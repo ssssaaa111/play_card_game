@@ -1,0 +1,8 @@
+.idea/
+.tmp/
+tmpchrome*/
+server.err.log
+server.out.log
+node_modules/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,198 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  FIELD_SIZE,
+  MAX_LP,
+  battlePreviewText,
+  battleValue,
+  canDirectAttack,
+  elementLabel,
+  fieldCards,
+  fieldElements,
+  makeBattlePreview,
+  shieldPreview,
+  spellTargetPrompt,
+  strongestMonster,
+  totalAtk,
+  totalDef,
+  validateAttackTarget,
+  validateSpellTargetRule,
+  weakestMonster
+} from "../src/rules.js";
+
+function monster(overrides = {}) {
+  return {
+    id: "test-monster",
+    name: "测试怪兽",
+    type: "monster",
+    element: "fire",
+    atk: 1000,
+    def: 800,
+    tempAtk: 0,
+    tempDef: 0,
+    mode: "attack",
+    ...overrides
+  };
+}
+
+function duelist(overrides = {}) {
+  return {
+    owner: "player",
+    field: Array(FIELD_SIZE).fill(null),
+    directAttacks: 0,
+    ...overrides
+  };
+}
+
+test("exports core rule constants", () => {
+  assert.equal(MAX_LP, 4000);
+  assert.equal(FIELD_SIZE, 3);
+});
+
+test("calculates current battle values from card state", () => {
+  const card = monster({ atk: 1200, def: 900, tempAtk: 500, tempDef: -200 });
+
+  assert.equal(totalAtk(card), 1700);
+  assert.equal(totalDef(card), 700);
+  assert.equal(battleValue(card), 1700);
+
+  card.mode = "defense";
+  assert.equal(battleValue(card), 700);
+});
+
+test("reads field cards and elements without empty slots", () => {
+  const owner = duelist({
+    field: [
+      monster({ name: "火怪", element: "fire" }),
+      null,
+      monster({ name: "光怪", element: "light" })
+    ]
+  });
+
+  assert.deepEqual(fieldCards(owner).map((card) => card.name), ["火怪", "光怪"]);
+  assert.deepEqual([...fieldElements(owner)].sort(), ["fire", "light"]);
+  assert.equal(elementLabel("fire"), "火");
+  assert.equal(elementLabel("shadow"), "暗");
+});
+
+test("finds strongest and weakest monsters by current attack", () => {
+  const owner = duelist({
+    field: [
+      monster({ name: "A", atk: 900, tempAtk: 500 }),
+      monster({ name: "B", atk: 1700 }),
+      monster({ name: "C", atk: 600 })
+    ]
+  });
+
+  assert.equal(strongestMonster(owner).name, "B");
+  assert.equal(weakestMonster(owner).name, "C");
+});
+
+test("blocks direct attacks while rival monsters exist unless permission is granted", () => {
+  const owner = duelist();
+  const rival = duelist({
+    owner: "ai",
+    field: [monster({ name: "守门怪" }), null, null]
+  });
+  const attacker = monster({ name: "攻击怪" });
+
+  assert.equal(canDirectAttack(owner, attacker), false);
+  assert.deepEqual(validateAttackTarget(owner, rival, attacker, -1), {
+    ok: false,
+    reason: "对手场上还有怪兽，必须先攻击怪兽；除非卡牌效果允许直接攻击。"
+  });
+
+  owner.directAttacks = 1;
+  assert.equal(canDirectAttack(owner, attacker), true);
+  assert.deepEqual(validateAttackTarget(owner, rival, attacker, -1), { ok: true, direct: true });
+
+  owner.directAttacks = 0;
+  attacker.canDirectAttack = true;
+  assert.deepEqual(validateAttackTarget(owner, rival, attacker, -1), { ok: true, direct: true });
+});
+
+test("allows attacking rival monsters and direct attacks into empty boards", () => {
+  const owner = duelist();
+  const rival = duelist({
+    owner: "ai",
+    field: [monster({ name: "守门怪" }), null, null]
+  });
+  const attacker = monster({ name: "攻击怪" });
+
+  assert.deepEqual(validateAttackTarget(owner, rival, attacker, 0), { ok: true, direct: false });
+  assert.deepEqual(validateAttackTarget(owner, rival, attacker, 1), {
+    ok: false,
+    reason: "这个召唤区没有怪兽，不能攻击空位。"
+  });
+
+  rival.field[0] = null;
+  assert.deepEqual(validateAttackTarget(owner, rival, attacker, 0), {
+    ok: false,
+    reason: "这个召唤区没有怪兽，不能攻击空位。"
+  });
+  assert.deepEqual(validateAttackTarget(owner, rival, attacker, -1), { ok: true, direct: true });
+});
+
+test("describes battle preview outcomes", () => {
+  const attacker = monster({ name: "星轨枪兵", atk: 1800 });
+  const weakTarget = monster({ name: "铁壁守卫", atk: 900 });
+  const strongTarget = monster({ name: "熔核巨像", atk: 2200 });
+  const defenseTarget = monster({ name: "守备者", mode: "defense", def: 1200 });
+
+  assert.match(battlePreviewText(attacker, null), /直接攻击.*1800/);
+  assert.match(battlePreviewText(attacker, weakTarget), /预计造成 900/);
+  assert.match(battlePreviewText(attacker, strongTarget), /攻击方预计承受 400/);
+  assert.match(battlePreviewText(attacker, defenseTarget), /可击破但不造成战斗伤害/);
+});
+
+test("builds structured battle previews with shield math", () => {
+  const attacker = monster({ name: "星轨枪兵", atk: 1800 });
+  const target = monster({ name: "铁壁守卫", atk: 900 });
+
+  assert.deepEqual(shieldPreview(900, 400), {
+    blocked: 400,
+    finalDamage: 500,
+    text: "护盾预计吸收 400 点，最终生命值伤害 500。"
+  });
+
+  const preview = makeBattlePreview(attacker, target, duelist(), duelist({ shield: 400 }));
+  assert.equal(preview.badge, "优势");
+  assert.equal(preview.rows.at(-1).value, "吸收 400 / 实伤 500");
+  assert.match(preview.result, /最终生命值伤害 500/);
+
+  const directPreview = makeBattlePreview(attacker, null, duelist(), duelist({ shield: 2000 }));
+  assert.equal(directPreview.badge, "直击");
+  assert.match(directPreview.rows.at(-1).value, /最终生命值伤害 0/);
+});
+
+test("builds spell target prompts from target mode and rule", () => {
+  assert.equal(
+    spellTargetPrompt("ownMonster", "战意高扬", "strongest"),
+    "请选择我方攻击力最高的怪兽作为「战意高扬」的目标。"
+  );
+  assert.equal(
+    spellTargetPrompt("enemyMonster", "破阵星芒"),
+    "请选择敌方怪兽作为「破阵星芒」的目标。"
+  );
+});
+
+test("validates strongest-only spell target rules", () => {
+  const owner = duelist({
+    field: [
+      monster({ name: "低攻怪", atk: 1000 }),
+      monster({ name: "最高怪A", atk: 1800 }),
+      monster({ name: "最高怪B", atk: 1500, tempAtk: 300 })
+    ]
+  });
+  const pending = {
+    cardName: "战意高扬",
+    mode: "ownMonster",
+    targetRule: "strongest"
+  };
+
+  assert.deepEqual(validateSpellTargetRule(pending, owner, owner.field[1]), { ok: true });
+  assert.deepEqual(validateSpellTargetRule(pending, owner, owner.field[2]), { ok: true });
+  assert.equal(validateSpellTargetRule(pending, owner, owner.field[0]).ok, false);
+  assert.match(validateSpellTargetRule(pending, owner, owner.field[0]).reason, /最高怪A、最高怪B/);
+});
