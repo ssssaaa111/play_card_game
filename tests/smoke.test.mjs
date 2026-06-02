@@ -290,7 +290,9 @@ test("browser smoke runner covers key click regressions", () => {
   const smoke = readProjectFile("src/browser-smoke.js");
 
   assert.match(html, /<option value="skipLock">跳攻锁定<\/option>/);
+  assert.match(html, /<option value="directTrap">直击陷阱<\/option>/);
   assert.match(data, /skipLock: \{/);
+  assert.match(data, /directTrap: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
   assert.match(smoke, /"skip-lock": runSkipLockSmoke/);
@@ -300,7 +302,10 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
   assert.match(smoke, /"double-attack": runDoubleAttackSmoke/);
+  assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
+  assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
+  assert.match(smoke, /function trapCard/);
   assert.match(smoke, /function doubleClickSmokeElement/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
   assert.match(smoke, /ctx\.els\.choiceConfirmBtn/);
@@ -310,6 +315,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /点其它手牌会取消当前目标选择并切换/);
   assert.match(smoke, /攻击目标点击后不应再等待二次确认/);
   assert.match(smoke, /战斗阶段陷阱确认可用/);
+  assert.match(smoke, /直击风暴转移连锁弹窗/);
+  assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
@@ -317,6 +324,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);
 });
 
 test("skipped attack lock is visible on field cards", () => {

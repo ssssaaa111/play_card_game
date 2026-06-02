@@ -203,6 +203,15 @@ export const scenarioSetups = {
     aiField: ["iron-guardian"],
     aiHand: ["solar-knight"]
   },
+  directTrap: {
+    label: "直击陷阱",
+    text: "我方空场且手牌含风暴转移，AI 场上有三只攻击怪兽，用来验证直击扣血和陷阱次数。",
+    goal: "盖放风暴转移后结束回合；AI 直击时应提示发动，且本回合只发动一张陷阱。",
+    playerHand: ["storm-shift"],
+    playerField: [],
+    aiField: ["star-lancer", "sky-raider", "ember-drake"],
+    aiHand: []
+  },
   skipLock: {
     label: "跳攻锁定",
     text: "我方场上已有可攻击怪兽，手牌含新怪兽，用来验证跳过攻击后新召唤也不能攻击。",

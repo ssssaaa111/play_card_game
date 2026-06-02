@@ -1405,9 +1405,13 @@ function consumeQueuedAttackReset(duelist, attacker, attackerIndex) {
 }
 
 function selectHandCard(uid) {
-  if (!canPlayerAct()) return;
   const card = state.player.hand.find((item) => item.uid === uid);
   if (!card) return;
+  if (!canPlayerAct()) {
+    showDetail(card);
+    render();
+    return;
+  }
   notePlayerIntent();
   if (state.pendingTarget) {
     const sameCard = state.pendingTarget.handUid === uid;
@@ -1604,13 +1608,17 @@ function cancelSelectedHandAction() {
 }
 
 function selectPlayerMonster(index) {
-  if (!canPlayerAct()) return;
+  const card = state.player.field[index];
+  if (!card) return;
+  if (!canPlayerAct()) {
+    showDetail(card);
+    render();
+    return;
+  }
   if (state.pendingTarget) {
     resolvePendingSpellTarget("player", index);
     return;
   }
-  const card = state.player.field[index];
-  if (!card) return;
   notePlayerIntent();
   playSound("click");
   state.selected = { zone: "playerField", index };
@@ -1675,11 +1683,28 @@ async function handlePlayerSlot(index) {
 }
 
 function handlePlayerTrapSlot(index) {
+  const existing = state.player.traps[index];
+  if (existing && (!canPlayerAct() || !state.selected || state.selected.zone !== "hand")) {
+    state.selected = null;
+    clearBattlePreview();
+    showDetail(existing);
+    render();
+    if (canPlayerAct()) resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
   if (state.pendingTarget) {
     cue(targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect));
     return;
   }
-  if (!canPlayerAct() || !state.selected || state.selected.zone !== "hand") return;
+  if (!canPlayerAct()) return;
+  if (!state.selected || state.selected.zone !== "hand") {
+    state.selected = null;
+    clearBattlePreview();
+    cue("请选择一张陷阱卡。");
+    render();
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
   notePlayerIntent();
   const handIndex = state.player.hand.findIndex((card) => card.uid === state.selected.uid);
   const card = state.player.hand[handIndex];
@@ -1693,7 +1718,7 @@ function handlePlayerTrapSlot(index) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
-  if (state.player.traps[index]) {
+  if (existing) {
     cue("这个陷阱区已经有盖卡。");
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
@@ -1707,7 +1732,10 @@ function handlePlayerTrapSlot(index) {
 function handleAiTrapSlot(index) {
   const card = state.ai.traps[index];
   if (card) {
+    state.selected = null;
+    clearBattlePreview();
     showDetail({ ...card, name: "盖放的陷阱", text: "这张卡还没有被触发。" });
+    render();
   }
 }
 
@@ -2056,6 +2084,7 @@ function spellCaption(card) {
 
 async function triggerTrap(owner, rival, eventName, context) {
   const result = { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
+  if (owner.trapActivatedThisTurn) return result;
   const skipped = new Set();
   while (!result.cancelled && !state.gameOver) {
     const trapIndex = owner.traps.findIndex((card, index) => (
@@ -2072,13 +2101,13 @@ async function triggerTrap(owner, rival, eventName, context) {
       }
     }
     const outcome = resolveTrapCard(owner, rival, eventName, context, trapIndex, result.activated + 1);
+    owner.trapActivatedThisTurn = true;
     result.activated += 1;
     result.cancelled = result.cancelled || Boolean(outcome.cancelled);
     result.shielded = result.shielded || Boolean(outcome.shielded);
     result.consumesAttack = result.consumesAttack || Boolean(outcome.consumesAttack);
     checkGameOver();
-    if (result.cancelled || state.gameOver) break;
-    await sleep(650);
+    break;
   }
   return result;
 }
@@ -2588,6 +2617,8 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
 
 function beginTurn(owner) {
   Object.assign(state, turnStartPatch(owner));
+  state.player.trapActivatedThisTurn = false;
+  state.ai.trapActivatedThisTurn = false;
   clearBattlePreview();
   cancelAutoEnd();
   clearPlayerIdleTimers();
@@ -2625,7 +2656,12 @@ function toggleSelectedMode() {
     return;
   }
   const card = state.player.field[state.selected.index];
-  if (!card) return;
+  if (!card) {
+    state.selected = null;
+    render();
+    cue("请选择你场上的怪兽。");
+    return;
+  }
   if (card.used || card.changedMode) {
     cue("这只怪兽本回合不能切换表示。");
     return;
@@ -2789,7 +2825,7 @@ async function aiAttack() {
       addLog(`AI 保留 ${card.name}，避免无意义攻击。`);
       continue;
     }
-    const targetIndex = shouldDirect ? -1 : (beatable ? beatable.targetIndex : targets[0]?.targetIndex ?? 0);
+    const targetIndex = targets.length === 0 ? -1 : (shouldDirect ? -1 : (beatable ? beatable.targetIndex : targets[0].targetIndex));
     const target = state.player.field[targetIndex];
     showBattlePreview(card, target, state.ai, state.player);
     addLog(`AI 攻击预判：${battlePreviewText(card, target)}`);
@@ -3438,7 +3474,8 @@ function render(animationKey = "") {
       els.choiceCancelBtn.disabled = !canPlayerAct();
     }
   }
-  els.modeBtn.disabled = Boolean(state.pendingTarget) || !canPlayerAct() || state.phase !== PHASES.main || state.selected?.zone !== "playerField";
+  const selectedPlayerMonster = state.selected?.zone === "playerField" && Boolean(state.player.field[state.selected.index]);
+  els.modeBtn.disabled = Boolean(state.pendingTarget) || !canPlayerAct() || state.phase !== PHASES.main || !selectedPlayerMonster;
   els.detailBtn.disabled = !state.focusedCard;
   if (els.setupPanel) {
     els.setupPanel.hidden = state.started || state.gameOver;
@@ -3622,7 +3659,11 @@ function renderTraps(root, duelist, owner) {
       if (owner === "player") {
         cardEl.addEventListener("click", (event) => {
           event.stopPropagation();
+          state.selected = null;
+          clearBattlePreview();
           showDetail(card);
+          render();
+          if (canPlayerAct()) resumePlayerIdleCountdownAfterPassiveIntent();
         });
       }
       slot.appendChild(cardEl);

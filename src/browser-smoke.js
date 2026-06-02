@@ -30,6 +30,7 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         shield: state.player.shield,
         attacksSkipped: state.player.attacksSkipped,
         directAttacks: state.player.directAttacks,
+        trapActivatedThisTurn: state.player.trapActivatedThisTurn,
         hand: cardIds(state.player.hand),
         field: cardIds(state.player.field),
         traps: cardIds(state.player.traps)
@@ -37,6 +38,7 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       ai: {
         lp: state.ai.lp,
         shield: state.ai.shield,
+        trapActivatedThisTurn: state.ai.trapActivatedThisTurn,
         handCount: state.ai.hand.length,
         field: cardIds(state.ai.field),
         traps: cardIds(state.ai.traps)
@@ -111,6 +113,11 @@ function fieldSlot(els, owner, index) {
 
 function handCard(els, cardId) {
   return els.hand.querySelector(`[data-zone="hand"][data-card-id="${cardId}"]`);
+}
+
+function trapCard(els, owner, cardId) {
+  const root = owner === "player" ? els.playerTraps : els.aiTraps;
+  return root.querySelector(`[data-zone="${owner}-trap"][data-card-id="${cardId}"]`);
 }
 
 async function runSkipLockSmoke(ctx) {
@@ -262,6 +269,45 @@ async function runDoubleAttackSmoke(ctx) {
   setSmokeStatus("passed", "double-attack");
 }
 
+async function runAiDirectTrapSmoke(ctx) {
+  setSmokeStatus("running", "ai-direct-trap");
+  await startSmokeDuel(ctx, "directTrap");
+  const playerLpBefore = ctx.state.player.lp;
+  clickSmokeElement(handCard(ctx.els, "storm-shift"), "风暴转移手牌");
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "空陷阱区");
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "storm-shift"), "风暴转移盖放");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "直击风暴转移连锁弹窗", 12000);
+  if (!ctx.els.chainText.textContent.includes("风暴转移") || !ctx.els.chainText.textContent.includes("你本人")) {
+    throw new Error("风暴转移直击提示缺少陷阱名或直击目标");
+  }
+  clickSmokeElement(ctx.els.chainYes, "发动风暴转移");
+  await waitForSmoke(() => ctx.state.player.trapActivatedThisTurn && !ctx.els.chainModal.classList.contains("show"), "陷阱额度被消耗");
+  await waitForSmoke(() => ctx.state.player.lp < playerLpBefore, "后续直击扣除玩家生命值", 16000);
+  const stormTriggers = ctx.state.log.filter((entry) => entry.includes("陷阱卡 风暴转移 触发")).length;
+  if (stormTriggers !== 1) {
+    throw new Error(`风暴转移本回合应只触发一次，实际 ${stormTriggers} 次`);
+  }
+  setSmokeStatus("passed", "ai-direct-trap");
+}
+
+async function runPauseDetailSmoke(ctx) {
+  setSmokeStatus("running", "pause-detail");
+  await startSmokeDuel(ctx, "direct");
+  clickSmokeElement(handCard(ctx.els, "mirror-snare"), "镜光反制手牌");
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "空陷阱区");
+  await waitForSmoke(() => trapCard(ctx.els, "player", "mirror-snare"), "镜光反制盖放");
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "选择星轨枪兵");
+  await waitForSmoke(() => !ctx.els.modeBtn.disabled, "怪兽切换表示可用");
+  clickSmokeElement(trapCard(ctx.els, "player", "mirror-snare"), "查看盖放陷阱");
+  await waitForSmoke(() => ctx.els.detailName.textContent === "镜光反制" && ctx.els.modeBtn.disabled, "陷阱详情清掉怪兽选择");
+  clickSmokeElement(ctx.els.pauseBtn, "暂停按钮");
+  await waitForSmoke(() => ctx.state.paused, "暂停状态");
+  clickSmokeElement(handCard(ctx.els, "war-chant"), "暂停时查看战意高扬");
+  await waitForSmoke(() => ctx.els.detailName.textContent === "战意高扬", "暂停时手牌详情切换");
+  setSmokeStatus("passed", "pause-detail");
+}
+
 export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActions }) {
   if (!smoke) return;
   const smokeRuns = {
@@ -271,7 +317,9 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
     "battle-trap": runBattleTrapSmoke,
-    "double-attack": runDoubleAttackSmoke
+    "double-attack": runDoubleAttackSmoke,
+    "ai-direct-trap": runAiDirectTrapSmoke,
+    "pause-detail": runPauseDetailSmoke
   };
   const run = smokeRuns[smoke];
   if (!run) {

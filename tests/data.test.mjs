@@ -91,7 +91,8 @@ test("trap cards are backed by trap metadata", () => {
   trapCards.forEach((card) => {
     const definition = trapDefinitions[card.trigger];
     assert.ok(definition, `${card.id} references missing trap definition: ${card.trigger}`);
-    assert.ok(validEvents.has(definition.event), `${card.trigger} has invalid trap event`);
+    const events = definition.events || [definition.event];
+    assert.ok(events.every((event) => validEvents.has(event)), `${card.trigger} has invalid trap event`);
     assert.ok(definition.caption, `${card.trigger} needs caption`);
     assert.ok(definition.triggerText, `${card.trigger} needs trigger text`);
     assert.equal(typeof definition.cancelsEvent, "boolean", `${card.trigger} needs cancelsEvent flag`);

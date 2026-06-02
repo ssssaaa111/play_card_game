@@ -16,7 +16,7 @@ export const trapDefinitions = {
     consumesAttack: true
   },
   attackShift: {
-    event: "attack",
+    events: ["attack", "direct"],
     caption: "取消攻击并获得护盾",
     triggerText: "对手攻击时",
     cancelsEvent: true,
@@ -72,7 +72,8 @@ export function trapDefinition(trigger) {
 
 export function trapMatchesEvent(card, eventName) {
   const definition = trapDefinition(card?.trigger);
-  return Boolean(definition && definition.event === eventName);
+  const events = definition?.events || [definition?.event];
+  return Boolean(definition && events.includes(eventName));
 }
 
 export function selectRedirectTarget(field = [], currentTargetIndex = -1) {
