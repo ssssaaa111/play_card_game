@@ -10,6 +10,7 @@ import {
   elementLabel,
   fieldCards,
   fieldElements,
+  legalAttackTargets,
   makeBattlePreview,
   shieldPreview,
   spellTargetPrompt,
@@ -132,6 +133,27 @@ test("allows attacking rival monsters and direct attacks into empty boards", () 
     reason: "这个召唤区没有怪兽，不能攻击空位。"
   });
   assert.deepEqual(validateAttackTarget(owner, rival, attacker, -1), { ok: true, direct: true });
+});
+
+test("finds legal attack targets for quick attack shortcuts", () => {
+  const owner = duelist();
+  const attacker = monster({ name: "攻击怪" });
+
+  assert.deepEqual(
+    legalAttackTargets(owner, duelist({ owner: "ai", field: [monster({ name: "守门怪" }), null, null] }), attacker).map((target) => target.targetIndex),
+    [0]
+  );
+  assert.deepEqual(
+    legalAttackTargets(owner, duelist({ owner: "ai", field: [null, null, null] }), attacker).map((target) => target.targetIndex),
+    [-1]
+  );
+  owner.directAttacks = 1;
+  assert.deepEqual(
+    legalAttackTargets(owner, duelist({ owner: "ai", field: [monster({ name: "守门怪" }), null, null] }), attacker).map((target) => target.targetIndex),
+    [0, -1]
+  );
+  assert.deepEqual(legalAttackTargets(owner, duelist({ owner: "ai", field: [monster({ name: "守门怪" }), null, null] }), monster({ used: true })), []);
+  assert.deepEqual(legalAttackTargets(owner, duelist({ owner: "ai", field: [monster({ name: "守门怪" }), null, null] }), monster({ mode: "defense" })), []);
 });
 
 test("describes battle preview outcomes", () => {

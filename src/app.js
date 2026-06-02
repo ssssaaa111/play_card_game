@@ -36,6 +36,7 @@ import {
   canDirectAttack,
   fieldCards,
   fieldElements,
+  legalAttackTargets,
   makeBattlePreview,
   spellTargetPrompt,
   strongestMonster,
@@ -1483,6 +1484,49 @@ async function queuePendingAttack(targetIndex) {
     resolvePlayerActionWindow("攻击完成");
   }
   return true;
+}
+
+function canUseAttackIntentWindow() {
+  return canPlayerAct() &&
+    [PHASES.main, PHASES.battle].includes(state.phase) &&
+    [ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(state.actionWindow);
+}
+
+async function quickAttackOnlyTarget(attackerIndex) {
+  if (!canPlayerAct()) return false;
+  if (state.pendingTarget) {
+    cue(targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect));
+    resetPlayerIdleCountdown();
+    return false;
+  }
+  if (!canUseAttackIntentWindow()) {
+    cue("当前时点不能攻击。");
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return false;
+  }
+  const attacker = state.player.field[attackerIndex];
+  if (!attacker) return false;
+  state.selected = { zone: "playerField", index: attackerIndex };
+  clearBattlePreview();
+  showDetail(attacker);
+  const targets = legalAttackTargets(state.player, state.ai, attacker);
+  if (targets.length !== 1) {
+    render();
+    cue(targets.length > 1 ? "有多个可攻击目标，请点选具体目标。" : "这只怪兽当前没有合法攻击目标。");
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return false;
+  }
+  notePlayerIntent();
+  if (!canUseBattleActions()) {
+    if (state.phase === PHASES.main) {
+      if (!enterPlayerBattlePhase("双击发起攻击", { preserveSelection: true, quiet: true })) return false;
+    } else {
+      cue("当前时点不能攻击。");
+      resumePlayerIdleCountdownAfterPassiveIntent();
+      return false;
+    }
+  }
+  return queuePendingAttack(targets[0].targetIndex);
 }
 
 function handConfirmLabel(card) {
@@ -3532,6 +3576,11 @@ function renderField(root, duelist, owner, animationKey) {
         cardEl.addEventListener("click", (event) => {
           event.stopPropagation();
           selectPlayerMonster(index);
+        });
+        cardEl.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          quickAttackOnlyTarget(index);
         });
       } else {
         cardEl.addEventListener("click", (event) => {

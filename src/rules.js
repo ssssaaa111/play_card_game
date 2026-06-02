@@ -143,6 +143,20 @@ export function validateAttackTarget(owner, rival, attacker, targetIndex) {
   return { ok: true, direct: true };
 }
 
+export function legalAttackTargets(owner, rival, attacker) {
+  if (!attacker || attacker.used || attacker.mode === "defense" || owner?.attacksSkipped) return [];
+  const targets = [];
+  (rival?.field || []).forEach((card, index) => {
+    if (card && validateAttackTarget(owner, rival, attacker, index).ok) {
+      targets.push({ type: "monster", targetIndex: index, card });
+    }
+  });
+  if (validateAttackTarget(owner, rival, attacker, -1).ok) {
+    targets.push({ type: "player", targetIndex: -1, card: null });
+  }
+  return targets;
+}
+
 export function spellTargetPrompt(mode, cardName = "这张卡", targetRule = "") {
   if (mode === "ownMonster" && targetRule === "strongest") return `请选择我方攻击力最高的怪兽作为「${cardName}」的目标。`;
   if (mode === "enemyMonster" && targetRule === "strongest") return `请选择敌方攻击力最高的怪兽作为「${cardName}」的目标。`;

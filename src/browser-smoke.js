@@ -79,6 +79,11 @@ function clickSmokeElement(element, label) {
   element.click();
 }
 
+function doubleClickSmokeElement(element, label) {
+  if (!element) throw new Error(`找不到测试目标：${label}`);
+  element.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }));
+}
+
 function selectScenario(els, scenarioId) {
   els.scenarioSelect.value = scenarioId;
   els.scenarioSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -241,6 +246,22 @@ async function runBattleTrapSmoke(ctx) {
   setSmokeStatus("passed", "battle-trap");
 }
 
+async function runDoubleAttackSmoke(ctx) {
+  setSmokeStatus("running", "double-attack");
+  await startSmokeDuel(ctx, "direct");
+  const aiLpBefore = ctx.state.ai.lp;
+  doubleClickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "双击星轨枪兵");
+  await waitForSmoke(
+    () => ctx.state.phase === "battle" && ctx.state.player.field[0]?.used && ctx.state.ai.lp < aiLpBefore,
+    "唯一目标双击自动攻击",
+    9000
+  );
+  if (ctx.state.ai.field[0]) {
+    throw new Error("唯一怪兽目标双击后应该完成攻击结算");
+  }
+  setSmokeStatus("passed", "double-attack");
+}
+
 export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActions }) {
   if (!smoke) return;
   const smokeRuns = {
@@ -249,7 +270,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "redirect-prompt": runRedirectPromptSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
-    "battle-trap": runBattleTrapSmoke
+    "battle-trap": runBattleTrapSmoke,
+    "double-attack": runDoubleAttackSmoke
   };
   const run = smokeRuns[smoke];
   if (!run) {

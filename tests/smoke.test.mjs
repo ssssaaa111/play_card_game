@@ -299,7 +299,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
+  assert.match(smoke, /"double-attack": runDoubleAttackSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
+  assert.match(smoke, /function doubleClickSmokeElement/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
   assert.match(smoke, /ctx\.els\.choiceConfirmBtn/);
   assert.match(smoke, /classList\.contains\("attack-target"\)/);
@@ -314,6 +316,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
 });
 
 test("skipped attack lock is visible on field cards", () => {
