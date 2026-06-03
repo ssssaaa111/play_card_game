@@ -329,6 +329,26 @@ async function runTrapChoiceSmoke(ctx) {
   setSmokeStatus("passed", "trap-choice");
 }
 
+async function runTrapFieldDirectSmoke(ctx) {
+  setSmokeStatus("running", "trap-field-direct");
+  await startSmokeDuel(ctx, "trapChoice");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "场上陷阱直点响应窗口", 12000);
+  clickSmokeElement(trapCard(ctx.els, "player", "void-lock"), "场上选择星界封锁");
+  await waitForSmoke(
+    () => trapCard(ctx.els, "player", "void-lock")?.classList.contains("trap-response-selected") && !ctx.els.chainYes.disabled,
+    "场上点选陷阱后进入已选择状态"
+  );
+  clickSmokeElement(trapCard(ctx.els, "player", "void-lock"), "再次点击场上星界封锁直接发动");
+  await waitForSmoke(
+    () => !ctx.state.player.traps.some((card) => card?.id === "void-lock") &&
+      ctx.state.player.traps.some((card) => card?.id === "mirror-snare"),
+    "再次点击场上高亮陷阱后直接发动选中的陷阱",
+    9000
+  );
+  setSmokeStatus("passed", "trap-field-direct");
+}
+
 async function runChainTrapChoiceSmoke(ctx) {
   setSmokeStatus("running", "chain-trap-choice");
   await startSmokeDuel(ctx, "chain");
@@ -396,6 +416,29 @@ async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("passed", "mode-auto-end");
 }
 
+async function runInvalidSpellAutoEndSmoke(ctx) {
+  setSmokeStatus("running", "invalid-spell-auto-end");
+  await startSmokeDuel(ctx, "combo");
+  const eclipse = ctx.state.player.hand.find((card) => card?.id === "eclipse-barrier");
+  if (!eclipse) throw new Error("晨昏星界测试卡不存在");
+  ctx.state.player.hand = [eclipse];
+  ctx.state.player.deck = [];
+  ctx.state.player.field.forEach((card) => {
+    if (!card) return;
+    card.mode = "defense";
+    card.used = false;
+    card.changedMode = true;
+  });
+  ctx.state.summonedThisTurn = true;
+  clickSmokeElement(handCard(ctx.els, "eclipse-barrier"), "查看不可发动的晨昏星界");
+  await waitForSmoke(
+    () => ctx.state.actionWindow === "autoEnd" || ctx.state.turn === "ai",
+    "只有不可发动晨昏星界时查看手牌仍应自动结束",
+    5000
+  );
+  setSmokeStatus("passed", "invalid-spell-auto-end");
+}
+
 async function runPauseDetailSmoke(ctx) {
   setSmokeStatus("running", "pause-detail");
   await startSmokeDuel(ctx, "direct");
@@ -425,8 +468,10 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "double-attack": runDoubleAttackSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
+    "trap-field-direct": runTrapFieldDirectSmoke,
     "chain-trap-choice": runChainTrapChoiceSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
+    "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
     "pause-detail": runPauseDetailSmoke
   };
   const run = smokeRuns[smoke];

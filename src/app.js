@@ -49,6 +49,7 @@ import {
 
 const BROWSER_TEST_MODE = new URLSearchParams(window.location.search).has("test");
 const BROWSER_SMOKE = BROWSER_TEST_MODE ? new URLSearchParams(window.location.search).get("smoke") || "" : "";
+const AUTO_END_DELAY_MS = 2800;
 
 const state = {
   player: createDuelist("player"),
@@ -1415,8 +1416,15 @@ function selectHandCard(uid) {
     render();
     return;
   }
-  notePlayerIntent();
+  if (state.pendingTrapChoice) {
+    showDetail(card);
+    cue("先选择高亮陷阱，或点击不发动。");
+    render();
+    resetPlayerIdleCountdown();
+    return;
+  }
   if (state.pendingTarget) {
+    notePlayerIntent();
     const sameCard = state.pendingTarget.handUid === uid;
     if (sameCard) {
       resolvePendingSpellDefault();
@@ -1429,12 +1437,22 @@ function selectHandCard(uid) {
       addLog(`已取消 ${previousCardName} 的目标选择，改选 ${card.name}。`);
     }
   }
-  if (!canUseHandCards(card)) {
-    cue(handTimingBlockReason(card));
-  }
   const handIndex = state.player.hand.findIndex((item) => item.uid === uid);
   const wasSelected = state.selected?.zone === "hand" && state.selected.uid === uid;
-  if (wasSelected && canUseHandCards(card)) {
+  const canUseNow = canUseHandCards(card);
+  const action = handActionInfo(card, handIndex);
+  if (!canUseNow || !action.ok) {
+    cue(canUseNow ? action.reason : handTimingBlockReason(card));
+    playSound("click");
+    state.selected = { zone: "hand", uid };
+    clearBattlePreview();
+    showDetail(card);
+    render();
+    resolvePlayerActionWindow("查看不可用手牌");
+    return;
+  }
+  notePlayerIntent();
+  if (wasSelected) {
     confirmSelectedHandAction();
     return;
   }
@@ -1442,7 +1460,7 @@ function selectHandCard(uid) {
   state.selected = { zone: "hand", uid };
   clearBattlePreview();
   showDetail(card);
-  if (card.type === "spell" && spellNeedsManualTarget(state.player, card) && canUseHandCards(card)) {
+  if (card.type === "spell" && spellNeedsManualTarget(state.player, card)) {
     beginSpellTargetSelection(handIndex, card);
     return;
   }
@@ -1704,6 +1722,10 @@ function selectPendingTrapChoice(index) {
   }
   const card = state.player.traps[index];
   if (!card) return true;
+  if (choice.selectedIndex === index && state.chainResolve) {
+    answerChain(true);
+    return true;
+  }
   choice.selectedIndex = index;
   state.selected = null;
   clearBattlePreview();
@@ -2620,6 +2642,7 @@ function promptTrapChoice(candidates, eventName, details = {}) {
   };
   updateTrapChoicePrompt();
   els.chainModal.classList.add("show");
+  els.chainModal.classList.add("trap-choice-pass-through");
   playSound("trap");
   speak(trapIndexes.length > 1 ? "请选择要发动的陷阱。" : `是否发动陷阱，${candidates[0].card.name}。`);
   render();
@@ -2637,6 +2660,7 @@ function promptTrapChoice(candidates, eventName, details = {}) {
       clearPlayerIdleTimers();
       Object.assign(state, previousWindow);
       els.chainModal.classList.remove("show");
+      els.chainModal.classList.remove("trap-choice-pass-through");
       state.chainResolve = null;
       state.pendingTrapChoice = null;
       clearTrapChoiceOptions();
@@ -2797,7 +2821,7 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
     if (state.turn === "player" && state.autoEnding && state.actionWindow === "autoEnd" && !state.gameOver) {
       endPlayerTurn();
     }
-  }, 1600);
+  }, AUTO_END_DELAY_MS);
 }
 
 function beginTurn(owner) {
