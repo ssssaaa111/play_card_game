@@ -1732,9 +1732,70 @@ h1 {
 }
 
 .modal-box.chain {
-  width: min(480px, 100%);
+  width: min(560px, 100%);
   text-align: left;
   border-color: rgba(183, 148, 244, 0.76);
+}
+
+.chain-choices {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.chain-choices[hidden] {
+  display: none;
+}
+
+.trap-choice-card {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(148, 221, 255, 0.32);
+  border-radius: 8px;
+  background: rgba(11, 18, 32, 0.86);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.trap-choice-card:hover,
+.trap-choice-card.selected {
+  border-color: rgba(255, 223, 126, 0.92);
+  box-shadow: 0 0 22px rgba(255, 207, 88, 0.24);
+  transform: translateY(-1px);
+}
+
+.trap-choice-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255, 218, 106, 0.28), rgba(93, 211, 255, 0.2));
+  color: var(--gold);
+  font-weight: 900;
+  font-size: 1rem;
+}
+
+.trap-choice-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.trap-choice-body strong {
+  font-size: 0.95rem;
+}
+
+.trap-choice-body span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 .chain-actions {

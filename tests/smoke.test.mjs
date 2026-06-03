@@ -179,7 +179,7 @@ test("target selection uses standardized timed action windows", () => {
   assert.match(turnState, /\[ACTION_WINDOWS\.targetSelect\]: TIMINGS\.targetSelection/);
   assert.match(turnState, /\[ACTION_WINDOWS\.response\]: TIMINGS\.responseWindow/);
   assert.match(turnState, /\[ACTION_WINDOWS\.targetSelect\]: 20/);
-  assert.match(turnState, /\[ACTION_WINDOWS\.response\]: 12/);
+  assert.match(turnState, /\[ACTION_WINDOWS\.response\]: 20/);
   assert.match(app, /openActionWindowPatch\(normalizeActionWindow\(windowName\)/);
   assert.match(app, /setActionWindow\(ACTION_WINDOWS\.targetSelect, \{ reason: `target:\$\{card\.uid\}` \}\)/);
   assert.match(app, /function handleTargetSelectionTimeout\(\)/);
@@ -187,6 +187,7 @@ test("target selection uses standardized timed action windows", () => {
   assert.match(app, /handleActionWindowTimeout\(windowId\)/);
   assert.match(app, /setActionWindow\(ACTION_WINDOWS\.response, \{ reason: `trap-choice:\$\{eventName\}` \}\)/);
   assert.match(app, /pendingTrapChoice/);
+  assert.match(app, /chainChoices/);
 });
 
 test("app uses extracted battle outcome helpers", () => {
@@ -308,6 +309,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"double-attack": runDoubleAttackSmoke/);
   assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
   assert.match(smoke, /"trap-choice": runTrapChoiceSmoke/);
+  assert.match(smoke, /"chain-trap-choice": runChainTrapChoiceSmoke/);
   assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
   assert.match(smoke, /function trapCard/);
@@ -322,6 +324,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /战斗阶段陷阱确认可用/);
   assert.match(smoke, /第 \$\{promptIndex\} 次直击风暴转移连锁弹窗/);
   assert.match(smoke, /所有可发动陷阱都应该高亮/);
+  assert.match(smoke, /连锁场景应该在弹窗内显示三张可选陷阱/);
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
@@ -332,6 +335,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "chain-trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);
 });
 

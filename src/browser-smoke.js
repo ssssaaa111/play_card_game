@@ -118,6 +118,10 @@ function trapCard(els, owner, cardId) {
   return root.querySelector(`[data-zone="${owner}-trap"][data-card-id="${cardId}"]`);
 }
 
+function chainChoiceButton(els, cardId) {
+  return els.chainChoices?.querySelector(`[data-card-id="${cardId}"]`);
+}
+
 async function runSkipLockSmoke(ctx) {
   setSmokeStatus("running", "skip-lock");
   await startSmokeDuel(ctx, "skipLock");
@@ -306,7 +310,10 @@ async function runTrapChoiceSmoke(ctx) {
   if (!ctx.els.chainYes.disabled) {
     throw new Error("多陷阱响应时必须先选择一张陷阱");
   }
-  clickSmokeElement(voidLock, "选择星界封锁");
+  if (!chainChoiceButton(ctx.els, "mirror-snare") || !chainChoiceButton(ctx.els, "void-lock")) {
+    throw new Error("多陷阱响应应该在弹窗内显示可选陷阱");
+  }
+  clickSmokeElement(chainChoiceButton(ctx.els, "void-lock"), "在弹窗内选择星界封锁");
   await waitForSmoke(
     () => ctx.els.chainText.textContent.includes("星界封锁") && !ctx.els.chainYes.disabled,
     "选择陷阱后确认按钮可用"
@@ -320,6 +327,42 @@ async function runTrapChoiceSmoke(ctx) {
     9000
   );
   setSmokeStatus("passed", "trap-choice");
+}
+
+async function runChainTrapChoiceSmoke(ctx) {
+  setSmokeStatus("running", "chain-trap-choice");
+  await startSmokeDuel(ctx, "chain");
+  clickSmokeElement(handCard(ctx.els, "iron-guardian"), "召唤高防守卫");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), "我方怪兽区 1");
+  await waitForSmoke(() => ctx.state.player.field.some((card) => card?.id === "iron-guardian"), "高防守卫召唤成功");
+  for (const trapId of ["weakening-web", "counter-array", "void-lock"]) {
+    clickSmokeElement(handCard(ctx.els, trapId), `选择陷阱 ${trapId}`);
+    clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `盖放陷阱 ${trapId}`);
+    await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === trapId), `陷阱 ${trapId} 盖放成功`);
+  }
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "连锁测试多陷阱响应窗口", 16000);
+  const choiceCount = ctx.els.chainChoices?.querySelectorAll("[data-trap-choice-index]").length || 0;
+  if (choiceCount !== 3) {
+    throw new Error(`连锁场景应该在弹窗内显示三张可选陷阱，实际 ${choiceCount} 张`);
+  }
+  if (!ctx.els.chainYes.disabled) {
+    throw new Error("连锁场景多陷阱响应时必须先选择再确认");
+  }
+  clickSmokeElement(chainChoiceButton(ctx.els, "counter-array"), "在弹窗内选择反击阵列");
+  await waitForSmoke(
+    () => ctx.els.chainText.textContent.includes("反击阵列") && !ctx.els.chainYes.disabled,
+    "连锁场景选择陷阱后确认按钮可用"
+  );
+  clickSmokeElement(ctx.els.chainYes, "确认发动反击阵列");
+  await waitForSmoke(
+    () => !ctx.state.player.traps.some((card) => card?.id === "counter-array") &&
+      ctx.state.player.traps.some((card) => card?.id === "weakening-web") &&
+      ctx.state.player.traps.some((card) => card?.id === "void-lock"),
+    "连锁场景只发动选中的陷阱",
+    9000
+  );
+  setSmokeStatus("passed", "chain-trap-choice");
 }
 
 async function runPauseDetailSmoke(ctx) {
@@ -351,6 +394,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "double-attack": runDoubleAttackSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
+    "chain-trap-choice": runChainTrapChoiceSmoke,
     "pause-detail": runPauseDetailSmoke
   };
   const run = smokeRuns[smoke];

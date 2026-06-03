@@ -172,6 +172,7 @@ const els = {
   zoomClose: document.querySelector("#zoomClose"),
   chainModal: document.querySelector("#chainModal"),
   chainText: document.querySelector("#chainText"),
+  chainChoices: document.querySelector("#chainChoices"),
   chainYes: document.querySelector("#chainYes"),
   chainNo: document.querySelector("#chainNo")
 };
@@ -2157,9 +2158,56 @@ function pendingTrapChoiceDetailsText(choice = state.pendingTrapChoice) {
   return `${eventText}可发动陷阱：${names}。点击高亮陷阱选择，本事件只能发动一张。`;
 }
 
+function renderTrapChoiceOptions(choice = state.pendingTrapChoice) {
+  if (!els.chainChoices) return;
+  els.chainChoices.replaceChildren();
+  if (!choice?.trapIndexes?.length) {
+    els.chainChoices.hidden = true;
+    return;
+  }
+  els.chainChoices.hidden = false;
+  choice.trapIndexes.forEach((trapIndex) => {
+    const card = state.player.traps[trapIndex];
+    if (!card) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "trap-choice-card";
+    button.dataset.trapChoiceIndex = String(trapIndex);
+    button.dataset.cardId = card.id;
+    button.classList.toggle("selected", choice.selectedIndex === trapIndex);
+
+    const icon = document.createElement("span");
+    icon.className = "trap-choice-icon";
+    icon.textContent = card.icon || "陷";
+
+    const body = document.createElement("span");
+    body.className = "trap-choice-body";
+
+    const name = document.createElement("strong");
+    name.textContent = card.name;
+
+    const text = document.createElement("span");
+    text.textContent = card.text || "满足当前事件，可以发动。";
+
+    body.appendChild(name);
+    body.appendChild(text);
+    button.appendChild(icon);
+    button.appendChild(body);
+    button.addEventListener("click", () => selectPendingTrapChoice(trapIndex));
+    els.chainChoices.appendChild(button);
+  });
+}
+
+function clearTrapChoiceOptions() {
+  if (!els.chainChoices) return;
+  els.chainChoices.replaceChildren();
+  els.chainChoices.hidden = true;
+}
+
 function updateTrapChoicePrompt() {
   if (!state.pendingTrapChoice) return;
   els.chainText.textContent = pendingTrapChoiceDetailsText();
+  renderTrapChoiceOptions();
   const selectedCard = state.player.traps[state.pendingTrapChoice.selectedIndex];
   els.chainYes.textContent = selectedCard ? `发动 ${selectedCard.name}` : "发动陷阱";
   els.chainYes.disabled = !selectedCard;
@@ -2591,6 +2639,7 @@ function promptTrapChoice(candidates, eventName, details = {}) {
       els.chainModal.classList.remove("show");
       state.chainResolve = null;
       state.pendingTrapChoice = null;
+      clearTrapChoiceOptions();
       els.chainYes.disabled = false;
       els.chainYes.textContent = "发动陷阱";
       render();

@@ -60,7 +60,7 @@ test("maps action windows to explicit timings and timeout budgets", () => {
   assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.main), 30);
   assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.battle), 30);
   assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.targetSelect), 20);
-  assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.response), 12);
+  assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.response), 20);
 });
 
 test("decides the player action window from phase and available actions", () => {

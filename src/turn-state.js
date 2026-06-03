@@ -53,7 +53,7 @@ const actionWindowTimeouts = {
   [ACTION_WINDOWS.main]: 30,
   [ACTION_WINDOWS.battle]: 30,
   [ACTION_WINDOWS.targetSelect]: 20,
-  [ACTION_WINDOWS.response]: 12,
+  [ACTION_WINDOWS.response]: 20,
   [ACTION_WINDOWS.autoEnd]: 2
 };
 
