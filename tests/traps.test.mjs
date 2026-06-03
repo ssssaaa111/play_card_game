@@ -24,7 +24,6 @@ test("matches trap triggers to battle events", () => {
   assert.equal(trapMatchesEvent(trap("attackDestroy"), "attack"), true);
   assert.equal(trapMatchesEvent(trap("counterBoost"), "attack"), true);
   assert.equal(trapMatchesEvent(trap("attackShift"), "attack"), true);
-  assert.equal(trapMatchesEvent(trap("attackShift"), "direct"), true);
   assert.equal(trapMatchesEvent(trap("attackNegate"), "attack"), true);
   assert.equal(trapMatchesEvent(trap("redirectAttack"), "attack"), true);
   assert.equal(trapMatchesEvent(trap("weakenAttack"), "attack"), true);
@@ -35,6 +34,7 @@ test("matches trap triggers to battle events", () => {
 
 test("does not match trap triggers to unrelated events", () => {
   assert.equal(trapMatchesEvent(trap("attackDestroy"), "direct"), false);
+  assert.equal(trapMatchesEvent(trap("attackShift"), "direct"), false);
   assert.equal(trapMatchesEvent(trap("directShield"), "attack"), false);
   assert.equal(trapMatchesEvent(trap("summonBurn"), "attack"), false);
   assert.equal(trapMatchesEvent(trap("missingTrigger"), "attack"), false);
@@ -89,7 +89,7 @@ test("checks whether redirect traps can actually resolve", () => {
   assert.equal(trapCanResolve(trap("redirectAttack"), "attack", { owner, context: { targetIndex: 0 } }), true);
   assert.equal(trapCanResolve(trap("redirectAttack"), "direct", { owner, context: { targetIndex: -1 } }), false);
   assert.equal(trapCanResolve(trap("attackShift"), "attack", { owner, context: { targetIndex: 0 } }), true);
-  assert.equal(trapCanResolve(trap("attackShift"), "direct", { owner, context: { targetIndex: -1 } }), true);
+  assert.equal(trapCanResolve(trap("attackShift"), "direct", { owner, context: { targetIndex: -1 } }), false);
 });
 
 test("describes attack targets before asking for trap activation", () => {

@@ -20,7 +20,6 @@ test("builds read-only browser smoke snapshots from live state", () => {
       shield: 0,
       attacksSkipped: false,
       directAttacks: 1,
-      trapActivatedThisTurn: false,
       hand: [{ id: "star-breach" }],
       field: [{ id: "star-lancer" }],
       traps: [null]
@@ -28,7 +27,6 @@ test("builds read-only browser smoke snapshots from live state", () => {
     ai: {
       lp: 2200,
       shield: 0,
-      trapActivatedThisTurn: false,
       hand: [{ id: "solar-knight" }],
       field: [{ id: "iron-guardian" }],
       traps: [null]
@@ -48,7 +46,6 @@ test("builds read-only browser smoke snapshots from live state", () => {
   assert.equal(snapshot.mode, "test");
   assert.equal(snapshot.latestLog, "攻击无效：必须先攻击怪兽。");
   assert.equal(snapshot.player.directAttacks, 1);
-  assert.equal(snapshot.player.trapActivatedThisTurn, false);
   assert.deepEqual(snapshot.player.hand, ["star-breach"]);
   assert.deepEqual(snapshot.ai.field, ["iron-guardian"]);
   assert.equal(snapshot.chain.open, true);

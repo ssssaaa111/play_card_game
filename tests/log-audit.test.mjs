@@ -86,3 +86,14 @@ test("accepts attack previews followed by battle or trap resolution", () => {
     { step: 2, text: "星轨枪兵 ATK 1800 低于 铁壁守卫 DEF 2100，攻击方受到 300 点生命值伤害。" }
   ]).ok, true);
 });
+
+test("flags rule-check failures when an attack changes nothing", () => {
+  const audit = auditLogEntries([
+    { step: 1, text: "攻击预判：星轨枪兵 直接攻击，预计造成 1800 点伤害。" },
+    { step: 2, text: "规则校验：星轨枪兵 的攻击没有产生任何状态影响，已中断后续流程。" }
+  ]);
+
+  assert.equal(audit.ok, false);
+  assert.equal(audit.issues[0].code, "attack-no-impact");
+  assert.equal(audit.issues[0].severity, "error");
+});

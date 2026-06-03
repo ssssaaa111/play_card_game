@@ -27,7 +27,6 @@ test("creates fresh duelists with empty zones and resources", () => {
   assert.equal(duelist.attackResets, 0);
   assert.equal(duelist.directAttacks, 0);
   assert.equal(duelist.attacksSkipped, false);
-  assert.equal(duelist.trapActivatedThisTurn, false);
 });
 
 test("clones cards with runtime battle state and display metadata", () => {

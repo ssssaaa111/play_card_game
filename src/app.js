@@ -87,7 +87,8 @@ const state = {
   log: [],
   timeline: [],
   timelineStep: 0,
-  battlePreview: null
+  battlePreview: null,
+  ruleCheckIssue: null
 };
 
 const els = {
@@ -1480,14 +1481,16 @@ async function queuePendingAttack(targetIndex) {
   render();
   clearPlayerIdleTimers();
   await sleep(360);
-  await attack(state.player, state.ai, attackerIndex, targetIndex);
+  const resolved = await attack(state.player, state.ai, attackerIndex, targetIndex);
   state.selected = null;
   clearBattlePreview();
   render(targetIndex >= 0 ? "hit-ai-" + targetIndex : "hit-ai-direct");
-  if (!state.gameOver) {
+  if (!state.gameOver && resolved) {
     resolvePlayerActionWindow("攻击完成");
+  } else if (!state.gameOver) {
+    resetPlayerIdleCountdown();
   }
-  return true;
+  return Boolean(resolved);
 }
 
 function canUseAttackIntentWindow() {
@@ -1613,6 +1616,11 @@ function selectPlayerMonster(index) {
   if (!canPlayerAct()) {
     showDetail(card);
     render();
+    return;
+  }
+  const wasSelected = state.selected?.zone === "playerField" && state.selected.index === index;
+  if (wasSelected && !state.pendingTarget && canUseAttackIntentWindow()) {
+    quickAttackOnlyTarget(index);
     return;
   }
   if (state.pendingTarget) {
@@ -2084,31 +2092,23 @@ function spellCaption(card) {
 
 async function triggerTrap(owner, rival, eventName, context) {
   const result = { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
-  if (owner.trapActivatedThisTurn) return result;
-  const skipped = new Set();
-  while (!result.cancelled && !state.gameOver) {
-    const trapIndex = owner.traps.findIndex((card, index) => (
-      !skipped.has(index) && trapCanResolve(card, eventName, { owner, context })
-    ));
-    if (trapIndex < 0) break;
-    const trap = owner.traps[trapIndex];
-    if (owner.owner === "player") {
-      const activate = await promptTrapActivation(trap, eventName, { owner, rival, context });
-      if (!activate) {
-        skipped.add(trapIndex);
-        addLog(`你没有发动 ${trap.name}。`);
-        continue;
-      }
+  if (state.gameOver) return result;
+  const trapIndex = owner.traps.findIndex((card) => trapCanResolve(card, eventName, { owner, context }));
+  if (trapIndex < 0) return result;
+  const trap = owner.traps[trapIndex];
+  if (owner.owner === "player") {
+    const activate = await promptTrapActivation(trap, eventName, { owner, rival, context });
+    if (!activate) {
+      addLog(`你没有发动 ${trap.name}。`);
+      return result;
     }
-    const outcome = resolveTrapCard(owner, rival, eventName, context, trapIndex, result.activated + 1);
-    owner.trapActivatedThisTurn = true;
-    result.activated += 1;
-    result.cancelled = result.cancelled || Boolean(outcome.cancelled);
-    result.shielded = result.shielded || Boolean(outcome.shielded);
-    result.consumesAttack = result.consumesAttack || Boolean(outcome.consumesAttack);
-    checkGameOver();
-    break;
   }
+  const outcome = resolveTrapCard(owner, rival, eventName, context, trapIndex, 1);
+  result.activated = 1;
+  result.cancelled = Boolean(outcome.cancelled);
+  result.shielded = Boolean(outcome.shielded);
+  result.consumesAttack = Boolean(outcome.consumesAttack);
+  checkGameOver();
   return result;
 }
 
@@ -2259,6 +2259,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
 }
 
 async function attack(owner, rival, attackerIndex, targetIndex) {
+  state.ruleCheckIssue = null;
   const attacker = owner.field[attackerIndex];
   if (!attacker || attacker.used) return;
   if (owner.attacksSkipped) {
@@ -2279,6 +2280,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     addLog(`${duelistLabel(owner)}的攻击被规则拦截：${targetValidation.reason}`);
     return false;
   }
+  const impactBefore = attackImpactSnapshot(owner, rival);
   const attackContext = { attackerIndex, targetIndex };
   const trapResult = await triggerTrap(rival, owner, "attack", attackContext);
   if (trapResult.cancelled) {
@@ -2286,7 +2288,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       attacker.used = true;
     }
     checkGameOver();
-    return true;
+    return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
   }
   const resolvedTargetIndex = attackContext.targetIndex;
   const target = rival.field[resolvedTargetIndex];
@@ -2322,7 +2324,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     if (shield.cancelled) {
       consumeQueuedAttackReset(owner, attacker, attackerIndex);
       checkGameOver();
-      return;
+      return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的直接攻击`);
     }
     if (owner.directAttacks > 0 && !attacker.canDirectAttack) {
       owner.directAttacks -= 1;
@@ -2417,7 +2419,54 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     speak(`${attacker.name} 的追风效果发动，抽一张卡。`);
   }
   checkGameOver();
-  return true;
+  return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
+}
+
+function cardImpactSignature(card) {
+  if (!card) return null;
+  return {
+    uid: card.uid,
+    id: card.id,
+    used: Boolean(card.used),
+    changedMode: Boolean(card.changedMode),
+    mode: card.mode || "attack",
+    tempAtk: card.tempAtk || 0,
+    tempDef: card.tempDef || 0,
+    battleWear: card.battleWear || 0
+  };
+}
+
+function duelistImpactSignature(duelist) {
+  return {
+    lp: duelist.lp,
+    shield: duelist.shield || 0,
+    directAttacks: duelist.directAttacks || 0,
+    attackResets: duelist.attackResets || 0,
+    hand: duelist.hand.map((card) => card.uid),
+    deck: duelist.deck.map((card) => card.uid),
+    field: duelist.field.map(cardImpactSignature),
+    traps: duelist.traps.map(cardImpactSignature),
+    grave: duelist.grave.map((card) => card.uid)
+  };
+}
+
+function attackImpactSnapshot(owner, rival) {
+  return JSON.stringify({
+    owner: duelistImpactSignature(owner),
+    rival: duelistImpactSignature(rival)
+  });
+}
+
+function assertAttackImpact(owner, rival, before, label) {
+  const after = attackImpactSnapshot(owner, rival);
+  if (before !== after || state.gameOver) return true;
+  const message = `规则校验：${label}没有产生任何状态影响，已中断后续流程。`;
+  state.ruleCheckIssue = message;
+  addLog(message);
+  cue("规则校验发现攻击没有结算影响，请查看疑点日志。");
+  playSound("damage");
+  console.error(message);
+  return false;
 }
 
 function damage(duelist, amount) {
@@ -2429,12 +2478,24 @@ function damage(duelist, amount) {
     playGuardShield(panelElement(duelist.owner));
     addLog(`${duelist.owner === "player" ? "你的" : "AI 的"}护盾吸收了 ${blocked} 点伤害。`);
   }
-  duelist.lp = Math.max(0, duelist.lp - amount);
-  return amount;
+  const dealt = Math.max(0, amount);
+  if (dealt > 0) {
+    duelist.lp = Math.max(0, duelist.lp - dealt);
+    playSound("damage");
+    playLifeDelta(duelist.owner, -dealt);
+  }
+  return dealt;
 }
 
 function heal(duelist, amount) {
+  const before = duelist.lp;
   duelist.lp = Math.min(MAX_LP, duelist.lp + amount);
+  const healed = duelist.lp - before;
+  if (healed > 0) {
+    playSound("spell-heal700");
+    playLifeDelta(duelist.owner, healed);
+  }
+  return healed;
 }
 
 function promptTrapActivation(trap, eventName, details = {}) {
@@ -2617,8 +2678,6 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
 
 function beginTurn(owner) {
   Object.assign(state, turnStartPatch(owner));
-  state.player.trapActivatedThisTurn = false;
-  state.ai.trapActivatedThisTurn = false;
   clearBattlePreview();
   cancelAutoEnd();
   clearPlayerIdleTimers();
@@ -2720,12 +2779,16 @@ async function runAiTurn() {
       await sleep(1700);
     }
     while (!state.gameOver && state.ai.extraSummon > 0) {
+      cue("对手还有额外召唤机会。");
+      playEpicAction("额外召唤", "draw", 900);
+      playVoice("ai", "summon", "对手准备额外召唤。");
+      await sleep(950);
       const summoned = await aiSummon();
       if (!summoned) break;
       state.ai.extraSummon -= 1;
       addLog("AI 使用了额外召唤机会。");
       render();
-      await sleep(1500);
+      await sleep(1850);
     }
     if (state.gameOver) return;
     state.phase = PHASES.battle;
@@ -2827,13 +2890,20 @@ async function aiAttack() {
     }
     const targetIndex = targets.length === 0 ? -1 : (shouldDirect ? -1 : (beatable ? beatable.targetIndex : targets[0].targetIndex));
     const target = state.player.field[targetIndex];
+    if (targetIndex < 0) {
+      cue(`对手的 ${card.name} 准备直接攻击你。`);
+      playEpicAction("直击预警", "attack", 980);
+      playVoice("ai", "direct", "对手准备直接攻击。");
+      await sleep(900);
+    }
     showBattlePreview(card, target, state.ai, state.player);
     addLog(`AI 攻击预判：${battlePreviewText(card, target)}`);
     render();
-    await sleep(840);
-    await attack(state.ai, state.player, index, targetIndex);
+    await sleep(1080);
+    const resolved = await attack(state.ai, state.player, index, targetIndex);
     render();
-    await sleep(1700);
+    if (resolved === false && state.ruleCheckIssue) break;
+    await sleep(2200);
   }
 }
 
@@ -3190,6 +3260,20 @@ function playEpicAction(text, kind = "attack", duration = 1100) {
   el.textContent = text;
   els.effectLayer.appendChild(el);
   window.setTimeout(() => el.remove(), duration);
+}
+
+function playLifeDelta(owner, amount) {
+  if (!els.effectLayer || amount === 0) return;
+  const target = panelElement(owner);
+  if (!target) return;
+  const rect = target.getBoundingClientRect();
+  const el = document.createElement("div");
+  el.className = `life-delta ${amount < 0 ? "damage" : "heal"}`;
+  el.textContent = amount < 0 ? `${amount}` : `+${amount}`;
+  el.style.setProperty("--x", `${rect.left + rect.width * 0.58}px`);
+  el.style.setProperty("--y", `${rect.top + rect.height * 0.18}px`);
+  els.effectLayer.appendChild(el);
+  window.setTimeout(() => el.remove(), 1180);
 }
 
 function playAttackCloseup(attacker, target, owner, rival) {
@@ -3614,11 +3698,6 @@ function renderField(root, duelist, owner, animationKey) {
           event.stopPropagation();
           selectPlayerMonster(index);
         });
-        cardEl.addEventListener("dblclick", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          quickAttackOnlyTarget(index);
-        });
       } else {
         cardEl.addEventListener("click", (event) => {
           event.stopPropagation();
@@ -3747,7 +3826,8 @@ function auditIssueLabel(issue) {
     "duplicate-log": "重复日志",
     "missing-spell-resolution": "缺少魔法结算",
     "direct-after-block": "直击规则矛盾",
-    "missing-attack-resolution": "缺少攻击结算"
+    "missing-attack-resolution": "缺少攻击结算",
+    "attack-no-impact": "攻击无影响"
   };
   return labels[issue?.code] || issue?.code || "未知疑点";
 }
@@ -3762,7 +3842,8 @@ function renderTimeline() {
     const audit = auditLogEntries(state.timeline);
     const hasError = audit.issues.some((issue) => issue.severity === "error");
     const firstIssue = audit.issues[0];
-    els.timelineAudit.textContent = audit.ok ? "审计 OK" : `疑点 ${audit.issueCount}：${auditIssueLabel(firstIssue)}`;
+    const firstIssueText = firstIssue ? `${auditIssueLabel(firstIssue)} - ${firstIssue.message}` : "";
+    els.timelineAudit.textContent = audit.ok ? "审计 OK" : `疑点 ${audit.issueCount}：${firstIssueText}`;
     els.timelineAudit.className = `timeline-audit ${audit.ok ? "ok" : hasError ? "error" : "warn"}`;
     els.timelineAudit.dataset.auditDetail = audit.ok
       ? ""

@@ -30,7 +30,6 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         shield: state.player.shield,
         attacksSkipped: state.player.attacksSkipped,
         directAttacks: state.player.directAttacks,
-        trapActivatedThisTurn: state.player.trapActivatedThisTurn,
         hand: cardIds(state.player.hand),
         field: cardIds(state.player.field),
         traps: cardIds(state.player.traps)
@@ -38,7 +37,6 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       ai: {
         lp: state.ai.lp,
         shield: state.ai.shield,
-        trapActivatedThisTurn: state.ai.trapActivatedThisTurn,
         handCount: state.ai.hand.length,
         field: cardIds(state.ai.field),
         traps: cardIds(state.ai.traps)
@@ -257,10 +255,13 @@ async function runDoubleAttackSmoke(ctx) {
   setSmokeStatus("running", "double-attack");
   await startSmokeDuel(ctx, "direct");
   const aiLpBefore = ctx.state.ai.lp;
-  doubleClickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "双击星轨枪兵");
+  const attacker = fieldCard(ctx.els, "player", "star-lancer");
+  clickSmokeElement(attacker, "第一次点击星轨枪兵");
+  await waitForSmoke(() => ctx.state.selected?.zone === "playerField" && ctx.state.selected.index === 0, "星轨枪兵被选中");
+  clickSmokeElement(attacker, "第二次点击星轨枪兵");
   await waitForSmoke(
     () => ctx.state.phase === "battle" && ctx.state.player.field[0]?.used && ctx.state.ai.lp < aiLpBefore,
-    "唯一目标双击自动攻击",
+    "唯一目标二次点击自动攻击",
     9000
   );
   if (ctx.state.ai.field[0]) {
@@ -277,16 +278,17 @@ async function runAiDirectTrapSmoke(ctx) {
   clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "空陷阱区");
   await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "storm-shift"), "风暴转移盖放");
   await finishPlayerTurn(ctx);
-  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "直击风暴转移连锁弹窗", 12000);
-  if (!ctx.els.chainText.textContent.includes("风暴转移") || !ctx.els.chainText.textContent.includes("你本人")) {
-    throw new Error("风暴转移直击提示缺少陷阱名或直击目标");
+  for (let promptIndex = 1; promptIndex <= 3; promptIndex += 1) {
+    await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `第 ${promptIndex} 次直击风暴转移连锁弹窗`, 14000);
+    if (!ctx.els.chainText.textContent.includes("风暴转移") || !ctx.els.chainText.textContent.includes("你本人")) {
+      throw new Error("风暴转移直击提示缺少陷阱名或直击目标");
+    }
+    clickSmokeElement(ctx.els.chainNo, `第 ${promptIndex} 次不发动风暴转移`);
   }
-  clickSmokeElement(ctx.els.chainYes, "发动风暴转移");
-  await waitForSmoke(() => ctx.state.player.trapActivatedThisTurn && !ctx.els.chainModal.classList.contains("show"), "陷阱额度被消耗");
-  await waitForSmoke(() => ctx.state.player.lp < playerLpBefore, "后续直击扣除玩家生命值", 16000);
-  const stormTriggers = ctx.state.log.filter((entry) => entry.includes("陷阱卡 风暴转移 触发")).length;
-  if (stormTriggers !== 1) {
-    throw new Error(`风暴转移本回合应只触发一次，实际 ${stormTriggers} 次`);
+  await waitForSmoke(() => ctx.state.player.lp < playerLpBefore, "连续直击扣除玩家生命值", 16000);
+  const declinedPrompts = ctx.state.log.filter((entry) => entry.includes("你没有发动 风暴转移")).length;
+  if (declinedPrompts !== 3) {
+    throw new Error(`三次攻击应分别提示风暴转移，实际记录 ${declinedPrompts} 次`);
   }
   setSmokeStatus("passed", "ai-direct-trap");
 }

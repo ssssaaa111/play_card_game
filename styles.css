@@ -600,8 +600,10 @@ h1 {
 .timeline-meta {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
-  flex: none;
+  min-width: 0;
+  flex: 1;
 }
 
 .timeline-audit {
@@ -614,6 +616,9 @@ h1 {
   color: #9ff0c9;
   font-size: 10px;
   font-weight: 900;
+  max-width: min(360px, 48vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -2150,6 +2155,32 @@ h1 {
   animation: labelPop 1050ms ease both;
 }
 
+.life-delta {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9;
+  transform: translate(var(--x), var(--y));
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: rgba(8, 10, 16, 0.88);
+  font-size: 24px;
+  font-weight: 900;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  animation: lifeDelta 1120ms ease-out both;
+  pointer-events: none;
+}
+
+.life-delta.damage {
+  color: #ff8a9f;
+  box-shadow: 0 0 24px rgba(239, 71, 111, 0.34);
+}
+
+.life-delta.heal {
+  color: #92f2b8;
+  box-shadow: 0 0 24px rgba(72, 187, 120, 0.34);
+}
+
 .center-card-effect {
   position: fixed;
   left: 50%;
@@ -3038,6 +3069,22 @@ h1 {
   76% {
     opacity: 1;
     transform: translate(var(--x), var(--y)) scale(1);
+  }
+}
+
+@keyframes lifeDelta {
+  0% {
+    opacity: 0;
+    transform: translate(var(--x), calc(var(--y) + 18px)) scale(0.72);
+  }
+  18%,
+  72% {
+    opacity: 1;
+    transform: translate(var(--x), var(--y)) scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x), calc(var(--y) - 42px)) scale(1);
   }
 }
 

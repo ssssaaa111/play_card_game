@@ -106,7 +106,7 @@ function auditDirectAttackFlow(entries, issues) {
 }
 
 function isAttackResolution(text = "") {
-  return /直接攻击，造成|ATK \d+|取消了攻击|无效了本次攻击|破坏了 .*|削弱了 .*攻击继续结算|让直接攻击伤害变为 0|攻击被规则拦截|攻击无效/.test(text);
+  return /直接攻击，造成|ATK \d+|取消了攻击|无效了本次攻击|破坏了 .*|削弱了 .*攻击继续结算|让直接攻击伤害变为 0|攻击被规则拦截|攻击无效|规则校验：.*没有产生任何状态影响/.test(text);
 }
 
 function isActionBoundary(text = "") {
@@ -123,6 +123,14 @@ function auditAttackPreviewResolution(entries, issues) {
   });
 }
 
+function auditRuleCheckEntries(entries, issues) {
+  entries.forEach((entry) => {
+    if (/规则校验：.*没有产生任何状态影响/.test(entry.text)) {
+      pushIssue(issues, "attack-no-impact", "攻击结算前后没有任何状态变化，通常表示规则事件漏结算或目标丢失。", entry, "error");
+    }
+  });
+}
+
 export function auditLogEntries(source = [], options = {}) {
   const entries = normalizeLogEntries(source, options);
   const issues = [];
@@ -130,6 +138,7 @@ export function auditLogEntries(source = [], options = {}) {
   auditSpellExpectations(entries, issues);
   auditDirectAttackFlow(entries, issues);
   auditAttackPreviewResolution(entries, issues);
+  auditRuleCheckEntries(entries, issues);
   return {
     ok: issues.length === 0,
     issueCount: issues.length,

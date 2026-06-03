@@ -270,7 +270,8 @@ test("app uses extracted log audit module", () => {
   assert.match(app, /timelineAudit: document\.querySelector\("#timelineAudit"\)/);
   assert.match(app, /auditLogEntries\(state\.timeline\)/);
   assert.match(app, /function auditIssueLabel\(issue\)/);
-  assert.match(app, /els\.timelineAudit\.textContent = audit\.ok \? "审计 OK" : `疑点 \$\{audit\.issueCount\}：\$\{auditIssueLabel\(firstIssue\)\}`/);
+  assert.match(app, /const firstIssueText = firstIssue \? `\$\{auditIssueLabel\(firstIssue\)\} - \$\{firstIssue\.message\}` : ""/);
+  assert.match(app, /els\.timelineAudit\.textContent = audit\.ok \? "审计 OK" : `疑点 \$\{audit\.issueCount\}：\$\{firstIssueText\}`/);
   assert.match(app, /els\.timelineAudit\.dataset\.auditDetail = audit\.ok/);
   assert.match(smoke, /from '\.\/log-audit\.js'/);
   assert.match(audit, /export function auditLogEntries/);
@@ -315,7 +316,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /点其它手牌会取消当前目标选择并切换/);
   assert.match(smoke, /攻击目标点击后不应再等待二次确认/);
   assert.match(smoke, /战斗阶段陷阱确认可用/);
-  assert.match(smoke, /直击风暴转移连锁弹窗/);
+  assert.match(smoke, /第 \$\{promptIndex\} 次直击风暴转移连锁弹窗/);
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);

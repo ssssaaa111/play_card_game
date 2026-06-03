@@ -16,7 +16,7 @@ export const trapDefinitions = {
     consumesAttack: true
   },
   attackShift: {
-    events: ["attack", "direct"],
+    event: "attack",
     caption: "取消攻击并获得护盾",
     triggerText: "对手攻击时",
     cancelsEvent: true,
