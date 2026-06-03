@@ -365,6 +365,37 @@ async function runChainTrapChoiceSmoke(ctx) {
   setSmokeStatus("passed", "chain-trap-choice");
 }
 
+async function runModeAutoEndSmoke(ctx) {
+  setSmokeStatus("running", "mode-auto-end");
+  await startSmokeDuel(ctx, "combo");
+  ctx.state.player.hand = [];
+  ctx.state.player.deck = [];
+  ctx.state.player.field.forEach((card) => {
+    if (!card) return;
+    card.mode = "attack";
+    card.used = false;
+    card.changedMode = false;
+  });
+  ctx.state.summonedThisTurn = true;
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "选择第一只怪兽");
+  clickSmokeElement(ctx.els.modeBtn, "第一只怪兽切换守备");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.mode === "defense" &&
+      ctx.state.phase === "main" &&
+      ctx.state.actionWindow === "main",
+    "第一只切守备后仍保留主阶段给第二只怪兽"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "gale-mage"), "选择第二只怪兽");
+  clickSmokeElement(ctx.els.modeBtn, "第二只怪兽切换守备");
+  await waitForSmoke(
+    () => ctx.state.player.field.every((card) => !card || card.mode === "defense") &&
+      (ctx.state.actionWindow === "autoEnd" || ctx.state.turn === "ai"),
+    "只剩守备怪兽且无可用手牌时自动进入回合结束",
+    5000
+  );
+  setSmokeStatus("passed", "mode-auto-end");
+}
+
 async function runPauseDetailSmoke(ctx) {
   setSmokeStatus("running", "pause-detail");
   await startSmokeDuel(ctx, "direct");
@@ -395,6 +426,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
     "chain-trap-choice": runChainTrapChoiceSmoke,
+    "mode-auto-end": runModeAutoEndSmoke,
     "pause-detail": runPauseDetailSmoke
   };
   const run = smokeRuns[smoke];

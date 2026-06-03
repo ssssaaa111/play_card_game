@@ -310,6 +310,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
   assert.match(smoke, /"trap-choice": runTrapChoiceSmoke/);
   assert.match(smoke, /"chain-trap-choice": runChainTrapChoiceSmoke/);
+  assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
   assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
   assert.match(smoke, /function trapCard/);
@@ -336,6 +337,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-trap-choice"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);
 });
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   actionsForPhase,
+  canChangeAttackToDefense,
   canDuelistAttack,
   canChangeMode,
   canSetTrapFromHand,
@@ -35,6 +36,9 @@ test("detects attack and mode-change availability from field state", () => {
   assert.equal(canChangeMode([monster()]), true);
   assert.equal(canChangeMode([monster({ changedMode: true })]), false);
   assert.equal(canChangeMode([monster({ used: true })]), false);
+  assert.equal(canChangeAttackToDefense([monster()]), true);
+  assert.equal(canChangeAttackToDefense([monster({ mode: "defense" })]), false);
+  assert.equal(canChangeAttackToDefense([monster({ used: true })]), false);
 });
 
 test("blocks attacks after the player has skipped battle for the turn", () => {
@@ -102,7 +106,31 @@ test("summarizes player action windows in one place", () => {
   assert.equal(summary.summon, false);
   assert.equal(summary.trap, true);
   assert.equal(summary.mode, false);
+  assert.equal(summary.modeBlocksMain, false);
   assert.equal(summary.hasAny, true);
+});
+
+test("defense-only mode switches do not block automatic turn flow", () => {
+  const defenseOnly = summarizePlayerActions({
+    player: duelist({
+      field: [monster({ mode: "defense" }), monster({ mode: "defense" }), null]
+    })
+  });
+  assert.equal(defenseOnly.mode, true, "the UI can still show that battle position is selectable");
+  assert.equal(defenseOnly.modeBlocksMain, false, "switching guards back to attack should not keep the turn open by itself");
+
+  const defenseOnlyActions = actionsForPhase(defenseOnly, "main");
+  assert.equal(defenseOnlyActions.hasMain, false);
+  assert.equal(defenseOnlyActions.hasAny, false);
+
+  const attackReady = summarizePlayerActions({
+    player: duelist({
+      field: [monster(), monster({ mode: "defense" }), null]
+    })
+  });
+  assert.equal(attackReady.mode, true);
+  assert.equal(attackReady.modeBlocksMain, true);
+  assert.equal(actionsForPhase(attackReady, "main").hasMain, true);
 });
 
 test("battle phase keeps trap setting as a valid action and auto-ends when empty", () => {

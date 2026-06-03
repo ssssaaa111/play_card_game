@@ -25,6 +25,10 @@ export function canChangeMode(field = []) {
   return field.some((card) => card && !card.used && !card.changedMode);
 }
 
+export function canChangeAttackToDefense(field = []) {
+  return field.some((card) => card && !card.used && !card.changedMode && card.mode !== "defense");
+}
+
 export function canSummonFromHand(duelist, summonedThisTurn = false) {
   const hasEmptyZone = duelist.field.some((slot) => !slot);
   const hasMonster = duelist.hand.some((card) => card.type === "monster");
@@ -47,7 +51,8 @@ export function summarizePlayerActions({
     spell: player.hand.some((card, index) => canSpell(card, index)),
     summon: canSummonFromHand(player, summonedThisTurn),
     trap: canSetTrapFromHand(player),
-    mode: canChangeMode(player.field)
+    mode: canChangeMode(player.field),
+    modeBlocksMain: canChangeAttackToDefense(player.field)
   };
   return {
     ...summary,
@@ -64,7 +69,8 @@ export function actionsForPhase(summary = {}, phase = PHASES.main) {
     trap: Boolean(summary.trap),
     mode: Boolean(summary.mode)
   };
-  const hasMain = Boolean(actions.targetSelect || actions.spell || actions.summon || actions.trap || actions.mode);
+  const modeBlocksMain = summary.modeBlocksMain ?? actions.mode;
+  const hasMain = Boolean(actions.targetSelect || actions.spell || actions.summon || actions.trap || modeBlocksMain);
   const hasBattle = Boolean(actions.attack || actions.spell || actions.trap);
 
   if (actions.targetSelect) {
