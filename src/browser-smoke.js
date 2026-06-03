@@ -293,6 +293,35 @@ async function runAiDirectTrapSmoke(ctx) {
   setSmokeStatus("passed", "ai-direct-trap");
 }
 
+async function runTrapChoiceSmoke(ctx) {
+  setSmokeStatus("running", "trap-choice");
+  await startSmokeDuel(ctx, "trapChoice");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "多陷阱响应窗口", 12000);
+  const mirror = trapCard(ctx.els, "player", "mirror-snare");
+  const voidLock = trapCard(ctx.els, "player", "void-lock");
+  if (!mirror?.classList.contains("trap-response") || !voidLock?.classList.contains("trap-response")) {
+    throw new Error("所有可发动陷阱都应该高亮");
+  }
+  if (!ctx.els.chainYes.disabled) {
+    throw new Error("多陷阱响应时必须先选择一张陷阱");
+  }
+  clickSmokeElement(voidLock, "选择星界封锁");
+  await waitForSmoke(
+    () => ctx.els.chainText.textContent.includes("星界封锁") && !ctx.els.chainYes.disabled,
+    "选择陷阱后确认按钮可用"
+  );
+  clickSmokeElement(ctx.els.chainYes, "确认发动星界封锁");
+  await waitForSmoke(
+    () => ctx.state.player.traps.some((card) => card?.id === "mirror-snare") &&
+      !ctx.state.player.traps.some((card) => card?.id === "void-lock") &&
+      ctx.state.log.some((entry) => entry.includes("陷阱卡 星界封锁 触发")),
+    "只发动选中的陷阱",
+    9000
+  );
+  setSmokeStatus("passed", "trap-choice");
+}
+
 async function runPauseDetailSmoke(ctx) {
   setSmokeStatus("running", "pause-detail");
   await startSmokeDuel(ctx, "direct");
@@ -321,6 +350,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "battle-trap": runBattleTrapSmoke,
     "double-attack": runDoubleAttackSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
+    "trap-choice": runTrapChoiceSmoke,
     "pause-detail": runPauseDetailSmoke
   };
   const run = smokeRuns[smoke];

@@ -185,7 +185,8 @@ test("target selection uses standardized timed action windows", () => {
   assert.match(app, /function handleTargetSelectionTimeout\(\)/);
   assert.match(app, /resolvePendingSpellTarget\(targets\[0\]\.owner, targets\[0\]\.index\)/);
   assert.match(app, /handleActionWindowTimeout\(windowId\)/);
-  assert.match(app, /setActionWindow\(ACTION_WINDOWS\.response, \{ reason: `trap:\$\{trap\.uid \|\| trap\.id \|\| trap\.name\}` \}\)/);
+  assert.match(app, /setActionWindow\(ACTION_WINDOWS\.response, \{ reason: `trap-choice:\$\{eventName\}` \}\)/);
+  assert.match(app, /pendingTrapChoice/);
 });
 
 test("app uses extracted battle outcome helpers", () => {
@@ -292,8 +293,10 @@ test("browser smoke runner covers key click regressions", () => {
 
   assert.match(html, /<option value="skipLock">跳攻锁定<\/option>/);
   assert.match(html, /<option value="directTrap">直击陷阱<\/option>/);
+  assert.match(html, /<option value="trapChoice">陷阱选择<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
+  assert.match(data, /trapChoice: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
   assert.match(smoke, /"skip-lock": runSkipLockSmoke/);
@@ -304,6 +307,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
   assert.match(smoke, /"double-attack": runDoubleAttackSmoke/);
   assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
+  assert.match(smoke, /"trap-choice": runTrapChoiceSmoke/);
   assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
   assert.match(smoke, /function trapCard/);
@@ -317,6 +321,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /攻击目标点击后不应再等待二次确认/);
   assert.match(smoke, /战斗阶段陷阱确认可用/);
   assert.match(smoke, /第 \$\{promptIndex\} 次直击风暴转移连锁弹窗/);
+  assert.match(smoke, /所有可发动陷阱都应该高亮/);
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
@@ -326,6 +331,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);
 });
 
@@ -393,8 +399,9 @@ test("app uses extracted trap metadata", () => {
   const app = readProjectFile("src/app.js");
 
   assert.match(app, /from '\.\/traps\.js'/);
-  assert.match(app, /trapActivationText\(trap, eventName, details\)/);
+  assert.match(app, /trapActivationText\(selectedCard, choice\.eventName, choice\.details\)/);
   assert.match(app, /trapCanResolve\(card, eventName, \{ owner, context \}\)/);
+  assert.match(app, /\.filter\(\(\{ card \}\) => trapCanResolve\(card, eventName, \{ owner, context \}\)\)/);
   assert.match(app, /selectRedirectTarget\(owner\.field, context\.targetIndex\)/);
   assert.match(app, /trapResult\.consumesAttack/);
   assert.doesNotMatch(app, /function trapMatchesEvent/);

@@ -890,6 +890,19 @@ h1 {
   cursor: crosshair;
 }
 
+.trap-slot.trap-response,
+.card.trap-response {
+  border-color: rgba(183, 148, 244, 0.96);
+  box-shadow: 0 0 0 3px rgba(183, 148, 244, 0.2), 0 0 34px rgba(183, 148, 244, 0.38);
+  cursor: pointer;
+}
+
+.trap-slot.trap-response-selected,
+.card.trap-response-selected {
+  border-color: rgba(246, 189, 96, 0.98);
+  box-shadow: 0 0 0 4px rgba(246, 189, 96, 0.24), 0 0 42px rgba(246, 189, 96, 0.44);
+}
+
 .slot.targetable::after {
   content: "选择目标";
   position: absolute;
@@ -922,6 +935,29 @@ h1 {
   font-weight: 900;
   text-align: center;
   pointer-events: none;
+}
+
+.trap-slot.trap-response::after {
+  content: "可发动";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 5;
+  padding: 4px 6px;
+  border: 1px solid rgba(183, 148, 244, 0.42);
+  background: rgba(8, 10, 16, 0.82);
+  color: #e3d5ff;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+  pointer-events: none;
+}
+
+.trap-slot.trap-response-selected::after {
+  content: "已选择";
+  border-color: rgba(246, 189, 96, 0.44);
+  color: var(--gold);
 }
 
 .card.used {

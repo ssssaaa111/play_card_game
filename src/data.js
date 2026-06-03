@@ -212,6 +212,16 @@ export const scenarioSetups = {
     aiField: ["star-lancer", "sky-raider", "ember-drake"],
     aiHand: []
   },
+  trapChoice: {
+    label: "陷阱选择",
+    text: "我方预置两张可响应攻击的陷阱，AI 场上有攻击怪兽，用来验证响应窗口多选一。",
+    goal: "AI 攻击时两张陷阱都应高亮；选择其中一张发动后，另一张保留。",
+    playerHand: [],
+    playerField: [],
+    playerTraps: ["mirror-snare", "void-lock"],
+    aiField: ["star-lancer"],
+    aiHand: []
+  },
   skipLock: {
     label: "跳攻锁定",
     text: "我方场上已有可攻击怪兽，手牌含新怪兽，用来验证跳过攻击后新召唤也不能攻击。",

@@ -65,6 +65,7 @@ const state = {
   actionWindow: ACTION_WINDOWS.setup,
   pendingOpeningDraw: false,
   chainResolve: null,
+  pendingTrapChoice: null,
   resumeResolvers: [],
   idleTimer: null,
   countdownTimer: null,
@@ -1690,7 +1691,31 @@ async function handlePlayerSlot(index) {
   resolvePlayerActionWindow("召唤完成");
 }
 
+function selectPendingTrapChoice(index) {
+  const choice = state.pendingTrapChoice;
+  if (!choice) return false;
+  if (!choice.trapIndexes.includes(index)) {
+    const card = state.player.traps[index];
+    if (card) showDetail(card);
+    cue("请选择高亮的可发动陷阱，或点击不发动。");
+    resetPlayerIdleCountdown();
+    return true;
+  }
+  const card = state.player.traps[index];
+  if (!card) return true;
+  choice.selectedIndex = index;
+  state.selected = null;
+  clearBattlePreview();
+  showDetail(card);
+  updateTrapChoicePrompt();
+  playSound("click");
+  render();
+  resetPlayerIdleCountdown();
+  return true;
+}
+
 function handlePlayerTrapSlot(index) {
+  if (selectPendingTrapChoice(index)) return;
   const existing = state.player.traps[index];
   if (existing && (!canPlayerAct() || !state.selected || state.selected.zone !== "hand")) {
     state.selected = null;
@@ -2093,15 +2118,18 @@ function spellCaption(card) {
 async function triggerTrap(owner, rival, eventName, context) {
   const result = { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
   if (state.gameOver) return result;
-  const trapIndex = owner.traps.findIndex((card) => trapCanResolve(card, eventName, { owner, context }));
-  if (trapIndex < 0) return result;
-  const trap = owner.traps[trapIndex];
+  const candidates = owner.traps
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => trapCanResolve(card, eventName, { owner, context }));
+  if (candidates.length === 0) return result;
+  let trapIndex = candidates[0].index;
   if (owner.owner === "player") {
-    const activate = await promptTrapActivation(trap, eventName, { owner, rival, context });
-    if (!activate) {
-      addLog(`你没有发动 ${trap.name}。`);
+    const choice = await promptTrapChoice(candidates, eventName, { owner, rival, context });
+    if (choice.trapIndex < 0) {
+      addLog(choice.skippedName ? `你没有发动 ${choice.skippedName}。` : "你没有发动陷阱。");
       return result;
     }
+    trapIndex = choice.trapIndex;
   }
   const outcome = resolveTrapCard(owner, rival, eventName, context, trapIndex, 1);
   result.activated = 1;
@@ -2110,6 +2138,31 @@ async function triggerTrap(owner, rival, eventName, context) {
   result.consumesAttack = Boolean(outcome.consumesAttack);
   checkGameOver();
   return result;
+}
+
+function pendingTrapChoiceDetailsText(choice = state.pendingTrapChoice) {
+  if (!choice) return "";
+  const selectedCard = state.player.traps[choice.selectedIndex];
+  if (selectedCard) {
+    return trapActivationText(selectedCard, choice.eventName, choice.details);
+  }
+  const firstCard = state.player.traps[choice.trapIndexes[0]];
+  const eventText = firstCard
+    ? trapActivationText(firstCard, choice.eventName, choice.details).split("是否连锁发动")[0]
+    : "";
+  const names = choice.trapIndexes
+    .map((index) => state.player.traps[index]?.name)
+    .filter(Boolean)
+    .join("、");
+  return `${eventText}可发动陷阱：${names}。点击高亮陷阱选择，本事件只能发动一张。`;
+}
+
+function updateTrapChoicePrompt() {
+  if (!state.pendingTrapChoice) return;
+  els.chainText.textContent = pendingTrapChoiceDetailsText();
+  const selectedCard = state.player.traps[state.pendingTrapChoice.selectedIndex];
+  els.chainYes.textContent = selectedCard ? `发动 ${selectedCard.name}` : "发动陷阱";
+  els.chainYes.disabled = !selectedCard;
 }
 
 function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex = 1) {
@@ -2498,7 +2551,7 @@ function heal(duelist, amount) {
   return healed;
 }
 
-function promptTrapActivation(trap, eventName, details = {}) {
+function promptTrapChoice(candidates, eventName, details = {}) {
   const previousWindow = {
     actionWindow: state.actionWindow,
     timing: state.timing,
@@ -2506,20 +2559,42 @@ function promptTrapActivation(trap, eventName, details = {}) {
     actionWindowReason: state.actionWindowReason,
     actionDeadline: state.actionDeadline
   };
+  const trapIndexes = candidates.map(({ index }) => index);
+  const selectedIndex = trapIndexes.length === 1 ? trapIndexes[0] : -1;
   clearPlayerIdleTimers();
-  setActionWindow(ACTION_WINDOWS.response, { reason: `trap:${trap.uid || trap.id || trap.name}` });
-  els.chainText.textContent = trapActivationText(trap, eventName, details);
+  setActionWindow(ACTION_WINDOWS.response, { reason: `trap-choice:${eventName}` });
+  state.pendingTrapChoice = {
+    owner: "player",
+    eventName,
+    details,
+    trapIndexes,
+    selectedIndex
+  };
+  updateTrapChoicePrompt();
   els.chainModal.classList.add("show");
   playSound("trap");
-  speak(`是否发动陷阱，${trap.name}。`);
+  speak(trapIndexes.length > 1 ? "请选择要发动的陷阱。" : `是否发动陷阱，${candidates[0].card.name}。`);
+  render();
   resetPlayerIdleCountdown();
   return new Promise((resolve) => {
     state.chainResolve = (answer) => {
+      const choice = state.pendingTrapChoice;
+      const trapIndex = choice?.selectedIndex ?? -1;
+      const skippedName = trapIndex >= 0 ? state.player.traps[trapIndex]?.name || "" : "";
+      if (answer && trapIndex < 0) {
+        cue("先选择一张高亮的陷阱卡。");
+        resetPlayerIdleCountdown();
+        return;
+      }
       clearPlayerIdleTimers();
       Object.assign(state, previousWindow);
       els.chainModal.classList.remove("show");
       state.chainResolve = null;
-      resolve(answer);
+      state.pendingTrapChoice = null;
+      els.chainYes.disabled = false;
+      els.chainYes.textContent = "发动陷阱";
+      render();
+      resolve({ trapIndex: answer ? trapIndex : -1, skippedName });
     };
   });
 }
@@ -3720,6 +3795,10 @@ function renderTraps(root, duelist, owner) {
     slot.dataset.owner = owner;
     slot.dataset.index = index;
     slot.dataset.testid = `${owner}-trap-${index}`;
+    const trapChoiceReady = owner === "player" && Boolean(state.pendingTrapChoice?.trapIndexes?.includes(index));
+    const trapChoiceSelected = trapChoiceReady && state.pendingTrapChoice?.selectedIndex === index;
+    slot.classList.toggle("trap-response", trapChoiceReady);
+    slot.classList.toggle("trap-response-selected", trapChoiceSelected);
     slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}陷阱区 ${index + 1}`);
     if (owner === "player") {
       slot.addEventListener("click", () => handlePlayerTrapSlot(index));
@@ -3735,9 +3814,12 @@ function renderTraps(root, duelist, owner) {
         cardEl.dataset.cardName = owner === "player" ? card.name || "" : "盖放的陷阱";
         cardEl.dataset.cardType = "trap";
       }
+      cardEl.classList.toggle("trap-response", trapChoiceReady);
+      cardEl.classList.toggle("trap-response-selected", trapChoiceSelected);
       if (owner === "player") {
         cardEl.addEventListener("click", (event) => {
           event.stopPropagation();
+          if (selectPendingTrapChoice(index)) return;
           state.selected = null;
           clearBattlePreview();
           showDetail(card);
