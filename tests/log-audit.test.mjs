@@ -28,6 +28,17 @@ test("flags duplicate logs and missing spell resolution", () => {
   );
 });
 
+test("allows repeatable gameplay actions with identical logs", () => {
+  const audit = auditLogEntries([
+    { step: 1, text: "AI 召唤了 星轨枪兵。" },
+    { step: 2, text: "AI 召唤了 星轨枪兵。" },
+    { step: 3, text: "AI 抽了 1 张卡。" },
+    { step: 4, text: "AI 抽了 1 张卡。" }
+  ]);
+
+  assert.equal(audit.ok, true);
+});
+
 test("accepts spell logs with matching resolution", () => {
   const audit = auditLogEntries([
     { step: 1, text: "你 发动魔法卡 预见之召。" },
@@ -84,6 +95,12 @@ test("accepts attack previews followed by battle or trap resolution", () => {
   assert.equal(auditLogEntries([
     { step: 1, text: "攻击预判：星轨枪兵 ATK 1800 对 铁壁守卫 DEF 2100，攻击方预计承受 300 点伤害。" },
     { step: 2, text: "星轨枪兵 ATK 1800 低于 铁壁守卫 DEF 2100，攻击方受到 300 点生命值伤害。" }
+  ]).ok, true);
+
+  assert.equal(auditLogEntries([
+    { step: 1, text: "攻击预判：星轨枪兵 ATK 1800 对 铁壁守卫 ATK 900，预计造成 900 点伤害。" },
+    { step: 2, text: "星轨枪兵 ATK 1800 击破 铁壁守卫 ATK 900，差值 900，造成 900 点战斗伤害。" },
+    { step: 3, text: "你盖放了陷阱卡 镜光反制。" }
   ]).ok, true);
 });
 

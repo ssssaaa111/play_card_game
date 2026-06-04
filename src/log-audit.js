@@ -62,9 +62,13 @@ function pushIssue(issues, code, message, entry, severity = "warning") {
   });
 }
 
+function isRepeatableActionLog(text = "") {
+  return /召唤了|盖放了|抽了 \d+ 张卡/.test(text);
+}
+
 function auditDuplicateNeighbors(entries, issues) {
   for (let i = 1; i < entries.length; i += 1) {
-    if (entries[i].text === entries[i - 1].text) {
+    if (entries[i].text === entries[i - 1].text && !isRepeatableActionLog(entries[i].text)) {
       pushIssue(issues, "duplicate-log", "连续出现完全相同的日志，可能是重复触发或重复播报。", entries[i]);
     }
   }

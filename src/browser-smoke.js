@@ -241,7 +241,18 @@ async function runBattleTrapSmoke(ctx) {
   clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "星轨枪兵");
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "敌方怪兽攻击高亮");
   clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "攻击铁壁守卫");
-  await waitForSmoke(() => ctx.state.phase === "battle" && ctx.state.player.field[0]?.used, "攻击后保留战斗窗口", 9000);
+  await waitForSmoke(() => ctx.state.actionWindow === "resolution", "攻击期间关闭玩家行动窗口");
+  if (!ctx.els.endTurnBtn.disabled) {
+    throw new Error("攻击结算期间不应允许结束回合");
+  }
+  await waitForSmoke(
+    () => ctx.state.phase === "battle" &&
+      ctx.state.actionWindow === "battle" &&
+      ctx.state.player.field[0]?.used &&
+      auditLogEntries(ctx.state.timeline).ok,
+    "攻击完整结算后重新开放战斗窗口",
+    9000
+  );
   clickSmokeElement(handCard(ctx.els, "mirror-snare"), "战斗阶段选择镜光反制");
   await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "战斗阶段陷阱确认可用");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "确认盖放镜光反制");
@@ -253,6 +264,51 @@ async function runBattleTrapSmoke(ctx) {
     throw new Error("战斗阶段仍有可行动项时不应关闭行动窗口");
   }
   setSmokeStatus("passed", "battle-trap");
+}
+
+async function runComboSpellSmoke(ctx) {
+  setSmokeStatus("running", "combo-spell");
+  await startSmokeDuel(ctx, "combo");
+  const aiLpBefore = ctx.state.ai.lp;
+  const attacksBefore = ctx.state.player.field.map((card) => card?.tempAtk || 0);
+  clickSmokeElement(handCard(ctx.els, "flame-gale-burst"), "炎岚合击手牌");
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "炎岚合击中央确认可用");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认发动炎岚合击");
+  await waitForSmoke(
+    () => ctx.state.ai.lp <= aiLpBefore - 400 &&
+      ctx.state.player.field.every((card, index) => !card || card.tempAtk >= attacksBefore[index] + 200) &&
+      ctx.state.player.grave.some((card) => card?.id === "flame-gale-burst"),
+    "炎岚合击完成伤害和全体强化"
+  );
+  if (!ctx.state.log.some((entry) => entry.includes("炎岚合击") && entry.includes("强化我方全体怪兽"))) {
+    throw new Error("炎岚合击缺少明确结算日志");
+  }
+  setSmokeStatus("passed", "combo-spell");
+}
+
+async function runAceAttackSmoke(ctx) {
+  setSmokeStatus("running", "ace-attack");
+  await startSmokeDuel(ctx, "ace");
+  clickSmokeElement(handCard(ctx.els, "flare-titan"), "熔核巨像手牌");
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "熔核巨像中央确认可用");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认召唤熔核巨像");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "flare-titan") &&
+      ctx.els.aceOverlay.classList.contains("show") &&
+      fieldCard(ctx.els, "player", "flare-titan"),
+    "王牌召唤动画与场上怪兽"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "flare-titan"), "选择熔核巨像");
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "王牌攻击目标高亮");
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "熔核巨像攻击铁壁守卫");
+  await waitForSmoke(() => ctx.els.effectLayer.querySelector(".ace-strike"), "王牌攻势特写", 9000);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "flare-titan" && card.used) &&
+      !ctx.state.ai.field.some((card) => card?.id === "iron-guardian"),
+    "王牌攻击完成结算",
+    10000
+  );
+  setSmokeStatus("passed", "ace-attack");
 }
 
 async function runDoubleAttackSmoke(ctx) {
@@ -397,6 +453,10 @@ async function runChainTrapChoiceSmoke(ctx) {
     "连锁场景只发动选中的陷阱",
     9000
   );
+  const audit = auditLogEntries(ctx.state.timeline);
+  if (!audit.ok) {
+    throw new Error(`连锁场景日志审计失败：${audit.issues.map((issue) => issue.message).join(" / ")}`);
+  }
   setSmokeStatus("passed", "chain-trap-choice");
 }
 
@@ -480,6 +540,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
     "battle-trap": runBattleTrapSmoke,
+    "combo-spell": runComboSpellSmoke,
+    "ace-attack": runAceAttackSmoke,
     "double-attack": runDoubleAttackSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,

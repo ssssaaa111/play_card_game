@@ -37,6 +37,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/log-audit.js");
   checkModuleSyntax("src/response-state.js");
   checkModuleSyntax("src/rules.js");
+  checkModuleSyntax("src/scenario-state.js");
   checkModuleSyntax("src/spells.js");
   checkModuleSyntax("src/timeline.js");
   checkModuleSyntax("src/traps.js");
@@ -320,6 +321,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
+  assert.match(smoke, /"combo-spell": runComboSpellSmoke/);
+  assert.match(smoke, /"ace-attack": runAceAttackSmoke/);
   assert.match(smoke, /"double-attack": runDoubleAttackSmoke/);
   assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
   assert.match(smoke, /"trap-choice": runTrapChoiceSmoke/);
@@ -350,6 +353,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "combo-spell"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "ace-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
@@ -383,14 +388,22 @@ test("app uses extracted card details", () => {
   assert.doesNotMatch(app, /cardTagText\(card\)/);
 });
 
-test("app uses extracted deck builders", () => {
+test("app delegates scenario setup to extracted state builder", () => {
   const app = readProjectFile("src/app.js");
+  const scenarioState = readProjectFile("src/scenario-state.js");
 
   assert.match(app, /from '\.\/deck\.js'/);
-  assert.match(app, /buildScenarioDeck\(state\.deckPreset, playerReserved\)/);
+  assert.match(app, /from '\.\/scenario-state\.js'/);
+  assert.match(app, /buildScenarioState\(scenario, \{/);
+  assert.doesNotMatch(app, /buildScenarioDeck\(/);
+  assert.doesNotMatch(app, /loadCardList\(/);
   assert.doesNotMatch(app, /function createDuelist/);
   assert.doesNotMatch(app, /function buildDeck/);
   assert.doesNotMatch(app, /function cloneCard/);
+
+  assert.match(scenarioState, /buildScenarioDeck\(preset, scenarioReservedIds\(scenario, owner\)\)/);
+  assert.match(scenarioState, /loadCardList\(scenario\[`[^\n]+Hand`\]\)/);
+  assert.match(scenarioState, /Array\(FIELD_SIZE\)\.fill\(null\)/);
 });
 
 test("app uses extracted view model text", () => {
@@ -466,7 +479,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "src/actions.js", "src/app.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "src/actions.js", "src/app.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

@@ -47,8 +47,10 @@ test("normalizes action windows and detects player control", () => {
   assert.equal(canPlayerActState(state()), true);
   assert.equal(canPlayerActState(state({ paused: true })), false);
   assert.equal(canPlayerActState(state({ turn: TURNS.ai })), false);
+  assert.equal(canPlayerActState(state({ actionWindow: ACTION_WINDOWS.resolution })), false);
   assert.equal(canUsePlayerTurnControls(state()), true);
   assert.equal(canUsePlayerTurnControls(state({ phase: PHASES.draw })), false);
+  assert.equal(canUsePlayerTurnControls(state({ actionWindow: ACTION_WINDOWS.resolution })), false);
 });
 
 test("maps action windows to explicit timings and timeout budgets", () => {
@@ -56,11 +58,13 @@ test("maps action windows to explicit timings and timeout budgets", () => {
   assert.equal(actionWindowTiming(ACTION_WINDOWS.battle), TIMINGS.battleOpen);
   assert.equal(actionWindowTiming(ACTION_WINDOWS.targetSelect), TIMINGS.targetSelection);
   assert.equal(actionWindowTiming(ACTION_WINDOWS.response), TIMINGS.responseWindow);
+  assert.equal(actionWindowTiming(ACTION_WINDOWS.resolution), TIMINGS.resolution);
   assert.equal(actionWindowTiming(ACTION_WINDOWS.autoEnd), TIMINGS.autoEnd);
   assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.main), 30);
   assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.battle), 30);
   assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.targetSelect), 20);
   assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.response), 20);
+  assert.equal(actionWindowTimeoutSeconds(ACTION_WINDOWS.resolution), 0);
 });
 
 test("decides the player action window from phase and available actions", () => {

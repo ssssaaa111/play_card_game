@@ -5,7 +5,7 @@ import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { cardDetailText, cardZoomMeta } from './card-detail.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { availableElementCombos, markElementComboResolved } from './combos.js';
-import { buildDeck, buildScenarioDeck, createDuelist, loadCardList } from './deck.js';
+import { buildDeck, createDuelist } from './deck.js';
 import { auditLogEntries } from './log-audit.js';
 import { scoreSpellForAi, spellDefinitions, validateSpellCondition } from './spells.js';
 import { nextTimelineState } from './timeline.js';
@@ -16,6 +16,7 @@ import {
   resolveTrapResponse,
   selectTrapResponse
 } from './response-state.js';
+import { buildScenarioState } from './scenario-state.js';
 import {
   ACTION_WINDOWS,
   PHASES,
@@ -36,7 +37,6 @@ import {
 import { describeHandAction, duelHintText, phaseLabel, turnLabel } from './view-model.js';
 import {
   MAX_LP,
-  FIELD_SIZE,
   battlePreviewText,
   battleValue,
   canDirectAttack,
@@ -875,46 +875,12 @@ function syncSetupControls() {
 function applyScenarioSetup() {
   const scenario = scenarioSetups[state.scenarioId];
   if (!scenario || state.scenarioId === "normal") return;
-  const playerReserved = [
-    ...(scenario.playerHand || []),
-    ...(scenario.playerField || []),
-    ...(scenario.playerTraps || [])
-  ];
-  const aiReserved = [
-    ...(scenario.aiHand || []),
-    ...(scenario.aiField || []),
-    ...(scenario.aiTraps || [])
-  ];
-  state.player.hand = loadCardList(scenario.playerHand);
-  state.ai.hand = loadCardList(scenario.aiHand);
-  state.player.deck = Array.isArray(scenario.playerDeck)
-    ? loadCardList(scenario.playerDeck)
-    : buildScenarioDeck(state.deckPreset, playerReserved);
-  state.ai.deck = Array.isArray(scenario.aiDeck)
-    ? loadCardList(scenario.aiDeck)
-    : buildScenarioDeck(aiProfiles[state.aiStyle]?.deckPreset || "balanced", aiReserved);
-  state.player.field = Array(FIELD_SIZE).fill(null);
-  state.ai.field = Array(FIELD_SIZE).fill(null);
-  state.player.traps = Array(FIELD_SIZE).fill(null);
-  state.ai.traps = Array(FIELD_SIZE).fill(null);
-  loadCardList(scenario.playerField).slice(0, FIELD_SIZE).forEach((card, index) => {
-    state.player.field[index] = card;
+  const setup = buildScenarioState(scenario, {
+    playerPreset: state.deckPreset,
+    aiPreset: aiProfiles[state.aiStyle]?.deckPreset || "balanced"
   });
-  loadCardList(scenario.aiField).slice(0, FIELD_SIZE).forEach((card, index) => {
-    state.ai.field[index] = card;
-  });
-  loadCardList(scenario.playerTraps).slice(0, FIELD_SIZE).forEach((card, index) => {
-    state.player.traps[index] = card;
-  });
-  loadCardList(scenario.aiTraps).slice(0, FIELD_SIZE).forEach((card, index) => {
-    state.ai.traps[index] = card;
-  });
-  state.player.field.forEach((card) => {
-    if (card) card.used = false;
-  });
-  state.ai.field.forEach((card) => {
-    if (card) card.used = false;
-  });
+  Object.assign(state.player, setup.player);
+  Object.assign(state.ai, setup.ai);
   addLog(`规则测试场景：${scenario.label}。${scenario.text}`);
   if (scenario.goal) {
     addLog(`测试目标：${scenario.goal}`);
@@ -1231,7 +1197,19 @@ function currentPlayerActions() {
     summonedThisTurn: state.summonedThisTurn,
     canSpell: (card, index) => card.type === "spell" && validateSpell(state.player, state.ai, card, index).ok
   });
-  return actionsForPhase(summary, state.phase);
+  const actions = actionsForPhase(summary, state.phase);
+  if (canPlayerAct()) return actions;
+  return {
+    targetSelect: false,
+    attack: false,
+    spell: false,
+    summon: false,
+    trap: false,
+    mode: false,
+    hasMain: false,
+    hasBattle: false,
+    hasAny: false
+  };
 }
 
 function spellTargetMode(card) {
@@ -1509,13 +1487,22 @@ async function queuePendingAttack(targetIndex) {
   }
   const target = state.ai.field[targetIndex];
   const preview = battlePreviewText(attacker, target);
+  cancelAutoEnd();
+  clearPlayerIdleTimers();
+  setActionWindow(ACTION_WINDOWS.resolution, { reason: "attack-resolution" });
   showBattlePreview(attacker, target, state.player, state.ai);
   addLog(`攻击预判：${preview}`);
   cue(preview);
   render();
-  clearPlayerIdleTimers();
-  await sleep(360);
-  const resolved = await attack(state.player, state.ai, attackerIndex, targetIndex);
+  let resolved = false;
+  try {
+    await sleep(360);
+    resolved = await attack(state.player, state.ai, attackerIndex, targetIndex);
+  } finally {
+    if (!state.gameOver && state.actionWindow === ACTION_WINDOWS.resolution) {
+      setActionWindow(ACTION_WINDOWS.battle, { reason: "attack-resolved" });
+    }
+  }
   state.selected = null;
   clearBattlePreview();
   render(targetIndex >= 0 ? "hit-ai-" + targetIndex : "hit-ai-direct");
@@ -1917,7 +1904,9 @@ function setTrap(owner, handIndex, trapIndex) {
   const card = owner.hand.splice(handIndex, 1)[0];
   owner.traps[trapIndex] = card;
   playSound("trap");
-  addLog(`${owner.owner === "player" ? "你" : "AI"} 盖放了 1 张陷阱卡。`);
+  addLog(owner.owner === "player"
+    ? `你盖放了陷阱卡 ${card.name}。`
+    : "AI 盖放了 1 张陷阱卡。");
   speak(owner.owner === "player" ? "陷阱卡盖放。" : "对手盖放了一张陷阱卡。");
   resolveElementCombos(owner, owner.owner === "player" ? state.ai : state.player, "trap");
 }

@@ -13,6 +13,7 @@ export const TIMINGS = {
   battleOpen: "battleOpen",
   targetSelection: "targetSelection",
   responseWindow: "responseWindow",
+  resolution: "resolution",
   chainResolution: "chainResolution",
   autoEnd: "autoEnd",
   ai: "ai",
@@ -31,6 +32,7 @@ export const ACTION_WINDOWS = {
   battle: "battle",
   targetSelect: "targetSelect",
   response: "response",
+  resolution: "resolution",
   autoEnd: "autoEnd",
   ai: "ai",
   gameOver: "gameOver"
@@ -44,6 +46,7 @@ const actionWindowTimings = {
   [ACTION_WINDOWS.battle]: TIMINGS.battleOpen,
   [ACTION_WINDOWS.targetSelect]: TIMINGS.targetSelection,
   [ACTION_WINDOWS.response]: TIMINGS.responseWindow,
+  [ACTION_WINDOWS.resolution]: TIMINGS.resolution,
   [ACTION_WINDOWS.autoEnd]: TIMINGS.autoEnd,
   [ACTION_WINDOWS.ai]: TIMINGS.ai,
   [ACTION_WINDOWS.gameOver]: TIMINGS.gameOver
@@ -88,8 +91,20 @@ export function closeActionWindowPatch() {
   };
 }
 
-export function canPlayerActState({ started = false, paused = false, turn = "", gameOver = false } = {}) {
-  return Boolean(started && !paused && turn === TURNS.player && !gameOver);
+export function canPlayerActState({
+  started = false,
+  paused = false,
+  turn = "",
+  gameOver = false,
+  actionWindow = ""
+} = {}) {
+  return Boolean(
+    started &&
+    !paused &&
+    turn === TURNS.player &&
+    !gameOver &&
+    actionWindow !== ACTION_WINDOWS.resolution
+  );
 }
 
 export function isPlayerMainState(state = {}) {
