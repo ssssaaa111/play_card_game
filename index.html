@@ -223,7 +223,11 @@
   </div>
   <div class="modal" id="chainModal">
     <div class="modal-box chain">
-      <h2>连锁确认</h2>
+      <div class="chain-heading">
+        <span class="chain-badge">陷阱响应</span>
+        <h2>选择响应卡</h2>
+        <span class="chain-status" id="chainStatus"></span>
+      </div>
       <p id="chainText"></p>
       <div class="chain-choices" id="chainChoices" hidden></div>
       <div class="chain-actions">
@@ -233,6 +237,6 @@
     </div>
   </div>
 
-  <script type="module" src="src/app.js?v=20260604-trap-choice"></script>
+  <script type="module" src="src/app.js?v=20260604-response-panel"></script>
 </body>
 </html>

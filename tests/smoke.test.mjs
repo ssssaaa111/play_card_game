@@ -309,7 +309,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"double-attack": runDoubleAttackSmoke/);
   assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
   assert.match(smoke, /"trap-choice": runTrapChoiceSmoke/);
-  assert.match(smoke, /"trap-field-direct": runTrapFieldDirectSmoke/);
+  assert.match(smoke, /"trap-choice-double": runTrapChoiceDoubleSmoke/);
   assert.match(smoke, /"chain-trap-choice": runChainTrapChoiceSmoke/);
   assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
@@ -338,7 +338,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
-  assert.match(smoke, /setSmokeStatus\("passed", "trap-field-direct"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);

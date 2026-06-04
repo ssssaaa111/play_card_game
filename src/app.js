@@ -174,6 +174,7 @@ const els = {
   chainModal: document.querySelector("#chainModal"),
   chainText: document.querySelector("#chainText"),
   chainChoices: document.querySelector("#chainChoices"),
+  chainStatus: document.querySelector("#chainStatus"),
   chainYes: document.querySelector("#chainYes"),
   chainNo: document.querySelector("#chainNo")
 };
@@ -1722,10 +1723,6 @@ function selectPendingTrapChoice(index) {
   }
   const card = state.player.traps[index];
   if (!card) return true;
-  if (choice.selectedIndex === index && state.chainResolve) {
-    answerChain(true);
-    return true;
-  }
   choice.selectedIndex = index;
   state.selected = null;
   clearBattlePreview();
@@ -1734,6 +1731,14 @@ function selectPendingTrapChoice(index) {
   playSound("click");
   render();
   resetPlayerIdleCountdown();
+  return true;
+}
+
+function activatePendingTrapChoice(index) {
+  const choice = state.pendingTrapChoice;
+  if (!choice?.trapIndexes?.includes(index) || !state.chainResolve) return false;
+  choice.selectedIndex = index;
+  answerChain(true);
   return true;
 }
 
@@ -2177,7 +2182,7 @@ function pendingTrapChoiceDetailsText(choice = state.pendingTrapChoice) {
     .map((index) => state.player.traps[index]?.name)
     .filter(Boolean)
     .join("、");
-  return `${eventText}可发动陷阱：${names}。点击高亮陷阱选择，本事件只能发动一张。`;
+  return `${eventText}可发动陷阱：${names}。单击响应卡选择，双击可直接发动；本事件只能发动一张。`;
 }
 
 function renderTrapChoiceOptions(choice = state.pendingTrapChoice) {
@@ -2216,6 +2221,10 @@ function renderTrapChoiceOptions(choice = state.pendingTrapChoice) {
     button.appendChild(icon);
     button.appendChild(body);
     button.addEventListener("click", () => selectPendingTrapChoice(trapIndex));
+    button.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      activatePendingTrapChoice(trapIndex);
+    });
     els.chainChoices.appendChild(button);
   });
 }
@@ -2231,6 +2240,11 @@ function updateTrapChoicePrompt() {
   els.chainText.textContent = pendingTrapChoiceDetailsText();
   renderTrapChoiceOptions();
   const selectedCard = state.player.traps[state.pendingTrapChoice.selectedIndex];
+  if (els.chainStatus) {
+    els.chainStatus.textContent = selectedCard
+      ? `已选择：${selectedCard.name}`
+      : `可响应 ${state.pendingTrapChoice.trapIndexes.length} 张 · 本事件限发动 1 张`;
+  }
   els.chainYes.textContent = selectedCard ? `发动 ${selectedCard.name}` : "发动陷阱";
   els.chainYes.disabled = !selectedCard;
 }
@@ -2642,7 +2656,6 @@ function promptTrapChoice(candidates, eventName, details = {}) {
   };
   updateTrapChoicePrompt();
   els.chainModal.classList.add("show");
-  els.chainModal.classList.add("trap-choice-pass-through");
   playSound("trap");
   speak(trapIndexes.length > 1 ? "请选择要发动的陷阱。" : `是否发动陷阱，${candidates[0].card.name}。`);
   render();
@@ -2660,10 +2673,10 @@ function promptTrapChoice(candidates, eventName, details = {}) {
       clearPlayerIdleTimers();
       Object.assign(state, previousWindow);
       els.chainModal.classList.remove("show");
-      els.chainModal.classList.remove("trap-choice-pass-through");
       state.chainResolve = null;
       state.pendingTrapChoice = null;
       clearTrapChoiceOptions();
+      if (els.chainStatus) els.chainStatus.textContent = "";
       els.chainYes.disabled = false;
       els.chainYes.textContent = "发动陷阱";
       render();

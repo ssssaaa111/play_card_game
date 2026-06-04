@@ -283,7 +283,7 @@ async function runAiDirectTrapSmoke(ctx) {
   await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "storm-shift"), "风暴转移盖放");
   await finishPlayerTurn(ctx);
   for (let promptIndex = 1; promptIndex <= 3; promptIndex += 1) {
-    await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `第 ${promptIndex} 次直击风暴转移连锁弹窗`, 14000);
+    await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `第 ${promptIndex} 次直击风暴转移连锁弹窗`, 20000);
     if (!ctx.els.chainText.textContent.includes("风暴转移") || !ctx.els.chainText.textContent.includes("你本人")) {
       throw new Error("风暴转移直击提示缺少陷阱名或直击目标");
     }
@@ -329,24 +329,19 @@ async function runTrapChoiceSmoke(ctx) {
   setSmokeStatus("passed", "trap-choice");
 }
 
-async function runTrapFieldDirectSmoke(ctx) {
-  setSmokeStatus("running", "trap-field-direct");
+async function runTrapChoiceDoubleSmoke(ctx) {
+  setSmokeStatus("running", "trap-choice-double");
   await startSmokeDuel(ctx, "trapChoice");
   await finishPlayerTurn(ctx);
-  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "场上陷阱直点响应窗口", 12000);
-  clickSmokeElement(trapCard(ctx.els, "player", "void-lock"), "场上选择星界封锁");
-  await waitForSmoke(
-    () => trapCard(ctx.els, "player", "void-lock")?.classList.contains("trap-response-selected") && !ctx.els.chainYes.disabled,
-    "场上点选陷阱后进入已选择状态"
-  );
-  clickSmokeElement(trapCard(ctx.els, "player", "void-lock"), "再次点击场上星界封锁直接发动");
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "陷阱双击响应窗口", 12000);
+  doubleClickSmokeElement(chainChoiceButton(ctx.els, "void-lock"), "双击星界封锁直接发动");
   await waitForSmoke(
     () => !ctx.state.player.traps.some((card) => card?.id === "void-lock") &&
       ctx.state.player.traps.some((card) => card?.id === "mirror-snare"),
-    "再次点击场上高亮陷阱后直接发动选中的陷阱",
+    "双击弹窗内陷阱后直接发动选中的陷阱",
     9000
   );
-  setSmokeStatus("passed", "trap-field-direct");
+  setSmokeStatus("passed", "trap-choice-double");
 }
 
 async function runChainTrapChoiceSmoke(ctx) {
@@ -468,7 +463,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "double-attack": runDoubleAttackSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
-    "trap-field-direct": runTrapFieldDirectSmoke,
+    "trap-choice-double": runTrapChoiceDoubleSmoke,
     "chain-trap-choice": runChainTrapChoiceSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,

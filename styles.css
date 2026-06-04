@@ -1708,15 +1708,6 @@ h1 {
   display: grid;
 }
 
-.modal.trap-choice-pass-through {
-  pointer-events: none;
-  background: rgba(0, 0, 0, 0.24);
-}
-
-.modal.trap-choice-pass-through .modal-box {
-  pointer-events: auto;
-}
-
 .modal-box {
   width: min(440px, 100%);
   max-height: calc(100vh - 36px);
@@ -1743,7 +1734,43 @@ h1 {
 .modal-box.chain {
   width: min(560px, 100%);
   text-align: left;
-  border-color: rgba(183, 148, 244, 0.76);
+  border-color: rgba(183, 148, 244, 0.68);
+  border-top: 3px solid rgba(246, 189, 96, 0.86);
+  background: rgba(14, 18, 29, 0.96);
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.52), 0 0 34px rgba(183, 148, 244, 0.16);
+  animation: chain-panel-in 180ms ease-out both;
+}
+
+#chainModal {
+  background: rgba(4, 7, 13, 0.52);
+  backdrop-filter: blur(2px);
+}
+
+.chain-heading {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.chain-heading h2 {
+  margin: 0;
+}
+
+.chain-badge {
+  grid-row: span 2;
+  padding: 5px 7px;
+  border: 1px solid rgba(246, 189, 96, 0.52);
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.chain-status {
+  color: #c8d6e8;
+  font-size: 0.76rem;
 }
 
 .chain-choices {
@@ -1779,6 +1806,10 @@ h1 {
   transform: translateY(-1px);
 }
 
+.trap-choice-card.selected {
+  background: rgba(33, 29, 44, 0.94);
+}
+
 .trap-choice-icon {
   display: grid;
   place-items: center;
@@ -1812,6 +1843,17 @@ h1 {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 16px;
+}
+
+@keyframes chain-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .zoom-layout {
