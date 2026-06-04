@@ -38,6 +38,7 @@ npm test
 - `tests/cards.test.mjs`：覆盖卡牌稀有度、流派、属性徽标、类型徽标和牌面规则摘要。
 - `tests/deck.test.mjs`：覆盖决斗者初始状态、卡牌克隆、预设卡组和规则测试场景卡组构建。
 - `tests/log-audit.test.mjs`：覆盖日志审计器，检查重复日志、魔法发动后缺少结算、攻击预判后缺少结算、直击规则前后矛盾等问题。
+- `tests/response-state.test.mjs`：覆盖可序列化的陷阱响应状态、候选去重、选择和失效响应拒绝。
 - `tests/spells.test.mjs`：覆盖魔法发动条件和 AI 评分，例如满血不能回血、卡组不足不能抽 2、没有怪兽不能强化、直击许可条件、AI 斩杀和组合技优先级。
 - `tests/timeline.test.mjs`：覆盖结算时间线的事件分类和长度裁剪。
 - `tests/traps.test.mjs`：覆盖陷阱触发事件匹配和玩家可见的触发时机文案。
@@ -48,6 +49,8 @@ npm test
 后续新增规则或卡牌时，先给规则/数据补测试，再跑 `npm test`；真实浏览器点击流程使用 `http://localhost:5177/?test=1` 作为回归入口，这个模式会跳过规则弹窗并默认关闭音效/语音。
 
 浏览器回归优先点测这些路径：`换位陷阱` 场景盖放 `幻影换位` 后确认连锁提示，`跳攻锁定` 场景验证跳过攻击后新召唤怪兽也不能继续攻击，`直击许可` 场景验证对手有怪兽时不能裸点角色直击。测试模式会暴露只读 `window.__starDuelTest.snapshot()`，方便检查当前回合、场面、连锁弹窗、音频开关和日志审计结果。自动冒烟入口包括 `http://localhost:5177/?test=1&smoke=skip-lock`、`http://localhost:5177/?test=1&smoke=direct-guard` 和 `http://localhost:5177/?test=1&smoke=redirect-prompt`，完成后会在 `document.body.dataset.smokeStatus` 标记 `passed` 或 `failed`。
+
+需要验证固定结算次数的规则测试场景可以声明 `playerDeck` 或 `aiDeck`，避免随机抽牌、组合技或额外召唤让回归结果漂移。
 
 ## 项目结构
 
@@ -64,6 +67,7 @@ npm test
 - `src/data.js`：纯数据配置，包含卡牌库、怪兽素材映射、角色、卡组预设和规则测试场景。
 - `src/deck.js`：卡组和决斗者构造模块，包含卡牌克隆、预设卡组构建和规则测试场景卡组扣除。
 - `src/log-audit.js`：日志审计模块，负责从时间线里发现重复日志、关键效果缺少结算日志、攻击预判断链和直击规则矛盾。
+- `src/response-state.js`：响应窗口纯状态模块，负责构造、选择和结算可序列化的陷阱响应选择。
 - `src/rules.js`：纯规则工具，包含生命上限、场地区数量、攻击/守备数值、直击校验、攻击预览和魔法目标选择规则。
 - `src/spells.js`：魔法卡规则模块，包含发动展示文案、目标范围、目标选择规则、发动条件校验和 AI 选牌评分。
 - `src/timeline.js`：结算时间线模块，负责把日志文本归类为攻击、召唤、魔法、陷阱、警告等类型。

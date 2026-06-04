@@ -35,6 +35,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/data.js");
   checkModuleSyntax("src/deck.js");
   checkModuleSyntax("src/log-audit.js");
+  checkModuleSyntax("src/response-state.js");
   checkModuleSyntax("src/rules.js");
   checkModuleSyntax("src/spells.js");
   checkModuleSyntax("src/timeline.js");
@@ -190,6 +191,19 @@ test("target selection uses standardized timed action windows", () => {
   assert.match(app, /chainChoices/);
 });
 
+test("trap response state is extracted and serializable", () => {
+  const app = readProjectFile("src/app.js");
+  const responseState = readProjectFile("src/response-state.js");
+
+  assert.match(app, /from '\.\/response-state\.js'/);
+  assert.match(app, /createTrapResponse\(\{/);
+  assert.match(app, /selectTrapResponse\(choice, index\)/);
+  assert.match(app, /resolveTrapResponse\(choice, answer, state\.player\.traps\)/);
+  assert.doesNotMatch(app, /chainResolve/);
+  assert.match(responseState, /export function createTrapResponse/);
+  assert.match(responseState, /export function resolveTrapResponse/);
+});
+
 test("app uses extracted battle outcome helpers", () => {
   const app = readProjectFile("src/app.js");
 
@@ -310,6 +324,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
   assert.match(smoke, /"trap-choice": runTrapChoiceSmoke/);
   assert.match(smoke, /"trap-choice-double": runTrapChoiceDoubleSmoke/);
+  assert.match(smoke, /"response-restart": runResponseRestartSmoke/);
   assert.match(smoke, /"chain-trap-choice": runChainTrapChoiceSmoke/);
   assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
@@ -339,6 +354,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "response-restart"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
@@ -450,7 +466,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "src/actions.js", "src/app.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/log-audit.js", "src/rules.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "src/actions.js", "src/app.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

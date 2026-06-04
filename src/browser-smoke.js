@@ -344,6 +344,26 @@ async function runTrapChoiceDoubleSmoke(ctx) {
   setSmokeStatus("passed", "trap-choice-double");
 }
 
+async function runResponseRestartSmoke(ctx) {
+  setSmokeStatus("running", "response-restart");
+  await startSmokeDuel(ctx, "trapChoice");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "重开前陷阱响应窗口", 12000);
+  clickSmokeElement(ctx.els.restartBtn, "响应期间重开");
+  await waitForSmoke(
+    () => !ctx.state.started &&
+      ctx.els.modal.classList.contains("show") &&
+      !ctx.els.chainModal.classList.contains("show") &&
+      !ctx.state.pendingTrapChoice,
+    "重开后清理旧响应窗口"
+  );
+  await new Promise((resolve) => window.setTimeout(resolve, 2200));
+  if (ctx.state.started || ctx.els.chainModal.classList.contains("show") || ctx.state.pendingTrapChoice) {
+    throw new Error("重开后旧响应流程重新污染了准备界面");
+  }
+  setSmokeStatus("passed", "response-restart");
+}
+
 async function runChainTrapChoiceSmoke(ctx) {
   setSmokeStatus("running", "chain-trap-choice");
   await startSmokeDuel(ctx, "chain");
@@ -464,6 +484,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
     "trap-choice-double": runTrapChoiceDoubleSmoke,
+    "response-restart": runResponseRestartSmoke,
     "chain-trap-choice": runChainTrapChoiceSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,

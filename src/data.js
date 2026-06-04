@@ -209,8 +209,9 @@ export const scenarioSetups = {
     goal: "盖放风暴转移后结束回合；AI 直击时应提示发动，且本回合只发动一张陷阱。",
     playerHand: ["storm-shift"],
     playerField: [],
-    aiField: ["star-lancer", "sky-raider", "ember-drake"],
-    aiHand: []
+    aiField: ["star-lancer", "sky-raider", "gale-mage"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
   },
   trapChoice: {
     label: "陷阱选择",

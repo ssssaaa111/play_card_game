@@ -114,7 +114,7 @@ test("deck presets reference only known cards and have enough cards", () => {
 });
 
 test("scenario setups reference only known cards", () => {
-  const cardListKeys = ["playerHand", "aiHand", "playerField", "aiField", "playerTraps", "aiTraps"];
+  const cardListKeys = ["playerDeck", "playerHand", "aiDeck", "aiHand", "playerField", "aiField", "playerTraps", "aiTraps"];
 
   Object.entries(scenarioSetups).forEach(([key, scenario]) => {
     assert.ok(scenario.label, `${key} needs label`);
@@ -124,6 +124,11 @@ test("scenario setups reference only known cards", () => {
       assertKnownCardIds(scenario[listKey], `scenarioSetups.${key}.${listKey}`);
     });
   });
+});
+
+test("direct trap scenario uses a deterministic non-damage AI draw", () => {
+  assert.deepEqual(scenarioSetups.directTrap.aiDeck, ["guard-sigil"]);
+  assert.deepEqual(scenarioSetups.directTrap.aiField, ["star-lancer", "sky-raider", "gale-mage"]);
 });
 
 test("role and AI profile presets are complete", () => {

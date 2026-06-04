@@ -11,6 +11,12 @@ import { scoreSpellForAi, spellDefinitions, validateSpellCondition } from './spe
 import { nextTimelineState } from './timeline.js';
 import { selectRedirectTarget, trapActivationText, trapCanResolve, trapConsumesAttack } from './traps.js';
 import {
+  canActivateTrapResponse,
+  createTrapResponse,
+  resolveTrapResponse,
+  selectTrapResponse
+} from './response-state.js';
+import {
   ACTION_WINDOWS,
   PHASES,
   TIMINGS,
@@ -65,7 +71,6 @@ const state = {
   autoEndTimer: null,
   actionWindow: ACTION_WINDOWS.setup,
   pendingOpeningDraw: false,
-  chainResolve: null,
   pendingTrapChoice: null,
   resumeResolvers: [],
   idleTimer: null,
@@ -92,6 +97,8 @@ const state = {
   battlePreview: null,
   ruleCheckIssue: null
 };
+
+let pendingTrapChoiceResolver = null;
 
 const els = {
   phaseText: document.querySelector("#phaseText"),
@@ -880,8 +887,12 @@ function applyScenarioSetup() {
   ];
   state.player.hand = loadCardList(scenario.playerHand);
   state.ai.hand = loadCardList(scenario.aiHand);
-  state.player.deck = buildScenarioDeck(state.deckPreset, playerReserved);
-  state.ai.deck = buildScenarioDeck(aiProfiles[state.aiStyle]?.deckPreset || "balanced", aiReserved);
+  state.player.deck = Array.isArray(scenario.playerDeck)
+    ? loadCardList(scenario.playerDeck)
+    : buildScenarioDeck(state.deckPreset, playerReserved);
+  state.ai.deck = Array.isArray(scenario.aiDeck)
+    ? loadCardList(scenario.aiDeck)
+    : buildScenarioDeck(aiProfiles[state.aiStyle]?.deckPreset || "balanced", aiReserved);
   state.player.field = Array(FIELD_SIZE).fill(null);
   state.ai.field = Array(FIELD_SIZE).fill(null);
   state.player.traps = Array(FIELD_SIZE).fill(null);
@@ -912,6 +923,7 @@ function applyScenarioSetup() {
 
 function startGame() {
   stopVoiceAudio();
+  closeTrapChoicePrompt();
   applySetupChoices();
   Object.assign(state.player, createDuelist("player"));
   Object.assign(state.ai, createDuelist("ai"));
@@ -962,6 +974,7 @@ function startGame() {
 
 function prepareGame() {
   stopVoiceAudio();
+  closeTrapChoicePrompt();
   applySetupChoices();
   syncSetupControls();
   Object.assign(state.player, createDuelist("player"));
@@ -1714,7 +1727,8 @@ async function handlePlayerSlot(index) {
 function selectPendingTrapChoice(index) {
   const choice = state.pendingTrapChoice;
   if (!choice) return false;
-  if (!choice.trapIndexes.includes(index)) {
+  const nextChoice = selectTrapResponse(choice, index);
+  if (!nextChoice) {
     const card = state.player.traps[index];
     if (card) showDetail(card);
     cue("请选择高亮的可发动陷阱，或点击不发动。");
@@ -1723,7 +1737,7 @@ function selectPendingTrapChoice(index) {
   }
   const card = state.player.traps[index];
   if (!card) return true;
-  choice.selectedIndex = index;
+  state.pendingTrapChoice = nextChoice;
   state.selected = null;
   clearBattlePreview();
   showDetail(card);
@@ -1736,8 +1750,9 @@ function selectPendingTrapChoice(index) {
 
 function activatePendingTrapChoice(index) {
   const choice = state.pendingTrapChoice;
-  if (!choice?.trapIndexes?.includes(index) || !state.chainResolve) return false;
-  choice.selectedIndex = index;
+  const nextChoice = selectTrapResponse(choice, index);
+  if (!nextChoice || !pendingTrapChoiceResolver || !canActivateTrapResponse(nextChoice, state.player.traps)) return false;
+  state.pendingTrapChoice = nextChoice;
   answerChain(true);
   return true;
 }
@@ -2246,7 +2261,17 @@ function updateTrapChoicePrompt() {
       : `可响应 ${state.pendingTrapChoice.trapIndexes.length} 张 · 本事件限发动 1 张`;
   }
   els.chainYes.textContent = selectedCard ? `发动 ${selectedCard.name}` : "发动陷阱";
-  els.chainYes.disabled = !selectedCard;
+  els.chainYes.disabled = !canActivateTrapResponse(state.pendingTrapChoice, state.player.traps);
+}
+
+function closeTrapChoicePrompt() {
+  els.chainModal.classList.remove("show");
+  state.pendingTrapChoice = null;
+  pendingTrapChoiceResolver = null;
+  clearTrapChoiceOptions();
+  if (els.chainStatus) els.chainStatus.textContent = "";
+  els.chainYes.disabled = false;
+  els.chainYes.textContent = "发动陷阱";
 }
 
 function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex = 1) {
@@ -2643,51 +2668,44 @@ function promptTrapChoice(candidates, eventName, details = {}) {
     actionWindowReason: state.actionWindowReason,
     actionDeadline: state.actionDeadline
   };
-  const trapIndexes = candidates.map(({ index }) => index);
-  const selectedIndex = trapIndexes.length === 1 ? trapIndexes[0] : -1;
   clearPlayerIdleTimers();
   setActionWindow(ACTION_WINDOWS.response, { reason: `trap-choice:${eventName}` });
-  state.pendingTrapChoice = {
-    owner: "player",
+  state.pendingTrapChoice = createTrapResponse({
     eventName,
     details,
-    trapIndexes,
-    selectedIndex
-  };
+    candidates
+  });
   updateTrapChoicePrompt();
   els.chainModal.classList.add("show");
   playSound("trap");
-  speak(trapIndexes.length > 1 ? "请选择要发动的陷阱。" : `是否发动陷阱，${candidates[0].card.name}。`);
+  speak(state.pendingTrapChoice.trapIndexes.length > 1 ? "请选择要发动的陷阱。" : `是否发动陷阱，${candidates[0].card.name}。`);
   render();
   resetPlayerIdleCountdown();
   return new Promise((resolve) => {
-    state.chainResolve = (answer) => {
+    pendingTrapChoiceResolver = (answer) => {
       const choice = state.pendingTrapChoice;
-      const trapIndex = choice?.selectedIndex ?? -1;
-      const skippedName = trapIndex >= 0 ? state.player.traps[trapIndex]?.name || "" : "";
-      if (answer && trapIndex < 0) {
+      const resolution = resolveTrapResponse(choice, answer, state.player.traps);
+      if (!resolution.ok && resolution.reason === "missing-selection") {
         cue("先选择一张高亮的陷阱卡。");
         resetPlayerIdleCountdown();
         return;
       }
+      if (!resolution.ok) {
+        cue("选中的陷阱已不在场上，本次响应已取消。");
+        addLog("陷阱响应失效：选中的陷阱已离开原槽位。");
+      }
       clearPlayerIdleTimers();
       Object.assign(state, previousWindow);
-      els.chainModal.classList.remove("show");
-      state.chainResolve = null;
-      state.pendingTrapChoice = null;
-      clearTrapChoiceOptions();
-      if (els.chainStatus) els.chainStatus.textContent = "";
-      els.chainYes.disabled = false;
-      els.chainYes.textContent = "发动陷阱";
+      closeTrapChoicePrompt();
       render();
-      resolve({ trapIndex: answer ? trapIndex : -1, skippedName });
+      resolve(resolution.ok ? resolution : { trapIndex: -1, skippedName: "" });
     };
   });
 }
 
 function answerChain(answer) {
-  if (state.chainResolve) {
-    state.chainResolve(answer);
+  if (pendingTrapChoiceResolver) {
+    pendingTrapChoiceResolver(answer);
   }
 }
 
@@ -3334,7 +3352,7 @@ function handleActionWindowTimeout(windowId) {
     handleTargetSelectionTimeout();
     return;
   }
-  if (state.actionWindow === ACTION_WINDOWS.response && state.chainResolve) {
+  if (state.actionWindow === ACTION_WINDOWS.response && pendingTrapChoiceResolver) {
     cue("响应超时，默认不发动。");
     answerChain(false);
     return;
