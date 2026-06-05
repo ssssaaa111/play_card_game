@@ -6,7 +6,12 @@ import { cardDetailText, cardZoomMeta } from './card-detail.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { availableElementCombos, markElementComboResolved } from './combos.js';
 import { buildDeck, createDuelist } from './deck.js';
-import { dispatchSetTrapFromUiState, dispatchSummonMonsterFromUiState } from './engine-adapter.js';
+import {
+  canDispatchSpellFromUiState,
+  dispatchActivateSpellFromUiState,
+  dispatchSetTrapFromUiState,
+  dispatchSummonMonsterFromUiState
+} from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
 import { scoreSpellForAi, spellDefinitions, validateSpellCondition } from './spells.js';
 import { nextTimelineState } from './timeline.js';
@@ -2136,8 +2141,22 @@ function playSpell(owner, rival, handIndex, targetInfo = null) {
     beginSpellTargetSelection(handIndex, selectedCard);
     return false;
   }
-  const card = owner.hand.splice(handIndex, 1)[0];
-  owner.grave.push(card);
+  const card = selectedCard;
+  let engineEvents = null;
+  let result = {};
+  if (canDispatchSpellFromUiState(card)) {
+    try {
+      engineEvents = dispatchActivateSpellFromUiState(state, owner.owner, rival.owner, handIndex, targetInfo);
+    } catch (error) {
+      if (owner.owner === "player") cue(error.message || "魔法卡发动失败。");
+      console.error(error);
+      if (owner.owner === "player") resumePlayerIdleCountdownAfterPassiveIntent();
+      return false;
+    }
+  } else {
+    owner.hand.splice(handIndex, 1);
+    owner.grave.push(card);
+  }
   playSound(`spell-${card.effect}`);
   animateAvatar(owner.owner, "cast");
   playCenterCardEffect(card, spellCaption(card));
@@ -2145,8 +2164,12 @@ function playSpell(owner, rival, handIndex, targetInfo = null) {
   addLog(`${owner.owner === "player" ? "你" : "AI"} 发动魔法卡 ${card.name}。`);
   speak(`${owner.owner === "player" ? "你发动" : "对手发动"}魔法卡，${card.name}。`);
   playDuelistLine(owner.owner, lineFor(owner.owner, "spell", card), false, "spell");
-  const effect = spellEffects[card.effect];
-  const result = effect?.apply?.({ owner, rival, card, handIndex, targetInfo }) || {};
+  if (engineEvents) {
+    result = resolveEngineSpellFeedback(owner, rival, card, engineEvents, targetInfo);
+  } else {
+    const effect = spellEffects[card.effect];
+    result = effect?.apply?.({ owner, rival, card, handIndex, targetInfo }) || {};
+  }
   playSpellEffect(owner, rival, card, result.effectTarget || null, result.targetOwner || targetInfo?.owner || owner.owner);
   resolveElementCombos(owner, rival, "spell");
   clearPendingTarget();
@@ -2157,6 +2180,53 @@ function playSpell(owner, rival, handIndex, targetInfo = null) {
     resolvePlayerActionWindow("魔法结算完成");
   }
   return true;
+}
+
+function runtimeCardId(card) {
+  return card?.uid || card?.engineId || card?.id || null;
+}
+
+function findRuntimeCard(cardId) {
+  for (const duelist of [state.player, state.ai]) {
+    for (const zoneName of ["hand", "deck", "field", "traps", "grave"]) {
+      const card = duelist[zoneName].find((item) => runtimeCardId(item) === cardId);
+      if (card) return { card, owner: duelist.owner };
+    }
+  }
+  return null;
+}
+
+function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = null) {
+  const result = {
+    effectTarget: targetInfo?.card || null,
+    targetOwner: targetInfo?.owner || owner.owner
+  };
+  events.forEach((event) => {
+    if (event.type === "CARDS_DRAWN" && event.count > 0) {
+      const drawn = (event.cardIds || []).map((cardId) => findRuntimeCard(cardId)?.card).filter(Boolean);
+      drawn.forEach((drawnCard, index) => {
+        window.setTimeout(() => {
+          playSound("draw");
+          playDrawEffect(owner.owner, drawnCard);
+        }, index * 760);
+      });
+      addLog(`${owner.owner === "player" ? "你" : "AI"} 抽了 ${event.count} 张卡。`);
+      playVoice(owner.owner, "draw", owner.owner === "player" ? `抽 ${event.count} 张卡。` : `对手抽 ${event.count} 张卡。`);
+    }
+    if (event.type === "LP_HEALED" && event.amount > 0) {
+      playSound("spell-heal700");
+      playLifeDelta(owner.owner, event.amount);
+      addLog(`${card.name} 为 ${duelistLabel(owner)}回复 ${event.amount} 点生命值。`);
+    }
+    if (event.type === "STAT_MODIFIED") {
+      const found = findRuntimeCard(event.cardId);
+      if (!found) return;
+      result.effectTarget = found.card;
+      result.targetOwner = found.owner;
+      addLog(`${found.card.name} 因 ${card.name} 攻击力提升 ${event.amount}。`);
+    }
+  });
+  return result;
 }
 
 function validateSpell(owner, rival, card, handIndex) {

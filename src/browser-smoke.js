@@ -222,6 +222,9 @@ async function runTargetWindowSmoke(ctx) {
     () => !ctx.state.pendingTarget && ctx.state.log.some((entry) => entry.includes("发动魔法卡 战意高扬")),
     "战意高扬二次点击默认发动"
   );
+  if (countGameEvents(ctx.state, "STAT_MODIFIED") < 1 || countGameEvents(ctx.state, "CARD_ACTIVATED") < 1) {
+    throw new Error("War chant must resolve through engine spell events");
+  }
   setSmokeStatus("passed", "target-window");
 }
 

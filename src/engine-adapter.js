@@ -1,8 +1,9 @@
 import { GameEngine, Phase } from './game-engine.js';
-import { FIELD_SIZE } from './rules.js';
+import { FIELD_SIZE, MAX_LP, totalAtk } from './rules.js';
 import { PHASES } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
+const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500"]);
 
 const uiZones = {
   deck: "deck",
@@ -162,10 +163,45 @@ export function applyUiGameEvents(uiState, events = []) {
       card.used = Boolean(event.used);
       card.changedMode = Boolean(event.changedMode);
     }
+    if (event.type === "CARDS_DRAWN") {
+      const duelist = uiDuelist(uiState, event.playerId);
+      (event.cardIds || []).forEach((cardId) => {
+        const card = removeCardFromUiState(uiState, cardId);
+        duelist.hand.push(card);
+      });
+    }
+    if (event.type === "LP_HEALED") {
+      const duelist = uiDuelist(uiState, event.playerId);
+      duelist.lp = Math.min(MAX_LP, duelist.lp + Math.max(0, Number(event.amount) || 0));
+    }
+    if (event.type === "STAT_MODIFIED") {
+      const card = findUiCard(uiState, event.cardId);
+      if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
+      card[event.stat] = Number(event.after);
+    }
   });
   uiState.gameEvents = Array.isArray(uiState.gameEvents) ? uiState.gameEvents : [];
   uiState.gameEvents.push(...events.map((event) => ({ ...event })));
   return events;
+}
+
+export function canDispatchSpellFromUiState(card) {
+  return card?.type === "spell" && engineBackedSpellEffects.has(card.effect);
+}
+
+function strongestMonsterId(uiState, playerId) {
+  const duelist = uiDuelist(uiState, playerId);
+  const candidates = duelist.field.filter(Boolean);
+  if (!candidates.length) return null;
+  return cardKey(candidates.slice().sort((left, right) => totalAtk(right) - totalAtk(left))[0]);
+}
+
+function targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo) {
+  const explicit = cardKey(targetInfo?.card);
+  if (explicit) return explicit;
+  if (card.effect === "buff500") return strongestMonsterId(uiState, playerId);
+  if (card.effect === "pierceLine") return strongestMonsterId(uiState, rivalId);
+  return null;
 }
 
 function findUiCard(uiState, cardId) {
@@ -213,5 +249,26 @@ export function dispatchSummonMonsterFromUiState(uiState, playerId, handIndex, f
     cardId,
     index: fieldIndex
   });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchActivateSpellFromUiState(uiState, playerId, rivalId, handIndex, targetInfo = null) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.hand[handIndex];
+  if (!card) throw new Error(`No hand card at index ${handIndex}`);
+  if (!canDispatchSpellFromUiState(card)) {
+    throw new Error(`Spell effect ${card.effect || "(none)"} is not engine-backed`);
+  }
+
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const action = {
+    type: "ACTIVATE_CARD",
+    playerId,
+    rivalId,
+    cardId: cardKey(card)
+  };
+  const targetCardId = targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo);
+  if (targetCardId) action.targetCardId = targetCardId;
+  const events = engine.dispatch(action);
   return applyUiGameEvents(uiState, events);
 }

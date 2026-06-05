@@ -104,6 +104,29 @@ test("seer-call draws two cards only through dispatch and logs events", () => {
   assertValidGameState(next);
 });
 
+test("spell activation is legal in battle phase action windows", () => {
+  const state = makeState({
+    cards: [
+      card("seer-battle", { templateId: "seer-call", effect: "draw2" }),
+      card("deck-battle-1", { type: "monster", templateId: "ember-drake" }),
+      card("deck-battle-2", { type: "monster", templateId: "solar-knight" })
+    ],
+    player: {
+      hand: ["seer-battle"],
+      deck: ["deck-battle-1", "deck-battle-2"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "seer-battle" });
+
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["deck-battle-1", "deck-battle-2"]);
+  assert.ok(events.some((event) => event.type === "CARD_ACTIVATED" && event.phase === Phase.battle));
+});
+
 test("dispatch records commands before derived events", () => {
   const state = makeState({
     cards: [

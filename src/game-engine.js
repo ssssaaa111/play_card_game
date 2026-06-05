@@ -292,7 +292,7 @@ export class GameEngine {
 
   #activateSpell(state, ctx, emit, action) {
     requireCurrentTurn(state, action.playerId);
-    requirePhase(state, [Phase.main], action.type);
+    requirePhase(state, [Phase.main, Phase.battle], action.type);
     const card = requireCardInZone(state, action.playerId, "hand", action.cardId);
     if (card.type !== "spell") {
       throw new GameRuleError(`Card ${action.cardId} is not a spell`);

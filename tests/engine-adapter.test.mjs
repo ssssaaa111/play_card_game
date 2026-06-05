@@ -2,7 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createDuelist } from "../src/deck.js";
-import { dispatchSetTrapFromUiState, dispatchSummonMonsterFromUiState } from "../src/engine-adapter.js";
+import {
+  canDispatchSpellFromUiState,
+  dispatchActivateSpellFromUiState,
+  dispatchSetTrapFromUiState,
+  dispatchSummonMonsterFromUiState
+} from "../src/engine-adapter.js";
 import { PHASES } from "../src/turn-state.js";
 
 function uiTrap(uid, id = "mirror-snare") {
@@ -17,14 +22,14 @@ function uiTrap(uid, id = "mirror-snare") {
   };
 }
 
-function uiSpell(uid) {
+function uiSpell(uid, effect = "burn500", id = "burst-rune") {
   return {
     uid,
-    id: "burst-rune",
+    id,
     ownerId: "player",
     type: "spell",
-    name: "burst-rune",
-    effect: "burn500"
+    name: id,
+    effect
   };
 }
 
@@ -154,5 +159,64 @@ test("preserves UI phase so SUMMON_MONSTER is rejected outside legal action phas
   );
   assert.deepEqual(state.player.hand, [lancer]);
   assert.equal(state.player.field.filter(Boolean).length, 0);
+  assert.deepEqual(state.gameEvents, []);
+});
+
+test("dispatches engine-backed draw spells and applies card movement events to UI zones", () => {
+  const seer = uiSpell("spell-draw", "draw2", "seer-call");
+  const deckOne = uiMonster("deck-1", "ember-drake");
+  const deckTwo = uiMonster("deck-2", "solar-knight");
+  const state = appState();
+  state.player.hand = [seer];
+  state.player.deck = [deckOne, deckTwo];
+
+  assert.equal(canDispatchSpellFromUiState(seer), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.deepEqual(state.player.hand, [deckOne, deckTwo]);
+  assert.deepEqual(state.player.deck, []);
+  assert.deepEqual(state.player.grave, [seer]);
+  assert.ok(events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === seer.uid));
+  assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.count === 2));
+  assert.equal(state.gameEvents.length, events.length);
+});
+
+test("dispatches engine-backed healing and stat spells without direct UI mutation", () => {
+  const renewal = uiSpell("spell-heal", "heal700", "renewal");
+  const chant = uiSpell("spell-buff", "buff500", "war-chant");
+  const strongest = uiMonster("strongest-1", "star-lancer");
+  const weaker = uiMonster("weaker-1", "ember-drake");
+  strongest.atk = 1800;
+  weaker.atk = 1500;
+  const state = appState();
+  state.player.lp = 3500;
+  state.player.hand = [renewal, chant];
+  state.player.field[0] = strongest;
+  state.player.field[1] = weaker;
+
+  const healEvents = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+  const buffEvents = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: strongest });
+
+  assert.equal(state.player.lp, 4000);
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [renewal, chant]);
+  assert.equal(strongest.tempAtk, 500);
+  assert.equal(weaker.tempAtk || 0, 0);
+  assert.ok(healEvents.some((event) => event.type === "LP_HEALED" && event.amount === 500));
+  assert.ok(buffEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === strongest.uid));
+});
+
+test("rejects engine-backed spells in illegal phases without consuming the card", () => {
+  const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
+  const state = appState({ phase: PHASES.draw });
+  state.player.hand = [seer];
+  state.player.deck = [uiMonster("deck-phase-1"), uiMonster("deck-phase-2")];
+
+  assert.throws(
+    () => dispatchActivateSpellFromUiState(state, "player", "ai", 0),
+    /not legal during draw phase/
+  );
+  assert.deepEqual(state.player.hand, [seer]);
+  assert.equal(state.player.grave.length, 0);
   assert.deepEqual(state.gameEvents, []);
 });
