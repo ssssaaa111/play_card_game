@@ -39,6 +39,7 @@ Card effects should only use these methods:
 - `summonMonster`
 - `modifyStat`
 - `negateEffect`
+- `grantAbility`
 
 ## Card effect DSL
 

@@ -78,6 +78,7 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -400 },
     { op: "dealDamage", player: "rival", amount: 200 }
   ], { target: { player: "rival", zone: "monsterZone", rule: "strongestAtk" } }),
+  directStrike: oneShot([{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]),
   attackNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }])
 });
 
@@ -222,6 +223,19 @@ export class EffectContext {
   negateEffect(targetEffectId, options = {}) {
     this.#emit("EFFECT_NEGATED", {
       targetEffectId: targetEffectId || null,
+      sourceCardId: options.sourceCardId || null
+    });
+  }
+
+  grantAbility(playerId, ability, options = {}) {
+    requirePlayer(this.#state, playerId);
+    requireAbility(ability);
+
+    this.#emit("ABILITY_GRANTED", {
+      playerId,
+      ability,
+      uses: Math.max(1, Number(options.uses) || 1),
+      duration: options.duration || "turn",
       sourceCardId: options.sourceCardId || null
     });
   }
@@ -846,6 +860,12 @@ function runEffectOperation(operation, ctx, action, card) {
       return ctx.modifyStat(resolveValue(operation.cardId, action, card), operation.stat, operation.amount, source);
     case "negateEffect":
       return ctx.negateEffect(resolveValue(operation.targetEffectId, action, card), source);
+    case "grantAbility":
+      return ctx.grantAbility(resolvePlayerRef(operation.player, action), operation.ability, {
+        ...source,
+        uses: operation.uses,
+        duration: operation.duration
+      });
     default:
       throw new GameRuleError(`Unsupported effect operation ${operation.op}`);
   }

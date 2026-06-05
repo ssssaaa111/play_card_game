@@ -153,11 +153,13 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const draw2 = getCardEffectDefinition("draw2");
   const burn500 = getCardEffectDefinition("burn500");
   const heal700 = getCardEffectDefinition("heal700");
+  const directStrike = getCardEffectDefinition("directStrike");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
   assert.deepEqual(burn500.operations, [{ op: "dealDamage", player: "rival", amount: 500 }]);
   assert.deepEqual(heal700.operations, [{ op: "heal", player: "self", amount: 700 }]);
+  assert.deepEqual(directStrike.operations, [{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]);
   assert.notEqual(typeof draw2, "function");
 });
 
@@ -295,6 +297,32 @@ test("pierce-line weakens the declared target and deals damage through events", 
   assert.equal(next.cards["guardian-1"].tempDef, -400);
   assert.equal(next.players[AI].lp, 3800);
   assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.amount === 200));
+});
+
+test("direct-strike grants direct attack through ability events", () => {
+  const state = makeState({
+    cards: [
+      card("breach-1", { templateId: "star-breach", effect: "directStrike" })
+    ],
+    player: {
+      hand: ["breach-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "breach-1" });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].hand, []);
+  assert.deepEqual(next.players[PLAYER].grave, ["breach-1"]);
+  assert.equal(hasAbility(next, PLAYER, Ability.directAttack), true);
+  assert.ok(events.some((event) =>
+    event.type === "ABILITY_GRANTED" &&
+    event.playerId === PLAYER &&
+    event.ability === Ability.directAttack &&
+    event.uses === 1 &&
+    event.sourceCardId === "breach-1"
+  ));
 });
 
 test("targeted spell activation rejects missing targets without consuming the card", () => {

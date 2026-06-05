@@ -2255,6 +2255,13 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       result.targetOwner = found.owner;
       addLog(`${found.card.name} 因 ${card.name} ${statChangeText(event)}。`);
     }
+    if (event.type === "ABILITY_GRANTED" && event.ability === "directAttack") {
+      const target = owner.field.find((item) => item && !item.used && item.mode !== "defense") || strongestMonster(owner);
+      result.effectTarget = target;
+      result.targetOwner = owner.owner;
+      addLog(`${duelistLabel(owner)}获得 ${event.uses || 1} 次直接攻击许可。`);
+      playEpicAction("直击许可", "attack");
+    }
   });
   return result;
 }

@@ -264,6 +264,31 @@ test("dispatches engine-backed pierce-line with target stat loss and shielded da
   ));
 });
 
+test("dispatches engine-backed direct-strike as an ability grant", () => {
+  const breach = uiSpell("spell-direct", "directStrike", "star-breach");
+  const attacker = uiMonster("player-attacker", "star-lancer");
+  const guard = uiMonster("enemy-guard", "iron-guardian");
+  guard.ownerId = "ai";
+  const state = appState();
+  state.player.hand = [breach];
+  state.player.field[0] = attacker;
+  state.ai.field[0] = guard;
+
+  assert.equal(canDispatchSpellFromUiState(breach), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [breach]);
+  assert.equal(state.player.directAttacks, 1);
+  assert.ok(events.some((event) =>
+    event.type === "ABILITY_GRANTED" &&
+    event.playerId === "player" &&
+    event.ability === "directAttack" &&
+    event.uses === 1 &&
+    event.sourceCardId === breach.uid
+  ));
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });

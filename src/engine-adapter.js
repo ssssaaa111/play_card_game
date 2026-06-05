@@ -1,9 +1,9 @@
-import { GameEngine, Phase } from './game-engine.js';
+import { Ability, GameEngine, Phase } from './game-engine.js';
 import { FIELD_SIZE, MAX_LP, totalAtk } from './rules.js';
 import { PHASES } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
-const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine"]);
+const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike"]);
 
 const uiZones = {
   deck: "deck",
@@ -49,6 +49,21 @@ function uiDuelistToEngine(duelist) {
   };
 }
 
+function uiAbilityEntries(duelist) {
+  return [
+    [Ability.directAttack, duelist.directAttacks],
+    [Ability.extraSummon, duelist.extraSummon],
+    [Ability.attackReset, duelist.attackResets]
+  ]
+    .filter(([, uses]) => Math.max(0, Number(uses) || 0) > 0)
+    .map(([ability, uses]) => ({
+      ability,
+      uses: Math.max(0, Number(uses) || 0),
+      duration: "turn",
+      sourceCardId: null
+    }));
+}
+
 function enginePhaseFromUiPhase(phase) {
   if (phase === PHASES.ready) return Phase.setup;
   return phase || Phase.main;
@@ -81,8 +96,8 @@ export function buildEngineStateFromUiState(uiState) {
       phase
     },
     abilities: {
-      player: [],
-      ai: []
+      player: uiAbilityEntries(uiState.player),
+      ai: uiAbilityEntries(uiState.ai)
     },
     events: [],
     nextEventId: 1
@@ -150,6 +165,20 @@ function insertCardIntoUiState(uiState, card, to) {
   }
 }
 
+function applyUiAbilityEvent(uiState, event, direction) {
+  const duelist = uiDuelist(uiState, event.playerId);
+  const uses = Math.max(1, Number(event.uses) || 1) * direction;
+  if (event.ability === Ability.directAttack) {
+    duelist.directAttacks = Math.max(0, (Number(duelist.directAttacks) || 0) + uses);
+  }
+  if (event.ability === Ability.extraSummon) {
+    duelist.extraSummon = Math.max(0, (Number(duelist.extraSummon) || 0) + uses);
+  }
+  if (event.ability === Ability.attackReset) {
+    duelist.attackResets = Math.max(0, (Number(duelist.attackResets) || 0) + uses);
+  }
+}
+
 export function applyUiGameEvents(uiState, events = []) {
   events.forEach((event) => {
     if (event.type === "CARD_MOVED") {
@@ -185,6 +214,12 @@ export function applyUiGameEvents(uiState, events = []) {
       const card = findUiCard(uiState, event.cardId);
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
       card[event.stat] = Number(event.after);
+    }
+    if (event.type === "ABILITY_GRANTED") {
+      applyUiAbilityEvent(uiState, event, 1);
+    }
+    if (event.type === "ABILITY_SPENT") {
+      applyUiAbilityEvent(uiState, event, -1);
     }
   });
   uiState.gameEvents = Array.isArray(uiState.gameEvents) ? uiState.gameEvents : [];

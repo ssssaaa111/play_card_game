@@ -136,12 +136,12 @@ npm test
 - 倒计时只在玩家主阶段、非目标选择、非自动结束状态下运行；被动查看卡牌或选中怪兽后必须恢复倒计时，避免清掉计时器后停住。
 - 切换攻击 / 守备表示也会立即重新评估行动窗口；如果切到守备后没有其他可操作项，会自动进入回合结束倒计时。
 - 卡牌效果尽量落到资源和标记上，例如额外召唤使用 `extraSummon`，攻击重置使用 `attackResets`，怪兽本回合攻击状态使用 `used`。
-- 直接攻击使用统一校验：`validateAttackTarget` 会拦截非法直击，玩家点对方角色时使用 `-1` 作为直击目标，`星隙穿透` 会给玩家授予 `directAttacks` 资源，结算直击后自动消耗。
+- 直接攻击使用统一校验：`validateAttackTarget` 会拦截非法直击，玩家点对方角色时使用 `-1` 作为直击目标，`星隙穿透` 会通过 `ABILITY_GRANTED` 授予直击许可，并回放成 UI 的 `directAttacks` 资源，结算直击后自动消耗。
 - 目标选择使用 `pendingTarget` 和 `targetSelect` 行动窗口：发动指定目标魔法后先高亮合法目标，点击合法怪兽后才移动卡牌并结算效果。
 - 魔法效果统一挂在 `spellEffects` 注册表里，每个效果包含发动条件、实际结算、演出文案和 AI 评分，避免继续堆硬编码分支。
 - 盖放陷阱已通过 `GameEngine.dispatch({ type: "SET_TRAP" })` 校验并产出 `CARD_MOVED/TRAP_SET` 事件，UI 只按事件回放固定槽位变化。
 - 召唤怪兽已通过 `GameEngine.dispatch({ type: "SUMMON_MONSTER" })` 校验并产出 `CARD_MOVED/MONSTER_SUMMONED` 事件，UI 只按事件回放手牌到怪兽区的移动和召唤状态标记。
-- 抽卡、回血、单体强化、基础伤害和指定目标削弱伤害魔法已通过 `GameEngine.dispatch({ type: "ACTIVATE_CARD" })` 产出 `CARD_MOVED/CARDS_DRAWN/LP_HEALED/STAT_MODIFIED/DAMAGE_DEALT` 事件；伤害事件会记录 `requested/blocked/amount`，由事件回放统一处理护盾吸收和最终扣血。
+- 抽卡、回血、单体强化、基础伤害、指定目标削弱伤害和直击许可魔法已通过 `GameEngine.dispatch({ type: "ACTIVATE_CARD" })` 产出 `CARD_MOVED/CARDS_DRAWN/LP_HEALED/STAT_MODIFIED/DAMAGE_DEALT/ABILITY_GRANTED` 事件；伤害事件会记录 `requested/blocked/amount`，由事件回放统一处理护盾吸收和最终扣血。
 - 陷阱触发拆成 `trapCanResolve` 和 `resolveTrapCard`，`triggerTrap` 会按当前场面逐张处理同一事件上的连锁结果。
 - `state.timeline` 从日志事件派生结算时间线，后续可以逐步替换成更正式的事件流。
 - 后续新增卡时优先按“发动条件校验 -> 支付/移动卡牌 -> 效果资源/数值结算 -> 重新评估行动窗口”的顺序实现。
