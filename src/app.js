@@ -2214,6 +2214,11 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
     targetOwner: targetInfo?.owner || owner.owner
   };
   events.forEach((event) => {
+    if (event.type === "CARD_MOVED" && event.from?.zone === "grave" && event.to?.zone === "deck") {
+      const found = findRuntimeCard(event.cardId);
+      const movedName = found?.card?.name || "墓地卡";
+      addLog(`${movedName} 因 ${card.name} 回到卡组顶。`);
+    }
     if (event.type === "CARDS_DRAWN" && event.count > 0) {
       const drawn = (event.cardIds || []).map((cardId) => findRuntimeCard(cardId)?.card).filter(Boolean);
       drawn.forEach((drawnCard, index) => {

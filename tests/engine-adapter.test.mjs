@@ -333,6 +333,36 @@ test("dispatches engine-backed shield spells with capped shield gain", () => {
   ));
 });
 
+test("dispatches engine-backed grave-return by moving a grave card to deck top before drawing", () => {
+  const reclaim = uiSpell("spell-return", "graveReturn", "grave-return");
+  const fallen = uiMonster("fallen-monster", "ember-drake");
+  const deckCard = uiMonster("deck-after-return", "solar-knight");
+  const state = appState();
+  state.player.hand = [reclaim];
+  state.player.deck = [deckCard];
+  state.player.grave = [fallen];
+
+  assert.equal(canDispatchSpellFromUiState(reclaim), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.deepEqual(state.player.hand, [fallen]);
+  assert.deepEqual(state.player.deck, [deckCard]);
+  assert.deepEqual(state.player.grave, [reclaim]);
+  assert.ok(events.some((event) =>
+    event.type === "CARD_MOVED" &&
+    event.cardId === fallen.uid &&
+    event.from.zone === "grave" &&
+    event.to.zone === "deck" &&
+    event.to.index === 0
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "CARDS_DRAWN" &&
+    event.playerId === "player" &&
+    event.cardIds.includes(fallen.uid) &&
+    event.sourceCardId === reclaim.uid
+  ));
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });

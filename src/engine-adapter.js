@@ -3,7 +3,7 @@ import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { PHASES } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
-const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800"]);
+const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn"]);
 
 const uiZones = {
   deck: "deck",
@@ -242,11 +242,19 @@ function strongestMonsterId(uiState, playerId) {
   return cardKey(candidates.slice().sort((left, right) => totalAtk(right) - totalAtk(left))[0]);
 }
 
+function firstGraveCardIdExcept(uiState, playerId, excludedCardId) {
+  const duelist = uiDuelist(uiState, playerId);
+  const candidate = duelist.grave.find((card) => cardKey(card) !== excludedCardId);
+  return cardKey(candidate);
+}
+
 function targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo) {
   const explicit = cardKey(targetInfo?.card);
   if (explicit) return explicit;
+  const sourceCardId = cardKey(card);
   if (card.effect === "buff500") return strongestMonsterId(uiState, playerId);
   if (card.effect === "pierceLine") return strongestMonsterId(uiState, rivalId);
+  if (card.effect === "graveReturn") return firstGraveCardIdExcept(uiState, playerId, sourceCardId);
   return null;
 }
 

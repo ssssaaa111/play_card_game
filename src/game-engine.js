@@ -81,6 +81,15 @@ export const defaultCardEffects = Object.freeze({
   ], { target: { player: "rival", zone: "monsterZone", rule: "strongestAtk" } }),
   directStrike: oneShot([{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]),
   extraSummon: oneShot([{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]),
+  graveReturn: oneShot([
+    {
+      op: "moveCard",
+      cardId: "$action.targetCardId",
+      from: { playerId: "$action.playerId", zone: "grave" },
+      to: { playerId: "$action.playerId", zone: "deck", index: 0 }
+    },
+    { op: "drawCards", player: "self", count: 1 }
+  ], { target: { player: "self", zone: "grave", rule: "notSource" } }),
   attackNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }])
 });
 
@@ -853,6 +862,9 @@ function validateEffectTarget(definition, state, action, card) {
       throw new GameRuleError(`Target ${action.targetCardId} is not the strongest monster for this effect`);
     }
   }
+  if (definition.target.rule === "notSource" && action.targetCardId === card.id) {
+    throw new GameRuleError(`Target ${action.targetCardId} cannot be the source card for this effect`);
+  }
 }
 
 export function getCardEffectDefinition(effectId, effects = defaultCardEffects) {
@@ -909,6 +921,8 @@ function resolvePlayerRef(ref, action) {
 
 function resolveValue(value, action, card) {
   if (value === "$action.cardId") return action.cardId;
+  if (value === "$action.playerId") return action.playerId;
+  if (value === "$action.rivalId") return action.rivalId;
   if (value === "$action.targetCardId") {
     if (!action.targetCardId) {
       throw new GameRuleError("Effect operation requires action.targetCardId");

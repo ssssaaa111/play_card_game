@@ -156,6 +156,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const directStrike = getCardEffectDefinition("directStrike");
   const extraSummon = getCardEffectDefinition("extraSummon");
   const shield800 = getCardEffectDefinition("shield800");
+  const graveReturn = getCardEffectDefinition("graveReturn");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
@@ -164,6 +165,15 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.deepEqual(directStrike.operations, [{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]);
   assert.deepEqual(extraSummon.operations, [{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]);
   assert.deepEqual(shield800.operations, [{ op: "gainShield", player: "self", amount: 800 }]);
+  assert.deepEqual(graveReturn.operations, [
+    {
+      op: "moveCard",
+      cardId: "$action.targetCardId",
+      from: { playerId: "$action.playerId", zone: "grave" },
+      to: { playerId: "$action.playerId", zone: "deck", index: 0 }
+    },
+    { op: "drawCards", player: "self", count: 1 }
+  ]);
   assert.notEqual(typeof draw2, "function");
 });
 
@@ -380,6 +390,50 @@ test("shield spells grant shield through capped shield events", () => {
     event.after === 2400 &&
     event.sourceCardId === "shield-1"
   ));
+});
+
+test("grave-return recovers a grave card through movement and draw events", () => {
+  const state = makeState({
+    cards: [
+      card("return-1", { templateId: "grave-return", effect: "graveReturn" }),
+      card("fallen-1", { templateId: "ember-drake", type: "monster" }),
+      card("deck-1", { templateId: "solar-knight", type: "monster" })
+    ],
+    player: {
+      hand: ["return-1"],
+      deck: ["deck-1"],
+      grave: ["fallen-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "return-1",
+    targetCardId: "fallen-1"
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].hand, ["fallen-1"]);
+  assert.deepEqual(next.players[PLAYER].deck, ["deck-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, ["return-1"]);
+  assert.ok(events.some((event) =>
+    event.type === "CARD_MOVED" &&
+    event.cardId === "fallen-1" &&
+    event.from.zone === "grave" &&
+    event.to.zone === "deck" &&
+    event.to.index === 0
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "CARDS_DRAWN" &&
+    event.playerId === PLAYER &&
+    event.count === 1 &&
+    event.cardIds.includes("fallen-1") &&
+    event.sourceCardId === "return-1"
+  ));
+  assertValidGameState(next);
 });
 
 test("targeted spell activation rejects missing targets without consuming the card", () => {
