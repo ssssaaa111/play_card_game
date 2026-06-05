@@ -790,7 +790,7 @@ function distortionCurve(amount = 20) {
 
 function speak(text, force = false, owner = "player") {
   if (!text) return false;
-  if (!state.voiceOn && !force) return false;
+  if (!state.voiceOn) return false;
   if (!state.voiceReady && !force) return false;
   if (!("speechSynthesis" in window)) return false;
   window.speechSynthesis.cancel();

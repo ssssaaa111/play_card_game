@@ -158,6 +158,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const shield800 = getCardEffectDefinition("shield800");
   const graveReturn = getCardEffectDefinition("graveReturn");
   const battleTrance = getCardEffectDefinition("battleTrance");
+  const lightShadowCombo = getCardEffectDefinition("lightShadowCombo");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
@@ -178,6 +179,10 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.deepEqual(battleTrance.operations, [
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
     { op: "grantAbility", player: "self", ability: Ability.attackReset, uses: 1, duration: "turn" }
+  ]);
+  assert.deepEqual(lightShadowCombo.operations, [
+    { op: "gainShield", player: "self", amount: 600 },
+    { op: "drawCards", player: "self", count: 1 }
   ]);
   assert.notEqual(typeof draw2, "function");
 });
@@ -480,6 +485,50 @@ test("battle-trance buffs the strongest monster and grants attack reset through 
     event.ability === Ability.attackReset &&
     event.uses === 1 &&
     event.sourceCardId === "trance-1"
+  ));
+  assertValidGameState(next);
+});
+
+test("light-shadow combo gains shield and draws through events", () => {
+  const state = makeState({
+    cards: [
+      card("eclipse-1", { templateId: "eclipse-barrier", effect: "lightShadowCombo" }),
+      card("deck-1", { templateId: "solar-knight", type: "monster" })
+    ],
+    player: {
+      hand: ["eclipse-1"],
+      deck: ["deck-1"],
+      shield: 2100
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "eclipse-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.players[PLAYER].shield, 2400);
+  assert.deepEqual(next.players[PLAYER].hand, ["deck-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, ["eclipse-1"]);
+  assert.ok(events.some((event) =>
+    event.type === "SHIELD_GAINED" &&
+    event.playerId === PLAYER &&
+    event.requested === 600 &&
+    event.amount === 300 &&
+    event.before === 2100 &&
+    event.after === 2400 &&
+    event.sourceCardId === "eclipse-1"
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "CARDS_DRAWN" &&
+    event.playerId === PLAYER &&
+    event.count === 1 &&
+    event.cardIds.includes("deck-1") &&
+    event.sourceCardId === "eclipse-1"
   ));
   assertValidGameState(next);
 });

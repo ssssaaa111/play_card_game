@@ -268,6 +268,8 @@ test("browser test mode disables sound and guide blocking", () => {
   assert.match(app, /const BROWSER_SMOKE = BROWSER_TEST_MODE \? new URLSearchParams\(window\.location\.search\)\.get\("smoke"\)/);
   assert.match(app, /soundOn: !BROWSER_TEST_MODE/);
   assert.match(app, /voiceReady: BROWSER_TEST_MODE/);
+  assert.match(app, /if \(!state\.voiceOn\) return false;/);
+  assert.match(app, /if \(!state\.voiceReady && !force\) return false;/);
   assert.match(app, /if \(BROWSER_TEST_MODE\) return true;/);
   assert.match(app, /window\.__starDuelTest = Object\.freeze\(\{/);
   assert.match(app, /snapshot: createTestSnapshot\(\{/);

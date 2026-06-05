@@ -396,6 +396,38 @@ test("dispatches engine-backed battle-trance as a stat buff plus attack reset ab
   ));
 });
 
+test("dispatches engine-backed light-shadow combo as shield gain plus draw", () => {
+  const eclipse = uiSpell("spell-eclipse", "lightShadowCombo", "eclipse-barrier");
+  const deckCard = uiMonster("eclipse-draw", "solar-knight");
+  const state = appState();
+  state.player.hand = [eclipse];
+  state.player.deck = [deckCard];
+  state.player.shield = 2100;
+
+  assert.equal(canDispatchSpellFromUiState(eclipse), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.deepEqual(state.player.hand, [deckCard]);
+  assert.deepEqual(state.player.deck, []);
+  assert.deepEqual(state.player.grave, [eclipse]);
+  assert.equal(state.player.shield, 2400);
+  assert.ok(events.some((event) =>
+    event.type === "SHIELD_GAINED" &&
+    event.playerId === "player" &&
+    event.requested === 600 &&
+    event.amount === 300 &&
+    event.before === 2100 &&
+    event.after === 2400 &&
+    event.sourceCardId === eclipse.uid
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "CARDS_DRAWN" &&
+    event.playerId === "player" &&
+    event.cardIds.includes(deckCard.uid) &&
+    event.sourceCardId === eclipse.uid
+  ));
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });

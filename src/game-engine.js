@@ -85,6 +85,10 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
     { op: "grantAbility", player: "self", ability: Ability.attackReset, uses: 1, duration: "turn" }
   ], { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }),
+  lightShadowCombo: oneShot([
+    { op: "gainShield", player: "self", amount: 600 },
+    { op: "drawCards", player: "self", count: 1 }
+  ]),
   graveReturn: oneShot([
     {
       op: "moveCard",

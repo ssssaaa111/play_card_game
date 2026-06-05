@@ -3,7 +3,7 @@ import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { PHASES } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
-const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "battleTrance"]);
+const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "battleTrance", "lightShadowCombo"]);
 
 const uiZones = {
   deck: "deck",
