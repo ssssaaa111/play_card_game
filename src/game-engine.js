@@ -188,7 +188,10 @@ export class EffectContext {
     this.#emit("MONSTER_SUMMONED", {
       playerId,
       cardId,
-      sourceCardId: options.sourceCardId || cardId
+      sourceCardId: options.sourceCardId || cardId,
+      mode: options.mode || card.mode || "attack",
+      used: false,
+      changedMode: false
     });
   }
 
@@ -595,9 +598,11 @@ export function applyGameEvent(state, event, options = {}) {
     case "COMMAND_DISPATCHED":
     case "CARD_ACTIVATED":
     case "TRAP_SET":
-    case "MONSTER_SUMMONED":
     case "CARD_DESTROYED":
     case "EFFECT_NEGATED":
+      break;
+    case "MONSTER_SUMMONED":
+      applyMonsterSummoned(state, event);
       break;
     default:
       throw new GameRuleError(`Unknown GameEvent type ${event.type}`);
@@ -657,6 +662,13 @@ function applyDamageDealt(state, event) {
   const player = requirePlayer(state, event.playerId);
   const amount = Math.max(0, Number(event.amount) || 0);
   player.lp = Math.max(0, player.lp - amount);
+}
+
+function applyMonsterSummoned(state, event) {
+  const card = requireCard(state, event.cardId);
+  card.mode = event.mode || card.mode || "attack";
+  card.used = Boolean(event.used);
+  card.changedMode = Boolean(event.changedMode);
 }
 
 function applyLpHealed(state, event) {

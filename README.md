@@ -37,7 +37,7 @@ npm test
 - `tests/data.test.mjs` 也会校验每张魔法卡都有对应的 `src/spells.js` 元数据。
 - `tests/cards.test.mjs`：覆盖卡牌稀有度、流派、属性徽标、类型徽标和牌面规则摘要。
 - `tests/deck.test.mjs`：覆盖决斗者初始状态、卡牌克隆、预设卡组和规则测试场景卡组构建。
-- `tests/engine-adapter.test.mjs`：覆盖 UI 固定槽位和 `GameEngine.dispatch` 事件之间的适配。
+- `tests/engine-adapter.test.mjs`：覆盖 UI 固定槽位和 `GameEngine.dispatch` 事件之间的适配，包括盖放陷阱与召唤怪兽。
 - `tests/log-audit.test.mjs`：覆盖日志审计器，检查重复日志、魔法发动后缺少结算、攻击预判后缺少结算、直击规则前后矛盾等问题。
 - `tests/response-state.test.mjs`：覆盖可序列化的陷阱响应状态、候选去重、选择和失效响应拒绝。
 - `tests/scenario-state.test.mjs`：覆盖规则测试场景的手牌、卡组、固定大小场区和预留卡牌构建。
@@ -140,6 +140,7 @@ npm test
 - 目标选择使用 `pendingTarget` 和 `targetSelect` 行动窗口：发动指定目标魔法后先高亮合法目标，点击合法怪兽后才移动卡牌并结算效果。
 - 魔法效果统一挂在 `spellEffects` 注册表里，每个效果包含发动条件、实际结算、演出文案和 AI 评分，避免继续堆硬编码分支。
 - 盖放陷阱已通过 `GameEngine.dispatch({ type: "SET_TRAP" })` 校验并产出 `CARD_MOVED/TRAP_SET` 事件，UI 只按事件回放固定槽位变化。
+- 召唤怪兽已通过 `GameEngine.dispatch({ type: "SUMMON_MONSTER" })` 校验并产出 `CARD_MOVED/MONSTER_SUMMONED` 事件，UI 只按事件回放手牌到怪兽区的移动和召唤状态标记。
 - 陷阱触发拆成 `trapCanResolve` 和 `resolveTrapCard`，`triggerTrap` 会按当前场面逐张处理同一事件上的连锁结果。
 - `state.timeline` 从日志事件派生结算时间线，后续可以逐步替换成更正式的事件流。
 - 后续新增卡时优先按“发动条件校验 -> 支付/移动卡牌 -> 效果资源/数值结算 -> 重新评估行动窗口”的顺序实现。

@@ -150,13 +150,34 @@ function insertCardIntoUiState(uiState, card, to) {
 
 export function applyUiGameEvents(uiState, events = []) {
   events.forEach((event) => {
-    if (event.type !== "CARD_MOVED") return;
-    const card = removeCardFromUiState(uiState, event.cardId);
-    insertCardIntoUiState(uiState, card, event.to);
+    if (event.type === "CARD_MOVED") {
+      const card = removeCardFromUiState(uiState, event.cardId);
+      insertCardIntoUiState(uiState, card, event.to);
+      return;
+    }
+    if (event.type === "MONSTER_SUMMONED") {
+      const card = findUiCard(uiState, event.cardId);
+      if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
+      card.mode = event.mode || card.mode || "attack";
+      card.used = Boolean(event.used);
+      card.changedMode = Boolean(event.changedMode);
+    }
   });
   uiState.gameEvents = Array.isArray(uiState.gameEvents) ? uiState.gameEvents : [];
   uiState.gameEvents.push(...events.map((event) => ({ ...event })));
   return events;
+}
+
+function findUiCard(uiState, cardId) {
+  for (const ownerId of ownerIds) {
+    const duelist = uiState[ownerId];
+    if (!duelist) continue;
+    for (const zoneName of ["deck", "hand", "grave", "field", "traps"]) {
+      const card = duelist[zoneName].find((entry) => cardKey(entry) === cardId);
+      if (card) return card;
+    }
+  }
+  return null;
 }
 
 export function dispatchSetTrapFromUiState(uiState, playerId, handIndex, trapIndex) {
@@ -170,6 +191,27 @@ export function dispatchSetTrapFromUiState(uiState, playerId, handIndex, trapInd
     playerId,
     cardId: cardKey(card),
     index: trapIndex
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchSummonMonsterFromUiState(uiState, playerId, handIndex, fieldIndex) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.hand[handIndex];
+  if (!card) throw new Error(`No hand card at index ${handIndex}`);
+
+  const engineState = buildEngineStateFromUiState(uiState);
+  const cardId = cardKey(card);
+  if (engineState.cards[cardId]) {
+    engineState.cards[cardId] = { ...engineState.cards[cardId], onSummon: null };
+  }
+
+  const engine = new GameEngine(engineState);
+  const events = engine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId,
+    cardId,
+    index: fieldIndex
   });
   return applyUiGameEvents(uiState, events);
 }

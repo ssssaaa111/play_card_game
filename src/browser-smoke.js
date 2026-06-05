@@ -307,6 +307,9 @@ async function runAceAttackSmoke(ctx) {
       fieldCard(ctx.els, "player", "flare-titan"),
     "王牌召唤动画与场上怪兽"
   );
+  if (countGameEvents(ctx.state, "MONSTER_SUMMONED") < 1 || countGameEvents(ctx.state, "CARD_MOVED") < 1) {
+    throw new Error("Monster summon must be recorded through engine events");
+  }
   clickSmokeElement(fieldCard(ctx.els, "player", "flare-titan"), "选择熔核巨像");
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "王牌攻击目标高亮");
   clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "熔核巨像攻击铁壁守卫");

@@ -6,7 +6,7 @@ import { cardDetailText, cardZoomMeta } from './card-detail.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { availableElementCombos, markElementComboResolved } from './combos.js';
 import { buildDeck, createDuelist } from './deck.js';
-import { dispatchSetTrapFromUiState } from './engine-adapter.js';
+import { dispatchSetTrapFromUiState, dispatchSummonMonsterFromUiState } from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
 import { scoreSpellForAi, spellDefinitions, validateSpellCondition } from './spells.js';
 import { nextTimelineState } from './timeline.js';
@@ -1703,7 +1703,11 @@ async function handlePlayerSlot(index) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
-  await summonMonster(state.player, state.ai, handIndex, index);
+  const summoned = await summonMonster(state.player, state.ai, handIndex, index);
+  if (!summoned) {
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
   if (usingExtraSummon) {
     state.player.extraSummon -= 1;
     addLog("额外召唤机会已使用。");
@@ -1887,11 +1891,15 @@ async function handleAiPanelAttack() {
 }
 
 async function summonMonster(owner, rival, handIndex, fieldIndex) {
-  const card = owner.hand.splice(handIndex, 1)[0];
-  card.used = false;
-  card.changedMode = false;
-  card.mode = card.mode || "attack";
-  owner.field[fieldIndex] = card;
+  const card = owner.hand[handIndex];
+  if (!card) return false;
+  try {
+    dispatchSummonMonsterFromUiState(state, owner.owner, handIndex, fieldIndex);
+  } catch (error) {
+    cue(error.message || "怪兽召唤失败。");
+    console.error(error);
+    return false;
+  }
   playSound("summon");
   animateAvatar(owner.owner, "cast");
   addLog(`${owner.owner === "player" ? "你" : "AI"} 召唤了 ${card.name}。`);
@@ -1902,9 +1910,10 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
     playDuelistLine(owner.owner, lineFor(owner.owner, "summon", card), false, "summon");
   }
   await triggerTrap(rival, owner, "summon", { summoned: card });
-  if (state.gameOver) return;
+  if (state.gameOver) return true;
   resolveSummonEffect(card, owner, rival);
   checkGameOver();
+  return true;
 }
 
 function setTrap(owner, handIndex, trapIndex) {
@@ -3025,7 +3034,8 @@ async function aiSummon() {
     .filter((entry) => entry.card.type === "monster")
     .sort((a, b) => aiMonsterScore(b.card) - aiMonsterScore(a.card));
   if (monsters.length === 0) return false;
-  await summonMonster(state.ai, state.player, monsters[0].index, empty);
+  const didSummon = await summonMonster(state.ai, state.player, monsters[0].index, empty);
+  if (!didSummon) return false;
   const summoned = state.ai.field[empty];
   if (summoned && (state.aiStyle === "control" || (summoned.def > totalAtk(summoned) + 400 && state.ai.lp < state.player.lp))) {
     summoned.mode = "defense";
