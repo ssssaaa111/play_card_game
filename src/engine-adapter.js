@@ -1,9 +1,9 @@
 import { Ability, GameEngine, Phase } from './game-engine.js';
-import { FIELD_SIZE, MAX_LP, totalAtk } from './rules.js';
+import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { PHASES } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
-const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon"]);
+const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800"]);
 
 const uiZones = {
   deck: "deck",
@@ -209,6 +209,10 @@ export function applyUiGameEvents(uiState, events = []) {
       const blocked = Math.max(0, Number(event.blocked) || 0);
       duelist.shield = Math.max(0, (Number(duelist.shield) || 0) - blocked);
       duelist.lp = Math.max(0, duelist.lp - Math.max(0, Number(event.amount) || 0));
+    }
+    if (event.type === "SHIELD_GAINED") {
+      const duelist = uiDuelist(uiState, event.playerId);
+      duelist.shield = Math.min(MAX_SHIELD, (Number(duelist.shield) || 0) + Math.max(0, Number(event.amount) || 0));
     }
     if (event.type === "STAT_MODIFIED") {
       const card = findUiCard(uiState, event.cardId);

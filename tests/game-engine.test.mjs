@@ -155,6 +155,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const heal700 = getCardEffectDefinition("heal700");
   const directStrike = getCardEffectDefinition("directStrike");
   const extraSummon = getCardEffectDefinition("extraSummon");
+  const shield800 = getCardEffectDefinition("shield800");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
@@ -162,6 +163,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.deepEqual(heal700.operations, [{ op: "heal", player: "self", amount: 700 }]);
   assert.deepEqual(directStrike.operations, [{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]);
   assert.deepEqual(extraSummon.operations, [{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]);
+  assert.deepEqual(shield800.operations, [{ op: "gainShield", player: "self", amount: 800 }]);
   assert.notEqual(typeof draw2, "function");
 });
 
@@ -349,6 +351,34 @@ test("extra-summon grants extra summon through ability events", () => {
     event.ability === Ability.extraSummon &&
     event.uses === 1 &&
     event.sourceCardId === "twin-1"
+  ));
+});
+
+test("shield spells grant shield through capped shield events", () => {
+  const state = makeState({
+    cards: [
+      card("shield-1", { templateId: "star-shield", effect: "shield800" })
+    ],
+    player: {
+      hand: ["shield-1"],
+      shield: 2000
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "shield-1" });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].grave, ["shield-1"]);
+  assert.equal(next.players[PLAYER].shield, 2400);
+  assert.ok(events.some((event) =>
+    event.type === "SHIELD_GAINED" &&
+    event.playerId === PLAYER &&
+    event.requested === 800 &&
+    event.amount === 400 &&
+    event.before === 2000 &&
+    event.after === 2400 &&
+    event.sourceCardId === "shield-1"
   ));
 });
 

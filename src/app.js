@@ -50,6 +50,7 @@ import {
   fieldElements,
   legalAttackTargets,
   makeBattlePreview,
+  MAX_SHIELD,
   spellTargetPrompt,
   strongestMonster,
   totalAtk,
@@ -1022,7 +1023,7 @@ function drawCards(duelist, count) {
 }
 
 function gainShield(duelist, amount, reason = "护盾") {
-  duelist.shield = Math.min(2400, (duelist.shield || 0) + amount);
+  duelist.shield = Math.min(MAX_SHIELD, (duelist.shield || 0) + amount);
   playSound("guard");
   playEpicAction("护盾", "guard");
   playGuardShield(panelElement(duelist.owner));
@@ -2228,6 +2229,15 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       playSound("spell-heal700");
       playLifeDelta(owner.owner, event.amount);
       addLog(`${card.name} 为 ${duelistLabel(owner)}回复 ${event.amount} 点生命值。`);
+    }
+    if (event.type === "SHIELD_GAINED" && event.amount > 0) {
+      const target = event.playerId === owner.owner ? owner : rival;
+      result.targetOwner = target.owner;
+      playSound("guard");
+      playEpicAction("护盾", "guard");
+      playGuardShield(panelElement(target.owner));
+      playVoice(target.owner, "shield", "护盾展开。");
+      addLog(`${target.owner === "player" ? "你" : "AI"} 获得 ${event.amount} 点护盾（${card.name}）。`);
     }
     if (event.type === "DAMAGE_DEALT") {
       const target = event.playerId === owner.owner ? owner : rival;

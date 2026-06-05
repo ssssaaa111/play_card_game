@@ -1,4 +1,4 @@
-import { FIELD_SIZE, MAX_LP } from "./rules.js";
+import { FIELD_SIZE, MAX_LP, MAX_SHIELD } from "./rules.js";
 
 export const Phase = Object.freeze({
   setup: "setup",
@@ -69,6 +69,7 @@ export const defaultCardEffects = Object.freeze({
   burn500: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
   heal300: oneShot([{ op: "heal", player: "self", amount: 300 }]),
   heal700: oneShot([{ op: "heal", player: "self", amount: 700 }]),
+  shield800: oneShot([{ op: "gainShield", player: "self", amount: 800 }]),
   buff500: oneShot(
     [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 500 }],
     { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }
@@ -140,6 +141,23 @@ export class EffectContext {
       playerId,
       amount: actual,
       requested: rawAmount,
+      sourceCardId: options.sourceCardId || null
+    });
+    return actual;
+  }
+
+  gainShield(playerId, amount, options = {}) {
+    const player = requirePlayer(this.#state, playerId);
+    const rawAmount = Math.max(0, Number(amount) || 0);
+    const before = Math.max(0, Number(player.shield) || 0);
+    const actual = Math.max(0, Math.min(MAX_SHIELD - before, rawAmount));
+
+    this.#emit("SHIELD_GAINED", {
+      playerId,
+      amount: actual,
+      requested: rawAmount,
+      before,
+      after: before + actual,
       sourceCardId: options.sourceCardId || null
     });
     return actual;
@@ -592,6 +610,9 @@ export function applyGameEvent(state, event, options = {}) {
     case "LP_HEALED":
       applyLpHealed(state, event);
       break;
+    case "SHIELD_GAINED":
+      applyShieldGained(state, event);
+      break;
     case "STAT_MODIFIED":
       applyStatModified(state, event);
       break;
@@ -703,6 +724,12 @@ function applyLpHealed(state, event) {
   const player = requirePlayer(state, event.playerId);
   const amount = Math.max(0, Number(event.amount) || 0);
   player.lp = Math.min(MAX_LP, player.lp + amount);
+}
+
+function applyShieldGained(state, event) {
+  const player = requirePlayer(state, event.playerId);
+  const amount = Math.max(0, Number(event.amount) || 0);
+  player.shield = Math.min(MAX_SHIELD, (Number(player.shield) || 0) + amount);
 }
 
 function applyStatModified(state, event) {
@@ -851,6 +878,8 @@ function runEffectOperation(operation, ctx, action, card) {
       return ctx.dealDamage(resolvePlayerRef(operation.player, action), operation.amount, source);
     case "heal":
       return ctx.heal(resolvePlayerRef(operation.player, action), operation.amount, source);
+    case "gainShield":
+      return ctx.gainShield(resolvePlayerRef(operation.player, action), operation.amount, source);
     case "moveCard":
       return ctx.moveCard(resolveValue(operation.cardId, action, card), resolveValue(operation.from, action, card), resolveValue(operation.to, action, card));
     case "destroyCard":

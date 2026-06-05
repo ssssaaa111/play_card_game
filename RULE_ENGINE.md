@@ -34,6 +34,7 @@ Card effects should only use these methods:
 - `drawCards`
 - `dealDamage`
 - `heal`
+- `gainShield`
 - `moveCard`
 - `destroyCard`
 - `summonMonster`

@@ -310,6 +310,29 @@ test("dispatches engine-backed extra-summon as an ability grant", () => {
   ));
 });
 
+test("dispatches engine-backed shield spells with capped shield gain", () => {
+  const shield = uiSpell("spell-shield", "shield800", "star-shield");
+  const state = appState();
+  state.player.hand = [shield];
+  state.player.shield = 2000;
+
+  assert.equal(canDispatchSpellFromUiState(shield), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [shield]);
+  assert.equal(state.player.shield, 2400);
+  assert.ok(events.some((event) =>
+    event.type === "SHIELD_GAINED" &&
+    event.playerId === "player" &&
+    event.requested === 800 &&
+    event.amount === 400 &&
+    event.before === 2000 &&
+    event.after === 2400 &&
+    event.sourceCardId === shield.uid
+  ));
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });

@@ -1,5 +1,6 @@
 export const MAX_LP = 4000;
 export const FIELD_SIZE = 3;
+export const MAX_SHIELD = 2400;
 
 export function fieldCards(duelist) {
   return duelist.field.filter(Boolean);
