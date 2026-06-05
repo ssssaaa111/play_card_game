@@ -229,6 +229,41 @@ test("dispatches engine-backed damage spells with shield absorption", () => {
   ));
 });
 
+test("dispatches engine-backed pierce-line with target stat loss and shielded damage", () => {
+  const pierce = uiSpell("spell-pierce", "pierceLine", "pierce-line");
+  const strongest = uiMonster("enemy-strongest", "star-lancer");
+  const weaker = uiMonster("enemy-weaker", "ember-drake");
+  strongest.ownerId = "ai";
+  weaker.ownerId = "ai";
+  strongest.atk = 1800;
+  weaker.atk = 1500;
+  const state = appState();
+  state.player.hand = [pierce];
+  state.ai.field[0] = weaker;
+  state.ai.field[1] = strongest;
+  state.ai.shield = 50;
+
+  assert.equal(canDispatchSpellFromUiState(pierce), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: strongest, owner: "ai" });
+
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [pierce]);
+  assert.equal(strongest.tempAtk, -400);
+  assert.equal(strongest.tempDef, -400);
+  assert.equal(weaker.tempAtk || 0, 0);
+  assert.equal(weaker.tempDef || 0, 0);
+  assert.equal(state.ai.shield, 0);
+  assert.equal(state.ai.lp, 3850);
+  assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === strongest.uid).length, 2);
+  assert.ok(events.some((event) =>
+    event.type === "DAMAGE_DEALT" &&
+    event.playerId === "ai" &&
+    event.requested === 200 &&
+    event.blocked === 50 &&
+    event.amount === 150
+  ));
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });

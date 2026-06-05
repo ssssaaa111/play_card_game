@@ -2196,6 +2196,17 @@ function findRuntimeCard(cardId) {
   return null;
 }
 
+function statLabel(stat) {
+  if (stat === "def" || stat === "tempDef") return "防御力";
+  return "攻击力";
+}
+
+function statChangeText(event) {
+  const amount = Number(event.amount) || 0;
+  const direction = amount >= 0 ? "提升" : "下降";
+  return `${statLabel(event.stat)}${direction} ${Math.abs(amount)}`;
+}
+
 function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = null) {
   const result = {
     effectTarget: targetInfo?.card || null,
@@ -2242,7 +2253,7 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       if (!found) return;
       result.effectTarget = found.card;
       result.targetOwner = found.owner;
-      addLog(`${found.card.name} 因 ${card.name} 攻击力提升 ${event.amount}。`);
+      addLog(`${found.card.name} 因 ${card.name} ${statChangeText(event)}。`);
     }
   });
   return result;
