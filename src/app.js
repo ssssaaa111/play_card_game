@@ -6,6 +6,7 @@ import { cardDetailText, cardZoomMeta } from './card-detail.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { availableElementCombos, markElementComboResolved } from './combos.js';
 import { buildDeck, createDuelist } from './deck.js';
+import { dispatchSetTrapFromUiState } from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
 import { scoreSpellForAi, spellDefinitions, validateSpellCondition } from './spells.js';
 import { nextTimelineState } from './timeline.js';
@@ -94,6 +95,7 @@ const state = {
   log: [],
   timeline: [],
   timelineStep: 0,
+  gameEvents: [],
   battlePreview: null,
   ruleCheckIssue: null
 };
@@ -916,6 +918,7 @@ function startGame() {
   state.log = [];
   state.timeline = [];
   state.timelineStep = 0;
+  state.gameEvents = [];
   els.modal.classList.remove("show");
   els.modalRestart.textContent = "再来一局";
   if (state.scenarioId === "normal") {
@@ -965,6 +968,7 @@ function prepareGame() {
   state.log = ["点击“开始决斗”后再抽卡开局。"];
   state.timeline = [];
   state.timelineStep = 0;
+  state.gameEvents = [];
   clearPlayerIdleTimers();
   els.modalTitle.textContent = "准备决斗";
   els.modalText.textContent = "确认准备好后再开始。开局后也可以随时暂停。";
@@ -1786,7 +1790,10 @@ function handlePlayerTrapSlot(index) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
-  setTrap(state.player, handIndex, index);
+  if (!setTrap(state.player, handIndex, index)) {
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
   state.selected = null;
   render();
   resolvePlayerActionWindow("陷阱盖放完成");
@@ -1901,14 +1908,22 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
 }
 
 function setTrap(owner, handIndex, trapIndex) {
-  const card = owner.hand.splice(handIndex, 1)[0];
-  owner.traps[trapIndex] = card;
+  const card = owner.hand[handIndex];
+  if (!card) return false;
+  try {
+    dispatchSetTrapFromUiState(state, owner.owner, handIndex, trapIndex);
+  } catch (error) {
+    cue(error.message || "陷阱卡盖放失败。");
+    console.error(error);
+    return false;
+  }
   playSound("trap");
   addLog(owner.owner === "player"
     ? `你盖放了陷阱卡 ${card.name}。`
     : "AI 盖放了 1 张陷阱卡。");
   speak(owner.owner === "player" ? "陷阱卡盖放。" : "对手盖放了一张陷阱卡。");
   resolveElementCombos(owner, owner.owner === "player" ? state.ai : state.player, "trap");
+  return true;
 }
 
 function resolveSummonEffect(card, owner, rival) {
@@ -3025,8 +3040,7 @@ function aiSetTraps() {
   if (empty < 0) return false;
   const trapIndex = state.ai.hand.findIndex((card) => card.type === "trap");
   if (trapIndex >= 0) {
-    setTrap(state.ai, trapIndex, empty);
-    return true;
+    return setTrap(state.ai, trapIndex, empty);
   }
   return false;
 }

@@ -13,6 +13,7 @@ test("builds read-only browser smoke snapshots from live state", () => {
     scenarioId: "direct",
     soundOn: false,
     voiceOn: false,
+    gameEvents: [{ type: "CARD_MOVED" }, { type: "TRAP_SET" }],
     log: ["攻击无效：必须先攻击怪兽。"],
     pendingTarget: null,
     player: {
@@ -44,6 +45,8 @@ test("builds read-only browser smoke snapshots from live state", () => {
   })();
 
   assert.equal(snapshot.mode, "test");
+  assert.equal(snapshot.gameEventCount, 2);
+  assert.deepEqual(snapshot.latestGameEvents, ["CARD_MOVED", "TRAP_SET"]);
   assert.equal(snapshot.latestLog, "攻击无效：必须先攻击怪兽。");
   assert.equal(snapshot.player.directAttacks, 1);
   assert.deepEqual(snapshot.player.hand, ["star-breach"]);

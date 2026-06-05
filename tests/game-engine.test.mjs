@@ -364,6 +364,89 @@ test("void-lock can only trigger in battle phase and logs negation", () => {
   assert.ok(events.some((event) => event.type === "EFFECT_NEGATED" && event.targetEffectId === "attack-42"));
 });
 
+test("set trap moves trap cards through dispatch events in main and battle phases", () => {
+  const mainState = makeState({
+    cards: [card("mirror-1", { templateId: "mirror-snare", type: "trap", trigger: "attackDestroy" })],
+    player: {
+      hand: ["mirror-1"]
+    }
+  });
+
+  const mainEngine = new GameEngine(mainState);
+  const mainEvents = mainEngine.dispatch({
+    type: "SET_TRAP",
+    playerId: PLAYER,
+    cardId: "mirror-1",
+    index: 2
+  });
+  const mainNext = mainEngine.getState();
+
+  assert.deepEqual(mainNext.players[PLAYER].hand, []);
+  assert.deepEqual(mainNext.players[PLAYER].spellTrapZone, ["mirror-1"]);
+  assert.ok(mainEvents.some((event) =>
+    event.type === "CARD_MOVED" &&
+    event.cardId === "mirror-1" &&
+    event.to.zone === "spellTrapZone" &&
+    event.to.index === 2
+  ));
+  assert.ok(mainEvents.some((event) => event.type === "TRAP_SET" && event.cardId === "mirror-1"));
+
+  const battleState = makeState({
+    cards: [card("guard-1", { templateId: "guard-sigil", type: "trap", trigger: "directShield" })],
+    player: {
+      hand: ["guard-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  battleState.machine.phase = Phase.battle;
+  battleState.machine.timing = Timing.battleOpen;
+
+  const battleEngine = new GameEngine(battleState);
+  battleEngine.dispatch({ type: "SET_TRAP", playerId: PLAYER, cardId: "guard-1", index: 0 });
+
+  assert.deepEqual(battleEngine.getState().players[PLAYER].spellTrapZone, ["guard-1"]);
+});
+
+test("set trap rejects non-traps and full spell trap zones without consuming the card", () => {
+  const monsterState = makeState({
+    cards: [card("lancer-1", { templateId: "star-lancer", type: "monster" })],
+    player: {
+      hand: ["lancer-1"]
+    }
+  });
+  const monsterEngine = new GameEngine(monsterState);
+
+  assert.throws(
+    () => monsterEngine.dispatch({ type: "SET_TRAP", playerId: PLAYER, cardId: "lancer-1" }),
+    GameRuleError
+  );
+  assert.deepEqual(monsterEngine.getState().players[PLAYER].hand, ["lancer-1"]);
+
+  const trapCards = Array.from({ length: FIELD_SIZE }, (_, index) =>
+    card(`set-${index}`, { templateId: "mirror-snare", type: "trap" })
+  );
+  const fullState = makeState({
+    cards: [
+      ...trapCards,
+      card("mirror-1", { templateId: "mirror-snare", type: "trap" })
+    ],
+    player: {
+      hand: ["mirror-1"],
+      spellTrapZone: trapCards.map((entry) => entry.id)
+    }
+  });
+  const fullEngine = new GameEngine(fullState);
+
+  assert.throws(
+    () => fullEngine.dispatch({ type: "SET_TRAP", playerId: PLAYER, cardId: "mirror-1" }),
+    GameRuleError
+  );
+  assert.deepEqual(fullEngine.getState().players[PLAYER].hand, ["mirror-1"]);
+  assert.equal(fullEngine.getState().players[PLAYER].spellTrapZone.length, FIELD_SIZE);
+});
+
 test("applyGameEvent is the only state mutator for card movement and LP changes", () => {
   const state = makeState({
     cards: [card("burst-1", { templateId: "burst-rune", effect: "burn500" })],

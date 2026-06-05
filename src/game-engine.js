@@ -353,16 +353,21 @@ export class GameEngine {
 
   #setTrap(state, ctx, emit, action) {
     requireCurrentTurn(state, action.playerId);
-    requirePhase(state, [Phase.main], action.type);
+    requirePhase(state, [Phase.main, Phase.battle], action.type);
     const card = requireCardInZone(state, action.playerId, "hand", action.cardId);
     if (card.type !== "trap") {
       throw new GameRuleError(`Card ${action.cardId} is not a trap`);
     }
 
-    ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "hand" }, { playerId: action.playerId, zone: "spellTrapZone" });
+    ctx.moveCard(
+      action.cardId,
+      { playerId: action.playerId, zone: "hand" },
+      { playerId: action.playerId, zone: "spellTrapZone", index: action.index }
+    );
     emit("TRAP_SET", {
       playerId: action.playerId,
       cardId: action.cardId,
+      index: action.index ?? null,
       phase: state.turn.phase
     });
   }

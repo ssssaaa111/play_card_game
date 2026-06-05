@@ -37,6 +37,7 @@ npm test
 - `tests/data.test.mjs` 也会校验每张魔法卡都有对应的 `src/spells.js` 元数据。
 - `tests/cards.test.mjs`：覆盖卡牌稀有度、流派、属性徽标、类型徽标和牌面规则摘要。
 - `tests/deck.test.mjs`：覆盖决斗者初始状态、卡牌克隆、预设卡组和规则测试场景卡组构建。
+- `tests/engine-adapter.test.mjs`：覆盖 UI 固定槽位和 `GameEngine.dispatch` 事件之间的适配。
 - `tests/log-audit.test.mjs`：覆盖日志审计器，检查重复日志、魔法发动后缺少结算、攻击预判后缺少结算、直击规则前后矛盾等问题。
 - `tests/response-state.test.mjs`：覆盖可序列化的陷阱响应状态、候选去重、选择和失效响应拒绝。
 - `tests/scenario-state.test.mjs`：覆盖规则测试场景的手牌、卡组、固定大小场区和预留卡牌构建。
@@ -67,6 +68,7 @@ npm test
 - `src/combos.js`：属性组合技规则模块，负责判断火风、光暗、三属性和陷阱联动组合技是否可触发。
 - `src/data.js`：纯数据配置，包含卡牌库、怪兽素材映射、角色、卡组预设和规则测试场景。
 - `src/deck.js`：卡组和决斗者构造模块，包含卡牌克隆、预设卡组构建和规则测试场景卡组扣除。
+- `src/engine-adapter.js`：UI 到核心规则引擎的适配层，负责把固定槽位操作转换成 `GameEngine.dispatch` 事件并回放到界面状态。
 - `src/log-audit.js`：日志审计模块，负责从时间线里发现重复日志、关键效果缺少结算日志、攻击预判断链和直击规则矛盾。
 - `src/response-state.js`：响应窗口纯状态模块，负责构造、选择和结算可序列化的陷阱响应选择。
 - `src/rules.js`：纯规则工具，包含生命上限、场地区数量、攻击/守备数值、直击校验、攻击预览和魔法目标选择规则。
@@ -137,6 +139,7 @@ npm test
 - 直接攻击使用统一校验：`validateAttackTarget` 会拦截非法直击，玩家点对方角色时使用 `-1` 作为直击目标，`星隙穿透` 会给玩家授予 `directAttacks` 资源，结算直击后自动消耗。
 - 目标选择使用 `pendingTarget` 和 `targetSelect` 行动窗口：发动指定目标魔法后先高亮合法目标，点击合法怪兽后才移动卡牌并结算效果。
 - 魔法效果统一挂在 `spellEffects` 注册表里，每个效果包含发动条件、实际结算、演出文案和 AI 评分，避免继续堆硬编码分支。
+- 盖放陷阱已通过 `GameEngine.dispatch({ type: "SET_TRAP" })` 校验并产出 `CARD_MOVED/TRAP_SET` 事件，UI 只按事件回放固定槽位变化。
 - 陷阱触发拆成 `trapCanResolve` 和 `resolveTrapCard`，`triggerTrap` 会按当前场面逐张处理同一事件上的连锁结果。
 - `state.timeline` 从日志事件派生结算时间线，后续可以逐步替换成更正式的事件流。
 - 后续新增卡时优先按“发动条件校验 -> 支付/移动卡牌 -> 效果资源/数值结算 -> 重新评估行动窗口”的顺序实现。

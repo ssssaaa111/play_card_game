@@ -20,6 +20,8 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       soundOn: state.soundOn,
       voiceOn: state.voiceOn,
       latestLog: state.log[0] || "",
+      gameEventCount: state.gameEvents?.length || 0,
+      latestGameEvents: (state.gameEvents || []).slice(-5).map((event) => event.type),
       pendingTarget: state.pendingTarget ? {
         mode: state.pendingTarget.mode,
         cardName: state.pendingTarget.cardName,
@@ -120,6 +122,10 @@ function trapCard(els, owner, cardId) {
 
 function chainChoiceButton(els, cardId) {
   return els.chainChoices?.querySelector(`[data-card-id="${cardId}"]`);
+}
+
+function countGameEvents(state, type) {
+  return (state.gameEvents || []).filter((event) => event.type === type).length;
 }
 
 async function runSkipLockSmoke(ctx) {
@@ -260,6 +266,9 @@ async function runBattleTrapSmoke(ctx) {
     () => ctx.state.phase === "battle" && ctx.state.player.traps.some((card) => card?.id === "mirror-snare"),
     "攻击后成功盖放陷阱"
   );
+  if (countGameEvents(ctx.state, "TRAP_SET") < 1 || countGameEvents(ctx.state, "CARD_MOVED") < 1) {
+    throw new Error("Battle phase trap set must be recorded through engine events");
+  }
   if (!ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap && !ctx.currentPlayerActions().attack) {
     throw new Error("战斗阶段仍有可行动项时不应关闭行动窗口");
   }
@@ -337,6 +346,9 @@ async function runAiDirectTrapSmoke(ctx) {
   clickSmokeElement(handCard(ctx.els, "storm-shift"), "风暴转移手牌");
   clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "空陷阱区");
   await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "storm-shift"), "风暴转移盖放");
+  if (countGameEvents(ctx.state, "TRAP_SET") < 1 || countGameEvents(ctx.state, "CARD_MOVED") < 1) {
+    throw new Error("Direct trap setup must be recorded through engine events");
+  }
   await finishPlayerTurn(ctx);
   for (let promptIndex = 1; promptIndex <= 3; promptIndex += 1) {
     await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `第 ${promptIndex} 次直击风暴转移连锁弹窗`, 20000);
@@ -433,6 +445,9 @@ async function runChainTrapChoiceSmoke(ctx) {
   }
   await finishPlayerTurn(ctx);
   await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "连锁测试多陷阱响应窗口", 16000);
+  if (countGameEvents(ctx.state, "TRAP_SET") < 3 || countGameEvents(ctx.state, "CARD_MOVED") < 3) {
+    throw new Error("Multi-trap setup must record every set trap through engine events");
+  }
   const choiceCount = ctx.els.chainChoices?.querySelectorAll("[data-trap-choice-index]").length || 0;
   if (choiceCount !== 3) {
     throw new Error(`连锁场景应该在弹窗内显示三张可选陷阱，实际 ${choiceCount} 张`);

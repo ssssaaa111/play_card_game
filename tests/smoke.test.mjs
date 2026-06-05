@@ -34,6 +34,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/combos.js");
   checkModuleSyntax("src/data.js");
   checkModuleSyntax("src/deck.js");
+  checkModuleSyntax("src/engine-adapter.js");
   checkModuleSyntax("src/log-audit.js");
   checkModuleSyntax("src/response-state.js");
   checkModuleSyntax("src/rules.js");
@@ -479,7 +480,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "src/actions.js", "src/app.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "src/actions.js", "src/app.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });
