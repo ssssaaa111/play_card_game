@@ -79,6 +79,7 @@ export const defaultCardEffects = Object.freeze({
     { op: "dealDamage", player: "rival", amount: 200 }
   ], { target: { player: "rival", zone: "monsterZone", rule: "strongestAtk" } }),
   directStrike: oneShot([{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]),
+  extraSummon: oneShot([{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]),
   attackNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }])
 });
 

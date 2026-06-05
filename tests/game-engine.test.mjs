@@ -154,12 +154,14 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const burn500 = getCardEffectDefinition("burn500");
   const heal700 = getCardEffectDefinition("heal700");
   const directStrike = getCardEffectDefinition("directStrike");
+  const extraSummon = getCardEffectDefinition("extraSummon");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
   assert.deepEqual(burn500.operations, [{ op: "dealDamage", player: "rival", amount: 500 }]);
   assert.deepEqual(heal700.operations, [{ op: "heal", player: "self", amount: 700 }]);
   assert.deepEqual(directStrike.operations, [{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]);
+  assert.deepEqual(extraSummon.operations, [{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]);
   assert.notEqual(typeof draw2, "function");
 });
 
@@ -322,6 +324,31 @@ test("direct-strike grants direct attack through ability events", () => {
     event.ability === Ability.directAttack &&
     event.uses === 1 &&
     event.sourceCardId === "breach-1"
+  ));
+});
+
+test("extra-summon grants extra summon through ability events", () => {
+  const state = makeState({
+    cards: [
+      card("twin-1", { templateId: "twin-summon", effect: "extraSummon" })
+    ],
+    player: {
+      hand: ["twin-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "twin-1" });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].grave, ["twin-1"]);
+  assert.equal(hasAbility(next, PLAYER, Ability.extraSummon), true);
+  assert.ok(events.some((event) =>
+    event.type === "ABILITY_GRANTED" &&
+    event.playerId === PLAYER &&
+    event.ability === Ability.extraSummon &&
+    event.uses === 1 &&
+    event.sourceCardId === "twin-1"
   ));
 });
 

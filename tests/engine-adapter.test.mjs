@@ -289,6 +289,27 @@ test("dispatches engine-backed direct-strike as an ability grant", () => {
   ));
 });
 
+test("dispatches engine-backed extra-summon as an ability grant", () => {
+  const twin = uiSpell("spell-extra", "extraSummon", "twin-summon");
+  const monster = uiMonster("summon-followup", "star-lancer");
+  const state = appState();
+  state.player.hand = [twin, monster];
+
+  assert.equal(canDispatchSpellFromUiState(twin), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.deepEqual(state.player.hand, [monster]);
+  assert.deepEqual(state.player.grave, [twin]);
+  assert.equal(state.player.extraSummon, 1);
+  assert.ok(events.some((event) =>
+    event.type === "ABILITY_GRANTED" &&
+    event.playerId === "player" &&
+    event.ability === "extraSummon" &&
+    event.uses === 1 &&
+    event.sourceCardId === twin.uid
+  ));
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });

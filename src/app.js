@@ -2262,6 +2262,11 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       addLog(`${duelistLabel(owner)}获得 ${event.uses || 1} 次直接攻击许可。`);
       playEpicAction("直击许可", "attack");
     }
+    if (event.type === "ABILITY_GRANTED" && event.ability === "extraSummon") {
+      result.targetOwner = owner.owner;
+      addLog(`${duelistLabel(owner)}本回合获得 ${event.uses || 1} 次额外通常召唤。`);
+      playEpicAction("额外召唤", "draw");
+    }
   });
   return result;
 }
