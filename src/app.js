@@ -2218,6 +2218,25 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       playLifeDelta(owner.owner, event.amount);
       addLog(`${card.name} 为 ${duelistLabel(owner)}回复 ${event.amount} 点生命值。`);
     }
+    if (event.type === "DAMAGE_DEALT") {
+      const target = event.playerId === owner.owner ? owner : rival;
+      const blocked = Math.max(0, Number(event.blocked) || 0);
+      const dealt = Math.max(0, Number(event.amount) || 0);
+      result.targetOwner = target.owner;
+      if (blocked > 0) {
+        playSound("guard");
+        playGuardShield(panelElement(target.owner));
+        addLog(`${target.owner === "player" ? "你的" : "AI 的"}护盾吸收了 ${blocked} 点伤害。`);
+      }
+      if (dealt > 0) {
+        playSound("damage");
+        playLifeDelta(target.owner, -dealt);
+        animateAvatar(target.owner, "hit");
+        addLog(`${card.name} 对 ${duelistLabel(target)}造成 ${dealt} 点伤害。`);
+      } else if (blocked > 0) {
+        addLog(`${card.name} 的伤害被护盾完全抵消。`);
+      }
+    }
     if (event.type === "STAT_MODIFIED") {
       const found = findRuntimeCard(event.cardId);
       if (!found) return;

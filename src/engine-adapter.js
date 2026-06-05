@@ -3,7 +3,7 @@ import { FIELD_SIZE, MAX_LP, totalAtk } from './rules.js';
 import { PHASES } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
-const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500"]);
+const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500"]);
 
 const uiZones = {
   deck: "deck",
@@ -39,6 +39,7 @@ function uiDuelistToEngine(duelist) {
   return {
     id: duelist.owner,
     lp: duelist.lp,
+    shield: duelist.shield || 0,
     deck: compactCardIds(duelist.deck),
     hand: compactCardIds(duelist.hand),
     monsterZone: compactCardIds(duelist.field),
@@ -173,6 +174,12 @@ export function applyUiGameEvents(uiState, events = []) {
     if (event.type === "LP_HEALED") {
       const duelist = uiDuelist(uiState, event.playerId);
       duelist.lp = Math.min(MAX_LP, duelist.lp + Math.max(0, Number(event.amount) || 0));
+    }
+    if (event.type === "DAMAGE_DEALT") {
+      const duelist = uiDuelist(uiState, event.playerId);
+      const blocked = Math.max(0, Number(event.blocked) || 0);
+      duelist.shield = Math.max(0, (Number(duelist.shield) || 0) - blocked);
+      duelist.lp = Math.max(0, duelist.lp - Math.max(0, Number(event.amount) || 0));
     }
     if (event.type === "STAT_MODIFIED") {
       const card = findUiCard(uiState, event.cardId);

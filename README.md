@@ -141,7 +141,7 @@ npm test
 - 魔法效果统一挂在 `spellEffects` 注册表里，每个效果包含发动条件、实际结算、演出文案和 AI 评分，避免继续堆硬编码分支。
 - 盖放陷阱已通过 `GameEngine.dispatch({ type: "SET_TRAP" })` 校验并产出 `CARD_MOVED/TRAP_SET` 事件，UI 只按事件回放固定槽位变化。
 - 召唤怪兽已通过 `GameEngine.dispatch({ type: "SUMMON_MONSTER" })` 校验并产出 `CARD_MOVED/MONSTER_SUMMONED` 事件，UI 只按事件回放手牌到怪兽区的移动和召唤状态标记。
-- 抽卡、回血和单体强化魔法已通过 `GameEngine.dispatch({ type: "ACTIVATE_CARD" })` 产出 `CARD_MOVED/CARDS_DRAWN/LP_HEALED/STAT_MODIFIED` 事件；伤害魔法仍保留旧路径，等护盾吸收事件进入引擎后再迁移。
+- 抽卡、回血、单体强化和基础伤害魔法已通过 `GameEngine.dispatch({ type: "ACTIVATE_CARD" })` 产出 `CARD_MOVED/CARDS_DRAWN/LP_HEALED/STAT_MODIFIED/DAMAGE_DEALT` 事件；伤害事件会记录 `requested/blocked/amount`，由事件回放统一处理护盾吸收和最终扣血。
 - 陷阱触发拆成 `trapCanResolve` 和 `resolveTrapCard`，`triggerTrap` 会按当前场面逐张处理同一事件上的连锁结果。
 - `state.timeline` 从日志事件派生结算时间线，后续可以逐步替换成更正式的事件流。
 - 后续新增卡时优先按“发动条件校验 -> 支付/移动卡牌 -> 效果资源/数值结算 -> 重新评估行动窗口”的顺序实现。

@@ -210,6 +210,34 @@ test("burst-rune deals damage and renewal heals with max LP cap", () => {
   assert.ok(healEvents.some((event) => event.type === "LP_HEALED" && event.amount === 400 && event.playerId === PLAYER));
 });
 
+test("damage events consume shield before LP", () => {
+  const state = makeState({
+    cards: [
+      card("burst-shield", { templateId: "burst-rune", effect: "burn500" })
+    ],
+    player: {
+      hand: ["burst-shield"]
+    },
+    ai: {
+      shield: 300
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "burst-shield" });
+  const next = engine.getState();
+
+  assert.equal(next.players[AI].shield, 0);
+  assert.equal(next.players[AI].lp, 3800);
+  assert.ok(events.some((event) =>
+    event.type === "DAMAGE_DEALT" &&
+    event.playerId === AI &&
+    event.requested === 500 &&
+    event.blocked === 300 &&
+    event.amount === 200
+  ));
+});
+
 test("war-chant modifies only the declared target through dispatch events", () => {
   const state = makeState({
     cards: [

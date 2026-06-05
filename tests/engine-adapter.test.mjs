@@ -206,6 +206,29 @@ test("dispatches engine-backed healing and stat spells without direct UI mutatio
   assert.ok(buffEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === strongest.uid));
 });
 
+test("dispatches engine-backed damage spells with shield absorption", () => {
+  const burst = uiSpell("spell-burn", "burn500", "burst-rune");
+  const state = appState();
+  state.player.hand = [burst];
+  state.ai.lp = 4000;
+  state.ai.shield = 300;
+
+  assert.equal(canDispatchSpellFromUiState(burst), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.equal(state.ai.shield, 0);
+  assert.equal(state.ai.lp, 3800);
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [burst]);
+  assert.ok(events.some((event) =>
+    event.type === "DAMAGE_DEALT" &&
+    event.playerId === "ai" &&
+    event.requested === 500 &&
+    event.blocked === 300 &&
+    event.amount === 200
+  ));
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });

@@ -112,12 +112,18 @@ export class EffectContext {
   dealDamage(playerId, amount, options = {}) {
     const player = requirePlayer(this.#state, playerId);
     const rawAmount = Math.max(0, Number(amount) || 0);
-    const actual = Math.min(player.lp, rawAmount);
+    const shieldBefore = Math.max(0, Number(player.shield) || 0);
+    const blocked = Math.min(shieldBefore, rawAmount);
+    const damageAfterShield = Math.max(0, rawAmount - blocked);
+    const actual = Math.min(player.lp, damageAfterShield);
 
     this.#emit("DAMAGE_DEALT", {
       playerId,
       amount: actual,
       requested: rawAmount,
+      blocked,
+      shieldBefore,
+      shieldAfter: shieldBefore - blocked,
       sourceCardId: options.sourceCardId || null
     });
     return actual;
@@ -510,6 +516,9 @@ export function assertValidGameState(state) {
     if (!Number.isFinite(player.lp)) {
       throw new GameStateValidationError(`Player ${player.id} LP must be a finite number`);
     }
+    if (player.shield !== undefined && !Number.isFinite(Number(player.shield))) {
+      throw new GameStateValidationError(`Player ${player.id} shield must be a finite number`);
+    }
 
     for (const zone of ZONE_KEYS) {
       const cards = player[zone];
@@ -661,6 +670,10 @@ function applyCardsDrawn(state, event) {
 function applyDamageDealt(state, event) {
   const player = requirePlayer(state, event.playerId);
   const amount = Math.max(0, Number(event.amount) || 0);
+  const blocked = Math.max(0, Number(event.blocked) || 0);
+  if (blocked > 0 || player.shield !== undefined) {
+    player.shield = Math.max(0, (Number(player.shield) || 0) - blocked);
+  }
   player.lp = Math.max(0, player.lp - amount);
 }
 
