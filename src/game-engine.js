@@ -81,6 +81,10 @@ export const defaultCardEffects = Object.freeze({
   ], { target: { player: "rival", zone: "monsterZone", rule: "strongestAtk" } }),
   directStrike: oneShot([{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]),
   extraSummon: oneShot([{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]),
+  battleTrance: oneShot([
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
+    { op: "grantAbility", player: "self", ability: Ability.attackReset, uses: 1, duration: "turn" }
+  ], { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }),
   graveReturn: oneShot([
     {
       op: "moveCard",

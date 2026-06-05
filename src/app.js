@@ -2282,6 +2282,11 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       addLog(`${duelistLabel(owner)}本回合获得 ${event.uses || 1} 次额外通常召唤。`);
       playEpicAction("额外召唤", "draw");
     }
+    if (event.type === "ABILITY_GRANTED" && event.ability === "attackReset") {
+      result.targetOwner = owner.owner;
+      addLog(`${duelistLabel(owner)}获得 ${event.uses || 1} 次攻击重置。`);
+      playEpicAction("攻击重置", "attack");
+    }
   });
   return result;
 }

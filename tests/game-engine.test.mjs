@@ -157,6 +157,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const extraSummon = getCardEffectDefinition("extraSummon");
   const shield800 = getCardEffectDefinition("shield800");
   const graveReturn = getCardEffectDefinition("graveReturn");
+  const battleTrance = getCardEffectDefinition("battleTrance");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
@@ -173,6 +174,10 @@ test("default card effects are declarative one-shot DSL definitions", () => {
       to: { playerId: "$action.playerId", zone: "deck", index: 0 }
     },
     { op: "drawCards", player: "self", count: 1 }
+  ]);
+  assert.deepEqual(battleTrance.operations, [
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
+    { op: "grantAbility", player: "self", ability: Ability.attackReset, uses: 1, duration: "turn" }
   ]);
   assert.notEqual(typeof draw2, "function");
 });
@@ -432,6 +437,49 @@ test("grave-return recovers a grave card through movement and draw events", () =
     event.count === 1 &&
     event.cardIds.includes("fallen-1") &&
     event.sourceCardId === "return-1"
+  ));
+  assertValidGameState(next);
+});
+
+test("battle-trance buffs the strongest monster and grants attack reset through events", () => {
+  const state = makeState({
+    cards: [
+      card("trance-1", { templateId: "battle-trance", effect: "battleTrance" }),
+      card("lancer-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("drake-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900 })
+    ],
+    player: {
+      hand: ["trance-1"],
+      monsterZone: ["lancer-1", "drake-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "trance-1",
+    targetCardId: "lancer-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["lancer-1"].tempAtk, 200);
+  assert.equal(next.cards["drake-1"].tempAtk || 0, 0);
+  assert.deepEqual(next.players[PLAYER].grave, ["trance-1"]);
+  assert.equal(hasAbility(next, PLAYER, Ability.attackReset), true);
+  assert.ok(events.some((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === "lancer-1" &&
+    event.stat === "tempAtk" &&
+    event.amount === 200
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "ABILITY_GRANTED" &&
+    event.playerId === PLAYER &&
+    event.ability === Ability.attackReset &&
+    event.uses === 1 &&
+    event.sourceCardId === "trance-1"
   ));
   assertValidGameState(next);
 });

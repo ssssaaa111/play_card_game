@@ -3,7 +3,7 @@ import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { PHASES } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
-const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn"]);
+const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "battleTrance"]);
 
 const uiZones = {
   deck: "deck",
@@ -253,6 +253,7 @@ function targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo) {
   if (explicit) return explicit;
   const sourceCardId = cardKey(card);
   if (card.effect === "buff500") return strongestMonsterId(uiState, playerId);
+  if (card.effect === "battleTrance") return strongestMonsterId(uiState, playerId);
   if (card.effect === "pierceLine") return strongestMonsterId(uiState, rivalId);
   if (card.effect === "graveReturn") return firstGraveCardIdExcept(uiState, playerId, sourceCardId);
   return null;

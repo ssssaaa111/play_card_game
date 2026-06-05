@@ -363,6 +363,39 @@ test("dispatches engine-backed grave-return by moving a grave card to deck top b
   ));
 });
 
+test("dispatches engine-backed battle-trance as a stat buff plus attack reset ability", () => {
+  const trance = uiSpell("spell-trance", "battleTrance", "battle-trance");
+  const strongest = uiMonster("strongest-trance", "star-lancer");
+  const weaker = uiMonster("weaker-trance", "ember-drake");
+  strongest.atk = 1800;
+  weaker.atk = 1500;
+  const state = appState();
+  state.player.hand = [trance];
+  state.player.field[0] = weaker;
+  state.player.field[1] = strongest;
+
+  assert.equal(canDispatchSpellFromUiState(trance), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: strongest });
+
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [trance]);
+  assert.equal(strongest.tempAtk, 200);
+  assert.equal(weaker.tempAtk || 0, 0);
+  assert.equal(state.player.attackResets, 1);
+  assert.ok(events.some((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === strongest.uid &&
+    event.amount === 200
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "ABILITY_GRANTED" &&
+    event.playerId === "player" &&
+    event.ability === "attackReset" &&
+    event.uses === 1 &&
+    event.sourceCardId === trance.uid
+  ));
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });
