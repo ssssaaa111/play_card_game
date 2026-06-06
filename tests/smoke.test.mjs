@@ -469,14 +469,27 @@ test("app uses extracted spell metadata", () => {
 
 test("app uses extracted trap metadata", () => {
   const app = readProjectFile("src/app.js");
+  const trapStart = app.indexOf("function resolveTrapCard");
+  const trapEnd = app.indexOf("async function attack", trapStart);
+  const resolveTrapCardSource = app.slice(trapStart, trapEnd);
 
   assert.match(app, /from '\.\/traps\.js'/);
+  assert.match(app, /dispatchActivateTrapFromUiState/);
+  assert.match(app, /canDispatchTrapFromUiState/);
   assert.match(app, /trapActivationText\(selectedCard, choice\.eventName, choice\.details\)/);
   assert.match(app, /trapCanResolve\(card, eventName, \{ owner, context \}\)/);
   assert.match(app, /\.filter\(\(\{ card \}\) => trapCanResolve\(card, eventName, \{ owner, context \}\)\)/);
   assert.match(app, /selectRedirectTarget\(owner\.field, context\.targetIndex\)/);
   assert.match(app, /trapResult\.consumesAttack/);
   assert.doesNotMatch(app, /function trapMatchesEvent/);
+  assert.doesNotMatch(resolveTrapCardSource, /owner\.traps\[trapIndex\]\s*=/);
+  assert.doesNotMatch(resolveTrapCardSource, /rival\.field\[context\.attackerIndex\]\s*=/);
+  assert.doesNotMatch(resolveTrapCardSource, /rival\.grave\.push\(attacker\)/);
+  assert.doesNotMatch(resolveTrapCardSource, /damage\(rival/);
+  assert.doesNotMatch(resolveTrapCardSource, /drawCards\(owner/);
+  assert.doesNotMatch(resolveTrapCardSource, /gainShield\(owner/);
+  assert.doesNotMatch(resolveTrapCardSource, /buffCard\(target/);
+  assert.doesNotMatch(resolveTrapCardSource, /wearMonster\(attacker/);
 });
 
 test("render code avoids unsupported DOM append shortcut", () => {

@@ -5,6 +5,7 @@ import { PHASES } from './turn-state.js';
 const ownerIds = ["player", "ai"];
 const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "rallyAttack", "battleTrance", "lightShadowCombo", "elementEcho", "fireWindCombo"]);
 const engineBackedSummonEffects = new Set(["burn200", "draw1", "heal300", "fireBuff", "shield400", "shadowBurn"]);
+const engineBackedTrapEffects = new Set(["attackDestroy", "counterBoost", "attackShift", "attackNegate", "redirectAttack", "weakenAttack", "directShield", "directRebound", "summonBurn"]);
 
 const uiZones = {
   deck: "deck",
@@ -245,6 +246,10 @@ export function canDispatchSummonEffectFromUiState(card) {
   return card?.type === "monster" && engineBackedSummonEffects.has(card.onSummon);
 }
 
+export function canDispatchTrapFromUiState(card) {
+  return card?.type === "trap" && engineBackedTrapEffects.has(card.trigger || card.effect);
+}
+
 function strongestMonsterId(uiState, playerId) {
   const duelist = uiDuelist(uiState, playerId);
   const candidates = duelist.field.filter(Boolean);
@@ -294,6 +299,30 @@ export function dispatchSetTrapFromUiState(uiState, playerId, handIndex, trapInd
     cardId: cardKey(card),
     index: trapIndex
   });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchActivateTrapFromUiState(uiState, playerId, rivalId, trapIndex, context = {}) {
+  const duelist = uiDuelist(uiState, playerId);
+  const rival = uiDuelist(uiState, rivalId);
+  const card = duelist.traps[trapIndex];
+  if (!card) throw new Error(`No trap card at index ${trapIndex}`);
+  if (!canDispatchTrapFromUiState(card)) {
+    throw new Error(`Trap effect ${card.trigger || card.effect || "(none)"} is not engine-backed`);
+  }
+
+  const action = {
+    type: "ACTIVATE_TRAP",
+    playerId,
+    rivalId,
+    cardId: cardKey(card)
+  };
+  const attackerCardId = cardKey(context.attacker) || cardKey(rival.field?.[context.attackerIndex]);
+  if (attackerCardId) action.attackerCardId = attackerCardId;
+  if (context.targetEffectId) action.targetEffectId = context.targetEffectId;
+
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch(action);
   return applyUiGameEvents(uiState, events);
 }
 

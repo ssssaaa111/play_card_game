@@ -159,6 +159,15 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const shield400 = getCardEffectDefinition("shield400");
   const shadowBurn = getCardEffectDefinition("shadowBurn");
   const heal700 = getCardEffectDefinition("heal700");
+  const attackDestroy = getCardEffectDefinition("attackDestroy");
+  const counterBoost = getCardEffectDefinition("counterBoost");
+  const attackShift = getCardEffectDefinition("attackShift");
+  const attackNegate = getCardEffectDefinition("attackNegate");
+  const redirectAttack = getCardEffectDefinition("redirectAttack");
+  const weakenAttack = getCardEffectDefinition("weakenAttack");
+  const directShield = getCardEffectDefinition("directShield");
+  const directRebound = getCardEffectDefinition("directRebound");
+  const summonBurn = getCardEffectDefinition("summonBurn");
   const directStrike = getCardEffectDefinition("directStrike");
   const extraSummon = getCardEffectDefinition("extraSummon");
   const shield800 = getCardEffectDefinition("shield800");
@@ -181,6 +190,20 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.deepEqual(shield400.operations, [{ op: "gainShield", player: "self", amount: 400 }]);
   assert.deepEqual(shadowBurn.operations, [{ op: "dealDamage", player: "rival", amount: 300 }]);
   assert.deepEqual(heal700.operations, [{ op: "heal", player: "self", amount: 700 }]);
+  assert.deepEqual(attackDestroy.operations, [{ op: "destroyCard", cardId: "$action.attackerCardId" }]);
+  assert.deepEqual(counterBoost.operations, [
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "tempAtk", amount: 400 }
+  ]);
+  assert.deepEqual(attackShift.operations, [{ op: "gainShield", player: "self", amount: 400 }]);
+  assert.deepEqual(attackNegate.operations, [{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }]);
+  assert.deepEqual(redirectAttack.operations, []);
+  assert.deepEqual(weakenAttack.operations, [
+    { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -500 },
+    { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempDef", amount: -500 }
+  ]);
+  assert.deepEqual(directShield.operations, [{ op: "drawCards", player: "self", count: 1 }]);
+  assert.deepEqual(directRebound.operations, [{ op: "dealDamage", player: "rival", amount: 500 }]);
+  assert.deepEqual(summonBurn.operations, [{ op: "dealDamage", player: "rival", amount: 400 }]);
   assert.deepEqual(directStrike.operations, [{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]);
   assert.deepEqual(extraSummon.operations, [{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]);
   assert.deepEqual(shield800.operations, [{ op: "gainShield", player: "self", amount: 800 }]);
@@ -1066,6 +1089,158 @@ test("void-lock can only trigger in battle phase and logs negation", () => {
   assert.deepEqual(next.players[PLAYER].spellTrapZone, []);
   assert.deepEqual(next.players[PLAYER].grave, ["void-1"]);
   assert.ok(events.some((event) => event.type === "EFFECT_NEGATED" && event.targetEffectId === "attack-42"));
+});
+
+test("attack traps resolve destruction boost shield weaken and empty redirect through events", () => {
+  const destroyState = makeState({
+    cards: [
+      card("mirror-1", { templateId: "mirror-snare", type: "trap", trigger: "attackDestroy" }),
+      card("attacker-1", { templateId: "star-lancer", ownerId: AI, type: "monster", atk: 1800, def: 1200 })
+    ],
+    player: { spellTrapZone: ["mirror-1"] },
+    ai: { monsterZone: ["attacker-1"] },
+    turn: { phase: Phase.battle }
+  });
+  destroyState.machine.phase = Phase.battle;
+  destroyState.machine.timing = Timing.battleOpen;
+  const destroyEngine = new GameEngine(destroyState);
+  const destroyEvents = destroyEngine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "mirror-1",
+    attackerCardId: "attacker-1"
+  });
+
+  assert.deepEqual(destroyEngine.getState().players[PLAYER].grave, ["mirror-1"]);
+  assert.deepEqual(destroyEngine.getState().players[AI].grave, ["attacker-1"]);
+  assert.ok(destroyEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "attacker-1" && event.sourceCardId === "mirror-1"));
+
+  const boostState = makeState({
+    cards: [
+      card("counter-1", { templateId: "counter-array", type: "trap", trigger: "counterBoost" }),
+      card("weak-1", { templateId: "ember-drake", type: "monster", atk: 1200, def: 900 }),
+      card("strong-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1200 })
+    ],
+    player: {
+      spellTrapZone: ["counter-1"],
+      monsterZone: ["strong-1", "weak-1"]
+    },
+    turn: { phase: Phase.battle }
+  });
+  boostState.machine.phase = Phase.battle;
+  boostState.machine.timing = Timing.battleOpen;
+  const boostEngine = new GameEngine(boostState);
+  const boostEvents = boostEngine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "counter-1",
+    attackerCardId: "attacker-irrelevant"
+  });
+
+  assert.equal(boostEngine.getState().cards["weak-1"].tempAtk, 400);
+  assert.equal(boostEngine.getState().cards["strong-1"].tempAtk, undefined);
+  assert.ok(boostEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === "weak-1" && event.sourceCardId === "counter-1"));
+
+  const shiftState = makeState({
+    cards: [card("shift-1", { templateId: "storm-shift", type: "trap", trigger: "attackShift" })],
+    player: { spellTrapZone: ["shift-1"], shield: 2200 },
+    turn: { phase: Phase.battle }
+  });
+  shiftState.machine.phase = Phase.battle;
+  shiftState.machine.timing = Timing.battleOpen;
+  const shiftEngine = new GameEngine(shiftState);
+  const shiftEvents = shiftEngine.dispatch({ type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "shift-1" });
+
+  assert.equal(shiftEngine.getState().players[PLAYER].shield, 2400);
+  assert.ok(shiftEvents.some((event) => event.type === "SHIELD_GAINED" && event.amount === 200 && event.requested === 400));
+
+  const weakenState = makeState({
+    cards: [
+      card("web-1", { templateId: "weakening-web", type: "trap", trigger: "weakenAttack" }),
+      card("attacker-1", { templateId: "star-lancer", ownerId: AI, type: "monster", atk: 1800, def: 1200 })
+    ],
+    player: { spellTrapZone: ["web-1"] },
+    ai: { monsterZone: ["attacker-1"] },
+    turn: { phase: Phase.battle }
+  });
+  weakenState.machine.phase = Phase.battle;
+  weakenState.machine.timing = Timing.battleOpen;
+  const weakenEngine = new GameEngine(weakenState);
+  const weakenEvents = weakenEngine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "web-1",
+    attackerCardId: "attacker-1"
+  });
+
+  assert.equal(weakenEngine.getState().cards["attacker-1"].tempAtk, -500);
+  assert.equal(weakenEngine.getState().cards["attacker-1"].tempDef, -500);
+  assert.equal(weakenEvents.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === "attacker-1").length, 2);
+
+  const redirectState = makeState({
+    cards: [card("switch-1", { templateId: "phantom-switch", type: "trap", trigger: "redirectAttack" })],
+    player: { spellTrapZone: ["switch-1"] },
+    turn: { phase: Phase.battle }
+  });
+  redirectState.machine.phase = Phase.battle;
+  redirectState.machine.timing = Timing.battleOpen;
+  const redirectEngine = new GameEngine(redirectState);
+  const redirectEvents = redirectEngine.dispatch({ type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "switch-1" });
+
+  assert.deepEqual(redirectEngine.getState().players[PLAYER].spellTrapZone, []);
+  assert.deepEqual(redirectEngine.getState().players[PLAYER].grave, ["switch-1"]);
+  assert.ok(redirectEvents.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === "switch-1"));
+});
+
+test("direct and summon traps resolve draw and damage through events", () => {
+  const directShieldState = makeState({
+    cards: [
+      card("guard-1", { templateId: "guard-sigil", type: "trap", trigger: "directShield" }),
+      card("draw-1", { templateId: "solar-knight", type: "monster" })
+    ],
+    player: {
+      spellTrapZone: ["guard-1"],
+      deck: ["draw-1"]
+    },
+    turn: { phase: Phase.battle }
+  });
+  directShieldState.machine.phase = Phase.battle;
+  directShieldState.machine.timing = Timing.battleOpen;
+  const directShieldEngine = new GameEngine(directShieldState);
+  const directShieldEvents = directShieldEngine.dispatch({ type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "guard-1" });
+
+  assert.deepEqual(directShieldEngine.getState().players[PLAYER].hand, ["draw-1"]);
+  assert.deepEqual(directShieldEngine.getState().players[PLAYER].grave, ["guard-1"]);
+  assert.ok(directShieldEvents.some((event) => event.type === "CARDS_DRAWN" && event.cardIds.includes("draw-1") && event.sourceCardId === "guard-1"));
+
+  const reboundState = makeState({
+    cards: [card("rebound-1", { templateId: "reversal-flare", type: "trap", trigger: "directRebound" })],
+    player: { spellTrapZone: ["rebound-1"] },
+    turn: { phase: Phase.battle }
+  });
+  reboundState.machine.phase = Phase.battle;
+  reboundState.machine.timing = Timing.battleOpen;
+  const reboundEngine = new GameEngine(reboundState);
+  const reboundEvents = reboundEngine.dispatch({ type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "rebound-1" });
+
+  assert.equal(reboundEngine.getState().players[AI].lp, 3500);
+  assert.ok(reboundEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.amount === 500 && event.sourceCardId === "rebound-1"));
+
+  const summonBurnState = makeState({
+    cards: [card("flare-1", { templateId: "summon-flare", type: "trap", trigger: "summonBurn" })],
+    player: { spellTrapZone: ["flare-1"] },
+    turn: { phase: Phase.main }
+  });
+  summonBurnState.machine.phase = Phase.main;
+  summonBurnState.machine.timing = Timing.summon;
+  const summonBurnEngine = new GameEngine(summonBurnState);
+  const summonBurnEvents = summonBurnEngine.dispatch({ type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "flare-1" });
+
+  assert.equal(summonBurnEngine.getState().players[AI].lp, 3600);
+  assert.ok(summonBurnEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.amount === 400 && event.sourceCardId === "flare-1"));
 });
 
 test("set trap moves trap cards through dispatch events in main and battle phases", () => {

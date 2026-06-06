@@ -10,6 +10,8 @@ import { buildDeck, createDuelist } from './deck.js';
 import {
   canDispatchSummonEffectFromUiState,
   canDispatchSpellFromUiState,
+  canDispatchTrapFromUiState,
+  dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState
@@ -2409,8 +2411,23 @@ function closeTrapChoicePrompt() {
 function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex = 1) {
   const trap = owner.traps[trapIndex];
   if (!trap) return { cancelled: false, shielded: false };
-  owner.traps[trapIndex] = null;
-  owner.grave.push(trap);
+  const trapSource = trapElement(owner.owner, trapIndex) || panelElement(owner.owner);
+  let trapEvents = [];
+  if (canDispatchTrapFromUiState(trap)) {
+    try {
+      trapEvents = dispatchActivateTrapFromUiState(state, owner.owner, rival.owner, trapIndex, {
+        ...context,
+        targetEffectId: context.targetEffectId || `${trap.uid || trap.id}:${eventName}`
+      });
+    } catch (error) {
+      cue(error.message || "陷阱卡发动失败。");
+      console.error(error);
+      return { cancelled: false, shielded: false };
+    }
+  } else {
+    addLog(`${trap.name} 的陷阱效果尚未接入规则引擎，已跳过。`);
+    return { cancelled: false, shielded: false };
+  }
   const chainLabel = chainIndex > 1 ? `连锁 ${chainIndex}` : "陷阱";
   playSound(`trap-${trap.trigger}`);
   animateAvatar(owner.owner, "cast");
@@ -2419,18 +2436,17 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
   addLog(`${chainLabel}：${owner.owner === "player" ? "你的" : "AI 的"}陷阱卡 ${trap.name} 触发。`);
   speak(`陷阱发动，${trap.name}。`);
   playDuelistLine(owner.owner, lineFor(owner.owner, "trap", trap), false, "trap");
-  const trapSource = trapElement(owner.owner, trapIndex) || panelElement(owner.owner);
+  resolveEngineSpellFeedback(owner, rival, trap, trapEvents);
 
   if (trap.trigger === "attackDestroy") {
-    const attacker = rival.field[context.attackerIndex];
     const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
     playArrow(trapSource, attackerEl, "trap", trap.name);
+    const destroyedEvent = trapEvents.find((event) => event.type === "CARD_DESTROYED");
+    const attacker = destroyedEvent ? findRuntimeCard(destroyedEvent.cardId)?.card : context.attacker;
     if (attacker) {
       playMonsterBurst(attackerEl);
       shakeScreen();
       playEpicAction("反制", "guard");
-      rival.field[context.attackerIndex] = null;
-      rival.grave.push(attacker);
       addLog(`${trap.name} 破坏了 ${attacker.name}。`);
     }
     return { cancelled: true, consumesAttack: trapConsumesAttack(trap.trigger) };
@@ -2438,12 +2454,12 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
 
   if (trap.trigger === "counterBoost") {
     const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
-    const target = weakestMonster(owner);
+    const statEvent = trapEvents.find((event) => event.type === "STAT_MODIFIED");
+    const target = statEvent ? findRuntimeCard(statEvent.cardId)?.card : weakestMonster(owner);
     const targetIndex = owner.field.indexOf(target);
     const targetEl = fieldElement(owner.owner, targetIndex) || panelElement(owner.owner);
     playArrow(trapSource, attackerEl, "trap", trap.name);
     if (target) {
-      buffCard(target, 400, trap.name);
       playGuardShield(targetEl);
     }
     playEpicAction("反击阵", "guard");
@@ -2458,7 +2474,6 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
       ? fieldElement(owner.owner, context.targetIndex) || panelElement(owner.owner)
       : panelElement(owner.owner);
     playArrow(trapSource, attackerEl, "trap", trap.name);
-    gainShield(owner, 400, trap.name);
     playGuardShield(shieldTarget);
     playEpicAction("转移", "guard");
     addLog(`${trap.name} 转移了攻击，获得 400 护盾。攻击机会已消耗。`);
@@ -2501,11 +2516,11 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
   }
 
   if (trap.trigger === "weakenAttack") {
-    const attacker = rival.field[context.attackerIndex];
+    const statEvent = trapEvents.find((event) => event.type === "STAT_MODIFIED");
+    const attacker = statEvent ? findRuntimeCard(statEvent.cardId)?.card : rival.field[context.attackerIndex];
     const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
     playArrow(trapSource, attackerEl, "trap", trap.name);
     if (attacker) {
-      wearMonster(attacker, 500, trap.name);
       playGuardShield(attackerEl);
       playEpicAction("弱化", "guard");
       addLog(`${trap.name} 削弱了 ${attacker.name}，攻击继续结算。`);
@@ -2520,7 +2535,6 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playSound("guard");
     playGuardShield(shieldTarget);
     playEpicAction("防御", "guard");
-    drawCards(owner, 1);
     addLog(`${trap.name} 让直接攻击伤害变为 0。`);
     return { cancelled: true, shielded: true };
   }
@@ -2531,7 +2545,6 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playArrow(trapSource, attackerEl, "trap", trap.name);
     playSound("guard");
     playGuardShield(shieldTarget);
-    damage(rival, 500);
     animateAvatar(rival.owner, "hit");
     shakeScreen();
     playEpicAction("反弹", "guard");
@@ -2542,7 +2555,6 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
 
   if (trap.trigger === "summonBurn") {
     playArrow(trapSource, panelElement(rival.owner), "trap", trap.name);
-    damage(rival, 400);
     animateAvatar(rival.owner, "hit");
     shakeScreen();
     playEpicAction("灼烧", "attack");

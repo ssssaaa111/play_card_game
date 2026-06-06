@@ -101,6 +101,7 @@ test("trap cards are backed by trap metadata", () => {
     assert.ok(definition.triggerText, `${card.trigger} needs trigger text`);
     assert.equal(typeof definition.cancelsEvent, "boolean", `${card.trigger} needs cancelsEvent flag`);
     assert.equal(typeof definition.consumesAttack, "boolean", `${card.trigger} needs consumesAttack flag`);
+    assert.ok(getCardEffectDefinition(card.trigger), `${card.id} trap trigger must have engine DSL metadata: ${card.trigger}`);
   });
 
   Object.keys(trapDefinitions).forEach((trigger) => {

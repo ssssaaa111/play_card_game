@@ -133,7 +133,20 @@ export const defaultCardEffects = Object.freeze({
     },
     { op: "drawCards", player: "self", count: 1 }
   ], { target: { player: "self", zone: "grave", rule: "notSource" } }),
-  attackNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }])
+  attackDestroy: oneShot([{ op: "destroyCard", cardId: "$action.attackerCardId" }]),
+  counterBoost: oneShot([
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "tempAtk", amount: 400 }
+  ]),
+  attackShift: oneShot([{ op: "gainShield", player: "self", amount: 400 }]),
+  attackNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }]),
+  redirectAttack: oneShot([]),
+  weakenAttack: oneShot([
+    { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -500 },
+    { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempDef", amount: -500 }
+  ]),
+  directShield: oneShot([{ op: "drawCards", player: "self", count: 1 }]),
+  directRebound: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
+  summonBurn: oneShot([{ op: "dealDamage", player: "rival", amount: 400 }])
 });
 
 export class EffectContext {
@@ -433,7 +446,7 @@ export class GameEngine {
 
   #activateTrap(state, ctx, emit, action) {
     requirePlayer(state, action.playerId);
-    requirePhase(state, [Phase.battle], action.type);
+    requirePhase(state, [Phase.main, Phase.battle], action.type);
     const card = requireCardInZone(state, action.playerId, "spellTrapZone", action.cardId);
     if (card.type !== "trap") {
       throw new GameRuleError(`Card ${action.cardId} is not a trap`);
@@ -441,14 +454,16 @@ export class GameEngine {
 
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };
-    validateEffectTarget(this.#effects[card.onSummon], state, preparedAction, card);
+    const effectId = card.trigger || card.effect;
+    validateEffectRequirements(this.#effects[effectId], state, preparedAction, card);
+    validateEffectTarget(this.#effects[effectId], state, preparedAction, card);
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
       cardId: action.cardId,
       cardType: card.type,
       phase: state.turn.phase
     });
-    runEffect(this.#effects, card.trigger || card.effect, ctx, preparedAction, card);
+    runEffect(this.#effects, effectId, ctx, preparedAction, card);
     ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "spellTrapZone" }, { playerId: action.playerId, zone: "grave" });
   }
 
@@ -1083,6 +1098,12 @@ function resolveValue(value, action, card) {
   if (value === "$action.cardId") return action.cardId;
   if (value === "$action.playerId") return action.playerId;
   if (value === "$action.rivalId") return action.rivalId;
+  if (value === "$action.attackerCardId") {
+    if (!action.attackerCardId) {
+      throw new GameRuleError("Effect operation requires action.attackerCardId");
+    }
+    return action.attackerCardId;
+  }
   if (value === "$action.targetCardId") {
     if (!action.targetCardId) {
       throw new GameRuleError("Effect operation requires action.targetCardId");
@@ -1118,6 +1139,13 @@ function resolveCardIdInput(state, cardId) {
         .slice()
         .sort((left, right) => engineTotalAtk(requireCard(state, right)) - engineTotalAtk(requireCard(state, left)))[0];
       return strongest ? [strongest] : [];
+    }
+    if (cardId.rule === "weakestAtk") {
+      if (cardIds.length === 0) return [];
+      const weakest = cardIds
+        .slice()
+        .sort((left, right) => engineTotalAtk(requireCard(state, left)) - engineTotalAtk(requireCard(state, right)))[0];
+      return weakest ? [weakest] : [];
     }
     if (cardId.rule) {
       throw new GameRuleError(`Unsupported card selector rule ${cardId.rule}`);

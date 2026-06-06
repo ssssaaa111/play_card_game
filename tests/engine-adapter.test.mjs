@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 
 import { createDuelist } from "../src/deck.js";
 import {
+  canDispatchTrapFromUiState,
   canDispatchSpellFromUiState,
   canDispatchSummonEffectFromUiState,
+  dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState
@@ -217,6 +219,95 @@ test("conditional on-summon effect skip still applies the summon to UI state", (
   assert.equal(state.player.field[0], captain);
   assert.equal(captain.tempAtk, undefined);
   assert.ok(events.some((event) => event.type === "EFFECT_SKIPPED" && event.effectId === "fireBuff"));
+});
+
+test("dispatches engine-backed attack traps and applies events to UI zones", () => {
+  const mirror = uiTrap("mirror-live", "mirror-snare");
+  mirror.trigger = "attackDestroy";
+  const attacker = uiMonster("attacker-live", "star-lancer");
+  attacker.ownerId = "ai";
+  const state = appState({ phase: PHASES.battle, turn: "ai" });
+  state.player.traps[0] = mirror;
+  state.ai.field[0] = attacker;
+
+  assert.equal(canDispatchTrapFromUiState(mirror), true);
+  const events = dispatchActivateTrapFromUiState(state, "player", "ai", 0, { attackerIndex: 0, targetEffectId: "attack-1" });
+
+  assert.equal(state.player.traps[0], null);
+  assert.deepEqual(state.player.grave, [mirror]);
+  assert.equal(state.ai.field[0], null);
+  assert.deepEqual(state.ai.grave, [attacker]);
+  assert.ok(events.some((event) => event.type === "CARD_DESTROYED" && event.cardId === attacker.uid && event.sourceCardId === mirror.uid));
+});
+
+test("dispatches engine-backed resource traps through UI event replay", () => {
+  const guard = uiTrap("guard-live", "guard-sigil");
+  guard.trigger = "directShield";
+  const drawCard = uiMonster("draw-live", "solar-knight");
+  const shift = uiTrap("shift-live", "storm-shift");
+  shift.trigger = "attackShift";
+  const rebound = uiTrap("rebound-live", "reversal-flare");
+  rebound.trigger = "directRebound";
+  const flare = uiTrap("flare-live", "summon-flare");
+  flare.trigger = "summonBurn";
+
+  const drawState = appState({ phase: PHASES.battle, turn: "ai" });
+  drawState.player.traps[0] = guard;
+  drawState.player.deck = [drawCard];
+  const drawEvents = dispatchActivateTrapFromUiState(drawState, "player", "ai", 0, {});
+  assert.deepEqual(drawState.player.hand, [drawCard]);
+  assert.deepEqual(drawState.player.grave, [guard]);
+  assert.ok(drawEvents.some((event) => event.type === "CARDS_DRAWN" && event.sourceCardId === guard.uid));
+
+  const shieldState = appState({ phase: PHASES.battle, turn: "ai" });
+  shieldState.player.traps[0] = shift;
+  shieldState.player.shield = 2200;
+  const shieldEvents = dispatchActivateTrapFromUiState(shieldState, "player", "ai", 0, {});
+  assert.equal(shieldState.player.shield, 2400);
+  assert.deepEqual(shieldState.player.grave, [shift]);
+  assert.ok(shieldEvents.some((event) => event.type === "SHIELD_GAINED" && event.amount === 200 && event.sourceCardId === shift.uid));
+
+  const reboundState = appState({ phase: PHASES.battle, turn: "ai" });
+  reboundState.player.traps[0] = rebound;
+  const reboundEvents = dispatchActivateTrapFromUiState(reboundState, "player", "ai", 0, {});
+  assert.equal(reboundState.ai.lp, 3500);
+  assert.ok(reboundEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 500 && event.sourceCardId === rebound.uid));
+
+  const summonState = appState({ phase: PHASES.main, turn: "ai" });
+  summonState.player.traps[0] = flare;
+  const summonEvents = dispatchActivateTrapFromUiState(summonState, "player", "ai", 0, {});
+  assert.equal(summonState.ai.lp, 3600);
+  assert.ok(summonEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 400 && event.sourceCardId === flare.uid));
+});
+
+test("dispatches engine-backed stat traps through UI event replay", () => {
+  const counter = uiTrap("counter-live", "counter-array");
+  counter.trigger = "counterBoost";
+  const weak = uiMonster("weak-live", "ember-drake");
+  weak.atk = 1200;
+  const strong = uiMonster("strong-live", "star-lancer");
+  strong.atk = 1800;
+  const web = uiTrap("web-live", "weakening-web");
+  web.trigger = "weakenAttack";
+  const attacker = uiMonster("web-attacker-live", "star-lancer");
+  attacker.ownerId = "ai";
+
+  const boostState = appState({ phase: PHASES.battle, turn: "ai" });
+  boostState.player.traps[0] = counter;
+  boostState.player.field[0] = strong;
+  boostState.player.field[1] = weak;
+  const boostEvents = dispatchActivateTrapFromUiState(boostState, "player", "ai", 0, {});
+  assert.equal(weak.tempAtk, 400);
+  assert.equal(strong.tempAtk || 0, 0);
+  assert.ok(boostEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === weak.uid && event.sourceCardId === counter.uid));
+
+  const weakenState = appState({ phase: PHASES.battle, turn: "ai" });
+  weakenState.player.traps[0] = web;
+  weakenState.ai.field[0] = attacker;
+  const weakenEvents = dispatchActivateTrapFromUiState(weakenState, "player", "ai", 0, { attackerIndex: 0 });
+  assert.equal(attacker.tempAtk, -500);
+  assert.equal(attacker.tempDef, -500);
+  assert.equal(weakenEvents.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === attacker.uid).length, 2);
 });
 
 test("does not mutate UI state when SUMMON_MONSTER is rejected by the engine", () => {
