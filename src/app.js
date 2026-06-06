@@ -1,5 +1,6 @@
 import { monsterAssets, roleProfiles, aiProfiles, deckPresets, characterProfiles, scenarioSetups } from './data.js';
 import { actionsForPhase, canDuelistAttack, shouldRunPlayerIdleCountdown, skipAvailableAttacks, summarizePlayerActions } from './actions.js';
+import { chooseAiAttackTarget } from './ai.js';
 import { battleLogText, battleWearAmount, describeBattleOutcome } from './battle.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { cardDetailText, cardZoomMeta } from './card-detail.js';
@@ -43,6 +44,7 @@ import {
 import { describeHandAction, duelHintText, phaseLabel, turnLabel } from './view-model.js';
 import {
   MAX_LP,
+  FIELD_SIZE,
   battlePreviewText,
   battleValue,
   canDirectAttack,
@@ -3205,32 +3207,32 @@ function aiSetTraps() {
 }
 
 async function aiAttack() {
-  const attackers = state.ai.field
-    .map((card, index) => ({ card, index }))
-    .filter((entry) => entry.card && !entry.card.used && entry.card.mode !== "defense")
-    .sort((a, b) => totalAtk(b.card) - totalAtk(a.card));
-  for (const { card, index } of attackers) {
+  const skippedAttackers = new Set();
+  const maxAttackSteps = FIELD_SIZE * 3;
+  for (let step = 0; step < maxAttackSteps; step += 1) {
+    const attackers = state.ai.field
+      .map((card, index) => ({ card, index }))
+      .filter((entry) => entry.card && !entry.card.used && entry.card.mode !== "defense" && !skippedAttackers.has(entry.card.uid))
+      .sort((a, b) => totalAtk(b.card) - totalAtk(a.card));
+    if (attackers.length === 0) return;
+    const { card, index } = attackers[0];
     if (state.gameOver || !state.ai.field[index]) return;
-    cue(`对手使用 ${card.name} 发动攻击。`);
-    await sleep(900);
-    const targets = state.player.field
-      .map((target, targetIndex) => ({ target, targetIndex }))
-      .filter((entry) => entry.target)
-      .sort((a, b) => totalAtk(a.target) - totalAtk(b.target));
-    const beatable = targets.find((entry) => totalAtk(card) >= battleValue(entry.target));
     const canUseDirect = canDirectAttack(state.ai, card);
-    const blockedByBoard = targets.length > 0 && !targets.some((entry) => totalAtk(card) >= battleValue(entry.target));
-    const shouldDirect = canUseDirect && (
-      totalAtk(card) >= state.player.lp ||
-      blockedByBoard ||
-      (state.aiStyle === "aggressive" && targets.length > 0)
-    );
-    if (state.aiStyle === "control" && targets.length > 0 && !beatable && !shouldDirect) {
+    const targetIndex = chooseAiAttackTarget({
+      attacker: card,
+      targets: state.player.field,
+      playerLp: state.player.lp,
+      aiStyle: state.aiStyle,
+      canUseDirect
+    });
+    if (targetIndex === null) {
+      skippedAttackers.add(card.uid);
       addLog(`AI 保留 ${card.name}，避免无意义攻击。`);
       continue;
     }
-    const targetIndex = targets.length === 0 ? -1 : (shouldDirect ? -1 : (beatable ? beatable.targetIndex : targets[0].targetIndex));
     const target = state.player.field[targetIndex];
+    cue(`对手使用 ${card.name} 发动攻击。`);
+    await sleep(900);
     if (targetIndex < 0) {
       cue(`对手的 ${card.name} 准备直接攻击你。`);
       playEpicAction("直击预警", "attack", 980);
@@ -3246,6 +3248,7 @@ async function aiAttack() {
     if (resolved === false && state.ruleCheckIssue) break;
     await sleep(2200);
   }
+  addLog("AI 攻击循环达到安全上限，已停止继续攻击。");
 }
 
 function checkGameOver() {

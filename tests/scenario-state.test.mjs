@@ -26,6 +26,22 @@ test("collects reserved scenario cards by owner", () => {
   ]);
 });
 
+test("collects reserved ids from configured scenario zone entries", () => {
+  assert.deepEqual(scenarioReservedIds({
+    playerHand: ["phantom-switch"],
+    playerField: [
+      { id: "gale-mage", mode: "defense" },
+      { id: "iron-guardian", mode: "defense" }
+    ],
+    playerTraps: [{ id: "mirror-snare" }]
+  }, "player"), [
+    "phantom-switch",
+    "gale-mage",
+    "iron-guardian",
+    "mirror-snare"
+  ]);
+});
+
 test("builds fixed-size cloned zones and explicit scenario decks", () => {
   const setup = buildScenarioState(scenarioSetups.directTrap, {
     playerPreset: "balanced",
@@ -40,6 +56,19 @@ test("builds fixed-size cloned zones and explicit scenario decks", () => {
   assert.equal(setup.player.traps.length, FIELD_SIZE);
   assert.equal(setup.ai.traps.length, FIELD_SIZE);
   assert.ok(setup.ai.field.every((card) => !card || (!card.used && card.changedMode === false)));
+});
+
+test("redirect trap scenario places guard targets in defense mode", () => {
+  const setup = buildScenarioState(scenarioSetups.redirect, {
+    playerPreset: "balanced",
+    aiPreset: "balanced"
+  });
+
+  assert.deepEqual(ids(setup.player.field).slice(0, 2), ["gale-mage", "iron-guardian"]);
+  assert.equal(setup.player.field[0].mode, "defense");
+  assert.equal(setup.player.field[1].mode, "defense");
+  assert.equal(setup.player.field[1].def, 2100);
+  assert.equal(setup.ai.field[0].mode, "attack");
 });
 
 test("builds preset scenario decks without cards reserved in visible zones", () => {

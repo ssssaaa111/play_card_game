@@ -11,8 +11,12 @@ const validTypes = new Set(["monster", "spell", "trap"]);
 const validElements = new Set(["fire", "light", "wind", "shadow"]);
 
 function assertKnownCardIds(ids = [], context) {
-  ids.forEach((id) => {
+  ids.forEach((entry) => {
+    const id = typeof entry === "string" ? entry : entry?.id;
     assert.ok(cardsById.has(id), `${context} references missing card id: ${id}`);
+    if (entry && typeof entry === "object" && entry.mode !== undefined) {
+      assert.ok(["attack", "defense"].includes(entry.mode), `${context}.${id} has invalid mode: ${entry.mode}`);
+    }
   });
 }
 

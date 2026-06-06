@@ -178,11 +178,24 @@ async function runRedirectPromptSmoke(ctx) {
   if (!text.includes("对手的") || !text.includes("正在攻击") || !text.includes("发动后会把攻击改为")) {
     throw new Error("换位陷阱提示缺少攻击目标信息");
   }
-  if (!text.includes("低于当前目标")) {
-    throw new Error("换位陷阱提示缺少低 DEF 风险");
+  if (!text.includes("疾风术士") || !text.includes("铁壁守卫")) {
+    throw new Error("换位陷阱提示应该说明原目标和换位目标");
+  }
+  if (text.includes("低于当前目标")) {
+    throw new Error("高防守卫换位场景不应显示低 DEF 风险");
+  }
+  const lpBeforeDecline = ctx.state.player.lp;
+  clickSmokeElement(ctx.els.chainNo, "不发动陷阱");
+  await waitForSmoke(
+    () => !ctx.state.player.field.some((card) => card?.id === "gale-mage") &&
+      ctx.state.player.field.some((card) => card?.id === "iron-guardian"),
+    "拒绝换位后低防目标被击破且铁壁保留",
+    12000
+  );
+  if (ctx.state.player.lp !== lpBeforeDecline) {
+    throw new Error("拒绝换位后的守备战斗不应造成生命值伤害");
   }
   setSmokeStatus("passed", "redirect-prompt");
-  clickSmokeElement(ctx.els.chainNo, "不发动陷阱");
 }
 
 async function runTargetWindowSmoke(ctx) {

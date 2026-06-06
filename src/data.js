@@ -3,7 +3,7 @@ export const library = [
   { id: "solar-knight", type: "monster", name: "日冕骑士", element: "light", stars: 4, atk: 1700, def: 1200, icon: "光", text: "稳健的光属性战士，适合抢节奏。" },
   { id: "gale-mage", type: "monster", name: "疾风术士", element: "wind", stars: 3, atk: 1200, def: 1400, icon: "风", text: "召唤时抽 1 张卡。", onSummon: "draw1" },
   { id: "void-hound", type: "monster", name: "虚影猎犬", element: "shadow", stars: 4, atk: 1600, def: 800, icon: "影", text: "攻击后自身攻击力提升 200。", afterAttack: "grow200" },
-  { id: "iron-guardian", type: "monster", name: "铁壁守卫", element: "light", stars: 4, atk: 900, def: 2100, icon: "盾", text: "光属性。防御很高，但当前原型只计算攻击力。" },
+  { id: "iron-guardian", type: "monster", name: "铁壁守卫", element: "light", stars: 4, atk: 900, def: 2100, icon: "盾", text: "光属性。守备表示时用 DEF 结算，适合挡住高攻击怪兽。" },
   { id: "star-lancer", type: "monster", name: "星轨枪兵", element: "wind", stars: 4, atk: 1800, def: 1000, icon: "星", text: "风属性。高攻击力的前线怪兽。" },
   { id: "night-oracle", type: "monster", name: "夜幕司祭", element: "shadow", stars: 3, atk: 1100, def: 1600, icon: "月", text: "召唤时回复 300 点生命值。", onSummon: "heal300" },
   { id: "flare-titan", type: "monster", name: "熔核巨像", element: "fire", stars: 5, atk: 2200, def: 1500, icon: "核", text: "火属性。强力王牌怪兽，第一版无需祭品即可召唤。" },
@@ -235,9 +235,12 @@ export const scenarioSetups = {
   redirect: {
     label: "换位陷阱",
     text: "我方场上有低守备目标和高守备守卫，手牌含幻影换位，用来验证攻击改目标。",
-    goal: "盖放幻影换位后让 AI 攻击，攻击会被改到铁壁守卫身上。",
+    goal: "盖放幻影换位后让 AI 攻击低守备目标；发动会改到铁壁守卫，拒绝则按原目标结算。",
     playerHand: ["phantom-switch", "war-chant", "seer-call"],
-    playerField: ["gale-mage", "iron-guardian"],
+    playerField: [
+      { id: "gale-mage", mode: "defense" },
+      { id: "iron-guardian", mode: "defense" }
+    ],
     aiField: ["star-lancer"],
     aiHand: ["burst-rune"]
   },
