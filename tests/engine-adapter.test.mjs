@@ -8,6 +8,8 @@ import {
   canDispatchSummonEffectFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchMarkMonsterUsedFromUiState,
+  dispatchResolveBattleFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState
 } from "../src/engine-adapter.js";
@@ -308,6 +310,105 @@ test("dispatches engine-backed stat traps through UI event replay", () => {
   assert.equal(attacker.tempAtk, -500);
   assert.equal(attacker.tempDef, -500);
   assert.equal(weakenEvents.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === attacker.uid).length, 2);
+});
+
+test("dispatches battle resolution and applies direct damage to UI state", () => {
+  const attacker = uiMonster("attacker-direct", "star-lancer");
+  attacker.atk = 1500;
+  const state = appState({ phase: PHASES.battle });
+  state.player.field[0] = attacker;
+  state.ai.shield = 500;
+
+  const events = dispatchResolveBattleFromUiState(state, "player", "ai", 0, -1);
+
+  assert.equal(attacker.used, true);
+  assert.equal(state.ai.shield, 0);
+  assert.equal(state.ai.lp, 3000);
+  assert.ok(events.some((event) => event.type === "ATTACK_DECLARED" && event.direct === true));
+  assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === attacker.uid));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 1000));
+});
+
+test("dispatches battle resolution and applies target destruction to fixed UI zones", () => {
+  const attacker = uiMonster("attacker-battle", "star-lancer");
+  attacker.atk = 1800;
+  const target = uiMonster("target-battle", "ember-drake");
+  target.ownerId = "ai";
+  target.atk = 1200;
+  const state = appState({ phase: PHASES.battle });
+  state.player.field[1] = attacker;
+  state.ai.field[2] = target;
+
+  const events = dispatchResolveBattleFromUiState(state, "player", "ai", 1, 2);
+
+  assert.equal(attacker.used, true);
+  assert.equal(state.ai.field[2], null);
+  assert.deepEqual(state.ai.grave, [target]);
+  assert.equal(state.ai.lp, 3400);
+  assert.ok(events.some((event) => event.type === "CARD_DESTROYED" && event.cardId === target.uid && event.reason === "battle"));
+});
+
+test("dispatches battle resolution and applies guard counter wear to UI state", () => {
+  const attacker = uiMonster("attacker-guard", "star-lancer");
+  attacker.atk = 1800;
+  const guard = uiMonster("guard-battle", "iron-guardian");
+  guard.ownerId = "ai";
+  guard.atk = 900;
+  guard.def = 2100;
+  guard.mode = "defense";
+  guard.battleWear = 0;
+  const state = appState({ phase: PHASES.battle });
+  state.player.field[0] = attacker;
+  state.player.shield = 100;
+  state.ai.field[0] = guard;
+
+  const events = dispatchResolveBattleFromUiState(state, "player", "ai", 0, 0);
+
+  assert.equal(attacker.used, true);
+  assert.equal(state.player.shield, 0);
+  assert.equal(state.player.lp, 3800);
+  assert.equal(state.player.field[0], attacker);
+  assert.equal(state.ai.field[0], guard);
+  assert.equal(guard.battleWear, 150);
+  assert.equal(guard.tempAtk, -150);
+  assert.equal(guard.tempDef, -150);
+  assert.ok(events.some((event) => event.type === "BATTLE_WEAR_APPLIED" && event.cardId === guard.uid && event.amount === 150));
+});
+
+test("dispatches after-attack monster effects through battle event replay", () => {
+  const hound = uiMonster("hound-battle", "void-hound");
+  hound.atk = 1600;
+  hound.afterAttack = "grow200";
+  const raider = uiMonster("raider-battle", "sky-raider");
+  raider.element = "wind";
+  raider.atk = 1550;
+  raider.afterAttack = "windDraw";
+  const draw = uiMonster("draw-after-battle", "ember-drake");
+
+  const growState = appState({ phase: PHASES.battle });
+  growState.player.field[0] = hound;
+  const growEvents = dispatchResolveBattleFromUiState(growState, "player", "ai", 0, -1);
+  assert.equal(hound.tempAtk, 200);
+  assert.ok(growEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === hound.uid && event.amount === 200));
+
+  const drawState = appState({ phase: PHASES.battle });
+  drawState.player.field[0] = raider;
+  drawState.player.deck = [draw];
+  const drawEvents = dispatchResolveBattleFromUiState(drawState, "player", "ai", 0, -1);
+  assert.deepEqual(drawState.player.hand, [draw]);
+  assert.deepEqual(drawState.player.deck, []);
+  assert.ok(drawEvents.some((event) => event.type === "CARDS_DRAWN" && event.sourceCardId === raider.uid && event.cardIds.includes(draw.uid)));
+});
+
+test("dispatches marked used attackers through UI event replay", () => {
+  const attacker = uiMonster("attacker-consumed", "star-lancer");
+  const state = appState({ phase: PHASES.battle });
+  state.player.field[2] = attacker;
+
+  const events = dispatchMarkMonsterUsedFromUiState(state, "player", 2);
+
+  assert.equal(attacker.used, true);
+  assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === attacker.uid));
 });
 
 test("does not mutate UI state when SUMMON_MONSTER is rejected by the engine", () => {

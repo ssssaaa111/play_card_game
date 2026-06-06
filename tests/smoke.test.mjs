@@ -215,6 +215,23 @@ test("app uses extracted battle outcome helpers", () => {
   assert.doesNotMatch(app, /Math\.round\(Math\.abs\(diff\) \* 0\.25/);
 });
 
+test("app dispatches battle state changes through the engine adapter", () => {
+  const app = readProjectFile("src/app.js");
+  const attackStart = app.indexOf("async function attack");
+  const attackEnd = app.indexOf("function cardImpactSignature", attackStart);
+  const attackSource = app.slice(attackStart, attackEnd);
+
+  assert.match(app, /dispatchResolveBattleFromUiState/);
+  assert.match(attackSource, /resolveBattleWithEngine\(owner, rival, attackerIndex, resolvedTargetIndex\)/);
+  assert.doesNotMatch(attackSource, /const dealt = damage\(/);
+  assert.doesNotMatch(attackSource, /rival\.field\[resolvedTargetIndex\]\s*=/);
+  assert.doesNotMatch(attackSource, /owner\.field\[attackerIndex\]\s*=/);
+  assert.doesNotMatch(attackSource, /rival\.grave\.push\(target\)/);
+  assert.doesNotMatch(attackSource, /owner\.grave\.push\(attacker\)/);
+  assert.doesNotMatch(attackSource, /attacker\.tempAtk\s*\+=/);
+  assert.doesNotMatch(attackSource, /drawCards\(owner/);
+});
+
 test("app uses extracted combo matching helpers", () => {
   const app = readProjectFile("src/app.js");
 

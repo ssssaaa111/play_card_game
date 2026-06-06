@@ -389,6 +389,12 @@ export class GameEngine {
       case "ACTIVATE_TRAP":
         this.#activateTrap(workingState, ctx, emit, action);
         break;
+      case "RESOLVE_BATTLE":
+        this.#resolveBattle(workingState, ctx, emit, action);
+        break;
+      case "MARK_MONSTER_USED":
+        this.#markMonsterUsed(workingState, emit, action);
+        break;
       case "SUMMON_MONSTER":
         this.#summonMonster(workingState, ctx, emit, action);
         break;
@@ -517,6 +523,97 @@ export class GameEngine {
       cardId: action.cardId,
       index: action.index ?? null,
       phase: state.turn.phase
+    });
+  }
+
+  #resolveBattle(state, ctx, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    requirePhase(state, [Phase.battle], action.type);
+    const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
+    const { attacker, target, direct } = validateBattleDeclaration(state, action.playerId, rivalId, action);
+
+    emit("TIMING_CHANGED", {
+      playerId: action.playerId,
+      from: state.machine.timing,
+      to: Timing.attackDeclaration
+    });
+    emit("ATTACK_DECLARED", {
+      playerId: action.playerId,
+      rivalId,
+      attackerCardId: action.attackerCardId,
+      targetCardId: target?.id || null,
+      targetPlayerId: direct ? rivalId : null,
+      direct,
+      phase: state.turn.phase,
+      timing: state.machine.timing
+    });
+    emit("TIMING_CHANGED", {
+      playerId: action.playerId,
+      from: state.machine.timing,
+      to: Timing.damageStep
+    });
+
+    const outcome = describeEngineBattleOutcome(state, action.playerId, rivalId, attacker, target);
+    emit("MONSTER_USED", {
+      playerId: action.playerId,
+      cardId: action.attackerCardId,
+      beforeUsed: Boolean(attacker.used),
+      afterUsed: true
+    });
+
+    if (direct && shouldSpendDirectAttackAbility(state, action.playerId, rivalId, attacker)) {
+      emit("ABILITY_SPENT", {
+        playerId: action.playerId,
+        ability: Ability.directAttack
+      });
+    }
+
+    if (outcome.rawDamage > 0) {
+      const damagePlayerId = outcome.damagePlayerId || null;
+      if (damagePlayerId) {
+        ctx.dealDamage(damagePlayerId, outcome.rawDamage, { sourceCardId: action.attackerCardId });
+      }
+    }
+    if (outcome.wear > 0 && target) {
+      applyBattleWear(emit, target, outcome.wear, action.attackerCardId);
+    }
+    if (outcome.destroysTarget && target) {
+      ctx.destroyCard(target.id, { reason: "battle", sourceCardId: action.attackerCardId });
+    }
+    if (outcome.destroysAttacker) {
+      ctx.destroyCard(action.attackerCardId, { reason: "battle", sourceCardId: target?.id || null });
+    }
+
+    resolveAfterAttackEffect(state, ctx, action.playerId, action.attackerCardId);
+
+    emit("BATTLE_RESOLVED", {
+      playerId: action.playerId,
+      rivalId,
+      attackerCardId: action.attackerCardId,
+      targetCardId: target?.id || null,
+      direct,
+      outcome
+    });
+    emit("TIMING_CHANGED", {
+      playerId: action.playerId,
+      from: state.machine.timing,
+      to: Timing.battleOpen
+    });
+  }
+
+  #markMonsterUsed(state, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    requirePhase(state, [Phase.battle], action.type);
+    const card = requireMonsterInZone(state, action.playerId, "monsterZone", action.cardId, "attacker");
+    if (card.used) {
+      throw new GameRuleError(`Monster ${action.cardId} has already attacked`);
+    }
+
+    emit("MONSTER_USED", {
+      playerId: action.playerId,
+      cardId: action.cardId,
+      beforeUsed: false,
+      afterUsed: true
     });
   }
 
@@ -759,6 +856,15 @@ export function applyGameEvent(state, event, options = {}) {
     case "MONSTER_READIED":
       applyMonsterReadied(state, event);
       break;
+    case "MONSTER_USED":
+      applyMonsterUsed(state, event);
+      break;
+    case "BATTLE_WEAR_APPLIED":
+      applyBattleWearApplied(state, event);
+      break;
+    case "ATTACK_DECLARED":
+    case "BATTLE_RESOLVED":
+      break;
     default:
       throw new GameRuleError(`Unknown GameEvent type ${event.type}`);
   }
@@ -833,6 +939,18 @@ function applyMonsterSummoned(state, event) {
 function applyMonsterReadied(state, event) {
   const card = requireCard(state, event.cardId);
   card.used = false;
+}
+
+function applyMonsterUsed(state, event) {
+  const card = requireCard(state, event.cardId);
+  card.used = event.afterUsed !== false;
+}
+
+function applyBattleWearApplied(state, event) {
+  const card = requireCard(state, event.cardId);
+  card.battleWear = Math.max(0, Number(event.after) || 0);
+  card.tempAtk = Number(event.tempAtkAfter);
+  card.tempDef = Number(event.tempDefAfter);
 }
 
 function applyLpHealed(state, event) {
@@ -1155,8 +1273,188 @@ function resolveCardIdInput(state, cardId) {
   return [cardId];
 }
 
+function validateBattleDeclaration(state, playerId, rivalId, action) {
+  const attacker = requireMonsterInZone(state, playerId, "monsterZone", action.attackerCardId, "attacker");
+  if (attacker.used) {
+    throw new GameRuleError(`Monster ${action.attackerCardId} has already attacked`);
+  }
+  if (attacker.mode === "defense") {
+    throw new GameRuleError("Defense position monsters cannot attack");
+  }
+
+  let target = null;
+  if (action.targetCardId) {
+    target = requireMonsterInZone(state, rivalId, "monsterZone", action.targetCardId, "target");
+  }
+  const direct = !target;
+  const rival = requirePlayer(state, rivalId);
+  if (direct && rival.monsterZone.length > 0 && !attacker.canDirectAttack && !hasAbility(state, playerId, Ability.directAttack)) {
+    throw new GameRuleError("A player must attack a monster before attacking directly");
+  }
+
+  return { attacker, target, direct };
+}
+
+function requireMonsterInZone(state, playerId, zone, cardId, label) {
+  if (!cardId) {
+    throw new GameRuleError(`Battle ${label} cardId is required`);
+  }
+  const card = requireCardInZone(state, playerId, zone, cardId);
+  if (card.type !== "monster") {
+    throw new GameRuleError(`Battle ${label} ${cardId} is not a monster`);
+  }
+  return card;
+}
+
+function shouldSpendDirectAttackAbility(state, playerId, rivalId, attacker) {
+  const rival = requirePlayer(state, rivalId);
+  return rival.monsterZone.length > 0 && !attacker.canDirectAttack && hasAbility(state, playerId, Ability.directAttack);
+}
+
+function describeEngineBattleOutcome(state, playerId, rivalId, attacker, target) {
+  const attack = engineTotalAtk(attacker);
+  if (!target) {
+    const shield = engineShieldPreview(attack, requirePlayer(state, rivalId).shield);
+    return {
+      kind: "direct",
+      attack,
+      targetValue: 0,
+      diff: attack,
+      rawDamage: attack,
+      finalDamage: shield.finalDamage,
+      shieldBlocked: shield.blocked,
+      damagePlayerId: rivalId,
+      destroysAttacker: false,
+      destroysTarget: false,
+      wear: 0
+    };
+  }
+
+  const targetValue = engineBattleValue(target);
+  const diff = attack - targetValue;
+  if (diff > 0) {
+    const rawDamage = target.mode === "defense" ? 0 : diff;
+    const shield = engineShieldPreview(rawDamage, requirePlayer(state, rivalId).shield);
+    return {
+      kind: target.mode === "defense" ? "breakDefense" : "attackWin",
+      attack,
+      targetValue,
+      diff,
+      rawDamage,
+      finalDamage: shield.finalDamage,
+      shieldBlocked: shield.blocked,
+      damagePlayerId: rawDamage > 0 ? rivalId : null,
+      destroysAttacker: false,
+      destroysTarget: true,
+      wear: 0
+    };
+  }
+
+  if (diff < 0) {
+    const rawDamage = Math.abs(diff);
+    const shield = engineShieldPreview(rawDamage, requirePlayer(state, playerId).shield);
+    return {
+      kind: target.mode === "defense" ? "guardCounter" : "countered",
+      attack,
+      targetValue,
+      diff,
+      rawDamage,
+      finalDamage: shield.finalDamage,
+      shieldBlocked: shield.blocked,
+      damagePlayerId: playerId,
+      destroysAttacker: target.mode !== "defense",
+      destroysTarget: false,
+      wear: engineBattleWearAmount(diff)
+    };
+  }
+
+  if (target.mode === "defense") {
+    return {
+      kind: "guardHold",
+      attack,
+      targetValue,
+      diff,
+      rawDamage: 0,
+      finalDamage: 0,
+      shieldBlocked: 0,
+      damagePlayerId: null,
+      destroysAttacker: false,
+      destroysTarget: false,
+      wear: 0
+    };
+  }
+
+  return {
+    kind: "clash",
+    attack,
+    targetValue,
+    diff,
+    rawDamage: 0,
+    finalDamage: 0,
+    shieldBlocked: 0,
+    damagePlayerId: null,
+    destroysAttacker: true,
+    destroysTarget: true,
+    wear: 0
+  };
+}
+
+function applyBattleWear(emit, card, amount, sourceCardId) {
+  const before = Math.max(0, Number(card.battleWear) || 0);
+  const tempAtkBefore = Number(card.tempAtk) || 0;
+  const tempDefBefore = Number(card.tempDef) || 0;
+  emit("BATTLE_WEAR_APPLIED", {
+    cardId: card.id,
+    amount,
+    before,
+    after: before + amount,
+    tempAtkBefore,
+    tempAtkAfter: tempAtkBefore - amount,
+    tempDefBefore,
+    tempDefAfter: tempDefBefore - amount,
+    reason: "battle",
+    sourceCardId
+  });
+}
+
+function resolveAfterAttackEffect(state, ctx, playerId, attackerCardId) {
+  const stillOnField = findCardLocations(state, attackerCardId).some((location) =>
+    location.playerId === playerId && location.zone === "monsterZone"
+  );
+  if (!stillOnField) return;
+
+  const attacker = requireCard(state, attackerCardId);
+  if (attacker.afterAttack === "grow200") {
+    ctx.modifyStat(attackerCardId, "tempAtk", 200, { sourceCardId: attackerCardId });
+  }
+  if (attacker.afterAttack === "windDraw" && monsterElementSet(state, playerId).has("wind")) {
+    ctx.drawCards(playerId, 1, { sourceCardId: attackerCardId });
+  }
+}
+
+function engineShieldPreview(amount, shield = 0) {
+  const rawAmount = Math.max(0, Number(amount) || 0);
+  const blocked = Math.min(Math.max(0, Number(shield) || 0), rawAmount);
+  return {
+    blocked,
+    finalDamage: rawAmount - blocked
+  };
+}
+
+function engineBattleWearAmount(diff) {
+  return Math.min(500, Math.max(150, Math.round(Math.abs(diff) * 0.25 / 50) * 50));
+}
+
+function engineBattleValue(card) {
+  return card?.mode === "defense" ? engineTotalDef(card) : engineTotalAtk(card);
+}
+
 function engineTotalAtk(card) {
   return Math.max(0, (Number(card?.atk) || 0) + (Number(card?.tempAtk) || 0));
+}
+
+function engineTotalDef(card) {
+  return Math.max(0, (Number(card?.def) || 0) + (Number(card?.tempDef) || 0));
 }
 
 function oneShot(operations, meta = {}) {

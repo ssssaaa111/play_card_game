@@ -13,6 +13,8 @@ import {
   canDispatchTrapFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchMarkMonsterUsedFromUiState,
+  dispatchResolveBattleFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState
 } from './engine-adapter.js';
@@ -2564,6 +2566,81 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
   return { cancelled: false };
 }
 
+function playBattleDamageFeedback(events, duelist) {
+  let total = 0;
+  events
+    .filter((event) => event.type === "DAMAGE_DEALT" && event.playerId === duelist.owner)
+    .forEach((event) => {
+      const blocked = Math.max(0, Number(event.blocked) || 0);
+      const dealt = Math.max(0, Number(event.amount) || 0);
+      if (blocked > 0) {
+        playSound("guard");
+        playGuardShield(panelElement(duelist.owner));
+        addLog(`${duelist.owner === "player" ? "你的" : "AI 的"}护盾吸收了 ${blocked} 点伤害。`);
+      }
+      if (dealt > 0) {
+        total += dealt;
+        playSound("damage");
+        playLifeDelta(duelist.owner, -dealt);
+      }
+    });
+  return total;
+}
+
+function resolveAfterAttackBattleFeedback(owner, attacker, events) {
+  const attackerId = runtimeCardId(attacker);
+  if (!attackerId) return;
+  if (events.some((event) =>
+    event.type === "ABILITY_SPENT" &&
+    event.playerId === owner.owner &&
+    event.ability === "directAttack"
+  )) {
+    addLog(`${duelistLabel(owner)}消耗 1 次直接攻击许可。`);
+  }
+  const growEvent = events.find((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.sourceCardId === attackerId &&
+    event.cardId === attackerId &&
+    event.stat === "tempAtk" &&
+    event.amount > 0
+  );
+  if (growEvent) {
+    addLog(`${attacker.name} 吞噬影子，攻击力提升 ${growEvent.amount}。`);
+  }
+  const wearEvent = events.find((event) => event.type === "BATTLE_WEAR_APPLIED");
+  if (wearEvent) {
+    const found = findRuntimeCard(wearEvent.cardId);
+    if (found?.card) {
+      playEpicAction("损耗", "guard", 900);
+      addLog(`${found.card.name} 承受冲击产生 ${wearEvent.amount} 点战斗损耗，ATK/DEF 下降。`);
+      speak(`${found.card.name} 承受冲击，战斗力下降。`);
+    }
+  }
+  const drawEvent = events.find((event) => event.type === "CARDS_DRAWN" && event.sourceCardId === attackerId);
+  if (drawEvent?.count > 0) {
+    const drawn = (drawEvent.cardIds || []).map((cardId) => findRuntimeCard(cardId)?.card).filter(Boolean);
+    drawn.forEach((drawnCard, index) => {
+      window.setTimeout(() => {
+        playSound("draw");
+        playDrawEffect(owner.owner, drawnCard);
+      }, index * 760);
+    });
+    playEpicAction("追风", "draw");
+    addLog(`${attacker.name} 追风突袭，攻击后抽 ${drawEvent.count} 张卡。`);
+    speak(`${attacker.name} 的追风效果发动，抽一张卡。`);
+  }
+}
+
+function resolveBattleWithEngine(owner, rival, attackerIndex, targetIndex) {
+  try {
+    return dispatchResolveBattleFromUiState(state, owner.owner, rival.owner, attackerIndex, targetIndex);
+  } catch (error) {
+    cue(error.message || "战斗结算失败。");
+    console.error(error);
+    return null;
+  }
+}
+
 async function attack(owner, rival, attackerIndex, targetIndex) {
   state.ruleCheckIssue = null;
   const attacker = owner.field[attackerIndex];
@@ -2590,15 +2667,20 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   const attackContext = { attackerIndex, targetIndex };
   const trapResult = await triggerTrap(rival, owner, "attack", attackContext);
   if (trapResult.cancelled) {
-    if (trapResult.consumesAttack && owner.field[attackerIndex] === attacker) {
-      attacker.used = true;
+    if (trapResult.consumesAttack && runtimeCardId(owner.field[attackerIndex]) === runtimeCardId(attacker)) {
+      try {
+        dispatchMarkMonsterUsedFromUiState(state, owner.owner, attackerIndex);
+      } catch (error) {
+        cue(error.message || "攻击机会消费失败。");
+        console.error(error);
+        return false;
+      }
     }
     checkGameOver();
     return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
   }
   const resolvedTargetIndex = attackContext.targetIndex;
   const target = rival.field[resolvedTargetIndex];
-  attacker.used = true;
   const fromEl = fieldElement(owner.owner, attackerIndex);
   const toEl = fieldElement(rival.owner, resolvedTargetIndex) || panelElement(rival.owner);
   if (attacker.stars >= 5) {
@@ -2625,6 +2707,9 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   playAttackCutIn(attacker, target, owner.owner, rival.owner);
   await sleep(620);
 
+  const outcome = target ? describeBattleOutcome(attacker, target, owner, rival) : null;
+  let battleEvents = [];
+
   if (!target) {
     const shield = await triggerTrap(rival, owner, "direct", { attackerIndex, targetIndex: resolvedTargetIndex });
     if (shield.cancelled) {
@@ -2632,13 +2717,11 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       checkGameOver();
       return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的直接攻击`);
     }
-    if (owner.directAttacks > 0 && !attacker.canDirectAttack) {
-      owner.directAttacks -= 1;
-      addLog(`${duelistLabel(owner)}消耗 1 次直接攻击许可。`);
-    }
+    battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex);
+    if (!battleEvents) return false;
     playSound("attack-impact");
     playImpactExplosion(toEl);
-    const dealt = damage(rival, totalAtk(attacker));
+    const dealt = playBattleDamageFeedback(battleEvents, rival);
     playSound("attack-direct");
     animateAvatar(rival.owner, "hit");
     playDuelistImpact(rival.owner, toEl);
@@ -2649,13 +2732,14 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     playDuelistLine(owner.owner, lineFor(owner.owner, "direct", attacker), false, "direct");
     playDuelistLine(rival.owner, lineFor(rival.owner, "hit"), false, "hit");
   } else {
+    battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex);
+    if (!battleEvents) return false;
     playSound("attack-impact");
     playImpactExplosion(toEl);
-    const outcome = describeBattleOutcome(attacker, target, owner, rival);
     if (outcome.diff > 0) {
       let dealt = 0;
       if (target.mode !== "defense") {
-        dealt = damage(rival, outcome.rawDamage);
+        dealt = playBattleDamageFeedback(battleEvents, rival);
         animateAvatar(rival.owner, "hit");
         playMonsterMotion(rival.owner, resolvedTargetIndex, "hit");
       } else {
@@ -2666,8 +2750,6 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
         playEpicAction("防御", "guard");
       }
       playMonsterBurst(toEl);
-      rival.field[resolvedTargetIndex] = null;
-      rival.grave.push(target);
       playSound("attack-break");
       shakeScreen();
       playEpicAction(target.mode === "defense" ? "破防" : "击破", "attack");
@@ -2676,18 +2758,13 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       speak(`${attacker.name} 击破目标。`);
       playDuelistLine(owner.owner, lineFor(owner.owner, "break"), false, "break");
     } else if (outcome.diff < 0) {
-      const dealt = damage(owner, outcome.rawDamage);
-      if (outcome.wear > 0) {
-        wearMonster(target, outcome.wear, "抵挡攻击");
-      }
+      const dealt = playBattleDamageFeedback(battleEvents, owner);
       playSound("damage");
       animateAvatar(owner.owner, "hit");
       playMonsterMotion(owner.owner, attackerIndex, "hit");
       shakeScreen();
       if (outcome.destroysAttacker) {
         playMonsterBurst(fromEl);
-        owner.field[attackerIndex] = null;
-        owner.grave.push(attacker);
         playEpicAction("反击", "attack");
       } else {
         playSound("guard");
@@ -2713,10 +2790,6 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     } else {
       playMonsterBurst(fromEl);
       playMonsterBurst(toEl);
-      owner.field[attackerIndex] = null;
-      rival.field[resolvedTargetIndex] = null;
-      owner.grave.push(attacker);
-      rival.grave.push(target);
       playSound("attack-clash");
       shakeScreen();
       playEpicAction("相杀", "attack");
@@ -2732,17 +2805,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   }
 
   consumeQueuedAttackReset(owner, attacker, attackerIndex);
-
-  if (owner.field[attackerIndex] && attacker.afterAttack === "grow200") {
-    attacker.tempAtk += 200;
-    addLog(`${attacker.name} 吞噬影子，攻击力提升 200。`);
-  }
-  if (owner.field[attackerIndex] && attacker.afterAttack === "windDraw" && fieldElements(owner).has("wind")) {
-    drawCards(owner, 1);
-    playEpicAction("追风", "draw");
-    addLog(`${attacker.name} 追风突袭，攻击后抽 1 张卡。`);
-    speak(`${attacker.name} 的追风效果发动，抽一张卡。`);
-  }
+  resolveAfterAttackBattleFeedback(owner, attacker, battleEvents);
   checkGameOver();
   return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
 }

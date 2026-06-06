@@ -200,6 +200,18 @@ export function applyUiGameEvents(uiState, events = []) {
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
       card.used = false;
     }
+    if (event.type === "MONSTER_USED") {
+      const card = findUiCard(uiState, event.cardId);
+      if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
+      card.used = event.afterUsed !== false;
+    }
+    if (event.type === "BATTLE_WEAR_APPLIED") {
+      const card = findUiCard(uiState, event.cardId);
+      if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
+      card.battleWear = Math.max(0, Number(event.after) || 0);
+      card.tempAtk = Number(event.tempAtkAfter);
+      card.tempDef = Number(event.tempDefAfter);
+    }
     if (event.type === "CARDS_DRAWN") {
       const duelist = uiDuelist(uiState, event.playerId);
       (event.cardIds || []).forEach((cardId) => {
@@ -323,6 +335,41 @@ export function dispatchActivateTrapFromUiState(uiState, playerId, rivalId, trap
 
   const engine = new GameEngine(buildEngineStateFromUiState(uiState));
   const events = engine.dispatch(action);
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchResolveBattleFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex) {
+  const duelist = uiDuelist(uiState, playerId);
+  const rival = uiDuelist(uiState, rivalId);
+  const attacker = duelist.field[attackerIndex];
+  if (!attacker) throw new Error(`No attacker at index ${attackerIndex}`);
+  const target = targetIndex >= 0 ? rival.field[targetIndex] : null;
+  if (targetIndex >= 0 && !target) throw new Error(`No battle target at index ${targetIndex}`);
+
+  const action = {
+    type: "RESOLVE_BATTLE",
+    playerId,
+    rivalId,
+    attackerCardId: cardKey(attacker)
+  };
+  if (target) action.targetCardId = cardKey(target);
+
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch(action);
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchMarkMonsterUsedFromUiState(uiState, playerId, fieldIndex) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.field[fieldIndex];
+  if (!card) throw new Error(`No monster at index ${fieldIndex}`);
+
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "MARK_MONSTER_USED",
+    playerId,
+    cardId: cardKey(card)
+  });
   return applyUiGameEvents(uiState, events);
 }
 

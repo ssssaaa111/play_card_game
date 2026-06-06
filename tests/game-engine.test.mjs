@@ -1243,6 +1243,260 @@ test("direct and summon traps resolve draw and damage through events", () => {
   assert.ok(summonBurnEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.amount === 400 && event.sourceCardId === "flare-1"));
 });
 
+test("battle resolution deals direct damage and marks the attacker through events", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1500, def: 1000 })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      shield: 500
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["attacker-1"].used, true);
+  assert.equal(next.players[AI].shield, 0);
+  assert.equal(next.players[AI].lp, 3000);
+  assert.ok(events.some((event) => event.type === "ATTACK_DECLARED" && event.direct === true));
+  assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === "attacker-1"));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 1500 && event.blocked === 500 && event.amount === 1000));
+  assert.ok(events.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "direct"));
+  assertValidGameState(next);
+});
+
+test("battle resolution destroys attack-position targets and applies battle damage through events", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("target-1", { templateId: "ember-drake", ownerId: AI, type: "monster", atk: 1200, def: 900 })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      monsterZone: ["target-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["attacker-1"].used, true);
+  assert.deepEqual(next.players[AI].monsterZone, []);
+  assert.deepEqual(next.players[AI].grave, ["target-1"]);
+  assert.equal(next.players[AI].lp, 3400);
+  assert.ok(events.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "target-1" && event.reason === "battle"));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.amount === 600));
+  assert.ok(events.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "attackWin"));
+  assertValidGameState(next);
+});
+
+test("battle resolution against stronger defense keeps monsters and applies guarded counter wear", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("guard-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense", battleWear: 0 })
+    ],
+    player: {
+      monsterZone: ["attacker-1"],
+      shield: 100
+    },
+    ai: {
+      monsterZone: ["guard-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "guard-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["attacker-1"].used, true);
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["attacker-1"]);
+  assert.deepEqual(next.players[AI].monsterZone, ["guard-1"]);
+  assert.deepEqual(next.players[AI].grave, []);
+  assert.equal(next.players[PLAYER].shield, 0);
+  assert.equal(next.players[PLAYER].lp, 3800);
+  assert.equal(next.cards["guard-1"].battleWear, 150);
+  assert.equal(next.cards["guard-1"].tempAtk, -150);
+  assert.equal(next.cards["guard-1"].tempDef, -150);
+  assert.ok(events.some((event) => event.type === "BATTLE_WEAR_APPLIED" && event.cardId === "guard-1" && event.amount === 150));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === PLAYER && event.requested === 300 && event.blocked === 100 && event.amount === 200));
+  assert.ok(events.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "guardCounter"));
+  assertValidGameState(next);
+});
+
+test("battle resolution rejects illegal battle declarations without consuming attackers", () => {
+  const directBlockedState = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("guard-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      monsterZone: ["guard-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  directBlockedState.machine.phase = Phase.battle;
+  directBlockedState.machine.timing = Timing.battleOpen;
+  const directBlockedEngine = new GameEngine(directBlockedState);
+
+  assert.throws(
+    () => directBlockedEngine.dispatch({
+      type: "RESOLVE_BATTLE",
+      playerId: PLAYER,
+      rivalId: AI,
+      attackerCardId: "attacker-1"
+    }),
+    /must attack a monster before attacking directly/
+  );
+  assert.equal(directBlockedEngine.getState().cards["attacker-1"].used, undefined);
+
+  const defenseAttackerState = makeState({
+    cards: [
+      card("defender-1", { templateId: "iron-guardian", type: "monster", atk: 900, def: 2100, mode: "defense" })
+    ],
+    player: {
+      monsterZone: ["defender-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  defenseAttackerState.machine.phase = Phase.battle;
+  defenseAttackerState.machine.timing = Timing.battleOpen;
+  const defenseAttackerEngine = new GameEngine(defenseAttackerState);
+
+  assert.throws(
+    () => defenseAttackerEngine.dispatch({
+      type: "RESOLVE_BATTLE",
+      playerId: PLAYER,
+      rivalId: AI,
+      attackerCardId: "defender-1"
+    }),
+    /Defense position monsters cannot attack/
+  );
+  assert.equal(defenseAttackerEngine.getState().cards["defender-1"].used, undefined);
+});
+
+test("after-attack monster effects resolve through battle events", () => {
+  const growState = makeState({
+    cards: [
+      card("hound-1", { templateId: "void-hound", type: "monster", atk: 1600, def: 800, afterAttack: "grow200" })
+    ],
+    player: {
+      monsterZone: ["hound-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  growState.machine.phase = Phase.battle;
+  growState.machine.timing = Timing.battleOpen;
+  const growEngine = new GameEngine(growState);
+  const growEvents = growEngine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "hound-1"
+  });
+
+  assert.equal(growEngine.getState().cards["hound-1"].tempAtk, 200);
+  assert.ok(growEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === "hound-1" && event.stat === "tempAtk" && event.amount === 200));
+
+  const drawState = makeState({
+    cards: [
+      card("raider-1", { templateId: "sky-raider", type: "monster", element: "wind", atk: 1550, def: 900, afterAttack: "windDraw" }),
+      card("draw-1", { templateId: "ember-drake", type: "monster" })
+    ],
+    player: {
+      monsterZone: ["raider-1"],
+      deck: ["draw-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  drawState.machine.phase = Phase.battle;
+  drawState.machine.timing = Timing.battleOpen;
+  const drawEngine = new GameEngine(drawState);
+  const drawEvents = drawEngine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "raider-1"
+  });
+
+  assert.deepEqual(drawEngine.getState().players[PLAYER].hand, ["draw-1"]);
+  assert.ok(drawEvents.some((event) => event.type === "CARDS_DRAWN" && event.sourceCardId === "raider-1" && event.cardIds.includes("draw-1")));
+});
+
+test("mark monster used consumes an attack chance through events only", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "MARK_MONSTER_USED",
+    playerId: PLAYER,
+    cardId: "attacker-1"
+  });
+
+  assert.equal(engine.getState().cards["attacker-1"].used, true);
+  assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === "attacker-1"));
+  assertValidGameState(engine.getState());
+});
+
 test("set trap moves trap cards through dispatch events in main and battle phases", () => {
   const mainState = makeState({
     cards: [card("mirror-1", { templateId: "mirror-snare", type: "trap", trigger: "attackDestroy" })],

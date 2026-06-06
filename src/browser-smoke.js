@@ -178,7 +178,7 @@ async function runGuardCounterSmoke(ctx) {
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "铁壁守卫攻击高亮");
   clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "攻击守备铁壁");
   await waitForSmoke(
-    () => (ctx.state.log[0] || "").includes("守备反击") &&
+    () => ctx.state.log.some((entry) => entry.includes("守备反击")) &&
       ctx.state.player.field.some((card) => card?.id === "star-lancer") &&
       ctx.state.ai.field.some((card) => card?.id === "iron-guardian"),
     "守备反击保留双方怪兽",
