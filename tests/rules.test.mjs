@@ -161,11 +161,15 @@ test("describes battle preview outcomes", () => {
   const weakTarget = monster({ name: "铁壁守卫", atk: 900 });
   const strongTarget = monster({ name: "熔核巨像", atk: 2200 });
   const defenseTarget = monster({ name: "守备者", mode: "defense", def: 1200 });
+  const strongDefenseTarget = monster({ name: "铁壁守卫", mode: "defense", def: 2100 });
+  const equalDefenseTarget = monster({ name: "同防守卫", mode: "defense", def: 1800 });
 
   assert.match(battlePreviewText(attacker, null), /直接攻击.*1800/);
   assert.match(battlePreviewText(attacker, weakTarget), /预计造成 900/);
   assert.match(battlePreviewText(attacker, strongTarget), /攻击方预计承受 400/);
   assert.match(battlePreviewText(attacker, defenseTarget), /可击破但不造成战斗伤害/);
+  assert.match(battlePreviewText(attacker, strongDefenseTarget), /双方怪兽保留/);
+  assert.match(battlePreviewText(attacker, equalDefenseTarget), /守备怪兽挡下攻击/);
 });
 
 test("builds structured battle previews with shield math", () => {
@@ -186,6 +190,20 @@ test("builds structured battle previews with shield math", () => {
   const directPreview = makeBattlePreview(attacker, null, duelist(), duelist({ shield: 2000 }));
   assert.equal(directPreview.badge, "直击");
   assert.match(directPreview.rows.at(-1).value, /最终生命值伤害 0/);
+
+  const guardPreview = makeBattlePreview(
+    attacker,
+    monster({ name: "铁壁守卫", mode: "defense", def: 2100 }),
+    duelist({ shield: 100 }),
+    duelist()
+  );
+  assert.equal(guardPreview.badge, "守备反击");
+  assert.equal(guardPreview.tone, "guard");
+  assert.match(guardPreview.result, /双方怪兽保留/);
+
+  const guardHoldPreview = makeBattlePreview(attacker, monster({ name: "同防守卫", mode: "defense", def: 1800 }), duelist(), duelist());
+  assert.equal(guardHoldPreview.badge, "防御");
+  assert.match(guardHoldPreview.result, /挡下攻击/);
 });
 
 test("builds spell target prompts from target mode and rule", () => {

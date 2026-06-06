@@ -197,7 +197,7 @@
         <div class="guide-item"><strong>3. 攻击结算</strong><span>攻击表示用 ATK 计算。对手场上有怪兽时必须先攻击怪兽；只有对手没有怪兽，或像星隙穿透这样的卡牌效果授予直接攻击许可时，才可以点击敌方角色造成直接伤害。</span></div>
         <div class="guide-item"><strong>4. 魔法卡</strong><span>点击魔法卡查看，再点一次发动。需要目标的魔法会进入选择目标状态：强化选我方怪兽，削弱选敌方怪兽；条件不足时不会消耗卡牌。</span></div>
         <div class="guide-item"><strong>5. 陷阱卡和连锁</strong><span>每方有 3 个陷阱区，最多盖 3 张。陷阱可破坏攻击、削弱攻击、挡直击或反弹伤害；你的陷阱满足条件时会弹出确认。</span></div>
-        <div class="guide-item"><strong>6. 攻击 / 守备</strong><span>选中自己的怪兽后点“切换表示”。守备表示不能攻击，但被攻击时用 DEF 结算。</span></div>
+        <div class="guide-item"><strong>6. 攻击 / 守备</strong><span>选中自己的怪兽后点“切换表示”。守备表示不能攻击，被攻击时用 DEF 结算；攻击方 ATK 低于 DEF 时只承受差值伤害，双方怪兽保留。</span></div>
         <div class="guide-item"><strong>7. 回合控制</strong><span>回合开始自动抽卡。召唤、盖陷阱、切换表示和发动魔法不会结束回合；你可以点“跳过攻击”放弃本回合攻击，也可以点“结束回合”直接交给 AI。</span></div>
         <div class="guide-item"><strong>8. 胜利条件</strong><span>任意一方生命值归 0 就结束决斗。日志、语音和箭头会告诉你每一步发生了什么。</span></div>
         <div class="guide-item"><strong>9. 护盾和额外召唤</strong><span>护盾会优先吸收伤害。额外召唤只在本回合生效，可让你在通常召唤之外再召唤 1 只怪兽。</span></div>
@@ -237,6 +237,6 @@
     </div>
   </div>
 
-  <script type="module" src="src/app.js?v=20260606-ai-redirect"></script>
+  <script type="module" src="src/app.js?v=20260606-guard-preview"></script>
 </body>
 </html>

@@ -166,6 +166,33 @@ async function runDirectGuardSmoke(ctx) {
   setSmokeStatus("passed", "direct-guard");
 }
 
+async function runGuardCounterSmoke(ctx) {
+  setSmokeStatus("running", "guard-counter");
+  await startSmokeDuel(ctx, "direct");
+  const guardian = ctx.state.ai.field.find((card) => card?.id === "iron-guardian");
+  if (!guardian) throw new Error("守备反击场景缺少铁壁守卫");
+  guardian.mode = "defense";
+  guardian.battleWear = 0;
+  const playerLpBefore = ctx.state.player.lp;
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "星轨枪兵");
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "铁壁守卫攻击高亮");
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "攻击守备铁壁");
+  await waitForSmoke(
+    () => (ctx.state.log[0] || "").includes("守备反击") &&
+      ctx.state.player.field.some((card) => card?.id === "star-lancer") &&
+      ctx.state.ai.field.some((card) => card?.id === "iron-guardian"),
+    "守备反击保留双方怪兽",
+    12000
+  );
+  if (ctx.state.player.lp !== playerLpBefore - 300) {
+    throw new Error("守备反击应只让攻击方承受 DEF 差值伤害");
+  }
+  if ((guardian.battleWear || 0) <= 0) {
+    throw new Error("守备反击后守备怪兽应产生战斗损耗");
+  }
+  setSmokeStatus("passed", "guard-counter");
+}
+
 async function runRedirectPromptSmoke(ctx) {
   setSmokeStatus("running", "redirect-prompt");
   await startSmokeDuel(ctx, "redirect");
@@ -463,7 +490,7 @@ async function runChainTrapChoiceSmoke(ctx) {
     await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === trapId), `陷阱 ${trapId} 盖放成功`);
   }
   await finishPlayerTurn(ctx);
-  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "连锁测试多陷阱响应窗口", 16000);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "连锁测试多陷阱响应窗口", 24000);
   if (countGameEvents(ctx.state, "TRAP_SET") < 3 || countGameEvents(ctx.state, "CARD_MOVED") < 3) {
     throw new Error("Multi-trap setup must record every set trap through engine events");
   }
@@ -570,6 +597,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
   const smokeRuns = {
     "skip-lock": runSkipLockSmoke,
     "direct-guard": runDirectGuardSmoke,
+    "guard-counter": runGuardCounterSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,

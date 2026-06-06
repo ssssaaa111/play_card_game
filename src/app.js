@@ -1,7 +1,7 @@
 import { monsterAssets, roleProfiles, aiProfiles, deckPresets, characterProfiles, scenarioSetups } from './data.js';
 import { actionsForPhase, canDuelistAttack, shouldRunPlayerIdleCountdown, skipAvailableAttacks, summarizePlayerActions } from './actions.js';
 import { chooseAiAttackTarget } from './ai.js';
-import { battleLogText, battleWearAmount, describeBattleOutcome } from './battle.js';
+import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { cardDetailText, cardZoomMeta } from './card-detail.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
@@ -2697,20 +2697,39 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       playDuelistLine(owner.owner, lineFor(owner.owner, "break"), false, "break");
     } else if (outcome.diff < 0) {
       const dealt = damage(owner, outcome.rawDamage);
-      const wear = battleWearAmount(outcome.diff);
-      wearMonster(target, wear, "抵挡攻击");
+      if (outcome.wear > 0) {
+        wearMonster(target, outcome.wear, "抵挡攻击");
+      }
       playSound("damage");
       animateAvatar(owner.owner, "hit");
       playMonsterMotion(owner.owner, attackerIndex, "hit");
-      playMonsterBurst(fromEl);
       shakeScreen();
-      playEpicAction("反击", "attack");
-      owner.field[attackerIndex] = null;
-      owner.grave.push(attacker);
+      if (outcome.destroysAttacker) {
+        playMonsterBurst(fromEl);
+        owner.field[attackerIndex] = null;
+        owner.grave.push(attacker);
+        playEpicAction("反击", "attack");
+      } else {
+        playSound("guard");
+        playMonsterMotion(rival.owner, resolvedTargetIndex, "guard");
+        playGuardShield(toEl);
+        playEpicAction("守备反击", "guard");
+      }
       playArrow(toEl, fromEl, "attack", "反击");
       addLog(battleLogText(attacker, target, outcome, dealt));
-      speak(`${attacker.name} 攻击失败，被反击破坏。`);
+      speak(outcome.destroysAttacker
+        ? `${attacker.name} 攻击失败，被反击破坏。`
+        : `${attacker.name} 攻击受阻，承受反击伤害。`);
       playDuelistLine(owner.owner, lineFor(owner.owner, "hit"), false, "hit");
+    } else if (outcome.kind === "guardHold") {
+      playSound("guard");
+      playMonsterMotion(rival.owner, resolvedTargetIndex, "guard");
+      playMonsterCounterPhantom(target, toEl, fromEl);
+      playGuardShield(toEl);
+      playEpicAction("防御", "guard");
+      playArrow(fromEl, toEl, "attack", "防御");
+      addLog(battleLogText(attacker, target, outcome));
+      speak(`${target.name} 挡下了攻击。`);
     } else {
       playMonsterBurst(fromEl);
       playMonsterBurst(toEl);

@@ -42,9 +42,13 @@ export function battlePreviewText(attacker, target) {
       : `${attacker.name} ATK ${totalAtk(attacker)} 对 ${target.name} ${targetStat}，预计造成 ${diff} 点伤害。`;
   }
   if (diff < 0) {
-    return `${attacker.name} ATK ${totalAtk(attacker)} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害。`;
+    return target.mode === "defense"
+      ? `${attacker.name} ATK ${totalAtk(attacker)} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害，双方怪兽保留。`
+      : `${attacker.name} ATK ${totalAtk(attacker)} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害。`;
   }
-  return `${attacker.name} 与 ${target.name} 数值相同，预计同归于尽。`;
+  return target.mode === "defense"
+    ? `${attacker.name} 与 ${target.name} 数值相同，守备怪兽挡下攻击，双方怪兽保留。`
+    : `${attacker.name} 与 ${target.name} 数值相同，预计同归于尽。`;
 }
 
 export function shieldPreview(amount, shield = 0) {
@@ -105,11 +109,27 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
     if (shield.blocked > 0) {
       rows.push({ label: "护盾", value: `吸收 ${shield.blocked} / 实伤 ${shield.finalDamage}` });
     }
+    if (target.mode === "defense") {
+      return {
+        badge: "守备反击",
+        tone: "guard",
+        rows,
+        result: `攻击方承受 DEF 差值伤害；${shield.text}双方怪兽保留，目标会产生战斗损耗。`
+      };
+    }
     return {
       badge: "受反击",
       tone: "danger",
       rows,
       result: `攻击方会被破坏；${shield.text}目标会产生战斗损耗。`
+    };
+  }
+  if (target.mode === "defense") {
+    return {
+      badge: "防御",
+      tone: "guard",
+      rows,
+      result: "守备怪兽挡下攻击，双方怪兽保留。"
     };
   }
   return {

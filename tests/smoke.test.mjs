@@ -322,6 +322,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /scheduleBrowserSmoke\(\{/);
   assert.match(smoke, /"skip-lock": runSkipLockSmoke/);
   assert.match(smoke, /"direct-guard": runDirectGuardSmoke/);
+  assert.match(smoke, /"guard-counter": runGuardCounterSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
@@ -347,6 +348,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /切换到破阵星芒/);
   assert.match(smoke, /点其它手牌会取消当前目标选择并切换/);
   assert.match(smoke, /攻击目标点击后不应再等待二次确认/);
+  assert.match(smoke, /守备反击保留双方怪兽/);
   assert.match(smoke, /战斗阶段陷阱确认可用/);
   assert.match(smoke, /第 \$\{promptIndex\} 次直击风暴转移连锁弹窗/);
   assert.match(smoke, /所有可发动陷阱都应该高亮/);
@@ -354,6 +356,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "guard-counter"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);

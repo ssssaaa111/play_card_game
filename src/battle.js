@@ -51,6 +51,21 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
 
   if (diff < 0) {
     const shield = shieldPreview(Math.abs(diff), owner?.shield || 0);
+    if (target.mode === "defense") {
+      return {
+        kind: "guardCounter",
+        attack,
+        targetValue,
+        targetStat: battleStatLabel(target),
+        diff,
+        rawDamage: Math.abs(diff),
+        finalDamage: shield.finalDamage,
+        shieldBlocked: shield.blocked,
+        destroysAttacker: false,
+        destroysTarget: false,
+        wear: battleWearAmount(diff)
+      };
+    }
     return {
       kind: "countered",
       attack,
@@ -63,6 +78,22 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
       destroysAttacker: true,
       destroysTarget: false,
       wear: battleWearAmount(diff)
+    };
+  }
+
+  if (target.mode === "defense") {
+    return {
+      kind: "guardHold",
+      attack,
+      targetValue,
+      targetStat: battleStatLabel(target),
+      diff,
+      rawDamage: 0,
+      finalDamage: 0,
+      shieldBlocked: 0,
+      destroysAttacker: false,
+      destroysTarget: false,
+      wear: 0
     };
   }
 
@@ -92,6 +123,13 @@ export function battleLogText(attacker, target, outcome, dealt = outcome?.finalD
   if (outcome.kind === "attackWin") {
     const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
     return `${attacker.name} ATK ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，差值 ${outcome.diff}${shieldText}，造成 ${dealt} 点战斗伤害。`;
+  }
+  if (outcome.kind === "guardCounter") {
+    const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
+    return `${attacker.name} ATK ${outcome.attack} 低于 ${target.name} ${outcome.targetStat}，守备反击差值 ${Math.abs(outcome.diff)}${shieldText}，攻击方承受 ${dealt} 点伤害，双方怪兽保留。`;
+  }
+  if (outcome.kind === "guardHold") {
+    return `${attacker.name} ATK ${outcome.attack} 与 ${target.name} ${outcome.targetStat} 相同，守备怪兽挡下攻击，双方怪兽保留。`;
   }
   if (outcome.kind === "countered") {
     const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
