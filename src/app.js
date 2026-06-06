@@ -2275,6 +2275,14 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       statModifiedCount += 1;
       addLog(`${found.card.name} 因 ${card.name} ${statChangeText(event)}。`);
     }
+    if (event.type === "MONSTER_READIED") {
+      const found = findRuntimeCard(event.cardId);
+      if (!found) return;
+      result.effectTarget = found.card;
+      result.targetOwner = found.owner;
+      addLog(`${found.card.name} 重新进入可攻击状态。`);
+      playEpicAction("再攻", "attack");
+    }
     if (event.type === "ABILITY_GRANTED" && event.ability === "directAttack") {
       const target = owner.field.find((item) => item && !item.used && item.mode !== "defense") || strongestMonster(owner);
       result.effectTarget = target;

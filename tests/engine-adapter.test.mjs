@@ -396,6 +396,38 @@ test("dispatches engine-backed battle-trance as a stat buff plus attack reset ab
   ));
 });
 
+test("dispatches engine-backed rally-attack as stat buff plus immediate monster ready", () => {
+  const rally = uiSpell("spell-rally", "rallyAttack", "rally-strike");
+  const strongest = uiMonster("strongest-rally", "star-lancer");
+  const usedMonster = uiMonster("used-rally", "ember-drake");
+  strongest.atk = 1800;
+  usedMonster.atk = 1500;
+  usedMonster.used = true;
+  const state = appState();
+  state.player.hand = [rally];
+  state.player.field[0] = usedMonster;
+  state.player.field[1] = strongest;
+
+  assert.equal(canDispatchSpellFromUiState(rally), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: strongest });
+
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [rally]);
+  assert.equal(strongest.tempAtk, 300);
+  assert.equal(usedMonster.used, false);
+  assert.equal(state.player.attackResets, 0);
+  assert.ok(events.some((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === strongest.uid &&
+    event.amount === 300
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_READIED" &&
+    event.cardId === usedMonster.uid &&
+    event.sourceCardId === rally.uid
+  ));
+});
+
 test("dispatches engine-backed light-shadow combo as shield gain plus draw", () => {
   const eclipse = uiSpell("spell-eclipse", "lightShadowCombo", "eclipse-barrier");
   const deckCard = uiMonster("eclipse-draw", "solar-knight");

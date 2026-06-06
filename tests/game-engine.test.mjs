@@ -157,6 +157,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const extraSummon = getCardEffectDefinition("extraSummon");
   const shield800 = getCardEffectDefinition("shield800");
   const graveReturn = getCardEffectDefinition("graveReturn");
+  const rallyAttack = getCardEffectDefinition("rallyAttack");
   const battleTrance = getCardEffectDefinition("battleTrance");
   const lightShadowCombo = getCardEffectDefinition("lightShadowCombo");
   const elementEcho = getCardEffectDefinition("elementEcho");
@@ -177,6 +178,17 @@ test("default card effects are declarative one-shot DSL definitions", () => {
       to: { playerId: "$action.playerId", zone: "deck", index: 0 }
     },
     { op: "drawCards", player: "self", count: 1 }
+  ]);
+  assert.deepEqual(rallyAttack.operations, [
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 },
+    {
+      op: "readyMonsterOrGrantAbility",
+      player: "self",
+      cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "firstUsed" },
+      ability: Ability.attackReset,
+      uses: 1,
+      duration: "turn"
+    }
   ]);
   assert.deepEqual(battleTrance.operations, [
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
@@ -459,6 +471,84 @@ test("grave-return recovers a grave card through movement and draw events", () =
     event.cardIds.includes("fallen-1") &&
     event.sourceCardId === "return-1"
   ));
+  assertValidGameState(next);
+});
+
+test("rally-attack buffs the strongest monster and readies an already used monster through events", () => {
+  const state = makeState({
+    cards: [
+      card("rally-1", { templateId: "rally-strike", effect: "rallyAttack" }),
+      card("lancer-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000, used: false }),
+      card("drake-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900, used: true })
+    ],
+    player: {
+      hand: ["rally-1"],
+      monsterZone: ["lancer-1", "drake-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "rally-1",
+    targetCardId: "lancer-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["lancer-1"].tempAtk, 300);
+  assert.equal(next.cards["drake-1"].used, false);
+  assert.equal(hasAbility(next, PLAYER, Ability.attackReset), false);
+  assert.deepEqual(next.players[PLAYER].grave, ["rally-1"]);
+  assert.ok(events.some((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === "lancer-1" &&
+    event.amount === 300
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_READIED" &&
+    event.cardId === "drake-1" &&
+    event.beforeUsed === true &&
+    event.afterUsed === false &&
+    event.sourceCardId === "rally-1"
+  ));
+  assertValidGameState(next);
+});
+
+test("rally-attack stores an attack reset ability when no monster has attacked", () => {
+  const state = makeState({
+    cards: [
+      card("rally-2", { templateId: "rally-strike", effect: "rallyAttack" }),
+      card("lancer-2", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000, used: false }),
+      card("drake-2", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900, used: false })
+    ],
+    player: {
+      hand: ["rally-2"],
+      monsterZone: ["lancer-2", "drake-2"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "rally-2",
+    targetCardId: "lancer-2"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["lancer-2"].tempAtk, 300);
+  assert.equal(hasAbility(next, PLAYER, Ability.attackReset), true);
+  assert.ok(events.some((event) =>
+    event.type === "ABILITY_GRANTED" &&
+    event.playerId === PLAYER &&
+    event.ability === Ability.attackReset &&
+    event.uses === 1 &&
+    event.sourceCardId === "rally-2"
+  ));
+  assert.ok(!events.some((event) => event.type === "MONSTER_READIED"));
   assertValidGameState(next);
 });
 

@@ -81,6 +81,17 @@ export const defaultCardEffects = Object.freeze({
   ], { target: { player: "rival", zone: "monsterZone", rule: "strongestAtk" } }),
   directStrike: oneShot([{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]),
   extraSummon: oneShot([{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]),
+  rallyAttack: oneShot([
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 },
+    {
+      op: "readyMonsterOrGrantAbility",
+      player: "self",
+      cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "firstUsed" },
+      ability: Ability.attackReset,
+      uses: 1,
+      duration: "turn"
+    }
+  ], { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }),
   battleTrance: oneShot([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
     { op: "grantAbility", player: "self", ability: Ability.attackReset, uses: 1, duration: "turn" }
@@ -286,6 +297,30 @@ export class EffectContext {
       duration: options.duration || "turn",
       sourceCardId: options.sourceCardId || null
     });
+  }
+
+  readyMonster(cardId, options = {}) {
+    const card = requireCard(this.#state, cardId);
+    const beforeUsed = Boolean(card.used);
+    if (!beforeUsed) return false;
+
+    this.#emit("MONSTER_READIED", {
+      cardId,
+      beforeUsed,
+      afterUsed: false,
+      sourceCardId: options.sourceCardId || null
+    });
+    return true;
+  }
+
+  readyMonsterOrGrantAbility(playerId, cardId, ability, options = {}) {
+    const cardIds = resolveCardIdInput(this.#state, cardId);
+    const usedCardId = cardIds.find((targetCardId) => Boolean(requireCard(this.#state, targetCardId).used));
+    if (usedCardId && this.readyMonster(usedCardId, options)) {
+      return usedCardId;
+    }
+    this.grantAbility(playerId, ability, options);
+    return null;
   }
 }
 
@@ -680,6 +715,9 @@ export function applyGameEvent(state, event, options = {}) {
     case "MONSTER_SUMMONED":
       applyMonsterSummoned(state, event);
       break;
+    case "MONSTER_READIED":
+      applyMonsterReadied(state, event);
+      break;
     default:
       throw new GameRuleError(`Unknown GameEvent type ${event.type}`);
   }
@@ -749,6 +787,11 @@ function applyMonsterSummoned(state, event) {
   card.mode = event.mode || card.mode || "attack";
   card.used = Boolean(event.used);
   card.changedMode = Boolean(event.changedMode);
+}
+
+function applyMonsterReadied(state, event) {
+  const card = requireCard(state, event.cardId);
+  card.used = false;
 }
 
 function applyLpHealed(state, event) {
@@ -965,6 +1008,12 @@ function runEffectOperation(operation, ctx, action, card) {
         uses: operation.uses,
         duration: operation.duration
       });
+    case "readyMonsterOrGrantAbility":
+      return ctx.readyMonsterOrGrantAbility(resolvePlayerRef(operation.player, action), resolveValue(operation.cardId, action, card), operation.ability, {
+        ...source,
+        uses: operation.uses,
+        duration: operation.duration
+      });
     default:
       throw new GameRuleError(`Unsupported effect operation ${operation.op}`);
   }
@@ -1004,7 +1053,15 @@ function resolveCardIdInput(state, cardId) {
       throw new GameRuleError("Card selector requires playerId and zone");
     }
     const player = requirePlayer(state, cardId.playerId);
-    return requireZone(player, cardId.zone).slice();
+    const cardIds = requireZone(player, cardId.zone).slice();
+    if (cardId.rule === "firstUsed") {
+      const found = cardIds.find((targetCardId) => Boolean(requireCard(state, targetCardId).used));
+      return found ? [found] : [];
+    }
+    if (cardId.rule) {
+      throw new GameRuleError(`Unsupported card selector rule ${cardId.rule}`);
+    }
+    return cardIds;
   }
   return [cardId];
 }

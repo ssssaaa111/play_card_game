@@ -3,7 +3,7 @@ import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { PHASES } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
-const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "battleTrance", "lightShadowCombo", "elementEcho", "fireWindCombo"]);
+const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "rallyAttack", "battleTrance", "lightShadowCombo", "elementEcho", "fireWindCombo"]);
 
 const uiZones = {
   deck: "deck",
@@ -193,6 +193,11 @@ export function applyUiGameEvents(uiState, events = []) {
       card.used = Boolean(event.used);
       card.changedMode = Boolean(event.changedMode);
     }
+    if (event.type === "MONSTER_READIED") {
+      const card = findUiCard(uiState, event.cardId);
+      if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
+      card.used = false;
+    }
     if (event.type === "CARDS_DRAWN") {
       const duelist = uiDuelist(uiState, event.playerId);
       (event.cardIds || []).forEach((cardId) => {
@@ -254,6 +259,7 @@ function targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo) {
   const sourceCardId = cardKey(card);
   if (card.effect === "buff500") return strongestMonsterId(uiState, playerId);
   if (card.effect === "battleTrance") return strongestMonsterId(uiState, playerId);
+  if (card.effect === "rallyAttack") return strongestMonsterId(uiState, playerId);
   if (card.effect === "pierceLine") return strongestMonsterId(uiState, rivalId);
   if (card.effect === "graveReturn") return firstGraveCardIdExcept(uiState, playerId, sourceCardId);
   return null;
