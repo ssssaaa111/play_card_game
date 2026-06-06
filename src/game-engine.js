@@ -85,6 +85,10 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
     { op: "grantAbility", player: "self", ability: Ability.attackReset, uses: 1, duration: "turn" }
   ], { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }),
+  elementEcho: oneShot([
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 200 },
+    { op: "drawCards", player: "self", count: 1 }
+  ], { requirements: [{ type: "minDistinctElements", player: "self", count: 2 }] }),
   lightShadowCombo: oneShot([
     { op: "gainShield", player: "self", amount: 600 },
     { op: "drawCards", player: "self", count: 1 }
@@ -239,20 +243,24 @@ export class EffectContext {
   }
 
   modifyStat(cardId, stat, amount, options = {}) {
-    const card = requireCard(this.#state, cardId);
+    const cardIds = resolveCardIdInput(this.#state, cardId);
     if (!["atk", "def", "tempAtk", "tempDef"].includes(stat)) {
       throw new GameRuleError(`Unsupported stat ${stat}`);
     }
-    const before = Number(card[stat]) || 0;
     const delta = Number(amount) || 0;
 
-    this.#emit("STAT_MODIFIED", {
-      cardId,
-      stat,
-      before,
-      after: before + delta,
-      amount: delta,
-      sourceCardId: options.sourceCardId || null
+    return cardIds.map((targetCardId) => {
+      const card = requireCard(this.#state, targetCardId);
+      const before = Number(card[stat]) || 0;
+      this.#emit("STAT_MODIFIED", {
+        cardId: targetCardId,
+        stat,
+        before,
+        after: before + delta,
+        amount: delta,
+        sourceCardId: options.sourceCardId || null
+      });
+      return targetCardId;
     });
   }
 
@@ -356,6 +364,7 @@ export class GameEngine {
 
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };
+    validateEffectRequirements(this.#effects[card.effect], state, preparedAction, card);
     validateEffectTarget(this.#effects[card.effect], state, preparedAction, card);
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
@@ -398,6 +407,7 @@ export class GameEngine {
 
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };
+    validateEffectRequirements(this.#effects[card.onSummon], state, preparedAction, card);
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
       cardId: action.cardId,
@@ -848,6 +858,27 @@ function runEffect(effects, effectId, ctx, action, card) {
   runEffectDefinition(definition, ctx, action, card);
 }
 
+function validateEffectRequirements(definition, state, action, card) {
+  const requirements = Array.isArray(definition?.requirements) ? definition.requirements : [];
+  for (const requirement of requirements) {
+    if (requirement.type === "minDistinctElements") {
+      const playerId = resolvePlayerRef(requirement.player, action);
+      const player = requirePlayer(state, playerId);
+      const elements = new Set(
+        player.monsterZone
+          .map((cardId) => requireCard(state, cardId).element)
+          .filter(Boolean)
+      );
+      const count = Math.max(0, Number(requirement.count) || 0);
+      if (elements.size < count) {
+        throw new GameRuleError(`Effect ${card.effect || card.id} requires at least ${count} distinct elements`);
+      }
+      continue;
+    }
+    throw new GameRuleError(`Unsupported effect requirement ${requirement.type}`);
+  }
+}
+
 function validateEffectTarget(definition, state, action, card) {
   if (!definition?.target) return;
   if (!action.targetCardId) {
@@ -944,6 +975,20 @@ function resolveValue(value, action, card) {
     return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, resolveValue(entry, action, card)]));
   }
   return value;
+}
+
+function resolveCardIdInput(state, cardId) {
+  if (Array.isArray(cardId)) {
+    return cardId.flatMap((entry) => resolveCardIdInput(state, entry));
+  }
+  if (cardId && typeof cardId === "object") {
+    if (!cardId.playerId || !cardId.zone) {
+      throw new GameRuleError("Card selector requires playerId and zone");
+    }
+    const player = requirePlayer(state, cardId.playerId);
+    return requireZone(player, cardId.zone).slice();
+  }
+  return [cardId];
 }
 
 function engineTotalAtk(card) {

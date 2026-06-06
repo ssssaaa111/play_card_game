@@ -428,6 +428,35 @@ test("dispatches engine-backed light-shadow combo as shield gain plus draw", () 
   ));
 });
 
+test("dispatches engine-backed element-echo as all-field stat buffs plus draw", () => {
+  const echo = uiSpell("spell-echo", "elementEcho", "element-echo");
+  const fire = uiMonster("echo-fire", "ember-drake");
+  const light = uiMonster("echo-light", "solar-knight");
+  const deckCard = uiMonster("echo-draw", "star-lancer");
+  fire.element = "fire";
+  light.element = "light";
+  const state = appState();
+  state.player.hand = [echo];
+  state.player.deck = [deckCard];
+  state.player.field[0] = fire;
+  state.player.field[1] = light;
+
+  assert.equal(canDispatchSpellFromUiState(echo), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.deepEqual(state.player.hand, [deckCard]);
+  assert.deepEqual(state.player.grave, [echo]);
+  assert.equal(fire.tempAtk, 200);
+  assert.equal(light.tempAtk, 200);
+  assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.amount === 200).length, 2);
+  assert.ok(events.some((event) =>
+    event.type === "CARDS_DRAWN" &&
+    event.playerId === "player" &&
+    event.cardIds.includes(deckCard.uid) &&
+    event.sourceCardId === echo.uid
+  ));
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });

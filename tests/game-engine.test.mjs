@@ -159,6 +159,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const graveReturn = getCardEffectDefinition("graveReturn");
   const battleTrance = getCardEffectDefinition("battleTrance");
   const lightShadowCombo = getCardEffectDefinition("lightShadowCombo");
+  const elementEcho = getCardEffectDefinition("elementEcho");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
@@ -182,6 +183,13 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   ]);
   assert.deepEqual(lightShadowCombo.operations, [
     { op: "gainShield", player: "self", amount: 600 },
+    { op: "drawCards", player: "self", count: 1 }
+  ]);
+  assert.deepEqual(elementEcho.requirements, [
+    { type: "minDistinctElements", player: "self", count: 2 }
+  ]);
+  assert.deepEqual(elementEcho.operations, [
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 200 },
     { op: "drawCards", player: "self", count: 1 }
   ]);
   assert.notEqual(typeof draw2, "function");
@@ -531,6 +539,73 @@ test("light-shadow combo gains shield and draws through events", () => {
     event.sourceCardId === "eclipse-1"
   ));
   assertValidGameState(next);
+});
+
+test("element-echo buffs all own monsters and draws through events", () => {
+  const state = makeState({
+    cards: [
+      card("echo-1", { templateId: "element-echo", effect: "elementEcho" }),
+      card("fire-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900, element: "fire" }),
+      card("light-1", { templateId: "solar-knight", type: "monster", atk: 1700, def: 1200, element: "light" }),
+      card("deck-1", { templateId: "star-lancer", type: "monster" })
+    ],
+    player: {
+      hand: ["echo-1"],
+      deck: ["deck-1"],
+      monsterZone: ["fire-1", "light-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "echo-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["fire-1"].tempAtk, 200);
+  assert.equal(next.cards["light-1"].tempAtk, 200);
+  assert.deepEqual(next.players[PLAYER].hand, ["deck-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, ["echo-1"]);
+  assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.amount === 200).length, 2);
+  assert.ok(events.some((event) =>
+    event.type === "CARDS_DRAWN" &&
+    event.playerId === PLAYER &&
+    event.cardIds.includes("deck-1") &&
+    event.sourceCardId === "echo-1"
+  ));
+  assertValidGameState(next);
+});
+
+test("element-echo rejects fields with fewer than two distinct elements", () => {
+  const state = makeState({
+    cards: [
+      card("echo-bad", { templateId: "element-echo", effect: "elementEcho" }),
+      card("fire-only", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900, element: "fire" }),
+      card("deck-bad", { templateId: "star-lancer", type: "monster" })
+    ],
+    player: {
+      hand: ["echo-bad"],
+      deck: ["deck-bad"],
+      monsterZone: ["fire-only"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "ACTIVATE_CARD",
+      playerId: PLAYER,
+      rivalId: AI,
+      cardId: "echo-bad"
+    }),
+    /requires at least 2 distinct elements/
+  );
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["echo-bad"]);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, []);
 });
 
 test("targeted spell activation rejects missing targets without consuming the card", () => {
