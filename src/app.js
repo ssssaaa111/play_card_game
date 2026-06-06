@@ -8,6 +8,7 @@ import { createCardElement as renderCardElement } from './card-renderer.js';
 import { availableElementCombos, markElementComboResolved } from './combos.js';
 import { buildDeck, createDuelist } from './deck.js';
 import {
+  canDispatchSummonEffectFromUiState,
   canDispatchSpellFromUiState,
   dispatchActivateSpellFromUiState,
   dispatchSetTrapFromUiState,
@@ -1902,8 +1903,9 @@ async function handleAiPanelAttack() {
 async function summonMonster(owner, rival, handIndex, fieldIndex) {
   const card = owner.hand[handIndex];
   if (!card) return false;
+  let summonEvents = [];
   try {
-    dispatchSummonMonsterFromUiState(state, owner.owner, handIndex, fieldIndex);
+    summonEvents = dispatchSummonMonsterFromUiState(state, owner.owner, handIndex, fieldIndex);
   } catch (error) {
     cue(error.message || "怪兽召唤失败。");
     console.error(error);
@@ -1920,7 +1922,12 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
   }
   await triggerTrap(rival, owner, "summon", { summoned: card });
   if (state.gameOver) return true;
-  resolveSummonEffect(card, owner, rival);
+  if (canDispatchSummonEffectFromUiState(card)) {
+    resolveEngineSpellFeedback(owner, rival, card, summonEvents);
+    resolveElementCombos(owner, rival, "summon");
+  } else {
+    resolveSummonEffect(card, owner, rival);
+  }
   checkGameOver();
   return true;
 }
@@ -1945,47 +1952,8 @@ function setTrap(owner, handIndex, trapIndex) {
 }
 
 function resolveSummonEffect(card, owner, rival) {
-  if (card.onSummon === "burn200") {
-    damage(rival, 200);
-    playSound("spell-burn500");
-    playArrow(fieldElement(owner.owner, owner.field.indexOf(card)) || panelElement(owner.owner), panelElement(rival.owner), "spell", "灼烧");
-    addLog(`${card.name} 的火焰灼烧造成 200 点伤害。`);
-    speak(`${card.name} 的效果发动，造成二百点伤害。`);
-  }
-  if (card.onSummon === "draw1") {
-    drawCards(owner, 1);
-    addLog(`${card.name} 让${owner.owner === "player" ? "你" : "AI"}额外抽卡。`);
-    speak(`${card.name} 的效果发动，额外抽一张卡。`);
-  }
-  if (card.onSummon === "heal300") {
-    heal(owner, 300);
-    playSound("spell-heal700");
-    addLog(`${card.name} 回复 300 点生命值。`);
-    speak(`${card.name} 的效果发动，回复三百点生命值。`);
-  }
-  if (card.onSummon === "fireBuff") {
-    const fireCount = fieldCards(owner).filter((item) => item.element === "fire").length;
-    if (fireCount >= 2) {
-      buffCard(strongestMonster(owner), 300, card.name);
-      playEpicAction("指挥", "attack");
-      playSound("spell-buff500");
-      speak(`${card.name} 指挥火焰阵线，攻击力提升。`);
-    }
-  }
-  if (card.onSummon === "shield400") {
-    gainShield(owner, 400, card.name);
-    speak(`${card.name} 展开护盾。`);
-  }
-  if (card.onSummon === "shadowBurn") {
-    const shadowCount = fieldCards(owner).filter((item) => item.element === "shadow").length;
-    if (shadowCount >= 2) {
-      damage(rival, 300);
-      playSound("spell-burn500");
-      playEpicAction("暗蚀", "attack");
-      animateAvatar(rival.owner, "hit");
-      addLog(`${card.name} 引动暗影连锁，对手受到 300 点伤害。`);
-      speak(`${card.name} 的暗影效果发动，造成三百点伤害。`);
-    }
+  if (card.onSummon) {
+    addLog(`${card.name} 的召唤效果尚未接入规则引擎，已跳过旧式直接结算。`);
   }
   resolveElementCombos(owner, rival, "summon");
 }

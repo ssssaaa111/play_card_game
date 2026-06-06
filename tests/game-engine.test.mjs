@@ -151,7 +151,13 @@ test("dispatch records commands before derived events", () => {
 
 test("default card effects are declarative one-shot DSL definitions", () => {
   const draw2 = getCardEffectDefinition("draw2");
+  const draw1 = getCardEffectDefinition("draw1");
+  const burn200 = getCardEffectDefinition("burn200");
+  const fireBuff = getCardEffectDefinition("fireBuff");
   const burn500 = getCardEffectDefinition("burn500");
+  const heal300 = getCardEffectDefinition("heal300");
+  const shield400 = getCardEffectDefinition("shield400");
+  const shadowBurn = getCardEffectDefinition("shadowBurn");
   const heal700 = getCardEffectDefinition("heal700");
   const directStrike = getCardEffectDefinition("directStrike");
   const extraSummon = getCardEffectDefinition("extraSummon");
@@ -164,8 +170,16 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const fireWindCombo = getCardEffectDefinition("fireWindCombo");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
+  assert.deepEqual(draw1.operations, [{ op: "drawCards", player: "self", count: 1 }]);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
+  assert.deepEqual(burn200.operations, [{ op: "dealDamage", player: "rival", amount: 200 }]);
+  assert.deepEqual(fireBuff.operations, [
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "strongestAtk" }, stat: "tempAtk", amount: 300 }
+  ]);
   assert.deepEqual(burn500.operations, [{ op: "dealDamage", player: "rival", amount: 500 }]);
+  assert.deepEqual(heal300.operations, [{ op: "heal", player: "self", amount: 300 }]);
+  assert.deepEqual(shield400.operations, [{ op: "gainShield", player: "self", amount: 400 }]);
+  assert.deepEqual(shadowBurn.operations, [{ op: "dealDamage", player: "rival", amount: 300 }]);
   assert.deepEqual(heal700.operations, [{ op: "heal", player: "self", amount: 700 }]);
   assert.deepEqual(directStrike.operations, [{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]);
   assert.deepEqual(extraSummon.operations, [{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]);
@@ -898,6 +912,128 @@ test("ember-drake summon moves the card through EffectContext and resolves on-su
   assert.equal(next.players[AI].lp, 3800);
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === "ember-1"));
   assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 200));
+});
+
+test("basic draw and heal on-summon effects resolve through events", () => {
+  const state = makeState({
+    cards: [
+      card("gale-1", { templateId: "gale-mage", type: "monster", atk: 1200, def: 1400, onSummon: "draw1" }),
+      card("oracle-1", { templateId: "night-oracle", type: "monster", atk: 1100, def: 1600, onSummon: "heal300" }),
+      card("deck-1", { templateId: "solar-knight", type: "monster", atk: 1700, def: 1200 })
+    ],
+    player: {
+      lp: 3600,
+      hand: ["gale-1", "oracle-1"],
+      deck: ["deck-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const drawEvents = engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "gale-1", index: 0 });
+  const healEvents = engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "oracle-1", index: 1 });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].hand, ["deck-1"]);
+  assert.deepEqual(next.players[PLAYER].deck, []);
+  assert.equal(next.players[PLAYER].lp, 3900);
+  assert.ok(drawEvents.some((event) =>
+    event.type === "CARDS_DRAWN" &&
+    event.count === 1 &&
+    event.cardIds.includes("deck-1") &&
+    event.sourceCardId === "gale-1"
+  ));
+  assert.ok(healEvents.some((event) =>
+    event.type === "LP_HEALED" &&
+    event.amount === 300 &&
+    event.sourceCardId === "oracle-1"
+  ));
+  assertValidGameState(next);
+});
+
+test("conditional stat shield and burn on-summon effects resolve through events", () => {
+  const buffState = makeState({
+    cards: [
+      card("ember-ally", { templateId: "ember-drake", type: "monster", element: "fire", atk: 1500, def: 900 }),
+      card("captain-1", { templateId: "flame-captain", type: "monster", element: "fire", atk: 1400, def: 1300, onSummon: "fireBuff" })
+    ],
+    player: {
+      monsterZone: ["ember-ally"],
+      hand: ["captain-1"]
+    }
+  });
+  const shieldState = makeState({
+    cards: [
+      card("saint-1", { templateId: "prism-saint", type: "monster", element: "light", atk: 1000, def: 1800, onSummon: "shield400" })
+    ],
+    player: {
+      hand: ["saint-1"]
+    }
+  });
+  const burnState = makeState({
+    cards: [
+      card("shadow-ally", { templateId: "night-oracle", type: "monster", element: "shadow", atk: 1100, def: 1600 }),
+      card("alchemist-1", { templateId: "dusk-alchemist", type: "monster", element: "shadow", atk: 1450, def: 1500, onSummon: "shadowBurn" })
+    ],
+    player: {
+      monsterZone: ["shadow-ally"],
+      hand: ["alchemist-1"]
+    }
+  });
+
+  const buffEngine = new GameEngine(buffState);
+  const shieldEngine = new GameEngine(shieldState);
+  const burnEngine = new GameEngine(burnState);
+  const buffEvents = buffEngine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "captain-1", index: 1 });
+  const shieldEvents = shieldEngine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "saint-1", index: 0 });
+  const burnEvents = burnEngine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "alchemist-1", index: 1 });
+
+  assert.equal(buffEngine.getState().cards["ember-ally"].tempAtk, 300);
+  assert.equal(shieldEngine.getState().players[PLAYER].shield, 400);
+  assert.equal(burnEngine.getState().players[AI].lp, 3700);
+  assert.ok(buffEvents.some((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === "ember-ally" &&
+    event.stat === "tempAtk" &&
+    event.amount === 300 &&
+    event.sourceCardId === "captain-1"
+  ));
+  assert.ok(shieldEvents.some((event) =>
+    event.type === "SHIELD_GAINED" &&
+    event.amount === 400 &&
+    event.sourceCardId === "saint-1"
+  ));
+  assert.ok(burnEvents.some((event) =>
+    event.type === "DAMAGE_DEALT" &&
+    event.amount === 300 &&
+    event.sourceCardId === "alchemist-1"
+  ));
+  assertValidGameState(buffEngine.getState());
+  assertValidGameState(shieldEngine.getState());
+  assertValidGameState(burnEngine.getState());
+});
+
+test("conditional on-summon effects can be skipped without rejecting the summon", () => {
+  const state = makeState({
+    cards: [
+      card("captain-1", { templateId: "flame-captain", type: "monster", element: "fire", atk: 1400, def: 1300, onSummon: "fireBuff" }),
+      card("alchemist-1", { templateId: "dusk-alchemist", type: "monster", element: "shadow", atk: 1450, def: 1500, onSummon: "shadowBurn" })
+    ],
+    player: {
+      hand: ["captain-1", "alchemist-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const buffEvents = engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "captain-1", index: 0 });
+  const burnEvents = engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "alchemist-1", index: 1 });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["captain-1", "alchemist-1"]);
+  assert.equal(next.cards["captain-1"].tempAtk, undefined);
+  assert.equal(next.players[AI].lp, 4000);
+  assert.ok(buffEvents.some((event) => event.type === "EFFECT_SKIPPED" && event.effectId === "fireBuff"));
+  assert.ok(burnEvents.some((event) => event.type === "EFFECT_SKIPPED" && event.effectId === "shadowBurn"));
+  assertValidGameState(next);
 });
 
 test("void-lock can only trigger in battle phase and logs negation", () => {

@@ -233,6 +233,44 @@ export const scenarioSetups = {
     aiHand: [],
     aiDeck: ["guard-sigil"]
   },
+  summonEffects: {
+    label: "召唤效果",
+    text: "手牌含赤焰幼龙、疾风术士和夜幕司祭，验证基础召唤成功效果由引擎事件结算。",
+    goal: "召唤后应分别产生伤害、抽卡和回血事件，UI 只根据事件表现。",
+    playerHand: ["ember-drake", "gale-mage", "night-oracle"],
+    playerDeck: ["solar-knight", "prism-saint"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
+  summonFireBuff: {
+    label: "召唤火强化",
+    text: "场上已有赤焰幼龙，手牌含焰心指挥官，用来验证条件召唤加攻效果由引擎事件结算。",
+    goal: "召唤焰心指挥官后，攻击力最高怪兽应通过 STAT_MODIFIED 获得攻击力提升。",
+    playerHand: ["flame-captain"],
+    playerField: ["ember-drake"],
+    playerDeck: [],
+    aiHand: [],
+    aiDeck: []
+  },
+  summonShield: {
+    label: "召唤护盾",
+    text: "手牌含辉棱圣徒，用来验证召唤护盾效果由引擎事件结算。",
+    goal: "召唤后应产生 SHIELD_GAINED 事件并增加我方护盾。",
+    playerHand: ["prism-saint"],
+    playerDeck: [],
+    aiHand: [],
+    aiDeck: []
+  },
+  summonShadowBurn: {
+    label: "召唤暗伤",
+    text: "场上已有夜幕司祭，手牌含暮影炼术师，用来验证条件召唤伤害效果由引擎事件结算。",
+    goal: "召唤暮影炼术师后，对手应通过 DAMAGE_DEALT 事件受到 300 点伤害。",
+    playerHand: ["dusk-alchemist"],
+    playerField: ["night-oracle"],
+    playerDeck: [],
+    aiHand: [],
+    aiDeck: []
+  },
   skipLock: {
     label: "跳攻锁定",
     text: "我方场上已有可攻击怪兽，手牌含新怪兽，用来验证跳过攻击后新召唤也不能攻击。",

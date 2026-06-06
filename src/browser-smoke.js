@@ -218,6 +218,94 @@ async function runAiGuardSkipSmoke(ctx) {
   setSmokeStatus("passed", "ai-guard-skip");
 }
 
+async function runSummonEffectsSmoke(ctx) {
+  setSmokeStatus("running", "summon-effects");
+  await startSmokeDuel(ctx, "summonEffects");
+  ctx.state.player.lp = 3600;
+  const aiLpBefore = ctx.state.ai.lp;
+  clickSmokeElement(handCard(ctx.els, "ember-drake"), "summon ember drake");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), "ember drake slot");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "ember-drake" &&
+      ctx.state.ai.lp === aiLpBefore - 200 &&
+      countGameEvents(ctx.state, "DAMAGE_DEALT") >= 1,
+    "ember on-summon burn through event",
+    9000
+  );
+
+  ctx.state.summonedThisTurn = false;
+  clickSmokeElement(handCard(ctx.els, "gale-mage"), "summon gale mage");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), "gale mage slot");
+  await waitForSmoke(
+    () => ctx.state.player.field[1]?.id === "gale-mage" &&
+      ctx.state.player.hand.some((card) => card?.id === "prism-saint") &&
+      countGameEvents(ctx.state, "CARDS_DRAWN") >= 1,
+    "gale on-summon draw through event",
+    9000
+  );
+
+  ctx.state.summonedThisTurn = false;
+  ctx.state.player.lp = 3000;
+  const lpBeforeHeal = ctx.state.player.lp;
+  clickSmokeElement(handCard(ctx.els, "night-oracle"), "summon night oracle");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 2), "night oracle slot");
+  await waitForSmoke(
+    () => ctx.state.player.field[2]?.id === "night-oracle" &&
+      ctx.state.player.lp === lpBeforeHeal + 300 &&
+      countGameEvents(ctx.state, "LP_HEALED") >= 1,
+    "night oracle on-summon heal through event",
+    9000
+  );
+
+  setSmokeStatus("passed", "summon-effects");
+}
+
+async function runSummonFireBuffSmoke(ctx) {
+  setSmokeStatus("running", "summon-fire-buff");
+  await startSmokeDuel(ctx, "summonFireBuff");
+  clickSmokeElement(handCard(ctx.els, "flame-captain"), "summon flame captain");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), "flame captain slot");
+  await waitForSmoke(
+    () => ctx.state.player.field[1]?.id === "flame-captain" &&
+      ctx.state.player.field[0]?.tempAtk === 300 &&
+      countGameEvents(ctx.state, "STAT_MODIFIED") >= 1,
+    "flame captain on-summon stat buff through event",
+    9000
+  );
+  setSmokeStatus("passed", "summon-fire-buff");
+}
+
+async function runSummonShieldSmoke(ctx) {
+  setSmokeStatus("running", "summon-shield");
+  await startSmokeDuel(ctx, "summonShield");
+  clickSmokeElement(handCard(ctx.els, "prism-saint"), "summon prism saint");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), "prism saint slot");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "prism-saint" &&
+      ctx.state.player.shield === 400 &&
+      countGameEvents(ctx.state, "SHIELD_GAINED") >= 1,
+    "prism saint on-summon shield through event",
+    9000
+  );
+  setSmokeStatus("passed", "summon-shield");
+}
+
+async function runSummonShadowBurnSmoke(ctx) {
+  setSmokeStatus("running", "summon-shadow-burn");
+  await startSmokeDuel(ctx, "summonShadowBurn");
+  const aiLpBefore = ctx.state.ai.lp;
+  clickSmokeElement(handCard(ctx.els, "dusk-alchemist"), "summon dusk alchemist");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), "dusk alchemist slot");
+  await waitForSmoke(
+    () => ctx.state.player.field[1]?.id === "dusk-alchemist" &&
+      ctx.state.ai.lp === aiLpBefore - 300 &&
+      countGameEvents(ctx.state, "DAMAGE_DEALT") >= 1,
+    "dusk alchemist on-summon burn through event",
+    9000
+  );
+  setSmokeStatus("passed", "summon-shadow-burn");
+}
+
 async function runRedirectPromptSmoke(ctx) {
   setSmokeStatus("running", "redirect-prompt");
   await startSmokeDuel(ctx, "redirect");
@@ -655,6 +743,10 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "direct-guard": runDirectGuardSmoke,
     "guard-counter": runGuardCounterSmoke,
     "ai-guard-skip": runAiGuardSkipSmoke,
+    "summon-effects": runSummonEffectsSmoke,
+    "summon-fire-buff": runSummonFireBuffSmoke,
+    "summon-shield": runSummonShieldSmoke,
+    "summon-shadow-burn": runSummonShadowBurnSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,

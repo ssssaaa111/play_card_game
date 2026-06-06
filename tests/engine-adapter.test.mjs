@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { createDuelist } from "../src/deck.js";
 import {
   canDispatchSpellFromUiState,
+  canDispatchSummonEffectFromUiState,
   dispatchActivateSpellFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState
@@ -132,6 +133,90 @@ test("dispatches SUMMON_MONSTER and applies CARD_MOVED to a fixed UI monster slo
   ));
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === lancer.uid));
   assert.equal(state.gameEvents.length, events.length);
+});
+
+test("dispatches basic on-summon effects through engine events", () => {
+  const ember = uiMonster("ember-summon", "ember-drake");
+  ember.onSummon = "burn200";
+  const gale = uiMonster("gale-summon", "gale-mage");
+  gale.onSummon = "draw1";
+  const oracle = uiMonster("oracle-summon", "night-oracle");
+  oracle.onSummon = "heal300";
+  const deckCard = uiMonster("deck-summon", "solar-knight");
+  const state = appState();
+  state.player.lp = 3600;
+  state.player.hand = [ember, gale, oracle];
+  state.player.deck = [deckCard];
+
+  assert.equal(canDispatchSummonEffectFromUiState(ember), true);
+  assert.equal(canDispatchSummonEffectFromUiState(gale), true);
+  assert.equal(canDispatchSummonEffectFromUiState(oracle), true);
+
+  const burnEvents = dispatchSummonMonsterFromUiState(state, "player", 0, 0);
+  const drawEvents = dispatchSummonMonsterFromUiState(state, "player", 0, 1);
+  const healEvents = dispatchSummonMonsterFromUiState(state, "player", 0, 2);
+
+  assert.equal(state.ai.lp, 3800);
+  assert.deepEqual(state.player.hand, [deckCard]);
+  assert.deepEqual(state.player.deck, []);
+  assert.equal(state.player.lp, 3900);
+  assert.ok(burnEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 200 && event.sourceCardId === ember.uid));
+  assert.ok(drawEvents.some((event) => event.type === "CARDS_DRAWN" && event.count === 1 && event.sourceCardId === gale.uid));
+  assert.ok(healEvents.some((event) => event.type === "LP_HEALED" && event.amount === 300 && event.sourceCardId === oracle.uid));
+});
+
+test("dispatches conditional on-summon effects through engine events", () => {
+  const ember = uiMonster("ember-ally", "ember-drake");
+  ember.element = "fire";
+  ember.atk = 1500;
+  const captain = uiMonster("captain-summon", "flame-captain");
+  captain.element = "fire";
+  captain.atk = 1400;
+  captain.onSummon = "fireBuff";
+  const saint = uiMonster("saint-summon", "prism-saint");
+  saint.onSummon = "shield400";
+  const oracle = uiMonster("oracle-ally", "night-oracle");
+  oracle.element = "shadow";
+  const alchemist = uiMonster("alchemist-summon", "dusk-alchemist");
+  alchemist.element = "shadow";
+  alchemist.onSummon = "shadowBurn";
+  const buffState = appState();
+  buffState.player.field[0] = ember;
+  buffState.player.hand = [captain];
+  const shieldState = appState();
+  shieldState.player.hand = [saint];
+  const burnState = appState();
+  burnState.player.field[0] = oracle;
+  burnState.player.hand = [alchemist];
+
+  assert.equal(canDispatchSummonEffectFromUiState(captain), true);
+  assert.equal(canDispatchSummonEffectFromUiState(saint), true);
+  assert.equal(canDispatchSummonEffectFromUiState(alchemist), true);
+
+  const buffEvents = dispatchSummonMonsterFromUiState(buffState, "player", 0, 1);
+  const shieldEvents = dispatchSummonMonsterFromUiState(shieldState, "player", 0, 0);
+  const burnEvents = dispatchSummonMonsterFromUiState(burnState, "player", 0, 1);
+
+  assert.equal(buffState.player.field[0].tempAtk, 300);
+  assert.equal(shieldState.player.shield, 400);
+  assert.equal(burnState.ai.lp, 3700);
+  assert.ok(buffEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === ember.uid && event.sourceCardId === captain.uid));
+  assert.ok(shieldEvents.some((event) => event.type === "SHIELD_GAINED" && event.amount === 400 && event.sourceCardId === saint.uid));
+  assert.ok(burnEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 300 && event.sourceCardId === alchemist.uid));
+});
+
+test("conditional on-summon effect skip still applies the summon to UI state", () => {
+  const captain = uiMonster("captain-alone", "flame-captain");
+  captain.element = "fire";
+  captain.onSummon = "fireBuff";
+  const state = appState();
+  state.player.hand = [captain];
+
+  const events = dispatchSummonMonsterFromUiState(state, "player", 0, 0);
+
+  assert.equal(state.player.field[0], captain);
+  assert.equal(captain.tempAtk, undefined);
+  assert.ok(events.some((event) => event.type === "EFFECT_SKIPPED" && event.effectId === "fireBuff"));
 });
 
 test("does not mutate UI state when SUMMON_MONSTER is rejected by the engine", () => {

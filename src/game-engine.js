@@ -69,7 +69,16 @@ export const defaultCardEffects = Object.freeze({
   burn500: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
   heal300: oneShot([{ op: "heal", player: "self", amount: 300 }]),
   heal700: oneShot([{ op: "heal", player: "self", amount: 700 }]),
+  shield400: oneShot([{ op: "gainShield", player: "self", amount: 400 }]),
   shield800: oneShot([{ op: "gainShield", player: "self", amount: 800 }]),
+  fireBuff: oneShot(
+    [{ op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "strongestAtk" }, stat: "tempAtk", amount: 300 }],
+    { requirements: [{ type: "minElementCount", player: "self", element: "fire", count: 2 }] }
+  ),
+  shadowBurn: oneShot(
+    [{ op: "dealDamage", player: "rival", amount: 300 }],
+    { requirements: [{ type: "minElementCount", player: "self", element: "shadow", count: 2 }] }
+  ),
   buff500: oneShot(
     [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 500 }],
     { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }
@@ -453,7 +462,6 @@ export class GameEngine {
 
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };
-    validateEffectRequirements(this.#effects[card.onSummon], state, preparedAction, card);
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
       cardId: action.cardId,
@@ -462,6 +470,16 @@ export class GameEngine {
     });
     ctx.summonMonster(action.playerId, action.cardId, { index: action.index });
     if (card.onSummon) {
+      const skipReason = effectRequirementFailure(this.#effects[card.onSummon], state, preparedAction, card);
+      if (skipReason) {
+        emit("EFFECT_SKIPPED", {
+          playerId: action.playerId,
+          cardId: action.cardId,
+          effectId: card.onSummon,
+          reason: skipReason
+        });
+        return;
+      }
       runEffect(this.#effects, card.onSummon, ctx, preparedAction, card);
     }
   }
@@ -718,6 +736,7 @@ export function applyGameEvent(state, event, options = {}) {
     case "TRAP_SET":
     case "CARD_DESTROYED":
     case "EFFECT_NEGATED":
+    case "EFFECT_SKIPPED":
       break;
     case "MONSTER_SUMMONED":
       applyMonsterSummoned(state, event);
@@ -934,7 +953,27 @@ function validateEffectRequirements(definition, state, action, card) {
       }
       continue;
     }
+    if (requirement.type === "minElementCount") {
+      const playerId = resolvePlayerRef(requirement.player, action);
+      const element = requirement.element;
+      const count = Math.max(0, Number(requirement.count) || 0);
+      const actual = monsterElementCount(state, playerId, element);
+      if (actual < count) {
+        throw new GameRuleError(`Effect ${card.effect || card.onSummon || card.id} requires at least ${count} ${element} monsters`);
+      }
+      continue;
+    }
     throw new GameRuleError(`Unsupported effect requirement ${requirement.type}`);
+  }
+}
+
+function effectRequirementFailure(definition, state, action, card) {
+  try {
+    validateEffectRequirements(definition, state, action, card);
+    return null;
+  } catch (error) {
+    if (error instanceof GameRuleError) return error.message;
+    throw error;
   }
 }
 
@@ -945,6 +984,14 @@ function monsterElementSet(state, playerId) {
       .map((cardId) => requireCard(state, cardId).element)
       .filter(Boolean)
   );
+}
+
+function monsterElementCount(state, playerId, element) {
+  const player = requirePlayer(state, playerId);
+  return player.monsterZone
+    .map((cardId) => requireCard(state, cardId).element)
+    .filter((entry) => entry === element)
+    .length;
 }
 
 function validateEffectTarget(definition, state, action, card) {
@@ -1064,6 +1111,13 @@ function resolveCardIdInput(state, cardId) {
     if (cardId.rule === "firstUsed") {
       const found = cardIds.find((targetCardId) => Boolean(requireCard(state, targetCardId).used));
       return found ? [found] : [];
+    }
+    if (cardId.rule === "strongestAtk") {
+      if (cardIds.length === 0) return [];
+      const strongest = cardIds
+        .slice()
+        .sort((left, right) => engineTotalAtk(requireCard(state, right)) - engineTotalAtk(requireCard(state, left)))[0];
+      return strongest ? [strongest] : [];
     }
     if (cardId.rule) {
       throw new GameRuleError(`Unsupported card selector rule ${cardId.rule}`);

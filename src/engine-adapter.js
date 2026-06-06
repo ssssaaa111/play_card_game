@@ -4,6 +4,7 @@ import { PHASES } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
 const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "rallyAttack", "battleTrance", "lightShadowCombo", "elementEcho", "fireWindCombo"]);
+const engineBackedSummonEffects = new Set(["burn200", "draw1", "heal300", "fireBuff", "shield400", "shadowBurn"]);
 
 const uiZones = {
   deck: "deck",
@@ -240,6 +241,10 @@ export function canDispatchSpellFromUiState(card) {
   return card?.type === "spell" && engineBackedSpellEffects.has(card.effect);
 }
 
+export function canDispatchSummonEffectFromUiState(card) {
+  return card?.type === "monster" && engineBackedSummonEffects.has(card.onSummon);
+}
+
 function strongestMonsterId(uiState, playerId) {
   const duelist = uiDuelist(uiState, playerId);
   const candidates = duelist.field.filter(Boolean);
@@ -299,7 +304,7 @@ export function dispatchSummonMonsterFromUiState(uiState, playerId, handIndex, f
 
   const engineState = buildEngineStateFromUiState(uiState);
   const cardId = cardKey(card);
-  if (engineState.cards[cardId]) {
+  if (engineState.cards[cardId] && !canDispatchSummonEffectFromUiState(card)) {
     engineState.cards[cardId] = { ...engineState.cards[cardId], onSummon: null };
   }
 

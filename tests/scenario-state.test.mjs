@@ -84,6 +84,43 @@ test("guard skip scenario starts with a locked defense wall", () => {
   assert.deepEqual(ids(setup.ai.deck), ["guard-sigil"]);
 });
 
+test("summon effects scenario exposes basic engine-backed summon triggers", () => {
+  const setup = buildScenarioState(scenarioSetups.summonEffects, {
+    playerPreset: "balanced",
+    aiPreset: "balanced"
+  });
+
+  assert.deepEqual(ids(setup.player.hand), ["ember-drake", "gale-mage", "night-oracle"]);
+  assert.equal(setup.player.hand[0].onSummon, "burn200");
+  assert.equal(setup.player.hand[1].onSummon, "draw1");
+  assert.equal(setup.player.hand[2].onSummon, "heal300");
+  assert.deepEqual(ids(setup.player.deck), ["solar-knight", "prism-saint"]);
+});
+
+test("conditional summon scenarios expose engine-backed summon triggers", () => {
+  const fire = buildScenarioState(scenarioSetups.summonFireBuff, {
+    playerPreset: "balanced",
+    aiPreset: "balanced"
+  });
+  const shield = buildScenarioState(scenarioSetups.summonShield, {
+    playerPreset: "balanced",
+    aiPreset: "balanced"
+  });
+  const shadow = buildScenarioState(scenarioSetups.summonShadowBurn, {
+    playerPreset: "balanced",
+    aiPreset: "balanced"
+  });
+
+  assert.deepEqual(ids(fire.player.field).slice(0, 1), ["ember-drake"]);
+  assert.deepEqual(ids(fire.player.hand), ["flame-captain"]);
+  assert.equal(fire.player.hand[0].onSummon, "fireBuff");
+  assert.deepEqual(ids(shield.player.hand), ["prism-saint"]);
+  assert.equal(shield.player.hand[0].onSummon, "shield400");
+  assert.deepEqual(ids(shadow.player.field).slice(0, 1), ["night-oracle"]);
+  assert.deepEqual(ids(shadow.player.hand), ["dusk-alchemist"]);
+  assert.equal(shadow.player.hand[0].onSummon, "shadowBurn");
+});
+
 test("builds preset scenario decks without cards reserved in visible zones", () => {
   const setup = buildScenarioState(scenarioSetups.combo, {
     playerPreset: "balanced",
