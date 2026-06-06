@@ -457,6 +457,38 @@ test("dispatches engine-backed element-echo as all-field stat buffs plus draw", 
   ));
 });
 
+test("dispatches engine-backed fire-wind combo as damage plus all-field stat buffs", () => {
+  const combo = uiSpell("spell-firewind", "fireWindCombo", "flame-gale-burst");
+  const fire = uiMonster("combo-fire", "ember-drake");
+  const wind = uiMonster("combo-wind", "gale-rogue");
+  fire.element = "fire";
+  wind.element = "wind";
+  const state = appState();
+  state.player.hand = [combo];
+  state.player.field[0] = fire;
+  state.player.field[1] = wind;
+  state.ai.shield = 100;
+
+  assert.equal(canDispatchSpellFromUiState(combo), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [combo]);
+  assert.equal(state.ai.shield, 0);
+  assert.equal(state.ai.lp, 3700);
+  assert.equal(fire.tempAtk, 200);
+  assert.equal(wind.tempAtk, 200);
+  assert.ok(events.some((event) =>
+    event.type === "DAMAGE_DEALT" &&
+    event.playerId === "ai" &&
+    event.requested === 400 &&
+    event.blocked === 100 &&
+    event.amount === 300 &&
+    event.sourceCardId === combo.uid
+  ));
+  assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.amount === 200).length, 2);
+});
+
 test("rejects engine-backed spells in illegal phases without consuming the card", () => {
   const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
   const state = appState({ phase: PHASES.draw });

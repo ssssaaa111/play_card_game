@@ -790,6 +790,7 @@ function distortionCurve(amount = 20) {
 
 function speak(text, force = false, owner = "player") {
   if (!text) return false;
+  if (!state.soundOn) return false;
   if (!state.voiceOn) return false;
   if (!state.voiceReady && !force) return false;
   if (!("speechSynthesis" in window)) return false;
@@ -2213,6 +2214,8 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
     effectTarget: targetInfo?.card || null,
     targetOwner: targetInfo?.owner || owner.owner
   };
+  let totalDamageDealt = 0;
+  let statModifiedCount = 0;
   events.forEach((event) => {
     if (event.type === "CARD_MOVED" && event.from?.zone === "grave" && event.to?.zone === "deck") {
       const found = findRuntimeCard(event.cardId);
@@ -2255,6 +2258,7 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
         addLog(`${target.owner === "player" ? "你的" : "AI 的"}护盾吸收了 ${blocked} 点伤害。`);
       }
       if (dealt > 0) {
+        totalDamageDealt += dealt;
         playSound("damage");
         playLifeDelta(target.owner, -dealt);
         animateAvatar(target.owner, "hit");
@@ -2268,6 +2272,7 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       if (!found) return;
       result.effectTarget = found.card;
       result.targetOwner = found.owner;
+      statModifiedCount += 1;
       addLog(`${found.card.name} 因 ${card.name} ${statChangeText(event)}。`);
     }
     if (event.type === "ABILITY_GRANTED" && event.ability === "directAttack") {
@@ -2288,6 +2293,10 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       playEpicAction("攻击重置", "attack");
     }
   });
+  if (card.effect === "fireWindCombo" && statModifiedCount > 0) {
+    playEpicAction("炎岚", "attack");
+    addLog(`${card.name} 造成 ${totalDamageDealt} 点伤害，并强化我方全体怪兽。`);
+  }
   return result;
 }
 
@@ -4200,6 +4209,8 @@ function toggleSound() {
   if (state.soundOn) {
     ensureAudio();
     playSound("turn");
+  } else {
+    stopVoiceAudio();
   }
   render();
 }

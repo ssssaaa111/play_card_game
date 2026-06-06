@@ -89,6 +89,10 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 200 },
     { op: "drawCards", player: "self", count: 1 }
   ], { requirements: [{ type: "minDistinctElements", player: "self", count: 2 }] }),
+  fireWindCombo: oneShot([
+    { op: "dealDamage", player: "rival", amount: 400 },
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 200 }
+  ], { requirements: [{ type: "requiredElements", player: "self", elements: ["fire", "wind"] }] }),
   lightShadowCombo: oneShot([
     { op: "gainShield", player: "self", amount: 600 },
     { op: "drawCards", player: "self", count: 1 }
@@ -863,20 +867,34 @@ function validateEffectRequirements(definition, state, action, card) {
   for (const requirement of requirements) {
     if (requirement.type === "minDistinctElements") {
       const playerId = resolvePlayerRef(requirement.player, action);
-      const player = requirePlayer(state, playerId);
-      const elements = new Set(
-        player.monsterZone
-          .map((cardId) => requireCard(state, cardId).element)
-          .filter(Boolean)
-      );
+      const elements = monsterElementSet(state, playerId);
       const count = Math.max(0, Number(requirement.count) || 0);
       if (elements.size < count) {
         throw new GameRuleError(`Effect ${card.effect || card.id} requires at least ${count} distinct elements`);
       }
       continue;
     }
+    if (requirement.type === "requiredElements") {
+      const playerId = resolvePlayerRef(requirement.player, action);
+      const elements = monsterElementSet(state, playerId);
+      const requiredElements = Array.isArray(requirement.elements) ? requirement.elements : [];
+      const missing = requiredElements.filter((element) => !elements.has(element));
+      if (missing.length > 0) {
+        throw new GameRuleError(`Effect ${card.effect || card.id} requires elements ${requiredElements.join(", ")}`);
+      }
+      continue;
+    }
     throw new GameRuleError(`Unsupported effect requirement ${requirement.type}`);
   }
+}
+
+function monsterElementSet(state, playerId) {
+  const player = requirePlayer(state, playerId);
+  return new Set(
+    player.monsterZone
+      .map((cardId) => requireCard(state, cardId).element)
+      .filter(Boolean)
+  );
 }
 
 function validateEffectTarget(definition, state, action, card) {

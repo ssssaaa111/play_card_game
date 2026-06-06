@@ -142,6 +142,7 @@ npm test
 - `星尘回收` 会通过 `CARD_MOVED` 把墓地目标放回卡组顶，再通过 `CARDS_DRAWN` 抽回手牌，UI 只按事件回放移动和抽卡。
 - `晨昏星界` 会通过 `SHIELD_GAINED` 获得护盾并通过 `CARDS_DRAWN` 抽卡，组合条件仍在发动前校验。
 - `元素共鸣` 会通过 `STAT_MODIFIED` 强化我方全体怪兽，并通过 `CARDS_DRAWN` 抽卡；至少 2 种属性的条件已进入引擎 `requirements` 校验。
+- `炎岚合击` 会通过 `DAMAGE_DEALT` 造成伤害，并通过 `STAT_MODIFIED` 强化我方全体怪兽；火+风属性条件已进入引擎 `requirements` 校验。
 - 直接攻击使用统一校验：`validateAttackTarget` 会拦截非法直击，玩家点对方角色时使用 `-1` 作为直击目标，`星隙穿透` 会通过 `ABILITY_GRANTED` 授予直击许可，并回放成 UI 的 `directAttacks` 资源，结算直击后自动消耗。
 - 目标选择使用 `pendingTarget` 和 `targetSelect` 行动窗口：发动指定目标魔法后先高亮合法目标，点击合法怪兽后才移动卡牌并结算效果。
 - 魔法效果统一挂在 `spellEffects` 注册表里，每个效果包含发动条件、实际结算、演出文案和 AI 评分，避免继续堆硬编码分支。
@@ -157,7 +158,7 @@ npm test
 - 音效仍使用 Web Audio 合成，包含抽卡、召唤、攻击、击破、护盾、魔法和陷阱反馈。
 - 语音已回退为浏览器自带 `speechSynthesis`，不再播放 `assets/voice/` 里的预生成 TTS 文件。
 - 新语音开始时会取消上一句，先避免多套语音混播和队列拖尾问题。
-- 语音开关会拦住强制胜负语音；测试模式默认关闭语音时，决斗败北也不会朗读。
+- 音效开关作为声音总闸，会同时停止和拦截语音；语音开关也会拦住强制胜负语音。测试模式默认关闭声音时，决斗败北也不会朗读。
 - `assets/voice/` 和 `tools/generate-voices.ps1` 暂时保留，后面如果重新做真人感语音可以继续用。
 
 ## 下一步可做

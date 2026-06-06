@@ -160,6 +160,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const battleTrance = getCardEffectDefinition("battleTrance");
   const lightShadowCombo = getCardEffectDefinition("lightShadowCombo");
   const elementEcho = getCardEffectDefinition("elementEcho");
+  const fireWindCombo = getCardEffectDefinition("fireWindCombo");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
@@ -191,6 +192,13 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.deepEqual(elementEcho.operations, [
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 200 },
     { op: "drawCards", player: "self", count: 1 }
+  ]);
+  assert.deepEqual(fireWindCombo.requirements, [
+    { type: "requiredElements", player: "self", elements: ["fire", "wind"] }
+  ]);
+  assert.deepEqual(fireWindCombo.operations, [
+    { op: "dealDamage", player: "rival", amount: 400 },
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 200 }
   ]);
   assert.notEqual(typeof draw2, "function");
 });
@@ -605,6 +613,70 @@ test("element-echo rejects fields with fewer than two distinct elements", () => 
     /requires at least 2 distinct elements/
   );
   assert.deepEqual(engine.getState().players[PLAYER].hand, ["echo-bad"]);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, []);
+});
+
+test("fire-wind combo damages the rival and buffs all own monsters through events", () => {
+  const state = makeState({
+    cards: [
+      card("firewind-1", { templateId: "flame-gale-burst", effect: "fireWindCombo" }),
+      card("fire-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900, element: "fire" }),
+      card("wind-1", { templateId: "gale-rogue", type: "monster", atk: 1300, def: 1100, element: "wind" })
+    ],
+    player: {
+      hand: ["firewind-1"],
+      monsterZone: ["fire-1", "wind-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "firewind-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.players[AI].lp, MAX_LP - 400);
+  assert.equal(next.cards["fire-1"].tempAtk, 200);
+  assert.equal(next.cards["wind-1"].tempAtk, 200);
+  assert.deepEqual(next.players[PLAYER].grave, ["firewind-1"]);
+  assert.ok(events.some((event) =>
+    event.type === "DAMAGE_DEALT" &&
+    event.playerId === AI &&
+    event.requested === 400 &&
+    event.amount === 400 &&
+    event.sourceCardId === "firewind-1"
+  ));
+  assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.amount === 200).length, 2);
+  assertValidGameState(next);
+});
+
+test("fire-wind combo rejects fields missing either required element", () => {
+  const state = makeState({
+    cards: [
+      card("firewind-bad", { templateId: "flame-gale-burst", effect: "fireWindCombo" }),
+      card("fire-only", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900, element: "fire" })
+    ],
+    player: {
+      hand: ["firewind-bad"],
+      monsterZone: ["fire-only"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "ACTIVATE_CARD",
+      playerId: PLAYER,
+      rivalId: AI,
+      cardId: "firewind-bad"
+    }),
+    /requires elements fire, wind/
+  );
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["firewind-bad"]);
   assert.deepEqual(engine.getState().players[PLAYER].grave, []);
 });
 
