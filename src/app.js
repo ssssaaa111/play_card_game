@@ -13,6 +13,7 @@ import {
   canDispatchTrapFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchSetTrapFromUiState,
@@ -2631,9 +2632,19 @@ function resolveAfterAttackBattleFeedback(owner, attacker, events) {
   }
 }
 
-function resolveBattleWithEngine(owner, rival, attackerIndex, targetIndex) {
+function declareAttackWithEngine(owner, rival, attackerIndex, targetIndex) {
   try {
-    return dispatchResolveBattleFromUiState(state, owner.owner, rival.owner, attackerIndex, targetIndex);
+    return dispatchDeclareAttackFromUiState(state, owner.owner, rival.owner, attackerIndex, targetIndex);
+  } catch (error) {
+    cue(error.message || "攻击宣言失败。");
+    console.error(error);
+    return null;
+  }
+}
+
+function resolveBattleWithEngine(owner, rival, attackerIndex, targetIndex, options = {}) {
+  try {
+    return dispatchResolveBattleFromUiState(state, owner.owner, rival.owner, attackerIndex, targetIndex, options);
   } catch (error) {
     cue(error.message || "战斗结算失败。");
     console.error(error);
@@ -2665,6 +2676,13 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   }
   const impactBefore = attackImpactSnapshot(owner, rival);
   const attackContext = { attackerIndex, targetIndex };
+  const declarationEvents = declareAttackWithEngine(owner, rival, attackerIndex, targetIndex);
+  if (!declarationEvents) return false;
+  const attackEvent = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  if (attackEvent) {
+    attackContext.targetEffectId = attackEvent.id;
+    attackContext.attackerCardId = attackEvent.attackerCardId;
+  }
   const trapResult = await triggerTrap(rival, owner, "attack", attackContext);
   if (trapResult.cancelled) {
     if (trapResult.consumesAttack && runtimeCardId(owner.field[attackerIndex]) === runtimeCardId(attacker)) {
@@ -2717,7 +2735,9 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       checkGameOver();
       return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的直接攻击`);
     }
-    battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex);
+    battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex, {
+      declarationEventId: attackContext.targetEffectId
+    });
     if (!battleEvents) return false;
     playSound("attack-impact");
     playImpactExplosion(toEl);
@@ -2732,7 +2752,9 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     playDuelistLine(owner.owner, lineFor(owner.owner, "direct", attacker), false, "direct");
     playDuelistLine(rival.owner, lineFor(rival.owner, "hit"), false, "hit");
   } else {
-    battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex);
+    battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex, {
+      declarationEventId: attackContext.targetEffectId
+    });
     if (!battleEvents) return false;
     playSound("attack-impact");
     playImpactExplosion(toEl);

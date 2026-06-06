@@ -389,6 +389,9 @@ export class GameEngine {
       case "ACTIVATE_TRAP":
         this.#activateTrap(workingState, ctx, emit, action);
         break;
+      case "DECLARE_ATTACK":
+        this.#declareAttack(workingState, emit, action);
+        break;
       case "RESOLVE_BATTLE":
         this.#resolveBattle(workingState, ctx, emit, action);
         break;
@@ -526,18 +529,18 @@ export class GameEngine {
     });
   }
 
-  #resolveBattle(state, ctx, emit, action) {
+  #declareAttack(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.battle], action.type);
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
-    const { attacker, target, direct } = validateBattleDeclaration(state, action.playerId, rivalId, action);
+    const { target, direct } = validateBattleDeclaration(state, action.playerId, rivalId, action);
 
     emit("TIMING_CHANGED", {
       playerId: action.playerId,
       from: state.machine.timing,
       to: Timing.attackDeclaration
     });
-    emit("ATTACK_DECLARED", {
+    const attackEvent = emit("ATTACK_DECLARED", {
       playerId: action.playerId,
       rivalId,
       attackerCardId: action.attackerCardId,
@@ -547,6 +550,48 @@ export class GameEngine {
       phase: state.turn.phase,
       timing: state.machine.timing
     });
+    emit("RESPONSE_WINDOW_OPENED", {
+      playerId: rivalId,
+      timing: Timing.attackDeclaration,
+      windowType: ResponseWindow.optional,
+      triggerEventId: attackEvent.id,
+      prompt: "attack",
+      context: {
+        attackerPlayerId: action.playerId,
+        rivalId,
+        attackerCardId: action.attackerCardId,
+        targetCardId: target?.id || null,
+        targetPlayerId: direct ? rivalId : null,
+        direct
+      }
+    });
+  }
+
+  #resolveBattle(state, ctx, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    requirePhase(state, [Phase.battle], action.type);
+    const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
+    const { attacker, target, direct } = validateBattleDeclaration(state, action.playerId, rivalId, action);
+
+    let declarationEventId = action.declarationEventId || null;
+    if (!declarationEventId) {
+      emit("TIMING_CHANGED", {
+        playerId: action.playerId,
+        from: state.machine.timing,
+        to: Timing.attackDeclaration
+      });
+      const attackEvent = emit("ATTACK_DECLARED", {
+        playerId: action.playerId,
+        rivalId,
+        attackerCardId: action.attackerCardId,
+        targetCardId: target?.id || null,
+        targetPlayerId: direct ? rivalId : null,
+        direct,
+        phase: state.turn.phase,
+        timing: state.machine.timing
+      });
+      declarationEventId = attackEvent.id;
+    }
     emit("TIMING_CHANGED", {
       playerId: action.playerId,
       from: state.machine.timing,
@@ -592,6 +637,7 @@ export class GameEngine {
       attackerCardId: action.attackerCardId,
       targetCardId: target?.id || null,
       direct,
+      declarationEventId,
       outcome
     });
     emit("TIMING_CHANGED", {
@@ -1000,7 +1046,8 @@ function applyResponseWindowOpened(state, event) {
     type: event.windowType,
     timing: event.timing,
     triggerEventId: event.triggerEventId || null,
-    prompt: event.prompt || null
+    prompt: event.prompt || null,
+    context: clone(event.context || {})
   };
 }
 

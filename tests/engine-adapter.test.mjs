@@ -8,6 +8,7 @@ import {
   canDispatchSummonEffectFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchSetTrapFromUiState,
@@ -327,6 +328,34 @@ test("dispatches battle resolution and applies direct damage to UI state", () =>
   assert.ok(events.some((event) => event.type === "ATTACK_DECLARED" && event.direct === true));
   assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === attacker.uid));
   assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 1000));
+});
+
+test("dispatches attack declaration as a response-window event without resolving battle", () => {
+  const attacker = uiMonster("attacker-declare", "star-lancer");
+  attacker.atk = 1800;
+  const target = uiMonster("target-declare", "iron-guardian");
+  target.ownerId = "ai";
+  target.def = 2100;
+  target.mode = "defense";
+  const state = appState({ phase: PHASES.battle });
+  state.gameEvents = [{ id: 41, type: "COMMAND_DISPATCHED", playerId: "player", commandType: "TEST_SETUP", command: {} }];
+  state.player.field[0] = attacker;
+  state.ai.field[1] = target;
+
+  const events = dispatchDeclareAttackFromUiState(state, "player", "ai", 0, 1);
+  const declared = events.find((event) => event.type === "ATTACK_DECLARED");
+  const windowOpened = events.find((event) => event.type === "RESPONSE_WINDOW_OPENED");
+
+  assert.equal(attacker.used, undefined);
+  assert.equal(state.player.lp, 4000);
+  assert.equal(state.ai.field[1], target);
+  assert.equal(declared.id, 44);
+  assert.equal(declared.targetCardId, target.uid);
+  assert.equal(windowOpened.playerId, "ai");
+  assert.equal(windowOpened.triggerEventId, declared.id);
+  assert.equal(windowOpened.context.attackerCardId, attacker.uid);
+  assert.ok(!events.some((event) => event.type === "DAMAGE_DEALT"));
+  assert.equal(state.gameEvents.at(-1).type, "RESPONSE_WINDOW_OPENED");
 });
 
 test("dispatches battle resolution and applies target destruction to fixed UI zones", () => {

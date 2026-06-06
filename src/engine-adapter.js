@@ -73,6 +73,8 @@ function enginePhaseFromUiPhase(phase) {
 
 export function buildEngineStateFromUiState(uiState) {
   const cards = {};
+  const events = Array.isArray(uiState.gameEvents) ? uiState.gameEvents.map((event) => ({ ...event })) : [];
+  const nextEventId = events.reduce((largest, event) => Math.max(largest, Number(event.id) || 0), 0) + 1;
   ownerIds.forEach((ownerId) => {
     const duelist = uiState[ownerId];
     if (!duelist) return;
@@ -101,8 +103,8 @@ export function buildEngineStateFromUiState(uiState) {
       player: uiAbilityEntries(uiState.player),
       ai: uiAbilityEntries(uiState.ai)
     },
-    events: [],
-    nextEventId: 1
+    events,
+    nextEventId
   };
 }
 
@@ -338,7 +340,28 @@ export function dispatchActivateTrapFromUiState(uiState, playerId, rivalId, trap
   return applyUiGameEvents(uiState, events);
 }
 
-export function dispatchResolveBattleFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex) {
+export function dispatchDeclareAttackFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex) {
+  const duelist = uiDuelist(uiState, playerId);
+  const rival = uiDuelist(uiState, rivalId);
+  const attacker = duelist.field[attackerIndex];
+  if (!attacker) throw new Error(`No attacker at index ${attackerIndex}`);
+  const target = targetIndex >= 0 ? rival.field[targetIndex] : null;
+  if (targetIndex >= 0 && !target) throw new Error(`No battle target at index ${targetIndex}`);
+
+  const action = {
+    type: "DECLARE_ATTACK",
+    playerId,
+    rivalId,
+    attackerCardId: cardKey(attacker)
+  };
+  if (target) action.targetCardId = cardKey(target);
+
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch(action);
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchResolveBattleFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex, options = {}) {
   const duelist = uiDuelist(uiState, playerId);
   const rival = uiDuelist(uiState, rivalId);
   const attacker = duelist.field[attackerIndex];
@@ -353,6 +376,7 @@ export function dispatchResolveBattleFromUiState(uiState, playerId, rivalId, att
     attackerCardId: cardKey(attacker)
   };
   if (target) action.targetCardId = cardKey(target);
+  if (options.declarationEventId) action.declarationEventId = options.declarationEventId;
 
   const engine = new GameEngine(buildEngineStateFromUiState(uiState));
   const events = engine.dispatch(action);

@@ -1419,6 +1419,87 @@ test("battle resolution rejects illegal battle declarations without consuming at
   assert.equal(defenseAttackerEngine.getState().cards["defender-1"].used, undefined);
 });
 
+test("attack declaration opens an engine-owned response window without resolving battle", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("target-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      monsterZone: ["target-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1"
+  });
+  const next = engine.getState();
+  const declared = events.find((event) => event.type === "ATTACK_DECLARED");
+  const windowOpened = events.find((event) => event.type === "RESPONSE_WINDOW_OPENED");
+
+  assert.equal(next.cards["attacker-1"].used, undefined);
+  assert.deepEqual(next.players[AI].monsterZone, ["target-1"]);
+  assert.equal(next.players[PLAYER].lp, MAX_LP);
+  assert.equal(next.machine.timing, Timing.attackDeclaration);
+  assert.equal(next.machine.responseWindow.playerId, AI);
+  assert.equal(next.machine.responseWindow.type, ResponseWindow.optional);
+  assert.equal(next.machine.responseWindow.timing, Timing.attackDeclaration);
+  assert.equal(declared.targetCardId, "target-1");
+  assert.equal(windowOpened.triggerEventId, declared.id);
+  assert.equal(windowOpened.context.attackerCardId, "attacker-1");
+  assert.equal(windowOpened.context.targetCardId, "target-1");
+  assert.ok(events.some((event) => event.type === "TIMING_CHANGED" && event.to === Timing.attackDeclaration));
+  assert.ok(!events.some((event) => event.type === "DAMAGE_DEALT"));
+  assert.ok(!events.some((event) => event.type === "MONSTER_USED"));
+  assertValidGameState(next);
+});
+
+test("attack declaration rejects illegal targets before response timing opens", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("guard-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      monsterZone: ["guard-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "DECLARE_ATTACK",
+      playerId: PLAYER,
+      rivalId: AI,
+      attackerCardId: "attacker-1"
+    }),
+    /must attack a monster before attacking directly/
+  );
+  assert.equal(engine.getState().machine.responseWindow, null);
+  assert.equal(engine.getState().machine.timing, Timing.battleOpen);
+  assert.equal(engine.getState().cards["attacker-1"].used, undefined);
+});
+
 test("after-attack monster effects resolve through battle events", () => {
   const growState = makeState({
     cards: [
