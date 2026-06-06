@@ -333,6 +333,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"combo-spell": runComboSpellSmoke/);
   assert.match(smoke, /"ace-attack": runAceAttackSmoke/);
   assert.match(smoke, /"double-attack": runDoubleAttackSmoke/);
+  assert.match(smoke, /"battle-trance-ready": runBattleTranceReadySmoke/);
   assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
   assert.match(smoke, /"trap-choice": runTrapChoiceSmoke/);
   assert.match(smoke, /"trap-choice-double": runTrapChoiceDoubleSmoke/);
@@ -369,6 +370,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "combo-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ace-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "battle-trance-ready"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);

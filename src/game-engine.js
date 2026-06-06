@@ -94,7 +94,14 @@ export const defaultCardEffects = Object.freeze({
   ], { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }),
   battleTrance: oneShot([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
-    { op: "grantAbility", player: "self", ability: Ability.attackReset, uses: 1, duration: "turn" }
+    {
+      op: "readyMonsterOrGrantAbility",
+      player: "self",
+      cardId: "$action.targetCardId",
+      ability: Ability.attackReset,
+      uses: 1,
+      duration: "turn"
+    }
   ], { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }),
   elementEcho: oneShot([
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 200 },

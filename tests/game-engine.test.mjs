@@ -192,7 +192,14 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   ]);
   assert.deepEqual(battleTrance.operations, [
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
-    { op: "grantAbility", player: "self", ability: Ability.attackReset, uses: 1, duration: "turn" }
+    {
+      op: "readyMonsterOrGrantAbility",
+      player: "self",
+      cardId: "$action.targetCardId",
+      ability: Ability.attackReset,
+      uses: 1,
+      duration: "turn"
+    }
   ]);
   assert.deepEqual(lightShadowCombo.operations, [
     { op: "gainShield", player: "self", amount: 600 },
@@ -592,6 +599,43 @@ test("battle-trance buffs the strongest monster and grants attack reset through 
     event.uses === 1 &&
     event.sourceCardId === "trance-1"
   ));
+  assertValidGameState(next);
+});
+
+test("battle-trance immediately readies its target when that monster already attacked", () => {
+  const state = makeState({
+    cards: [
+      card("trance-used", { templateId: "battle-trance", effect: "battleTrance" }),
+      card("lancer-used", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000, used: true }),
+      card("drake-used", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900, used: false })
+    ],
+    player: {
+      hand: ["trance-used"],
+      monsterZone: ["lancer-used", "drake-used"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "trance-used",
+    targetCardId: "lancer-used"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["lancer-used"].tempAtk, 200);
+  assert.equal(next.cards["lancer-used"].used, false);
+  assert.equal(hasAbility(next, PLAYER, Ability.attackReset), false);
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_READIED" &&
+    event.cardId === "lancer-used" &&
+    event.beforeUsed === true &&
+    event.afterUsed === false &&
+    event.sourceCardId === "trance-used"
+  ));
+  assert.ok(!events.some((event) => event.type === "ABILITY_GRANTED" && event.ability === Ability.attackReset));
   assertValidGameState(next);
 });
 

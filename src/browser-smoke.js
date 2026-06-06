@@ -410,6 +410,37 @@ async function runDoubleAttackSmoke(ctx) {
   setSmokeStatus("passed", "double-attack");
 }
 
+async function runBattleTranceReadySmoke(ctx) {
+  setSmokeStatus("running", "battle-trance-ready");
+  await startSmokeDuel(ctx, "combo");
+  const ember = fieldCard(ctx.els, "player", "ember-drake");
+  clickSmokeElement(ember, "select ember for first attack");
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "first attack target");
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "ember attacks iron guardian");
+  await waitForSmoke(
+    () => ctx.state.phase === "battle" &&
+      ctx.state.player.field[0]?.id === "ember-drake" &&
+      ctx.state.player.field[0]?.used &&
+      !ctx.state.ai.field.some((card) => card?.id === "iron-guardian"),
+    "first attack resolved before battle trance",
+    10000
+  );
+  clickSmokeElement(handCard(ctx.els, "battle-trance"), "select battle trance");
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "battleTrance", "battle trance target window");
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "target used strongest monster");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "ember-drake" &&
+      ctx.state.player.field[0]?.used === false &&
+      (ctx.state.player.field[0]?.tempAtk || 0) >= 200,
+    "battle trance readies used target",
+    9000
+  );
+  if (!ctx.state.gameEvents.some((event) => event.type === "MONSTER_READIED")) {
+    throw new Error("battle-trance should ready the used monster through a MONSTER_READIED event");
+  }
+  setSmokeStatus("passed", "battle-trance-ready");
+}
+
 async function runAiDirectTrapSmoke(ctx) {
   setSmokeStatus("running", "ai-direct-trap");
   await startSmokeDuel(ctx, "directTrap");
@@ -631,6 +662,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "combo-spell": runComboSpellSmoke,
     "ace-attack": runAceAttackSmoke,
     "double-attack": runDoubleAttackSmoke,
+    "battle-trance-ready": runBattleTranceReadySmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
     "trap-choice-double": runTrapChoiceDoubleSmoke,

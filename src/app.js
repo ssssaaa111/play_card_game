@@ -2083,7 +2083,7 @@ const spellEffects = {
       const target = targetInfo?.card || strongestMonster(owner);
       if (!target) return {};
       buffCard(target, 200, card.name);
-      grantAttackReset(owner, null, 1);
+      grantAttackReset(owner, target, 1);
       return { effectTarget: target };
     }
   },
