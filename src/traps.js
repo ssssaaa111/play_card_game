@@ -48,14 +48,14 @@ export const trapDefinitions = {
     caption: "直击伤害归零",
     triggerText: "受到直接攻击时",
     cancelsEvent: true,
-    consumesAttack: false
+    consumesAttack: true
   },
   directRebound: {
     event: "direct",
     caption: "直击反弹",
     triggerText: "受到直接攻击时",
     cancelsEvent: true,
-    consumesAttack: false
+    consumesAttack: true
   },
   summonBurn: {
     event: "summon",

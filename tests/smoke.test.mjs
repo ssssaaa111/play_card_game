@@ -355,6 +355,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.doesNotMatch(app, /card\.onSummon === "(burn200|draw1|heal300|fireBuff|shield400|shadowBurn)"/);
   assert.match(smoke, /"skip-lock": runSkipLockSmoke/);
   assert.match(smoke, /"direct-guard": runDirectGuardSmoke/);
+  assert.match(smoke, /"direct-shield-consume": runDirectShieldConsumeSmoke/);
   assert.match(smoke, /"guard-counter": runGuardCounterSmoke/);
   assert.match(smoke, /"ai-guard-skip": runAiGuardSkipSmoke/);
   assert.match(smoke, /"summon-effects": runSummonEffectsSmoke/);
@@ -374,6 +375,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"trap-choice-double": runTrapChoiceDoubleSmoke/);
   assert.match(smoke, /"response-restart": runResponseRestartSmoke/);
   assert.match(smoke, /"chain-trap-choice": runChainTrapChoiceSmoke/);
+  assert.match(smoke, /"chain-weaken-resolution": runChainWeakenResolutionSmoke/);
   assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
   assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
@@ -382,6 +384,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /function doubleClickSmokeElement/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
   assert.match(smoke, /ctx\.els\.choiceConfirmBtn/);
+  assert.match(smoke, /守护刻印挡住直击后消耗攻击机会/);
+  assert.match(smoke, /弱化力场不取消攻击，削弱后继续结算并反杀攻击怪兽/);
+  assert.match(smoke, /ctx\.currentPlayerActions\(\)\.attack/);
   assert.match(smoke, /classList\.contains\("attack-target"\)/);
   assert.match(smoke, /敌方空召唤区不应作为攻击候选/);
   assert.match(smoke, /切换到破阵星芒/);
@@ -396,6 +401,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "direct-shield-consume"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "guard-counter"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-guard-skip"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "summon-effects"\)/);
@@ -415,6 +421,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "response-restart"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-trap-choice"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);

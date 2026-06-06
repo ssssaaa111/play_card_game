@@ -31,6 +31,6 @@ test("describes spell and trap rule lines", () => {
 
   assert.equal(cardRuleLine(targetedSpell), "规则：目标：我方最高");
   assert.equal(cardRuleLine(ordinarySpell), "规则：无需指定目标");
-  assert.equal(cardRuleLine(trap), "触发：受到直接攻击时 / 直击伤害归零");
+  assert.equal(cardRuleLine(trap), "触发：受到直接攻击时 / 直击伤害归零 / 消耗攻击");
   assert.match(cardZoomMeta(trap), /触发键：directShield/);
 });

@@ -1,4 +1,5 @@
 import { auditLogEntries } from './log-audit.js';
+import { cloneCardById } from './deck.js';
 
 function cardIds(list = []) {
   return list.map((card) => card?.id || null);
@@ -164,6 +165,37 @@ async function runDirectGuardSmoke(ctx) {
   if (!ctx.els.choiceActions.hidden) throw new Error("攻击目标点击后不应再等待二次确认");
   if (!ctx.state.player.field[0]?.used) throw new Error("成功直击应该消耗攻击机会");
   setSmokeStatus("passed", "direct-guard");
+}
+
+async function runDirectShieldConsumeSmoke(ctx) {
+  setSmokeStatus("running", "direct-shield-consume");
+  await startSmokeDuel(ctx, "direct");
+  const guard = cloneCardById("guard-sigil");
+  if (!guard) throw new Error("守护刻印测试卡不存在");
+  ctx.state.ai.traps[0] = guard;
+  const aiLpBefore = ctx.state.ai.lp;
+  const usedEventsBefore = countGameEvents(ctx.state, "MONSTER_USED");
+
+  clickSmokeElement(handCard(ctx.els, "star-breach"), "星隙穿透手牌");
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "星隙穿透确认可用");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认发动星隙穿透");
+  await waitForSmoke(() => ctx.state.player.directAttacks > 0, "获得直接攻击许可");
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "选择星轨枪兵");
+  clickSmokeElement(ctx.els.aiPanel, "直击 AI 玩家触发守护刻印");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.used &&
+      !ctx.state.ai.traps.some((card) => card?.id === "guard-sigil") &&
+      countGameEvents(ctx.state, "MONSTER_USED") > usedEventsBefore,
+    "守护刻印挡住直击后消耗攻击机会",
+    12000
+  );
+  if (ctx.state.ai.lp !== aiLpBefore) {
+    throw new Error("守护刻印应让直接攻击伤害归零");
+  }
+  if (ctx.currentPlayerActions().attack) {
+    throw new Error("守护刻印挡住直击后同一只怪兽不应还能继续攻击");
+  }
+  setSmokeStatus("passed", "direct-shield-consume");
 }
 
 async function runGuardCounterSmoke(ctx) {
@@ -665,6 +697,41 @@ async function runChainTrapChoiceSmoke(ctx) {
   setSmokeStatus("passed", "chain-trap-choice");
 }
 
+async function runChainWeakenResolutionSmoke(ctx) {
+  setSmokeStatus("running", "chain-weaken-resolution");
+  await startSmokeDuel(ctx, "chain");
+  ctx.state.ai.hand = [];
+  ctx.state.ai.deck = [];
+  clickSmokeElement(handCard(ctx.els, "gale-mage"), "召唤疾风术士");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), "我方怪兽区 1");
+  await waitForSmoke(() => ctx.state.player.field[0]?.id === "gale-mage", "疾风术士召唤成功");
+  clickSmokeElement(handCard(ctx.els, "weakening-web"), "选择弱化力场");
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "盖放弱化力场");
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "weakening-web"), "弱化力场盖放成功");
+  const aiLpBefore = ctx.state.ai.lp;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "弱化力场响应窗口", 16000);
+  if (!ctx.els.chainText.textContent.includes("弱化力场")) {
+    throw new Error("弱化力场响应提示缺少陷阱名称");
+  }
+  clickSmokeElement(ctx.els.chainYes, "确认发动弱化力场");
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "sky-raider") &&
+      ctx.state.player.field.some((card) => card?.id === "gale-mage") &&
+      ctx.state.ai.lp < aiLpBefore,
+    "弱化力场不取消攻击，削弱后继续结算并反杀攻击怪兽",
+    12000
+  );
+  if (!ctx.state.log.some((entry) => entry.includes("弱化力场") && entry.includes("攻击继续结算"))) {
+    throw new Error("弱化力场日志应说明攻击继续结算");
+  }
+  const audit = auditLogEntries(ctx.state.timeline);
+  if (!audit.ok) {
+    throw new Error(`弱化力场结算日志审计失败：${audit.issues.map((issue) => issue.message).join(" / ")}`);
+  }
+  setSmokeStatus("passed", "chain-weaken-resolution");
+}
+
 async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("running", "mode-auto-end");
   await startSmokeDuel(ctx, "combo");
@@ -741,6 +808,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
   const smokeRuns = {
     "skip-lock": runSkipLockSmoke,
     "direct-guard": runDirectGuardSmoke,
+    "direct-shield-consume": runDirectShieldConsumeSmoke,
     "guard-counter": runGuardCounterSmoke,
     "ai-guard-skip": runAiGuardSkipSmoke,
     "summon-effects": runSummonEffectsSmoke,
@@ -760,6 +828,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trap-choice-double": runTrapChoiceDoubleSmoke,
     "response-restart": runResponseRestartSmoke,
     "chain-trap-choice": runChainTrapChoiceSmoke,
+    "chain-weaken-resolution": runChainWeakenResolutionSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
     "pause-detail": runPauseDetailSmoke

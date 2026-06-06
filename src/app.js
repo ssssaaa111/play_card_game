@@ -2539,7 +2539,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playGuardShield(shieldTarget);
     playEpicAction("防御", "guard");
     addLog(`${trap.name} 让直接攻击伤害变为 0。`);
-    return { cancelled: true, shielded: true };
+    return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
   if (trap.trigger === "directRebound") {
@@ -2553,7 +2553,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playEpicAction("反弹", "guard");
     addLog(`${trap.name} 让直接攻击伤害变为 0，并反弹 500 点伤害。`);
     speak(`${trap.name} 反弹了直接攻击。`);
-    return { cancelled: true, shielded: true };
+    return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
   if (trap.trigger === "summonBurn") {
@@ -2652,6 +2652,18 @@ function resolveBattleWithEngine(owner, rival, attackerIndex, targetIndex, optio
   }
 }
 
+function consumeCancelledAttackWithEngine(owner, attacker, attackerIndex) {
+  if (runtimeCardId(owner.field[attackerIndex]) !== runtimeCardId(attacker)) return true;
+  try {
+    dispatchMarkMonsterUsedFromUiState(state, owner.owner, attackerIndex);
+    return true;
+  } catch (error) {
+    cue(error.message || "攻击机会消费失败。");
+    console.error(error);
+    return false;
+  }
+}
+
 async function attack(owner, rival, attackerIndex, targetIndex) {
   state.ruleCheckIssue = null;
   const attacker = owner.field[attackerIndex];
@@ -2685,14 +2697,8 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   }
   const trapResult = await triggerTrap(rival, owner, "attack", attackContext);
   if (trapResult.cancelled) {
-    if (trapResult.consumesAttack && runtimeCardId(owner.field[attackerIndex]) === runtimeCardId(attacker)) {
-      try {
-        dispatchMarkMonsterUsedFromUiState(state, owner.owner, attackerIndex);
-      } catch (error) {
-        cue(error.message || "攻击机会消费失败。");
-        console.error(error);
-        return false;
-      }
+    if (trapResult.consumesAttack) {
+      if (!consumeCancelledAttackWithEngine(owner, attacker, attackerIndex)) return false;
     }
     checkGameOver();
     return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
@@ -2731,7 +2737,9 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   if (!target) {
     const shield = await triggerTrap(rival, owner, "direct", { attackerIndex, targetIndex: resolvedTargetIndex });
     if (shield.cancelled) {
-      consumeQueuedAttackReset(owner, attacker, attackerIndex);
+      if (shield.consumesAttack) {
+        if (!consumeCancelledAttackWithEngine(owner, attacker, attackerIndex)) return false;
+      }
       checkGameOver();
       return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的直接攻击`);
     }

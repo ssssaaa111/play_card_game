@@ -45,5 +45,5 @@ test("builds card display tags and rule summaries", () => {
   assert.equal(spellTargetSummary("draw2"), "");
   assert.equal(cardRuleText(targetedSpell), "目标:我方最高");
   assert.equal(cardRuleText(ordinarySpell), "N");
-  assert.equal(cardRuleText(trap), "受到直接攻击时 / 直击伤害归零");
+  assert.equal(cardRuleText(trap), "受到直接攻击时 / 直击伤害归零 / 消耗攻击");
 });

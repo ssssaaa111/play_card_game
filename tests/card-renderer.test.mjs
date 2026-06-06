@@ -33,7 +33,7 @@ test("builds spell and trap render models with rule summaries", () => {
   const locked = cardRenderModel({ type: "monster", name: "星轨枪兵", element: "wind", stars: 4, atk: 1800, def: 1000, icon: "星", text: "测试。", mode: "attack" }, { attacksLocked: true });
 
   assert.deepEqual(spell.stats, ["SPELL", "目标:我方最高"]);
-  assert.deepEqual(trap.stats, ["TRAP", "受到直接攻击时 / 直击伤害归零"]);
+  assert.deepEqual(trap.stats, ["TRAP", "受到直接攻击时 / 直击伤害归零 / 消耗攻击"]);
   assert.equal(locked.statusText, "攻击已跳过");
 });
 

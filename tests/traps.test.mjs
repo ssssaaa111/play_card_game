@@ -57,7 +57,8 @@ test("marks which cancelled traps consume the attack chance", () => {
   assert.equal(trapConsumesAttack("attackNegate"), true);
   assert.equal(trapConsumesAttack("redirectAttack"), false);
   assert.equal(trapConsumesAttack("attackDestroy"), false);
-  assert.equal(trapConsumesAttack("directShield"), false);
+  assert.equal(trapConsumesAttack("directShield"), true);
+  assert.equal(trapConsumesAttack("directRebound"), true);
   assert.equal(trapConsumesAttack("missingTrigger"), false);
 });
 
