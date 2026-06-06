@@ -20,6 +20,12 @@ function compareAttackTargets(a, b) {
   return a.targetIndex - b.targetIndex;
 }
 
+function isUsefulAttackTarget(entry) {
+  if (entry.diff > 0) return true;
+  if (entry.diff === 0 && entry.target.mode !== "defense") return true;
+  return false;
+}
+
 export function chooseAiAttackTarget({
   attacker,
   targets = [],
@@ -36,8 +42,8 @@ export function chooseAiAttackTarget({
 
   if (targetEntries.length === 0) return -1;
 
-  const beatable = targetEntries.filter((entry) => entry.diff >= 0);
-  const blockedByBoard = beatable.length === 0;
+  const usefulTargets = targetEntries.filter(isUsefulAttackTarget);
+  const blockedByBoard = usefulTargets.length === 0;
   const shouldDirect = canUseDirect && (
     attackerAtk >= playerLp ||
     blockedByBoard ||
@@ -45,6 +51,6 @@ export function chooseAiAttackTarget({
   );
 
   if (shouldDirect) return -1;
-  if (beatable.length > 0) return beatable[0].targetIndex;
+  if (usefulTargets.length > 0) return usefulTargets[0].targetIndex;
   return null;
 }

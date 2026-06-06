@@ -71,6 +71,19 @@ test("redirect trap scenario places guard targets in defense mode", () => {
   assert.equal(setup.ai.field[0].mode, "attack");
 });
 
+test("guard skip scenario starts with a locked defense wall", () => {
+  const setup = buildScenarioState(scenarioSetups.guardSkip, {
+    playerPreset: "balanced",
+    aiPreset: "balanced"
+  });
+
+  assert.deepEqual(ids(setup.player.field).slice(0, 1), ["iron-guardian"]);
+  assert.equal(setup.player.field[0].mode, "defense");
+  assert.equal(setup.player.field[0].changedMode, true);
+  assert.deepEqual(ids(setup.ai.field).slice(0, 1), ["star-lancer"]);
+  assert.deepEqual(ids(setup.ai.deck), ["guard-sigil"]);
+});
+
 test("builds preset scenario decks without cards reserved in visible zones", () => {
   const setup = buildScenarioState(scenarioSetups.combo, {
     playerPreset: "balanced",

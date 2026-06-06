@@ -223,6 +223,16 @@ export const scenarioSetups = {
     aiField: ["star-lancer"],
     aiHand: []
   },
+  guardSkip: {
+    label: "守备停攻",
+    text: "我方铁壁守卫守备表示，AI 星轨枪兵攻击力不足，用来验证 AI 不会白撞高防。",
+    goal: "结束回合后 AI 应保留攻击，不造成伤害，也不消耗怪兽。",
+    playerHand: [],
+    playerField: [{ id: "iron-guardian", mode: "defense", changedMode: true }],
+    aiField: ["star-lancer"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
   skipLock: {
     label: "跳攻锁定",
     text: "我方场上已有可攻击怪兽，手牌含新怪兽，用来验证跳过攻击后新召唤也不能攻击。",

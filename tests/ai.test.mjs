@@ -29,7 +29,7 @@ test("AI attacks a beatable guard instead of a stronger defense target", () => {
   assert.equal(target, 0);
 });
 
-test("AI skips attacks that would only destroy its own monster", () => {
+test("AI skips attacks that would only cost LP into stronger defense", () => {
   const target = chooseAiAttackTarget({
     attacker: monster({ name: "星轨枪兵", atk: 1800 }),
     targets: [
@@ -39,6 +39,30 @@ test("AI skips attacks that would only destroy its own monster", () => {
   });
 
   assert.equal(target, null);
+});
+
+test("AI skips equal defense targets because they only consume attacks", () => {
+  const target = chooseAiAttackTarget({
+    attacker: monster({ name: "星轨枪兵", atk: 1800 }),
+    targets: [
+      monster({ name: "同防守卫", mode: "defense", def: 1800 })
+    ],
+    playerLp: 4000
+  });
+
+  assert.equal(target, null);
+});
+
+test("AI still accepts equal attack targets as a trade", () => {
+  const target = chooseAiAttackTarget({
+    attacker: monster({ name: "星轨枪兵", atk: 1800 }),
+    targets: [
+      monster({ name: "同攻怪", mode: "attack", atk: 1800 })
+    ],
+    playerLp: 4000
+  });
+
+  assert.equal(target, 0);
 });
 
 test("AI uses direct attack permission when the board blocks normal attacks", () => {

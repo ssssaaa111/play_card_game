@@ -193,6 +193,31 @@ async function runGuardCounterSmoke(ctx) {
   setSmokeStatus("passed", "guard-counter");
 }
 
+async function runAiGuardSkipSmoke(ctx) {
+  setSmokeStatus("running", "ai-guard-skip");
+  await startSmokeDuel(ctx, "guardSkip");
+  const playerLpBefore = ctx.state.player.lp;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.aiRunning,
+    "AI 面对高守备保留攻击后回到玩家回合",
+    22000
+  );
+  if (ctx.state.player.lp !== playerLpBefore) {
+    throw new Error("AI 跳过无意义守备攻击时不应造成生命值变化");
+  }
+  if (!ctx.state.player.field.some((card) => card?.id === "iron-guardian")) {
+    throw new Error("AI 跳过守备攻击后铁壁守卫应仍在场");
+  }
+  if (!ctx.state.ai.field.some((card) => card?.id === "star-lancer")) {
+    throw new Error("AI 跳过守备攻击后星轨枪兵应仍在场");
+  }
+  if (!ctx.state.log.some((entry) => entry.includes("AI 保留 星轨枪兵"))) {
+    throw new Error("AI 应记录保留攻击，避免玩家以为流程卡住");
+  }
+  setSmokeStatus("passed", "ai-guard-skip");
+}
+
 async function runRedirectPromptSmoke(ctx) {
   setSmokeStatus("running", "redirect-prompt");
   await startSmokeDuel(ctx, "redirect");
@@ -598,6 +623,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "skip-lock": runSkipLockSmoke,
     "direct-guard": runDirectGuardSmoke,
     "guard-counter": runGuardCounterSmoke,
+    "ai-guard-skip": runAiGuardSkipSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,

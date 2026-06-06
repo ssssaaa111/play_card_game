@@ -315,14 +315,17 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="skipLock">跳攻锁定<\/option>/);
   assert.match(html, /<option value="directTrap">直击陷阱<\/option>/);
   assert.match(html, /<option value="trapChoice">陷阱选择<\/option>/);
+  assert.match(html, /<option value="guardSkip">守备停攻<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
   assert.match(data, /trapChoice: \{/);
+  assert.match(data, /guardSkip: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
   assert.match(smoke, /"skip-lock": runSkipLockSmoke/);
   assert.match(smoke, /"direct-guard": runDirectGuardSmoke/);
   assert.match(smoke, /"guard-counter": runGuardCounterSmoke/);
+  assert.match(smoke, /"ai-guard-skip": runAiGuardSkipSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
@@ -349,6 +352,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /点其它手牌会取消当前目标选择并切换/);
   assert.match(smoke, /攻击目标点击后不应再等待二次确认/);
   assert.match(smoke, /守备反击保留双方怪兽/);
+  assert.match(smoke, /AI 面对高守备保留攻击后回到玩家回合/);
   assert.match(smoke, /战斗阶段陷阱确认可用/);
   assert.match(smoke, /第 \$\{promptIndex\} 次直击风暴转移连锁弹窗/);
   assert.match(smoke, /所有可发动陷阱都应该高亮/);
@@ -357,6 +361,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "guard-counter"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "ai-guard-skip"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
