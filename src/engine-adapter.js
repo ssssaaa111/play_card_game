@@ -343,6 +343,12 @@ function trapResponseAction(uiState, playerId, rivalId, trapIndex, context = {})
 }
 
 export function dispatchTrapResponseFromUiState(uiState, playerId, rivalId, trapIndex, context = {}) {
+  const queuedEvents = dispatchQueueTrapResponseFromUiState(uiState, playerId, rivalId, trapIndex, context);
+  const resolutionEvents = dispatchResolveChainFromUiState(uiState, playerId);
+  return [...queuedEvents, ...resolutionEvents];
+}
+
+export function dispatchQueueTrapResponseFromUiState(uiState, playerId, rivalId, trapIndex, context = {}) {
   const { card, action } = trapResponseAction(uiState, playerId, rivalId, trapIndex, context);
   const engine = new GameEngine(buildEngineStateFromUiState(uiState));
   const events = [
@@ -353,9 +359,24 @@ export function dispatchTrapResponseFromUiState(uiState, playerId, rivalId, trap
       effectId: card.trigger || card.effect || null,
       targetEffectId: context.targetEffectId || null
     }),
-    ...engine.dispatch(action),
-    ...engine.dispatch({ type: "RESOLVE_CHAIN", playerId })
+    ...engine.dispatch(action)
   ];
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchPassResponsePriorityFromUiState(uiState, playerId, nextPlayerId) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "PASS_RESPONSE_PRIORITY",
+    playerId,
+    nextPlayerId
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchResolveChainFromUiState(uiState, playerId) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({ type: "RESOLVE_CHAIN", playerId });
   return applyUiGameEvents(uiState, events);
 }
 

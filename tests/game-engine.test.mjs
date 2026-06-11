@@ -1749,19 +1749,188 @@ test("timing, response windows, and chain links are explicit state machine event
     effectId: "attackNegate",
     targetEffectId: "attack-42"
   });
+  const activationEvents = engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "void-1",
+    targetEffectId: "attack-42"
+  });
 
   let next = engine.getState();
   assert.equal(next.machine.timing, Timing.attackDeclaration);
   assert.equal(next.machine.responseWindow.type, ResponseWindow.optional);
   assert.equal(next.machine.chain.length, 1);
   assert.equal(next.machine.chain[0].effectId, "attackNegate");
+  assert.equal(next.machine.chain[0].committed, true);
+  assert.ok(!activationEvents.some((event) => event.type === "EFFECT_NEGATED"));
 
   const resolveEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: PLAYER });
   next = engine.getState();
 
   assert.deepEqual(next.machine.chain, []);
   assert.equal(next.machine.responseWindow, null);
+  assert.ok(resolveEvents.some((event) => event.type === "EFFECT_NEGATED" && event.targetEffectId === "attack-42"));
   assert.ok(resolveEvents.some((event) => event.type === "CHAIN_RESOLVED"));
+});
+
+test("trap chain effects wait for resolution and resolve in last-in-first-out order", () => {
+  const state = makeState({
+    cards: [
+      card("chain-heal", { type: "trap", trigger: "chainHeal" }),
+      card("chain-burn", { type: "trap", trigger: "chainSelfBurn" })
+    ],
+    player: {
+      lp: 3500,
+      spellTrapZone: ["chain-heal", "chain-burn"]
+    },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.attackDeclaration;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.attackDeclaration,
+    resumeTiming: Timing.battleOpen,
+    triggerEventId: "attack-42"
+  };
+  const engine = new GameEngine(state, {
+    cardEffects: {
+      chainHeal: {
+        duration: EffectDuration.oneShot,
+        operations: [{ op: "heal", player: "self", amount: 700 }]
+      },
+      chainSelfBurn: {
+        duration: EffectDuration.oneShot,
+        operations: [{ op: "dealDamage", player: "self", amount: 500 }]
+      }
+    }
+  });
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "chain-heal",
+    effectId: "chainHeal",
+    targetEffectId: "attack-42"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "chain-heal"
+  });
+  assert.equal(engine.getState().players[PLAYER].lp, 3500);
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "chain-burn",
+    effectId: "chainSelfBurn",
+    targetEffectId: "chain-heal"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "chain-burn"
+  });
+  assert.equal(engine.getState().players[PLAYER].lp, 3500);
+
+  const resolveEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: PLAYER });
+  const effectEvents = resolveEvents.filter((event) => ["DAMAGE_DEALT", "LP_HEALED"].includes(event.type));
+
+  assert.equal(engine.getState().players[PLAYER].lp, 3700);
+  assert.deepEqual(effectEvents.map((event) => [event.type, event.sourceCardId]), [
+    ["DAMAGE_DEALT", "chain-burn"],
+    ["LP_HEALED", "chain-heal"]
+  ]);
+  assert.deepEqual(engine.getState().machine.chain, []);
+});
+
+test("response priority can pass to the rival before they add another chain link", () => {
+  const state = makeState({
+    cards: [
+      card("player-chain-heal", { type: "trap", trigger: "chainHeal" }),
+      card("ai-chain-burn", { ownerId: AI, type: "trap", trigger: "chainBurn" })
+    ],
+    player: {
+      lp: 3500,
+      spellTrapZone: ["player-chain-heal"]
+    },
+    ai: {
+      spellTrapZone: ["ai-chain-burn"]
+    },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.attackDeclaration;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.attackDeclaration,
+    resumeTiming: Timing.battleOpen,
+    triggerEventId: "attack-88"
+  };
+  const engine = new GameEngine(state, {
+    cardEffects: {
+      chainHeal: {
+        duration: EffectDuration.oneShot,
+        operations: [{ op: "heal", player: "self", amount: 700 }]
+      },
+      chainBurn: {
+        duration: EffectDuration.oneShot,
+        operations: [{ op: "dealDamage", player: "rival", amount: 500 }]
+      }
+    }
+  });
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "player-chain-heal",
+    effectId: "chainHeal"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "player-chain-heal"
+  });
+  const passEvents = engine.dispatch({
+    type: "PASS_RESPONSE_PRIORITY",
+    playerId: PLAYER,
+    nextPlayerId: AI
+  });
+
+  assert.equal(engine.getState().machine.responseWindow.playerId, AI);
+  assert.ok(passEvents.some((event) =>
+    event.type === "RESPONSE_PRIORITY_PASSED" && event.fromPlayerId === PLAYER && event.toPlayerId === AI
+  ));
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: AI,
+    cardId: "ai-chain-burn",
+    effectId: "chainBurn"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: "ai-chain-burn"
+  });
+
+  assert.equal(engine.getState().players[PLAYER].lp, 3500);
+  const resolveEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: AI });
+  assert.equal(engine.getState().players[PLAYER].lp, 3700);
+  assert.deepEqual(
+    resolveEvents
+      .filter((event) => event.type === "CHAIN_LINK_RESOLVED")
+      .map((event) => event.cardId),
+    ["ai-chain-burn", "player-chain-heal"]
+  );
 });
 
 test("only the designated responder can add a trap chain link", () => {

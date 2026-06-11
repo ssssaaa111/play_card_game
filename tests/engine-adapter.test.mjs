@@ -13,7 +13,10 @@ import {
   dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
+  dispatchPassResponsePriorityFromUiState,
+  dispatchQueueTrapResponseFromUiState,
   dispatchResolveBattleFromUiState,
+  dispatchResolveChainFromUiState,
   dispatchTrapResponseFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState
@@ -387,6 +390,50 @@ test("rebuilds the open response window and resolves a selected trap as one even
   assert.ok(responseEvents.some((event) => event.type === "EFFECT_NEGATED" && event.targetEffectId === declaration.id));
   assert.ok(responseEvents.some((event) => event.type === "CHAIN_RESOLVED"));
   assert.ok(responseEvents.some((event) => event.type === "RESPONSE_WINDOW_CLOSED"));
+  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
+  assert.deepEqual(buildEngineStateFromUiState(state).machine.chain, []);
+});
+
+test("queues opposing trap responses before resolving the shared chain in reverse order", () => {
+  const playerTrap = uiTrap("player-chain-flare", "summon-flare");
+  playerTrap.trigger = "summonBurn";
+  const aiTrap = uiTrap("ai-chain-rebound", "reversal-flare");
+  aiTrap.ownerId = "ai";
+  aiTrap.trigger = "directRebound";
+  const state = appState({ phase: PHASES.battle, turn: "ai" });
+  state.player.lp = 4000;
+  state.ai.lp = 4000;
+  state.player.traps[0] = playerTrap;
+  state.ai.traps[0] = aiTrap;
+
+  dispatchOpenResponseWindowFromUiState(state, "player", {
+    timing: "attackDeclaration",
+    resumeTiming: "battleOpen",
+    prompt: "attack",
+    triggerEventId: "attack-chain-1"
+  });
+  const playerEvents = dispatchQueueTrapResponseFromUiState(state, "player", "ai", 0, {
+    targetEffectId: "attack-chain-1"
+  });
+
+  assert.equal(state.ai.lp, 4000);
+  assert.ok(playerEvents.some((event) => event.type === "CHAIN_LINK_COMMITTED" && event.cardId === playerTrap.uid));
+  assert.equal(buildEngineStateFromUiState(state).machine.chain.length, 1);
+
+  dispatchPassResponsePriorityFromUiState(state, "player", "ai");
+  dispatchQueueTrapResponseFromUiState(state, "ai", "player", 0, {
+    targetEffectId: playerTrap.uid
+  });
+  const resolutionEvents = dispatchResolveChainFromUiState(state, "ai");
+
+  assert.equal(state.player.lp, 3500);
+  assert.equal(state.ai.lp, 3600);
+  assert.deepEqual(
+    resolutionEvents
+      .filter((event) => event.type === "CHAIN_LINK_RESOLVED")
+      .map((event) => event.cardId),
+    [aiTrap.uid, playerTrap.uid]
+  );
   assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
   assert.deepEqual(buildEngineStateFromUiState(state).machine.chain, []);
 });

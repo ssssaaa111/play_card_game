@@ -416,8 +416,11 @@ export class GameEngine {
       case "ADD_CHAIN_LINK":
         this.#addChainLink(workingState, emit, action);
         break;
+      case "PASS_RESPONSE_PRIORITY":
+        this.#passResponsePriority(workingState, emit, action);
+        break;
       case "RESOLVE_CHAIN":
-        this.#resolveChain(workingState, emit, action);
+        this.#resolveChain(workingState, ctx, emit, action);
         break;
       case "GRANT_ABILITY":
         this.#grantAbility(workingState, emit, action);
@@ -463,9 +466,10 @@ export class GameEngine {
     if (card.type !== "trap") {
       throw new GameRuleError(`Card ${action.cardId} is not a trap`);
     }
+    let chainLink = null;
     if (state.machine.responseWindow) {
       requireOpenResponseWindow(state, action.playerId);
-      const chainLink = state.machine.chain.at(-1);
+      chainLink = state.machine.chain.at(-1);
       if (chainLink?.playerId !== action.playerId || chainLink?.cardId !== action.cardId) {
         throw new GameRuleError(`Trap ${action.cardId} must join the current chain before activation`);
       }
@@ -482,6 +486,21 @@ export class GameEngine {
       cardType: card.type,
       phase: state.turn.phase
     });
+    if (chainLink) {
+      if (chainLink.effectId && chainLink.effectId !== effectId) {
+        throw new GameRuleError(`Chain link effect ${chainLink.effectId} does not match trap effect ${effectId}`);
+      }
+      ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "spellTrapZone" }, { playerId: action.playerId, zone: "grave" });
+      emit("CHAIN_LINK_COMMITTED", {
+        playerId: action.playerId,
+        linkId: chainLink.linkId,
+        cardId: action.cardId,
+        effectId,
+        action: clone(preparedAction)
+      });
+      return;
+    }
+
     runEffect(this.#effects, effectId, ctx, preparedAction, card);
     ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "spellTrapZone" }, { playerId: action.playerId, zone: "grave" });
   }
@@ -749,18 +768,58 @@ export class GameEngine {
     }
   }
 
-  #resolveChain(state, emit, action) {
+  #passResponsePriority(state, emit, action) {
+    requireOpenResponseWindow(state, action.playerId);
+    requirePlayer(state, action.nextPlayerId);
+    if (action.nextPlayerId === action.playerId) {
+      throw new GameRuleError("Response priority must pass to another player");
+    }
+    emit("RESPONSE_PRIORITY_PASSED", {
+      playerId: action.nextPlayerId,
+      fromPlayerId: action.playerId,
+      toPlayerId: action.nextPlayerId,
+      timing: state.machine.timing,
+      chainLength: state.machine.chain.length
+    });
+  }
+
+  #resolveChain(state, ctx, emit, action) {
     const responseWindow = requireOpenResponseWindow(state, action.playerId);
     const resumeTiming = action.resumeTiming || responseWindow.resumeTiming || responseWindow.timing || timingForPhase(state.turn.phase);
+    const resolutionOrder = state.machine.chain.slice().reverse();
+    const uncommitted = resolutionOrder.find((link) => !link.committed);
+    if (uncommitted) {
+      throw new GameRuleError(`Chain link ${uncommitted.linkId} has not been committed`);
+    }
 
     emit("TIMING_CHANGED", {
       playerId: action.playerId,
       from: state.machine.timing,
       to: Timing.chainResolution
     });
+    for (const link of resolutionOrder) {
+      const card = requireCard(state, link.cardId);
+      const effectId = link.effectId || card.trigger || card.effect;
+      const preparedAction = clone(link.action || {});
+      emit("CHAIN_LINK_RESOLVING", {
+        playerId: link.playerId,
+        linkId: link.linkId,
+        cardId: link.cardId,
+        effectId,
+        targetEffectId: link.targetEffectId || null
+      });
+      runEffect(this.#effects, effectId, ctx, preparedAction, card);
+      emit("CHAIN_LINK_RESOLVED", {
+        playerId: link.playerId,
+        linkId: link.linkId,
+        cardId: link.cardId,
+        effectId,
+        targetEffectId: link.targetEffectId || null
+      });
+    }
     emit("CHAIN_RESOLVED", {
       playerId: action.playerId,
-      resolvedLinks: state.machine.chain.map((link) => ({ ...link }))
+      resolvedLinks: resolutionOrder.map((link) => ({ ...link }))
     });
     if (state.machine.responseWindow) {
       emit("RESPONSE_WINDOW_CLOSED", {
@@ -918,8 +977,14 @@ export function applyGameEvent(state, event, options = {}) {
     case "RESPONSE_WINDOW_CLOSED":
       applyResponseWindowClosed(state, event);
       break;
+    case "RESPONSE_PRIORITY_PASSED":
+      applyResponsePriorityPassed(state, event);
+      break;
     case "CHAIN_LINK_ADDED":
       applyChainLinkAdded(state, event);
+      break;
+    case "CHAIN_LINK_COMMITTED":
+      applyChainLinkCommitted(state, event);
       break;
     case "CHAIN_RESOLVED":
       applyChainResolved(state, event);
@@ -936,6 +1001,8 @@ export function applyGameEvent(state, event, options = {}) {
     case "CARD_DESTROYED":
     case "EFFECT_NEGATED":
     case "EFFECT_SKIPPED":
+    case "CHAIN_LINK_RESOLVING":
+    case "CHAIN_LINK_RESOLVED":
       break;
     case "MONSTER_SUMMONED":
       applyMonsterSummoned(state, event);
@@ -1098,6 +1165,18 @@ function applyResponseWindowClosed(state, event) {
   state.machine.responseWindow = null;
 }
 
+function applyResponsePriorityPassed(state, event) {
+  requirePlayer(state, event.fromPlayerId);
+  requirePlayer(state, event.toPlayerId);
+  if (!state.machine.responseWindow) {
+    throw new GameRuleError("Cannot pass priority without an open response window");
+  }
+  if (state.machine.responseWindow.playerId !== event.fromPlayerId) {
+    throw new GameRuleError(`Current response window belongs to ${state.machine.responseWindow.playerId}`);
+  }
+  state.machine.responseWindow.playerId = event.toPlayerId;
+}
+
 function applyChainLinkAdded(state, event) {
   requirePlayer(state, event.playerId);
   if (event.cardId) {
@@ -1109,8 +1188,24 @@ function applyChainLinkAdded(state, event) {
     cardId: event.cardId || null,
     effectId: event.effectId || null,
     targetEffectId: event.targetEffectId || null,
-    timing: event.timing || state.machine.timing
+    timing: event.timing || state.machine.timing,
+    committed: false,
+    action: null
   });
+}
+
+function applyChainLinkCommitted(state, event) {
+  requirePlayer(state, event.playerId);
+  const link = state.machine.chain.find((entry) => entry.linkId === event.linkId);
+  if (!link) {
+    throw new GameRuleError(`Chain link ${event.linkId} does not exist`);
+  }
+  if (link.playerId !== event.playerId || link.cardId !== event.cardId) {
+    throw new GameRuleError(`Chain link ${event.linkId} does not match committed trap ${event.cardId}`);
+  }
+  link.effectId = event.effectId || link.effectId;
+  link.committed = true;
+  link.action = clone(event.action || {});
 }
 
 function applyChainResolved(state, event) {
@@ -1759,6 +1854,9 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
     if (event.type === "RESPONSE_WINDOW_CLOSED") {
       machine.responseWindow = null;
     }
+    if (event.type === "RESPONSE_PRIORITY_PASSED" && machine.responseWindow) {
+      machine.responseWindow.playerId = event.toPlayerId;
+    }
     if (event.type === "CHAIN_LINK_ADDED") {
       machine.chain.push({
         linkId: machine.chain.length + 1,
@@ -1766,8 +1864,18 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
         cardId: event.cardId || null,
         effectId: event.effectId || null,
         targetEffectId: event.targetEffectId || null,
-        timing: event.timing || machine.timing
+        timing: event.timing || machine.timing,
+        committed: false,
+        action: null
       });
+    }
+    if (event.type === "CHAIN_LINK_COMMITTED") {
+      const link = machine.chain.find((entry) => entry.linkId === event.linkId);
+      if (link) {
+        link.effectId = event.effectId || link.effectId;
+        link.committed = true;
+        link.action = clone(event.action || {});
+      }
     }
     if (event.type === "CHAIN_RESOLVED") {
       machine.chain = [];
