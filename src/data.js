@@ -271,6 +271,17 @@ export const scenarioSetups = {
     aiHand: [],
     aiDeck: []
   },
+  summonTrap: {
+    label: "召唤陷阱响应",
+    text: "我方手牌含召雷陷阵，AI 手牌只有一只怪兽，用来验证召唤成功后的陷阱响应窗口。",
+    goal: "盖放召雷陷阵后结束回合；AI 召唤时发动陷阱，应通过完整连锁造成 400 点伤害。",
+    playerHand: ["summon-flare"],
+    playerField: [],
+    playerDeck: ["renewal"],
+    aiField: [],
+    aiHand: ["solar-knight"],
+    aiDeck: ["guard-sigil"]
+  },
   skipLock: {
     label: "跳攻锁定",
     text: "我方场上已有可攻击怪兽，手牌含新怪兽，用来验证跳过攻击后新召唤也不能攻击。",

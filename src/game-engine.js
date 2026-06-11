@@ -463,6 +463,13 @@ export class GameEngine {
     if (card.type !== "trap") {
       throw new GameRuleError(`Card ${action.cardId} is not a trap`);
     }
+    if (state.machine.responseWindow) {
+      requireOpenResponseWindow(state, action.playerId);
+      const chainLink = state.machine.chain.at(-1);
+      if (chainLink?.playerId !== action.playerId || chainLink?.cardId !== action.cardId) {
+        throw new GameRuleError(`Trap ${action.cardId} must join the current chain before activation`);
+      }
+    }
 
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };
@@ -684,6 +691,10 @@ export class GameEngine {
     requirePlayer(state, action.playerId);
     requireTiming(action.timing);
     requireResponseWindow(action.windowType);
+    if (action.resumeTiming) requireTiming(action.resumeTiming);
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("A response window is already open");
+    }
 
     emit("TIMING_CHANGED", {
       playerId: action.playerId,
@@ -693,9 +704,11 @@ export class GameEngine {
     emit("RESPONSE_WINDOW_OPENED", {
       playerId: action.playerId,
       timing: action.timing,
+      resumeTiming: action.resumeTiming || action.timing,
       windowType: action.windowType,
       triggerEventId: action.triggerEventId || null,
-      prompt: action.prompt || null
+      prompt: action.prompt || null,
+      context: clone(action.context || {})
     });
   }
 
@@ -720,17 +733,25 @@ export class GameEngine {
 
   #closeResponseWindow(state, emit, action) {
     const responseWindow = requireOpenResponseWindow(state, action.playerId);
+    const resumeTiming = responseWindow.resumeTiming || responseWindow.timing || timingForPhase(state.turn.phase);
     emit("RESPONSE_WINDOW_CLOSED", {
       playerId: action.playerId,
       timing: state.machine.timing,
       triggerEventId: responseWindow.triggerEventId || null,
       reason: action.reason || "passed"
     });
+    if (state.machine.timing !== resumeTiming) {
+      emit("TIMING_CHANGED", {
+        playerId: action.playerId,
+        from: state.machine.timing,
+        to: resumeTiming
+      });
+    }
   }
 
   #resolveChain(state, emit, action) {
-    requirePlayer(state, action.playerId);
-    const resumeTiming = action.resumeTiming || state.machine.responseWindow?.timing || timingForPhase(state.turn.phase);
+    const responseWindow = requireOpenResponseWindow(state, action.playerId);
+    const resumeTiming = action.resumeTiming || responseWindow.resumeTiming || responseWindow.timing || timingForPhase(state.turn.phase);
 
     emit("TIMING_CHANGED", {
       playerId: action.playerId,
@@ -1065,6 +1086,7 @@ function applyResponseWindowOpened(state, event) {
     playerId: event.playerId,
     type: event.windowType,
     timing: event.timing,
+    resumeTiming: event.resumeTiming || event.timing,
     triggerEventId: event.triggerEventId || null,
     prompt: event.prompt || null,
     context: clone(event.context || {})
@@ -1728,6 +1750,7 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
         playerId: event.playerId,
         type: event.windowType,
         timing: event.timing,
+        resumeTiming: event.resumeTiming || event.timing,
         triggerEventId: event.triggerEventId || null,
         prompt: event.prompt || null,
         context: clone(event.context || {})

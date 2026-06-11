@@ -362,6 +362,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-fire-buff": runSummonFireBuffSmoke/);
   assert.match(smoke, /"summon-shield": runSummonShieldSmoke/);
   assert.match(smoke, /"summon-shadow-burn": runSummonShadowBurnSmoke/);
+  assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
@@ -408,6 +409,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "summon-fire-buff"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "summon-shield"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "summon-shadow-burn"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "summon-trap-response"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);

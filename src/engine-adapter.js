@@ -369,6 +369,28 @@ export function dispatchCloseResponseWindowFromUiState(uiState, playerId, reason
   return applyUiGameEvents(uiState, events);
 }
 
+export function dispatchOpenResponseWindowFromUiState(uiState, playerId, {
+  timing,
+  resumeTiming = timing,
+  windowType = "optional",
+  triggerEventId = null,
+  prompt = null,
+  context = {}
+} = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "OPEN_RESPONSE_WINDOW",
+    playerId,
+    timing,
+    resumeTiming,
+    windowType,
+    triggerEventId,
+    prompt,
+    context
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
 export function dispatchDeclareAttackFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex) {
   const duelist = uiDuelist(uiState, playerId);
   const rival = uiDuelist(uiState, rivalId);

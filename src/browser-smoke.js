@@ -195,6 +195,11 @@ async function runDirectShieldConsumeSmoke(ctx) {
   if (ctx.currentPlayerActions().attack) {
     throw new Error("守护刻印挡住直击后同一只怪兽不应还能继续攻击");
   }
+  if (!(ctx.state.gameEvents || []).some((event) => event.type === "RESPONSE_WINDOW_OPENED" && event.prompt === "direct") ||
+      countGameEvents(ctx.state, "CHAIN_LINK_ADDED") < 1 ||
+      countGameEvents(ctx.state, "CHAIN_RESOLVED") < 1) {
+    throw new Error("守护刻印必须通过直击响应窗口和连锁事件结算");
+  }
   setSmokeStatus("passed", "direct-shield-consume");
 }
 
@@ -336,6 +341,34 @@ async function runSummonShadowBurnSmoke(ctx) {
     9000
   );
   setSmokeStatus("passed", "summon-shadow-burn");
+}
+
+async function runSummonTrapResponseSmoke(ctx) {
+  setSmokeStatus("running", "summon-trap-response");
+  await startSmokeDuel(ctx, "summonTrap");
+  clickSmokeElement(handCard(ctx.els, "summon-flare"), "选择召雷陷阵");
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "盖放召雷陷阵");
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "summon-flare"), "召雷陷阵盖放成功");
+  const aiLpBefore = ctx.state.ai.lp;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "AI 召唤后的陷阱响应窗口", 16000);
+  if (!ctx.els.chainText.textContent.includes("召雷陷阵") || !ctx.els.chainText.textContent.includes("召唤")) {
+    throw new Error("召唤陷阱响应提示缺少触发卡或召唤信息");
+  }
+  clickSmokeElement(ctx.els.chainYes, "发动召雷陷阵");
+  await waitForSmoke(
+    () => ctx.state.ai.lp === aiLpBefore - 400 &&
+      !ctx.state.player.traps.some((card) => card?.id === "summon-flare"),
+    "召雷陷阵通过连锁造成 400 点伤害",
+    9000
+  );
+  const summonWindow = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "RESPONSE_WINDOW_OPENED" && event.prompt === "summon"
+  );
+  if (!summonWindow || countGameEvents(ctx.state, "CHAIN_LINK_ADDED") !== 1 || countGameEvents(ctx.state, "CHAIN_RESOLVED") !== 1) {
+    throw new Error("召唤陷阱必须记录召唤响应窗口和完整连锁事件");
+  }
+  setSmokeStatus("passed", "summon-trap-response");
 }
 
 async function runRedirectPromptSmoke(ctx) {
@@ -584,8 +617,15 @@ async function runAiDirectTrapSmoke(ctx) {
   if (declinedPrompts !== 3) {
     throw new Error(`三次攻击应分别提示风暴转移，实际记录 ${declinedPrompts} 次`);
   }
-  if (countGameEvents(ctx.state, "RESPONSE_WINDOW_OPENED") < 3 || countGameEvents(ctx.state, "RESPONSE_WINDOW_CLOSED") < 3) {
-    throw new Error("连续直击的每次攻击响应窗口都必须通过引擎事件关闭");
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).filter((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.timing === "damageStep").length >= 3,
+    "三次直击伤害窗口全部关闭",
+    10000
+  );
+  const directWindows = (ctx.state.gameEvents || []).filter((event) => event.type === "RESPONSE_WINDOW_OPENED" && event.prompt === "direct").length;
+  const directCloses = (ctx.state.gameEvents || []).filter((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.timing === "damageStep").length;
+  if (directWindows !== 3 || directCloses !== 3) {
+    throw new Error(`连续直击响应事件数量异常：直击窗口 ${directWindows}，关闭 ${directCloses}`);
   }
   setSmokeStatus("passed", "ai-direct-trap");
 }
@@ -828,6 +868,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-fire-buff": runSummonFireBuffSmoke,
     "summon-shield": runSummonShieldSmoke,
     "summon-shadow-burn": runSummonShadowBurnSmoke,
+    "summon-trap-response": runSummonTrapResponseSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,

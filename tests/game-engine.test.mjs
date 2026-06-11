@@ -1844,6 +1844,79 @@ test("declining a response closes the window through an explicit event", () => {
   assert.ok(events.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "declined"));
 });
 
+test("response windows preserve trigger context and cannot be nested", () => {
+  const state = makeState({ turn: { phase: Phase.battle } });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+
+  engine.dispatch({
+    type: "OPEN_RESPONSE_WINDOW",
+    playerId: PLAYER,
+    timing: Timing.damageStep,
+    windowType: ResponseWindow.optional,
+    triggerEventId: "attack-42",
+    prompt: "direct",
+    context: { attackerCardId: "attacker-1", targetPlayerId: PLAYER }
+  });
+
+  assert.deepEqual(engine.getState().machine.responseWindow.context, {
+    attackerCardId: "attacker-1",
+    targetPlayerId: PLAYER
+  });
+  assert.throws(
+    () => engine.dispatch({
+      type: "OPEN_RESPONSE_WINDOW",
+      playerId: PLAYER,
+      timing: Timing.damageStep,
+      windowType: ResponseWindow.optional
+    }),
+    /response window is already open/
+  );
+});
+
+test("an open response window requires traps to join the chain before activation", () => {
+  const state = makeState({
+    cards: [card("guard-1", { templateId: "guard-sigil", type: "trap", trigger: "directShield" })],
+    player: { spellTrapZone: ["guard-1"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.damageStep;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.damageStep,
+    triggerEventId: "attack-42"
+  };
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "ACTIVATE_TRAP",
+      playerId: PLAYER,
+      rivalId: AI,
+      cardId: "guard-1"
+    }),
+    /must join the current chain/
+  );
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "guard-1",
+    effectId: "directShield",
+    targetEffectId: "attack-42"
+  });
+  const activationEvents = engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "guard-1"
+  });
+  assert.ok(activationEvents.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === "guard-1"));
+});
+
 test("abilities are event-sourced resources for complex restrictions", () => {
   const engine = new GameEngine(makeState());
 

@@ -12,6 +12,7 @@ import {
   dispatchCloseResponseWindowFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
+  dispatchOpenResponseWindowFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchTrapResponseFromUiState,
   dispatchSetTrapFromUiState,
@@ -403,6 +404,69 @@ test("declining an attack response closes the restored engine response window", 
 
   assert.ok(events.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "declined"));
   assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
+});
+
+test("resolves a direct-attack trap through a dedicated damage-step response window", () => {
+  const guard = uiTrap("direct-window-guard", "guard-sigil");
+  guard.trigger = "directShield";
+  const draw = uiMonster("direct-window-draw", "solar-knight");
+  const attacker = uiMonster("direct-window-attacker", "star-lancer");
+  attacker.ownerId = "ai";
+  const state = appState({ phase: PHASES.battle, turn: "ai" });
+  state.player.traps[0] = guard;
+  state.player.deck = [draw];
+  state.ai.field[0] = attacker;
+
+  const declarationEvents = dispatchDeclareAttackFromUiState(state, "ai", "player", 0, -1);
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  dispatchCloseResponseWindowFromUiState(state, "player", "no-legal-trap");
+  const openEvents = dispatchOpenResponseWindowFromUiState(state, "player", {
+    timing: "damageStep",
+    prompt: "direct",
+    triggerEventId: declaration.id,
+    context: { attackerCardId: attacker.uid, targetPlayerId: "player" }
+  });
+  const responseEvents = dispatchTrapResponseFromUiState(state, "player", "ai", 0, {
+    attackerIndex: 0,
+    targetEffectId: declaration.id
+  });
+
+  assert.ok(openEvents.some((event) => event.type === "RESPONSE_WINDOW_OPENED" && event.prompt === "direct"));
+  assert.deepEqual(state.player.hand, [draw]);
+  assert.ok(responseEvents.some((event) => event.type === "CHAIN_LINK_ADDED" && event.cardId === guard.uid));
+  assert.ok(responseEvents.some((event) => event.type === "CHAIN_RESOLVED"));
+  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
+  assert.equal(buildEngineStateFromUiState(state).machine.timing, "damageStep");
+});
+
+test("resolves a summon trap through a summon timing response window", () => {
+  const flare = uiTrap("summon-window-flare", "summon-flare");
+  flare.trigger = "summonBurn";
+  const summoned = uiMonster("summon-window-monster", "ember-drake");
+  summoned.ownerId = "ai";
+  const state = appState({ phase: PHASES.main, turn: "ai" });
+  state.player.traps[0] = flare;
+  state.ai.hand = [summoned];
+
+  const summonEvents = dispatchSummonMonsterFromUiState(state, "ai", 0, 0);
+  const summonedEvent = summonEvents.find((event) => event.type === "MONSTER_SUMMONED");
+  dispatchOpenResponseWindowFromUiState(state, "player", {
+    timing: "summon",
+    resumeTiming: "mainOpen",
+    prompt: "summon",
+    triggerEventId: summonedEvent.id,
+    context: { summonedPlayerId: "ai", summonedCardId: summoned.uid }
+  });
+  const responseEvents = dispatchTrapResponseFromUiState(state, "player", "ai", 0, {
+    targetEffectId: summonedEvent.id
+  });
+
+  assert.equal(state.ai.lp, 3600);
+  assert.ok(responseEvents.some((event) => event.type === "CHAIN_LINK_ADDED" && event.cardId === flare.uid));
+  assert.ok(responseEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 400));
+  assert.ok(responseEvents.some((event) => event.type === "RESPONSE_WINDOW_CLOSED"));
+  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
+  assert.equal(buildEngineStateFromUiState(state).machine.timing, "mainOpen");
 });
 
 test("dispatches battle resolution and applies target destruction to fixed UI zones", () => {

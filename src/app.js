@@ -16,6 +16,7 @@ import {
   dispatchCloseResponseWindowFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
+  dispatchOpenResponseWindowFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState,
@@ -1927,7 +1928,26 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
   } else {
     playDuelistLine(owner.owner, lineFor(owner.owner, "summon", card), false, "summon");
   }
-  await triggerTrap(rival, owner, "summon", { summoned: card });
+  const summonedEvent = summonEvents.find((event) => event.type === "MONSTER_SUMMONED" && event.cardId === runtimeCardId(card));
+  if (!summonedEvent) {
+    cue("召唤事件缺失，已中断后续响应结算。");
+    return true;
+  }
+  if (!openTrapResponseWindow(rival.owner, {
+    timing: "summon",
+    resumeTiming: "mainOpen",
+    prompt: "summon",
+    triggerEventId: summonedEvent.id,
+    context: {
+      summonedPlayerId: owner.owner,
+      summonedCardId: runtimeCardId(card)
+    }
+  })) return true;
+  await triggerTrap(rival, owner, "summon", {
+    summoned: card,
+    targetEffectId: summonedEvent.id,
+    engineResponse: true
+  });
   if (state.gameOver) return true;
   if (canDispatchSummonEffectFromUiState(card)) {
     resolveEngineSpellFeedback(owner, rival, card, summonEvents);
@@ -2300,11 +2320,12 @@ function spellCaption(card) {
 async function triggerTrap(owner, rival, eventName, context) {
   const result = { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
   if (state.gameOver) return result;
+  const engineResponse = Boolean(context?.engineResponse);
   const candidates = owner.traps
     .map((card, index) => ({ card, index }))
     .filter(({ card }) => trapCanResolve(card, eventName, { owner, context }));
   if (candidates.length === 0) {
-    if (eventName === "attack" && !closeAttackResponseWindow(owner.owner, "no-legal-trap")) {
+    if (engineResponse && !closeTrapResponseWindow(owner.owner, "no-legal-trap")) {
       result.cancelled = true;
     }
     return result;
@@ -2314,7 +2335,7 @@ async function triggerTrap(owner, rival, eventName, context) {
     const choice = await promptTrapChoice(candidates, eventName, { owner, rival, context });
     if (choice.trapIndex < 0) {
       addLog(choice.skippedName ? `你没有发动 ${choice.skippedName}。` : "你没有发动陷阱。");
-      if (eventName === "attack" && !closeAttackResponseWindow(owner.owner, "declined")) {
+      if (engineResponse && !closeTrapResponseWindow(owner.owner, "declined")) {
         result.cancelled = true;
       }
       return result;
@@ -2330,7 +2351,18 @@ async function triggerTrap(owner, rival, eventName, context) {
   return result;
 }
 
-function closeAttackResponseWindow(playerId, reason) {
+function openTrapResponseWindow(playerId, options) {
+  try {
+    dispatchOpenResponseWindowFromUiState(state, playerId, options);
+    return true;
+  } catch (error) {
+    cue(error.message || "陷阱响应窗口打开失败。");
+    console.error(error);
+    return false;
+  }
+}
+
+function closeTrapResponseWindow(playerId, reason) {
   try {
     dispatchCloseResponseWindowFromUiState(state, playerId, reason);
     return true;
@@ -2439,7 +2471,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
   let trapEvents = [];
   if (canDispatchTrapFromUiState(trap)) {
     try {
-      const dispatchTrap = eventName === "attack"
+      const dispatchTrap = context.engineResponse
         ? dispatchTrapResponseFromUiState
         : dispatchActivateTrapFromUiState;
       trapEvents = dispatchTrap(state, owner.owner, rival.owner, trapIndex, {
@@ -2711,7 +2743,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     return false;
   }
   const impactBefore = attackImpactSnapshot(owner, rival);
-  const attackContext = { attackerIndex, targetIndex };
+  const attackContext = { attackerIndex, targetIndex, engineResponse: true };
   const declarationEvents = declareAttackWithEngine(owner, rival, attackerIndex, targetIndex);
   if (!declarationEvents) return false;
   const attackEvent = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
@@ -2759,7 +2791,24 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   let battleEvents = [];
 
   if (!target) {
-    const shield = await triggerTrap(rival, owner, "direct", { attackerIndex, targetIndex: resolvedTargetIndex });
+    if (!openTrapResponseWindow(rival.owner, {
+      timing: "damageStep",
+      resumeTiming: "damageStep",
+      prompt: "direct",
+      triggerEventId: attackContext.targetEffectId,
+      context: {
+        attackerPlayerId: owner.owner,
+        attackerCardId: runtimeCardId(attacker),
+        targetPlayerId: rival.owner,
+        direct: true
+      }
+    })) return false;
+    const shield = await triggerTrap(rival, owner, "direct", {
+      attackerIndex,
+      targetIndex: resolvedTargetIndex,
+      targetEffectId: attackContext.targetEffectId,
+      engineResponse: true
+    });
     if (shield.cancelled) {
       if (shield.consumesAttack) {
         if (!consumeCancelledAttackWithEngine(owner, attacker, attackerIndex)) return false;
