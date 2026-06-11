@@ -584,6 +584,9 @@ async function runAiDirectTrapSmoke(ctx) {
   if (declinedPrompts !== 3) {
     throw new Error(`三次攻击应分别提示风暴转移，实际记录 ${declinedPrompts} 次`);
   }
+  if (countGameEvents(ctx.state, "RESPONSE_WINDOW_OPENED") < 3 || countGameEvents(ctx.state, "RESPONSE_WINDOW_CLOSED") < 3) {
+    throw new Error("连续直击的每次攻击响应窗口都必须通过引擎事件关闭");
+  }
   setSmokeStatus("passed", "ai-direct-trap");
 }
 
@@ -690,6 +693,11 @@ async function runChainTrapChoiceSmoke(ctx) {
     "连锁场景只发动选中的陷阱",
     9000
   );
+  if (countGameEvents(ctx.state, "CHAIN_LINK_ADDED") !== 1 ||
+      countGameEvents(ctx.state, "CHAIN_RESOLVED") !== 1 ||
+      countGameEvents(ctx.state, "RESPONSE_WINDOW_CLOSED") < 1) {
+    throw new Error("选中的攻击陷阱必须完整记录加入连锁、结算和关闭响应窗口事件");
+  }
   const audit = auditLogEntries(ctx.state.timeline);
   if (!audit.ok) {
     throw new Error(`连锁场景日志审计失败：${audit.issues.map((issue) => issue.message).join(" / ")}`);
@@ -724,6 +732,11 @@ async function runChainWeakenResolutionSmoke(ctx) {
   );
   if (!ctx.state.log.some((entry) => entry.includes("弱化力场") && entry.includes("攻击继续结算"))) {
     throw new Error("弱化力场日志应说明攻击继续结算");
+  }
+  if (countGameEvents(ctx.state, "CHAIN_LINK_ADDED") !== 1 ||
+      countGameEvents(ctx.state, "CHAIN_RESOLVED") !== 1 ||
+      countGameEvents(ctx.state, "RESPONSE_WINDOW_CLOSED") < 1) {
+    throw new Error("弱化力场响应必须完整记录连锁和响应窗口事件");
   }
   const audit = auditLogEntries(ctx.state.timeline);
   if (!audit.ok) {

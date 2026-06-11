@@ -1764,6 +1764,86 @@ test("timing, response windows, and chain links are explicit state machine event
   assert.ok(resolveEvents.some((event) => event.type === "CHAIN_RESOLVED"));
 });
 
+test("only the designated responder can add a trap chain link", () => {
+  const state = makeState({
+    cards: [card("void-1", { templateId: "void-lock", type: "trap", trigger: "attackNegate" })],
+    player: { spellTrapZone: ["void-1"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.attackDeclaration;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.attackDeclaration,
+    triggerEventId: "attack-42"
+  };
+
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "ADD_CHAIN_LINK",
+      playerId: AI,
+      cardId: "void-1",
+      effectId: "attackNegate",
+      targetEffectId: "attack-42"
+    }),
+    /response window belongs to player/
+  );
+});
+
+test("trap chain links must reference a trap in the responder spell trap zone", () => {
+  const state = makeState({
+    cards: [card("void-1", { templateId: "void-lock", type: "trap", trigger: "attackNegate" })],
+    player: { hand: ["void-1"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.attackDeclaration;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.attackDeclaration,
+    triggerEventId: "attack-42"
+  };
+
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "ADD_CHAIN_LINK",
+      playerId: PLAYER,
+      cardId: "void-1",
+      effectId: "attackNegate",
+      targetEffectId: "attack-42"
+    }),
+    /not in player\.spellTrapZone/
+  );
+});
+
+test("declining a response closes the window through an explicit event", () => {
+  const state = makeState({ turn: { phase: Phase.battle } });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.attackDeclaration;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.attackDeclaration,
+    triggerEventId: "attack-42"
+  };
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "CLOSE_RESPONSE_WINDOW",
+    playerId: PLAYER,
+    reason: "declined"
+  });
+
+  assert.equal(engine.getState().machine.responseWindow, null);
+  assert.ok(events.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "declined"));
+});
+
 test("abilities are event-sourced resources for complex restrictions", () => {
   const engine = new GameEngine(makeState());
 

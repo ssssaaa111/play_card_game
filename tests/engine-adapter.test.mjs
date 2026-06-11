@@ -3,14 +3,17 @@ import assert from "node:assert/strict";
 
 import { createDuelist } from "../src/deck.js";
 import {
+  buildEngineStateFromUiState,
   canDispatchTrapFromUiState,
   canDispatchSpellFromUiState,
   canDispatchSummonEffectFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchCloseResponseWindowFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchResolveBattleFromUiState,
+  dispatchTrapResponseFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState
 } from "../src/engine-adapter.js";
@@ -356,6 +359,50 @@ test("dispatches attack declaration as a response-window event without resolving
   assert.equal(windowOpened.context.attackerCardId, attacker.uid);
   assert.ok(!events.some((event) => event.type === "DAMAGE_DEALT"));
   assert.equal(state.gameEvents.at(-1).type, "RESPONSE_WINDOW_OPENED");
+});
+
+test("rebuilds the open response window and resolves a selected trap as one event chain", () => {
+  const trap = uiTrap("negate-response", "void-lock");
+  trap.trigger = "attackNegate";
+  const attacker = uiMonster("ai-attacker-response", "star-lancer");
+  attacker.ownerId = "ai";
+  const target = uiMonster("player-target-response", "iron-guardian");
+  const state = appState({ phase: PHASES.battle, turn: "ai" });
+  state.player.traps[1] = trap;
+  state.player.field[0] = target;
+  state.ai.field[0] = attacker;
+
+  const declarationEvents = dispatchDeclareAttackFromUiState(state, "ai", "player", 0, 0);
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow.playerId, "player");
+  const responseEvents = dispatchTrapResponseFromUiState(state, "player", "ai", 1, {
+    attackerIndex: 0,
+    targetEffectId: declaration.id
+  });
+
+  assert.equal(state.player.traps[1], null);
+  assert.deepEqual(state.player.grave, [trap]);
+  assert.ok(responseEvents.some((event) => event.type === "CHAIN_LINK_ADDED" && event.cardId === trap.uid));
+  assert.ok(responseEvents.some((event) => event.type === "EFFECT_NEGATED" && event.targetEffectId === declaration.id));
+  assert.ok(responseEvents.some((event) => event.type === "CHAIN_RESOLVED"));
+  assert.ok(responseEvents.some((event) => event.type === "RESPONSE_WINDOW_CLOSED"));
+  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
+  assert.deepEqual(buildEngineStateFromUiState(state).machine.chain, []);
+});
+
+test("declining an attack response closes the restored engine response window", () => {
+  const attacker = uiMonster("ai-attacker-pass", "star-lancer");
+  attacker.ownerId = "ai";
+  const target = uiMonster("player-target-pass", "iron-guardian");
+  const state = appState({ phase: PHASES.battle, turn: "ai" });
+  state.player.field[0] = target;
+  state.ai.field[0] = attacker;
+
+  dispatchDeclareAttackFromUiState(state, "ai", "player", 0, 0);
+  const events = dispatchCloseResponseWindowFromUiState(state, "player", "declined");
+
+  assert.ok(events.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "declined"));
+  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
 });
 
 test("dispatches battle resolution and applies target destruction to fixed UI zones", () => {

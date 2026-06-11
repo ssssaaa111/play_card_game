@@ -410,6 +410,9 @@ export class GameEngine {
       case "OPEN_RESPONSE_WINDOW":
         this.#openResponseWindow(workingState, emit, action);
         break;
+      case "CLOSE_RESPONSE_WINDOW":
+        this.#closeResponseWindow(workingState, emit, action);
+        break;
       case "ADD_CHAIN_LINK":
         this.#addChainLink(workingState, emit, action);
         break;
@@ -697,12 +700,12 @@ export class GameEngine {
   }
 
   #addChainLink(state, emit, action) {
-    requirePlayer(state, action.playerId);
-    if (!state.machine.responseWindow) {
-      throw new GameRuleError("Cannot add a chain link without an open response window");
-    }
+    const responseWindow = requireOpenResponseWindow(state, action.playerId);
     if (action.cardId) {
-      requireCard(state, action.cardId);
+      const card = requireCardInZone(state, action.playerId, "spellTrapZone", action.cardId);
+      if (card.type !== "trap") {
+        throw new GameRuleError(`Card ${action.cardId} is not a trap`);
+      }
     }
 
     emit("CHAIN_LINK_ADDED", {
@@ -710,12 +713,24 @@ export class GameEngine {
       cardId: action.cardId || null,
       effectId: action.effectId || null,
       targetEffectId: action.targetEffectId || null,
-      timing: state.machine.timing
+      timing: state.machine.timing,
+      triggerEventId: responseWindow.triggerEventId || null
+    });
+  }
+
+  #closeResponseWindow(state, emit, action) {
+    const responseWindow = requireOpenResponseWindow(state, action.playerId);
+    emit("RESPONSE_WINDOW_CLOSED", {
+      playerId: action.playerId,
+      timing: state.machine.timing,
+      triggerEventId: responseWindow.triggerEventId || null,
+      reason: action.reason || "passed"
     });
   }
 
   #resolveChain(state, emit, action) {
     requirePlayer(state, action.playerId);
+    const resumeTiming = action.resumeTiming || state.machine.responseWindow?.timing || timingForPhase(state.turn.phase);
 
     emit("TIMING_CHANGED", {
       playerId: action.playerId,
@@ -732,6 +747,11 @@ export class GameEngine {
         timing: state.machine.timing
       });
     }
+    emit("TIMING_CHANGED", {
+      playerId: action.playerId,
+      from: state.machine.timing,
+      to: resumeTiming
+    });
   }
 
   #grantAbility(state, emit, action) {
@@ -1583,6 +1603,18 @@ function requireResponseWindow(windowType) {
   }
 }
 
+function requireOpenResponseWindow(state, playerId) {
+  requirePlayer(state, playerId);
+  const responseWindow = state.machine.responseWindow;
+  if (!responseWindow) {
+    throw new GameRuleError("Cannot respond without an open response window");
+  }
+  if (responseWindow.playerId !== playerId) {
+    throw new GameRuleError(`Current response window belongs to ${responseWindow.playerId}`);
+  }
+  return responseWindow;
+}
+
 function requireAbility(ability) {
   if (!ABILITIES.has(ability)) {
     throw new GameRuleError(`Unknown ability ${ability}`);
@@ -1671,6 +1703,63 @@ function timingForPhase(phase) {
     [Phase.battle]: Timing.battleOpen,
     [Phase.end]: Timing.end
   }[phase] || Timing.setup;
+}
+
+export function projectMachineStateFromEvents(events = [], phase = Phase.setup) {
+  const machine = {
+    phase,
+    timing: timingForPhase(phase),
+    responseWindow: null,
+    chain: []
+  };
+
+  for (const event of events) {
+    if (event.type === "PHASE_CHANGED") {
+      machine.phase = event.to;
+      machine.timing = timingForPhase(event.to);
+      machine.responseWindow = null;
+      machine.chain = [];
+    }
+    if (event.type === "TIMING_CHANGED" && TIMINGS.has(event.to)) {
+      machine.timing = event.to;
+    }
+    if (event.type === "RESPONSE_WINDOW_OPENED") {
+      machine.responseWindow = {
+        playerId: event.playerId,
+        type: event.windowType,
+        timing: event.timing,
+        triggerEventId: event.triggerEventId || null,
+        prompt: event.prompt || null,
+        context: clone(event.context || {})
+      };
+    }
+    if (event.type === "RESPONSE_WINDOW_CLOSED") {
+      machine.responseWindow = null;
+    }
+    if (event.type === "CHAIN_LINK_ADDED") {
+      machine.chain.push({
+        linkId: machine.chain.length + 1,
+        playerId: event.playerId,
+        cardId: event.cardId || null,
+        effectId: event.effectId || null,
+        targetEffectId: event.targetEffectId || null,
+        timing: event.timing || machine.timing
+      });
+    }
+    if (event.type === "CHAIN_RESOLVED") {
+      machine.chain = [];
+    }
+  }
+
+  if (machine.phase !== phase) {
+    return {
+      phase,
+      timing: timingForPhase(phase),
+      responseWindow: null,
+      chain: []
+    };
+  }
+  return machine;
 }
 
 function clone(value) {

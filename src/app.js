@@ -13,11 +13,13 @@ import {
   canDispatchTrapFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchCloseResponseWindowFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchSetTrapFromUiState,
-  dispatchSummonMonsterFromUiState
+  dispatchSummonMonsterFromUiState,
+  dispatchTrapResponseFromUiState
 } from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
 import { scoreSpellForAi, spellDefinitions, validateSpellCondition } from './spells.js';
@@ -2301,12 +2303,20 @@ async function triggerTrap(owner, rival, eventName, context) {
   const candidates = owner.traps
     .map((card, index) => ({ card, index }))
     .filter(({ card }) => trapCanResolve(card, eventName, { owner, context }));
-  if (candidates.length === 0) return result;
+  if (candidates.length === 0) {
+    if (eventName === "attack" && !closeAttackResponseWindow(owner.owner, "no-legal-trap")) {
+      result.cancelled = true;
+    }
+    return result;
+  }
   let trapIndex = candidates[0].index;
   if (owner.owner === "player") {
     const choice = await promptTrapChoice(candidates, eventName, { owner, rival, context });
     if (choice.trapIndex < 0) {
       addLog(choice.skippedName ? `你没有发动 ${choice.skippedName}。` : "你没有发动陷阱。");
+      if (eventName === "attack" && !closeAttackResponseWindow(owner.owner, "declined")) {
+        result.cancelled = true;
+      }
       return result;
     }
     trapIndex = choice.trapIndex;
@@ -2318,6 +2328,17 @@ async function triggerTrap(owner, rival, eventName, context) {
   result.consumesAttack = Boolean(outcome.consumesAttack);
   checkGameOver();
   return result;
+}
+
+function closeAttackResponseWindow(playerId, reason) {
+  try {
+    dispatchCloseResponseWindowFromUiState(state, playerId, reason);
+    return true;
+  } catch (error) {
+    cue(error.message || "攻击响应窗口关闭失败。");
+    console.error(error);
+    return false;
+  }
 }
 
 function pendingTrapChoiceDetailsText(choice = state.pendingTrapChoice) {
@@ -2418,7 +2439,10 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
   let trapEvents = [];
   if (canDispatchTrapFromUiState(trap)) {
     try {
-      trapEvents = dispatchActivateTrapFromUiState(state, owner.owner, rival.owner, trapIndex, {
+      const dispatchTrap = eventName === "attack"
+        ? dispatchTrapResponseFromUiState
+        : dispatchActivateTrapFromUiState;
+      trapEvents = dispatchTrap(state, owner.owner, rival.owner, trapIndex, {
         ...context,
         targetEffectId: context.targetEffectId || `${trap.uid || trap.id}:${eventName}`
       });

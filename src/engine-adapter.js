@@ -1,4 +1,4 @@
-import { Ability, GameEngine, Phase } from './game-engine.js';
+import { Ability, GameEngine, Phase, projectMachineStateFromEvents } from './game-engine.js';
 import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { PHASES } from './turn-state.js';
 
@@ -96,9 +96,7 @@ export function buildEngineStateFromUiState(uiState) {
       playerId: uiState.turn || "player",
       phase
     },
-    machine: {
-      phase
-    },
+    machine: projectMachineStateFromEvents(events, phase),
     abilities: {
       player: uiAbilityEntries(uiState.player),
       ai: uiAbilityEntries(uiState.ai)
@@ -317,6 +315,13 @@ export function dispatchSetTrapFromUiState(uiState, playerId, handIndex, trapInd
 }
 
 export function dispatchActivateTrapFromUiState(uiState, playerId, rivalId, trapIndex, context = {}) {
+  const { action } = trapResponseAction(uiState, playerId, rivalId, trapIndex, context);
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch(action);
+  return applyUiGameEvents(uiState, events);
+}
+
+function trapResponseAction(uiState, playerId, rivalId, trapIndex, context = {}) {
   const duelist = uiDuelist(uiState, playerId);
   const rival = uiDuelist(uiState, rivalId);
   const card = duelist.traps[trapIndex];
@@ -334,9 +339,33 @@ export function dispatchActivateTrapFromUiState(uiState, playerId, rivalId, trap
   const attackerCardId = cardKey(context.attacker) || cardKey(rival.field?.[context.attackerIndex]);
   if (attackerCardId) action.attackerCardId = attackerCardId;
   if (context.targetEffectId) action.targetEffectId = context.targetEffectId;
+  return { card, action };
+}
 
+export function dispatchTrapResponseFromUiState(uiState, playerId, rivalId, trapIndex, context = {}) {
+  const { card, action } = trapResponseAction(uiState, playerId, rivalId, trapIndex, context);
   const engine = new GameEngine(buildEngineStateFromUiState(uiState));
-  const events = engine.dispatch(action);
+  const events = [
+    ...engine.dispatch({
+      type: "ADD_CHAIN_LINK",
+      playerId,
+      cardId: cardKey(card),
+      effectId: card.trigger || card.effect || null,
+      targetEffectId: context.targetEffectId || null
+    }),
+    ...engine.dispatch(action),
+    ...engine.dispatch({ type: "RESOLVE_CHAIN", playerId })
+  ];
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchCloseResponseWindowFromUiState(uiState, playerId, reason = "passed") {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "CLOSE_RESPONSE_WINDOW",
+    playerId,
+    reason
+  });
   return applyUiGameEvents(uiState, events);
 }
 
