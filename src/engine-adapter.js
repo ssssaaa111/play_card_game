@@ -1,6 +1,6 @@
 import { Ability, GameEngine, Phase, projectMachineStateFromEvents } from './game-engine.js';
 import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
-import { PHASES } from './turn-state.js';
+import { PHASES, TIMINGS } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
 const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "rallyAttack", "battleTrance", "lightShadowCombo", "elementEcho", "fireWindCombo"]);
@@ -13,6 +13,13 @@ const uiZones = {
   monsterZone: "field",
   spellTrapZone: "traps",
   grave: "grave"
+};
+
+const uiTimingByPhase = {
+  [PHASES.setup]: TIMINGS.setup,
+  [PHASES.draw]: TIMINGS.draw,
+  [PHASES.main]: TIMINGS.mainOpen,
+  [PHASES.battle]: TIMINGS.battleOpen
 };
 
 function cardKey(card) {
@@ -47,7 +54,10 @@ function uiDuelistToEngine(duelist) {
     monsterZone: compactCardIds(duelist.field),
     spellTrapZone: compactCardIds(duelist.traps),
     grave: compactCardIds(duelist.grave),
-    banished: []
+    banished: [],
+    attacksSkipped: Boolean(duelist.attacksSkipped),
+    comboThisTurn: Boolean(duelist.comboThisTurn),
+    comboFlags: { ...(duelist.comboFlags || {}) }
   };
 }
 
@@ -183,6 +193,20 @@ function applyUiAbilityEvent(uiState, event, direction) {
 
 export function applyUiGameEvents(uiState, events = []) {
   events.forEach((event) => {
+    if (event.type === "TURN_STARTED") {
+      const duelist = uiDuelist(uiState, event.playerId);
+      uiState.turn = event.playerId;
+      uiState.phase = PHASES.draw;
+      uiState.timing = "draw";
+      uiState.summonedThisTurn = false;
+      duelist.attacksSkipped = false;
+      duelist.comboThisTurn = false;
+      duelist.comboFlags = {};
+    }
+    if (event.type === "PHASE_CHANGED") {
+      uiState.phase = event.to;
+      uiState.timing = uiTimingByPhase[event.to] || uiState.timing;
+    }
     if (event.type === "CARD_MOVED") {
       const card = removeCardFromUiState(uiState, event.cardId);
       insertCardIntoUiState(uiState, card, event.to);
@@ -210,6 +234,12 @@ export function applyUiGameEvents(uiState, events = []) {
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
       card.mode = event.to;
       card.changedMode = event.afterChangedMode !== false;
+    }
+    if (event.type === "MONSTER_TURN_RESET") {
+      const card = findUiCard(uiState, event.cardId);
+      if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
+      card.used = Boolean(event.afterUsed);
+      card.changedMode = Boolean(event.afterChangedMode);
     }
     if (event.type === "BATTLE_WEAR_APPLIED") {
       const card = findUiCard(uiState, event.cardId);
@@ -249,6 +279,12 @@ export function applyUiGameEvents(uiState, events = []) {
     }
     if (event.type === "ABILITY_SPENT") {
       applyUiAbilityEvent(uiState, event, -1);
+    }
+    if (event.type === "TURN_ABILITIES_EXPIRED") {
+      const duelist = uiDuelist(uiState, event.playerId);
+      duelist.directAttacks = 0;
+      duelist.extraSummon = 0;
+      duelist.attackResets = 0;
     }
   });
   uiState.gameEvents = Array.isArray(uiState.gameEvents) ? uiState.gameEvents : [];
@@ -488,6 +524,25 @@ export function dispatchChangeMonsterModeFromUiState(uiState, playerId, fieldInd
   };
   if (mode) action.mode = mode;
   const events = engine.dispatch(action);
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchStartTurnFromUiState(uiState, playerId) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "START_TURN",
+    playerId
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchChangePhaseFromUiState(uiState, playerId, phase) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "CHANGE_PHASE",
+    playerId,
+    phase
+  });
   return applyUiGameEvents(uiState, events);
 }
 

@@ -234,6 +234,18 @@ async function runAiGuardSkipSmoke(ctx) {
   setSmokeStatus("running", "ai-guard-skip");
   await startSmokeDuel(ctx, "guardSkip");
   const playerLpBefore = ctx.state.player.lp;
+  const guardian = ctx.state.player.field.find((card) => card?.id === "iron-guardian");
+  const turnEventsBefore = countGameEvents(ctx.state, "TURN_STARTED");
+  const resetEventsBefore = countGameEvents(ctx.state, "MONSTER_TURN_RESET");
+  const expiredEventsBefore = countGameEvents(ctx.state, "TURN_ABILITIES_EXPIRED");
+  guardian.used = true;
+  guardian.changedMode = true;
+  ctx.state.player.extraSummon = 1;
+  ctx.state.player.attackResets = 1;
+  ctx.state.player.directAttacks = 1;
+  ctx.state.player.attacksSkipped = true;
+  ctx.state.player.comboThisTurn = true;
+  ctx.state.player.comboFlags = { smoke: true };
   await finishPlayerTurn(ctx);
   await waitForSmoke(
     () => ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.aiRunning,
@@ -251,6 +263,20 @@ async function runAiGuardSkipSmoke(ctx) {
   }
   if (!ctx.state.log.some((entry) => entry.includes("AI 保留 星轨枪兵"))) {
     throw new Error("AI 应记录保留攻击，避免玩家以为流程卡住");
+  }
+  if (guardian.used || guardian.changedMode) {
+    throw new Error("玩家新回合应通过怪兽重置事件恢复攻击和表示变更资格");
+  }
+  if (ctx.state.player.extraSummon || ctx.state.player.attackResets || ctx.state.player.directAttacks) {
+    throw new Error("玩家新回合应通过能力过期事件清空回合资源");
+  }
+  if (ctx.state.player.attacksSkipped || ctx.state.player.comboThisTurn || Object.keys(ctx.state.player.comboFlags || {}).length) {
+    throw new Error("玩家新回合应通过开始回合事件清空回合标记");
+  }
+  if (countGameEvents(ctx.state, "TURN_STARTED") < turnEventsBefore + 2 ||
+      countGameEvents(ctx.state, "MONSTER_TURN_RESET") < resetEventsBefore + 1 ||
+      countGameEvents(ctx.state, "TURN_ABILITIES_EXPIRED") < expiredEventsBefore + 1) {
+    throw new Error("完整回合循环缺少开始回合、怪兽重置或能力过期事件");
   }
   setSmokeStatus("passed", "ai-guard-skip");
 }
@@ -799,7 +825,15 @@ async function runAiCounterChainSmoke(ctx) {
   if (!ctx.els.chainText.textContent.includes("反击阵列")) {
     throw new Error("AI 反制场景应先提示玩家发动反击阵列");
   }
+  if (ctx.els.chainYes.disabled) {
+    throw new Error("反击阵列已自动选中，但发动按钮仍被禁用");
+  }
   clickSmokeElement(ctx.els.chainYes, "发动反击阵列");
+  await waitForSmoke(
+    () => !ctx.els.chainModal.classList.contains("show"),
+    "确认反击阵列后关闭响应窗口",
+    3000
+  );
   await waitForSmoke(
     () => !ctx.state.player.traps.some((card) => card?.id === "counter-array") &&
       !ctx.state.ai.traps.some((card) => card?.id === "chain-nullifier") &&

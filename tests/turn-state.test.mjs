@@ -130,13 +130,9 @@ test("builds standardized action-window patches with deadlines", () => {
 
 test("builds transition patches for turn flow", () => {
   assert.deepEqual(turnStartPatch(TURNS.player), {
-    turn: TURNS.player,
-    phase: PHASES.draw,
-    timing: TIMINGS.draw,
     selected: null,
     pendingTarget: null,
     focusedCard: null,
-    summonedThisTurn: false,
     autoEnding: false,
     actionWindow: ACTION_WINDOWS.draw,
     actionDeadline: 0,
@@ -146,8 +142,6 @@ test("builds transition patches for turn flow", () => {
   });
 
   assert.deepEqual(drawToMainPatch(), {
-    phase: PHASES.main,
-    timing: TIMINGS.mainOpen,
     actionWindow: ACTION_WINDOWS.main,
     pendingTarget: null,
     actionDeadline: 0,
@@ -156,8 +150,6 @@ test("builds transition patches for turn flow", () => {
   });
 
   assert.deepEqual(mainToBattlePatch(), {
-    phase: PHASES.battle,
-    timing: TIMINGS.battleOpen,
     actionWindow: ACTION_WINDOWS.battle,
     pendingTarget: null,
     actionDeadline: 0,

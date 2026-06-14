@@ -10,6 +10,7 @@ import {
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
   dispatchCloseResponseWindowFromUiState,
+  dispatchChangePhaseFromUiState,
   dispatchChangeMonsterModeFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
@@ -18,6 +19,7 @@ import {
   dispatchQueueTrapResponseFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
+  dispatchStartTurnFromUiState,
   dispatchTrapResponseFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState
@@ -618,6 +620,75 @@ test("dispatches monster mode changes and replays them into UI state", () => {
     event.to === "defense"
   ));
   assert.equal(state.gameEvents.length, events.length);
+});
+
+test("dispatches turn start and replays rule resets into UI state", () => {
+  const first = uiMonster("turn-first", "star-lancer");
+  first.used = true;
+  first.changedMode = true;
+  first.mode = "defense";
+  const second = uiMonster("turn-second", "iron-guardian");
+  second.used = false;
+  second.changedMode = true;
+  const state = appState({ turn: "ai", phase: PHASES.battle, summonedThisTurn: true });
+  state.player.field[0] = first;
+  state.player.field[1] = second;
+  state.player.extraSummon = 2;
+  state.player.attackResets = 1;
+  state.player.directAttacks = 1;
+  state.player.attacksSkipped = true;
+  state.player.comboThisTurn = true;
+  state.player.comboFlags = { fireWind: true };
+
+  const events = dispatchStartTurnFromUiState(state, "player");
+
+  assert.equal(state.turn, "player");
+  assert.equal(state.phase, PHASES.draw);
+  assert.equal(state.timing, "draw");
+  assert.equal(state.summonedThisTurn, false);
+  assert.equal(first.used, false);
+  assert.equal(first.changedMode, false);
+  assert.equal(second.changedMode, false);
+  assert.equal(state.player.extraSummon, 0);
+  assert.equal(state.player.attackResets, 0);
+  assert.equal(state.player.directAttacks, 0);
+  assert.equal(state.player.attacksSkipped, false);
+  assert.equal(state.player.comboThisTurn, false);
+  assert.deepEqual(state.player.comboFlags, {});
+  assert.ok(events.some((event) => event.type === "TURN_STARTED" && event.playerId === "player"));
+  assert.equal(events.filter((event) => event.type === "MONSTER_TURN_RESET").length, 2);
+  assert.ok(events.some((event) => event.type === "TURN_ABILITIES_EXPIRED"));
+});
+
+test("phase events preserve attack response windows after a started turn", () => {
+  const attacker = uiMonster("ai-phase-attacker", "star-lancer");
+  attacker.ownerId = "ai";
+  const target = uiMonster("player-phase-target", "gale-mage");
+  const trap = uiTrap("player-phase-trap", "counter-array");
+  trap.trigger = "counterBoost";
+  const state = appState({ phase: PHASES.main, turn: "player" });
+  state.player.field[0] = target;
+  state.player.traps[0] = trap;
+  state.ai.field[0] = attacker;
+
+  dispatchStartTurnFromUiState(state, "ai");
+  dispatchChangePhaseFromUiState(state, "ai", PHASES.main);
+  dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
+  const declarationEvents = dispatchDeclareAttackFromUiState(state, "ai", "player", 0, 0);
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+
+  assert.equal(state.phase, PHASES.battle);
+  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow?.playerId, "player");
+
+  const responseEvents = dispatchQueueTrapResponseFromUiState(state, "player", "ai", 0, {
+    attackerIndex: 0,
+    targetEffectId: declaration.id
+  });
+
+  assert.equal(state.player.traps[0], null);
+  assert.deepEqual(state.player.grave, [trap]);
+  assert.ok(responseEvents.some((event) => event.type === "CHAIN_LINK_COMMITTED" && event.cardId === trap.uid));
+  assert.equal(state.gameEvents.filter((event) => event.type === "PHASE_CHANGED").length, 2);
 });
 
 test("does not mutate UI state when SUMMON_MONSTER is rejected by the engine", () => {

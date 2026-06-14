@@ -403,6 +403,9 @@ export class GameEngine {
       case "CHANGE_MONSTER_MODE":
         this.#changeMonsterMode(workingState, emit, action);
         break;
+      case "START_TURN":
+        this.#startTurn(workingState, emit, action);
+        break;
       case "SUMMON_MONSTER":
         this.#summonMonster(workingState, ctx, emit, action);
         break;
@@ -730,6 +733,52 @@ export class GameEngine {
     });
   }
 
+  #startTurn(state, emit, action) {
+    requirePlayer(state, action.playerId);
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("Cannot start a turn while a response window is open");
+    }
+    if (state.machine.chain.length > 0) {
+      throw new GameRuleError("Cannot start a turn while a chain is unresolved");
+    }
+
+    const previousPlayerId = state.turn.playerId;
+    const player = requirePlayer(state, action.playerId);
+    const monsterResets = player.monsterZone
+      .map((cardId) => requireCard(state, cardId))
+      .filter((card) => card.used || card.changedMode)
+      .map((card) => ({
+        cardId: card.id,
+        beforeUsed: Boolean(card.used),
+        beforeChangedMode: Boolean(card.changedMode)
+      }));
+    const expiredAbilities = (state.abilities[action.playerId] || [])
+      .filter((entry) => entry.duration === "turn")
+      .map((entry) => clone(entry));
+
+    emit("TURN_STARTED", {
+      playerId: action.playerId,
+      previousPlayerId,
+      phase: Phase.draw,
+      timing: Timing.draw,
+      resetTurnFlags: true
+    });
+    monsterResets.forEach((reset) => {
+      emit("MONSTER_TURN_RESET", {
+        playerId: action.playerId,
+        ...reset,
+        afterUsed: false,
+        afterChangedMode: false
+      });
+    });
+    if (expiredAbilities.length > 0) {
+      emit("TURN_ABILITIES_EXPIRED", {
+        playerId: action.playerId,
+        abilities: expiredAbilities
+      });
+    }
+  }
+
   #changePhase(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
     if (!PHASE_ORDER.includes(action.phase)) {
@@ -1028,6 +1077,9 @@ export function applyGameEvent(state, event, options = {}) {
     case "PHASE_CHANGED":
       applyPhaseChanged(state, event);
       break;
+    case "TURN_STARTED":
+      applyTurnStarted(state, event);
+      break;
     case "TIMING_CHANGED":
       applyTimingChanged(state, event);
       break;
@@ -1055,6 +1107,9 @@ export function applyGameEvent(state, event, options = {}) {
     case "ABILITY_SPENT":
       applyAbilitySpent(state, event);
       break;
+    case "TURN_ABILITIES_EXPIRED":
+      applyTurnAbilitiesExpired(state, event);
+      break;
     case "COMMAND_DISPATCHED":
     case "CARD_ACTIVATED":
     case "TRAP_SET":
@@ -1075,6 +1130,9 @@ export function applyGameEvent(state, event, options = {}) {
       break;
     case "MONSTER_MODE_CHANGED":
       applyMonsterModeChanged(state, event);
+      break;
+    case "MONSTER_TURN_RESET":
+      applyMonsterTurnReset(state, event);
       break;
     case "BATTLE_WEAR_APPLIED":
       applyBattleWearApplied(state, event);
@@ -1172,6 +1230,15 @@ function applyMonsterModeChanged(state, event) {
   card.changedMode = event.afterChangedMode !== false;
 }
 
+function applyMonsterTurnReset(state, event) {
+  const card = requireCardInZone(state, event.playerId, "monsterZone", event.cardId);
+  if (card.type !== "monster") {
+    throw new GameRuleError(`Card ${event.cardId} is not a monster`);
+  }
+  card.used = Boolean(event.afterUsed);
+  card.changedMode = Boolean(event.afterChangedMode);
+}
+
 function applyBattleWearApplied(state, event) {
   const card = requireCard(state, event.cardId);
   card.battleWear = Math.max(0, Number(event.after) || 0);
@@ -1209,6 +1276,19 @@ function applyPhaseChanged(state, event) {
   state.machine.timing = timingForPhase(event.to);
   state.machine.responseWindow = null;
   state.machine.chain = [];
+}
+
+function applyTurnStarted(state, event) {
+  const player = requirePlayer(state, event.playerId);
+  state.turn.playerId = event.playerId;
+  state.turn.phase = Phase.draw;
+  state.machine.phase = Phase.draw;
+  state.machine.timing = Timing.draw;
+  state.machine.responseWindow = null;
+  state.machine.chain = [];
+  player.attacksSkipped = false;
+  player.comboThisTurn = false;
+  player.comboFlags = {};
 }
 
 function applyTimingChanged(state, event) {
@@ -1310,6 +1390,12 @@ function applyAbilitySpent(state, event) {
   if (abilities[index].uses <= 0) {
     abilities.splice(index, 1);
   }
+}
+
+function applyTurnAbilitiesExpired(state, event) {
+  requirePlayer(state, event.playerId);
+  state.abilities[event.playerId] = (state.abilities[event.playerId] || [])
+    .filter((entry) => entry.duration !== "turn");
 }
 
 function runEffect(effects, effectId, ctx, action, card) {
@@ -1751,6 +1837,11 @@ function normalizeState(state) {
   state.abilities = state.abilities && typeof state.abilities === "object" ? state.abilities : {};
   for (const playerId of Object.keys(state.players || {})) {
     state.abilities[playerId] = Array.isArray(state.abilities[playerId]) ? state.abilities[playerId] : [];
+    state.players[playerId].attacksSkipped = Boolean(state.players[playerId].attacksSkipped);
+    state.players[playerId].comboThisTurn = Boolean(state.players[playerId].comboThisTurn);
+    state.players[playerId].comboFlags = state.players[playerId].comboFlags && typeof state.players[playerId].comboFlags === "object"
+      ? state.players[playerId].comboFlags
+      : {};
   }
   return state;
 }
@@ -1903,6 +1994,12 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
   };
 
   for (const event of events) {
+    if (event.type === "TURN_STARTED") {
+      machine.phase = Phase.draw;
+      machine.timing = Timing.draw;
+      machine.responseWindow = null;
+      machine.chain = [];
+    }
     if (event.type === "PHASE_CHANGED") {
       machine.phase = event.to;
       machine.timing = timingForPhase(event.to);

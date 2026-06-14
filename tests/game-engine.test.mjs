@@ -30,6 +30,9 @@ function basePlayer(overrides = {}) {
     spellTrapZone: [],
     grave: [],
     banished: [],
+    attacksSkipped: false,
+    comboThisTurn: false,
+    comboFlags: {},
     ...overrides
   };
 }
@@ -1631,6 +1634,73 @@ test("monster mode changes reject illegal phases and used monsters", () => {
   assert.throws(
     () => usedEngine.dispatch({ type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "used-mode", mode: "defense" }),
     /after attacking/
+  );
+});
+
+test("start turn switches ownership and resets turn-scoped state through events", () => {
+  const state = makeState({
+    cards: [
+      card("ready-1", { type: "monster", used: true, changedMode: true, mode: "defense" }),
+      card("ready-2", { type: "monster", used: false, changedMode: true, mode: "attack" })
+    ],
+    player: {
+      monsterZone: ["ready-1", "ready-2"],
+      attacksSkipped: true,
+      comboThisTurn: true,
+      comboFlags: { fireWind: true }
+    },
+    turn: { playerId: AI, phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  state.abilities[PLAYER] = [
+    { ability: Ability.directAttack, uses: 1, duration: "turn", sourceCardId: "breach-1" },
+    { ability: Ability.extraSummon, uses: 2, duration: "turn", sourceCardId: "twin-1" },
+    { ability: Ability.attackReset, uses: 1, duration: "duel", sourceCardId: "permanent-1" }
+  ];
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({ type: "START_TURN", playerId: PLAYER });
+  const next = engine.getState();
+
+  assert.equal(next.turn.playerId, PLAYER);
+  assert.equal(next.turn.phase, Phase.draw);
+  assert.equal(next.machine.phase, Phase.draw);
+  assert.equal(next.machine.timing, Timing.draw);
+  assert.equal(next.cards["ready-1"].used, false);
+  assert.equal(next.cards["ready-1"].changedMode, false);
+  assert.equal(next.cards["ready-2"].changedMode, false);
+  assert.equal(next.players[PLAYER].attacksSkipped, false);
+  assert.equal(next.players[PLAYER].comboThisTurn, false);
+  assert.deepEqual(next.players[PLAYER].comboFlags, {});
+  assert.deepEqual(next.abilities[PLAYER], [
+    { ability: Ability.attackReset, uses: 1, duration: "duel", sourceCardId: "permanent-1" }
+  ]);
+  assert.ok(events.some((event) => event.type === "TURN_STARTED" && event.playerId === PLAYER && event.previousPlayerId === AI));
+  assert.equal(events.filter((event) => event.type === "MONSTER_TURN_RESET").length, 2);
+  assert.ok(events.some((event) =>
+    event.type === "TURN_ABILITIES_EXPIRED" &&
+    event.playerId === PLAYER &&
+    event.abilities.length === 2
+  ));
+});
+
+test("start turn rejects unresolved response windows", () => {
+  const state = makeState({ turn: { playerId: AI, phase: Phase.battle } });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.attackDeclaration;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.attackDeclaration,
+    resumeTiming: Timing.battleOpen,
+    triggerEventId: "attack-open"
+  };
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({ type: "START_TURN", playerId: PLAYER }),
+    /response window is open/
   );
 });
 

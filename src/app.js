@@ -13,6 +13,7 @@ import {
   canDispatchTrapFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchChangePhaseFromUiState,
   dispatchChangeMonsterModeFromUiState,
   dispatchCloseResponseWindowFromUiState,
   dispatchDeclareAttackFromUiState,
@@ -23,6 +24,7 @@ import {
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
   dispatchSetTrapFromUiState,
+  dispatchStartTurnFromUiState,
   dispatchSummonMonsterFromUiState,
   dispatchTrapResponseFromUiState
 } from './engine-adapter.js';
@@ -3210,6 +3212,13 @@ function enterPlayerBattlePhase(reason = "战斗时点", { preserveSelection = f
   clearPlayerIdleTimers();
   if (!preserveSelection) state.selected = null;
   clearBattlePreview();
+  try {
+    dispatchChangePhaseFromUiState(state, "player", PHASES.battle);
+  } catch (error) {
+    cue(error.message || "无法进入战斗阶段。");
+    console.error(error);
+    return false;
+  }
   Object.assign(state, mainToBattlePatch());
   if (!quiet) {
     playSound("click");
@@ -3328,23 +3337,17 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
 }
 
 function beginTurn(owner) {
+  try {
+    dispatchStartTurnFromUiState(state, owner);
+  } catch (error) {
+    cue(error.message || "回合开始失败。");
+    console.error(error);
+    return false;
+  }
   Object.assign(state, turnStartPatch(owner));
   clearBattlePreview();
   cancelAutoEnd();
   clearPlayerIdleTimers();
-  const duelist = activeDuelist();
-  duelist.field.forEach((card) => {
-    if (card) {
-      card.used = false;
-      card.changedMode = false;
-    }
-  });
-  duelist.comboThisTurn = false;
-  duelist.comboFlags = {};
-  duelist.extraSummon = 0;
-  duelist.attackResets = 0;
-  duelist.directAttacks = 0;
-  duelist.attacksSkipped = false;
   playSound("turn");
   addLog(`${owner === "player" ? "你的" : "AI 的"}回合开始。`);
   playVoice(owner, "turn", owner === "player" ? "轮到你了。抽卡。" : "对手回合。");
@@ -3353,6 +3356,7 @@ function beginTurn(owner) {
       if (!state.paused) autoPlayerDraw();
     }, 700);
   }
+  return true;
 }
 
 function toggleSelectedMode() {
@@ -3392,6 +3396,13 @@ function autoPlayerDraw() {
   if (state.phase !== PHASES.draw) return;
   state.pendingOpeningDraw = false;
   drawCard(state.player);
+  try {
+    dispatchChangePhaseFromUiState(state, "player", PHASES.main);
+  } catch (error) {
+    cue(error.message || "无法进入主要阶段。");
+    console.error(error);
+    return;
+  }
   Object.assign(state, drawToMainPatch());
   render("draw-player");
   resetPlayerIdleCountdown();
@@ -3415,8 +3426,7 @@ async function runAiTurn() {
     setActionWindow("ai");
     await sleep(950);
     drawCard(state.ai);
-    state.phase = PHASES.main;
-    state.timing = TIMINGS.mainOpen;
+    dispatchChangePhaseFromUiState(state, "ai", PHASES.main);
     render();
     await sleep(1500);
     await aiPlaySpells();
@@ -3444,8 +3454,7 @@ async function runAiTurn() {
       await sleep(1850);
     }
     if (state.gameOver) return;
-    state.phase = PHASES.battle;
-    state.timing = TIMINGS.battleOpen;
+    dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
     await aiAttack();
     if (!state.gameOver) {
       await sleep(1150);

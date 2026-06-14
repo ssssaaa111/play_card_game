@@ -180,13 +180,9 @@ export function pauseResumeStep(state = {}) {
 
 export function turnStartPatch(owner) {
   return {
-    turn: owner,
-    phase: PHASES.draw,
-    timing: TIMINGS.draw,
     selected: null,
     pendingTarget: null,
     focusedCard: null,
-    summonedThisTurn: false,
     autoEnding: false,
     actionWindow: ACTION_WINDOWS.draw,
     actionDeadline: 0,
@@ -198,8 +194,6 @@ export function turnStartPatch(owner) {
 
 export function drawToMainPatch() {
   return {
-    phase: PHASES.main,
-    timing: TIMINGS.mainOpen,
     actionWindow: ACTION_WINDOWS.main,
     pendingTarget: null,
     actionDeadline: 0,
@@ -210,8 +204,6 @@ export function drawToMainPatch() {
 
 export function mainToBattlePatch() {
   return {
-    phase: PHASES.battle,
-    timing: TIMINGS.battleOpen,
     actionWindow: ACTION_WINDOWS.battle,
     pendingTarget: null,
     actionDeadline: 0,
