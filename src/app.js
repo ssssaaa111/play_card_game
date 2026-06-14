@@ -17,6 +17,7 @@ import {
   dispatchChangeMonsterModeFromUiState,
   dispatchCloseResponseWindowFromUiState,
   dispatchDeclareAttackFromUiState,
+  dispatchDrawCardsFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
   dispatchPassResponsePriorityFromUiState,
@@ -90,7 +91,6 @@ const state = {
   selected: null,
   pendingTarget: null,
   focusedCard: null,
-  summonedThisTurn: false,
   autoEnding: false,
   autoEndTimer: null,
   actionWindow: ACTION_WINDOWS.setup,
@@ -927,7 +927,6 @@ function startGame() {
   state.pendingTarget = null;
   state.focusedCard = null;
   clearBattlePreview();
-  state.summonedThisTurn = false;
   state.autoEnding = false;
   cancelAutoEnd();
   setActionWindow("draw");
@@ -946,10 +945,8 @@ function startGame() {
   els.modal.classList.remove("show");
   els.modalRestart.textContent = "再来一局";
   if (state.scenarioId === "normal") {
-    for (let i = 0; i < 5; i += 1) {
-      drawCard(state.player, false);
-      drawCard(state.ai, false);
-    }
+    drawCards(state.player, 5, { announce: false, reason: "opening" });
+    drawCards(state.ai, 5, { announce: false, reason: "opening" });
   } else {
     applyScenarioSetup();
   }
@@ -978,7 +975,6 @@ function prepareGame() {
   state.pendingTarget = null;
   state.focusedCard = null;
   clearBattlePreview();
-  state.summonedThisTurn = false;
   state.autoEnding = false;
   cancelAutoEnd();
   setActionWindow("setup");
@@ -1001,41 +997,52 @@ function prepareGame() {
   render();
 }
 
-function drawCard(duelist, announce = true) {
-  if (duelist.deck.length === 0) {
-    damage(duelist, 500);
-    playSound("damage");
-    addLog(`${duelist.owner === "player" ? "你" : "AI"} 无卡可抽，受到 500 点伤害。`);
-    speak(`${duelist.owner === "player" ? "你" : "对手"}无卡可抽，受到伤害。`);
-    checkGameOver();
-    return null;
-  }
-  const card = duelist.deck.shift();
-  duelist.hand.push(card);
-  if (announce) {
-    playSound("draw");
-    playDrawEffect(duelist.owner, card);
-    addLog(`${duelist.owner === "player" ? "你" : "AI"} 抽了 1 张卡。`);
-    playVoice(duelist.owner, "draw", duelist.owner === "player" ? "抽卡。" : "对手抽卡。");
-  }
-  return card;
+function drawCard(duelist, announce = true, reason = "effect") {
+  return drawCards(duelist, 1, { announce, reason })[0] || null;
 }
 
-function drawCards(duelist, count) {
-  const drawn = [];
-  for (let i = 0; i < count; i += 1) {
-    const card = drawCard(duelist, false);
-    if (card) {
-      drawn.push(card);
+function drawCards(duelist, count, { announce = true, reason = "effect", sourceCardId = null } = {}) {
+  let events = [];
+  try {
+    events = dispatchDrawCardsFromUiState(state, duelist.owner, count, { reason, sourceCardId });
+  } catch (error) {
+    cue(error.message || "抽卡失败。");
+    console.error(error);
+    return [];
+  }
+
+  const drawEvent = events.find((event) => event.type === "CARDS_DRAWN");
+  const drawn = (drawEvent?.cardIds || [])
+    .map((cardId) => findRuntimeCard(cardId)?.card)
+    .filter(Boolean);
+  if (announce && drawn.length > 0) {
+    drawn.forEach((card, index) => {
       window.setTimeout(() => {
         playSound("draw");
         playDrawEffect(duelist.owner, card);
-      }, i * 760);
-    }
-  }
-  if (drawn.length > 0) {
+      }, index * 760);
+    });
     addLog(`${duelist.owner === "player" ? "你" : "AI"} 抽了 ${drawn.length} 张卡。`);
     playVoice(duelist.owner, "draw", duelist.owner === "player" ? `抽 ${drawn.length} 张卡。` : `对手抽 ${drawn.length} 张卡。`);
+  }
+
+  const failed = events.find((event) => event.type === "DRAW_FAILED");
+  const damageEvent = events.find((event) => event.type === "DAMAGE_DEALT");
+  if (failed) {
+    const blocked = Math.max(0, Number(damageEvent?.blocked) || 0);
+    const dealt = Math.max(0, Number(damageEvent?.amount) || 0);
+    if (blocked > 0) {
+      playSound("guard");
+      playGuardShield(panelElement(duelist.owner));
+    }
+    if (dealt > 0) {
+      playSound("damage");
+      playLifeDelta(duelist.owner, -dealt);
+      animateAvatar(duelist.owner, "hit");
+    }
+    addLog(`${duelist.owner === "player" ? "你" : "AI"} 少抽 ${failed.missing} 张卡，受到 ${dealt} 点伤害${blocked > 0 ? `，护盾吸收 ${blocked}` : ""}。`);
+    speak(`${duelist.owner === "player" ? "你" : "对手"}无卡可抽，受到伤害。`);
+    checkGameOver();
   }
   return drawn;
 }
@@ -1222,7 +1229,7 @@ function currentPlayerActions() {
   const summary = summarizePlayerActions({
     player: state.player,
     pendingTarget: state.pendingTarget,
-    summonedThisTurn: state.summonedThisTurn,
+    summonedThisTurn: state.player.normalSummonsUsed > 0,
     canSpell: (card, index) => card.type === "spell" && validateSpell(state.player, state.ai, card, index).ok
   });
   const actions = actionsForPhase(summary, state.phase);
@@ -1716,8 +1723,7 @@ async function handlePlayerSlot(index) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
-  const usingExtraSummon = state.summonedThisTurn && state.player.extraSummon > 0;
-  if (state.summonedThisTurn && !usingExtraSummon) {
+  if (state.player.normalSummonsUsed > 0 && state.player.extraSummon <= 0) {
     announce("本回合已经召唤过怪兽");
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
@@ -1731,12 +1737,6 @@ async function handlePlayerSlot(index) {
   if (!summoned) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
-  }
-  if (usingExtraSummon) {
-    state.player.extraSummon -= 1;
-    addLog("额外召唤机会已使用。");
-  } else {
-    state.summonedThisTurn = true;
   }
   state.selected = null;
   render("summon-player-" + index);
@@ -1935,6 +1935,9 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
     playDuelistLine(owner.owner, lineFor(owner.owner, "summon", card), false, "summon");
   }
   const summonedEvent = summonEvents.find((event) => event.type === "MONSTER_SUMMONED" && event.cardId === runtimeCardId(card));
+  if (summonEvents.some((event) => event.type === "ABILITY_SPENT" && event.ability === "extraSummon")) {
+    addLog(`${owner.owner === "player" ? "你" : "AI"} 使用了额外召唤机会。`);
+  }
   if (!summonedEvent) {
     cue("召唤事件缺失，已中断后续响应结算。");
     return true;
@@ -2026,11 +2029,7 @@ const spellEffects = {
     apply: ({ owner, card }) => gainShield(owner, 800, card.name)
   },
   extraSummon: {
-    ...spellDefinitions.extraSummon,
-    apply: ({ owner }) => {
-      owner.extraSummon += 1;
-      addLog(`${duelistLabel(owner)}本回合获得 1 次额外通常召唤。`);
-    }
+    ...spellDefinitions.extraSummon
   },
   elementEcho: {
     ...spellDefinitions.elementEcho,
@@ -3395,7 +3394,11 @@ function autoPlayerDraw() {
   if (!canPlayerAct()) return;
   if (state.phase !== PHASES.draw) return;
   state.pendingOpeningDraw = false;
-  drawCard(state.player);
+  drawCard(state.player, true, "turn");
+  if (state.gameOver) {
+    render();
+    return;
+  }
   try {
     dispatchChangePhaseFromUiState(state, "player", PHASES.main);
   } catch (error) {
@@ -3425,7 +3428,8 @@ async function runAiTurn() {
   try {
     setActionWindow("ai");
     await sleep(950);
-    drawCard(state.ai);
+    drawCard(state.ai, true, "turn");
+    if (state.gameOver) return;
     dispatchChangePhaseFromUiState(state, "ai", PHASES.main);
     render();
     await sleep(1500);
@@ -3448,8 +3452,6 @@ async function runAiTurn() {
       await sleep(950);
       const summoned = await aiSummon();
       if (!summoned) break;
-      state.ai.extraSummon -= 1;
-      addLog("AI 使用了额外召唤机会。");
       render();
       await sleep(1850);
     }
@@ -4437,7 +4439,7 @@ function handActionInfo(card, handIndex) {
     selected,
     hasMonsterZone: state.player.field.some((slot) => !slot),
     hasTrapZone: state.player.traps.some((slot) => !slot),
-    summonedThisTurn: state.summonedThisTurn,
+    summonedThisTurn: state.player.normalSummonsUsed > 0,
     extraSummon: state.player.extraSummon,
     spellValidation: card.type === "spell" ? validateSpell(state.player, state.ai, card, handIndex) : { ok: true },
     spellNeedsManualTarget: needsTarget,

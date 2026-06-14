@@ -236,6 +236,7 @@ async function runAiGuardSkipSmoke(ctx) {
   const playerLpBefore = ctx.state.player.lp;
   const guardian = ctx.state.player.field.find((card) => card?.id === "iron-guardian");
   const turnEventsBefore = countGameEvents(ctx.state, "TURN_STARTED");
+  const drawEventsBefore = countGameEvents(ctx.state, "CARDS_DRAWN");
   const resetEventsBefore = countGameEvents(ctx.state, "MONSTER_TURN_RESET");
   const expiredEventsBefore = countGameEvents(ctx.state, "TURN_ABILITIES_EXPIRED");
   guardian.used = true;
@@ -274,6 +275,7 @@ async function runAiGuardSkipSmoke(ctx) {
     throw new Error("玩家新回合应通过开始回合事件清空回合标记");
   }
   if (countGameEvents(ctx.state, "TURN_STARTED") < turnEventsBefore + 2 ||
+      countGameEvents(ctx.state, "CARDS_DRAWN") < drawEventsBefore + 2 ||
       countGameEvents(ctx.state, "MONSTER_TURN_RESET") < resetEventsBefore + 1 ||
       countGameEvents(ctx.state, "TURN_ABILITIES_EXPIRED") < expiredEventsBefore + 1) {
     throw new Error("完整回合循环缺少开始回合、怪兽重置或能力过期事件");
@@ -285,6 +287,7 @@ async function runSummonEffectsSmoke(ctx) {
   setSmokeStatus("running", "summon-effects");
   await startSmokeDuel(ctx, "summonEffects");
   ctx.state.player.lp = 3600;
+  ctx.state.player.extraSummon = 2;
   const aiLpBefore = ctx.state.ai.lp;
   clickSmokeElement(handCard(ctx.els, "ember-drake"), "summon ember drake");
   clickSmokeElement(fieldSlot(ctx.els, "player", 0), "ember drake slot");
@@ -296,7 +299,6 @@ async function runSummonEffectsSmoke(ctx) {
     9000
   );
 
-  ctx.state.summonedThisTurn = false;
   clickSmokeElement(handCard(ctx.els, "gale-mage"), "summon gale mage");
   clickSmokeElement(fieldSlot(ctx.els, "player", 1), "gale mage slot");
   await waitForSmoke(
@@ -307,7 +309,6 @@ async function runSummonEffectsSmoke(ctx) {
     9000
   );
 
-  ctx.state.summonedThisTurn = false;
   ctx.state.player.lp = 3000;
   const lpBeforeHeal = ctx.state.player.lp;
   clickSmokeElement(handCard(ctx.els, "night-oracle"), "summon night oracle");
@@ -319,6 +320,14 @@ async function runSummonEffectsSmoke(ctx) {
     "night oracle on-summon heal through event",
     9000
   );
+
+  if (ctx.state.player.normalSummonsUsed !== 1 || ctx.state.player.extraSummon !== 0) {
+    throw new Error("连续三次召唤后应保留一次普通召唤记录并耗尽两次额外召唤");
+  }
+  if (countGameEvents(ctx.state, "NORMAL_SUMMON_USED") !== 1 ||
+      (ctx.state.gameEvents || []).filter((event) => event.type === "ABILITY_SPENT" && event.ability === "extraSummon").length !== 2) {
+    throw new Error("连续召唤缺少普通召唤或额外召唤消耗事件");
+  }
 
   setSmokeStatus("passed", "summon-effects");
 }
@@ -868,7 +877,7 @@ async function runModeAutoEndSmoke(ctx) {
     card.used = false;
     card.changedMode = false;
   });
-  ctx.state.summonedThisTurn = true;
+  ctx.state.player.normalSummonsUsed = 1;
   clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "选择第一只怪兽");
   clickSmokeElement(ctx.els.modeBtn, "第一只怪兽切换守备");
   await waitForSmoke(
@@ -928,7 +937,7 @@ async function runInvalidSpellAutoEndSmoke(ctx) {
     card.used = false;
     card.changedMode = true;
   });
-  ctx.state.summonedThisTurn = true;
+  ctx.state.player.normalSummonsUsed = 1;
   clickSmokeElement(handCard(ctx.els, "eclipse-barrier"), "查看不可发动的晨昏星界");
   await waitForSmoke(
     () => ctx.state.actionWindow === "autoEnd" || ctx.state.turn === "ai",

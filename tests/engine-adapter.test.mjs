@@ -13,6 +13,7 @@ import {
   dispatchChangePhaseFromUiState,
   dispatchChangeMonsterModeFromUiState,
   dispatchDeclareAttackFromUiState,
+  dispatchDrawCardsFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
   dispatchPassResponsePriorityFromUiState,
@@ -140,6 +141,7 @@ test("dispatches SUMMON_MONSTER and applies CARD_MOVED to a fixed UI monster slo
   assert.equal(lancer.mode, "attack");
   assert.equal(lancer.used, false);
   assert.equal(lancer.changedMode, false);
+  assert.equal(state.player.normalSummonsUsed, 1);
   assert.ok(events.some((event) =>
     event.type === "CARD_MOVED" &&
     event.cardId === lancer.uid &&
@@ -148,6 +150,24 @@ test("dispatches SUMMON_MONSTER and applies CARD_MOVED to a fixed UI monster slo
   ));
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === lancer.uid));
   assert.equal(state.gameEvents.length, events.length);
+});
+
+test("dispatches turn draws and replays deck-out damage into UI state", () => {
+  const first = uiMonster("ui-draw-first", "star-lancer");
+  const second = uiMonster("ui-draw-second", "iron-guardian");
+  const state = appState({ phase: PHASES.draw, turn: "player" });
+  state.player.lp = 4000;
+  state.player.shield = 200;
+  state.player.deck = [first, second];
+
+  const events = dispatchDrawCardsFromUiState(state, "player", 3, { reason: "turn" });
+
+  assert.deepEqual(state.player.deck, []);
+  assert.deepEqual(state.player.hand, [first, second]);
+  assert.equal(state.player.shield, 0);
+  assert.equal(state.player.lp, 3700);
+  assert.ok(events.some((event) => event.type === "DRAW_FAILED" && event.missing === 1));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.blocked === 200 && event.amount === 300));
 });
 
 test("dispatches basic on-summon effects through engine events", () => {
@@ -162,6 +182,7 @@ test("dispatches basic on-summon effects through engine events", () => {
   state.player.lp = 3600;
   state.player.hand = [ember, gale, oracle];
   state.player.deck = [deckCard];
+  state.player.extraSummon = 2;
 
   assert.equal(canDispatchSummonEffectFromUiState(ember), true);
   assert.equal(canDispatchSummonEffectFromUiState(gale), true);
@@ -630,7 +651,7 @@ test("dispatches turn start and replays rule resets into UI state", () => {
   const second = uiMonster("turn-second", "iron-guardian");
   second.used = false;
   second.changedMode = true;
-  const state = appState({ turn: "ai", phase: PHASES.battle, summonedThisTurn: true });
+  const state = appState({ turn: "ai", phase: PHASES.battle });
   state.player.field[0] = first;
   state.player.field[1] = second;
   state.player.extraSummon = 2;
@@ -639,13 +660,14 @@ test("dispatches turn start and replays rule resets into UI state", () => {
   state.player.attacksSkipped = true;
   state.player.comboThisTurn = true;
   state.player.comboFlags = { fireWind: true };
+  state.player.normalSummonsUsed = 1;
 
   const events = dispatchStartTurnFromUiState(state, "player");
 
   assert.equal(state.turn, "player");
   assert.equal(state.phase, PHASES.draw);
   assert.equal(state.timing, "draw");
-  assert.equal(state.summonedThisTurn, false);
+  assert.equal(state.player.normalSummonsUsed, 0);
   assert.equal(first.used, false);
   assert.equal(first.changedMode, false);
   assert.equal(second.changedMode, false);

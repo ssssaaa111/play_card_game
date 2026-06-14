@@ -406,6 +406,9 @@ export class GameEngine {
       case "START_TURN":
         this.#startTurn(workingState, emit, action);
         break;
+      case "DRAW_CARDS":
+        this.#drawCards(workingState, ctx, emit, action);
+        break;
       case "SUMMON_MONSTER":
         this.#summonMonster(workingState, ctx, emit, action);
         break;
@@ -516,6 +519,7 @@ export class GameEngine {
   #summonMonster(state, ctx, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.main], action.type);
+    const player = requirePlayer(state, action.playerId);
     const card = requireCardInZone(state, action.playerId, "hand", action.cardId);
     if (card.type !== "monster") {
       throw new GameRuleError(`Card ${action.cardId} is not a monster`);
@@ -523,6 +527,22 @@ export class GameEngine {
 
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };
+    if (player.normalSummonsUsed < 1) {
+      emit("NORMAL_SUMMON_USED", {
+        playerId: action.playerId,
+        before: player.normalSummonsUsed,
+        after: player.normalSummonsUsed + 1,
+        cardId: action.cardId
+      });
+    } else if (hasAbility(state, action.playerId, Ability.extraSummon)) {
+      emit("ABILITY_SPENT", {
+        playerId: action.playerId,
+        ability: Ability.extraSummon,
+        cardId: action.cardId
+      });
+    } else {
+      throw new GameRuleError(`${action.playerId} has no normal or extra summon remaining`);
+    }
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
       cardId: action.cardId,
@@ -779,6 +799,41 @@ export class GameEngine {
     }
   }
 
+  #drawCards(state, ctx, emit, action) {
+    requirePlayer(state, action.playerId);
+    const count = Number(action.count);
+    if (!Number.isInteger(count) || count <= 0 || count > 20) {
+      throw new GameRuleError(`Invalid draw count ${action.count}`);
+    }
+    const reason = action.reason || "effect";
+    if (!new Set(["opening", "turn", "effect"]).has(reason)) {
+      throw new GameRuleError(`Unknown draw reason ${reason}`);
+    }
+    if (reason === "turn") {
+      requireCurrentTurn(state, action.playerId);
+      requirePhase(state, [Phase.draw], action.type);
+    }
+    if (reason === "opening") {
+      requirePhase(state, [Phase.draw], action.type);
+    }
+
+    const drawn = ctx.drawCards(action.playerId, count, {
+      sourceCardId: action.sourceCardId || null
+    });
+    const missing = count - drawn.length;
+    if (missing <= 0) return;
+    emit("DRAW_FAILED", {
+      playerId: action.playerId,
+      requested: count,
+      drawn: drawn.length,
+      missing,
+      reason
+    });
+    ctx.dealDamage(action.playerId, missing * 500, {
+      sourceCardId: action.sourceCardId || null
+    });
+  }
+
   #changePhase(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
     if (!PHASE_ORDER.includes(action.phase)) {
@@ -1010,6 +1065,9 @@ export function assertValidGameState(state) {
     if (player.shield !== undefined && !Number.isFinite(Number(player.shield))) {
       throw new GameStateValidationError(`Player ${player.id} shield must be a finite number`);
     }
+    if (!Number.isInteger(player.normalSummonsUsed) || player.normalSummonsUsed < 0) {
+      throw new GameStateValidationError(`Player ${player.id} normal summon count must be a non-negative integer`);
+    }
 
     for (const zone of ZONE_KEYS) {
       const cards = player[zone];
@@ -1110,12 +1168,16 @@ export function applyGameEvent(state, event, options = {}) {
     case "TURN_ABILITIES_EXPIRED":
       applyTurnAbilitiesExpired(state, event);
       break;
+    case "NORMAL_SUMMON_USED":
+      applyNormalSummonUsed(state, event);
+      break;
     case "COMMAND_DISPATCHED":
     case "CARD_ACTIVATED":
     case "TRAP_SET":
     case "CARD_DESTROYED":
     case "EFFECT_NEGATED":
     case "EFFECT_SKIPPED":
+    case "DRAW_FAILED":
     case "CHAIN_LINK_RESOLVING":
     case "CHAIN_LINK_RESOLVED":
       break;
@@ -1289,6 +1351,7 @@ function applyTurnStarted(state, event) {
   player.attacksSkipped = false;
   player.comboThisTurn = false;
   player.comboFlags = {};
+  player.normalSummonsUsed = 0;
 }
 
 function applyTimingChanged(state, event) {
@@ -1396,6 +1459,15 @@ function applyTurnAbilitiesExpired(state, event) {
   requirePlayer(state, event.playerId);
   state.abilities[event.playerId] = (state.abilities[event.playerId] || [])
     .filter((entry) => entry.duration !== "turn");
+}
+
+function applyNormalSummonUsed(state, event) {
+  const player = requirePlayer(state, event.playerId);
+  const before = Math.max(0, Number(event.before) || 0);
+  if (player.normalSummonsUsed !== before) {
+    throw new GameRuleError(`Normal summon count changed before event replay for ${event.playerId}`);
+  }
+  player.normalSummonsUsed = Math.max(0, Number(event.after) || 0);
 }
 
 function runEffect(effects, effectId, ctx, action, card) {
@@ -1842,6 +1914,7 @@ function normalizeState(state) {
     state.players[playerId].comboFlags = state.players[playerId].comboFlags && typeof state.players[playerId].comboFlags === "object"
       ? state.players[playerId].comboFlags
       : {};
+    state.players[playerId].normalSummonsUsed = Math.max(0, Number(state.players[playerId].normalSummonsUsed) || 0);
   }
   return state;
 }

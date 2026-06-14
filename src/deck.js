@@ -17,7 +17,8 @@ export function createDuelist(owner) {
     directAttacks: 0,
     attacksSkipped: false,
     comboThisTurn: false,
-    comboFlags: {}
+    comboFlags: {},
+    normalSummonsUsed: 0
   };
 }
 

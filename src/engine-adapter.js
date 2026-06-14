@@ -57,7 +57,8 @@ function uiDuelistToEngine(duelist) {
     banished: [],
     attacksSkipped: Boolean(duelist.attacksSkipped),
     comboThisTurn: Boolean(duelist.comboThisTurn),
-    comboFlags: { ...(duelist.comboFlags || {}) }
+    comboFlags: { ...(duelist.comboFlags || {}) },
+    normalSummonsUsed: Math.max(0, Number(duelist.normalSummonsUsed) || 0)
   };
 }
 
@@ -198,10 +199,10 @@ export function applyUiGameEvents(uiState, events = []) {
       uiState.turn = event.playerId;
       uiState.phase = PHASES.draw;
       uiState.timing = "draw";
-      uiState.summonedThisTurn = false;
       duelist.attacksSkipped = false;
       duelist.comboThisTurn = false;
       duelist.comboFlags = {};
+      duelist.normalSummonsUsed = 0;
     }
     if (event.type === "PHASE_CHANGED") {
       uiState.phase = event.to;
@@ -218,6 +219,10 @@ export function applyUiGameEvents(uiState, events = []) {
       card.mode = event.mode || card.mode || "attack";
       card.used = Boolean(event.used);
       card.changedMode = Boolean(event.changedMode);
+    }
+    if (event.type === "NORMAL_SUMMON_USED") {
+      const duelist = uiDuelist(uiState, event.playerId);
+      duelist.normalSummonsUsed = Math.max(0, Number(event.after) || 0);
     }
     if (event.type === "MONSTER_READIED") {
       const card = findUiCard(uiState, event.cardId);
@@ -542,6 +547,18 @@ export function dispatchChangePhaseFromUiState(uiState, playerId, phase) {
     type: "CHANGE_PHASE",
     playerId,
     phase
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchDrawCardsFromUiState(uiState, playerId, count = 1, options = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "DRAW_CARDS",
+    playerId,
+    count,
+    reason: options.reason || "effect",
+    sourceCardId: options.sourceCardId || null
   });
   return applyUiGameEvents(uiState, events);
 }

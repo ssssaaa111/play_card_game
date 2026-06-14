@@ -33,6 +33,7 @@ function basePlayer(overrides = {}) {
     attacksSkipped: false,
     comboThisTurn: false,
     comboFlags: {},
+    normalSummonsUsed: 0,
     ...overrides
   };
 }
@@ -94,7 +95,6 @@ test("seer-call draws two cards only through dispatch and logs events", () => {
       deck: ["deck-1", "deck-2"]
     }
   });
-
   const engine = new GameEngine(state);
   const events = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "seer-1" });
   const next = engine.getState();
@@ -122,7 +122,6 @@ test("spell activation is legal in battle phase action windows", () => {
       phase: Phase.battle
     }
   });
-
   const engine = new GameEngine(state);
   const events = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "seer-battle" });
 
@@ -955,6 +954,9 @@ test("basic draw and heal on-summon effects resolve through events", () => {
       deck: ["deck-1"]
     }
   });
+  state.abilities[PLAYER] = [
+    { ability: Ability.extraSummon, uses: 1, duration: "turn", sourceCardId: "basic-summon-test" }
+  ];
 
   const engine = new GameEngine(state);
   const drawEvents = engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "gale-1", index: 0 });
@@ -1050,6 +1052,9 @@ test("conditional on-summon effects can be skipped without rejecting the summon"
       hand: ["captain-1", "alchemist-1"]
     }
   });
+  state.abilities[PLAYER] = [
+    { ability: Ability.extraSummon, uses: 1, duration: "turn", sourceCardId: "conditional-summon-test" }
+  ];
 
   const engine = new GameEngine(state);
   const buffEvents = engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "captain-1", index: 0 });
@@ -1702,6 +1707,81 @@ test("start turn rejects unresolved response windows", () => {
     () => engine.dispatch({ type: "START_TURN", playerId: PLAYER }),
     /response window is open/
   );
+});
+
+test("turn draw moves cards and applies deck-out damage through events", () => {
+  const state = makeState({
+    cards: [
+      card("draw-a", { type: "monster" }),
+      card("draw-b", { type: "trap" })
+    ],
+    player: {
+      lp: 4000,
+      shield: 100,
+      deck: ["draw-a", "draw-b"]
+    },
+    turn: { playerId: PLAYER, phase: Phase.draw }
+  });
+  state.machine.phase = Phase.draw;
+  state.machine.timing = Timing.draw;
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({ type: "DRAW_CARDS", playerId: PLAYER, count: 3, reason: "turn" });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].deck, []);
+  assert.deepEqual(next.players[PLAYER].hand, ["draw-a", "draw-b"]);
+  assert.equal(next.players[PLAYER].shield, 0);
+  assert.equal(next.players[PLAYER].lp, 3600);
+  assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.count === 2 && event.requested === 3));
+  assert.ok(events.some((event) => event.type === "DRAW_FAILED" && event.missing === 1 && event.reason === "turn"));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.requested === 500 && event.blocked === 100 && event.amount === 400));
+});
+
+test("turn draw rejects the wrong player and illegal phase", () => {
+  const wrongPlayer = makeState({ turn: { playerId: AI, phase: Phase.draw } });
+  wrongPlayer.machine.phase = Phase.draw;
+  wrongPlayer.machine.timing = Timing.draw;
+  assert.throws(
+    () => new GameEngine(wrongPlayer).dispatch({ type: "DRAW_CARDS", playerId: PLAYER, count: 1, reason: "turn" }),
+    /not player's turn/
+  );
+
+  const wrongPhase = makeState({ turn: { playerId: PLAYER, phase: Phase.main } });
+  assert.throws(
+    () => new GameEngine(wrongPhase).dispatch({ type: "DRAW_CARDS", playerId: PLAYER, count: 1, reason: "turn" }),
+    /not legal during main phase/
+  );
+});
+
+test("summon limit consumes the normal summon before extra summon abilities", () => {
+  const state = makeState({
+    cards: [
+      card("summon-one", { type: "monster" }),
+      card("summon-two", { type: "monster" }),
+      card("summon-three", { type: "monster" })
+    ],
+    player: { hand: ["summon-one", "summon-two", "summon-three"] }
+  });
+  state.abilities[PLAYER] = [
+    { ability: Ability.extraSummon, uses: 1, duration: "turn", sourceCardId: "extra-source" }
+  ];
+  const engine = new GameEngine(state);
+
+  const firstEvents = engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "summon-one", index: 0 });
+  const secondEvents = engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "summon-two", index: 1 });
+
+  assert.equal(engine.getState().players[PLAYER].normalSummonsUsed, 1);
+  assert.deepEqual(engine.getState().players[PLAYER].monsterZone, ["summon-one", "summon-two"]);
+  assert.ok(firstEvents.some((event) => event.type === "NORMAL_SUMMON_USED" && event.after === 1));
+  assert.ok(secondEvents.some((event) => event.type === "ABILITY_SPENT" && event.ability === Ability.extraSummon));
+  assert.equal(hasAbility(engine.getState(), PLAYER, Ability.extraSummon), false);
+
+  assert.throws(
+    () => engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "summon-three", index: 2 }),
+    /no normal or extra summon remaining/
+  );
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["summon-three"]);
 });
 
 test("set trap moves trap cards through dispatch events in main and battle phases", () => {
