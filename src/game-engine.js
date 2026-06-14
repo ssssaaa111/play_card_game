@@ -146,7 +146,8 @@ export const defaultCardEffects = Object.freeze({
   ]),
   directShield: oneShot([{ op: "drawCards", player: "self", count: 1 }]),
   directRebound: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
-  summonBurn: oneShot([{ op: "dealDamage", player: "rival", amount: 400 }])
+  summonBurn: oneShot([{ op: "dealDamage", player: "rival", amount: 400 }]),
+  chainNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }])
 });
 
 export class EffectContext {
@@ -787,6 +788,7 @@ export class GameEngine {
     const responseWindow = requireOpenResponseWindow(state, action.playerId);
     const resumeTiming = action.resumeTiming || responseWindow.resumeTiming || responseWindow.timing || timingForPhase(state.turn.phase);
     const resolutionOrder = state.machine.chain.slice().reverse();
+    const resolutionEventStart = state.events.length;
     const uncommitted = resolutionOrder.find((link) => !link.committed);
     if (uncommitted) {
       throw new GameRuleError(`Chain link ${uncommitted.linkId} has not been committed`);
@@ -808,6 +810,27 @@ export class GameEngine {
         effectId,
         targetEffectId: link.targetEffectId || null
       });
+      const negatingEvent = state.events.slice(resolutionEventStart).find((event) =>
+        event.type === "EFFECT_NEGATED" && event.targetEffectId === link.cardId
+      );
+      if (negatingEvent) {
+        emit("EFFECT_SKIPPED", {
+          playerId: link.playerId,
+          cardId: link.cardId,
+          effectId,
+          reason: "negated",
+          sourceCardId: negatingEvent.sourceCardId || null
+        });
+        emit("CHAIN_LINK_RESOLVED", {
+          playerId: link.playerId,
+          linkId: link.linkId,
+          cardId: link.cardId,
+          effectId,
+          targetEffectId: link.targetEffectId || null,
+          skipped: true
+        });
+        continue;
+      }
       runEffect(this.#effects, effectId, ctx, preparedAction, card);
       emit("CHAIN_LINK_RESOLVED", {
         playerId: link.playerId,

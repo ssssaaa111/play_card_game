@@ -63,6 +63,13 @@ export const trapDefinitions = {
     triggerText: "对手召唤时",
     cancelsEvent: false,
     consumesAttack: false
+  },
+  chainNegate: {
+    event: "chain",
+    caption: "无效该陷阱效果",
+    triggerText: "对手发动陷阱时",
+    cancelsEvent: false,
+    consumesAttack: false
   }
 };
 
@@ -87,6 +94,9 @@ export function trapCanResolve(card, eventName, { owner = null, context = {} } =
   if (!trapMatchesEvent(card, eventName)) return false;
   if (card?.trigger === "redirectAttack") {
     return selectRedirectTarget(owner?.field || [], context.targetIndex ?? -1) >= 0;
+  }
+  if (card?.trigger === "chainNegate") {
+    return Boolean(context.targetEffectId);
   }
   return true;
 }
@@ -135,7 +145,9 @@ export function trapActivationText(trap, eventName, { owner = null, rival = null
     ? attackEventText({ owner, rival, context })
     : eventName === "direct"
       ? attackEventText({ owner, rival, context })
-      : `对手召唤了 ${monsterText(context.summoned)}`;
+      : eventName === "chain"
+        ? `对手发动了陷阱${context.sourceTrap?.name ? `「${context.sourceTrap.name}」` : ""}`
+        : `对手召唤了 ${monsterText(context.summoned)}`;
   const preview = redirectPreviewText(trap, { owner, context });
   return `${eventText}。${preview ? `${preview} ` : ""}是否连锁发动「${trap.name}」？${trap.text}`;
 }

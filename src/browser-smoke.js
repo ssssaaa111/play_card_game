@@ -611,6 +611,11 @@ async function runAiDirectTrapSmoke(ctx) {
       throw new Error("风暴转移直击提示缺少陷阱名或直击目标");
     }
     clickSmokeElement(ctx.els.chainNo, `第 ${promptIndex} 次不发动风暴转移`);
+    await waitForSmoke(
+      () => ctx.state.log.filter((entry) => entry.includes("你没有发动 风暴转移")).length >= promptIndex,
+      `第 ${promptIndex} 次拒绝风暴转移已记录`,
+      5000
+    );
   }
   await waitForSmoke(() => ctx.state.player.lp < playerLpBefore, "连续直击扣除玩家生命值", 16000);
   const declinedPrompts = ctx.state.log.filter((entry) => entry.includes("你没有发动 风暴转移")).length;
@@ -785,6 +790,39 @@ async function runChainWeakenResolutionSmoke(ctx) {
   setSmokeStatus("passed", "chain-weaken-resolution");
 }
 
+async function runAiCounterChainSmoke(ctx) {
+  setSmokeStatus("running", "ai-counter-chain");
+  await startSmokeDuel(ctx, "counterChain");
+  const playerLpBefore = ctx.state.player.lp;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "玩家攻击陷阱响应窗口", 16000);
+  if (!ctx.els.chainText.textContent.includes("反击阵列")) {
+    throw new Error("AI 反制场景应先提示玩家发动反击阵列");
+  }
+  clickSmokeElement(ctx.els.chainYes, "发动反击阵列");
+  await waitForSmoke(
+    () => !ctx.state.player.traps.some((card) => card?.id === "counter-array") &&
+      !ctx.state.ai.traps.some((card) => card?.id === "chain-nullifier") &&
+      !ctx.state.player.field.some((card) => card?.id === "gale-mage") &&
+      ctx.state.player.lp < playerLpBefore,
+    "AI 追加断链裁决后攻击继续结算",
+    18000
+  );
+  if (countGameEvents(ctx.state, "CHAIN_LINK_ADDED") !== 2 ||
+      countGameEvents(ctx.state, "CHAIN_LINK_COMMITTED") !== 2 ||
+      countGameEvents(ctx.state, "RESPONSE_PRIORITY_PASSED") < 2 ||
+      countGameEvents(ctx.state, "EFFECT_NEGATED") !== 1 ||
+      countGameEvents(ctx.state, "EFFECT_SKIPPED") !== 1 ||
+      countGameEvents(ctx.state, "CHAIN_RESOLVED") !== 1) {
+    throw new Error("AI 反制必须记录两条链接、优先权转移、无效、跳过和统一结算事件");
+  }
+  if (!ctx.state.log.some((entry) => entry.includes("AI 检测到") && entry.includes("反击阵列")) ||
+      !ctx.state.log.some((entry) => entry.includes("断链裁决") && entry.includes("无效"))) {
+    throw new Error("AI 追加连锁缺少可读日志");
+  }
+  setSmokeStatus("passed", "ai-counter-chain");
+}
+
 async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("running", "mode-auto-end");
   await startSmokeDuel(ctx, "combo");
@@ -883,6 +921,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "response-restart": runResponseRestartSmoke,
     "chain-trap-choice": runChainTrapChoiceSmoke,
     "chain-weaken-resolution": runChainWeakenResolutionSmoke,
+    "ai-counter-chain": runAiCounterChainSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
     "pause-detail": runPauseDetailSmoke

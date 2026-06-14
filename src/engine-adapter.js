@@ -5,7 +5,7 @@ import { PHASES } from './turn-state.js';
 const ownerIds = ["player", "ai"];
 const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "rallyAttack", "battleTrance", "lightShadowCombo", "elementEcho", "fireWindCombo"]);
 const engineBackedSummonEffects = new Set(["burn200", "draw1", "heal300", "fireBuff", "shield400", "shadowBurn"]);
-const engineBackedTrapEffects = new Set(["attackDestroy", "counterBoost", "attackShift", "attackNegate", "redirectAttack", "weakenAttack", "directShield", "directRebound", "summonBurn"]);
+const engineBackedTrapEffects = new Set(["attackDestroy", "counterBoost", "attackShift", "attackNegate", "redirectAttack", "weakenAttack", "directShield", "directRebound", "summonBurn", "chainNegate"]);
 
 const uiZones = {
   deck: "deck",

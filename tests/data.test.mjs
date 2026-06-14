@@ -90,7 +90,7 @@ test("engine-backed targeted spells keep UI and rules targets aligned", () => {
 test("trap cards are backed by trap metadata", () => {
   const trapCards = library.filter((card) => card.type === "trap");
   const triggersFromCards = new Set(trapCards.map((card) => card.trigger));
-  const validEvents = new Set(["attack", "direct", "summon"]);
+  const validEvents = new Set(["attack", "direct", "summon", "chain"]);
 
   trapCards.forEach((card) => {
     const definition = trapDefinitions[card.trigger];

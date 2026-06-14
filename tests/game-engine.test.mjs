@@ -168,6 +168,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const directShield = getCardEffectDefinition("directShield");
   const directRebound = getCardEffectDefinition("directRebound");
   const summonBurn = getCardEffectDefinition("summonBurn");
+  const chainNegate = getCardEffectDefinition("chainNegate");
   const directStrike = getCardEffectDefinition("directStrike");
   const extraSummon = getCardEffectDefinition("extraSummon");
   const shield800 = getCardEffectDefinition("shield800");
@@ -204,6 +205,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.deepEqual(directShield.operations, [{ op: "drawCards", player: "self", count: 1 }]);
   assert.deepEqual(directRebound.operations, [{ op: "dealDamage", player: "rival", amount: 500 }]);
   assert.deepEqual(summonBurn.operations, [{ op: "dealDamage", player: "rival", amount: 400 }]);
+  assert.deepEqual(chainNegate.operations, [{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }]);
   assert.deepEqual(directStrike.operations, [{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]);
   assert.deepEqual(extraSummon.operations, [{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]);
   assert.deepEqual(shield800.operations, [{ op: "gainShield", player: "self", amount: 800 }]);
@@ -1931,6 +1933,73 @@ test("response priority can pass to the rival before they add another chain link
       .map((event) => event.cardId),
     ["ai-chain-burn", "player-chain-heal"]
   );
+});
+
+test("a chain negate trap skips the targeted earlier link during reverse resolution", () => {
+  const state = makeState({
+    cards: [
+      card("player-flare", { type: "trap", trigger: "summonBurn" }),
+      card("ai-nullifier", { ownerId: AI, type: "trap", trigger: "chainNegate" })
+    ],
+    player: { spellTrapZone: ["player-flare"] },
+    ai: { spellTrapZone: ["ai-nullifier"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.attackDeclaration;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.attackDeclaration,
+    resumeTiming: Timing.battleOpen,
+    triggerEventId: "attack-99"
+  };
+  const engine = new GameEngine(state);
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "player-flare",
+    effectId: "summonBurn",
+    targetEffectId: "attack-99"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "player-flare",
+    targetEffectId: "attack-99"
+  });
+  engine.dispatch({
+    type: "PASS_RESPONSE_PRIORITY",
+    playerId: PLAYER,
+    nextPlayerId: AI
+  });
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: AI,
+    cardId: "ai-nullifier",
+    effectId: "chainNegate",
+    targetEffectId: "player-flare"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: "ai-nullifier",
+    targetEffectId: "player-flare"
+  });
+
+  const resolveEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: AI });
+
+  assert.equal(engine.getState().players[AI].lp, 4000);
+  assert.ok(resolveEvents.some((event) =>
+    event.type === "EFFECT_NEGATED" && event.targetEffectId === "player-flare" && event.sourceCardId === "ai-nullifier"
+  ));
+  assert.ok(resolveEvents.some((event) =>
+    event.type === "EFFECT_SKIPPED" && event.cardId === "player-flare" && event.reason === "negated"
+  ));
+  assert.ok(!resolveEvents.some((event) => event.type === "DAMAGE_DEALT"));
 });
 
 test("only the designated responder can add a trap chain link", () => {

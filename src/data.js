@@ -33,7 +33,8 @@ export const library = [
   { id: "void-lock", type: "trap", name: "星界封锁", icon: "封", text: "盖放后自动触发：对手攻击时，无效本次攻击并消耗攻击机会。", trigger: "attackNegate" },
   { id: "phantom-switch", type: "trap", name: "幻影换位", icon: "换", text: "盖放后自动触发：对手攻击时，将攻击目标改为我方另一只守备力最高的怪兽。", trigger: "redirectAttack" },
   { id: "weakening-web", type: "trap", name: "弱化力场", icon: "弱", text: "盖放后自动触发：对手攻击时，攻击怪兽 ATK/DEF 下降 500，攻击继续结算。", trigger: "weakenAttack" },
-  { id: "reversal-flare", type: "trap", name: "逆焰护壁", icon: "返", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并反弹 500 点伤害。", trigger: "directRebound" }
+  { id: "reversal-flare", type: "trap", name: "逆焰护壁", icon: "返", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并反弹 500 点伤害。", trigger: "directRebound" },
+  { id: "chain-nullifier", type: "trap", name: "断链裁决", icon: "断", text: "对手发动陷阱时可以连锁发动：无效那张陷阱的效果。", trigger: "chainNegate" }
 ];
 
 export const monsterAssets = {
@@ -123,7 +124,7 @@ export const deckPresets = {
       "flame-captain", "sky-raider", "dusk-alchemist",
       "burst-rune", "renewal", "war-chant", "seer-call", "element-echo",
       "pierce-line", "grave-return", "battle-trance", "star-breach", "flame-gale-burst", "eclipse-barrier",
-      "mirror-snare", "guard-sigil", "summon-flare", "mirror-snare", "counter-array", "storm-shift", "void-lock", "phantom-switch", "weakening-web", "reversal-flare"
+      "mirror-snare", "guard-sigil", "summon-flare", "mirror-snare", "counter-array", "storm-shift", "void-lock", "phantom-switch", "weakening-web", "reversal-flare", "chain-nullifier"
     ]
   },
   aggressive: {
@@ -138,7 +139,7 @@ export const deckPresets = {
       "star-lancer", "void-hound", "solar-knight",
       "mirror-snare", "summon-flare", "summon-flare", "counter-array", "storm-shift", "void-lock", "phantom-switch",
       "burst-rune", "war-chant", "rally-strike", "seer-call", "twin-summon", "element-echo",
-      "pierce-line", "battle-trance", "star-breach", "flame-gale-burst", "reversal-flare"
+      "pierce-line", "battle-trance", "star-breach", "flame-gale-burst", "reversal-flare", "chain-nullifier"
     ]
   },
   control: {
@@ -154,7 +155,7 @@ export const deckPresets = {
       "mirror-snare", "mirror-snare", "guard-sigil", "guard-sigil",
       "counter-array", "counter-array", "storm-shift", "storm-shift", "void-lock", "phantom-switch",
       "summon-flare", "star-shield", "element-echo",
-      "grave-return", "pierce-line", "eclipse-barrier", "weakening-web", "reversal-flare"
+      "grave-return", "pierce-line", "eclipse-barrier", "weakening-web", "reversal-flare", "chain-nullifier"
     ]
   }
 };
@@ -176,6 +177,19 @@ export const scenarioSetups = {
     playerHand: ["weakening-web", "counter-array", "void-lock", "iron-guardian", "gale-mage", "storm-shift", "dusk-alchemist"],
     aiHand: ["war-chant", "twin-summon", "star-lancer", "solar-knight"],
     aiField: ["sky-raider"]
+  },
+  counterChain: {
+    label: "AI 反制连锁",
+    text: "双方都预置陷阱；玩家发动反击阵列后，AI 会用断链裁决追加连锁。",
+    goal: "结束回合并发动反击阵列；AI 应追加连锁 2，无效反击阵列，随后攻击继续结算。",
+    playerHand: [],
+    playerField: ["gale-mage"],
+    playerTraps: ["counter-array"],
+    playerDeck: [],
+    aiField: ["star-lancer"],
+    aiTraps: ["chain-nullifier"],
+    aiHand: [],
+    aiDeck: []
   },
   combo: {
     label: "组合魔法",

@@ -84,6 +84,18 @@ test("guard skip scenario starts with a locked defense wall", () => {
   assert.deepEqual(ids(setup.ai.deck), ["guard-sigil"]);
 });
 
+test("counter chain scenario starts with opposing response traps", () => {
+  const setup = buildScenarioState(scenarioSetups.counterChain, {
+    playerPreset: "balanced",
+    aiPreset: "control"
+  });
+
+  assert.deepEqual(ids(setup.player.field).slice(0, 1), ["gale-mage"]);
+  assert.deepEqual(ids(setup.player.traps).slice(0, 1), ["counter-array"]);
+  assert.deepEqual(ids(setup.ai.field).slice(0, 1), ["star-lancer"]);
+  assert.deepEqual(ids(setup.ai.traps).slice(0, 1), ["chain-nullifier"]);
+});
+
 test("summon effects scenario exposes basic engine-backed summon triggers", () => {
   const setup = buildScenarioState(scenarioSetups.summonEffects, {
     playerPreset: "balanced",

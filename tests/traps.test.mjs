@@ -30,6 +30,7 @@ test("matches trap triggers to battle events", () => {
   assert.equal(trapMatchesEvent(trap("directShield"), "direct"), true);
   assert.equal(trapMatchesEvent(trap("directRebound"), "direct"), true);
   assert.equal(trapMatchesEvent(trap("summonBurn"), "summon"), true);
+  assert.equal(trapMatchesEvent(trap("chainNegate"), "chain"), true);
 });
 
 test("does not match trap triggers to unrelated events", () => {
@@ -37,6 +38,7 @@ test("does not match trap triggers to unrelated events", () => {
   assert.equal(trapMatchesEvent(trap("attackShift"), "direct"), false);
   assert.equal(trapMatchesEvent(trap("directShield"), "attack"), false);
   assert.equal(trapMatchesEvent(trap("summonBurn"), "attack"), false);
+  assert.equal(trapMatchesEvent(trap("chainNegate"), "attack"), false);
   assert.equal(trapMatchesEvent(trap("missingTrigger"), "attack"), false);
   assert.equal(trapMatchesEvent(null, "attack"), false);
 });
@@ -48,6 +50,7 @@ test("provides player-facing trap trigger text", () => {
   assert.equal(trapTriggerText("redirectAttack"), "对手攻击时");
   assert.equal(trapTriggerText("directShield"), "受到直接攻击时");
   assert.equal(trapTriggerText("summonBurn"), "对手召唤时");
+  assert.equal(trapTriggerText("chainNegate"), "对手发动陷阱时");
   assert.equal(trapTriggerText("missingTrigger"), "未知触发");
 });
 
@@ -68,6 +71,7 @@ test("summarizes trap trigger timing and effect", () => {
   assert.equal(trapSummaryText("attackNegate"), "对手攻击时 / 无效本次攻击 / 消耗攻击");
   assert.equal(trapSummaryText("redirectAttack"), "对手攻击时 / 改为攻击另一只怪兽");
   assert.equal(trapSummaryText("attackDestroy"), "对手攻击时 / 破坏攻击怪兽");
+  assert.equal(trapSummaryText("chainNegate"), "对手发动陷阱时 / 无效该陷阱效果");
   assert.equal(trapSummaryText("missingTrigger"), "未知触发");
 });
 
@@ -91,6 +95,8 @@ test("checks whether redirect traps can actually resolve", () => {
   assert.equal(trapCanResolve(trap("redirectAttack"), "direct", { owner, context: { targetIndex: -1 } }), false);
   assert.equal(trapCanResolve(trap("attackShift"), "attack", { owner, context: { targetIndex: 0 } }), true);
   assert.equal(trapCanResolve(trap("attackShift"), "direct", { owner, context: { targetIndex: -1 } }), false);
+  assert.equal(trapCanResolve(trap("chainNegate"), "chain", { context: { targetEffectId: "trap-1" } }), true);
+  assert.equal(trapCanResolve(trap("chainNegate"), "chain", { context: {} }), false);
 });
 
 test("describes attack targets before asking for trap activation", () => {

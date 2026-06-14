@@ -17,7 +17,10 @@ import {
   dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
+  dispatchPassResponsePriorityFromUiState,
+  dispatchQueueTrapResponseFromUiState,
   dispatchResolveBattleFromUiState,
+  dispatchResolveChainFromUiState,
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState,
   dispatchTrapResponseFromUiState
@@ -2317,33 +2320,158 @@ function spellCaption(card) {
   return card.text || "魔法发动";
 }
 
+function trapCandidates(owner, eventName, context) {
+  return owner.traps
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => trapCanResolve(card, eventName, { owner, context }));
+}
+
+async function chooseTrapIndex(owner, rival, eventName, context) {
+  const candidates = trapCandidates(owner, eventName, context);
+  if (candidates.length === 0) return { trapIndex: -1, candidates, declined: false };
+  if (owner.owner !== "player") {
+    return { trapIndex: candidates[0].index, candidates, declined: false };
+  }
+  const choice = await promptTrapChoice(candidates, eventName, { owner, rival, context });
+  return { ...choice, candidates, declined: choice.trapIndex < 0 };
+}
+
+function announceTrapActivation(owner, trap, chainIndex) {
+  const chainLabel = chainIndex > 1 ? `连锁 ${chainIndex}` : "陷阱";
+  playSound(`trap-${trap.trigger}`);
+  animateAvatar(owner.owner, "cast");
+  playCenterCardEffect(trap, chainIndex > 1 ? `陷阱连锁 ${chainIndex}` : "陷阱连锁发动");
+  playEpicAction(chainLabel, "guard");
+  addLog(`${chainLabel}：${owner.owner === "player" ? "你的" : "AI 的"}陷阱卡 ${trap.name} 触发。`);
+  speak(`陷阱发动，${trap.name}。`);
+  playDuelistLine(owner.owner, lineFor(owner.owner, "trap", trap), false, "trap");
+}
+
+function queueTrapChainLink(owner, rival, eventName, context, trapIndex, chainIndex) {
+  const trap = owner.traps[trapIndex];
+  if (!trap) return null;
+  const trapSource = trapElement(owner.owner, trapIndex) || panelElement(owner.owner);
+  try {
+    const events = dispatchQueueTrapResponseFromUiState(state, owner.owner, rival.owner, trapIndex, {
+      ...context,
+      targetEffectId: context.targetEffectId || `${trap.uid || trap.id}:${eventName}`
+    });
+    announceTrapActivation(owner, trap, chainIndex);
+    return { owner, rival, eventName, context: { ...context }, trap, trapIndex, trapSource, chainIndex, events };
+  } catch (error) {
+    cue(error.message || "陷阱卡加入连锁失败。");
+    console.error(error);
+    return null;
+  }
+}
+
+function eventsForTrap(events, trap) {
+  const cardId = runtimeCardId(trap);
+  return events.filter((event) =>
+    event.sourceCardId === cardId ||
+    event.cardId === cardId ||
+    (event.type === "EFFECT_NEGATED" && event.sourceCardId === cardId)
+  );
+}
+
+async function resolveEngineTrapChain(owner, rival, eventName, context, trapIndex) {
+  const links = [];
+  const firstLink = queueTrapChainLink(owner, rival, eventName, context, trapIndex, 1);
+  if (!firstLink) return { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
+  links.push(firstLink);
+
+  let priorityHolder = owner;
+  let responder = rival;
+  let sourceTrap = firstLink.trap;
+  let resolutionPlayerId = owner.owner;
+
+  for (let chainIndex = 2; chainIndex <= 8; chainIndex += 1) {
+    try {
+      dispatchPassResponsePriorityFromUiState(state, priorityHolder.owner, responder.owner);
+    } catch (error) {
+      cue(error.message || "连锁响应权转移失败。");
+      console.error(error);
+      break;
+    }
+    resolutionPlayerId = responder.owner;
+    const chainContext = {
+      ...context,
+      engineResponse: true,
+      sourceTrap,
+      targetEffectId: runtimeCardId(sourceTrap)
+    };
+    const choice = await chooseTrapIndex(responder, priorityHolder, "chain", chainContext);
+    if (choice.trapIndex < 0) {
+      if (choice.declined) {
+        addLog(choice.skippedName ? `你没有发动 ${choice.skippedName}。` : "你没有追加陷阱连锁。");
+      }
+      break;
+    }
+    if (responder.owner === "ai") {
+      addLog(`AI 检测到 ${sourceTrap.name}，准备追加陷阱连锁。`);
+      await sleep(620);
+    }
+    const nextLink = queueTrapChainLink(responder, priorityHolder, "chain", chainContext, choice.trapIndex, chainIndex);
+    if (!nextLink) break;
+    links.push(nextLink);
+    sourceTrap = nextLink.trap;
+    const previousHolder = priorityHolder;
+    priorityHolder = responder;
+    responder = previousHolder;
+    resolutionPlayerId = priorityHolder.owner;
+  }
+
+  let resolutionEvents = [];
+  try {
+    resolutionEvents = dispatchResolveChainFromUiState(state, resolutionPlayerId);
+  } catch (error) {
+    cue(error.message || "陷阱连锁结算失败。");
+    console.error(error);
+    return { cancelled: false, shielded: false, consumesAttack: false, activated: links.length };
+  }
+
+  let originalOutcome = { cancelled: false, shielded: false, consumesAttack: false };
+  for (const link of links.slice().reverse()) {
+    await sleep(320);
+    const outcome = resolveTrapCard(
+      link.owner,
+      link.rival,
+      link.eventName,
+      link.context,
+      link.trapIndex,
+      link.chainIndex,
+      {
+        trap: link.trap,
+        trapSource: link.trapSource,
+        events: eventsForTrap(resolutionEvents, link.trap),
+        announced: true
+      }
+    );
+    if (link === firstLink) originalOutcome = outcome;
+  }
+
+  return { ...originalOutcome, activated: links.length };
+}
+
 async function triggerTrap(owner, rival, eventName, context) {
   const result = { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
   if (state.gameOver) return result;
   const engineResponse = Boolean(context?.engineResponse);
-  const candidates = owner.traps
-    .map((card, index) => ({ card, index }))
-    .filter(({ card }) => trapCanResolve(card, eventName, { owner, context }));
-  if (candidates.length === 0) {
-    if (engineResponse && !closeTrapResponseWindow(owner.owner, "no-legal-trap")) {
+  const choice = await chooseTrapIndex(owner, rival, eventName, context);
+  if (choice.trapIndex < 0) {
+    if (choice.declined) {
+      addLog(choice.skippedName ? `你没有发动 ${choice.skippedName}。` : "你没有发动陷阱。");
+    }
+    if (engineResponse && !closeTrapResponseWindow(owner.owner, choice.declined ? "declined" : "no-legal-trap")) {
       result.cancelled = true;
     }
     return result;
   }
-  let trapIndex = candidates[0].index;
-  if (owner.owner === "player") {
-    const choice = await promptTrapChoice(candidates, eventName, { owner, rival, context });
-    if (choice.trapIndex < 0) {
-      addLog(choice.skippedName ? `你没有发动 ${choice.skippedName}。` : "你没有发动陷阱。");
-      if (engineResponse && !closeTrapResponseWindow(owner.owner, "declined")) {
-        result.cancelled = true;
-      }
-      return result;
-    }
-    trapIndex = choice.trapIndex;
-  }
-  const outcome = resolveTrapCard(owner, rival, eventName, context, trapIndex, 1);
-  result.activated = 1;
+
+  const outcome = engineResponse
+    ? await resolveEngineTrapChain(owner, rival, eventName, context, choice.trapIndex)
+    : resolveTrapCard(owner, rival, eventName, context, choice.trapIndex, 1);
+  result.activated = outcome.activated || 1;
   result.cancelled = Boolean(outcome.cancelled);
   result.shielded = Boolean(outcome.shielded);
   result.consumesAttack = Boolean(outcome.consumesAttack);
@@ -2464,12 +2592,12 @@ function closeTrapChoicePrompt() {
   els.chainYes.textContent = "发动陷阱";
 }
 
-function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex = 1) {
-  const trap = owner.traps[trapIndex];
+function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex = 1, options = {}) {
+  const trap = options.trap || owner.traps[trapIndex];
   if (!trap) return { cancelled: false, shielded: false };
-  const trapSource = trapElement(owner.owner, trapIndex) || panelElement(owner.owner);
-  let trapEvents = [];
-  if (canDispatchTrapFromUiState(trap)) {
+  const trapSource = options.trapSource || trapElement(owner.owner, trapIndex) || panelElement(owner.owner);
+  let trapEvents = Array.isArray(options.events) ? options.events : [];
+  if (!Array.isArray(options.events) && canDispatchTrapFromUiState(trap)) {
     try {
       const dispatchTrap = context.engineResponse
         ? dispatchTrapResponseFromUiState
@@ -2484,18 +2612,32 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
       return { cancelled: false, shielded: false };
     }
   } else {
-    addLog(`${trap.name} 的陷阱效果尚未接入规则引擎，已跳过。`);
+    if (!Array.isArray(options.events)) {
+      addLog(`${trap.name} 的陷阱效果尚未接入规则引擎，已跳过。`);
+      return { cancelled: false, shielded: false };
+    }
+  }
+  if (!options.announced) announceTrapActivation(owner, trap, chainIndex);
+  const skippedEvent = trapEvents.find((event) =>
+    event.type === "EFFECT_SKIPPED" && event.cardId === runtimeCardId(trap) && event.reason === "negated"
+  );
+  if (skippedEvent) {
+    playSound("guard");
+    playEpicAction("连锁无效", "guard");
+    addLog(`${trap.name} 的效果被连锁无效。`);
+    speak(`${trap.name}，效果无效。`);
+    return { cancelled: false, shielded: false, negated: true };
+  }
+  resolveEngineSpellFeedback(owner, rival, trap, trapEvents);
+
+  if (trap.trigger === "chainNegate") {
+    const sourceTrap = context.sourceTrap;
+    playArrow(trapSource, panelElement(rival.owner), "trap", trap.name);
+    playEpicAction("断链", "guard");
+    addLog(`${trap.name} 无效了${sourceTrap?.name ? ` ${sourceTrap.name}` : "上一张陷阱"}的效果。`);
+    speak(`${trap.name}，连锁无效。`);
     return { cancelled: false, shielded: false };
   }
-  const chainLabel = chainIndex > 1 ? `连锁 ${chainIndex}` : "陷阱";
-  playSound(`trap-${trap.trigger}`);
-  animateAvatar(owner.owner, "cast");
-  playCenterCardEffect(trap, chainIndex > 1 ? `陷阱连锁 ${chainIndex}` : "陷阱连锁发动");
-  playEpicAction(chainLabel, "guard");
-  addLog(`${chainLabel}：${owner.owner === "player" ? "你的" : "AI 的"}陷阱卡 ${trap.name} 触发。`);
-  speak(`陷阱发动，${trap.name}。`);
-  playDuelistLine(owner.owner, lineFor(owner.owner, "trap", trap), false, "trap");
-  resolveEngineSpellFeedback(owner, rival, trap, trapEvents);
 
   if (trap.trigger === "attackDestroy") {
     const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
