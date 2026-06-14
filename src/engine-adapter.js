@@ -205,6 +205,12 @@ export function applyUiGameEvents(uiState, events = []) {
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
       card.used = event.afterUsed !== false;
     }
+    if (event.type === "MONSTER_MODE_CHANGED") {
+      const card = findUiCard(uiState, event.cardId);
+      if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
+      card.mode = event.to;
+      card.changedMode = event.afterChangedMode !== false;
+    }
     if (event.type === "BATTLE_WEAR_APPLIED") {
       const card = findUiCard(uiState, event.cardId);
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
@@ -466,6 +472,22 @@ export function dispatchMarkMonsterUsedFromUiState(uiState, playerId, fieldIndex
     playerId,
     cardId: cardKey(card)
   });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchChangeMonsterModeFromUiState(uiState, playerId, fieldIndex, mode = null) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.field[fieldIndex];
+  if (!card) throw new Error(`No monster at index ${fieldIndex}`);
+
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const action = {
+    type: "CHANGE_MONSTER_MODE",
+    playerId,
+    cardId: cardKey(card)
+  };
+  if (mode) action.mode = mode;
+  const events = engine.dispatch(action);
   return applyUiGameEvents(uiState, events);
 }
 

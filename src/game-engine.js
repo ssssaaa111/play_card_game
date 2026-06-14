@@ -47,6 +47,7 @@ const PHASE_ORDER = Object.freeze([Phase.setup, Phase.draw, Phase.main, Phase.ba
 const TIMINGS = new Set(Object.values(Timing));
 const RESPONSE_WINDOWS = new Set(Object.values(ResponseWindow));
 const ABILITIES = new Set(Object.values(Ability));
+const MONSTER_MODES = new Set(["attack", "defense"]);
 
 export class GameRuleError extends Error {
   constructor(message) {
@@ -399,6 +400,9 @@ export class GameEngine {
       case "MARK_MONSTER_USED":
         this.#markMonsterUsed(workingState, emit, action);
         break;
+      case "CHANGE_MONSTER_MODE":
+        this.#changeMonsterMode(workingState, emit, action);
+        break;
       case "SUMMON_MONSTER":
         this.#summonMonster(workingState, ctx, emit, action);
         break;
@@ -690,6 +694,39 @@ export class GameEngine {
       cardId: action.cardId,
       beforeUsed: false,
       afterUsed: true
+    });
+  }
+
+  #changeMonsterMode(state, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    requirePhase(state, [Phase.main], action.type);
+    const card = requireCardInZone(state, action.playerId, "monsterZone", action.cardId);
+    if (card.type !== "monster") {
+      throw new GameRuleError(`Card ${action.cardId} is not a monster`);
+    }
+    if (card.used) {
+      throw new GameRuleError(`Monster ${action.cardId} cannot change mode after attacking`);
+    }
+    if (card.changedMode) {
+      throw new GameRuleError(`Monster ${action.cardId} already changed mode this turn`);
+    }
+
+    const before = card.mode || "attack";
+    const nextMode = action.mode || (before === "attack" ? "defense" : "attack");
+    if (!MONSTER_MODES.has(nextMode)) {
+      throw new GameRuleError(`Unknown monster mode ${nextMode}`);
+    }
+    if (nextMode === before) {
+      throw new GameRuleError(`Monster ${action.cardId} is already in ${nextMode} mode`);
+    }
+
+    emit("MONSTER_MODE_CHANGED", {
+      playerId: action.playerId,
+      cardId: action.cardId,
+      from: before,
+      to: nextMode,
+      beforeChangedMode: Boolean(card.changedMode),
+      afterChangedMode: true
     });
   }
 
@@ -1036,6 +1073,9 @@ export function applyGameEvent(state, event, options = {}) {
     case "MONSTER_USED":
       applyMonsterUsed(state, event);
       break;
+    case "MONSTER_MODE_CHANGED":
+      applyMonsterModeChanged(state, event);
+      break;
     case "BATTLE_WEAR_APPLIED":
       applyBattleWearApplied(state, event);
       break;
@@ -1121,6 +1161,15 @@ function applyMonsterReadied(state, event) {
 function applyMonsterUsed(state, event) {
   const card = requireCard(state, event.cardId);
   card.used = event.afterUsed !== false;
+}
+
+function applyMonsterModeChanged(state, event) {
+  const card = requireCard(state, event.cardId);
+  if (!MONSTER_MODES.has(event.to)) {
+    throw new GameRuleError(`Unknown monster mode ${event.to}`);
+  }
+  card.mode = event.to;
+  card.changedMode = event.afterChangedMode !== false;
 }
 
 function applyBattleWearApplied(state, event) {

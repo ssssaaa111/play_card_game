@@ -379,6 +379,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"chain-weaken-resolution": runChainWeakenResolutionSmoke/);
   assert.match(smoke, /"ai-counter-chain": runAiCounterChainSmoke/);
   assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
+  assert.match(smoke, /"ai-mode-event": runAiModeEventSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
   assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
@@ -427,6 +428,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);
 });

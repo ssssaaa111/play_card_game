@@ -851,7 +851,34 @@ async function runModeAutoEndSmoke(ctx) {
     "只剩守备怪兽且无可用手牌时自动进入回合结束",
     5000
   );
+  if (countGameEvents(ctx.state, "MONSTER_MODE_CHANGED") !== 2) {
+    throw new Error("两次切换表示必须分别产生 MONSTER_MODE_CHANGED 事件");
+  }
   setSmokeStatus("passed", "mode-auto-end");
+}
+
+async function runAiModeEventSmoke(ctx) {
+  setSmokeStatus("running", "ai-mode-event");
+  await startSmokeDuel(ctx, "combo");
+  ctx.state.aiStyle = "control";
+  ctx.state.ai.hand = ctx.state.ai.hand.filter((card) => card?.id === "solar-knight");
+  ctx.state.ai.deck = [];
+  const modeEventsBefore = countGameEvents(ctx.state, "MONSTER_MODE_CHANGED");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) =>
+      card?.id === "solar-knight" && card.mode === "defense" && card.changedMode
+    ) && countGameEvents(ctx.state, "MONSTER_MODE_CHANGED") > modeEventsBefore,
+    "控制型 AI 召唤后通过事件切换守备表示",
+    18000
+  );
+  const modeEvent = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "MONSTER_MODE_CHANGED" && event.playerId === "ai" && event.to === "defense"
+  );
+  if (!modeEvent) {
+    throw new Error("AI 转守备必须产生玩家为 ai 的 MONSTER_MODE_CHANGED 事件");
+  }
+  setSmokeStatus("passed", "ai-mode-event");
 }
 
 async function runInvalidSpellAutoEndSmoke(ctx) {
@@ -923,6 +950,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "chain-weaken-resolution": runChainWeakenResolutionSmoke,
     "ai-counter-chain": runAiCounterChainSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
+    "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
     "pause-detail": runPauseDetailSmoke
   };

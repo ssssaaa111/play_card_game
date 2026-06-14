@@ -1580,6 +1580,60 @@ test("mark monster used consumes an attack chance through events only", () => {
   assertValidGameState(engine.getState());
 });
 
+test("monster mode changes are validated and applied through dispatch events", () => {
+  const state = makeState({
+    cards: [card("mode-1", { type: "monster", mode: "attack", used: false, changedMode: false })],
+    player: { monsterZone: ["mode-1"] }
+  });
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "CHANGE_MONSTER_MODE",
+    playerId: PLAYER,
+    cardId: "mode-1",
+    mode: "defense"
+  });
+
+  assert.equal(engine.getState().cards["mode-1"].mode, "defense");
+  assert.equal(engine.getState().cards["mode-1"].changedMode, true);
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_MODE_CHANGED" &&
+    event.cardId === "mode-1" &&
+    event.from === "attack" &&
+    event.to === "defense"
+  ));
+  assert.throws(
+    () => engine.dispatch({ type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "mode-1", mode: "attack" }),
+    /already changed mode/
+  );
+});
+
+test("monster mode changes reject illegal phases and used monsters", () => {
+  const battleState = makeState({
+    cards: [card("battle-mode", { type: "monster", mode: "attack", used: false, changedMode: false })],
+    player: { monsterZone: ["battle-mode"] },
+    turn: { phase: Phase.battle }
+  });
+  battleState.machine.phase = Phase.battle;
+  battleState.machine.timing = Timing.battleOpen;
+  const battleEngine = new GameEngine(battleState);
+
+  assert.throws(
+    () => battleEngine.dispatch({ type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "battle-mode", mode: "defense" }),
+    /not legal during battle phase/
+  );
+
+  const usedState = makeState({
+    cards: [card("used-mode", { type: "monster", mode: "attack", used: true, changedMode: false })],
+    player: { monsterZone: ["used-mode"] }
+  });
+  const usedEngine = new GameEngine(usedState);
+  assert.throws(
+    () => usedEngine.dispatch({ type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "used-mode", mode: "defense" }),
+    /after attacking/
+  );
+});
+
 test("set trap moves trap cards through dispatch events in main and battle phases", () => {
   const mainState = makeState({
     cards: [card("mirror-1", { templateId: "mirror-snare", type: "trap", trigger: "attackDestroy" })],

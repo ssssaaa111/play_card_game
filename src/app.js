@@ -13,6 +13,7 @@ import {
   canDispatchTrapFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchChangeMonsterModeFromUiState,
   dispatchCloseResponseWindowFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
@@ -3371,12 +3372,14 @@ function toggleSelectedMode() {
     cue("请选择你场上的怪兽。");
     return;
   }
-  if (card.used || card.changedMode) {
-    cue("这只怪兽本回合不能切换表示。");
+  try {
+    dispatchChangeMonsterModeFromUiState(state, "player", state.selected.index);
+  } catch (error) {
+    cue(error.message || "这只怪兽本回合不能切换表示。");
+    console.error(error);
+    resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
-  card.mode = card.mode === "attack" ? "defense" : "attack";
-  card.changedMode = true;
   playSound("click");
   addLog(`${card.name} 切换为${card.mode === "attack" ? "攻击" : "守备"}表示。`);
   speak(`${card.name}，${card.mode === "attack" ? "攻击" : "守备"}表示。`);
@@ -3496,9 +3499,14 @@ async function aiSummon() {
   if (!didSummon) return false;
   const summoned = state.ai.field[empty];
   if (summoned && (state.aiStyle === "control" || (summoned.def > totalAtk(summoned) + 400 && state.ai.lp < state.player.lp))) {
-    summoned.mode = "defense";
-    addLog(`${summoned.name} 转为守备表示。`);
-    speak(`${summoned.name} 转为守备表示。`);
+    try {
+      dispatchChangeMonsterModeFromUiState(state, "ai", empty, "defense");
+      addLog(`${summoned.name} 转为守备表示。`);
+      speak(`${summoned.name} 转为守备表示。`);
+    } catch (error) {
+      addLog(`${summoned.name} 无法转为守备表示：${error.message}`);
+      console.error(error);
+    }
   }
   return true;
 }

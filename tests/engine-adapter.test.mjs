@@ -10,6 +10,7 @@ import {
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
   dispatchCloseResponseWindowFromUiState,
+  dispatchChangeMonsterModeFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
@@ -596,6 +597,27 @@ test("dispatches marked used attackers through UI event replay", () => {
 
   assert.equal(attacker.used, true);
   assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === attacker.uid));
+});
+
+test("dispatches monster mode changes and replays them into UI state", () => {
+  const monster = uiMonster("mode-ui", "iron-guardian");
+  monster.mode = "attack";
+  monster.used = false;
+  monster.changedMode = false;
+  const state = appState();
+  state.player.field[1] = monster;
+
+  const events = dispatchChangeMonsterModeFromUiState(state, "player", 1, "defense");
+
+  assert.equal(monster.mode, "defense");
+  assert.equal(monster.changedMode, true);
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_MODE_CHANGED" &&
+    event.cardId === monster.uid &&
+    event.from === "attack" &&
+    event.to === "defense"
+  ));
+  assert.equal(state.gameEvents.length, events.length);
 });
 
 test("does not mutate UI state when SUMMON_MONSTER is rejected by the engine", () => {
