@@ -112,7 +112,8 @@ The validator catches:
 
 ## UI action windows
 
-- UI timers should be tied to explicit action windows, not scattered `setTimeout` checks.
+- Action-window transitions use `OPEN_ACTION_WINDOW` and `ACTION_WINDOW_OPENED`; UI code must not assign `actionWindow`, `actionWindowId`, or `actionDeadline` directly.
+- UI timers are presentation consumers of the event-owned `windowId` and `deadline`, not a second source of window state.
 - `main` uses `mainOpen` timing and a 30 second idle timeout.
 - `targetSelect` uses `targetSelection` timing and a 20 second target-selection timeout.
 - `response` uses `responseWindow` timing and a 12 second response timeout.

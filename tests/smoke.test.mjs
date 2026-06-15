@@ -97,7 +97,7 @@ test("app uses extracted turn state machine", () => {
 
   assert.match(app, /from '\.\/turn-state\.js'/);
   assert.match(app, /canPlayerActState\(state\)/);
-  assert.match(app, /normalizeActionWindow\(windowName\)/);
+  assert.match(app, /dispatchOpenActionWindowFromUiState\(/);
   assert.match(app, /playerActionWindowDecision\(state, \{[\s\S]*hasMainAction: actions\.hasMain[\s\S]*hasBattleAction: actions\.hasBattle[\s\S]*\}\)/);
   assert.match(app, /shouldRunPlayerIdleCountdownForState\(state\)/);
   assert.match(app, /pauseResumeStep\(state\)/);
@@ -105,7 +105,9 @@ test("app uses extracted turn state machine", () => {
   assert.match(app, /Object\.assign\(state, turnStartPatch\(owner\)\)/);
   assert.match(app, /Object\.assign\(state, drawToMainPatch\(\)\)/);
   assert.match(app, /Object\.assign\(state, mainToBattlePatch\(\)\)/);
-  assert.match(app, /Object\.assign\(state, aiWindowPatch\(\)\)/);
+  assert.doesNotMatch(app, /^\s*state\.actionWindow\s*=(?!=)/m);
+  assert.doesNotMatch(app, /^\s*state\.actionWindowId\s*=(?!=)/m);
+  assert.doesNotMatch(app, /^\s*state\.actionDeadline\s*=(?!=)/m);
 });
 
 test("app exposes manual turn control buttons", () => {
@@ -187,7 +189,7 @@ test("target selection uses standardized timed action windows", () => {
   assert.match(turnState, /\[ACTION_WINDOWS\.response\]: TIMINGS\.responseWindow/);
   assert.match(turnState, /\[ACTION_WINDOWS\.targetSelect\]: 20/);
   assert.match(turnState, /\[ACTION_WINDOWS\.response\]: 20/);
-  assert.match(app, /openActionWindowPatch\(normalizeActionWindow\(windowName\)/);
+  assert.match(app, /dispatchOpenActionWindowFromUiState[\s\S]*timeoutSeconds/);
   assert.match(app, /setActionWindow\(ACTION_WINDOWS\.targetSelect, \{ reason: `target:\$\{card\.uid\}` \}\)/);
   assert.match(app, /function handleTargetSelectionTimeout\(\)/);
   assert.match(app, /resolvePendingSpellTarget\(targets\[0\]\.owner, targets\[0\]\.index\)/);
@@ -275,6 +277,8 @@ test("project documents the current phase and event flow", () => {
   assert.match(flow, /DECLARE_ATTACK/);
   assert.match(flow, /RESOLVE_CHAIN/);
   assert.match(flow, /SKIP_REMAINING_ATTACKS/);
+  assert.match(flow, /OPEN_ACTION_WINDOW/);
+  assert.match(flow, /ACTION_WINDOW_OPENED/);
   assert.match(engineRules, /\[GAME_FLOW\.md\]\(GAME_FLOW\.md\)/);
 });
 

@@ -83,7 +83,18 @@ flowchart TD
 | `ai` | AI 行动 | 无玩家倒计时 |
 | `gameOver` | 胜负已确定 | 无 |
 
-当前 `Phase`、`Timing`、响应窗口和连锁由规则事件管理；部分 UI `actionWindow` 和计时器仍由 `turn-state.js` 投影管理。后续重构目标是让窗口切换也由引擎事件唯一决定。
+`Phase`、`Timing`、响应窗口、连锁和 `actionWindow` 均由规则事件管理。`turn-state.js` 只负责根据当前牌局计算建议窗口和超时策略；浏览器计时器读取事件中的 `windowId` 与 `deadline` 显示进度，不直接创建或修改窗口状态。
+
+```mermaid
+flowchart LR
+    Decision[计算下一合法操作窗口] --> Command[OPEN_ACTION_WINDOW]
+    Command --> Event[ACTION_WINDOW_OPENED]
+    Event --> Machine[machine.actionWindow]
+    Event --> Adapter[UI 回放 windowId deadline reason]
+    Adapter --> Timer[浏览器显示倒计时进度]
+    Timer -->|到期且 windowId 未变化| Timeout[执行该窗口的超时策略]
+    Timer -->|窗口已变化| Ignore[忽略旧计时器]
+```
 
 ## 单次操作结算
 

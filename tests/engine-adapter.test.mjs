@@ -16,6 +16,7 @@ import {
   dispatchDrawCardsFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
+  dispatchOpenActionWindowFromUiState,
   dispatchPassResponsePriorityFromUiState,
   dispatchQueueTrapResponseFromUiState,
   dispatchResolveBattleFromUiState,
@@ -127,6 +128,22 @@ test("replays combo and character passive events into UI state", () => {
   assert.deepEqual(state.player.hand, [draw]);
   assert.ok(events.some((event) => event.type === "COMBO_TRIGGERED"));
   assert.ok(events.some((event) => event.type === "CHARACTER_PASSIVE_TRIGGERED"));
+});
+
+test("replays engine-owned action windows into UI state", () => {
+  const state = appState();
+
+  const events = dispatchOpenActionWindowFromUiState(state, "player", "targetSelect", {
+    reason: "target:spell-1",
+    now: 2000,
+    timeoutSeconds: 20
+  });
+
+  assert.equal(state.actionWindow, "targetSelect");
+  assert.equal(state.actionWindowId, "targetSelect:2000");
+  assert.equal(state.actionWindowReason, "target:spell-1");
+  assert.equal(state.actionDeadline, 22000);
+  assert.ok(events.some((event) => event.type === "ACTION_WINDOW_OPENED"));
 });
 
 test("does not mutate UI state when SET_TRAP is rejected by the engine", () => {

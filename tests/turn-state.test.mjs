@@ -10,11 +10,9 @@ import {
   actionWindowTiming,
   canPlayerActState,
   canUsePlayerTurnControls,
-  aiWindowPatch,
   drawToMainPatch,
   mainToBattlePatch,
   normalizeActionWindow,
-  openActionWindowPatch,
   pauseResumeStep,
   playerActionWindowDecision,
   shouldRunPlayerIdleCountdownForState,
@@ -111,57 +109,20 @@ test("detects idle countdown and pause resume steps", () => {
   assert.equal(pauseResumeStep(state({ paused: true })), "none");
 });
 
-test("builds standardized action-window patches with deadlines", () => {
-  assert.deepEqual(openActionWindowPatch(ACTION_WINDOWS.targetSelect, { now: 1000, reason: "select target" }), {
-    actionWindow: ACTION_WINDOWS.targetSelect,
-    timing: TIMINGS.targetSelection,
-    actionWindowId: "targetSelect:1000",
-    actionWindowReason: "select target",
-    actionDeadline: 21000
-  });
-  assert.deepEqual(openActionWindowPatch(ACTION_WINDOWS.ai, { now: 1000 }), {
-    actionWindow: ACTION_WINDOWS.ai,
-    timing: TIMINGS.ai,
-    actionWindowId: "ai:1000",
-    actionWindowReason: "",
-    actionDeadline: 0
-  });
-});
-
 test("builds transition patches for turn flow", () => {
   assert.deepEqual(turnStartPatch(TURNS.player), {
     selected: null,
     pendingTarget: null,
     focusedCard: null,
     autoEnding: false,
-    actionWindow: ACTION_WINDOWS.draw,
-    actionDeadline: 0,
-    actionWindowId: null,
-    actionWindowReason: "",
     aiRunning: false
   });
 
   assert.deepEqual(drawToMainPatch(), {
-    actionWindow: ACTION_WINDOWS.main,
-    pendingTarget: null,
-    actionDeadline: 0,
-    actionWindowId: null,
-    actionWindowReason: ""
+    pendingTarget: null
   });
 
   assert.deepEqual(mainToBattlePatch(), {
-    actionWindow: ACTION_WINDOWS.battle,
-    pendingTarget: null,
-    actionDeadline: 0,
-    actionWindowId: null,
-    actionWindowReason: ""
-  });
-
-  assert.deepEqual(aiWindowPatch(), {
-    actionWindow: ACTION_WINDOWS.ai,
-    timing: TIMINGS.ai,
-    actionDeadline: 0,
-    actionWindowId: null,
-    actionWindowReason: ""
+    pendingTarget: null
   });
 });

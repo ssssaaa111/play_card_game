@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  ActionWindow,
   Ability,
   EffectDuration,
   GameEngine,
@@ -13,7 +14,8 @@ import {
   applyGameEvent,
   assertValidGameState,
   getCardEffectDefinition,
-  hasAbility
+  hasAbility,
+  projectMachineStateFromEvents
 } from "../src/game-engine.js";
 import { FIELD_SIZE, MAX_LP } from "../src/rules.js";
 
@@ -72,7 +74,8 @@ function makeState({ cards = [], player = {}, ai = {}, turn = {} } = {}) {
       phase: turn.phase || Phase.main,
       timing: Timing.mainOpen,
       responseWindow: null,
-      chain: []
+      chain: [],
+      actionWindow: null
     },
     abilities: {
       [PLAYER]: [],
@@ -2195,6 +2198,57 @@ test("timing, response windows, and chain links are explicit state machine event
   assert.equal(next.machine.responseWindow, null);
   assert.ok(resolveEvents.some((event) => event.type === "EFFECT_NEGATED" && event.targetEffectId === "attack-42"));
   assert.ok(resolveEvents.some((event) => event.type === "CHAIN_RESOLVED"));
+});
+
+test("action windows open through dispatch events and replay with deterministic deadlines", () => {
+  const state = makeState();
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "OPEN_ACTION_WINDOW",
+    playerId: PLAYER,
+    window: ActionWindow.targetSelect,
+    reason: "select:war-chant",
+    openedAt: 1000,
+    timeoutSeconds: 20
+  });
+  const next = engine.getState();
+  const opened = events.find((event) => event.type === "ACTION_WINDOW_OPENED");
+
+  assert.deepEqual(opened, {
+    id: opened.id,
+    type: "ACTION_WINDOW_OPENED",
+    playerId: PLAYER,
+    window: ActionWindow.targetSelect,
+    windowId: "targetSelect:1000",
+    reason: "select:war-chant",
+    openedAt: 1000,
+    deadline: 21000
+  });
+  assert.deepEqual(next.machine.actionWindow, {
+    playerId: PLAYER,
+    window: ActionWindow.targetSelect,
+    windowId: "targetSelect:1000",
+    reason: "select:war-chant",
+    openedAt: 1000,
+    deadline: 21000
+  });
+
+  const projected = projectMachineStateFromEvents(events, Phase.main);
+  assert.deepEqual(projected.actionWindow, next.machine.actionWindow);
+});
+
+test("action window commands reject unknown windows and invalid timeout data", () => {
+  const engine = new GameEngine(makeState());
+
+  assert.throws(
+    () => engine.dispatch({ type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: "missing", openedAt: 1000 }),
+    /Unknown action window/
+  );
+  assert.throws(
+    () => engine.dispatch({ type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: ActionWindow.main, openedAt: Number.NaN }),
+    /openedAt must be finite/
+  );
 });
 
 test("trap chain effects wait for resolution and resolve in last-in-first-out order", () => {

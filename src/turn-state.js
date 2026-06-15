@@ -1,3 +1,5 @@
+import { ActionWindow } from './game-engine.js';
+
 export const PHASES = {
   setup: "setup",
   ready: "ready",
@@ -25,18 +27,7 @@ export const TURNS = {
   ai: "ai"
 };
 
-export const ACTION_WINDOWS = {
-  setup: "setup",
-  draw: "draw",
-  main: "main",
-  battle: "battle",
-  targetSelect: "targetSelect",
-  response: "response",
-  resolution: "resolution",
-  autoEnd: "autoEnd",
-  ai: "ai",
-  gameOver: "gameOver"
-};
+export const ACTION_WINDOWS = ActionWindow;
 
 const validActionWindows = new Set(Object.values(ACTION_WINDOWS));
 const actionWindowTimings = {
@@ -70,25 +61,6 @@ export function actionWindowTiming(windowName) {
 
 export function actionWindowTimeoutSeconds(windowName) {
   return actionWindowTimeouts[normalizeActionWindow(windowName)] || 0;
-}
-
-export function openActionWindowPatch(windowName, { now = Date.now(), reason = "", timeoutSeconds = actionWindowTimeoutSeconds(windowName) } = {}) {
-  const actionWindow = normalizeActionWindow(windowName);
-  return {
-    actionWindow,
-    timing: actionWindowTiming(actionWindow),
-    actionWindowId: `${actionWindow}:${now}`,
-    actionWindowReason: reason,
-    actionDeadline: timeoutSeconds > 0 ? now + timeoutSeconds * 1000 : 0
-  };
-}
-
-export function closeActionWindowPatch() {
-  return {
-    actionDeadline: 0,
-    actionWindowId: null,
-    actionWindowReason: ""
-  };
 }
 
 export function canPlayerActState({
@@ -184,40 +156,18 @@ export function turnStartPatch(owner) {
     pendingTarget: null,
     focusedCard: null,
     autoEnding: false,
-    actionWindow: ACTION_WINDOWS.draw,
-    actionDeadline: 0,
-    actionWindowId: null,
-    actionWindowReason: "",
     aiRunning: false
   };
 }
 
 export function drawToMainPatch() {
   return {
-    actionWindow: ACTION_WINDOWS.main,
-    pendingTarget: null,
-    actionDeadline: 0,
-    actionWindowId: null,
-    actionWindowReason: ""
+    pendingTarget: null
   };
 }
 
 export function mainToBattlePatch() {
   return {
-    actionWindow: ACTION_WINDOWS.battle,
-    pendingTarget: null,
-    actionDeadline: 0,
-    actionWindowId: null,
-    actionWindowReason: ""
-  };
-}
-
-export function aiWindowPatch() {
-  return {
-    actionWindow: ACTION_WINDOWS.ai,
-    timing: TIMINGS.ai,
-    actionDeadline: 0,
-    actionWindowId: null,
-    actionWindowReason: ""
+    pendingTarget: null
   };
 }

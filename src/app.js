@@ -19,6 +19,7 @@ import {
   dispatchDrawCardsFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
+  dispatchOpenActionWindowFromUiState,
   dispatchPassResponsePriorityFromUiState,
   dispatchQueueTrapResponseFromUiState,
   dispatchResolveBattleFromUiState,
@@ -48,11 +49,8 @@ import {
   actionWindowTimeoutSeconds,
   canPlayerActState,
   canUsePlayerTurnControls,
-  aiWindowPatch,
   drawToMainPatch,
   mainToBattlePatch,
-  normalizeActionWindow,
-  openActionWindowPatch,
   pauseResumeStep,
   playerActionWindowDecision,
   shouldRunPlayerIdleCountdownForState,
@@ -1158,10 +1156,21 @@ function canUseBattleActions() {
 }
 
 function setActionWindow(windowName, options = {}) {
-  Object.assign(state, openActionWindowPatch(normalizeActionWindow(windowName), {
-    now: options.now ?? Date.now(),
-    reason: options.reason || ""
-  }));
+  try {
+    return dispatchOpenActionWindowFromUiState(
+      state,
+      options.playerId || state.turn || "player",
+      windowName,
+      {
+        now: options.now ?? Date.now(),
+        reason: options.reason || "",
+        timeoutSeconds: options.timeoutSeconds ?? actionWindowTimeoutSeconds(windowName)
+      }
+    );
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
 }
 
 function cancelAutoEnd() {
@@ -3068,10 +3077,7 @@ function heal(duelist, amount) {
 function promptTrapChoice(candidates, eventName, details = {}) {
   const previousWindow = {
     actionWindow: state.actionWindow,
-    timing: state.timing,
-    actionWindowId: state.actionWindowId,
-    actionWindowReason: state.actionWindowReason,
-    actionDeadline: state.actionDeadline
+    actionWindowReason: state.actionWindowReason
   };
   clearPlayerIdleTimers();
   setActionWindow(ACTION_WINDOWS.response, { reason: `trap-choice:${eventName}` });
@@ -3100,7 +3106,9 @@ function promptTrapChoice(candidates, eventName, details = {}) {
         addLog("陷阱响应失效：选中的陷阱已离开原槽位。");
       }
       clearPlayerIdleTimers();
-      Object.assign(state, previousWindow);
+      setActionWindow(previousWindow.actionWindow, {
+        reason: previousWindow.actionWindowReason || "trap response resolved"
+      });
       closeTrapChoicePrompt();
       render();
       resolve(resolution.ok ? resolution : { trapIndex: -1, skippedName: "" });
@@ -3120,7 +3128,6 @@ function endPlayerTurn() {
   state.selected = null;
   state.pendingTarget = null;
   clearBattlePreview();
-  Object.assign(state, aiWindowPatch());
   clearPlayerIdleTimers();
   beginTurn("ai");
   render();
@@ -3151,6 +3158,7 @@ function enterPlayerBattlePhase(reason = "战斗时点", { preserveSelection = f
     return false;
   }
   Object.assign(state, mainToBattlePatch());
+  setActionWindow(ACTION_WINDOWS.battle, { reason });
   if (!quiet) {
     playSound("click");
     addLog(`${reason}，进入战斗时点。`);
@@ -3275,6 +3283,10 @@ function beginTurn(owner) {
     return false;
   }
   Object.assign(state, turnStartPatch(owner));
+  setActionWindow(owner === "player" ? ACTION_WINDOWS.draw : ACTION_WINDOWS.ai, {
+    playerId: owner,
+    reason: "turn started"
+  });
   clearBattlePreview();
   cancelAutoEnd();
   clearPlayerIdleTimers();
@@ -3338,6 +3350,7 @@ function autoPlayerDraw() {
     return;
   }
   Object.assign(state, drawToMainPatch());
+  setActionWindow(ACTION_WINDOWS.main, { reason: "draw completed" });
   render("draw-player");
   resetPlayerIdleCountdown();
 }
@@ -3674,7 +3687,6 @@ function clearPlayerIdleTimers() {
   window.clearInterval(state.countdownTimer);
   state.idleTimer = null;
   state.countdownTimer = null;
-  state.actionDeadline = 0;
   if (els.timerText) {
     els.timerText.textContent = "";
   }
@@ -3701,13 +3713,13 @@ function resetPlayerIdleCountdown() {
   if (!shouldRunPlayerIdleCountdownForState(state)) return;
   const seconds = actionWindowTimeoutSeconds(state.actionWindow);
   if (seconds <= 0) return;
+  setActionWindow(state.actionWindow, {
+    reason: state.actionWindowReason || "countdown reset",
+    timeoutSeconds: seconds
+  });
   const startedAt = Date.now();
   const totalMs = seconds * 1000;
-  if (!state.actionWindowId) {
-    state.actionWindowId = `${state.actionWindow}:${startedAt}`;
-  }
   const windowId = state.actionWindowId;
-  state.actionDeadline = startedAt + totalMs;
   els.timerProgress?.classList.add("active");
   const tick = () => {
     if (!shouldRunPlayerIdleCountdownForState(state)) {

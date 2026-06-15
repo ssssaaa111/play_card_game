@@ -22,6 +22,19 @@ const uiTimingByPhase = {
   [PHASES.battle]: TIMINGS.battleOpen
 };
 
+const uiTimingByActionWindow = {
+  setup: TIMINGS.setup,
+  draw: TIMINGS.draw,
+  main: TIMINGS.mainOpen,
+  battle: TIMINGS.battleOpen,
+  targetSelect: TIMINGS.targetSelection,
+  response: TIMINGS.responseWindow,
+  resolution: TIMINGS.resolution,
+  autoEnd: TIMINGS.autoEnd,
+  ai: TIMINGS.ai,
+  gameOver: TIMINGS.gameOver
+};
+
 function cardKey(card) {
   return card?.uid || card?.engineId || card?.id || null;
 }
@@ -220,6 +233,13 @@ export function applyUiGameEvents(uiState, events = []) {
     if (event.type === "PHASE_CHANGED") {
       uiState.phase = event.to;
       uiState.timing = uiTimingByPhase[event.to] || uiState.timing;
+    }
+    if (event.type === "ACTION_WINDOW_OPENED") {
+      uiState.actionWindow = event.window;
+      uiState.actionWindowId = event.windowId;
+      uiState.actionWindowReason = event.reason || "";
+      uiState.actionDeadline = Math.max(0, Number(event.deadline) || 0);
+      uiState.timing = uiTimingByActionWindow[event.window] || uiState.timing;
     }
     if (event.type === "CARD_MOVED") {
       const card = removeCardFromUiState(uiState, event.cardId);
@@ -471,6 +491,23 @@ export function dispatchOpenResponseWindowFromUiState(uiState, playerId, {
     triggerEventId,
     prompt,
     context
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchOpenActionWindowFromUiState(uiState, playerId, window, {
+  reason = "",
+  now = Date.now(),
+  timeoutSeconds = 0
+} = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "OPEN_ACTION_WINDOW",
+    playerId,
+    window,
+    reason,
+    openedAt: now,
+    timeoutSeconds
   });
   return applyUiGameEvents(uiState, events);
 }

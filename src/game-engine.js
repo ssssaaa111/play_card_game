@@ -26,6 +26,19 @@ export const ResponseWindow = Object.freeze({
   mandatory: "mandatory"
 });
 
+export const ActionWindow = Object.freeze({
+  setup: "setup",
+  draw: "draw",
+  main: "main",
+  battle: "battle",
+  targetSelect: "targetSelect",
+  response: "response",
+  resolution: "resolution",
+  autoEnd: "autoEnd",
+  ai: "ai",
+  gameOver: "gameOver"
+});
+
 export const EffectDuration = Object.freeze({
   oneShot: "oneShot",
   continuous: "continuous"
@@ -47,6 +60,7 @@ const ZONE_LIMITS = Object.freeze({
 const PHASE_ORDER = Object.freeze([Phase.setup, Phase.draw, Phase.main, Phase.battle, Phase.end]);
 const TIMINGS = new Set(Object.values(Timing));
 const RESPONSE_WINDOWS = new Set(Object.values(ResponseWindow));
+const ACTION_WINDOWS = new Set(Object.values(ActionWindow));
 const ABILITIES = new Set(Object.values(Ability));
 const MONSTER_MODES = new Set(["attack", "defense"]);
 
@@ -447,6 +461,9 @@ export class GameEngine {
         break;
       case "OPEN_RESPONSE_WINDOW":
         this.#openResponseWindow(workingState, emit, action);
+        break;
+      case "OPEN_ACTION_WINDOW":
+        this.#openActionWindow(workingState, emit, action);
         break;
       case "CLOSE_RESPONSE_WINDOW":
         this.#closeResponseWindow(workingState, emit, action);
@@ -1005,6 +1022,27 @@ export class GameEngine {
     });
   }
 
+  #openActionWindow(state, emit, action) {
+    requirePlayer(state, action.playerId);
+    if (!ACTION_WINDOWS.has(action.window)) {
+      throw new GameRuleError(`Unknown action window ${action.window}`);
+    }
+    const openedAt = Number(action.openedAt);
+    const timeoutSeconds = Math.max(0, Number(action.timeoutSeconds) || 0);
+    if (!Number.isFinite(openedAt)) {
+      throw new GameRuleError("Action window openedAt must be finite");
+    }
+
+    emit("ACTION_WINDOW_OPENED", {
+      playerId: action.playerId,
+      window: action.window,
+      windowId: action.windowId || `${action.window}:${openedAt}`,
+      reason: action.reason || "",
+      openedAt,
+      deadline: timeoutSeconds > 0 ? openedAt + timeoutSeconds * 1000 : 0
+    });
+  }
+
   #addChainLink(state, emit, action) {
     const responseWindow = requireOpenResponseWindow(state, action.playerId);
     if (action.cardId) {
@@ -1192,6 +1230,17 @@ export function assertValidGameState(state) {
   if (!Array.isArray(state.machine.chain)) {
     throw new GameStateValidationError("State machine chain must be an array");
   }
+  if (state.machine.actionWindow) {
+    if (!ACTION_WINDOWS.has(state.machine.actionWindow.window)) {
+      throw new GameStateValidationError(`Unknown action window ${state.machine.actionWindow.window}`);
+    }
+    if (!state.players[state.machine.actionWindow.playerId]) {
+      throw new GameStateValidationError("Action window player must exist");
+    }
+    if (!Number.isFinite(state.machine.actionWindow.openedAt) || !Number.isFinite(state.machine.actionWindow.deadline)) {
+      throw new GameStateValidationError("Action window timing must be finite");
+    }
+  }
   if (state.machine.responseWindow && !RESPONSE_WINDOWS.has(state.machine.responseWindow.type)) {
     throw new GameStateValidationError(`Unknown response window ${state.machine.responseWindow.type}`);
   }
@@ -1296,6 +1345,9 @@ export function applyGameEvent(state, event, options = {}) {
       break;
     case "RESPONSE_WINDOW_CLOSED":
       applyResponseWindowClosed(state, event);
+      break;
+    case "ACTION_WINDOW_OPENED":
+      applyActionWindowOpened(state, event);
       break;
     case "RESPONSE_PRIORITY_PASSED":
       applyResponsePriorityPassed(state, event);
@@ -1496,6 +1548,7 @@ function applyPhaseChanged(state, event) {
   state.machine.timing = timingForPhase(event.to);
   state.machine.responseWindow = null;
   state.machine.chain = [];
+  state.machine.actionWindow = null;
 }
 
 function applyTurnStarted(state, event) {
@@ -1506,6 +1559,7 @@ function applyTurnStarted(state, event) {
   state.machine.timing = Timing.draw;
   state.machine.responseWindow = null;
   state.machine.chain = [];
+  state.machine.actionWindow = null;
   player.attacksSkipped = false;
   player.comboThisTurn = false;
   player.comboFlags = {};
@@ -1547,6 +1601,24 @@ function applyResponseWindowOpened(state, event) {
 function applyResponseWindowClosed(state, event) {
   requirePlayer(state, event.playerId);
   state.machine.responseWindow = null;
+}
+
+function applyActionWindowOpened(state, event) {
+  requirePlayer(state, event.playerId);
+  if (!ACTION_WINDOWS.has(event.window)) {
+    throw new GameRuleError(`Unknown action window ${event.window}`);
+  }
+  if (!event.windowId || !Number.isFinite(Number(event.openedAt)) || !Number.isFinite(Number(event.deadline))) {
+    throw new GameRuleError("ACTION_WINDOW_OPENED requires valid timing data");
+  }
+  state.machine.actionWindow = {
+    playerId: event.playerId,
+    window: event.window,
+    windowId: event.windowId,
+    reason: event.reason || "",
+    openedAt: Number(event.openedAt),
+    deadline: Number(event.deadline)
+  };
 }
 
 function applyResponsePriorityPassed(state, event) {
@@ -2105,6 +2177,7 @@ function normalizeState(state) {
     timing: timingForPhase(state.turn.phase),
     responseWindow: null,
     chain: [],
+    actionWindow: null,
     ...(state.machine || {}),
     phase: state.turn.phase
   };
@@ -2270,7 +2343,8 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
     phase,
     timing: timingForPhase(phase),
     responseWindow: null,
-    chain: []
+    chain: [],
+    actionWindow: null
   };
 
   for (const event of events) {
@@ -2279,12 +2353,14 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
       machine.timing = Timing.draw;
       machine.responseWindow = null;
       machine.chain = [];
+      machine.actionWindow = null;
     }
     if (event.type === "PHASE_CHANGED") {
       machine.phase = event.to;
       machine.timing = timingForPhase(event.to);
       machine.responseWindow = null;
       machine.chain = [];
+      machine.actionWindow = null;
     }
     if (event.type === "TIMING_CHANGED" && TIMINGS.has(event.to)) {
       machine.timing = event.to;
@@ -2302,6 +2378,16 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
     }
     if (event.type === "RESPONSE_WINDOW_CLOSED") {
       machine.responseWindow = null;
+    }
+    if (event.type === "ACTION_WINDOW_OPENED") {
+      machine.actionWindow = {
+        playerId: event.playerId,
+        window: event.window,
+        windowId: event.windowId,
+        reason: event.reason || "",
+        openedAt: Number(event.openedAt),
+        deadline: Number(event.deadline)
+      };
     }
     if (event.type === "RESPONSE_PRIORITY_PASSED" && machine.responseWindow) {
       machine.responseWindow.playerId = event.toPlayerId;
@@ -2336,7 +2422,8 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
       phase,
       timing: timingForPhase(phase),
       responseWindow: null,
-      chain: []
+      chain: [],
+      actionWindow: null
     };
   }
   return machine;
