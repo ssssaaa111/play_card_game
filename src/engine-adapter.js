@@ -58,6 +58,7 @@ function uiDuelistToEngine(duelist) {
     attacksSkipped: Boolean(duelist.attacksSkipped),
     comboThisTurn: Boolean(duelist.comboThisTurn),
     comboFlags: { ...(duelist.comboFlags || {}) },
+    comboPassive: duelist.comboPassive ? { ...duelist.comboPassive, operations: (duelist.comboPassive.operations || []).map((operation) => ({ ...operation })) } : null,
     normalSummonsUsed: Math.max(0, Number(duelist.normalSummonsUsed) || 0)
   };
 }
@@ -207,6 +208,14 @@ export function applyUiGameEvents(uiState, events = []) {
       duelist.comboThisTurn = false;
       duelist.comboFlags = {};
       duelist.normalSummonsUsed = 0;
+    }
+    if (event.type === "COMBO_TRIGGERED") {
+      const duelist = uiDuelist(uiState, event.playerId);
+      duelist.comboFlags = duelist.comboFlags || {};
+      duelist.comboFlags[event.comboId] = true;
+    }
+    if (event.type === "CHARACTER_PASSIVE_TRIGGERED") {
+      uiDuelist(uiState, event.playerId).comboThisTurn = true;
     }
     if (event.type === "PHASE_CHANGED") {
       uiState.phase = event.to;
@@ -528,6 +537,17 @@ export function dispatchSkipRemainingAttacksFromUiState(uiState, playerId) {
   const events = engine.dispatch({
     type: "SKIP_REMAINING_ATTACKS",
     playerId
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchResolveElementCombosFromUiState(uiState, playerId, rivalId, source = "") {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "RESOLVE_ELEMENT_COMBOS",
+    playerId,
+    rivalId,
+    source
   });
   return applyUiGameEvents(uiState, events);
 }

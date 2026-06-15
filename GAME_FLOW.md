@@ -153,6 +153,35 @@ flowchart TD
 
 连锁项通过 `CHAIN_LINK_ADDED` 和 `CHAIN_LINK_COMMITTED` 建立，双方都放弃继续响应后，由 `RESOLVE_CHAIN` 按后进先出顺序结算。
 
+## 属性组合与角色被动
+
+召唤、发动魔法或盖放陷阱完成后，UI 只负责派发一次组合检查命令。组合条件、每回合标记和实际效果均由引擎结算。
+
+```mermaid
+flowchart TD
+    ActionDone[召唤 魔法或盖陷阱结算完成] --> Command[RESOLVE_ELEMENT_COMBOS]
+    Command --> Read[读取场上怪兽属性 来源和 comboFlags]
+    Read --> Match{存在尚未触发的组合}
+    Match -->|否| Return[返回行动窗口]
+    Match -->|是| ComboEvent[COMBO_TRIGGERED]
+    ComboEvent --> Mark[事件写入 comboFlags]
+    Mark --> Passive{本回合角色被动是否未触发}
+    Passive -->|是| PassiveEvent[CHARACTER_PASSIVE_TRIGGERED]
+    PassiveEvent --> PassiveOps[执行声明式被动 operations]
+    Passive -->|否| ComboOps[执行组合 operations]
+    PassiveOps --> ComboOps
+    ComboOps --> RuleEvents[抽卡 伤害 护盾 属性修改事件]
+    RuleEvents --> More{还有其他匹配组合}
+    More -->|是| ComboEvent
+    More -->|否| Feedback[UI 根据事件播放动画 音效和日志]
+```
+
+- 组合定义位于 `src/combos.js`，条件和效果均为声明式数据。
+- `COMBO_TRIGGERED` 是 `comboFlags` 的唯一写入来源。
+- `CHARACTER_PASSIVE_TRIGGERED` 是 `comboThisTurn` 的唯一写入来源，保证同一回合只触发一次角色被动。
+- 角色被动存放在玩家规则状态的 `comboPassive.operations` 中，不允许自由函数直接修改状态。
+- 多个组合同时满足时按定义顺序结算；角色被动只跟随第一个组合触发一次。
+
 ## 文档维护规则
 
 以下变化必须同步更新本文：

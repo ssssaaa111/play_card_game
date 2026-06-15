@@ -5,7 +5,6 @@ import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { cardDetailText, cardZoomMeta } from './card-detail.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
-import { availableElementCombos, markElementComboResolved } from './combos.js';
 import { buildDeck, createDuelist } from './deck.js';
 import {
   canDispatchSummonEffectFromUiState,
@@ -24,6 +23,7 @@ import {
   dispatchQueueTrapResponseFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
+  dispatchResolveElementCombosFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
   dispatchSetTrapFromUiState,
   dispatchStartTurnFromUiState,
@@ -918,8 +918,8 @@ function startGame() {
   stopVoiceAudio();
   closeTrapChoicePrompt();
   applySetupChoices();
-  Object.assign(state.player, createDuelist("player"));
-  Object.assign(state.ai, createDuelist("ai"));
+  Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
+  Object.assign(state.ai, createDuelist("ai", characterProfiles.ai.passive));
   state.player.deck = buildDeck(state.deckPreset);
   state.ai.deck = buildDeck(aiProfiles[state.aiStyle]?.deckPreset || "balanced");
   state.turn = "player";
@@ -968,8 +968,8 @@ function prepareGame() {
   closeTrapChoicePrompt();
   applySetupChoices();
   syncSetupControls();
-  Object.assign(state.player, createDuelist("player"));
-  Object.assign(state.ai, createDuelist("ai"));
+  Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
+  Object.assign(state.ai, createDuelist("ai", characterProfiles.ai.passive));
   state.turn = "player";
   state.phase = "ready";
   state.selected = null;
@@ -1081,71 +1081,38 @@ function duelistLabel(duelist) {
   return duelist.owner === "player" ? "你" : "AI";
 }
 
-function resolveCharacterCombo(owner, rival) {
-  if (owner.comboThisTurn) return;
-  owner.comboThisTurn = true;
-  const profile = characterProfiles[owner.owner];
-  if (profile.kind === "draw") {
-    const count = profile.count || 1;
-    drawCards(owner, count);
-    addLog(`${profile.skill}发动：首次组合技让${duelistLabel(owner)}额外抽 ${count} 张卡。`);
-    speak(`角色技能发动，${profile.skill}，额外抽卡。`, false, owner.owner);
-  } else if (profile.kind === "buff") {
-    const target = strongestMonster(owner);
-    const amount = profile.amount || 300;
-    if (target) {
-      buffCard(target, amount, profile.skill);
-      playSound("spell-buff500");
-      playEpicAction("号令", "attack");
-      addLog(`${profile.skill}发动：${target.name} 攻击力提升 ${amount}。`);
-      speak(`角色技能发动，${profile.skill}，攻击力提升。`, false, owner.owner);
-    }
-  } else if (profile.kind === "shield") {
-    const amount = profile.amount || 450;
-    gainShield(owner, amount, profile.skill);
-    addLog(`${profile.skill}发动：${duelistLabel(owner)}获得 ${amount} 护盾。`);
-    speak(`角色技能发动，${profile.skill}，护盾展开。`, false, owner.owner);
-  } else {
-    const amount = profile.amount || 150;
-    damage(rival, amount);
-    animateAvatar(rival.owner, "hit");
-    playEpicAction("压迫", "attack");
-    addLog(`${profile.skill}发动：首次组合技造成 ${amount} 点伤害。`);
-    speak(`角色技能发动，${profile.skill}。`, false, owner.owner);
-  }
-}
-
-function triggerCombo(owner, rival, title, text) {
-  playCenterCardEffect({ type: "spell", name: title, icon: "连", text }, text);
-  playSound("spell-elementEcho");
-  playEpicAction("连携", "draw");
-  const voiced = playVoice(owner.owner, "combo", `${duelistLabel(owner)}触发组合技，${title}。`);
-  addLog(`${duelistLabel(owner)}触发组合技：${title}。${text}`);
-  if (!voiced) speak(`${duelistLabel(owner)}触发组合技，${title}。`, false, owner.owner);
-  resolveCharacterCombo(owner, rival);
-}
-
 function resolveElementCombos(owner, rival, source = "") {
-  availableElementCombos(owner, source).forEach((combo) => {
-    markElementComboResolved(owner, combo);
-    triggerCombo(owner, rival, combo.title, combo.text);
-    if (combo.flag === "fireWind") {
-      damage(rival, 300);
-      buffAllMonsters(owner, 100, combo.title);
-      animateAvatar(rival.owner, "hit");
-      shakeScreen();
-    }
-    if (combo.flag === "lightShadow") {
-      gainShield(owner, 600, combo.title);
-      drawCards(owner, 1);
-    }
-    if (combo.flag === "triad") {
-      buffAllMonsters(owner, 200, combo.title);
-    }
-    if (combo.flag === "shadowAmbush") {
-      gainShield(owner, 300, combo.title);
-    }
+  let events = [];
+  try {
+    events = dispatchResolveElementCombosFromUiState(state, owner.owner, rival.owner, source);
+  } catch (error) {
+    addLog(`组合技结算被规则引擎拒绝：${error.message || "未知错误"}`);
+    console.error(error);
+    return [];
+  }
+
+  const comboEvents = events.filter((event) => event.type === "COMBO_TRIGGERED");
+  comboEvents.forEach((event) => {
+    playCenterCardEffect({ type: "spell", name: event.title, icon: "连", text: event.text }, event.text);
+    playSound("spell-elementEcho");
+    playEpicAction("连携", "draw");
+    const voiced = playVoice(owner.owner, "combo", `${duelistLabel(owner)}触发组合技，${event.title}。`);
+    addLog(`${duelistLabel(owner)}触发组合技：${event.title}。${event.text}`);
+    if (!voiced) speak(`${duelistLabel(owner)}触发组合技，${event.title}。`, false, owner.owner);
   });
+
+  events.filter((event) => event.type === "CHARACTER_PASSIVE_TRIGGERED").forEach((event) => {
+    playEpicAction("角色技能", "draw");
+    addLog(`${event.name}发动：本回合首次组合技触发角色被动。`);
+    speak(`角色技能发动，${event.name}。`, false, owner.owner);
+  });
+
+  if (comboEvents.length > 0) {
+    const effectName = comboEvents.map((event) => event.title).join(" / ");
+    resolveEngineSpellFeedback(owner, rival, { name: effectName, effect: "elementCombo" }, events);
+    if (events.some((event) => event.type === "DAMAGE_DEALT" && event.amount > 0)) shakeScreen();
+  }
+  return events;
 }
 
 function activeDuelist() {

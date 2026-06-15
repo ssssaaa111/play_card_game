@@ -29,6 +29,19 @@ test("creates fresh duelists with empty zones and resources", () => {
   assert.equal(duelist.attacksSkipped, false);
 });
 
+test("creates duelists with cloned declarative character passives", () => {
+  const passive = {
+    id: "starLink",
+    name: "星脉连携",
+    operations: [{ op: "drawCards", player: "self", count: 1 }]
+  };
+  const duelist = createDuelist("player", passive);
+
+  assert.deepEqual(duelist.comboPassive, passive);
+  assert.notEqual(duelist.comboPassive, passive);
+  assert.notEqual(duelist.comboPassive.operations, passive.operations);
+});
+
 test("clones cards with runtime battle state and display metadata", () => {
   const template = cardById("ember-drake");
   const clone = cloneCard(template);

@@ -107,6 +107,8 @@ The validator catches:
 - Complex permissions such as direct attack, extra summon, and attack reset should be represented as abilities, then granted or spent through events.
 - Skipping remaining attacks uses `SKIP_REMAINING_ATTACKS`, consumes attack-only abilities through events, and grants the turn-scoped `skipAttackLock` ability.
 - A queued `attackReset` is spent automatically when an attack chance is consumed; a surviving attacker is readied through `MONSTER_READIED`.
+- Element combos resolve through `RESOLVE_ELEMENT_COMBOS`. `COMBO_TRIGGERED` and `CHARACTER_PASSIVE_TRIGGERED` own the combo and once-per-turn passive flags.
+- Element combos and character passives declare `operations`; UI code and card configuration must not store free functions that mutate rule state.
 
 ## UI action windows
 

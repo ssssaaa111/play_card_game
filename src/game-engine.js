@@ -1,4 +1,5 @@
 import { FIELD_SIZE, MAX_LP, MAX_SHIELD } from "./rules.js";
+import { matchingElementCombos } from "./combos.js";
 
 export const Phase = Object.freeze({
   setup: "setup",
@@ -423,6 +424,9 @@ export class GameEngine {
       case "SKIP_REMAINING_ATTACKS":
         this.#skipRemainingAttacks(workingState, emit, action);
         break;
+      case "RESOLVE_ELEMENT_COMBOS":
+        this.#resolveElementCombos(workingState, ctx, emit, action);
+        break;
       case "CHANGE_MONSTER_MODE":
         this.#changeMonsterMode(workingState, emit, action);
         break;
@@ -491,6 +495,59 @@ export class GameEngine {
     });
     ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "hand" }, { playerId: action.playerId, zone: "grave" });
     runEffect(this.#effects, card.effect, ctx, preparedAction, card);
+  }
+
+  #resolveElementCombos(state, ctx, emit, action) {
+    requirePlayer(state, action.playerId);
+    requirePhase(state, [Phase.main, Phase.battle], action.type);
+    const player = requirePlayer(state, action.playerId);
+    const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
+    const combos = matchingElementCombos({
+      elements: monsterElementSet(state, action.playerId),
+      flags: player.comboFlags,
+      source: action.source || ""
+    });
+
+    for (const combo of combos) {
+      emit("COMBO_TRIGGERED", {
+        playerId: action.playerId,
+        rivalId,
+        comboId: combo.flag,
+        title: combo.title,
+        text: combo.text,
+        source: action.source || ""
+      });
+
+      if (!player.comboThisTurn && player.comboPassive) {
+        const passive = player.comboPassive;
+        const definition = {
+          duration: EffectDuration.oneShot,
+          operations: passive.operations || []
+        };
+        normalizeEffectDefinitions({ [passive.id || "characterPassive"]: definition });
+        emit("CHARACTER_PASSIVE_TRIGGERED", {
+          playerId: action.playerId,
+          rivalId,
+          passiveId: passive.id || "characterPassive",
+          name: passive.name || passive.id || "角色被动",
+          comboId: combo.flag
+        });
+        runEffectDefinition(definition, ctx, {
+          ...action,
+          rivalId,
+          cardId: `passive:${passive.id || "characterPassive"}`
+        }, { id: passive.id || "characterPassive" });
+      }
+
+      runEffectDefinition({
+        duration: EffectDuration.oneShot,
+        operations: combo.operations || []
+      }, ctx, {
+        ...action,
+        rivalId,
+        cardId: `combo:${combo.flag}`
+      }, { id: combo.flag });
+    }
   }
 
   #activateTrap(state, ctx, emit, action) {
@@ -1153,6 +1210,14 @@ export function assertValidGameState(state) {
     if (!Number.isInteger(player.normalSummonsUsed) || player.normalSummonsUsed < 0) {
       throw new GameStateValidationError(`Player ${player.id} normal summon count must be a non-negative integer`);
     }
+    if (player.comboPassive) {
+      if (!player.comboPassive.id || !Array.isArray(player.comboPassive.operations)) {
+        throw new GameStateValidationError(`Player ${player.id} combo passive must be declarative`);
+      }
+      if (player.comboPassive.operations.some((operation) => !operation || typeof operation.op !== "string")) {
+        throw new GameStateValidationError(`Player ${player.id} combo passive has an invalid operation`);
+      }
+    }
 
     for (const zone of ZONE_KEYS) {
       const cards = player[zone];
@@ -1252,6 +1317,12 @@ export function applyGameEvent(state, event, options = {}) {
       break;
     case "TURN_ABILITIES_EXPIRED":
       applyTurnAbilitiesExpired(state, event);
+      break;
+    case "COMBO_TRIGGERED":
+      applyComboTriggered(state, event);
+      break;
+    case "CHARACTER_PASSIVE_TRIGGERED":
+      applyCharacterPassiveTriggered(state, event);
       break;
     case "NORMAL_SUMMON_USED":
       applyNormalSummonUsed(state, event);
@@ -1439,6 +1510,17 @@ function applyTurnStarted(state, event) {
   player.comboThisTurn = false;
   player.comboFlags = {};
   player.normalSummonsUsed = 0;
+}
+
+function applyComboTriggered(state, event) {
+  const player = requirePlayer(state, event.playerId);
+  if (!event.comboId) throw new GameRuleError("COMBO_TRIGGERED requires comboId");
+  player.comboFlags[event.comboId] = true;
+}
+
+function applyCharacterPassiveTriggered(state, event) {
+  const player = requirePlayer(state, event.playerId);
+  player.comboThisTurn = true;
 }
 
 function applyTimingChanged(state, event) {
@@ -2034,6 +2116,11 @@ function normalizeState(state) {
     state.players[playerId].comboFlags = state.players[playerId].comboFlags && typeof state.players[playerId].comboFlags === "object"
       ? state.players[playerId].comboFlags
       : {};
+    if (state.players[playerId].comboPassive !== undefined) {
+      state.players[playerId].comboPassive = state.players[playerId].comboPassive && typeof state.players[playerId].comboPassive === "object"
+        ? state.players[playerId].comboPassive
+        : null;
+    }
     state.players[playerId].normalSummonsUsed = Math.max(0, Number(state.players[playerId].normalSummonsUsed) || 0);
   }
   return state;

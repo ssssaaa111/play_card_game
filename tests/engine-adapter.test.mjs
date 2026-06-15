@@ -20,6 +20,7 @@ import {
   dispatchQueueTrapResponseFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
+  dispatchResolveElementCombosFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
   dispatchStartTurnFromUiState,
   dispatchTrapResponseFromUiState,
@@ -27,6 +28,7 @@ import {
   dispatchSummonMonsterFromUiState
 } from "../src/engine-adapter.js";
 import { PHASES } from "../src/turn-state.js";
+import { MAX_LP } from "../src/rules.js";
 
 function uiTrap(uid, id = "mirror-snare") {
   return {
@@ -97,6 +99,34 @@ test("dispatches SET_TRAP and applies CARD_MOVED to a fixed UI trap slot", () =>
   ));
   assert.ok(events.some((event) => event.type === "TRAP_SET" && event.cardId === mirror.uid));
   assert.equal(state.gameEvents.length, events.length);
+});
+
+test("replays combo and character passive events into UI state", () => {
+  const state = appState();
+  const fire = uiMonster("fire-combo", "ember-drake");
+  const wind = uiMonster("wind-combo", "gale-mage");
+  const draw = uiMonster("combo-draw", "solar-knight");
+  fire.element = "fire";
+  wind.element = "wind";
+  state.player.field[0] = fire;
+  state.player.field[1] = wind;
+  state.player.deck = [draw];
+  state.player.comboPassive = {
+    id: "starLink",
+    name: "星脉连携",
+    operations: [{ op: "drawCards", player: "self", count: 1 }]
+  };
+
+  const events = dispatchResolveElementCombosFromUiState(state, "player", "ai", "summon");
+
+  assert.equal(state.player.comboFlags.fireWind, true);
+  assert.equal(state.player.comboThisTurn, true);
+  assert.equal(state.ai.lp, MAX_LP - 300);
+  assert.equal(fire.tempAtk, 100);
+  assert.equal(wind.tempAtk, 100);
+  assert.deepEqual(state.player.hand, [draw]);
+  assert.ok(events.some((event) => event.type === "COMBO_TRIGGERED"));
+  assert.ok(events.some((event) => event.type === "CHARACTER_PASSIVE_TRIGGERED"));
 });
 
 test("does not mutate UI state when SET_TRAP is rejected by the engine", () => {

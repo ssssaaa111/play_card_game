@@ -57,6 +57,11 @@ export const roleProfiles = {
     name: "星辉使者",
     skill: "星脉连携",
     kind: "draw",
+    passive: {
+      id: "starLink",
+      name: "星脉连携",
+      operations: [{ op: "drawCards", player: "self", count: 1 }]
+    },
     text: "每回合首次触发组合技时抽 1 张卡。"
   },
   blaze: {
@@ -64,6 +69,13 @@ export const roleProfiles = {
     skill: "燃阵号令",
     kind: "buff",
     amount: 300,
+    passive: {
+      id: "blazeCommand",
+      name: "燃阵号令",
+      operations: [
+        { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "strongestAtk" }, stat: "tempAtk", amount: 300 }
+      ]
+    },
     text: "每回合首次触发组合技时，强化我方攻击力最高怪兽。"
   },
   guard: {
@@ -71,6 +83,11 @@ export const roleProfiles = {
     skill: "棱光庇护",
     kind: "shield",
     amount: 500,
+    passive: {
+      id: "prismGuard",
+      name: "棱光庇护",
+      operations: [{ op: "gainShield", player: "self", amount: 500 }]
+    },
     text: "每回合首次触发组合技时，获得 500 护盾。"
   }
 };
@@ -84,6 +101,11 @@ export const aiProfiles = {
       skill: "暗影压迫",
       kind: "burn",
       amount: 150,
+      passive: {
+        id: "shadowPressure",
+        name: "暗影压迫",
+        operations: [{ op: "dealDamage", player: "rival", amount: 150 }]
+      },
       text: "每回合首次触发组合技时对你造成 150 伤害。"
     }
   },
@@ -95,6 +117,11 @@ export const aiProfiles = {
       skill: "灼热追打",
       kind: "burn",
       amount: 220,
+      passive: {
+        id: "scorchPursuit",
+        name: "灼热追打",
+        operations: [{ op: "dealDamage", player: "rival", amount: 220 }]
+      },
       text: "每回合首次触发组合技时对你造成 220 伤害。"
     }
   },
@@ -106,6 +133,11 @@ export const aiProfiles = {
       skill: "镜域稳固",
       kind: "shield",
       amount: 450,
+      passive: {
+        id: "mirrorStability",
+        name: "镜域稳固",
+        operations: [{ op: "gainShield", player: "self", amount: 450 }]
+      },
       text: "每回合首次触发组合技时获得 450 护盾。"
     }
   }

@@ -1835,6 +1835,97 @@ test("start turn rejects unresolved response windows", () => {
   );
 });
 
+test("element combos resolve through events and character passive triggers once per turn", () => {
+  const state = makeState({
+    cards: [
+      card("fire-1", { type: "monster", element: "fire", atk: 1500, def: 900 }),
+      card("wind-1", { type: "monster", element: "wind", atk: 1200, def: 1400 }),
+      card("draw-1", { type: "monster", element: "light", atk: 1000, def: 1000 })
+    ],
+    player: {
+      monsterZone: ["fire-1", "wind-1"],
+      deck: ["draw-1"],
+      comboPassive: {
+        id: "starLink",
+        name: "星脉连携",
+        operations: [{ op: "drawCards", player: "self", count: 1 }]
+      }
+    }
+  });
+  const engine = new GameEngine(state);
+
+  const firstEvents = engine.dispatch({
+    type: "RESOLVE_ELEMENT_COMBOS",
+    playerId: PLAYER,
+    rivalId: AI,
+    source: "summon"
+  });
+  const afterFirst = engine.getState();
+
+  assert.equal(afterFirst.players[PLAYER].comboFlags.fireWind, true);
+  assert.equal(afterFirst.players[PLAYER].comboThisTurn, true);
+  assert.equal(afterFirst.players[AI].lp, MAX_LP - 300);
+  assert.equal(afterFirst.cards["fire-1"].tempAtk, 100);
+  assert.equal(afterFirst.cards["wind-1"].tempAtk, 100);
+  assert.deepEqual(afterFirst.players[PLAYER].hand, ["draw-1"]);
+  assert.ok(firstEvents.some((event) => event.type === "COMBO_TRIGGERED" && event.comboId === "fireWind"));
+  assert.ok(firstEvents.some((event) => event.type === "CHARACTER_PASSIVE_TRIGGERED" && event.passiveId === "starLink"));
+  assert.ok(firstEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 300));
+  assert.equal(firstEvents.filter((event) => event.type === "CARDS_DRAWN").length, 1);
+
+  const secondEvents = engine.dispatch({
+    type: "RESOLVE_ELEMENT_COMBOS",
+    playerId: PLAYER,
+    rivalId: AI,
+    source: "spell"
+  });
+  assert.equal(secondEvents.some((event) => event.type === "COMBO_TRIGGERED"), false);
+  assert.equal(secondEvents.some((event) => event.type === "CHARACTER_PASSIVE_TRIGGERED"), false);
+});
+
+test("light-shadow, triad and trap-only combos use declarative event effects", () => {
+  const state = makeState({
+    cards: [
+      card("light-1", { type: "monster", element: "light", atk: 1400, def: 1400 }),
+      card("shadow-1", { type: "monster", element: "shadow", atk: 1300, def: 1500 }),
+      card("fire-1", { type: "monster", element: "fire", atk: 1200, def: 1000 }),
+      card("draw-1", { type: "monster", element: "wind", atk: 1000, def: 1000 })
+    ],
+    player: {
+      monsterZone: ["light-1", "shadow-1", "fire-1"],
+      deck: ["draw-1"]
+    }
+  });
+  const engine = new GameEngine(state);
+
+  const summonEvents = engine.dispatch({
+    type: "RESOLVE_ELEMENT_COMBOS",
+    playerId: PLAYER,
+    rivalId: AI,
+    source: "summon"
+  });
+  const afterSummon = engine.getState();
+
+  assert.deepEqual(
+    summonEvents.filter((event) => event.type === "COMBO_TRIGGERED").map((event) => event.comboId),
+    ["lightShadow", "triad"]
+  );
+  assert.equal(afterSummon.players[PLAYER].shield, 600);
+  assert.deepEqual(afterSummon.players[PLAYER].hand, ["draw-1"]);
+  assert.equal(afterSummon.cards["light-1"].tempAtk, 200);
+  assert.equal(afterSummon.cards["shadow-1"].tempAtk, 200);
+  assert.equal(afterSummon.cards["fire-1"].tempAtk, 200);
+
+  const trapEvents = engine.dispatch({
+    type: "RESOLVE_ELEMENT_COMBOS",
+    playerId: PLAYER,
+    rivalId: AI,
+    source: "trap"
+  });
+  assert.ok(trapEvents.some((event) => event.type === "COMBO_TRIGGERED" && event.comboId === "shadowAmbush"));
+  assert.equal(engine.getState().players[PLAYER].shield, 900);
+});
+
 test("turn draw moves cards and applies deck-out damage through events", () => {
   const state = makeState({
     cards: [
@@ -2564,5 +2655,18 @@ test("assertValidGameState catches invalid zones, LP, and turn owner", () => {
   assert.throws(
     () => assertValidGameState(makeState({ turn: { playerId: "missing-player" } })),
     GameStateValidationError
+  );
+});
+
+test("assertValidGameState rejects non-declarative character passives", () => {
+  const invalid = makeState({
+    player: {
+      comboPassive: { id: "badPassive", operations: [() => {}] }
+    }
+  });
+
+  assert.throws(
+    () => assertValidGameState(invalid),
+    /combo passive has an invalid operation/
   );
 });

@@ -240,12 +240,15 @@ test("app dispatches battle state changes through the engine adapter", () => {
   assert.doesNotMatch(attackSource, /drawCards\(owner/);
 });
 
-test("app uses extracted combo matching helpers", () => {
+test("app resolves element combos through engine commands", () => {
   const app = readProjectFile("src/app.js");
+  const adapter = readProjectFile("src/engine-adapter.js");
 
-  assert.match(app, /from '\.\/combos\.js'/);
-  assert.match(app, /availableElementCombos\(owner, source\)/);
-  assert.match(app, /markElementComboResolved\(owner, combo\)/);
+  assert.match(app, /dispatchResolveElementCombosFromUiState\(state, owner\.owner, rival\.owner, source\)/);
+  assert.match(adapter, /type: "RESOLVE_ELEMENT_COMBOS"/);
+  assert.doesNotMatch(app, /markElementComboResolved/);
+  assert.doesNotMatch(app, /owner\.comboFlags\[/);
+  assert.doesNotMatch(app, /owner\.comboThisTurn\s*=/);
   assert.doesNotMatch(app, /elements\.has\("fire"\) && elements\.has\("wind"\)/);
 });
 

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { availableElementCombos, markElementComboResolved } from "../src/combos.js";
+import { availableElementCombos } from "../src/combos.js";
 
 function monster(element) {
   return {
@@ -35,10 +35,12 @@ test("respects resolved combo flags and trap-only combo sources", () => {
   assert.deepEqual(availableElementCombos(owner, "trap").map((combo) => combo.flag), ["shadowAmbush"]);
 });
 
-test("marks element combos as resolved on the owner", () => {
+test("combo matching is pure and exposes declarative operations", () => {
   const owner = duelist([monster("fire"), monster("wind"), null]);
   const [combo] = availableElementCombos(owner);
-  markElementComboResolved(owner, combo);
-  assert.equal(owner.comboFlags.fireWind, true);
-  assert.deepEqual(availableElementCombos(owner).map((item) => item.flag), []);
+  assert.deepEqual(owner.comboFlags, {});
+  assert.deepEqual(combo.operations, [
+    { op: "dealDamage", player: "rival", amount: 300 },
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 100 }
+  ]);
 });

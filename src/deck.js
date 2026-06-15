@@ -2,7 +2,7 @@ import { deckPresets, library } from './data.js';
 import { inferArchetype, inferRarity } from './cards.js';
 import { FIELD_SIZE, MAX_LP } from './rules.js';
 
-export function createDuelist(owner) {
+export function createDuelist(owner, comboPassive = null) {
   return {
     owner,
     lp: MAX_LP,
@@ -18,6 +18,10 @@ export function createDuelist(owner) {
     attacksSkipped: false,
     comboThisTurn: false,
     comboFlags: {},
+    comboPassive: comboPassive ? {
+      ...comboPassive,
+      operations: (comboPassive.operations || []).map((operation) => ({ ...operation }))
+    } : null,
     normalSummonsUsed: 0
   };
 }
