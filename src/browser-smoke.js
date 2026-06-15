@@ -132,10 +132,20 @@ function countGameEvents(state, type) {
 async function runSkipLockSmoke(ctx) {
   setSmokeStatus("running", "skip-lock");
   await startSmokeDuel(ctx, "skipLock");
+  ctx.state.player.attackResets = 2;
+  ctx.state.player.directAttacks = 1;
+  ctx.state.player.extraSummon = 1;
   clickSmokeElement(ctx.els.skipAttackBtn, "跳过攻击按钮");
   await waitForSmoke(() => ctx.state.player.attacksSkipped, "跳过攻击标记");
   if (ctx.currentPlayerActions().attack) {
     throw new Error("跳过攻击后仍然存在可攻击行动");
+  }
+  if (ctx.state.player.attackResets || ctx.state.player.directAttacks || ctx.state.player.extraSummon !== 1) {
+    throw new Error("跳过攻击应只清理攻击重置和直击许可");
+  }
+  if (!ctx.state.gameEvents.some((event) => event.type === "ATTACKS_SKIPPED") ||
+      !ctx.state.gameEvents.some((event) => event.type === "ABILITY_GRANTED" && event.ability === "skipAttackLock")) {
+    throw new Error("跳过攻击必须通过规则事件建立本回合锁定");
   }
   setSmokeStatus("passed", "skip-lock");
 }
@@ -583,18 +593,33 @@ async function runDoubleAttackSmoke(ctx) {
   setSmokeStatus("running", "double-attack");
   await startSmokeDuel(ctx, "direct");
   const aiLpBefore = ctx.state.ai.lp;
+  ctx.state.player.attackResets = 1;
   const attacker = fieldCard(ctx.els, "player", "star-lancer");
   clickSmokeElement(attacker, "第一次点击星轨枪兵");
   await waitForSmoke(() => ctx.state.selected?.zone === "playerField" && ctx.state.selected.index === 0, "星轨枪兵被选中");
   clickSmokeElement(attacker, "第二次点击星轨枪兵");
   await waitForSmoke(
-    () => ctx.state.phase === "battle" && ctx.state.player.field[0]?.used && ctx.state.ai.lp < aiLpBefore,
-    "唯一目标二次点击自动攻击",
+    () => ctx.state.phase === "battle" && ctx.state.player.field[0]?.used === false &&
+      ctx.state.player.attackResets === 0 && ctx.state.ai.lp < aiLpBefore,
+    "第一次攻击后消费重置并恢复攻击",
     9000
   );
   if (ctx.state.ai.field[0]) {
-    throw new Error("唯一怪兽目标双击后应该完成攻击结算");
+    throw new Error("第一次攻击后应该完成怪兽目标结算");
   }
+  if (!ctx.state.gameEvents.some((event) => event.type === "ABILITY_SPENT" && event.ability === "attackReset") ||
+      !ctx.state.gameEvents.some((event) => event.type === "MONSTER_READIED" && event.cardId === ctx.state.player.field[0]?.uid)) {
+    throw new Error("攻击重置必须通过能力消费和怪兽恢复事件结算");
+  }
+  const aiLpAfterFirstAttack = ctx.state.ai.lp;
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "重置后再次选择星轨枪兵");
+  await waitForSmoke(() => ctx.els.aiPanel.classList.contains("direct-target"), "第二次攻击可直击玩家");
+  clickSmokeElement(ctx.els.aiPanel, "第二次攻击直击 AI");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.used && ctx.state.ai.lp < aiLpAfterFirstAttack,
+    "攻击重置后的第二次攻击完成",
+    9000
+  );
   setSmokeStatus("passed", "double-attack");
 }
 

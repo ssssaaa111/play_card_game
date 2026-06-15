@@ -20,6 +20,7 @@ import {
   dispatchQueueTrapResponseFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
+  dispatchSkipRemainingAttacksFromUiState,
   dispatchStartTurnFromUiState,
   dispatchTrapResponseFromUiState,
   dispatchSetTrapFromUiState,
@@ -620,6 +621,43 @@ test("dispatches marked used attackers through UI event replay", () => {
 
   assert.equal(attacker.used, true);
   assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === attacker.uid));
+});
+
+test("dispatches skip attack lock and clears only attack resources in UI state", () => {
+  const ready = uiMonster("skip-ready", "star-lancer");
+  const guard = uiMonster("skip-guard", "iron-guardian");
+  guard.mode = "defense";
+  const state = appState({ phase: PHASES.battle });
+  state.player.field[0] = ready;
+  state.player.field[1] = guard;
+  state.player.attackResets = 2;
+  state.player.directAttacks = 1;
+  state.player.extraSummon = 1;
+
+  const events = dispatchSkipRemainingAttacksFromUiState(state, "player");
+
+  assert.equal(ready.used, true);
+  assert.equal(guard.used, undefined);
+  assert.equal(state.player.attacksSkipped, true);
+  assert.equal(state.player.attackResets, 0);
+  assert.equal(state.player.directAttacks, 0);
+  assert.equal(state.player.extraSummon, 1);
+  assert.ok(events.some((event) => event.type === "ATTACKS_SKIPPED"));
+});
+
+test("battle replay automatically spends attack reset and readies the attacker", () => {
+  const attacker = uiMonster("reset-ui-attacker", "star-lancer");
+  attacker.atk = 1500;
+  const state = appState({ phase: PHASES.battle });
+  state.player.field[0] = attacker;
+  state.player.attackResets = 1;
+
+  const events = dispatchResolveBattleFromUiState(state, "player", "ai", 0, -1);
+
+  assert.equal(attacker.used, false);
+  assert.equal(state.player.attackResets, 0);
+  assert.ok(events.some((event) => event.type === "ABILITY_SPENT" && event.ability === "attackReset"));
+  assert.ok(events.some((event) => event.type === "MONSTER_READIED" && event.cardId === attacker.uid));
 });
 
 test("dispatches monster mode changes and replays them into UI state", () => {

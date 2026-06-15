@@ -2,6 +2,8 @@
 
 `src/game-engine.js` is the new rules boundary for card behavior. It is intentionally small for now so it can sit beside the current UI without forcing a large visual refactor.
 
+The current turn, phase, action-window, attack, response, and chain flow is documented in [GAME_FLOW.md](GAME_FLOW.md). Update that document when a rules change alters the main game flow.
+
 ## Required flow
 
 1. Write or update a test in `tests/game-engine.test.mjs`.
@@ -103,6 +105,8 @@ The validator catches:
 - `ResponseWindow` models whether a response is optional or mandatory.
 - Chain links are stored under `state.machine.chain` and only change through chain events.
 - Complex permissions such as direct attack, extra summon, and attack reset should be represented as abilities, then granted or spent through events.
+- Skipping remaining attacks uses `SKIP_REMAINING_ATTACKS`, consumes attack-only abilities through events, and grants the turn-scoped `skipAttackLock` ability.
+- A queued `attackReset` is spent automatically when an attack chance is consumed; a surviving attacker is readied through `MONSTER_READIED`.
 
 ## UI action windows
 

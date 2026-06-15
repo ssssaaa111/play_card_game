@@ -66,7 +66,8 @@ function uiAbilityEntries(duelist) {
   return [
     [Ability.directAttack, duelist.directAttacks],
     [Ability.extraSummon, duelist.extraSummon],
-    [Ability.attackReset, duelist.attackResets]
+    [Ability.attackReset, duelist.attackResets],
+    [Ability.skipAttackLock, duelist.attacksSkipped ? 1 : 0]
   ]
     .filter(([, uses]) => Math.max(0, Number(uses) || 0) > 0)
     .map(([ability, uses]) => ({
@@ -190,6 +191,9 @@ function applyUiAbilityEvent(uiState, event, direction) {
   if (event.ability === Ability.attackReset) {
     duelist.attackResets = Math.max(0, (Number(duelist.attackResets) || 0) + uses);
   }
+  if (event.ability === Ability.skipAttackLock) {
+    duelist.attacksSkipped = direction > 0;
+  }
 }
 
 export function applyUiGameEvents(uiState, events = []) {
@@ -290,6 +294,9 @@ export function applyUiGameEvents(uiState, events = []) {
       duelist.directAttacks = 0;
       duelist.extraSummon = 0;
       duelist.attackResets = 0;
+      if ((event.abilities || []).some((entry) => entry.ability === Ability.skipAttackLock)) {
+        duelist.attacksSkipped = false;
+      }
     }
   });
   uiState.gameEvents = Array.isArray(uiState.gameEvents) ? uiState.gameEvents : [];
@@ -512,6 +519,15 @@ export function dispatchMarkMonsterUsedFromUiState(uiState, playerId, fieldIndex
     type: "MARK_MONSTER_USED",
     playerId,
     cardId: cardKey(card)
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchSkipRemainingAttacksFromUiState(uiState, playerId) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "SKIP_REMAINING_ATTACKS",
+    playerId
   });
   return applyUiGameEvents(uiState, events);
 }

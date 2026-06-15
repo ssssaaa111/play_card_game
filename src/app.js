@@ -1,5 +1,5 @@
 import { monsterAssets, roleProfiles, aiProfiles, deckPresets, characterProfiles, scenarioSetups } from './data.js';
-import { actionsForPhase, canDuelistAttack, shouldRunPlayerIdleCountdown, skipAvailableAttacks, summarizePlayerActions } from './actions.js';
+import { actionsForPhase, canDuelistAttack, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import { chooseAiAttackTarget } from './ai.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
@@ -24,6 +24,7 @@ import {
   dispatchQueueTrapResponseFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
+  dispatchSkipRemainingAttacksFromUiState,
   dispatchSetTrapFromUiState,
   dispatchStartTurnFromUiState,
   dispatchSummonMonsterFromUiState,
@@ -1410,31 +1411,6 @@ function hasAvailablePlayerAttack() {
   return canDuelistAttack(state.player);
 }
 
-function grantAttackReset(duelist, target = null, amount = 1) {
-  if (duelist.attacksSkipped) {
-    addLog(`${duelistLabel(duelist)}已经跳过本回合攻击，不能获得攻击重置。`);
-    return false;
-  }
-  if (target && target.used) {
-    target.used = false;
-    addLog(`${target.name} 重新进入可攻击状态。`);
-    return true;
-  }
-  duelist.attackResets = (duelist.attackResets || 0) + amount;
-  addLog(`${duelistLabel(duelist)}获得 ${amount} 次攻击重置，下一次攻击后可再次行动。`);
-  return true;
-}
-
-function consumeQueuedAttackReset(duelist, attacker, attackerIndex) {
-  if (!attacker || !duelist.field[attackerIndex] || (duelist.attackResets || 0) <= 0) return false;
-  duelist.attackResets -= 1;
-  attacker.used = false;
-  playEpicAction("再攻", "attack");
-  addLog(`${attacker.name} 消耗攻击重置，再次进入可攻击状态。`);
-  speak(`${attacker.name} 攻击重置，可以再次攻击。`, false, duelist.owner);
-  return true;
-}
-
 function selectHandCard(uid) {
   const card = state.player.hand.find((item) => item.uid === uid);
   if (!card) return;
@@ -2040,15 +2016,7 @@ const spellEffects = {
     }
   },
   rallyAttack: {
-    ...spellDefinitions.rallyAttack,
-    apply: ({ owner, card, targetInfo }) => {
-      const target = targetInfo?.card || strongestMonster(owner);
-      if (!target) return {};
-      buffCard(target, 300, card.name);
-      const used = owner.field.find((item) => item && item.used);
-      grantAttackReset(owner, used || null, 1);
-      return { effectTarget: target };
-    }
+    ...spellDefinitions.rallyAttack
   },
   pierceLine: {
     ...spellDefinitions.pierceLine,
@@ -2078,24 +2046,10 @@ const spellEffects = {
     }
   },
   battleTrance: {
-    ...spellDefinitions.battleTrance,
-    apply: ({ owner, card, targetInfo }) => {
-      const target = targetInfo?.card || strongestMonster(owner);
-      if (!target) return {};
-      buffCard(target, 200, card.name);
-      grantAttackReset(owner, target, 1);
-      return { effectTarget: target };
-    }
+    ...spellDefinitions.battleTrance
   },
   directStrike: {
-    ...spellDefinitions.directStrike,
-    apply: ({ owner, card }) => {
-      owner.directAttacks += 1;
-      const target = owner.field.find((item) => item && !item.used && item.mode !== "defense") || strongestMonster(owner);
-      addLog(`${duelistLabel(owner)}获得 1 次直接攻击许可。`);
-      playEpicAction("直击许可", "attack");
-      return { effectTarget: target };
-    }
+    ...spellDefinitions.directStrike
   },
   fireWindCombo: {
     ...spellDefinitions.fireWindCombo,
@@ -2855,13 +2809,24 @@ function resolveBattleWithEngine(owner, rival, attackerIndex, targetIndex, optio
 function consumeCancelledAttackWithEngine(owner, attacker, attackerIndex) {
   if (runtimeCardId(owner.field[attackerIndex]) !== runtimeCardId(attacker)) return true;
   try {
-    dispatchMarkMonsterUsedFromUiState(state, owner.owner, attackerIndex);
+    const events = dispatchMarkMonsterUsedFromUiState(state, owner.owner, attackerIndex);
+    playAttackResetFeedback(owner, attacker, events);
     return true;
   } catch (error) {
     cue(error.message || "攻击机会消费失败。");
     console.error(error);
     return false;
   }
+}
+
+function playAttackResetFeedback(owner, attacker, events = []) {
+  if (!events.some((event) => event.type === "MONSTER_READIED" && event.cardId === runtimeCardId(attacker))) {
+    return false;
+  }
+  playEpicAction("再攻", "attack");
+  addLog(`${attacker.name} 消耗攻击重置，再次进入可攻击状态。`);
+  speak(`${attacker.name} 攻击重置，可以再次攻击。`, false, owner.owner);
+  return true;
 }
 
 async function attack(owner, rival, attackerIndex, targetIndex) {
@@ -3051,7 +3016,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     }
   }
 
-  consumeQueuedAttackReset(owner, attacker, attackerIndex);
+  playAttackResetFeedback(owner, attacker, battleEvents);
   resolveAfterAttackBattleFeedback(owner, attacker, battleEvents);
   checkGameOver();
   return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
@@ -3242,15 +3207,16 @@ function skipPlayerAttack() {
     return;
   }
   notePlayerIntent();
-  const skipped = skipAvailableAttacks(state.player.field);
-  if (skipped <= 0) {
-    cue("本回合没有可跳过的攻击。");
+  let skipEvents;
+  try {
+    skipEvents = dispatchSkipRemainingAttacksFromUiState(state, "player");
+  } catch (error) {
+    cue(error.message || "本回合没有可跳过的攻击。");
+    console.error(error);
     resetPlayerIdleCountdown();
     return;
   }
-  state.player.attackResets = 0;
-  state.player.directAttacks = 0;
-  state.player.attacksSkipped = true;
+  const skipped = skipEvents.find((event) => event.type === "ATTACKS_SKIPPED")?.count || 0;
   state.selected = null;
   clearBattlePreview();
   playSound("click");
@@ -3275,8 +3241,6 @@ function manualEndPlayerTurn() {
   }
   cancelAutoEnd();
   clearPlayerIdleTimers();
-  state.player.attackResets = 0;
-  state.player.directAttacks = 0;
   state.selected = null;
   state.pendingTarget = null;
   clearBattlePreview();

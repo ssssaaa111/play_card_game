@@ -81,7 +81,11 @@ test("app uses extracted player action summary", () => {
 
   assert.match(app, /from '\.\/actions\.js'/);
   assert.match(app, /canDuelistAttack\(state\.player\)/);
-  assert.match(app, /skipAvailableAttacks\(state\.player\.field\)/);
+  assert.match(app, /dispatchSkipRemainingAttacksFromUiState\(state, "player"\)/);
+  assert.doesNotMatch(app, /skipAvailableAttacks\(state\.player\.field\)/);
+  assert.doesNotMatch(app, /state\.player\.attacksSkipped\s*=/);
+  assert.doesNotMatch(app, /state\.player\.attackResets\s*=/);
+  assert.doesNotMatch(app, /state\.player\.directAttacks\s*=/);
   assert.match(app, /summarizePlayerActions\(\{/);
   assert.match(app, /const actions = currentPlayerActions\(\)/);
   assert.doesNotMatch(app, /function canSummonFromHand/);
@@ -255,6 +259,20 @@ test("serve script uses the fixed local port", () => {
   assert.match(server, /const host = "127\.0\.0\.1"/);
   assert.match(server, /Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"/);
   assert.match(server, /charset=utf-8/);
+});
+
+test("project documents the current phase and event flow", () => {
+  const readme = readProjectFile("README.md");
+  const flow = readProjectFile("GAME_FLOW.md");
+  const engineRules = readProjectFile("RULE_ENGINE.md");
+
+  assert.match(readme, /\[游戏流程与状态机\]\(GAME_FLOW\.md\)/);
+  assert.match(flow, /```mermaid/);
+  assert.match(flow, /setup[\s\S]*draw[\s\S]*main[\s\S]*battle[\s\S]*end/);
+  assert.match(flow, /DECLARE_ATTACK/);
+  assert.match(flow, /RESOLVE_CHAIN/);
+  assert.match(flow, /SKIP_REMAINING_ATTACKS/);
+  assert.match(engineRules, /\[GAME_FLOW\.md\]\(GAME_FLOW\.md\)/);
 });
 
 test("app uses extracted card display metadata", () => {

@@ -1588,6 +1588,132 @@ test("mark monster used consumes an attack chance through events only", () => {
   assertValidGameState(engine.getState());
 });
 
+test("skipping remaining attacks is an event-sourced turn lock", () => {
+  const state = makeState({
+    cards: [
+      card("ready-1", { type: "monster", mode: "attack", used: false }),
+      card("used-1", { type: "monster", mode: "attack", used: true }),
+      card("guard-1", { type: "monster", mode: "defense", used: false })
+    ],
+    player: { monsterZone: ["ready-1", "used-1", "guard-1"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  state.abilities[PLAYER] = [
+    { ability: Ability.attackReset, uses: 2, duration: "turn", sourceCardId: "reset-source" },
+    { ability: Ability.directAttack, uses: 1, duration: "turn", sourceCardId: "direct-source" },
+    { ability: Ability.extraSummon, uses: 1, duration: "turn", sourceCardId: "summon-source" }
+  ];
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({ type: "SKIP_REMAINING_ATTACKS", playerId: PLAYER });
+  const next = engine.getState();
+
+  assert.equal(next.cards["ready-1"].used, true);
+  assert.equal(next.cards["used-1"].used, true);
+  assert.equal(next.cards["guard-1"].used, false);
+  assert.equal(hasAbility(next, PLAYER, Ability.skipAttackLock), true);
+  assert.equal(hasAbility(next, PLAYER, Ability.attackReset), false);
+  assert.equal(hasAbility(next, PLAYER, Ability.directAttack), false);
+  assert.equal(hasAbility(next, PLAYER, Ability.extraSummon), true);
+  assert.equal(events.filter((event) => event.type === "ABILITY_SPENT" && event.ability === Ability.attackReset).length, 2);
+  assert.ok(events.some((event) => event.type === "ATTACKS_SKIPPED" && event.cardIds.includes("ready-1")));
+  assert.throws(
+    () => engine.dispatch({ type: "DECLARE_ATTACK", playerId: PLAYER, rivalId: AI, attackerCardId: "guard-1" }),
+    /skipped attacks/
+  );
+});
+
+test("attack reset is spent and readies a surviving attacker through battle events", () => {
+  const state = makeState({
+    cards: [card("reset-attacker", { type: "monster", atk: 1500, def: 1000, mode: "attack", used: false })],
+    player: { monsterZone: ["reset-attacker"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  state.abilities[PLAYER] = [
+    { ability: Ability.attackReset, uses: 1, duration: "turn", sourceCardId: "reset-source" }
+  ];
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "reset-attacker"
+  });
+
+  assert.equal(engine.getState().cards["reset-attacker"].used, false);
+  assert.equal(hasAbility(engine.getState(), PLAYER, Ability.attackReset), false);
+  assert.ok(events.some((event) => event.type === "ABILITY_SPENT" && event.ability === Ability.attackReset));
+  assert.ok(events.some((event) => event.type === "MONSTER_READIED" && event.cardId === "reset-attacker"));
+});
+
+test("cancelled attacks consume queued attack reset through mark-used events", () => {
+  const state = makeState({
+    cards: [card("cancelled-attacker", { type: "monster", mode: "attack", used: false })],
+    player: { monsterZone: ["cancelled-attacker"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  state.abilities[PLAYER] = [
+    { ability: Ability.attackReset, uses: 1, duration: "turn", sourceCardId: "reset-source" }
+  ];
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({ type: "MARK_MONSTER_USED", playerId: PLAYER, cardId: "cancelled-attacker" });
+
+  assert.equal(engine.getState().cards["cancelled-attacker"].used, false);
+  assert.equal(hasAbility(engine.getState(), PLAYER, Ability.attackReset), false);
+  assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === "cancelled-attacker"));
+  assert.ok(events.some((event) => event.type === "MONSTER_READIED" && event.cardId === "cancelled-attacker"));
+});
+
+test("skip attack lock blocks attack reset and direct attack grants", () => {
+  const state = makeState({
+    cards: [
+      card("locked-monster", { type: "monster", atk: 1500, mode: "attack", used: true }),
+      card("locked-trance", { type: "spell", effect: "battleTrance" }),
+      card("locked-direct", { type: "spell", effect: "directStrike" })
+    ],
+    player: {
+      hand: ["locked-trance", "locked-direct"],
+      monsterZone: ["locked-monster"]
+    },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  state.abilities[PLAYER] = [
+    { ability: Ability.skipAttackLock, uses: 1, duration: "turn", sourceCardId: null }
+  ];
+  const engine = new GameEngine(state);
+
+  const resetEvents = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "locked-trance",
+    targetCardId: "locked-monster"
+  });
+  const directEvents = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "locked-direct"
+  });
+
+  assert.equal(hasAbility(engine.getState(), PLAYER, Ability.attackReset), false);
+  assert.equal(hasAbility(engine.getState(), PLAYER, Ability.directAttack), false);
+  assert.equal(engine.getState().cards["locked-monster"].used, true);
+  assert.equal(engine.getState().cards["locked-monster"].tempAtk, 200);
+  assert.ok(resetEvents.some((event) => event.type === "ABILITY_GRANT_BLOCKED" && event.ability === Ability.attackReset));
+  assert.ok(directEvents.some((event) => event.type === "ABILITY_GRANT_BLOCKED" && event.ability === Ability.directAttack));
+});
+
 test("monster mode changes are validated and applied through dispatch events", () => {
   const state = makeState({
     cards: [card("mode-1", { type: "monster", mode: "attack", used: false, changedMode: false })],

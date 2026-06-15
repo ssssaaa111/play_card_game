@@ -321,6 +321,16 @@ export class EffectContext {
     requirePlayer(this.#state, playerId);
     requireAbility(ability);
 
+    if (attackAbilityBlocked(this.#state, playerId, ability)) {
+      this.#emit("ABILITY_GRANT_BLOCKED", {
+        playerId,
+        ability,
+        reason: Ability.skipAttackLock,
+        sourceCardId: options.sourceCardId || null
+      });
+      return false;
+    }
+
     this.#emit("ABILITY_GRANTED", {
       playerId,
       ability,
@@ -328,6 +338,7 @@ export class EffectContext {
       duration: options.duration || "turn",
       sourceCardId: options.sourceCardId || null
     });
+    return true;
   }
 
   readyMonster(cardId, options = {}) {
@@ -345,6 +356,15 @@ export class EffectContext {
   }
 
   readyMonsterOrGrantAbility(playerId, cardId, ability, options = {}) {
+    if (attackAbilityBlocked(this.#state, playerId, ability)) {
+      this.#emit("ABILITY_GRANT_BLOCKED", {
+        playerId,
+        ability,
+        reason: Ability.skipAttackLock,
+        sourceCardId: options.sourceCardId || null
+      });
+      return null;
+    }
     const cardIds = resolveCardIdInput(this.#state, cardId);
     const usedCardId = cardIds.find((targetCardId) => Boolean(requireCard(this.#state, targetCardId).used));
     if (usedCardId && this.readyMonster(usedCardId, options)) {
@@ -399,6 +419,9 @@ export class GameEngine {
         break;
       case "MARK_MONSTER_USED":
         this.#markMonsterUsed(workingState, emit, action);
+        break;
+      case "SKIP_REMAINING_ATTACKS":
+        this.#skipRemainingAttacks(workingState, emit, action);
         break;
       case "CHANGE_MONSTER_MODE":
         this.#changeMonsterMode(workingState, emit, action);
@@ -687,6 +710,7 @@ export class GameEngine {
     }
 
     resolveAfterAttackEffect(state, ctx, action.playerId, action.attackerCardId);
+    consumeAttackResetForMonster(state, emit, action.playerId, action.attackerCardId);
 
     emit("BATTLE_RESOLVED", {
       playerId: action.playerId,
@@ -717,6 +741,57 @@ export class GameEngine {
       cardId: action.cardId,
       beforeUsed: false,
       afterUsed: true
+    });
+    consumeAttackResetForMonster(state, emit, action.playerId, action.cardId);
+  }
+
+  #skipRemainingAttacks(state, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    requirePhase(state, [Phase.battle], action.type);
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("Cannot skip attacks while a response window is open");
+    }
+    const player = requirePlayer(state, action.playerId);
+    if (player.attacksSkipped || hasAbility(state, action.playerId, Ability.skipAttackLock)) {
+      throw new GameRuleError(`${action.playerId} already skipped attacks`);
+    }
+    const cardIds = player.monsterZone.filter((cardId) => {
+      const card = requireCard(state, cardId);
+      return card.type === "monster" && card.mode !== "defense" && !card.used;
+    });
+    if (cardIds.length === 0) {
+      throw new GameRuleError(`${action.playerId} has no remaining attacks to skip`);
+    }
+
+    cardIds.forEach((cardId) => {
+      emit("MONSTER_USED", {
+        playerId: action.playerId,
+        cardId,
+        beforeUsed: false,
+        afterUsed: true,
+        reason: "skipRemainingAttacks"
+      });
+    });
+    for (const ability of [Ability.attackReset, Ability.directAttack]) {
+      while (hasAbility(state, action.playerId, ability)) {
+        emit("ABILITY_SPENT", {
+          playerId: action.playerId,
+          ability,
+          reason: "skipRemainingAttacks"
+        });
+      }
+    }
+    emit("ABILITY_GRANTED", {
+      playerId: action.playerId,
+      ability: Ability.skipAttackLock,
+      uses: 1,
+      duration: "turn",
+      sourceCardId: null
+    });
+    emit("ATTACKS_SKIPPED", {
+      playerId: action.playerId,
+      cardIds,
+      count: cardIds.length
     });
   }
 
@@ -1002,6 +1077,16 @@ export class GameEngine {
     requirePlayer(state, action.playerId);
     requireAbility(action.ability);
 
+    if (attackAbilityBlocked(state, action.playerId, action.ability)) {
+      emit("ABILITY_GRANT_BLOCKED", {
+        playerId: action.playerId,
+        ability: action.ability,
+        reason: Ability.skipAttackLock,
+        sourceCardId: action.sourceCardId || null
+      });
+      return;
+    }
+
     emit("ABILITY_GRANTED", {
       playerId: action.playerId,
       ability: action.ability,
@@ -1178,6 +1263,8 @@ export function applyGameEvent(state, event, options = {}) {
     case "EFFECT_NEGATED":
     case "EFFECT_SKIPPED":
     case "DRAW_FAILED":
+    case "ATTACKS_SKIPPED":
+    case "ABILITY_GRANT_BLOCKED":
     case "CHAIN_LINK_RESOLVING":
     case "CHAIN_LINK_RESOLVED":
       break;
@@ -1688,6 +1775,10 @@ function resolveCardIdInput(state, cardId) {
 }
 
 function validateBattleDeclaration(state, playerId, rivalId, action) {
+  const player = requirePlayer(state, playerId);
+  if (player.attacksSkipped || hasAbility(state, playerId, Ability.skipAttackLock)) {
+    throw new GameRuleError(`${playerId} skipped attacks for this turn`);
+  }
   const attacker = requireMonsterInZone(state, playerId, "monsterZone", action.attackerCardId, "attacker");
   if (attacker.used) {
     throw new GameRuleError(`Monster ${action.attackerCardId} has already attacked`);
@@ -1707,6 +1798,35 @@ function validateBattleDeclaration(state, playerId, rivalId, action) {
   }
 
   return { attacker, target, direct };
+}
+
+function attackAbilityBlocked(state, playerId, ability) {
+  return [Ability.attackReset, Ability.directAttack].includes(ability) &&
+    hasAbility(state, playerId, Ability.skipAttackLock);
+}
+
+function consumeAttackResetForMonster(state, emit, playerId, cardId) {
+  if (!hasAbility(state, playerId, Ability.attackReset) || hasAbility(state, playerId, Ability.skipAttackLock)) {
+    return false;
+  }
+  const player = requirePlayer(state, playerId);
+  if (!player.monsterZone.includes(cardId)) return false;
+  const card = requireCard(state, cardId);
+  if (!card.used) return false;
+
+  emit("ABILITY_SPENT", {
+    playerId,
+    ability: Ability.attackReset,
+    cardId
+  });
+  emit("MONSTER_READIED", {
+    playerId,
+    cardId,
+    beforeUsed: true,
+    afterUsed: false,
+    sourceCardId: null
+  });
+  return true;
 }
 
 function requireMonsterInZone(state, playerId, zone, cardId, label) {

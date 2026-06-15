@@ -10,7 +10,6 @@ import {
   canSummonFromHand,
   hasAvailableAttack,
   shouldRunPlayerIdleCountdown,
-  skipAvailableAttacks,
   summarizePlayerActions
 } from "../src/actions.js";
 
@@ -54,22 +53,21 @@ test("blocks attacks after the player has skipped battle for the turn", () => {
 
 test("skipped battle prevents newly summoned monsters from opening attacks", () => {
   const player = duelist({ attacksSkipped: true, field: [monster({ used: true }), monster(), null] });
-  assert.equal(skipAvailableAttacks(player.field), 1);
+  assert.equal(canDuelistAttack(player), false);
   player.field[2] = monster();
   assert.equal(canDuelistAttack(player), false);
 });
 
-test("marks all available attacks as skipped without touching guards", () => {
+test("detects available attacks without mutating field state", () => {
   const ready = monster();
   const alreadyUsed = monster({ used: true });
   const defender = monster({ mode: "defense" });
   const field = [ready, alreadyUsed, defender];
 
-  assert.equal(skipAvailableAttacks(field), 1);
-  assert.equal(ready.used, true);
+  assert.equal(hasAvailableAttack(field), true);
+  assert.equal(ready.used, false);
   assert.equal(alreadyUsed.used, true);
   assert.equal(defender.used, false);
-  assert.equal(hasAvailableAttack(field), false);
 });
 
 test("detects when the player idle countdown should run", () => {

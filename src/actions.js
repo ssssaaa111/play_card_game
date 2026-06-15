@@ -10,17 +10,6 @@ export function canDuelistAttack(duelist) {
   return !duelist?.attacksSkipped && hasAvailableAttack(duelist?.field || []);
 }
 
-export function skipAvailableAttacks(field = []) {
-  let skipped = 0;
-  field.forEach((card) => {
-    if (card && !card.used && card.mode !== "defense") {
-      card.used = true;
-      skipped += 1;
-    }
-  });
-  return skipped;
-}
-
 export function canChangeMode(field = []) {
   return field.some((card) => card && !card.used && !card.changedMode);
 }
