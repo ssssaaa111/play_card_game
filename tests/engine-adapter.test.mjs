@@ -9,16 +9,20 @@ import {
   canDispatchSummonEffectFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchCancelAutoEndFromUiState,
   dispatchCloseResponseWindowFromUiState,
   dispatchChangePhaseFromUiState,
   dispatchChangeMonsterModeFromUiState,
+  dispatchCommitAutoEndFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchDrawCardsFromUiState,
+  dispatchEndTurnFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
   dispatchOpenActionWindowFromUiState,
   dispatchPassResponsePriorityFromUiState,
   dispatchQueueTrapResponseFromUiState,
+  dispatchRequestAutoEndFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
   dispatchResolveElementCombosFromUiState,
@@ -765,6 +769,51 @@ test("dispatches turn start and replays rule resets into UI state", () => {
   assert.ok(events.some((event) => event.type === "TURN_STARTED" && event.playerId === "player"));
   assert.equal(events.filter((event) => event.type === "MONSTER_TURN_RESET").length, 2);
   assert.ok(events.some((event) => event.type === "TURN_ABILITIES_EXPIRED"));
+});
+
+test("auto-end and turn-end events project into UI state", () => {
+  const state = appState({ turn: "player", phase: PHASES.main });
+
+  const requestEvents = dispatchRequestAutoEndFromUiState(state, "player", {
+    reason: "no actions",
+    now: 1000,
+    timeoutSeconds: 2
+  });
+
+  assert.equal(state.autoEnding, true);
+  assert.equal(state.actionWindow, "autoEnd");
+  assert.equal(state.actionDeadline, 3000);
+  assert.equal(state.timing, "autoEnd");
+  assert.ok(requestEvents.some((event) => event.type === "AUTO_END_REQUESTED"));
+
+  const cancelEvents = dispatchCancelAutoEndFromUiState(state, "player", {
+    reason: "player intent"
+  });
+
+  assert.equal(state.autoEnding, false);
+  assert.ok(cancelEvents.some((event) => event.type === "AUTO_END_CANCELED"));
+
+  dispatchRequestAutoEndFromUiState(state, "player", {
+    reason: "still no actions",
+    now: 5000,
+    timeoutSeconds: 2
+  });
+  const commitEvents = dispatchCommitAutoEndFromUiState(state, "player", {
+    now: 7000
+  });
+
+  assert.equal(state.autoEnding, false);
+  assert.equal(state.phase, "end");
+  assert.equal(state.timing, "end");
+  assert.ok(commitEvents.some((event) => event.type === "AUTO_END_COMMITTED"));
+  assert.ok(commitEvents.some((event) => event.type === "TURN_ENDED" && event.nextPlayerId === "ai"));
+
+  const manualState = appState({ turn: "player", phase: PHASES.battle });
+  const manualEvents = dispatchEndTurnFromUiState(manualState, "player", {
+    reason: "manual"
+  });
+  assert.equal(manualState.phase, "end");
+  assert.ok(manualEvents.some((event) => event.type === "TURN_ENDED" && event.reason === "manual"));
 });
 
 test("phase events preserve attack response windows after a started turn", () => {

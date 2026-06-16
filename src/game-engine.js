@@ -447,6 +447,18 @@ export class GameEngine {
       case "START_TURN":
         this.#startTurn(workingState, emit, action);
         break;
+      case "END_TURN":
+        this.#endTurn(workingState, emit, action);
+        break;
+      case "REQUEST_AUTO_END":
+        this.#requestAutoEnd(workingState, emit, action);
+        break;
+      case "CANCEL_AUTO_END":
+        this.#cancelAutoEnd(workingState, emit, action);
+        break;
+      case "COMMIT_AUTO_END":
+        this.#commitAutoEnd(workingState, emit, action);
+        break;
       case "DRAW_CARDS":
         this.#drawCards(workingState, ctx, emit, action);
         break;
@@ -948,6 +960,107 @@ export class GameEngine {
     }
   }
 
+  #endTurn(state, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    requirePhase(state, [Phase.main, Phase.battle, Phase.end], action.type);
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("Cannot end a turn while a response window is open");
+    }
+    if (state.machine.chain.length > 0) {
+      throw new GameRuleError("Cannot end a turn while a chain is unresolved");
+    }
+
+    const nextPlayerId = action.nextPlayerId || otherPlayerId(state, action.playerId);
+    requirePlayer(state, nextPlayerId);
+    emit("TURN_ENDED", {
+      playerId: action.playerId,
+      nextPlayerId,
+      fromPhase: state.turn.phase,
+      phase: Phase.end,
+      timing: Timing.end,
+      reason: action.reason || "",
+      endedBy: action.endedBy || "manual",
+      endedAt: Number.isFinite(Number(action.endedAt)) ? Number(action.endedAt) : null
+    });
+  }
+
+  #requestAutoEnd(state, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    requirePhase(state, [Phase.main, Phase.battle], action.type);
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("Cannot request auto-end while a response window is open");
+    }
+    if (state.machine.chain.length > 0) {
+      throw new GameRuleError("Cannot request auto-end while a chain is unresolved");
+    }
+
+    const requestedAt = Number(action.requestedAt);
+    const timeoutSeconds = Math.max(0, Number(action.timeoutSeconds) || 0);
+    if (!Number.isFinite(requestedAt)) {
+      throw new GameRuleError("Auto-end requestedAt must be finite");
+    }
+    const deadline = timeoutSeconds > 0 ? requestedAt + timeoutSeconds * 1000 : 0;
+    const reason = action.reason || "";
+    emit("AUTO_END_REQUESTED", {
+      playerId: action.playerId,
+      reason,
+      requestedAt,
+      deadline
+    });
+    emit("ACTION_WINDOW_OPENED", {
+      playerId: action.playerId,
+      window: ActionWindow.autoEnd,
+      windowId: action.windowId || `${ActionWindow.autoEnd}:${requestedAt}`,
+      reason,
+      openedAt: requestedAt,
+      deadline
+    });
+  }
+
+  #cancelAutoEnd(state, emit, action) {
+    requirePlayer(state, action.playerId);
+    const pending = state.machine.autoEnd;
+    if (!pending) return;
+    if (pending.playerId !== action.playerId) {
+      throw new GameRuleError(`Auto-end belongs to ${pending.playerId}`);
+    }
+
+    emit("AUTO_END_CANCELED", {
+      playerId: action.playerId,
+      reason: action.reason || "",
+      canceledAt: Number.isFinite(Number(action.canceledAt)) ? Number(action.canceledAt) : null
+    });
+  }
+
+  #commitAutoEnd(state, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    const pending = state.machine.autoEnd;
+    if (!pending || pending.playerId !== action.playerId) {
+      throw new GameRuleError("Cannot commit auto-end without a pending auto-end request");
+    }
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("Cannot commit auto-end while a response window is open");
+    }
+    if (state.machine.chain.length > 0) {
+      throw new GameRuleError("Cannot commit auto-end while a chain is unresolved");
+    }
+
+    const committedAt = Number.isFinite(Number(action.committedAt)) ? Number(action.committedAt) : null;
+    emit("AUTO_END_COMMITTED", {
+      playerId: action.playerId,
+      reason: pending.reason || action.reason || "",
+      requestedAt: pending.requestedAt,
+      committedAt
+    });
+    this.#endTurn(state, emit, {
+      type: "END_TURN",
+      playerId: action.playerId,
+      reason: pending.reason || action.reason || "",
+      endedBy: "auto",
+      endedAt: committedAt
+    });
+  }
+
   #drawCards(state, ctx, emit, action) {
     requirePlayer(state, action.playerId);
     const count = Number(action.count);
@@ -1241,6 +1354,14 @@ export function assertValidGameState(state) {
       throw new GameStateValidationError("Action window timing must be finite");
     }
   }
+  if (state.machine.autoEnd) {
+    if (!state.players[state.machine.autoEnd.playerId]) {
+      throw new GameStateValidationError("Auto-end player must exist");
+    }
+    if (!Number.isFinite(state.machine.autoEnd.requestedAt) || !Number.isFinite(state.machine.autoEnd.deadline)) {
+      throw new GameStateValidationError("Auto-end timing must be finite");
+    }
+  }
   if (state.machine.responseWindow && !RESPONSE_WINDOWS.has(state.machine.responseWindow.type)) {
     throw new GameStateValidationError(`Unknown response window ${state.machine.responseWindow.type}`);
   }
@@ -1337,6 +1458,9 @@ export function applyGameEvent(state, event, options = {}) {
     case "TURN_STARTED":
       applyTurnStarted(state, event);
       break;
+    case "TURN_ENDED":
+      applyTurnEnded(state, event);
+      break;
     case "TIMING_CHANGED":
       applyTimingChanged(state, event);
       break;
@@ -1348,6 +1472,15 @@ export function applyGameEvent(state, event, options = {}) {
       break;
     case "ACTION_WINDOW_OPENED":
       applyActionWindowOpened(state, event);
+      break;
+    case "AUTO_END_REQUESTED":
+      applyAutoEndRequested(state, event);
+      break;
+    case "AUTO_END_CANCELED":
+      applyAutoEndCanceled(state, event);
+      break;
+    case "AUTO_END_COMMITTED":
+      applyAutoEndCommitted(state, event);
       break;
     case "RESPONSE_PRIORITY_PASSED":
       applyResponsePriorityPassed(state, event);
@@ -1549,6 +1682,7 @@ function applyPhaseChanged(state, event) {
   state.machine.responseWindow = null;
   state.machine.chain = [];
   state.machine.actionWindow = null;
+  state.machine.autoEnd = null;
 }
 
 function applyTurnStarted(state, event) {
@@ -1560,10 +1694,27 @@ function applyTurnStarted(state, event) {
   state.machine.responseWindow = null;
   state.machine.chain = [];
   state.machine.actionWindow = null;
+  state.machine.autoEnd = null;
   player.attacksSkipped = false;
   player.comboThisTurn = false;
   player.comboFlags = {};
   player.normalSummonsUsed = 0;
+}
+
+function applyTurnEnded(state, event) {
+  requirePlayer(state, event.playerId);
+  requirePlayer(state, event.nextPlayerId);
+  if (event.phase !== Phase.end || event.timing !== Timing.end) {
+    throw new GameRuleError("TURN_ENDED must move the turn to end timing");
+  }
+  state.turn.playerId = event.playerId;
+  state.turn.phase = Phase.end;
+  state.machine.phase = Phase.end;
+  state.machine.timing = Timing.end;
+  state.machine.responseWindow = null;
+  state.machine.chain = [];
+  state.machine.actionWindow = null;
+  state.machine.autoEnd = null;
 }
 
 function applyComboTriggered(state, event) {
@@ -1619,6 +1770,35 @@ function applyActionWindowOpened(state, event) {
     openedAt: Number(event.openedAt),
     deadline: Number(event.deadline)
   };
+}
+
+function applyAutoEndRequested(state, event) {
+  requirePlayer(state, event.playerId);
+  if (!Number.isFinite(Number(event.requestedAt)) || !Number.isFinite(Number(event.deadline))) {
+    throw new GameRuleError("AUTO_END_REQUESTED requires valid timing data");
+  }
+  state.machine.autoEnd = {
+    playerId: event.playerId,
+    reason: event.reason || "",
+    requestedAt: Number(event.requestedAt),
+    deadline: Number(event.deadline)
+  };
+}
+
+function applyAutoEndCanceled(state, event) {
+  requirePlayer(state, event.playerId);
+  state.machine.autoEnd = null;
+  if (state.machine.actionWindow?.window === ActionWindow.autoEnd) {
+    state.machine.actionWindow = null;
+  }
+}
+
+function applyAutoEndCommitted(state, event) {
+  requirePlayer(state, event.playerId);
+  state.machine.autoEnd = null;
+  if (state.machine.actionWindow?.window === ActionWindow.autoEnd) {
+    state.machine.actionWindow = null;
+  }
 }
 
 function applyResponsePriorityPassed(state, event) {
@@ -2178,6 +2358,7 @@ function normalizeState(state) {
     responseWindow: null,
     chain: [],
     actionWindow: null,
+    autoEnd: null,
     ...(state.machine || {}),
     phase: state.turn.phase
   };
@@ -2344,7 +2525,8 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
     timing: timingForPhase(phase),
     responseWindow: null,
     chain: [],
-    actionWindow: null
+    actionWindow: null,
+    autoEnd: null
   };
 
   for (const event of events) {
@@ -2354,6 +2536,15 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
       machine.responseWindow = null;
       machine.chain = [];
       machine.actionWindow = null;
+      machine.autoEnd = null;
+    }
+    if (event.type === "TURN_ENDED") {
+      machine.phase = Phase.end;
+      machine.timing = Timing.end;
+      machine.responseWindow = null;
+      machine.chain = [];
+      machine.actionWindow = null;
+      machine.autoEnd = null;
     }
     if (event.type === "PHASE_CHANGED") {
       machine.phase = event.to;
@@ -2361,6 +2552,7 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
       machine.responseWindow = null;
       machine.chain = [];
       machine.actionWindow = null;
+      machine.autoEnd = null;
     }
     if (event.type === "TIMING_CHANGED" && TIMINGS.has(event.to)) {
       machine.timing = event.to;
@@ -2388,6 +2580,20 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
         openedAt: Number(event.openedAt),
         deadline: Number(event.deadline)
       };
+    }
+    if (event.type === "AUTO_END_REQUESTED") {
+      machine.autoEnd = {
+        playerId: event.playerId,
+        reason: event.reason || "",
+        requestedAt: Number(event.requestedAt),
+        deadline: Number(event.deadline)
+      };
+    }
+    if (event.type === "AUTO_END_CANCELED" || event.type === "AUTO_END_COMMITTED") {
+      machine.autoEnd = null;
+      if (machine.actionWindow?.window === ActionWindow.autoEnd) {
+        machine.actionWindow = null;
+      }
     }
     if (event.type === "RESPONSE_PRIORITY_PASSED" && machine.responseWindow) {
       machine.responseWindow.playerId = event.toPlayerId;
@@ -2423,7 +2629,8 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
       timing: timingForPhase(phase),
       responseWindow: null,
       chain: [],
-      actionWindow: null
+      actionWindow: null,
+      autoEnd: null
     };
   }
   return machine;

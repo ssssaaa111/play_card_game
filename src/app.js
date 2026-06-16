@@ -12,16 +12,20 @@ import {
   canDispatchTrapFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchCancelAutoEndFromUiState,
   dispatchChangePhaseFromUiState,
   dispatchChangeMonsterModeFromUiState,
   dispatchCloseResponseWindowFromUiState,
+  dispatchCommitAutoEndFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchDrawCardsFromUiState,
+  dispatchEndTurnFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
   dispatchOpenActionWindowFromUiState,
   dispatchPassResponsePriorityFromUiState,
   dispatchQueueTrapResponseFromUiState,
+  dispatchRequestAutoEndFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
   dispatchResolveElementCombosFromUiState,
@@ -1179,9 +1183,19 @@ function cancelAutoEnd() {
     state.autoEndTimer = null;
   }
   if (state.autoEnding) {
-    state.autoEnding = false;
-    if (state.actionWindow === "autoEnd") {
-      setActionWindow("main", { reason: "cancel auto end" });
+    const wasAutoEndWindow = state.actionWindow === ACTION_WINDOWS.autoEnd;
+    try {
+      dispatchCancelAutoEndFromUiState(state, state.turn || "player", {
+        reason: "cancel auto end"
+      });
+    } catch (error) {
+      console.error(error);
+      state.autoEnding = false;
+    }
+    if (wasAutoEndWindow && canPlayerAct()) {
+      setActionWindow(state.phase === PHASES.battle ? ACTION_WINDOWS.battle : ACTION_WINDOWS.main, {
+        reason: "cancel auto end"
+      });
     }
   }
 }
@@ -3122,9 +3136,7 @@ function answerChain(answer) {
   }
 }
 
-function endPlayerTurn() {
-  if (!canPlayerAct()) return;
-  cancelAutoEnd();
+function handOffToAiTurn() {
   state.selected = null;
   state.pendingTarget = null;
   clearBattlePreview();
@@ -3132,6 +3144,27 @@ function endPlayerTurn() {
   beginTurn("ai");
   render();
   window.setTimeout(runAiTurn, 950);
+}
+
+function endPlayerTurn(reason = "manual") {
+  if (!canPlayerAct()) return;
+  cancelAutoEnd();
+  state.selected = null;
+  state.pendingTarget = null;
+  clearBattlePreview();
+  clearPlayerIdleTimers();
+  try {
+    dispatchEndTurnFromUiState(state, "player", {
+      reason,
+      endedBy: reason === "manual" ? "manual" : "system"
+    });
+  } catch (error) {
+    cue(error.message || "回合结束失败。");
+    console.error(error);
+    resetPlayerIdleCountdown();
+    return;
+  }
+  handOffToAiTurn();
 }
 
 function enterPlayerBattlePhase(reason = "战斗时点", { preserveSelection = false, quiet = false } = {}) {
@@ -3259,8 +3292,17 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
     resetPlayerIdleCountdown();
     return;
   }
-  state.autoEnding = true;
-  setActionWindow(ACTION_WINDOWS.autoEnd, { reason });
+  try {
+    dispatchRequestAutoEndFromUiState(state, "player", {
+      reason,
+      now: Date.now(),
+      timeoutSeconds: actionWindowTimeoutSeconds(ACTION_WINDOWS.autoEnd)
+    });
+  } catch (error) {
+    cue(error.message || "无法进入自动结束。");
+    console.error(error);
+    return;
+  }
   state.selected = null;
   state.pendingTarget = null;
   clearPlayerIdleTimers();
@@ -3269,7 +3311,19 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
   state.autoEndTimer = window.setTimeout(() => {
     state.autoEndTimer = null;
     if (state.turn === "player" && state.autoEnding && state.actionWindow === "autoEnd" && !state.gameOver) {
-      endPlayerTurn();
+      try {
+        dispatchCommitAutoEndFromUiState(state, "player", {
+          reason,
+          now: Date.now()
+        });
+      } catch (error) {
+        cue(error.message || "自动结束失败。");
+        console.error(error);
+        resetPlayerIdleCountdown();
+        render();
+        return;
+      }
+      handOffToAiTurn();
     }
   }, AUTO_END_DELAY_MS);
 }

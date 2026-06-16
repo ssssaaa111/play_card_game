@@ -922,6 +922,17 @@ async function runModeAutoEndSmoke(ctx) {
   if (countGameEvents(ctx.state, "MONSTER_MODE_CHANGED") !== 2) {
     throw new Error("两次切换表示必须分别产生 MONSTER_MODE_CHANGED 事件");
   }
+  if (countGameEvents(ctx.state, "AUTO_END_REQUESTED") < 1) {
+    throw new Error("自动结束必须先记录 AUTO_END_REQUESTED 事件");
+  }
+  await waitForSmoke(
+    () => ctx.state.turn === "ai" && countGameEvents(ctx.state, "AUTO_END_COMMITTED") >= 1,
+    "自动结束必须提交并交给 AI",
+    5000
+  );
+  if (countGameEvents(ctx.state, "TURN_ENDED") < 1) {
+    throw new Error("自动结束必须通过 TURN_ENDED 事件交接回合");
+  }
   setSmokeStatus("passed", "mode-auto-end");
 }
 

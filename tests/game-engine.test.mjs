@@ -75,7 +75,8 @@ function makeState({ cards = [], player = {}, ai = {}, turn = {} } = {}) {
       timing: Timing.mainOpen,
       responseWindow: null,
       chain: [],
-      actionWindow: null
+      actionWindow: null,
+      autoEnd: null
     },
     abilities: {
       [PLAYER]: [],
@@ -1836,6 +1837,51 @@ test("start turn rejects unresolved response windows", () => {
     () => engine.dispatch({ type: "START_TURN", playerId: PLAYER }),
     /response window is open/
   );
+});
+
+test("auto-end and turn end resolve through explicit events", () => {
+  const state = makeState({ turn: { playerId: PLAYER, phase: Phase.main } });
+  const engine = new GameEngine(state);
+
+  const requestEvents = engine.dispatch({
+    type: "REQUEST_AUTO_END",
+    playerId: PLAYER,
+    reason: "no actions",
+    requestedAt: 1000,
+    timeoutSeconds: 2
+  });
+  let next = engine.getState();
+
+  assert.ok(requestEvents.some((event) => event.type === "AUTO_END_REQUESTED" && event.reason === "no actions"));
+  assert.ok(requestEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.window === ActionWindow.autoEnd &&
+    event.deadline === 3000
+  ));
+  assert.equal(next.machine.actionWindow.window, ActionWindow.autoEnd);
+  assert.equal(next.machine.autoEnd.playerId, PLAYER);
+
+  const commitEvents = engine.dispatch({
+    type: "COMMIT_AUTO_END",
+    playerId: PLAYER,
+    committedAt: 3000
+  });
+  next = engine.getState();
+
+  assert.ok(commitEvents.some((event) => event.type === "AUTO_END_COMMITTED" && event.playerId === PLAYER));
+  assert.ok(commitEvents.some((event) =>
+    event.type === "TURN_ENDED" &&
+    event.playerId === PLAYER &&
+    event.nextPlayerId === AI &&
+    event.phase === Phase.end &&
+    event.timing === Timing.end
+  ));
+  assert.equal(next.turn.playerId, PLAYER);
+  assert.equal(next.turn.phase, Phase.end);
+  assert.equal(next.machine.phase, Phase.end);
+  assert.equal(next.machine.timing, Timing.end);
+  assert.equal(next.machine.autoEnd, null);
+  assert.equal(next.machine.actionWindow, null);
 });
 
 test("element combos resolve through events and character passive triggers once per turn", () => {

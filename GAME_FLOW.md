@@ -1,6 +1,6 @@
 # 游戏流程与状态机
 
-最后更新：2026-06-16
+最后更新：2026-06-17
 
 本文描述当前实现中的真实流程。规则变化时，应同时更新对应流程图、阶段表和事件说明。
 
@@ -95,6 +95,26 @@ flowchart LR
     Timer -->|到期且 windowId 未变化| Timeout[执行该窗口的超时策略]
     Timer -->|窗口已变化| Ignore[忽略旧计时器]
 ```
+
+### 自动结束回合事件链
+
+`autoEnd` 不再由 UI 直接写入 `autoEnding`。UI 只负责发现“当前没有合法操作”和启动浏览器计时器；规则状态通过以下命令和事件交接：
+
+```mermaid
+flowchart LR
+    NoAction[无合法操作] --> Request[REQUEST_AUTO_END]
+    Request --> Requested[AUTO_END_REQUESTED]
+    Request --> Window[ACTION_WINDOW_OPENED autoEnd]
+    Window --> Timer[浏览器等待 deadline]
+    Timer -->|玩家有新意图| Cancel[CANCEL_AUTO_END]
+    Cancel --> Canceled[AUTO_END_CANCELED]
+    Timer -->|deadline 到期| Commit[COMMIT_AUTO_END]
+    Commit --> Committed[AUTO_END_COMMITTED]
+    Committed --> EndTurn[TURN_ENDED]
+    EndTurn --> NextTurn[START_TURN nextPlayer]
+```
+
+手动结束回合直接走 `END_TURN -> TURN_ENDED -> START_TURN nextPlayer`。`TURN_ENDED` 会把核心阶段推进到 `end`，清理响应窗口、连锁、行动窗口和待提交的自动结束请求。
 
 ## 单次操作结算
 

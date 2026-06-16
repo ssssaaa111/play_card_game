@@ -19,7 +19,8 @@ const uiTimingByPhase = {
   [PHASES.setup]: TIMINGS.setup,
   [PHASES.draw]: TIMINGS.draw,
   [PHASES.main]: TIMINGS.mainOpen,
-  [PHASES.battle]: TIMINGS.battleOpen
+  [PHASES.battle]: TIMINGS.battleOpen,
+  [PHASES.end]: TIMINGS.end
 };
 
 const uiTimingByActionWindow = {
@@ -217,10 +218,21 @@ export function applyUiGameEvents(uiState, events = []) {
       uiState.turn = event.playerId;
       uiState.phase = PHASES.draw;
       uiState.timing = "draw";
+      uiState.autoEnding = false;
       duelist.attacksSkipped = false;
       duelist.comboThisTurn = false;
       duelist.comboFlags = {};
       duelist.normalSummonsUsed = 0;
+    }
+    if (event.type === "TURN_ENDED") {
+      uiState.turn = event.playerId;
+      uiState.phase = PHASES.end;
+      uiState.timing = TIMINGS.end;
+      uiState.autoEnding = false;
+      uiState.actionWindow = null;
+      uiState.actionWindowId = null;
+      uiState.actionWindowReason = "";
+      uiState.actionDeadline = 0;
     }
     if (event.type === "COMBO_TRIGGERED") {
       const duelist = uiDuelist(uiState, event.playerId);
@@ -240,6 +252,18 @@ export function applyUiGameEvents(uiState, events = []) {
       uiState.actionWindowReason = event.reason || "";
       uiState.actionDeadline = Math.max(0, Number(event.deadline) || 0);
       uiState.timing = uiTimingByActionWindow[event.window] || uiState.timing;
+    }
+    if (event.type === "AUTO_END_REQUESTED") {
+      uiState.autoEnding = true;
+    }
+    if (event.type === "AUTO_END_CANCELED" || event.type === "AUTO_END_COMMITTED") {
+      uiState.autoEnding = false;
+      if (uiState.actionWindow === "autoEnd") {
+        uiState.actionWindow = null;
+        uiState.actionWindowId = null;
+        uiState.actionWindowReason = "";
+        uiState.actionDeadline = 0;
+      }
     }
     if (event.type === "CARD_MOVED") {
       const card = removeCardFromUiState(uiState, event.cardId);
@@ -508,6 +532,66 @@ export function dispatchOpenActionWindowFromUiState(uiState, playerId, window, {
     reason,
     openedAt: now,
     timeoutSeconds
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchRequestAutoEndFromUiState(uiState, playerId, {
+  reason = "",
+  now = Date.now(),
+  timeoutSeconds = 0
+} = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "REQUEST_AUTO_END",
+    playerId,
+    reason,
+    requestedAt: now,
+    timeoutSeconds
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchCancelAutoEndFromUiState(uiState, playerId, {
+  reason = "",
+  now = Date.now()
+} = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "CANCEL_AUTO_END",
+    playerId,
+    reason,
+    canceledAt: now
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchCommitAutoEndFromUiState(uiState, playerId, {
+  reason = "",
+  now = Date.now()
+} = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "COMMIT_AUTO_END",
+    playerId,
+    reason,
+    committedAt: now
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchEndTurnFromUiState(uiState, playerId, {
+  reason = "",
+  endedBy = "manual",
+  now = Date.now()
+} = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "END_TURN",
+    playerId,
+    reason,
+    endedBy,
+    endedAt: now
   });
   return applyUiGameEvents(uiState, events);
 }

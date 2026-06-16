@@ -5,7 +5,8 @@ export const PHASES = {
   ready: "ready",
   draw: "draw",
   main: "main",
-  battle: "battle"
+  battle: "battle",
+  end: "end"
 };
 
 export const TIMINGS = {
@@ -17,6 +18,7 @@ export const TIMINGS = {
   responseWindow: "responseWindow",
   resolution: "resolution",
   chainResolution: "chainResolution",
+  end: "end",
   autoEnd: "autoEnd",
   ai: "ai",
   gameOver: "gameOver"

@@ -119,3 +119,11 @@ The validator catches:
 - `response` uses `responseWindow` timing and a 12 second response timeout.
 - When target selection times out, the UI should auto-select the only legal target. If there are zero or multiple legal targets, cancel that selection and return to the main action window.
 - Passive interactions such as viewing a card may restart the current window timer, but must not erase the current action window.
+
+## Turn handoff and auto-end
+
+- Manual turn handoff uses `END_TURN`; automatic no-action handoff uses `REQUEST_AUTO_END`, `CANCEL_AUTO_END`, and `COMMIT_AUTO_END`.
+- `AUTO_END_REQUESTED` owns the pending auto-end flag. UI code must not directly assign `autoEnding` except when constructing or resetting an unstarted local game state.
+- `COMMIT_AUTO_END` emits `AUTO_END_COMMITTED` and `TURN_ENDED`. `TURN_ENDED` moves the engine phase to `end` and clears response windows, chain links, action windows, and pending auto-end state.
+- The browser timer is only a scheduler. When the deadline fires it dispatches `COMMIT_AUTO_END`; it does not directly change turn ownership.
+- The next player starts through a separate `START_TURN` command so turn end and turn start remain distinct events in the log.

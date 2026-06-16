@@ -98,6 +98,10 @@ test("app uses extracted turn state machine", () => {
   assert.match(app, /from '\.\/turn-state\.js'/);
   assert.match(app, /canPlayerActState\(state\)/);
   assert.match(app, /dispatchOpenActionWindowFromUiState\(/);
+  assert.match(app, /dispatchRequestAutoEndFromUiState\(/);
+  assert.match(app, /dispatchCancelAutoEndFromUiState\(/);
+  assert.match(app, /dispatchCommitAutoEndFromUiState\(/);
+  assert.match(app, /dispatchEndTurnFromUiState\(/);
   assert.match(app, /playerActionWindowDecision\(state, \{[\s\S]*hasMainAction: actions\.hasMain[\s\S]*hasBattleAction: actions\.hasBattle[\s\S]*\}\)/);
   assert.match(app, /shouldRunPlayerIdleCountdownForState\(state\)/);
   assert.match(app, /pauseResumeStep\(state\)/);
@@ -108,6 +112,7 @@ test("app uses extracted turn state machine", () => {
   assert.doesNotMatch(app, /^\s*state\.actionWindow\s*=(?!=)/m);
   assert.doesNotMatch(app, /^\s*state\.actionWindowId\s*=(?!=)/m);
   assert.doesNotMatch(app, /^\s*state\.actionDeadline\s*=(?!=)/m);
+  assert.doesNotMatch(app, /^\s*state\.autoEnding\s*=\s*true/m);
 });
 
 test("app exposes manual turn control buttons", () => {
@@ -279,7 +284,14 @@ test("project documents the current phase and event flow", () => {
   assert.match(flow, /SKIP_REMAINING_ATTACKS/);
   assert.match(flow, /OPEN_ACTION_WINDOW/);
   assert.match(flow, /ACTION_WINDOW_OPENED/);
+  assert.match(flow, /REQUEST_AUTO_END/);
+  assert.match(flow, /AUTO_END_REQUESTED/);
+  assert.match(flow, /COMMIT_AUTO_END/);
+  assert.match(flow, /TURN_ENDED/);
   assert.match(engineRules, /\[GAME_FLOW\.md\]\(GAME_FLOW\.md\)/);
+  assert.match(engineRules, /Turn handoff and auto-end/);
+  assert.match(engineRules, /REQUEST_AUTO_END/);
+  assert.match(engineRules, /END_TURN/);
 });
 
 test("app uses extracted card display metadata", () => {
