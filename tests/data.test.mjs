@@ -109,6 +109,19 @@ test("trap cards are backed by trap metadata", () => {
   });
 });
 
+test("monster triggered effects are backed by engine DSL metadata", () => {
+  library
+    .filter((card) => card.type === "monster")
+    .forEach((card) => {
+      if (card.onSummon) {
+        assert.ok(getCardEffectDefinition(card.onSummon), `${card.id} onSummon must have engine DSL metadata: ${card.onSummon}`);
+      }
+      if (card.afterAttack) {
+        assert.ok(getCardEffectDefinition(card.afterAttack), `${card.id} afterAttack must have engine DSL metadata: ${card.afterAttack}`);
+      }
+    });
+});
+
 test("deck presets reference only known cards and have enough cards", () => {
   Object.entries(deckPresets).forEach(([key, preset]) => {
     assert.ok(preset.label, `${key} needs label`);

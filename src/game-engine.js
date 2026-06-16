@@ -163,7 +163,12 @@ export const defaultCardEffects = Object.freeze({
   directShield: oneShot([{ op: "drawCards", player: "self", count: 1 }]),
   directRebound: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
   summonBurn: oneShot([{ op: "dealDamage", player: "rival", amount: 400 }]),
-  chainNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }])
+  chainNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }]),
+  grow200: oneShot([{ op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: 200 }]),
+  windDraw: oneShot(
+    [{ op: "drawCards", player: "self", count: 1 }],
+    { requirements: [{ type: "minElementCount", player: "self", element: "wind", count: 1 }] }
+  )
 });
 
 export class EffectContext {
@@ -461,6 +466,9 @@ export class GameEngine {
         break;
       case "DRAW_CARDS":
         this.#drawCards(workingState, ctx, emit, action);
+        break;
+      case "RESOLVE_TURN_DRAW":
+        this.#resolveTurnDraw(workingState, ctx, emit, action);
         break;
       case "SUMMON_MONSTER":
         this.#summonMonster(workingState, ctx, emit, action);
@@ -795,7 +803,7 @@ export class GameEngine {
       ctx.destroyCard(action.attackerCardId, { reason: "battle", sourceCardId: target?.id || null });
     }
 
-    resolveAfterAttackEffect(state, ctx, action.playerId, action.attackerCardId);
+    resolveAfterAttackEffect(this.#effects, state, ctx, action.playerId, rivalId, action.attackerCardId);
     consumeAttackResetForMonster(state, emit, action.playerId, action.attackerCardId);
 
     emit("BATTLE_RESOLVED", {
@@ -1094,6 +1102,33 @@ export class GameEngine {
     ctx.dealDamage(action.playerId, missing * 500, {
       sourceCardId: action.sourceCardId || null
     });
+  }
+
+  #resolveTurnDraw(state, ctx, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    requirePhase(state, [Phase.draw], action.type);
+    this.#drawCards(state, ctx, emit, {
+      type: "DRAW_CARDS",
+      playerId: action.playerId,
+      count: Math.max(1, Number(action.count) || 1),
+      reason: "turn",
+      sourceCardId: action.sourceCardId || null
+    });
+
+    const player = requirePlayer(state, action.playerId);
+    const phaseAdvanced = player.lp > 0;
+    emit("TURN_DRAW_RESOLVED", {
+      playerId: action.playerId,
+      phaseAdvanced,
+      nextPhase: phaseAdvanced ? Phase.main : Phase.draw
+    });
+    if (phaseAdvanced) {
+      this.#changePhase(state, emit, {
+        type: "CHANGE_PHASE",
+        playerId: action.playerId,
+        phase: Phase.main
+      });
+    }
   }
 
   #changePhase(state, emit, action) {
@@ -1513,6 +1548,7 @@ export function applyGameEvent(state, event, options = {}) {
       applyNormalSummonUsed(state, event);
       break;
     case "COMMAND_DISPATCHED":
+    case "TURN_DRAW_RESOLVED":
     case "CARD_ACTIVATED":
     case "TRAP_SET":
     case "CARD_DESTROYED":
@@ -2285,19 +2321,24 @@ function applyBattleWear(emit, card, amount, sourceCardId) {
   });
 }
 
-function resolveAfterAttackEffect(state, ctx, playerId, attackerCardId) {
+function resolveAfterAttackEffect(effects, state, ctx, playerId, rivalId, attackerCardId) {
   const stillOnField = findCardLocations(state, attackerCardId).some((location) =>
     location.playerId === playerId && location.zone === "monsterZone"
   );
   if (!stillOnField) return;
 
   const attacker = requireCard(state, attackerCardId);
-  if (attacker.afterAttack === "grow200") {
-    ctx.modifyStat(attackerCardId, "tempAtk", 200, { sourceCardId: attackerCardId });
-  }
-  if (attacker.afterAttack === "windDraw" && monsterElementSet(state, playerId).has("wind")) {
-    ctx.drawCards(playerId, 1, { sourceCardId: attackerCardId });
-  }
+  if (!attacker.afterAttack) return;
+  const effectAction = {
+    type: "AFTER_ATTACK_EFFECT",
+    playerId,
+    rivalId,
+    cardId: attackerCardId,
+    attackerCardId
+  };
+  const skipReason = effectRequirementFailure(effects[attacker.afterAttack], state, effectAction, attacker);
+  if (skipReason) return;
+  runEffect(effects, attacker.afterAttack, ctx, effectAction, attacker);
 }
 
 function engineShieldPreview(amount, shield = 0) {

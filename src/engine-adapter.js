@@ -720,6 +720,17 @@ export function dispatchDrawCardsFromUiState(uiState, playerId, count = 1, optio
   return applyUiGameEvents(uiState, events);
 }
 
+export function dispatchResolveTurnDrawFromUiState(uiState, playerId, options = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "RESOLVE_TURN_DRAW",
+    playerId,
+    count: options.count || 1,
+    sourceCardId: options.sourceCardId || null
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
 export function dispatchSummonMonsterFromUiState(uiState, playerId, handIndex, fieldIndex) {
   const duelist = uiDuelist(uiState, playerId);
   const card = duelist.hand[handIndex];

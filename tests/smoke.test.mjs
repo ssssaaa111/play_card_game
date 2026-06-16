@@ -76,6 +76,17 @@ test("app uses the extracted rules module", () => {
   assert.doesNotMatch(app, /const FIELD_SIZE =/);
 });
 
+test("rule docs describe event-sourced turn draw and after-attack effects", () => {
+  const flow = readProjectFile("GAME_FLOW.md");
+  const guardrails = readProjectFile("RULE_ENGINE.md");
+
+  assert.match(flow, /RESOLVE_TURN_DRAW/);
+  assert.match(flow, /TURN_DRAW_RESOLVED/);
+  assert.match(flow, /afterAttack/);
+  assert.match(guardrails, /RESOLVE_TURN_DRAW/);
+  assert.match(guardrails, /afterAttack/);
+});
+
 test("app uses extracted player action summary", () => {
   const app = readProjectFile("src/app.js");
 
@@ -102,6 +113,8 @@ test("app uses extracted turn state machine", () => {
   assert.match(app, /dispatchCancelAutoEndFromUiState\(/);
   assert.match(app, /dispatchCommitAutoEndFromUiState\(/);
   assert.match(app, /dispatchEndTurnFromUiState\(/);
+  assert.match(app, /dispatchResolveTurnDrawFromUiState\(/);
+  assert.match(app, /function autoPlayerDraw\(\)[\s\S]*dispatchResolveTurnDrawFromUiState\(state, "player"\)/);
   assert.match(app, /playerActionWindowDecision\(state, \{[\s\S]*hasMainAction: actions\.hasMain[\s\S]*hasBattleAction: actions\.hasBattle[\s\S]*\}\)/);
   assert.match(app, /shouldRunPlayerIdleCountdownForState\(state\)/);
   assert.match(app, /pauseResumeStep\(state\)/);

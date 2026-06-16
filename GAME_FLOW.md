@@ -29,7 +29,7 @@ flowchart TD
     Setup[setup 开局配置] --> Start[玩家点击开始决斗]
     Start --> Opening[双方起手抽 5 张]
     Opening --> PlayerTurn[START_TURN 玩家]
-    PlayerTurn --> Draw[draw 自动抽 1 张]
+    PlayerTurn --> Draw[RESOLVE_TURN_DRAW 自动抽 1 张]
     Draw --> Main[main 主要阶段]
     Main --> Decision{还有合法操作吗}
     Decision -->|召唤 魔法 盖陷阱 切换表示| Main
@@ -39,7 +39,7 @@ flowchart TD
     BattleDecision -->|攻击 魔法 盖陷阱| Battle
     BattleDecision -->|没有操作或主动结束| AutoEnd
     AutoEnd --> AiTurn[START_TURN AI]
-    AiTurn --> AiDraw[draw AI 自动抽卡]
+    AiTurn --> AiDraw[RESOLVE_TURN_DRAW AI 自动抽卡]
     AiDraw --> AiMain[main AI 出牌和召唤]
     AiMain --> AiBattle[battle AI 选择攻击]
     AiBattle --> CheckEnd{任一方生命值为 0}
@@ -59,12 +59,28 @@ flowchart TD
 | Phase | Engine Timing | 当前行为 | 主要合法命令 |
 | --- | --- | --- | --- |
 | `setup` | `setup` | 选择角色、卡组、AI 和测试场景 | 初始化，不允许正式出牌 |
-| `draw` | `draw` | 当前回合玩家自动抽 1 张 | `DRAW_CARDS`、`CHANGE_PHASE` |
+| `draw` | `draw` | 当前回合玩家自动抽 1 张，存活后自动进入主要阶段 | `RESOLVE_TURN_DRAW` |
 | `main` | `mainOpen` | 召唤、发动魔法、盖陷阱、切换表示 | `SUMMON_MONSTER`、`ACTIVATE_CARD`、`SET_TRAP`、`CHANGE_MONSTER_MODE` |
 | `battle` | `battleOpen` | 攻击，也可发动魔法或盖陷阱 | `DECLARE_ATTACK`、`RESOLVE_BATTLE`、`ACTIVATE_CARD`、`SET_TRAP`、`SKIP_REMAINING_ATTACKS` |
 | `end` | `end` | 核心引擎保留的结束阶段 | 当前 UI 通过回合交接完成，尚未作为可见阶段停留 |
 
 通常召唤限制属于玩家回合资源：第一次召唤产生 `NORMAL_SUMMON_USED`，后续召唤必须消费 `extraSummon` 能力。
+
+### 回合抽卡事件链
+
+回合开始后的自动抽卡不再由 UI 先发 `DRAW_CARDS` 再手动切到 `main`。当前统一通过 `RESOLVE_TURN_DRAW` 结算：
+
+```mermaid
+flowchart LR
+    StartTurn[START_TURN currentPlayer] --> DrawPhase[draw phase]
+    DrawPhase --> ResolveDraw[RESOLVE_TURN_DRAW]
+    ResolveDraw --> DrawEvents[CARDS_DRAWN 或 DRAW_FAILED]
+    DrawEvents --> Resolved[TURN_DRAW_RESOLVED]
+    Resolved -->|玩家仍存活| MainPhase[PHASE_CHANGED main]
+    Resolved -->|生命值归零| Stop[停留 draw 等待 gameOver]
+```
+
+`TURN_DRAW_RESOLVED` 只描述本次回合抽卡是否允许推进阶段；实际抽卡、卡组耗尽伤害和护盾消耗仍由 `CARDS_DRAWN`、`DRAW_FAILED`、`DAMAGE_DEALT` 等事件记录。
 
 ## UI 行动窗口
 
@@ -170,6 +186,7 @@ flowchart TD
 - 每只攻击表示且未行动的怪兽通常每回合可攻击一次。
 - 攻击被某些陷阱取消时，是否消耗攻击次数由陷阱规则决定。
 - `attackReset` 在攻击次数被消耗后自动消费；攻击怪兽仍在场时产生 `MONSTER_READIED`。
+- 怪兽的 `afterAttack` 效果通过默认或注入的卡牌 DSL 结算，不能在战斗结算中新增硬编码分支。
 - “跳过攻击”通过 `SKIP_REMAINING_ATTACKS` 将当前可攻击怪兽标记为已行动，清空攻击重置和直击许可，并授予本回合 `skipAttackLock`。新召唤怪兽也不能绕过该锁。
 
 ## 连锁数据

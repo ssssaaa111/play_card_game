@@ -26,6 +26,7 @@ import {
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
   dispatchResolveElementCombosFromUiState,
+  dispatchResolveTurnDrawFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
   dispatchStartTurnFromUiState,
   dispatchTrapResponseFromUiState,
@@ -220,6 +221,31 @@ test("dispatches turn draws and replays deck-out damage into UI state", () => {
   assert.equal(state.player.lp, 3700);
   assert.ok(events.some((event) => event.type === "DRAW_FAILED" && event.missing === 1));
   assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.blocked === 200 && event.amount === 300));
+});
+
+test("dispatches turn draw resolution and advances surviving turns to main", () => {
+  const drawCard = uiMonster("ui-turn-draw", "solar-knight");
+  const state = appState({ phase: PHASES.draw, turn: "player" });
+  state.player.deck = [drawCard];
+
+  const events = dispatchResolveTurnDrawFromUiState(state, "player");
+
+  assert.deepEqual(state.player.hand, [drawCard]);
+  assert.deepEqual(state.player.deck, []);
+  assert.equal(state.phase, PHASES.main);
+  assert.equal(state.timing, "mainOpen");
+  assert.ok(events.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === true));
+  assert.ok(events.some((event) => event.type === "PHASE_CHANGED" && event.to === PHASES.main));
+
+  const fatal = appState({ phase: PHASES.draw, turn: "player" });
+  fatal.player.lp = 300;
+  fatal.player.deck = [];
+  const fatalEvents = dispatchResolveTurnDrawFromUiState(fatal, "player");
+
+  assert.equal(fatal.player.lp, 0);
+  assert.equal(fatal.phase, PHASES.draw);
+  assert.ok(fatalEvents.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === false));
+  assert.equal(fatalEvents.some((event) => event.type === "PHASE_CHANGED"), false);
 });
 
 test("dispatches basic on-summon effects through engine events", () => {

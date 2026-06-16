@@ -29,6 +29,7 @@ import {
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
   dispatchResolveElementCombosFromUiState,
+  dispatchResolveTurnDrawFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
   dispatchSetTrapFromUiState,
   dispatchStartTurnFromUiState,
@@ -1004,16 +1005,7 @@ function drawCard(duelist, announce = true, reason = "effect") {
   return drawCards(duelist, 1, { announce, reason })[0] || null;
 }
 
-function drawCards(duelist, count, { announce = true, reason = "effect", sourceCardId = null } = {}) {
-  let events = [];
-  try {
-    events = dispatchDrawCardsFromUiState(state, duelist.owner, count, { reason, sourceCardId });
-  } catch (error) {
-    cue(error.message || "抽卡失败。");
-    console.error(error);
-    return [];
-  }
-
+function applyDrawEventFeedback(duelist, events, announce = true) {
   const drawEvent = events.find((event) => event.type === "CARDS_DRAWN");
   const drawn = (drawEvent?.cardIds || [])
     .map((cardId) => findRuntimeCard(cardId)?.card)
@@ -1048,6 +1040,19 @@ function drawCards(duelist, count, { announce = true, reason = "effect", sourceC
     checkGameOver();
   }
   return drawn;
+}
+
+function drawCards(duelist, count, { announce = true, reason = "effect", sourceCardId = null } = {}) {
+  let events = [];
+  try {
+    events = dispatchDrawCardsFromUiState(state, duelist.owner, count, { reason, sourceCardId });
+  } catch (error) {
+    cue(error.message || "抽卡失败。");
+    console.error(error);
+    return [];
+  }
+
+  return applyDrawEventFeedback(duelist, events, announce);
 }
 
 function gainShield(duelist, amount, reason = "护盾") {
@@ -3391,16 +3396,21 @@ function autoPlayerDraw() {
   if (!canPlayerAct()) return;
   if (state.phase !== PHASES.draw) return;
   state.pendingOpeningDraw = false;
-  drawCard(state.player, true, "turn");
+  let events = [];
+  try {
+    events = dispatchResolveTurnDrawFromUiState(state, "player");
+  } catch (error) {
+    cue(error.message || "自动抽卡失败。");
+    console.error(error);
+    return;
+  }
+  applyDrawEventFeedback(state.player, events, true);
   if (state.gameOver) {
     render();
     return;
   }
-  try {
-    dispatchChangePhaseFromUiState(state, "player", PHASES.main);
-  } catch (error) {
-    cue(error.message || "无法进入主要阶段。");
-    console.error(error);
+  if (state.phase !== PHASES.main) {
+    render();
     return;
   }
   Object.assign(state, drawToMainPatch());
@@ -3426,9 +3436,10 @@ async function runAiTurn() {
   try {
     setActionWindow("ai");
     await sleep(950);
-    drawCard(state.ai, true, "turn");
+    const drawEvents = dispatchResolveTurnDrawFromUiState(state, "ai");
+    applyDrawEventFeedback(state.ai, drawEvents, true);
     if (state.gameOver) return;
-    dispatchChangePhaseFromUiState(state, "ai", PHASES.main);
+    if (state.phase !== PHASES.main) return;
     render();
     await sleep(1500);
     await aiPlaySpells();

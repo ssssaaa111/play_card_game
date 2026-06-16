@@ -184,6 +184,8 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const lightShadowCombo = getCardEffectDefinition("lightShadowCombo");
   const elementEcho = getCardEffectDefinition("elementEcho");
   const fireWindCombo = getCardEffectDefinition("fireWindCombo");
+  const grow200 = getCardEffectDefinition("grow200");
+  const windDraw = getCardEffectDefinition("windDraw");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw1.operations, [{ op: "drawCards", player: "self", count: 1 }]);
@@ -264,6 +266,13 @@ test("default card effects are declarative one-shot DSL definitions", () => {
     { op: "dealDamage", player: "rival", amount: 400 },
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 200 }
   ]);
+  assert.deepEqual(grow200.operations, [
+    { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: 200 }
+  ]);
+  assert.deepEqual(windDraw.requirements, [
+    { type: "minElementCount", player: "self", element: "wind", count: 1 }
+  ]);
+  assert.deepEqual(windDraw.operations, [{ op: "drawCards", player: "self", count: 1 }]);
   assert.notEqual(typeof draw2, "function");
 });
 
@@ -1566,6 +1575,42 @@ test("after-attack monster effects resolve through battle events", () => {
   assert.ok(drawEvents.some((event) => event.type === "CARDS_DRAWN" && event.sourceCardId === "raider-1" && event.cardIds.includes("draw-1")));
 });
 
+test("after-attack monster effects use the configured effect DSL registry", () => {
+  const state = makeState({
+    cards: [
+      card("custom-1", { templateId: "custom-after", type: "monster", atk: 1200, def: 900, afterAttack: "customAfterAttack" }),
+      card("draw-custom", { templateId: "ember-drake", type: "monster" })
+    ],
+    player: {
+      monsterZone: ["custom-1"],
+      deck: ["draw-custom"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state, {
+    cardEffects: {
+      customAfterAttack: {
+        duration: EffectDuration.oneShot,
+        operations: [{ op: "drawCards", player: "self", count: 1 }]
+      }
+    }
+  });
+
+  const events = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "custom-1"
+  });
+
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["draw-custom"]);
+  assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.sourceCardId === "custom-1"));
+});
+
 test("mark monster used consumes an attack chance through events only", () => {
   const state = makeState({
     cards: [
@@ -2002,6 +2047,57 @@ test("turn draw moves cards and applies deck-out damage through events", () => {
   assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.count === 2 && event.requested === 3));
   assert.ok(events.some((event) => event.type === "DRAW_FAILED" && event.missing === 1 && event.reason === "turn"));
   assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.requested === 500 && event.blocked === 100 && event.amount === 400));
+});
+
+test("resolve turn draw advances to main only when the player survives", () => {
+  const state = makeState({
+    cards: [card("turn-draw-1", { type: "monster" })],
+    player: { deck: ["turn-draw-1"] },
+    turn: { playerId: PLAYER, phase: Phase.draw }
+  });
+  state.machine.phase = Phase.draw;
+  state.machine.timing = Timing.draw;
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: PLAYER });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].hand, ["turn-draw-1"]);
+  assert.equal(next.turn.phase, Phase.main);
+  assert.equal(next.machine.timing, Timing.mainOpen);
+  assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.count === 1));
+  assert.ok(events.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === true));
+  assert.ok(events.some((event) => event.type === "PHASE_CHANGED" && event.from === Phase.draw && event.to === Phase.main));
+
+  const survivedDeckOut = makeState({
+    player: { lp: 700, shield: 300, deck: [] },
+    turn: { playerId: PLAYER, phase: Phase.draw }
+  });
+  survivedDeckOut.machine.phase = Phase.draw;
+  survivedDeckOut.machine.timing = Timing.draw;
+  const survivedEngine = new GameEngine(survivedDeckOut);
+  const survivedEvents = survivedEngine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: PLAYER });
+  const survivedNext = survivedEngine.getState();
+
+  assert.equal(survivedNext.players[PLAYER].lp, 500);
+  assert.equal(survivedNext.players[PLAYER].shield, 0);
+  assert.equal(survivedNext.turn.phase, Phase.main);
+  assert.ok(survivedEvents.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === true));
+
+  const fatalDeckOut = makeState({
+    player: { lp: 300, shield: 0, deck: [] },
+    turn: { playerId: PLAYER, phase: Phase.draw }
+  });
+  fatalDeckOut.machine.phase = Phase.draw;
+  fatalDeckOut.machine.timing = Timing.draw;
+  const fatalEngine = new GameEngine(fatalDeckOut);
+  const fatalEvents = fatalEngine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: PLAYER });
+  const fatalNext = fatalEngine.getState();
+
+  assert.equal(fatalNext.players[PLAYER].lp, 0);
+  assert.equal(fatalNext.turn.phase, Phase.draw);
+  assert.ok(fatalEvents.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === false));
+  assert.equal(fatalEvents.some((event) => event.type === "PHASE_CHANGED"), false);
 });
 
 test("turn draw rejects the wrong player and illegal phase", () => {

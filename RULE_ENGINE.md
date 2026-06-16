@@ -59,6 +59,8 @@ draw2: {
 
 The engine rejects function effects. One-shot effects and continuous effects use different `EffectDuration` values and are not resolved through the same path.
 
+Monster `onSummon` and `afterAttack` hooks must reference effect ids in the same DSL registry. Adding a monster-triggered effect means adding rule tests first, then registering the DSL operations.
+
 ## Event and validation guarantees
 
 Every successful `dispatch` emits `GameEvent` entries, applies those events, and then runs `assertValidGameState`.
@@ -80,6 +82,7 @@ The current event applier handles:
 - `CHAIN_RESOLVED`
 - `ABILITY_GRANTED`
 - `ABILITY_SPENT`
+- `TURN_DRAW_RESOLVED`
 
 Audit-only events such as `CARD_ACTIVATED`, `MONSTER_SUMMONED`, `CARD_DESTROYED`, and `EFFECT_NEGATED` are still recorded in the same log.
 
@@ -97,6 +100,7 @@ The validator catches:
 
 - spells and normal summons are legal in `main`
 - trap activation is legal in `battle`
+- turn draw resolution uses `RESOLVE_TURN_DRAW` in `draw` and advances to `main` only if the player survives
 - illegal phase actions throw `GameRuleError`
 
 ## Timing, chain, and abilities
@@ -109,6 +113,7 @@ The validator catches:
 - A queued `attackReset` is spent automatically when an attack chance is consumed; a surviving attacker is readied through `MONSTER_READIED`.
 - Element combos resolve through `RESOLVE_ELEMENT_COMBOS`. `COMBO_TRIGGERED` and `CHARACTER_PASSIVE_TRIGGERED` own the combo and once-per-turn passive flags.
 - Element combos and character passives declare `operations`; UI code and card configuration must not store free functions that mutate rule state.
+- Attack-after effects use the same DSL registry through the monster `afterAttack` key, so custom and existing monster effects share one implementation path.
 
 ## UI action windows
 
@@ -123,6 +128,7 @@ The validator catches:
 ## Turn handoff and auto-end
 
 - Manual turn handoff uses `END_TURN`; automatic no-action handoff uses `REQUEST_AUTO_END`, `CANCEL_AUTO_END`, and `COMMIT_AUTO_END`.
+- Turn-start draw uses `RESOLVE_TURN_DRAW`, which emits draw or deck-out events, records `TURN_DRAW_RESOLVED`, and emits `PHASE_CHANGED` to `main` only when the current player is still alive.
 - `AUTO_END_REQUESTED` owns the pending auto-end flag. UI code must not directly assign `autoEnding` except when constructing or resetting an unstarted local game state.
 - `COMMIT_AUTO_END` emits `AUTO_END_COMMITTED` and `TURN_ENDED`. `TURN_ENDED` moves the engine phase to `end` and clears response windows, chain links, action windows, and pending auto-end state.
 - The browser timer is only a scheduler. When the deadline fires it dispatches `COMMIT_AUTO_END`; it does not directly change turn ownership.
