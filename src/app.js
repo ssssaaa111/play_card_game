@@ -72,7 +72,6 @@ import {
   fieldElements,
   legalAttackTargets,
   makeBattlePreview,
-  MAX_SHIELD,
   spellTargetPrompt,
   strongestMonster,
   totalAtk,
@@ -1067,35 +1066,6 @@ function drawCards(duelist, count, { announce = true, reason = "effect", sourceC
   return applyDrawEventFeedback(duelist, events, announce);
 }
 
-function gainShield(duelist, amount, reason = "护盾") {
-  duelist.shield = Math.min(MAX_SHIELD, (duelist.shield || 0) + amount);
-  playSound("guard");
-  playEpicAction("护盾", "guard");
-  playGuardShield(panelElement(duelist.owner));
-  playVoice(duelist.owner, "shield", "护盾展开。");
-  addLog(`${duelist.owner === "player" ? "你" : "AI"} 获得 ${amount} 点护盾（${reason}）。`);
-}
-
-function buffCard(card, amount, reason = "强化") {
-  if (!card) return;
-  card.tempAtk = (card.tempAtk || 0) + amount;
-  addLog(`${card.name} 因 ${reason} 攻击力提升 ${amount}。`);
-}
-
-function wearMonster(card, amount, reason = "承受攻击") {
-  if (!card || amount <= 0) return;
-  card.battleWear = (card.battleWear || 0) + amount;
-  card.tempAtk = (card.tempAtk || 0) - amount;
-  card.tempDef = (card.tempDef || 0) - amount;
-  playEpicAction("损耗", "guard", 900);
-  addLog(`${card.name} 承受冲击产生 ${amount} 点战斗损耗，ATK/DEF 下降。`);
-  speak(`${card.name} 承受冲击，战斗力下降。`);
-}
-
-function buffAllMonsters(duelist, amount, reason = "组合技") {
-  fieldCards(duelist).forEach((card) => buffCard(card, amount, reason));
-}
-
 function duelistLabel(duelist) {
   return duelist.owner === "player" ? "你" : "AI";
 }
@@ -1977,108 +1947,7 @@ function resolveSummonEffect(card, owner, rival) {
   resolveElementCombos(owner, rival, "summon");
 }
 
-const spellEffects = {
-  burn500: {
-    ...spellDefinitions.burn500,
-    apply: ({ rival, card }) => {
-      const dealt = damage(rival, 500);
-      animateAvatar(rival.owner, "hit");
-      addLog(`${card.name} 对${duelistLabel(rival)}造成 ${dealt} 点伤害。`);
-    }
-  },
-  heal700: {
-    ...spellDefinitions.heal700,
-    apply: ({ owner, card }) => {
-      const before = owner.lp;
-      heal(owner, 700);
-      addLog(`${card.name} 为${duelistLabel(owner)}回复 ${owner.lp - before} 点生命值。`);
-    }
-  },
-  draw2: {
-    ...spellDefinitions.draw2,
-    apply: ({ owner }) => drawCards(owner, 2)
-  },
-  buff500: {
-    ...spellDefinitions.buff500,
-    apply: ({ owner, card, targetInfo }) => {
-      const target = targetInfo?.card || strongestMonster(owner);
-      if (!target) return {};
-      buffCard(target, 500, card.name);
-      return { effectTarget: target };
-    }
-  },
-  shield800: {
-    ...spellDefinitions.shield800,
-    apply: ({ owner, card }) => gainShield(owner, 800, card.name)
-  },
-  extraSummon: {
-    ...spellDefinitions.extraSummon
-  },
-  elementEcho: {
-    ...spellDefinitions.elementEcho,
-    apply: ({ owner, card }) => {
-      buffAllMonsters(owner, 200, card.name);
-      drawCards(owner, 1);
-      addLog(`${card.name} 让多属性阵线产生共鸣。`);
-    }
-  },
-  rallyAttack: {
-    ...spellDefinitions.rallyAttack
-  },
-  pierceLine: {
-    ...spellDefinitions.pierceLine,
-    apply: ({ rival, card, targetInfo }) => {
-      const target = targetInfo?.card || strongestMonster(rival);
-      if (!target) return {};
-      wearMonster(target, 400, card.name);
-      damage(rival, 200);
-      animateAvatar(rival.owner, "hit");
-      addLog(`${card.name} 削弱了 ${target.name}，并造成 200 点伤害。`);
-      return { effectTarget: target, targetOwner: rival.owner };
-    }
-  },
-  graveReturn: {
-    ...spellDefinitions.graveReturn,
-    apply: ({ owner, card }) => {
-      const index = owner.grave.findIndex((item) => item.uid !== card.uid);
-      if (index < 0) {
-        addLog("但墓地没有其他卡可以回收。");
-        return {};
-      }
-      const recovered = owner.grave.splice(index, 1)[0];
-      owner.deck.unshift(recovered);
-      addLog(`${recovered.name} 回到卡组顶。`);
-      drawCards(owner, 1);
-      return {};
-    }
-  },
-  battleTrance: {
-    ...spellDefinitions.battleTrance
-  },
-  directStrike: {
-    ...spellDefinitions.directStrike
-  },
-  fireWindCombo: {
-    ...spellDefinitions.fireWindCombo,
-    apply: ({ owner, rival, card }) => {
-      const dealt = damage(rival, 400);
-      buffAllMonsters(owner, 200, card.name);
-      animateAvatar(rival.owner, "hit");
-      playEpicAction("炎岚", "attack");
-      addLog(`${card.name} 造成 ${dealt} 点伤害，并强化我方全体怪兽。`);
-      return { targetOwner: rival.owner };
-    }
-  },
-  lightShadowCombo: {
-    ...spellDefinitions.lightShadowCombo,
-    apply: ({ owner, card }) => {
-      gainShield(owner, 600, card.name);
-      drawCards(owner, 1);
-      playEpicAction("星界", "guard");
-      addLog(`${card.name} 展开光暗星界，获得护盾并抽 1 张卡。`);
-    }
-  }
-};
+const spellEffects = spellDefinitions;
 
 function playSpell(owner, rival, handIndex, targetInfo = null) {
   const selectedCard = owner.hand[handIndex];
@@ -3074,35 +2943,6 @@ function assertAttackImpact(owner, rival, before, label) {
   playSound("damage");
   console.error(message);
   return false;
-}
-
-function damage(duelist, amount) {
-  if (duelist.shield > 0 && amount > 0) {
-    const blocked = Math.min(duelist.shield, amount);
-    duelist.shield -= blocked;
-    amount -= blocked;
-    playSound("guard");
-    playGuardShield(panelElement(duelist.owner));
-    addLog(`${duelist.owner === "player" ? "你的" : "AI 的"}护盾吸收了 ${blocked} 点伤害。`);
-  }
-  const dealt = Math.max(0, amount);
-  if (dealt > 0) {
-    duelist.lp = Math.max(0, duelist.lp - dealt);
-    playSound("damage");
-    playLifeDelta(duelist.owner, -dealt);
-  }
-  return dealt;
-}
-
-function heal(duelist, amount) {
-  const before = duelist.lp;
-  duelist.lp = Math.min(MAX_LP, duelist.lp + amount);
-  const healed = duelist.lp - before;
-  if (healed > 0) {
-    playSound("spell-heal700");
-    playLifeDelta(duelist.owner, healed);
-  }
-  return healed;
 }
 
 function promptTrapChoice(candidates, eventName, details = {}) {

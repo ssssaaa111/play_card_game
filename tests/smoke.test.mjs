@@ -376,8 +376,10 @@ test("app uses extracted log audit module", () => {
   assert.match(audit, /missing-attack-resolution/);
   assert.match(css, /\.timeline-audit\.warn/);
   assert.match(css, /\.timeline-audit\.error/);
-  assert.match(app, /addLog\(`\$\{card\.name\} 对\$\{duelistLabel\(rival\)\}造成 \$\{dealt\} 点伤害。`\)/);
-  assert.match(app, /addLog\(`\$\{card\.name\} 为\$\{duelistLabel\(owner\)\}回复 \$\{owner\.lp - before\} 点生命值。`\)/);
+  assert.match(app, /if \(event\.type === "LP_HEALED" && event\.amount > 0\)/);
+  assert.match(app, /if \(event\.type === "DAMAGE_DEALT"\)/);
+  assert.match(app, /playLifeDelta\(owner\.owner, event\.amount\)/);
+  assert.match(app, /playLifeDelta\(target\.owner, -dealt\)/);
 });
 
 test("browser smoke runner covers key click regressions", () => {
@@ -546,11 +548,21 @@ test("app uses extracted timeline classification", () => {
 
 test("app uses extracted spell metadata", () => {
   const app = readProjectFile("src/app.js");
+  const spellStart = app.indexOf("const spellEffects");
+  const spellEnd = app.indexOf("function playSpell", spellStart);
+  const spellEffectsSource = app.slice(spellStart, spellEnd);
 
   assert.match(app, /from '\.\/spells\.js'/);
-  assert.match(app, /\.\.\.spellDefinitions\.buff500/);
+  assert.match(app, /const spellEffects = spellDefinitions/);
   assert.match(app, /validateSpellCondition\(card\.effect/);
   assert.match(app, /scoreSpellForAi\(card\.effect/);
+  assert.doesNotMatch(spellEffectsSource, /apply:/);
+  assert.doesNotMatch(app, /function damage\(/);
+  assert.doesNotMatch(app, /function heal\(/);
+  assert.doesNotMatch(app, /function gainShield\(/);
+  assert.doesNotMatch(app, /function buffCard\(/);
+  assert.doesNotMatch(app, /function wearMonster\(/);
+  assert.doesNotMatch(app, /function buffAllMonsters\(/);
   assert.doesNotMatch(app, /caption: "攻击力提升"/);
   assert.doesNotMatch(app, /can: \(/);
   assert.doesNotMatch(app, /aiScore:/);
