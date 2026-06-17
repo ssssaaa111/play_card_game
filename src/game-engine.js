@@ -207,7 +207,7 @@ export class EffectContext {
     const damageAfterShield = Math.max(0, rawAmount - blocked);
     const actual = Math.min(player.lp, damageAfterShield);
 
-    this.#emit("DAMAGE_DEALT", {
+    const damageEvent = this.#emit("DAMAGE_DEALT", {
       playerId,
       amount: actual,
       requested: rawAmount,
@@ -215,6 +215,11 @@ export class EffectContext {
       shieldBefore,
       shieldAfter: shieldBefore - blocked,
       sourceCardId: options.sourceCardId || null
+    });
+    emitGameOverIfNeeded(this.#state, this.#emit, {
+      reason: options.reason || "lp-zero",
+      sourceCardId: options.sourceCardId || null,
+      triggerEventId: damageEvent.id
     });
     return actual;
   }
@@ -1116,7 +1121,7 @@ export class GameEngine {
     });
 
     const player = requirePlayer(state, action.playerId);
-    const phaseAdvanced = player.lp > 0;
+    const phaseAdvanced = !state.gameOver && player.lp > 0;
     emit("TURN_DRAW_RESOLVED", {
       playerId: action.playerId,
       phaseAdvanced,
@@ -1400,6 +1405,17 @@ export function assertValidGameState(state) {
   if (state.machine.responseWindow && !RESPONSE_WINDOWS.has(state.machine.responseWindow.type)) {
     throw new GameStateValidationError(`Unknown response window ${state.machine.responseWindow.type}`);
   }
+  if (state.gameOver) {
+    if (typeof state.gameOver !== "object") {
+      throw new GameStateValidationError("GameState.gameOver must be an object when set");
+    }
+    if (state.gameOver.winnerId !== null && state.gameOver.winnerId !== undefined && !state.players[state.gameOver.winnerId]) {
+      throw new GameStateValidationError("Game-over winner must exist");
+    }
+    if (!Array.isArray(state.gameOver.loserIds) || state.gameOver.loserIds.some((playerId) => !state.players[playerId])) {
+      throw new GameStateValidationError("Game-over losers must exist");
+    }
+  }
 
   const seenCards = new Map();
   for (const player of Object.values(state.players)) {
@@ -1516,6 +1532,9 @@ export function applyGameEvent(state, event, options = {}) {
       break;
     case "AUTO_END_COMMITTED":
       applyAutoEndCommitted(state, event);
+      break;
+    case "GAME_OVER_DECLARED":
+      applyGameOverDeclared(state, event);
       break;
     case "RESPONSE_PRIORITY_PASSED":
       applyResponsePriorityPassed(state, event);
@@ -1643,6 +1662,37 @@ function applyDamageDealt(state, event) {
     player.shield = Math.max(0, (Number(player.shield) || 0) - blocked);
   }
   player.lp = Math.max(0, player.lp - amount);
+}
+
+function applyGameOverDeclared(state, event) {
+  const loserIds = Array.isArray(event.loserIds)
+    ? event.loserIds.slice()
+    : [event.loserId].filter(Boolean);
+  loserIds.forEach((playerId) => requirePlayer(state, playerId));
+  const winnerId = event.winnerId || null;
+  if (winnerId) requirePlayer(state, winnerId);
+  const windowPlayerId = winnerId || loserIds[0] || state.turn.playerId;
+  requirePlayer(state, windowPlayerId);
+  const openedAt = Number(event.declaredAt) || Number(event.id) || 0;
+
+  state.gameOver = {
+    winnerId,
+    loserIds,
+    reason: event.reason || "lp-zero",
+    sourceCardId: event.sourceCardId || null,
+    triggerEventId: event.triggerEventId || null
+  };
+  state.machine.responseWindow = null;
+  state.machine.chain = [];
+  state.machine.autoEnd = null;
+  state.machine.actionWindow = {
+    playerId: windowPlayerId,
+    window: ActionWindow.gameOver,
+    windowId: event.windowId || `game-over-${event.id || openedAt}`,
+    reason: event.reason || "game-over",
+    openedAt,
+    deadline: openedAt
+  };
 }
 
 function applyMonsterSummoned(state, event) {
@@ -2393,6 +2443,7 @@ function normalizeState(state) {
   state.events = Array.isArray(state.events) ? state.events : [];
   const largestEventId = state.events.reduce((largest, event) => Math.max(largest, Number(event.id) || 0), 0);
   state.nextEventId = Number.isInteger(state.nextEventId) ? state.nextEventId : largestEventId + 1;
+  state.gameOver = state.gameOver && typeof state.gameOver === "object" ? state.gameOver : null;
   state.machine = {
     phase: state.turn.phase,
     timing: timingForPhase(state.turn.phase),
@@ -2431,6 +2482,27 @@ function createEventEmitter(state) {
     applyGameEvent(state, event);
     return event;
   };
+}
+
+function emitGameOverIfNeeded(state, emit, {
+  reason = "lp-zero",
+  sourceCardId = null,
+  triggerEventId = null
+} = {}) {
+  if (state.gameOver) return null;
+  const players = Object.values(state.players || {});
+  const loserIds = players.filter((player) => Number(player.lp) <= 0).map((player) => player.id);
+  if (loserIds.length === 0) return null;
+  const winners = players.filter((player) => Number(player.lp) > 0);
+  const winnerId = winners.length === 1 ? winners[0].id : null;
+  return emit("GAME_OVER_DECLARED", {
+    playerId: winnerId || loserIds[0],
+    winnerId,
+    loserIds,
+    reason,
+    sourceCardId,
+    triggerEventId
+  });
 }
 
 function requireCurrentTurn(state, playerId) {

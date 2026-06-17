@@ -1,11 +1,9 @@
-import { Ability, GameEngine, Phase, projectMachineStateFromEvents } from './game-engine.js';
+import { Ability, GameEngine, Phase, getCardEffectDefinition, projectMachineStateFromEvents } from './game-engine.js';
 import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { PHASES, TIMINGS } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
-const engineBackedSpellEffects = new Set(["draw2", "heal700", "buff500", "burn500", "pierceLine", "directStrike", "extraSummon", "shield800", "graveReturn", "rallyAttack", "battleTrance", "lightShadowCombo", "elementEcho", "fireWindCombo"]);
-const engineBackedSummonEffects = new Set(["burn200", "draw1", "heal300", "fireBuff", "shield400", "shadowBurn"]);
-const engineBackedTrapEffects = new Set(["attackDestroy", "counterBoost", "attackShift", "attackNegate", "redirectAttack", "weakenAttack", "directShield", "directRebound", "summonBurn", "chainNegate"]);
+const ONE_SHOT_EFFECT = "oneShot";
 
 const uiZones = {
   deck: "deck",
@@ -327,6 +325,18 @@ export function applyUiGameEvents(uiState, events = []) {
       duelist.shield = Math.max(0, (Number(duelist.shield) || 0) - blocked);
       duelist.lp = Math.max(0, duelist.lp - Math.max(0, Number(event.amount) || 0));
     }
+    if (event.type === "GAME_OVER_DECLARED") {
+      uiState.gameOver = true;
+      uiState.gameOverWinner = event.winnerId || null;
+      uiState.gameOverLosers = Array.isArray(event.loserIds) ? event.loserIds.slice() : [];
+      uiState.gameOverReason = event.reason || "lp-zero";
+      uiState.autoEnding = false;
+      uiState.actionWindow = "gameOver";
+      uiState.actionWindowId = event.windowId || `game-over-${event.id}`;
+      uiState.actionWindowReason = event.reason || "game-over";
+      uiState.actionDeadline = 0;
+      uiState.timing = uiTimingByActionWindow.gameOver;
+    }
     if (event.type === "SHIELD_GAINED") {
       const duelist = uiDuelist(uiState, event.playerId);
       duelist.shield = Math.min(MAX_SHIELD, (Number(duelist.shield) || 0) + Math.max(0, Number(event.amount) || 0));
@@ -358,15 +368,15 @@ export function applyUiGameEvents(uiState, events = []) {
 }
 
 export function canDispatchSpellFromUiState(card) {
-  return card?.type === "spell" && engineBackedSpellEffects.has(card.effect);
+  return card?.type === "spell" && getCardEffectDefinition(card.effect)?.duration === ONE_SHOT_EFFECT;
 }
 
 export function canDispatchSummonEffectFromUiState(card) {
-  return card?.type === "monster" && engineBackedSummonEffects.has(card.onSummon);
+  return card?.type === "monster" && getCardEffectDefinition(card.onSummon)?.duration === ONE_SHOT_EFFECT;
 }
 
 export function canDispatchTrapFromUiState(card) {
-  return card?.type === "trap" && engineBackedTrapEffects.has(card.trigger || card.effect);
+  return card?.type === "trap" && getCardEffectDefinition(card.trigger || card.effect)?.duration === ONE_SHOT_EFFECT;
 }
 
 function strongestMonsterId(uiState, playerId) {

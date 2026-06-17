@@ -82,8 +82,10 @@ test("rule docs describe event-sourced turn draw and after-attack effects", () =
 
   assert.match(flow, /RESOLVE_TURN_DRAW/);
   assert.match(flow, /TURN_DRAW_RESOLVED/);
+  assert.match(flow, /GAME_OVER_DECLARED/);
   assert.match(flow, /afterAttack/);
   assert.match(guardrails, /RESOLVE_TURN_DRAW/);
+  assert.match(guardrails, /GAME_OVER_DECLARED/);
   assert.match(guardrails, /afterAttack/);
 });
 
@@ -301,6 +303,7 @@ test("project documents the current phase and event flow", () => {
   assert.match(flow, /AUTO_END_REQUESTED/);
   assert.match(flow, /COMMIT_AUTO_END/);
   assert.match(flow, /TURN_ENDED/);
+  assert.match(flow, /GAME_OVER_DECLARED/);
   assert.match(engineRules, /\[GAME_FLOW\.md\]\(GAME_FLOW\.md\)/);
   assert.match(engineRules, /Turn handoff and auto-end/);
   assert.match(engineRules, /REQUEST_AUTO_END/);
@@ -432,6 +435,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-mode-event": runAiModeEventSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
   assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
+  assert.match(smoke, /"game-over-event": runGameOverEventSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
   assert.match(smoke, /function trapCard/);
   assert.match(smoke, /function doubleClickSmokeElement/);
@@ -475,6 +479,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "response-restart"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-trap-choice"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "game-over-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);

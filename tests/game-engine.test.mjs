@@ -353,6 +353,34 @@ test("damage events consume shield before LP", () => {
   ));
 });
 
+test("lethal damage declares game over through the event log", () => {
+  const state = makeState({
+    cards: [
+      card("burst-lethal", { templateId: "burst-rune", effect: "burn500" })
+    ],
+    player: {
+      hand: ["burst-lethal"]
+    },
+    ai: {
+      lp: 400
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "burst-lethal" });
+  const next = engine.getState();
+
+  assert.equal(next.players[AI].lp, 0);
+  assert.equal(next.gameOver.winnerId, PLAYER);
+  assert.deepEqual(next.gameOver.loserIds, [AI]);
+  assert.ok(events.some((event) =>
+    event.type === "GAME_OVER_DECLARED" &&
+    event.winnerId === PLAYER &&
+    event.loserIds.includes(AI) &&
+    event.triggerEventId
+  ));
+});
+
 test("war-chant modifies only the declared target through dispatch events", () => {
   const state = makeState({
     cards: [
@@ -2095,7 +2123,10 @@ test("resolve turn draw advances to main only when the player survives", () => {
   const fatalNext = fatalEngine.getState();
 
   assert.equal(fatalNext.players[PLAYER].lp, 0);
+  assert.equal(fatalNext.gameOver.winnerId, AI);
+  assert.deepEqual(fatalNext.gameOver.loserIds, [PLAYER]);
   assert.equal(fatalNext.turn.phase, Phase.draw);
+  assert.ok(fatalEvents.some((event) => event.type === "GAME_OVER_DECLARED" && event.winnerId === AI && event.reason === "lp-zero"));
   assert.ok(fatalEvents.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === false));
   assert.equal(fatalEvents.some((event) => event.type === "PHASE_CHANGED"), false);
 });

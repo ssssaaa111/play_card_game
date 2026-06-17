@@ -243,7 +243,12 @@ test("dispatches turn draw resolution and advances surviving turns to main", () 
   const fatalEvents = dispatchResolveTurnDrawFromUiState(fatal, "player");
 
   assert.equal(fatal.player.lp, 0);
+  assert.equal(fatal.gameOver, true);
+  assert.equal(fatal.gameOverWinner, "ai");
+  assert.equal(fatal.actionWindow, "gameOver");
+  assert.equal(fatal.timing, "gameOver");
   assert.equal(fatal.phase, PHASES.draw);
+  assert.ok(fatalEvents.some((event) => event.type === "GAME_OVER_DECLARED" && event.winnerId === "ai"));
   assert.ok(fatalEvents.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === false));
   assert.equal(fatalEvents.some((event) => event.type === "PHASE_CHANGED"), false);
 });
@@ -966,6 +971,22 @@ test("dispatches engine-backed damage spells with shield absorption", () => {
     event.blocked === 300 &&
     event.amount === 200
   ));
+});
+
+test("replays lethal spell damage as a game-over UI event", () => {
+  const burst = uiSpell("spell-lethal", "burn500", "burst-rune");
+  const state = appState();
+  state.player.hand = [burst];
+  state.ai.lp = 400;
+
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.equal(state.ai.lp, 0);
+  assert.equal(state.gameOver, true);
+  assert.equal(state.gameOverWinner, "player");
+  assert.equal(state.actionWindow, "gameOver");
+  assert.equal(state.timing, "gameOver");
+  assert.ok(events.some((event) => event.type === "GAME_OVER_DECLARED" && event.winnerId === "player"));
 });
 
 test("dispatches engine-backed pierce-line with target stat loss and shielded damage", () => {

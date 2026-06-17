@@ -119,6 +119,10 @@ const state = {
   voiceOn: !BROWSER_TEST_MODE,
   voiceReady: BROWSER_TEST_MODE,
   gameOver: false,
+  gameOverWinner: null,
+  gameOverLosers: [],
+  gameOverReason: "",
+  gameOverAnnounced: false,
   log: [],
   timeline: [],
   timelineStep: 0,
@@ -941,6 +945,10 @@ function startGame() {
   state.resumeResolvers = [];
   clearPlayerIdleTimers();
   state.gameOver = false;
+  state.gameOverWinner = null;
+  state.gameOverLosers = [];
+  state.gameOverReason = "";
+  state.gameOverAnnounced = false;
   state.statsRecorded = false;
   state.log = [];
   state.timeline = [];
@@ -988,6 +996,10 @@ function prepareGame() {
   state.aiRunning = false;
   state.resumeResolvers = [];
   state.gameOver = false;
+  state.gameOverWinner = null;
+  state.gameOverLosers = [];
+  state.gameOverReason = "";
+  state.gameOverAnnounced = false;
   state.statsRecorded = false;
   state.log = ["点击“开始决斗”后再抽卡开局。"];
   state.timeline = [];
@@ -3587,10 +3599,11 @@ async function aiAttack() {
 }
 
 function checkGameOver() {
-  if (state.gameOver) return;
-  if (state.player.lp <= 0 || state.ai.lp <= 0) {
+  if (state.gameOverAnnounced) return;
+  if (state.gameOver || state.player.lp <= 0 || state.ai.lp <= 0) {
     state.gameOver = true;
-    const win = state.ai.lp <= 0 && state.player.lp > 0;
+    state.gameOverAnnounced = true;
+    const win = state.gameOverWinner ? state.gameOverWinner === "player" : state.ai.lp <= 0 && state.player.lp > 0;
     recordGameResult(win);
     playSound(win ? "win" : "lose");
     playVoice(win ? "player" : "ai", "win", win ? "你赢了。" : "决斗败北。", true);
@@ -4688,5 +4701,6 @@ scheduleBrowserSmoke({
   smoke: BROWSER_SMOKE,
   state,
   els,
-  currentPlayerActions
+  currentPlayerActions,
+  render
 });

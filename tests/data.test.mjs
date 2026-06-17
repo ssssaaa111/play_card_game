@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { aiProfiles, deckPresets, library, roleProfiles, scenarioSetups } from "../src/data.js";
+import { canDispatchSpellFromUiState, canDispatchSummonEffectFromUiState, canDispatchTrapFromUiState } from "../src/engine-adapter.js";
 import { getCardEffectDefinition } from "../src/game-engine.js";
 import { spellDefinitions } from "../src/spells.js";
 import { trapDefinitions } from "../src/traps.js";
@@ -120,6 +121,20 @@ test("monster triggered effects are backed by engine DSL metadata", () => {
         assert.ok(getCardEffectDefinition(card.afterAttack), `${card.id} afterAttack must have engine DSL metadata: ${card.afterAttack}`);
       }
     });
+});
+
+test("current card library effects are dispatchable through the engine adapter", () => {
+  library.forEach((card) => {
+    if (card.type === "spell") {
+      assert.equal(canDispatchSpellFromUiState(card), true, `${card.id} spell should dispatch through engine`);
+    }
+    if (card.type === "trap") {
+      assert.equal(canDispatchTrapFromUiState(card), true, `${card.id} trap should dispatch through engine`);
+    }
+    if (card.type === "monster" && card.onSummon) {
+      assert.equal(canDispatchSummonEffectFromUiState(card), true, `${card.id} onSummon should dispatch through engine`);
+    }
+  });
 });
 
 test("deck presets reference only known cards and have enough cards", () => {

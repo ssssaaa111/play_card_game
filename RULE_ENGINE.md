@@ -83,6 +83,7 @@ The current event applier handles:
 - `ABILITY_GRANTED`
 - `ABILITY_SPENT`
 - `TURN_DRAW_RESOLVED`
+- `GAME_OVER_DECLARED`
 
 Audit-only events such as `CARD_ACTIVATED`, `MONSTER_SUMMONED`, `CARD_DESTROYED`, and `EFFECT_NEGATED` are still recorded in the same log.
 
@@ -101,6 +102,7 @@ The validator catches:
 - spells and normal summons are legal in `main`
 - trap activation is legal in `battle`
 - turn draw resolution uses `RESOLVE_TURN_DRAW` in `draw` and advances to `main` only if the player survives
+- lethal damage declares `GAME_OVER_DECLARED`; UI should replay that event instead of inferring victory from LP directly
 - illegal phase actions throw `GameRuleError`
 
 ## Timing, chain, and abilities
@@ -129,6 +131,7 @@ The validator catches:
 
 - Manual turn handoff uses `END_TURN`; automatic no-action handoff uses `REQUEST_AUTO_END`, `CANCEL_AUTO_END`, and `COMMIT_AUTO_END`.
 - Turn-start draw uses `RESOLVE_TURN_DRAW`, which emits draw or deck-out events, records `TURN_DRAW_RESOLVED`, and emits `PHASE_CHANGED` to `main` only when the current player is still alive.
+- Game-over handoff uses `GAME_OVER_DECLARED`. Applying that event records winner/losers, clears response windows, chain links, and auto-end state, then opens the `gameOver` action window for presentation.
 - `AUTO_END_REQUESTED` owns the pending auto-end flag. UI code must not directly assign `autoEnding` except when constructing or resetting an unstarted local game state.
 - `COMMIT_AUTO_END` emits `AUTO_END_COMMITTED` and `TURN_ENDED`. `TURN_ENDED` moves the engine phase to `end` and clears response windows, chain links, action windows, and pending auto-end state.
 - The browser timer is only a scheduler. When the deadline fires it dispatches `COMMIT_AUTO_END`; it does not directly change turn ownership.

@@ -44,7 +44,7 @@ flowchart TD
     AiMain --> AiBattle[battle AI 选择攻击]
     AiBattle --> CheckEnd{任一方生命值为 0}
     CheckEnd -->|否| PlayerTurn
-    CheckEnd -->|是| GameOver[gameOver]
+    CheckEnd -->|是| GameOver[GAME_OVER_DECLARED gameOver]
 ```
 
 当前没有要求玩家手动点击“结束主要阶段”。状态机会根据当前场面和手牌判断：
@@ -77,10 +77,10 @@ flowchart LR
     ResolveDraw --> DrawEvents[CARDS_DRAWN 或 DRAW_FAILED]
     DrawEvents --> Resolved[TURN_DRAW_RESOLVED]
     Resolved -->|玩家仍存活| MainPhase[PHASE_CHANGED main]
-    Resolved -->|生命值归零| Stop[停留 draw 等待 gameOver]
+    Resolved -->|生命值归零| Stop[GAME_OVER_DECLARED]
 ```
 
-`TURN_DRAW_RESOLVED` 只描述本次回合抽卡是否允许推进阶段；实际抽卡、卡组耗尽伤害和护盾消耗仍由 `CARDS_DRAWN`、`DRAW_FAILED`、`DAMAGE_DEALT` 等事件记录。
+`TURN_DRAW_RESOLVED` 只描述本次回合抽卡是否允许推进阶段；实际抽卡、卡组耗尽伤害和护盾消耗仍由 `CARDS_DRAWN`、`DRAW_FAILED`、`DAMAGE_DEALT` 等事件记录。若生命值归零，引擎会继续派生 `GAME_OVER_DECLARED`，UI 只负责按该事件展示结算。
 
 ## UI 行动窗口
 
@@ -149,6 +149,22 @@ flowchart TD
 ```
 
 任何失败命令都不应消耗卡牌、攻击次数或能力资源。
+
+### 胜负结算事件链
+
+生命值归零不再由 UI 自行推断。任何通过 `EffectContext.dealDamage` 产生的致命伤害都会派生 `GAME_OVER_DECLARED`：
+
+```mermaid
+flowchart LR
+    Damage[DAMAGE_DEALT] --> CheckZero{任一玩家 LP 为 0}
+    CheckZero -->|否| Continue[继续当前结算]
+    CheckZero -->|是| GameOver[GAME_OVER_DECLARED]
+    GameOver --> Clear[清理响应窗口 连锁 自动结束]
+    GameOver --> Window[actionWindow gameOver]
+    Window --> UI[UI 展示胜负弹窗 音效 统计]
+```
+
+`GAME_OVER_DECLARED` 记录 `winnerId`、`loserIds`、`reason`、`sourceCardId` 和触发它的事件 ID。后续如果新增特殊胜利条件，也应产生同一类胜负事件，而不是让 UI 直接写 `gameOver`。
 
 ## 攻击、响应窗口与连锁
 

@@ -1000,7 +1000,32 @@ async function runPauseDetailSmoke(ctx) {
   setSmokeStatus("passed", "pause-detail");
 }
 
-export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActions }) {
+async function runGameOverEventSmoke(ctx) {
+  setSmokeStatus("running", "game-over-event");
+  await startSmokeDuel(ctx, "combo");
+  const burst = cloneCardById("burst-rune");
+  if (!burst) throw new Error("爆裂符文测试卡不存在");
+  ctx.state.player.hand = [burst];
+  ctx.state.ai.lp = 400;
+  ctx.state.ai.shield = 0;
+  ctx.render?.();
+  await waitForSmoke(() => handCard(ctx.els, "burst-rune"), "致命爆裂符文出现在手牌");
+  clickSmokeElement(handCard(ctx.els, "burst-rune"), "致命爆裂符文手牌");
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "致命魔法确认可用");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认发动致命爆裂符文");
+  await waitForSmoke(
+    () => ctx.state.gameOver &&
+      ctx.state.gameOverWinner === "player" &&
+      ctx.state.actionWindow === "gameOver" &&
+      countGameEvents(ctx.state, "GAME_OVER_DECLARED") >= 1,
+    "致命伤害通过 GAME_OVER_DECLARED 结算",
+    6000
+  );
+  await waitForSmoke(() => ctx.els.modal.classList.contains("show"), "胜负弹窗显示", 4000);
+  setSmokeStatus("passed", "game-over-event");
+}
+
+export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActions, render = null }) {
   if (!smoke) return;
   const smokeRuns = {
     "skip-lock": runSkipLockSmoke,
@@ -1031,7 +1056,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "mode-auto-end": runModeAutoEndSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
-    "pause-detail": runPauseDetailSmoke
+    "pause-detail": runPauseDetailSmoke,
+    "game-over-event": runGameOverEventSmoke
   };
   const run = smokeRuns[smoke];
   if (!run) {
@@ -1039,7 +1065,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     return;
   }
   window.setTimeout(() => {
-    run({ state, els, currentPlayerActions }).catch((error) => {
+    run({ state, els, currentPlayerActions, render }).catch((error) => {
       setSmokeStatus("failed", error.message);
       console.error(error);
     });
