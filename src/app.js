@@ -2148,6 +2148,25 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
         playEpicAction("装备", "guard");
       }
     }
+    if (event.type === "CONTINUOUS_EFFECT_RELEASED") {
+      const source = findRuntimeCard(event.sourceCardId);
+      const target = findRuntimeCard(event.targetCardId);
+      const sourceName = source?.card?.name || "装备卡";
+      const targetText = target?.card?.name ? `，${target.card.name} 失去持续加成` : "";
+      if (target?.card) {
+        result.effectTarget = target.card;
+        result.targetOwner = target.owner;
+      }
+      addLog(`${sourceName} 的装备持续效果失效${targetText}。`);
+      playEpicAction("装备失效", "draw");
+    }
+    if (event.type === "CARD_DESTROYED" && event.cardId !== runtimeCardId(card)) {
+      const destroyed = findRuntimeCard(event.cardId);
+      const destroyedName = destroyed?.card?.name || "目标卡";
+      result.effectTarget = destroyed?.card || result.effectTarget;
+      result.targetOwner = destroyed?.owner || result.targetOwner;
+      addLog(`${card.name} 破坏了 ${destroyedName}。`);
+    }
     if (event.type === "MONSTER_READIED") {
       const found = findRuntimeCard(event.cardId);
       if (!found) return;

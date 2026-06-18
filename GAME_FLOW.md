@@ -286,9 +286,13 @@ flowchart TD
     Move --> Register[CONTINUOUS_EFFECT_REGISTERED]
     Register --> Stats[STAT_MODIFIED duration continuous]
     Stats --> UI[UI replays events and keeps equipment on field]
+    UI --> Leaving{equipment or target leaves valid zone}
+    Leaving --> Release[CONTINUOUS_EFFECT_RELEASED]
+    Release --> Revert[STAT_MODIFIED reverse continuous bonus]
+    Revert --> Cleanup[CARD_MOVED/CARD_DESTROYED if equipment is invalid]
 ```
 
-Current continuous equipment effects only use declarative `modifyStat` operations. If equipment removal, aura ranges, or non-stat continuous effects are added later, they should add explicit revoke/remove events instead of directly changing card state.
+Current continuous equipment effects only use declarative `modifyStat` operations. Equipment removal and target departure are represented by explicit release and reverse-stat events, not by direct state mutation. If aura ranges or non-stat continuous effects are added later, they should add explicit revoke/remove events instead of directly changing card state.
 
 ## Browser Smoke Baseline
 

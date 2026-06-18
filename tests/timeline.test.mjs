@@ -13,6 +13,8 @@ test("classifies timeline entries by gameplay meaning", () => {
   assert.equal(timelineKind("你的护盾吸收了 500 点伤害。"), "guard");
   assert.equal(timelineKind("你的回合开始。"), "turn");
   assert.equal(timelineKind("赤焰幼龙 承受冲击产生 300 点战斗损耗。"), "damage");
+  assert.equal(timelineKind("锋刃刻印 的装备持续效果失效。"), "spell");
+  assert.equal(timelineKind("解印射线 破坏了 锋刃刻印。"), "spell");
 });
 
 test("builds capped timeline state without mutating input", () => {

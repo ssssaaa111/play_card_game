@@ -1040,6 +1040,18 @@ async function runEquipmentSpellSmoke(ctx) {
   if (!enemyEquip) throw new Error("解印射线测试缺少敌方装备卡");
   enemyEquip.ownerId = "ai";
   ctx.state.ai.traps[0] = enemyEquip;
+  const enemyTarget = ctx.state.ai.field[0];
+  if (!enemyTarget) throw new Error("解印射线测试缺少敌方装备目标");
+  enemyTarget.tempAtk = (Number(enemyTarget.tempAtk) || 0) + 300;
+  ctx.state.gameEvents.push({
+    id: Math.max(1000, (ctx.state.gameEvents.at(-1)?.id || 0) + 1),
+    type: "CONTINUOUS_EFFECT_REGISTERED",
+    playerId: "ai",
+    sourceCardId: enemyEquip.uid,
+    effectId: "equipBlade",
+    targetCardId: enemyTarget.uid,
+    operations: [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }]
+  });
   ctx.render?.();
   await waitForSmoke(() => ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"] .card'), "敌方魔陷目标入场", 6000);
   clickSmokeElement(handCard(ctx.els, "dispelling-ray"), "解印射线手牌");
@@ -1053,7 +1065,9 @@ async function runEquipmentSpellSmoke(ctx) {
   await waitForSmoke(
     () => !ctx.state.ai.traps[0] &&
       ctx.state.ai.grave.some((card) => card?.id === "blade-sigil") &&
-      countGameEvents(ctx.state, "CARD_DESTROYED") >= 1,
+      countGameEvents(ctx.state, "CARD_DESTROYED") >= 1 &&
+      ctx.state.log.some((entry) => entry.includes("解印射线 破坏了")) &&
+      ctx.state.log.some((entry) => entry.includes("装备持续效果失效")),
     "解印射线破坏敌方魔陷",
     9000
   );
