@@ -61,7 +61,7 @@ The engine rejects function effects. One-shot effects and continuous effects use
 
 Monster `onSummon` and `afterAttack` hooks must reference effect ids in the same DSL registry. Adding a monster-triggered effect means adding rule tests first, then registering the DSL operations.
 
-Continuous equipment spells use `EffectDuration.continuous`. Activating one moves the spell from hand to `spellTrapZone`, emits `CONTINUOUS_EFFECT_REGISTERED`, then applies its stat modifiers through `STAT_MODIFIED` events with `duration: "continuous"`. Continuous definitions currently support `modifyStat` operations only; expanding that list requires new rule tests first.
+Continuous equipment spells use `EffectDuration.continuous`. Activating one moves the spell from hand to `spellTrapZone`, emits `CONTINUOUS_EFFECT_REGISTERED`, then applies its stat modifiers through `STAT_MODIFIED` events with `duration: "continuous"`. If the equipment source leaves the spell/trap zone, or the equipped monster leaves the monster zone, the engine emits `CONTINUOUS_EFFECT_RELEASED` and reverses the continuous stat modifiers with follow-up `STAT_MODIFIED` events. When an equipped monster leaves play, the now-invalid equipment card is destroyed through normal movement/destruction events. Continuous definitions currently support `modifyStat` operations only; expanding that list requires new rule tests first.
 
 ## Event and validation guarantees
 
@@ -76,6 +76,7 @@ The current event applier handles:
 - `SHIELD_GAINED`
 - `STAT_MODIFIED`
 - `CONTINUOUS_EFFECT_REGISTERED`
+- `CONTINUOUS_EFFECT_RELEASED`
 - `MONSTER_SUMMONED`
 - `PHASE_CHANGED`
 - `TIMING_CHANGED`
@@ -97,6 +98,8 @@ The validator catches:
 - monster and spell/trap zones exceeding `FIELD_SIZE`
 - player LP becoming `NaN` or another non-finite value
 - a missing current turn player
+- active continuous effects whose source is no longer in a spell/trap zone
+- active continuous effects whose target is no longer in a monster zone
 
 ## Phase rules
 

@@ -4,7 +4,7 @@ import { trapSummaryText } from './traps.js';
 
 export function inferRarity(card) {
   if (card.type === "monster" && card.stars >= 5) return "SR";
-  if (["elementEcho", "rallyAttack", "pierceLine", "graveReturn", "battleTrance", "directStrike", "fireWindCombo", "lightShadowCombo", "equipBlade", "equipAegis", "equipPrism", "equipOverclock"].includes(card.effect)) return "R";
+  if (["elementEcho", "rallyAttack", "pierceLine", "graveReturn", "battleTrance", "directStrike", "fireWindCombo", "lightShadowCombo", "equipBlade", "equipAegis", "equipPrism", "equipOverclock", "destroySpellTrap"].includes(card.effect)) return "R";
   if (["counterBoost", "weakenAttack", "directRebound"].includes(card.trigger)) return "R";
   if (card.type === "trap") return "R";
   return "N";
@@ -15,7 +15,7 @@ export function inferArchetype(card) {
   if (["buff500", "rallyAttack", "elementEcho", "battleTrance", "fireWindCombo", "lightShadowCombo"].includes(card.effect)) return "连携";
   if (["equipBlade", "equipAegis", "equipPrism", "equipOverclock"].includes(card.effect)) return "装备";
   if (["draw2", "extraSummon", "graveReturn"].includes(card.effect)) return "资源";
-  if (["pierceLine", "directStrike"].includes(card.effect) || ["weakenAttack", "directRebound"].includes(card.trigger)) return "破阵";
+  if (["pierceLine", "directStrike", "destroySpellTrap"].includes(card.effect) || ["weakenAttack", "directRebound"].includes(card.trigger)) return "破阵";
   if (["shield800", "heal700"].includes(card.effect) || card.trigger === "directShield") return "守护";
   if (card.type === "trap") return "反制";
   return "通用";
@@ -46,6 +46,7 @@ export function cardTypeLabel(card) {
 export function spellTargetSummary(effect) {
   const definition = spellDefinition(effect);
   if (!definition?.target) return "";
+  if (definition.target === "enemySpellTrap") return "敌方魔陷";
   const scope = definition.target === "enemyMonster" ? "敌方" : "我方";
   if (definition.targetRule === "strongest") return `${scope}最高`;
   return scope;

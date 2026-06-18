@@ -111,6 +111,9 @@ function projectContinuousEffectsFromEvents(events = []) {
         operations: (event.operations || []).map((operation) => ({ ...operation }))
       });
     }
+    if (event.type === "CONTINUOUS_EFFECT_RELEASED") {
+      active.delete(event.id);
+    }
   });
   return [...active.values()];
 }
@@ -413,6 +416,12 @@ function firstGraveCardIdExcept(uiState, playerId, excludedCardId) {
   return cardKey(candidate);
 }
 
+function firstSpellTrapCardId(uiState, playerId) {
+  const duelist = uiDuelist(uiState, playerId);
+  const candidate = duelist.traps.find(Boolean);
+  return cardKey(candidate);
+}
+
 function targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo) {
   const explicit = cardKey(targetInfo?.card);
   if (explicit) return explicit;
@@ -425,6 +434,7 @@ function targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo) {
   if (card.effect === "graveReturn") return firstGraveCardIdExcept(uiState, playerId, sourceCardId);
   if (definition?.target === "ownMonster") return strongestMonsterId(uiState, playerId);
   if (definition?.target === "enemyMonster") return strongestMonsterId(uiState, rivalId);
+  if (definition?.target === "enemySpellTrap") return firstSpellTrapCardId(uiState, rivalId);
   return null;
 }
 

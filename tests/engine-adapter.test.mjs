@@ -7,6 +7,7 @@ import {
   canDispatchTrapFromUiState,
   canDispatchSpellFromUiState,
   canDispatchSummonEffectFromUiState,
+  applyUiGameEvents,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
   dispatchCancelAutoEndFromUiState,
@@ -979,6 +980,72 @@ test("dispatches engine-backed equipment spells into UI spell trap zones", () =>
     event.type === "STAT_MODIFIED" &&
     event.cardId === lancer.uid &&
     event.duration === "continuous"
+  ));
+});
+
+test("replays continuous effect release events into UI and engine projections", () => {
+  const blade = uiSpell("equip-blade", "equipBlade", "blade-sigil");
+  const lancer = uiMonster("lancer-1", "star-lancer");
+  lancer.atk = 1800;
+  const state = appState();
+  state.player.hand = [blade];
+  state.player.field[0] = lancer;
+
+  dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: lancer });
+  applyUiGameEvents(state, [
+    {
+      id: "continuous:equip-blade",
+      type: "CONTINUOUS_EFFECT_RELEASED",
+      playerId: "player",
+      sourceCardId: blade.uid,
+      effectId: "equipBlade",
+      targetCardId: lancer.uid,
+      reason: "source-left-zone",
+      operations: [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }]
+    },
+    {
+      id: 50,
+      type: "STAT_MODIFIED",
+      cardId: lancer.uid,
+      stat: "tempAtk",
+      before: 300,
+      after: 0,
+      amount: -300,
+      sourceCardId: blade.uid,
+      duration: "continuous"
+    },
+    {
+      id: 51,
+      type: "CARD_MOVED",
+      cardId: blade.uid,
+      from: { playerId: "player", zone: "spellTrapZone" },
+      to: { playerId: "player", zone: "grave", index: null }
+    }
+  ]);
+
+  assert.equal(lancer.tempAtk, 0);
+  assert.equal(state.player.traps[0], null);
+  assert.deepEqual(state.player.grave, [blade]);
+  assert.deepEqual(buildEngineStateFromUiState(state).continuousEffects, []);
+});
+
+test("dispatches spell/trap removal spells against explicit rival trap targets", () => {
+  const ray = uiSpell("ray-1", "destroySpellTrap", "dispelling-ray");
+  const enemyTrap = uiSpell("enemy-trap-1", "equipBlade", "blade-sigil");
+  enemyTrap.ownerId = "ai";
+  const state = appState();
+  state.player.hand = [ray];
+  state.ai.traps[1] = enemyTrap;
+
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: enemyTrap });
+
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [ray]);
+  assert.equal(state.ai.traps[1], null);
+  assert.deepEqual(state.ai.grave, [enemyTrap]);
+  assert.ok(events.some((event) =>
+    event.type === "CARD_DESTROYED" &&
+    event.cardId === enemyTrap.uid
   ));
 });
 

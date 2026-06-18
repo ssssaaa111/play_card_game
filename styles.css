@@ -788,6 +788,7 @@ h1 {
 }
 
 .trap-slot {
+  position: relative;
   min-width: 0;
   border: 1px dashed rgba(84, 210, 210, 0.28);
   background: rgba(84, 210, 210, 0.055);
@@ -877,6 +878,7 @@ h1 {
 }
 
 .slot.targetable,
+.trap-slot.targetable,
 .card.targetable {
   border-color: rgba(246, 189, 96, 0.9);
   box-shadow: 0 0 0 3px rgba(246, 189, 96, 0.16), 0 0 26px rgba(246, 189, 96, 0.28);
@@ -903,7 +905,8 @@ h1 {
   box-shadow: 0 0 0 4px rgba(246, 189, 96, 0.24), 0 0 42px rgba(246, 189, 96, 0.44);
 }
 
-.slot.targetable::after {
+.slot.targetable::after,
+.trap-slot.targetable::after {
   content: "选择目标";
   position: absolute;
   left: 8px;

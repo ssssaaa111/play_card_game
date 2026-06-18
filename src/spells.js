@@ -66,6 +66,10 @@ export const spellDefinitions = {
   equipOverclock: {
     caption: "装备：超载攻击",
     target: "ownMonster"
+  },
+  destroySpellTrap: {
+    caption: "破坏对手魔陷",
+    target: "enemySpellTrap"
   }
 };
 
@@ -150,6 +154,10 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       if ((owner.traps || []).every(Boolean)) return { ok: false, reason: "魔陷区已满，不能发动装备魔法。" };
       return { ok: true };
     }
+    case "destroySpellTrap":
+      return (rival?.traps || []).some(Boolean)
+        ? { ok: true }
+        : { ok: false, reason: "对手魔陷区没有可破坏的卡，不能发动解印射线。" };
     default:
       return { ok: true };
   }
@@ -214,6 +222,11 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       return fieldCards(owner).length > 0 && (owner.traps || []).some((slot) => !slot)
         ? (aiStyle === "aggressive" ? 74 : 42)
         : 0;
+    case "destroySpellTrap": {
+      const targets = (rival?.traps || []).filter(Boolean);
+      if (!targets.length) return 0;
+      return targets.some((card) => ["equipBlade", "equipAegis", "equipPrism", "equipOverclock"].includes(card.effect)) ? 78 : 52;
+    }
     default:
       return 0;
   }

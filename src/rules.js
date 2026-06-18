@@ -184,6 +184,7 @@ export function spellTargetPrompt(mode, cardName = "这张卡", targetRule = "")
   if (mode === "enemyMonster" && targetRule === "strongest") return `请选择敌方攻击力最高的怪兽作为「${cardName}」的目标。`;
   if (mode === "ownMonster") return `请选择我方怪兽作为「${cardName}」的目标。`;
   if (mode === "enemyMonster") return `请选择敌方怪兽作为「${cardName}」的目标。`;
+  if (mode === "enemySpellTrap") return `请选择敌方魔陷区的卡作为「${cardName}」的目标。`;
   return `请选择「${cardName}」的目标。`;
 }
 

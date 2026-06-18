@@ -31,6 +31,7 @@ export const library = [
   { id: "aegis-plate", type: "spell", name: "庇护甲片", icon: "甲", text: "装备给我方 1 只怪兽。只要此卡留在魔陷区，目标守备力 +500。", effect: "equipAegis" },
   { id: "prism-drive", type: "spell", name: "棱光驱动", icon: "棱", text: "装备给我方 1 只怪兽。目标攻击力 +200、守备力 +200。", effect: "equipPrism" },
   { id: "overclock-core", type: "spell", name: "超频核心", icon: "核", text: "装备给我方 1 只怪兽。目标攻击力 +600、守备力 -300。", effect: "equipOverclock" },
+  { id: "dispelling-ray", type: "spell", name: "解印射线", icon: "解", text: "选择对手魔陷区 1 张卡破坏。若破坏装备魔法，持续加成会立刻失效。", effect: "destroySpellTrap" },
   { id: "mirror-snare", type: "trap", name: "镜光反制", icon: "镜", text: "盖放后自动触发：对手攻击时，破坏攻击怪兽。", trigger: "attackDestroy" },
   { id: "guard-sigil", type: "trap", name: "守护刻印", icon: "印", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并抽 1 张卡。", trigger: "directShield" },
   { id: "summon-flare", type: "trap", name: "召雷陷阵", icon: "雷", text: "盖放后自动触发：对手召唤怪兽时，对其造成 400 点伤害。", trigger: "summonBurn" },
@@ -164,7 +165,7 @@ export const deckPresets = {
       "flame-captain", "sky-raider", "dusk-alchemist",
       "burst-rune", "renewal", "war-chant", "seer-call", "element-echo",
       "pierce-line", "grave-return", "battle-trance", "star-breach", "flame-gale-burst", "eclipse-barrier",
-      "nova-squire", "aegis-mender", "blade-sigil", "aegis-plate", "prism-drive", "overclock-core",
+      "nova-squire", "aegis-mender", "blade-sigil", "aegis-plate", "prism-drive", "overclock-core", "dispelling-ray",
       "mirror-snare", "guard-sigil", "summon-flare", "mirror-snare", "counter-array", "storm-shift", "void-lock", "phantom-switch", "weakening-web", "reversal-flare", "chain-nullifier"
     ]
   },
@@ -180,7 +181,7 @@ export const deckPresets = {
       "star-lancer", "void-hound", "solar-knight",
       "mirror-snare", "summon-flare", "summon-flare", "counter-array", "storm-shift", "void-lock", "phantom-switch",
       "burst-rune", "war-chant", "rally-strike", "seer-call", "twin-summon", "element-echo",
-      "pierce-line", "battle-trance", "star-breach", "flame-gale-burst", "nova-squire", "blade-sigil", "overclock-core", "reversal-flare", "chain-nullifier"
+      "pierce-line", "battle-trance", "star-breach", "flame-gale-burst", "nova-squire", "blade-sigil", "overclock-core", "dispelling-ray", "reversal-flare", "chain-nullifier"
     ]
   },
   control: {
@@ -196,7 +197,7 @@ export const deckPresets = {
       "mirror-snare", "mirror-snare", "guard-sigil", "guard-sigil",
       "counter-array", "counter-array", "storm-shift", "storm-shift", "void-lock", "phantom-switch",
       "summon-flare", "star-shield", "element-echo",
-      "grave-return", "pierce-line", "eclipse-barrier", "aegis-mender", "aegis-plate", "prism-drive", "weakening-web", "reversal-flare", "chain-nullifier"
+      "grave-return", "pierce-line", "eclipse-barrier", "aegis-mender", "aegis-plate", "prism-drive", "dispelling-ray", "weakening-web", "reversal-flare", "chain-nullifier"
     ]
   }
 };
@@ -362,7 +363,7 @@ export const scenarioSetups = {
     label: "装备魔法",
     text: "起手包含怪兽和装备魔法，用来验证持续魔法效果。",
     goal: "发动锋刃刻印和庇护甲片后，卡牌应留在魔陷区，并通过规则事件持续修改目标数值。",
-    playerHand: ["blade-sigil", "aegis-plate", "prism-drive", "overclock-core", "nova-squire", "aegis-mender"],
+    playerHand: ["blade-sigil", "aegis-plate", "prism-drive", "overclock-core", "dispelling-ray", "nova-squire", "aegis-mender"],
     playerField: ["star-lancer"],
     playerDeck: [],
     aiField: ["iron-guardian"],

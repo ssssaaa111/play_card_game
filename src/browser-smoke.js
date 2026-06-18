@@ -1035,6 +1035,28 @@ async function runEquipmentSpellSmoke(ctx) {
   if (ctx.state.player.grave.some((card) => ["blade-sigil", "aegis-plate"].includes(card?.id))) {
     throw new Error("equipment spells should not go to grave after activation");
   }
+
+  const enemyEquip = cloneCardById("blade-sigil");
+  if (!enemyEquip) throw new Error("解印射线测试缺少敌方装备卡");
+  enemyEquip.ownerId = "ai";
+  ctx.state.ai.traps[0] = enemyEquip;
+  ctx.render?.();
+  await waitForSmoke(() => ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"] .card'), "敌方魔陷目标入场", 6000);
+  clickSmokeElement(handCard(ctx.els, "dispelling-ray"), "解印射线手牌");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "destroySpellTrap" &&
+      ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"]')?.classList.contains("targetable"),
+    "解印射线选择敌方魔陷目标",
+    6000
+  );
+  clickSmokeElement(ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"]'), "解印射线破坏敌方装备");
+  await waitForSmoke(
+    () => !ctx.state.ai.traps[0] &&
+      ctx.state.ai.grave.some((card) => card?.id === "blade-sigil") &&
+      countGameEvents(ctx.state, "CARD_DESTROYED") >= 1,
+    "解印射线破坏敌方魔陷",
+    9000
+  );
   setSmokeStatus("passed", "equipment-spell");
 }
 

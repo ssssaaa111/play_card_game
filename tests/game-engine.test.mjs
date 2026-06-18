@@ -58,7 +58,7 @@ function card(id, overrides = {}) {
   };
 }
 
-function makeState({ cards = [], player = {}, ai = {}, turn = {} } = {}) {
+function makeState({ cards = [], player = {}, ai = {}, turn = {}, continuousEffects = [] } = {}) {
   return {
     cards: Object.fromEntries(cards.map((entry) => [entry.id, entry])),
     players: {
@@ -83,6 +83,7 @@ function makeState({ cards = [], player = {}, ai = {}, turn = {} } = {}) {
       [AI]: []
     },
     events: [],
+    continuousEffects,
     nextEventId: 1
   };
 }
@@ -375,6 +376,181 @@ test("continuous equip spells support multiple stat modifiers", () => {
   assert.equal(next.cards["guardian-1"].tempAtk, 200);
   assert.equal(next.cards["guardian-1"].tempDef, 200);
   assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.duration === EffectDuration.continuous).length, 2);
+});
+
+test("continuous equip spells release and revert stats when the source leaves play", () => {
+  const state = makeState({
+    cards: [
+      card("blade-1", { templateId: "blade-sigil", effect: "equipBlade" }),
+      card("shatter-1", { templateId: "shatter-sigil", effect: "destroySpellTrap" }),
+      card("lancer-1", { type: "monster", templateId: "star-lancer", atk: 1800, def: 1000 })
+    ],
+    player: {
+      hand: ["blade-1", "shatter-1"],
+      monsterZone: ["lancer-1"]
+    }
+  });
+  const engine = new GameEngine(state, {
+    cardEffects: {
+      equipBlade: {
+        duration: EffectDuration.continuous,
+        target: { player: "self", zone: "monsterZone" },
+        operations: [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }]
+      },
+      destroySpellTrap: {
+        duration: EffectDuration.oneShot,
+        target: { player: "self", zone: "spellTrapZone" },
+        operations: [{ op: "destroyCard", cardId: "$action.targetCardId" }]
+      }
+    }
+  });
+
+  engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "blade-1",
+    targetCardId: "lancer-1"
+  });
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "shatter-1",
+    targetCardId: "blade-1"
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].spellTrapZone, []);
+  assert.deepEqual(next.players[PLAYER].grave, ["shatter-1", "blade-1"]);
+  assert.equal(next.cards["lancer-1"].tempAtk, 0);
+  assert.deepEqual(next.continuousEffects, []);
+  assert.ok(events.some((event) =>
+    event.type === "CONTINUOUS_EFFECT_RELEASED" &&
+    event.sourceCardId === "blade-1" &&
+    event.targetCardId === "lancer-1" &&
+    event.reason === "source-left-zone"
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === "lancer-1" &&
+    event.amount === -300 &&
+    event.duration === EffectDuration.continuous
+  ));
+  assertValidGameState(next);
+});
+
+test("continuous equip spells release and revert stats when the target leaves play", () => {
+  const state = makeState({
+    cards: [
+      card("blade-1", { templateId: "blade-sigil", effect: "equipBlade" }),
+      card("banish-1", { templateId: "banish-test", effect: "destroyOwnMonster" }),
+      card("lancer-1", { type: "monster", templateId: "star-lancer", atk: 1800, def: 1000 })
+    ],
+    player: {
+      hand: ["blade-1", "banish-1"],
+      monsterZone: ["lancer-1"]
+    }
+  });
+  const engine = new GameEngine(state, {
+    cardEffects: {
+      equipBlade: {
+        duration: EffectDuration.continuous,
+        target: { player: "self", zone: "monsterZone" },
+        operations: [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }]
+      },
+      destroyOwnMonster: {
+        duration: EffectDuration.oneShot,
+        target: { player: "self", zone: "monsterZone" },
+        operations: [{ op: "destroyCard", cardId: "$action.targetCardId" }]
+      }
+    }
+  });
+
+  engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "blade-1",
+    targetCardId: "lancer-1"
+  });
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "banish-1",
+    targetCardId: "lancer-1"
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].monsterZone, []);
+  assert.deepEqual(next.players[PLAYER].spellTrapZone, []);
+  assert.deepEqual(next.players[PLAYER].grave, ["banish-1", "blade-1", "lancer-1"]);
+  assert.equal(next.cards["lancer-1"].tempAtk, 0);
+  assert.deepEqual(next.continuousEffects, []);
+  assert.ok(events.some((event) =>
+    event.type === "CONTINUOUS_EFFECT_RELEASED" &&
+    event.reason === "target-left-zone"
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "CARD_DESTROYED" &&
+    event.cardId === "blade-1" &&
+    event.reason === "continuous-target-left-zone"
+  ));
+  assertValidGameState(next);
+});
+
+test("dispelling ray destroys rival spell/trap cards and releases equipment bonuses", () => {
+  const state = makeState({
+    cards: [
+      card("ray-1", { templateId: "dispelling-ray", effect: "destroySpellTrap" }),
+      card("blade-ai", { ownerId: AI, templateId: "blade-sigil", effect: "equipBlade" }),
+      card("lancer-ai", {
+        ownerId: AI,
+        type: "monster",
+        templateId: "star-lancer",
+        atk: 1800,
+        def: 1000,
+        tempAtk: 300
+      })
+    ],
+    player: {
+      hand: ["ray-1"]
+    },
+    ai: {
+      spellTrapZone: ["blade-ai"],
+      monsterZone: ["lancer-ai"]
+    },
+    continuousEffects: [
+      {
+        id: "continuous:blade-ai",
+        playerId: AI,
+        sourceCardId: "blade-ai",
+        effectId: "equipBlade",
+        targetCardId: "lancer-ai",
+        operations: [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }]
+      }
+    ]
+  });
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "ray-1",
+    targetCardId: "blade-ai"
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].grave, ["ray-1"]);
+  assert.deepEqual(next.players[AI].spellTrapZone, []);
+  assert.deepEqual(next.players[AI].grave, ["blade-ai"]);
+  assert.equal(next.cards["lancer-ai"].tempAtk, 0);
+  assert.deepEqual(next.continuousEffects, []);
+  assert.ok(events.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "blade-ai"));
+  assert.ok(events.some((event) => event.type === "CONTINUOUS_EFFECT_RELEASED" && event.sourceCardId === "blade-ai"));
+  assertValidGameState(next);
 });
 
 test("burst-rune deals damage and renewal heals with max LP cap", () => {

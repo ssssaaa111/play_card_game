@@ -1277,9 +1277,20 @@ function beginSpellTargetSelection(handIndex, card) {
   return true;
 }
 
-function validateSpellTarget(pending, ownerName, index) {
+function validateSpellTarget(pending, ownerName, index, zone = "field") {
   if (!pending) return { ok: false, reason: "当前没有需要选择目标的效果。" };
   const duelist = ownerName === "player" ? state.player : state.ai;
+
+  if (pending.mode === "enemySpellTrap") {
+    if (zone !== "traps" || ownerName !== "ai") {
+      return { ok: false, reason: "这个效果需要选择敌方魔陷区的卡。" };
+    }
+    const target = duelist.traps[index];
+    if (!target) return { ok: false, reason: "请选择敌方魔陷区的卡作为目标。" };
+    return { ok: true, target, targetOwner: ownerName, targetIndex: index, targetZone: zone };
+  }
+
+  if (zone !== "field") return { ok: false, reason: "这个效果需要选择场上的怪兽。" };
   const target = duelist.field[index];
   if (!target) return { ok: false, reason: "请选择场上的怪兽作为目标。" };
   if (pending.mode === "ownMonster" && ownerName !== "player") {
@@ -1298,21 +1309,27 @@ function isPendingTargetSlot(ownerName, index) {
   return validateSpellTarget(state.pendingTarget, ownerName, index).ok;
 }
 
-function targetInfoFromPending(ownerName, index) {
-  const validation = validateSpellTarget(state.pendingTarget, ownerName, index);
+function isPendingTrapTargetSlot(ownerName, index) {
+  if (!state.pendingTarget) return false;
+  return validateSpellTarget(state.pendingTarget, ownerName, index, "traps").ok;
+}
+
+function targetInfoFromPending(ownerName, index, zone = "field") {
+  const validation = validateSpellTarget(state.pendingTarget, ownerName, index, zone);
   if (!validation.ok) return validation;
   return {
     ok: true,
     owner: ownerName,
     index,
+    zone,
     card: validation.target
   };
 }
 
-function resolvePendingSpellTarget(ownerName, index) {
+function resolvePendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
   notePlayerIntent();
-  const targetInfo = targetInfoFromPending(ownerName, index);
+  const targetInfo = targetInfoFromPending(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
     resetPlayerIdleCountdown();
@@ -1736,16 +1753,20 @@ function activatePendingTrapChoice(index) {
 function handlePlayerTrapSlot(index) {
   if (selectPendingTrapChoice(index)) return;
   const existing = state.player.traps[index];
+  if (state.pendingTarget) {
+    if (isPendingTrapTargetSlot("player", index)) {
+      resolvePendingSpellTarget("player", index, "traps");
+      return;
+    }
+    cue(targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect));
+    return;
+  }
   if (existing && (!canPlayerAct() || !state.selected || state.selected.zone !== "hand")) {
     state.selected = null;
     clearBattlePreview();
     showDetail(existing);
     render();
     if (canPlayerAct()) resumePlayerIdleCountdownAfterPassiveIntent();
-    return;
-  }
-  if (state.pendingTarget) {
-    cue(targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect));
     return;
   }
   if (!canPlayerAct()) return;
@@ -1786,6 +1807,10 @@ function handlePlayerTrapSlot(index) {
 
 function handleAiTrapSlot(index) {
   const card = state.ai.traps[index];
+  if (state.pendingTarget) {
+    resolvePendingSpellTarget("ai", index, "traps");
+    return;
+  }
   if (card) {
     state.selected = null;
     clearBattlePreview();
@@ -3673,6 +3698,13 @@ function legalPendingTargets(pending = state.pendingTarget) {
         targets.push(targetInfo);
       }
     });
+    duelist.traps.forEach((card, index) => {
+      if (!card) return;
+      const targetInfo = targetInfoFromPending(ownerName, index, "traps");
+      if (targetInfo.ok) {
+        targets.push(targetInfo);
+      }
+    });
   });
   return targets;
 }
@@ -4256,8 +4288,10 @@ function renderTraps(root, duelist, owner) {
     slot.dataset.testid = `${owner}-trap-${index}`;
     const trapChoiceReady = owner === "player" && Boolean(state.pendingTrapChoice?.trapIndexes?.includes(index));
     const trapChoiceSelected = trapChoiceReady && state.pendingTrapChoice?.selectedIndex === index;
+    const targetable = isPendingTrapTargetSlot(owner, index);
     slot.classList.toggle("trap-response", trapChoiceReady);
     slot.classList.toggle("trap-response-selected", trapChoiceSelected);
+    slot.classList.toggle("targetable", targetable);
     slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}陷阱区 ${index + 1}`);
     if (owner === "player") {
       slot.addEventListener("click", () => handlePlayerTrapSlot(index));
@@ -4275,6 +4309,7 @@ function renderTraps(root, duelist, owner) {
       }
       cardEl.classList.toggle("trap-response", trapChoiceReady);
       cardEl.classList.toggle("trap-response-selected", trapChoiceSelected);
+      cardEl.classList.toggle("targetable", targetable);
       if (owner === "player") {
         cardEl.addEventListener("click", (event) => {
           event.stopPropagation();

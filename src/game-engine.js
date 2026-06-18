@@ -154,6 +154,10 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 600 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -300 }
   ], { target: { player: "self", zone: "monsterZone" } }),
+  destroySpellTrap: oneShot(
+    [{ op: "destroyCard", cardId: "$action.targetCardId" }],
+    { target: { player: "rival", zone: "spellTrapZone" } }
+  ),
   graveReturn: oneShot([
     {
       op: "moveCard",
@@ -289,11 +293,58 @@ export class EffectContext {
     }
 
     const source = from || currentLocations[0] || null;
+    this.#releaseContinuousEffectsForMove(cardId, source, to);
     this.#emit("CARD_MOVED", {
       cardId,
       from: source,
       to: { playerId: to.playerId, zone: to.zone, index: to.index ?? null }
     });
+  }
+
+  #releaseContinuousEffectsForMove(cardId, from, to) {
+    const releases = continuousEffectsForMove(this.#state, cardId, from, to);
+    for (const release of releases) {
+      const effect = this.#state.continuousEffects.find((entry) => entry.id === release.effect.id);
+      if (!effect) continue;
+
+      this.#emit("CONTINUOUS_EFFECT_RELEASED", {
+        id: effect.id,
+        playerId: effect.playerId,
+        sourceCardId: effect.sourceCardId,
+        effectId: effect.effectId,
+        targetCardId: effect.targetCardId || null,
+        reason: release.reason,
+        operations: clone(effect.operations || [])
+      });
+
+      for (const operation of effect.operations || []) {
+        if (operation.op !== "modifyStat") {
+          throw new GameRuleError(`Continuous effect ${effect.effectId} cannot release ${operation.op}`);
+        }
+        const action = {
+          type: "RELEASE_CONTINUOUS_EFFECT",
+          playerId: effect.playerId,
+          cardId: effect.sourceCardId,
+          targetCardId: effect.targetCardId || null
+        };
+        const resolvedCardId = resolveValue(operation.cardId, action, { id: effect.sourceCardId });
+        this.modifyStat(resolvedCardId, operation.stat, -Number(operation.amount || 0), {
+          sourceCardId: effect.sourceCardId,
+          duration: EffectDuration.continuous
+        });
+      }
+
+      if (release.reason === "target-left-zone") {
+        const sourceLocation = findCardLocations(this.#state, effect.sourceCardId)
+          .find((location) => location.zone === "spellTrapZone");
+        if (sourceLocation) {
+          this.destroyCard(effect.sourceCardId, {
+            reason: "continuous-target-left-zone",
+            sourceCardId: effect.sourceCardId
+          });
+        }
+      }
+    }
   }
 
   destroyCard(cardId, options = {}) {
@@ -1459,8 +1510,14 @@ export function assertValidGameState(state) {
     if (!state.cards[effect.sourceCardId]) {
       throw new GameStateValidationError("Continuous effect source card must exist");
     }
+    if (!findCardLocations(state, effect.sourceCardId).some((location) => location.zone === "spellTrapZone")) {
+      throw new GameStateValidationError("Continuous effect source must stay in a spell/trap zone");
+    }
     if (effect.targetCardId && !state.cards[effect.targetCardId]) {
       throw new GameStateValidationError("Continuous effect target card must exist");
+    }
+    if (effect.targetCardId && !findCardLocations(state, effect.targetCardId).some((location) => location.zone === "monsterZone")) {
+      throw new GameStateValidationError("Continuous effect target must stay in a monster zone");
     }
     if (!Array.isArray(effect.operations)) {
       throw new GameStateValidationError("Continuous effect operations must be an array");
@@ -1555,6 +1612,9 @@ export function applyGameEvent(state, event, options = {}) {
       break;
     case "CONTINUOUS_EFFECT_REGISTERED":
       applyContinuousEffectRegistered(state, event);
+      break;
+    case "CONTINUOUS_EFFECT_RELEASED":
+      applyContinuousEffectReleased(state, event);
       break;
     case "PHASE_CHANGED":
       applyPhaseChanged(state, event);
@@ -1826,6 +1886,18 @@ function applyContinuousEffectRegistered(state, event) {
     targetCardId: event.targetCardId || null,
     operations: clone(event.operations || [])
   });
+}
+
+function applyContinuousEffectReleased(state, event) {
+  requirePlayer(state, event.playerId);
+  requireCard(state, event.sourceCardId);
+  if (event.targetCardId) requireCard(state, event.targetCardId);
+  state.continuousEffects = Array.isArray(state.continuousEffects) ? state.continuousEffects : [];
+  const index = state.continuousEffects.findIndex((entry) => entry.id === event.id);
+  if (index < 0) {
+    throw new GameRuleError(`Continuous effect ${event.id} is not active`);
+  }
+  state.continuousEffects.splice(index, 1);
 }
 
 function applyPhaseChanged(state, event) {
@@ -2278,6 +2350,22 @@ function resolveCardIdInput(state, cardId) {
     return cardIds;
   }
   return [cardId];
+}
+
+function continuousEffectsForMove(state, cardId, from, to) {
+  if (!from || !to || sameLocation(from, to)) return [];
+  const effects = Array.isArray(state.continuousEffects) ? state.continuousEffects : [];
+  return effects
+    .map((effect) => {
+      if (effect.sourceCardId === cardId && from.zone === "spellTrapZone" && to.zone !== "spellTrapZone") {
+        return { effect, reason: "source-left-zone" };
+      }
+      if (effect.targetCardId === cardId && from.zone === "monsterZone" && to.zone !== "monsterZone") {
+        return { effect, reason: "target-left-zone" };
+      }
+      return null;
+    })
+    .filter(Boolean);
 }
 
 function validateBattleDeclaration(state, playerId, rivalId, action) {

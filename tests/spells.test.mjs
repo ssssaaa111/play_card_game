@@ -159,6 +159,20 @@ test("validates equipment spell requirements", () => {
   assert.deepEqual(validateSpellCondition("equipPrism", { owner: duelist({ field: [monster(), null, null] }) }), { ok: true });
 });
 
+test("validates spell/trap removal spell requirements", () => {
+  assert.deepEqual(validateSpellCondition("destroySpellTrap", {
+    owner: duelist(),
+    rival: duelist({ owner: "ai" })
+  }), {
+    ok: false,
+    reason: "对手魔陷区没有可破坏的卡，不能发动解印射线。"
+  });
+  assert.deepEqual(validateSpellCondition("destroySpellTrap", {
+    owner: duelist(),
+    rival: duelist({ owner: "ai", traps: [spell({ effect: "equipBlade" }), null, null] })
+  }), { ok: true });
+});
+
 test("rejects missing spell definitions", () => {
   assert.deepEqual(validateSpellCondition("missingEffect", { owner: duelist(), rival: duelist({ owner: "ai" }) }), {
     ok: false,
@@ -228,4 +242,19 @@ test("scores AI equipment spells by board state", () => {
     rival: duelist({ owner: "player" }),
     aiStyle: "control"
   }), 64);
+});
+
+test("scores AI spell/trap removal higher against equipment", () => {
+  assert.equal(scoreSpellForAi("destroySpellTrap", {
+    owner: duelist(),
+    rival: duelist({ owner: "player" })
+  }), 0);
+  assert.equal(scoreSpellForAi("destroySpellTrap", {
+    owner: duelist(),
+    rival: duelist({ owner: "player", traps: [spell({ effect: "draw2" }), null, null] })
+  }), 52);
+  assert.equal(scoreSpellForAi("destroySpellTrap", {
+    owner: duelist(),
+    rival: duelist({ owner: "player", traps: [spell({ effect: "equipBlade" }), null, null] })
+  }), 78);
 });

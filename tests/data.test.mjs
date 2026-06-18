@@ -65,7 +65,7 @@ test("player-facing card and scenario copy is localized", () => {
 test("spell cards are backed by spell metadata", () => {
   const spellCards = library.filter((card) => card.type === "spell");
   const effectsFromCards = new Set(spellCards.map((card) => card.effect));
-  const validTargets = new Set(["ownMonster", "enemyMonster"]);
+  const validTargets = new Set(["ownMonster", "enemyMonster", "enemySpellTrap"]);
   const validTargetRules = new Set(["strongest"]);
 
   spellCards.forEach((card) => {
@@ -101,6 +101,19 @@ test("engine-backed targeted spells keep UI and rules targets aligned", () => {
     assert.equal(uiDefinition.targetRule, "strongest", `${effect} UI target rule should stay strongest`);
     assert.deepEqual(engineDefinition.target, expected, `${effect} engine target rule drifted from UI metadata`);
   });
+});
+
+test("spell/trap removal card is backed by engine and UI metadata", () => {
+  const card = cardsById.get("dispelling-ray");
+  const uiDefinition = spellDefinitions.destroySpellTrap;
+  const engineDefinition = getCardEffectDefinition("destroySpellTrap");
+
+  assert.ok(card, "missing dispelling-ray card");
+  assert.equal(card.type, "spell");
+  assert.equal(card.effect, "destroySpellTrap");
+  assert.equal(uiDefinition.target, "enemySpellTrap");
+  assert.deepEqual(engineDefinition.target, { player: "rival", zone: "spellTrapZone" });
+  assert.deepEqual(engineDefinition.operations, [{ op: "destroyCard", cardId: "$action.targetCardId" }]);
 });
 
 test("trap cards are backed by trap metadata", () => {
