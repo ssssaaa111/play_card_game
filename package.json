@@ -10,6 +10,8 @@
     "test:engine": "node --test tests/game-engine.test.mjs",
     "test:rules": "node --test tests/rules.test.mjs",
     "test:data": "node --test tests/data.test.mjs",
+    "test:sim": "node --test tests/rule-simulator.test.mjs",
+    "sim:rules": "node scripts/rule-simulator.mjs",
     "test:smoke": "node --test tests/smoke.test.mjs",
     "smoke:browser": "node scripts/browser-smoke.mjs"
   }

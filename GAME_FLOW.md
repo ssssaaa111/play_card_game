@@ -294,6 +294,28 @@ flowchart TD
 
 Current continuous equipment effects only use declarative `modifyStat` operations. Equipment removal and target departure are represented by explicit release and reverse-stat events, not by direct state mutation. If aura ranges or non-stat continuous effects are added later, they should add explicit revoke/remove events instead of directly changing card state.
 
+## Rule Simulation Baseline
+
+`npm run test:sim` runs deterministic random duels against `GameEngine` only. It does not click the UI; every generated move goes through `GameEngine.dispatch(action)`.
+
+```mermaid
+flowchart TD
+    Seed[fixed seed] --> Build[build shuffled duel state]
+    Build --> Opening[opening DRAW_CARDS]
+    Opening --> Loop{game over or step limit}
+    Loop -->|draw phase| Draw[RESOLVE_TURN_DRAW]
+    Loop -->|main phase| Main[choose summon spell trap mode battle or end]
+    Loop -->|battle phase| Battle[choose attack spell trap skip or end]
+    Main --> Dispatch[GameEngine.dispatch]
+    Battle --> Dispatch
+    Draw --> Dispatch
+    Dispatch --> Validate[assertValidGameState and event-log checks]
+    Validate --> Loop
+    Loop -->|finished| Summary[action and event coverage summary]
+```
+
+`npm run sim:rules -- --games=50 --seed=rule-sim-cli --max-steps=260` prints a JSON summary and exits non-zero if a dispatch fails, an invariant fails, a duel hits the step limit, or a scripted scenario fails. The CLI also includes a fixed `chainTrap` scenario: attack declaration, defender trap chain link, attacker chain-negate trap, chain resolution, then battle resolution. Use this before adding new cards that affect draw, summon, battle, response windows, continuous effects, or turn flow.
+
 ## Browser Smoke Baseline
 
 `npm run smoke:browser` runs the in-page smoke scenarios through headless Chrome/Edge against the fixed local server.
