@@ -127,6 +127,12 @@ The validator catches:
 - When target selection times out, the UI should auto-select the only legal target. If there are zero or multiple legal targets, cancel that selection and return to the main action window.
 - Passive interactions such as viewing a card may restart the current window timer, but must not erase the current action window.
 
+## AI and browser smoke
+
+- AI decision functions in `src/ai.js` are pure planners. They return command-shaped actions such as `spell`, `setTrap`, `summon`, `attack`, `skipAttack`, or `none`; they must not mutate game state.
+- AI execution in `src/app.js` should consume those planned actions and then use the same adapter/`GameEngine.dispatch` path as player actions.
+- Browser smoke baselines run with `npm run smoke:browser` against `127.0.0.1:5177`. A scenario should first be implemented in `src/browser-smoke.js`, then added to `scripts/browser-smoke.mjs` when it becomes part of the default regression set.
+
 ## Turn handoff and auto-end
 
 - Manual turn handoff uses `END_TURN`; automatic no-action handoff uses `REQUEST_AUTO_END`, `CANCEL_AUTO_END`, and `COMMIT_AUTO_END`.

@@ -246,6 +246,51 @@ flowchart TD
 - 角色被动存放在玩家规则状态的 `comboPassive.operations` 中，不允许自由函数直接修改状态。
 - 多个组合同时满足时按定义顺序结算；角色被动只跟随第一个组合触发一次。
 
+## AI Command Planning
+
+AI code is split into pure planning and UI execution. `src/ai.js` chooses command-shaped actions; `src/app.js` only performs those commands through existing adapter functions and animation timing.
+
+```mermaid
+flowchart TD
+    Start[AI turn] --> Draw[RESOLVE_TURN_DRAW]
+    Draw --> PlanSpell[chooseAiSpellAction]
+    PlanSpell -->|spell command| Cast[playSpell -> GameEngine.dispatch]
+    Cast --> PlanSpell
+    PlanSpell -->|none| PlanTrap[chooseAiSetTrapAction]
+    PlanTrap -->|setTrap command| SetTrap[setTrap -> GameEngine.dispatch]
+    PlanTrap -->|none| PlanSummon[chooseAiSummonAction]
+    SetTrap --> PlanSummon
+    PlanSummon -->|summon command| Summon[summonMonster -> GameEngine.dispatch]
+    Summon --> DefensePolicy[shouldSwitchSummonedMonsterToDefense]
+    DefensePolicy --> BattlePhase[PHASE_CHANGED battle]
+    PlanSummon -->|none| BattlePhase
+    BattlePhase --> PlanAttack[chooseAiAttackAction]
+    PlanAttack -->|attack command| Attack[attack -> DECLARE_ATTACK/RESOLVE_BATTLE]
+    Attack --> PlanAttack
+    PlanAttack -->|skipAttack command| Skip[record skipped attacker]
+    Skip --> PlanAttack
+    PlanAttack -->|none| PlayerTurn[START_TURN player]
+```
+
+Planning functions do not mutate state. They return `spell`, `setTrap`, `summon`, `attack`, `skipAttack`, or `none`. Execution still goes through `GameEngine.dispatch` via the adapter, so AI and player actions share the same rule path.
+
+## Browser Smoke Baseline
+
+`npm run smoke:browser` runs the in-page smoke scenarios through headless Chrome/Edge against the fixed local server.
+
+```mermaid
+flowchart LR
+    Serve[npm run serve on 127.0.0.1:5177] --> Script[npm run smoke:browser]
+    Script --> Browser[Headless Chrome/Edge]
+    Browser --> Page[/?test=1&smoke=name]
+    Page --> SelfTest[scheduleBrowserSmoke]
+    SelfTest --> Status[data-smoke-status]
+    Status -->|passed| OK[CLI pass]
+    Status -->|failed or missing| Fail[CLI fail with detail]
+```
+
+Default browser smoke coverage currently includes `game-over-event`, `mode-auto-end`, `battle-trap`, `chain-trap-choice`, and `combo-spell`. Add a scenario to `src/browser-smoke.js` first, then include it in `scripts/browser-smoke.mjs` when it becomes part of the baseline.
+
 ## 文档维护规则
 
 以下变化必须同步更新本文：

@@ -277,13 +277,19 @@ test("app resolves element combos through engine commands", () => {
 test("serve script uses the fixed local port", () => {
   const pkg = JSON.parse(readProjectFile("package.json"));
   const server = readProjectFile("scripts/dev-server.mjs");
+  const browserSmoke = readProjectFile("scripts/browser-smoke.mjs");
 
   assert.equal(pkg.scripts.serve, "node scripts/dev-server.mjs");
   assert.equal(pkg.scripts.dev, "npm run serve");
+  assert.equal(pkg.scripts["smoke:browser"], "node scripts/browser-smoke.mjs");
   assert.match(server, /const port = 5177/);
   assert.match(server, /const host = "127\.0\.0\.1"/);
   assert.match(server, /Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"/);
   assert.match(server, /charset=utf-8/);
+  assert.match(browserSmoke, /DEFAULT_BASE_URL = "http:\/\/127\.0\.0\.1:5177"/);
+  assert.match(browserSmoke, /data-smoke-status="([^"]+)"/);
+  assert.match(browserSmoke, /--user-data-dir=\$\{profileDir\}/);
+  assert.match(browserSmoke, /BROWSER_BIN/);
 });
 
 test("project documents the current phase and event flow", () => {
@@ -304,10 +310,16 @@ test("project documents the current phase and event flow", () => {
   assert.match(flow, /COMMIT_AUTO_END/);
   assert.match(flow, /TURN_ENDED/);
   assert.match(flow, /GAME_OVER_DECLARED/);
+  assert.match(flow, /AI Command Planning/);
+  assert.match(flow, /chooseAiSpellAction/);
+  assert.match(flow, /Browser Smoke Baseline/);
+  assert.match(flow, /data-smoke-status/);
   assert.match(engineRules, /\[GAME_FLOW\.md\]\(GAME_FLOW\.md\)/);
   assert.match(engineRules, /Turn handoff and auto-end/);
   assert.match(engineRules, /REQUEST_AUTO_END/);
   assert.match(engineRules, /END_TURN/);
+  assert.match(engineRules, /AI decision functions/);
+  assert.match(engineRules, /npm run smoke:browser/);
 });
 
 test("app uses extracted card display metadata", () => {
@@ -548,6 +560,7 @@ test("app uses extracted timeline classification", () => {
 
 test("app uses extracted spell metadata", () => {
   const app = readProjectFile("src/app.js");
+  const ai = readProjectFile("src/ai.js");
   const spellStart = app.indexOf("const spellEffects");
   const spellEnd = app.indexOf("function playSpell", spellStart);
   const spellEffectsSource = app.slice(spellStart, spellEnd);
@@ -555,7 +568,8 @@ test("app uses extracted spell metadata", () => {
   assert.match(app, /from '\.\/spells\.js'/);
   assert.match(app, /const spellEffects = spellDefinitions/);
   assert.match(app, /validateSpellCondition\(card\.effect/);
-  assert.match(app, /scoreSpellForAi\(card\.effect/);
+  assert.match(app, /chooseAiSpellAction\(\{/);
+  assert.match(ai, /scoreSpellForAi\(card\.effect/);
   assert.doesNotMatch(spellEffectsSource, /apply:/);
   assert.doesNotMatch(app, /function damage\(/);
   assert.doesNotMatch(app, /function heal\(/);
@@ -593,6 +607,17 @@ test("app uses extracted trap metadata", () => {
   assert.doesNotMatch(resolveTrapCardSource, /wearMonster\(attacker/);
 });
 
+test("app reports missing engine effects instead of silent fallbacks", () => {
+  const app = readProjectFile("src/app.js");
+
+  assert.match(app, /function reportMissingEngineEffect\(card, kind\)/);
+  assert.match(app, /reportMissingEngineEffect\(card, "summon"\)/);
+  assert.match(app, /reportMissingEngineEffect\(trap, "trap"\)/);
+  assert.doesNotMatch(app, /function resolveSummonEffect/);
+  assert.doesNotMatch(app, /旧式直接结算/);
+  assert.doesNotMatch(app, /尚未接入规则引擎，已跳过/);
+});
+
 test("render code avoids unsupported DOM append shortcut", () => {
   const app = readProjectFile("src/app.js");
 
@@ -626,7 +651,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "src/actions.js", "src/app.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/app.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

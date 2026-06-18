@@ -1,6 +1,12 @@
 import { monsterAssets, roleProfiles, aiProfiles, deckPresets, characterProfiles, scenarioSetups } from './data.js';
 import { actionsForPhase, canDuelistAttack, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
-import { chooseAiAttackTarget } from './ai.js';
+import {
+  chooseAiAttackAction,
+  chooseAiSetTrapAction,
+  chooseAiSpellAction,
+  chooseAiSummonAction,
+  shouldSwitchSummonedMonsterToDefense
+} from './ai.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { cardDetailText, cardZoomMeta } from './card-detail.js';
@@ -37,7 +43,7 @@ import {
   dispatchTrapResponseFromUiState
 } from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
-import { scoreSpellForAi, spellDefinitions, validateSpellCondition } from './spells.js';
+import { spellDefinitions, validateSpellCondition } from './spells.js';
 import { nextTimelineState } from './timeline.js';
 import { selectRedirectTarget, trapActivationText, trapCanResolve, trapConsumesAttack } from './traps.js';
 import {
@@ -67,7 +73,6 @@ import {
   FIELD_SIZE,
   battlePreviewText,
   battleValue,
-  canDirectAttack,
   fieldCards,
   fieldElements,
   legalAttackTargets,
@@ -75,7 +80,6 @@ import {
   spellTargetPrompt,
   strongestMonster,
   totalAtk,
-  totalDef,
   validateAttackTarget,
   validateSpellTargetRule,
   weakestMonster
@@ -1911,12 +1915,14 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
     engineResponse: true
   });
   if (state.gameOver) return true;
-  if (canDispatchSummonEffectFromUiState(card)) {
-    resolveEngineSpellFeedback(owner, rival, card, summonEvents);
-    resolveElementCombos(owner, rival, "summon");
-  } else {
-    resolveSummonEffect(card, owner, rival);
+  if (card.onSummon) {
+    if (canDispatchSummonEffectFromUiState(card)) {
+      resolveEngineSpellFeedback(owner, rival, card, summonEvents);
+    } else {
+      reportMissingEngineEffect(card, "summon");
+    }
   }
+  resolveElementCombos(owner, rival, "summon");
   checkGameOver();
   return true;
 }
@@ -1940,11 +1946,12 @@ function setTrap(owner, handIndex, trapIndex) {
   return true;
 }
 
-function resolveSummonEffect(card, owner, rival) {
-  if (card.onSummon) {
-    addLog(`${card.name} 的召唤效果尚未接入规则引擎，已跳过旧式直接结算。`);
-  }
-  resolveElementCombos(owner, rival, "summon");
+function reportMissingEngineEffect(card, kind) {
+  const message = `${card?.name || "Unknown card"} ${kind} effect is not registered in GameEngine.`;
+  state.ruleCheckIssue = message;
+  addLog(message);
+  cue("Rule setup error: card effect is missing from GameEngine.");
+  console.error(message);
 }
 
 const spellEffects = spellDefinitions;
@@ -2445,7 +2452,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     }
   } else {
     if (!Array.isArray(options.events)) {
-      addLog(`${trap.name} 的陷阱效果尚未接入规则引擎，已跳过。`);
+      reportMissingEngineEffect(trap, "trap");
       return { cancelled: false, shielded: false };
     }
   }
@@ -3330,53 +3337,47 @@ async function runAiTurn() {
 }
 
 async function aiPlaySpells() {
-  let acted = true;
-  while (acted && !state.gameOver) {
-    acted = false;
-    const candidates = state.ai.hand
-      .map((card, index) => ({ card, index }))
-      .filter(({ card, index }) => card.type === "spell" && validateSpell(state.ai, state.player, card, index).ok)
-      .map(({ card, index }) => ({
-        card,
-        index,
-        score: scoreSpellForAi(card.effect, { owner: state.ai, rival: state.player, aiStyle: state.aiStyle })
-      }))
-      .filter((entry) => entry.score >= 40)
-      .sort((a, b) => b.score - a.score);
-    const pick = candidates[0];
-    if (pick) {
-      acted = playSpell(state.ai, state.player, pick.index);
-      if (acted) {
-        await sleep(1650);
-      }
-    }
+  let action = chooseAiSpellAction({
+    hand: state.ai.hand,
+    owner: state.ai,
+    rival: state.player,
+    aiStyle: state.aiStyle
+  });
+  while (action && !state.gameOver) {
+    const acted = playSpell(state.ai, state.player, action.handIndex);
+    if (!acted) return;
+    await sleep(1650);
+    action = chooseAiSpellAction({
+      hand: state.ai.hand,
+      owner: state.ai,
+      rival: state.player,
+      aiStyle: state.aiStyle
+    });
   }
 }
 
-function aiMonsterScore(card) {
-  if (state.aiStyle === "control") return Math.max(totalDef(card), totalAtk(card) - 150) + (card.onSummon ? 120 : 0);
-  if (state.aiStyle === "aggressive") return totalAtk(card) + (card.afterAttack ? 180 : 0) + card.stars * 35;
-  return totalAtk(card) + card.stars * 20;
-}
-
 async function aiSummon() {
-  const empty = state.ai.field.findIndex((slot) => !slot);
-  if (empty < 0) return false;
-  const monsters = state.ai.hand
-    .map((card, index) => ({ card, index }))
-    .filter((entry) => entry.card.type === "monster")
-    .sort((a, b) => aiMonsterScore(b.card) - aiMonsterScore(a.card));
-  if (monsters.length === 0) return false;
-  const didSummon = await summonMonster(state.ai, state.player, monsters[0].index, empty);
+  const action = chooseAiSummonAction({
+    hand: state.ai.hand,
+    field: state.ai.field,
+    aiStyle: state.aiStyle
+  });
+  if (!action) return false;
+  const didSummon = await summonMonster(state.ai, state.player, action.handIndex, action.fieldIndex);
   if (!didSummon) return false;
-  const summoned = state.ai.field[empty];
-  if (summoned && (state.aiStyle === "control" || (summoned.def > totalAtk(summoned) + 400 && state.ai.lp < state.player.lp))) {
+  const summoned = state.ai.field[action.fieldIndex];
+  if (shouldSwitchSummonedMonsterToDefense({
+    monster: summoned,
+    ownerLp: state.ai.lp,
+    rivalLp: state.player.lp,
+    aiStyle: state.aiStyle
+  })) {
     try {
-      dispatchChangeMonsterModeFromUiState(state, "ai", empty, "defense");
-      addLog(`${summoned.name} 转为守备表示。`);
-      speak(`${summoned.name} 转为守备表示。`);
+      dispatchChangeMonsterModeFromUiState(state, "ai", action.fieldIndex, "defense");
+      addLog(`${summoned.name} switches to defense mode.`);
+      speak(`${summoned.name} switches to defense mode.`);
     } catch (error) {
-      addLog(`${summoned.name} 无法转为守备表示：${error.message}`);
+      addLog(`${summoned.name} cannot switch to defense mode: ${error.message}`);
       console.error(error);
     }
   }
@@ -3384,58 +3385,51 @@ async function aiSummon() {
 }
 
 function aiSetTraps() {
-  const empty = state.ai.traps.findIndex((slot) => !slot);
-  if (empty < 0) return false;
-  const trapIndex = state.ai.hand.findIndex((card) => card.type === "trap");
-  if (trapIndex >= 0) {
-    return setTrap(state.ai, trapIndex, empty);
-  }
-  return false;
+  const action = chooseAiSetTrapAction({
+    hand: state.ai.hand,
+    traps: state.ai.traps
+  });
+  return action ? setTrap(state.ai, action.handIndex, action.trapIndex) : false;
 }
 
 async function aiAttack() {
   const skippedAttackers = new Set();
   const maxAttackSteps = FIELD_SIZE * 3;
   for (let step = 0; step < maxAttackSteps; step += 1) {
-    const attackers = state.ai.field
-      .map((card, index) => ({ card, index }))
-      .filter((entry) => entry.card && !entry.card.used && entry.card.mode !== "defense" && !skippedAttackers.has(entry.card.uid))
-      .sort((a, b) => totalAtk(b.card) - totalAtk(a.card));
-    if (attackers.length === 0) return;
-    const { card, index } = attackers[0];
-    if (state.gameOver || !state.ai.field[index]) return;
-    const canUseDirect = canDirectAttack(state.ai, card);
-    const targetIndex = chooseAiAttackTarget({
-      attacker: card,
-      targets: state.player.field,
-      playerLp: state.player.lp,
+    const action = chooseAiAttackAction({
+      owner: state.ai,
+      field: state.ai.field,
+      rivalField: state.player.field,
+      rivalLp: state.player.lp,
       aiStyle: state.aiStyle,
-      canUseDirect
+      skippedAttackers
     });
-    if (targetIndex === null) {
-      skippedAttackers.add(card.uid);
-      addLog(`AI 保留 ${card.name}，避免无意义攻击。`);
+    if (action.type === "none") return;
+    const { card, attackerIndex, targetIndex, target } = action;
+    if (state.gameOver || !state.ai.field[attackerIndex]) return;
+    if (action.type === "skipAttack") {
+      skippedAttackers.add(action.cardUid);
+      addLog(`AI holds ${card.name} to avoid a bad attack.`);
       continue;
     }
-    const target = state.player.field[targetIndex];
-    cue(`对手使用 ${card.name} 发动攻击。`);
+    cue(`AI attacks with ${card.name}.`);
     await sleep(900);
     if (targetIndex < 0) {
-      cue(`对手的 ${card.name} 准备直接攻击你。`);
-      playEpicAction("直击预警", "attack", 980);
-      playVoice("ai", "direct", "对手准备直接攻击。");
+      cue(`AI prepares a direct attack with ${card.name}.`);
+      playEpicAction("Direct", "attack", 980);
+      playVoice("ai", "direct", "AI prepares a direct attack.");
       await sleep(900);
     }
     showBattlePreview(card, target, state.ai, state.player);
-    addLog(`AI 攻击预判：${battlePreviewText(card, target)}`);
+    addLog(`AI attack preview: ${battlePreviewText(card, target)}`);
     render();
     await sleep(1080);
-    const resolved = await attack(state.ai, state.player, index, targetIndex);
+    const resolved = await attack(state.ai, state.player, attackerIndex, targetIndex);
     render();
     if (resolved === false && state.ruleCheckIssue) break;
     await sleep(2200);
   }
-  addLog("AI 攻击循环达到安全上限，已停止继续攻击。");
+  addLog("AI attack loop reached the safety cap.");
 }
 
 function checkGameOver() {
