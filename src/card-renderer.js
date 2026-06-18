@@ -34,7 +34,7 @@ export function cardRenderModel(card, { asset = "", attacksLocked = false } = {}
     ? `<span class="monster-icon">${escapeHtml(card.icon)}</span><div class="monster-projection ${escapeHtml(card.element || "")} ${card.mode === "defense" ? "defense" : ""}">${asset ? `<img class="monster-sprite" src="${escapeHtml(asset)}" alt="">` : `<div class="monster-head"></div><div class="monster-body"></div><div class="monster-limb left"></div><div class="monster-limb right"></div>`}</div>`
     : escapeHtml(card.icon);
   const stats = card.type === "monster"
-    ? [`ATK ${totalAtk(card)}`, `${elementText || "无属性"} / ${modeLabel} DEF ${totalDef(card)}`]
+    ? [`攻击 ${totalAtk(card)}`, `${elementText || "无属性"} / ${modeLabel} 守备 ${totalDef(card)}`]
     : [typeLabel, ruleText];
 
   return {

@@ -110,7 +110,7 @@ function auditDirectAttackFlow(entries, issues) {
 }
 
 function isAttackResolution(text = "") {
-  return /直接攻击，造成|ATK \d+|取消了攻击|无效了本次攻击|破坏了 .*|削弱了 .*攻击继续结算|让直接攻击伤害变为 0|攻击被规则拦截|攻击无效|规则校验：.*没有产生任何状态影响/.test(text);
+  return /直接攻击，造成|攻击 \d+|取消了攻击|无效了本次攻击|破坏了 .*|削弱了 .*攻击继续结算|让直接攻击伤害变为 0|攻击被规则拦截|攻击无效|规则校验：.*没有产生任何状态影响/.test(text);
 }
 
 function isActionBoundary(text = "") {
@@ -119,7 +119,7 @@ function isActionBoundary(text = "") {
 
 function auditAttackPreviewResolution(entries, issues) {
   entries.forEach((entry, index) => {
-    if (!/攻击预判：|AI 攻击预判：/.test(entry.text)) return;
+    if (!/攻击预判：|对手攻击预判：/.test(entry.text)) return;
     const followups = entries.slice(index + 1);
     const resolution = followups.find((candidate) => isAttackResolution(candidate.text) || isActionBoundary(candidate.text));
     if (!resolution || isAttackResolution(resolution.text)) return;

@@ -115,6 +115,6 @@ test("describes attack targets before asking for trap activation", () => {
 
   assert.equal(
     trapActivationText(trap("redirectAttack"), "attack", { owner, rival, context: { attackerIndex: 0, targetIndex: 0 } }),
-    "对手的突击者（ATK 1800 / DEF 1000）正在攻击你的高防守卫（ATK 900 / DEF 2200）。发动后会把攻击改为你的低防术士（ATK 1400 / DEF 900）。 注意：换位目标 DEF 900 低于当前目标 DEF 2200。 是否连锁发动「测试陷阱」？测试效果。"
+    "对手的突击者（攻击 1800 / 守备 1000）正在攻击你的高防守卫（攻击 900 / 守备 2200）。发动后会把攻击改为你的低防术士（攻击 1400 / 守备 900）。 注意：换位目标守备 900 低于当前目标守备 2200。 是否连锁发动「测试陷阱」？测试效果。"
   );
 });

@@ -118,7 +118,7 @@ export function trapSummaryText(trigger) {
 
 function monsterText(card) {
   if (!card) return "未知目标";
-  return `${card.name}（ATK ${totalAtk(card)} / DEF ${totalDef(card)}）`;
+  return `${card.name}（攻击 ${totalAtk(card)} / 守备 ${totalDef(card)}）`;
 }
 
 function attackEventText({ owner = null, rival = null, context = {} } = {}) {
@@ -135,7 +135,7 @@ function redirectPreviewText(trap, { owner = null, context = {} } = {}) {
   const redirectTarget = owner?.field?.[redirectIndex];
   if (!redirectTarget) return "当前没有可换位的其他怪兽。";
   const warning = currentTarget && totalDef(redirectTarget) < totalDef(currentTarget)
-    ? ` 注意：换位目标 DEF ${totalDef(redirectTarget)} 低于当前目标 DEF ${totalDef(currentTarget)}。`
+    ? ` 注意：换位目标守备 ${totalDef(redirectTarget)} 低于当前目标守备 ${totalDef(currentTarget)}。`
     : "";
   return `发动后会把攻击改为你的${monsterText(redirectTarget)}。${warning}`;
 }

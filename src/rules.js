@@ -34,17 +34,18 @@ export function battleValue(card) {
 export function battlePreviewText(attacker, target) {
   if (!attacker) return "还没有选择攻击怪兽。";
   if (!target) return `${attacker.name} 直接攻击，预计造成 ${totalAtk(attacker)} 点伤害。`;
-  const targetStat = target.mode === "defense" ? `DEF ${totalDef(target)}` : `ATK ${totalAtk(target)}`;
+  const attackerStat = `攻击 ${totalAtk(attacker)}`;
+  const targetStat = target.mode === "defense" ? `守备 ${totalDef(target)}` : `攻击 ${totalAtk(target)}`;
   const diff = totalAtk(attacker) - battleValue(target);
   if (diff > 0) {
     return target.mode === "defense"
-      ? `${attacker.name} ATK ${totalAtk(attacker)} 对 ${target.name} ${targetStat}，可击破但不造成战斗伤害。`
-      : `${attacker.name} ATK ${totalAtk(attacker)} 对 ${target.name} ${targetStat}，预计造成 ${diff} 点伤害。`;
+      ? `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破但不造成战斗伤害。`
+      : `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，预计造成 ${diff} 点伤害。`;
   }
   if (diff < 0) {
     return target.mode === "defense"
-      ? `${attacker.name} ATK ${totalAtk(attacker)} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害，双方怪兽保留。`
-      : `${attacker.name} ATK ${totalAtk(attacker)} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害。`;
+      ? `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害，双方怪兽保留。`
+      : `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害。`;
   }
   return target.mode === "defense"
     ? `${attacker.name} 与 ${target.name} 数值相同，守备怪兽挡下攻击，双方怪兽保留。`
@@ -68,7 +69,7 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
   if (!attacker) return null;
   const attack = totalAtk(attacker);
   const rows = [
-    { label: "攻击方", value: `${attacker.name} / ATK ${attack}` }
+    { label: "攻击方", value: `${attacker.name} / 攻击 ${attack}` }
   ];
   if (!target) {
     const shield = shieldPreview(attack, rival?.shield || 0);
@@ -83,7 +84,7 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
       result: `${attacker.name} 将直接攻击玩家。${shield.blocked > 0 ? "护盾会先吸收伤害。" : ""}`
     };
   }
-  const targetMode = target.mode === "defense" ? "DEF" : "ATK";
+  const targetMode = target.mode === "defense" ? "守备" : "攻击";
   const targetValue = battleValue(target);
   const diff = attack - targetValue;
   rows.push(
@@ -114,7 +115,7 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
         badge: "守备反击",
         tone: "guard",
         rows,
-        result: `攻击方承受 DEF 差值伤害；${shield.text}双方怪兽保留，目标会产生战斗损耗。`
+        result: `攻击方承受守备力差值伤害；${shield.text}双方怪兽保留，目标会产生战斗损耗。`
       };
     }
     return {

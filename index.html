@@ -27,8 +27,8 @@
         <button class="btn" id="pauseBtn" title="暂停或继续决斗">暂停</button>
         <button class="btn turn-control" id="skipAttackBtn" title="放弃本回合剩余攻击机会">跳过攻击</button>
         <button class="btn turn-control" id="endTurnBtn" title="放弃后续操作并结束你的回合">结束回合</button>
-        <button class="btn" id="soundBtn" title="开启或关闭音效">音效 ON</button>
-        <button class="btn" id="voiceBtn" title="开启或关闭语音提示">语音 ON</button>
+        <button class="btn" id="soundBtn" title="开启或关闭音效">音效 开</button>
+        <button class="btn" id="voiceBtn" title="开启或关闭语音提示">语音 开</button>
         <button class="btn" id="restartBtn" title="重新开始本局">重开</button>
       </div>
     </header>
@@ -73,7 +73,7 @@
       <section class="field">
         <div class="zone-row" id="aiField"></div>
         <div class="trap-row" id="aiTraps"></div>
-        <div class="center-line"><span id="duelHint">DUEL FIELD</span></div>
+        <div class="center-line"><span id="duelHint">决斗场</span></div>
         <div class="trap-row" id="playerTraps"></div>
         <div class="zone-row" id="playerField"></div>
       </section>
@@ -202,15 +202,15 @@
       <div class="guide-grid">
         <div class="guide-item"><strong>1. 抽卡和手牌</strong><span>回合开始自动抽 1 张。手牌暂时没有上限，卡组抽空时每次应抽卡会受到 500 点伤害。</span></div>
         <div class="guide-item"><strong>2. 召唤怪兽</strong><span>点击手牌怪兽，再点自己下方的空召唤区。场上有 3 个怪兽区，每回合通常召唤 1 只。</span></div>
-        <div class="guide-item"><strong>3. 攻击结算</strong><span>攻击表示用 ATK 计算。对手场上有怪兽时必须先攻击怪兽；只有对手没有怪兽，或像星隙穿透这样的卡牌效果授予直接攻击许可时，才可以点击敌方角色造成直接伤害。</span></div>
+        <div class="guide-item"><strong>3. 攻击结算</strong><span>攻击表示用攻击力计算。对手场上有怪兽时必须先攻击怪兽；只有对手没有怪兽，或像星隙穿透这样的卡牌效果授予直接攻击许可时，才可以点击敌方角色造成直接伤害。</span></div>
         <div class="guide-item"><strong>4. 魔法卡</strong><span>点击魔法卡查看，再点一次发动。需要目标的魔法会进入选择目标状态：强化选我方怪兽，削弱选敌方怪兽；条件不足时不会消耗卡牌。</span></div>
         <div class="guide-item"><strong>5. 陷阱卡和连锁</strong><span>每方有 3 个陷阱区，最多盖 3 张。陷阱可破坏攻击、削弱攻击、挡直击或反弹伤害；你的陷阱满足条件时会弹出确认。</span></div>
-        <div class="guide-item"><strong>6. 攻击 / 守备</strong><span>选中自己的怪兽后点“切换表示”。守备表示不能攻击，被攻击时用 DEF 结算；攻击方 ATK 低于 DEF 时只承受差值伤害，双方怪兽保留。</span></div>
+        <div class="guide-item"><strong>6. 攻击 / 守备</strong><span>选中自己的怪兽后点“切换表示”。守备表示不能攻击，被攻击时用守备力结算；攻击方攻击力低于守备力时只承受差值伤害，双方怪兽保留。</span></div>
         <div class="guide-item"><strong>7. 回合控制</strong><span>回合开始自动抽卡。召唤、盖陷阱、切换表示和发动魔法不会结束回合；你可以点“跳过攻击”放弃本回合攻击，也可以点“结束回合”直接交给 AI。</span></div>
         <div class="guide-item"><strong>8. 胜利条件</strong><span>任意一方生命值归 0 就结束决斗。日志、语音和箭头会告诉你每一步发生了什么。</span></div>
         <div class="guide-item"><strong>9. 护盾和额外召唤</strong><span>护盾会优先吸收伤害。额外召唤只在本回合生效，可让你在通常召唤之外再召唤 1 只怪兽。</span></div>
         <div class="guide-item"><strong>10. 属性和组合技</strong><span>怪兽卡右上角会直接显示火、光、风、暗属性。火+风会造成追击伤害，光+暗会展开护盾，集齐 3 种属性会全场强化。部分魔法也需要指定属性组合才可发动。</span></div>
-        <div class="guide-item"><strong>11. 战斗损耗</strong><span>怪兽被攻击或被削弱但没有被破坏时会产生战斗损耗，ATK/DEF 会下降。攻击强敌也能为下一次击破做准备。</span></div>
+        <div class="guide-item"><strong>11. 战斗损耗</strong><span>怪兽被攻击或被削弱但没有被破坏时会产生战斗损耗，攻击力和守备力会下降。攻击强敌也能为下一次击破做准备。</span></div>
         <div class="guide-item"><strong>12. 扩展系统</strong><span>开局前可选择角色、卡组和 AI 风格。攻击重置、墓地回收、破阵削弱和组合魔法都走统一结算，后面可以继续加新卡。</span></div>
       </div>
       <button class="btn primary" id="guideClose">开始决斗</button>

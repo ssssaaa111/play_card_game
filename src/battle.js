@@ -1,8 +1,8 @@
 import { battleValue, shieldPreview, totalAtk, totalDef } from './rules.js';
 
 export function battleStatLabel(card) {
-  if (!card) return "DIRECT";
-  return card.mode === "defense" ? `DEF ${totalDef(card)}` : `ATK ${totalAtk(card)}`;
+  if (!card) return "直接攻击";
+  return card.mode === "defense" ? `守备 ${totalDef(card)}` : `攻击 ${totalAtk(card)}`;
 }
 
 export function battleWearAmount(diff) {
@@ -115,25 +115,25 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
 export function battleLogText(attacker, target, outcome, dealt = outcome?.finalDamage) {
   if (!outcome) return "";
   if (outcome.kind === "direct") {
-    return `${attacker.name} 直接攻击，ATK ${outcome.attack}，造成 ${dealt} 点生命值伤害。`;
+    return `${attacker.name} 直接攻击，攻击 ${outcome.attack}，造成 ${dealt} 点生命值伤害。`;
   }
   if (outcome.kind === "breakDefense") {
-    return `${attacker.name} ATK ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，守备怪兽不造成生命值伤害。`;
+    return `${attacker.name} 攻击 ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，守备怪兽不造成生命值伤害。`;
   }
   if (outcome.kind === "attackWin") {
     const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
-    return `${attacker.name} ATK ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，差值 ${outcome.diff}${shieldText}，造成 ${dealt} 点战斗伤害。`;
+    return `${attacker.name} 攻击 ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，差值 ${outcome.diff}${shieldText}，造成 ${dealt} 点战斗伤害。`;
   }
   if (outcome.kind === "guardCounter") {
     const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
-    return `${attacker.name} ATK ${outcome.attack} 低于 ${target.name} ${outcome.targetStat}，守备反击差值 ${Math.abs(outcome.diff)}${shieldText}，攻击方承受 ${dealt} 点伤害，双方怪兽保留。`;
+    return `${attacker.name} 攻击 ${outcome.attack} 低于 ${target.name} ${outcome.targetStat}，守备反击差值 ${Math.abs(outcome.diff)}${shieldText}，攻击方承受 ${dealt} 点伤害，双方怪兽保留。`;
   }
   if (outcome.kind === "guardHold") {
-    return `${attacker.name} ATK ${outcome.attack} 与 ${target.name} ${outcome.targetStat} 相同，守备怪兽挡下攻击，双方怪兽保留。`;
+    return `${attacker.name} 攻击 ${outcome.attack} 与 ${target.name} ${outcome.targetStat} 相同，守备怪兽挡下攻击，双方怪兽保留。`;
   }
   if (outcome.kind === "countered") {
     const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
-    return `${attacker.name} ATK ${outcome.attack} 低于 ${target.name} ${outcome.targetStat}，差值 ${Math.abs(outcome.diff)}${shieldText}，被反击破坏并承受 ${dealt} 点伤害。`;
+    return `${attacker.name} 攻击 ${outcome.attack} 低于 ${target.name} ${outcome.targetStat}，差值 ${Math.abs(outcome.diff)}${shieldText}，被反击破坏并承受 ${dealt} 点伤害。`;
   }
   return `${attacker.name} 与 ${target.name} 数值相同，双方同归于尽。`;
 }

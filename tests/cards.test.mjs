@@ -27,9 +27,9 @@ test("builds compact card badges and type labels", () => {
   assert.equal(cardBadgeText({ type: "spell" }), "魔");
   assert.equal(cardBadgeText({ type: "trap" }), "陷");
 
-  assert.equal(cardTypeLabel({ type: "monster" }), "MONSTER");
-  assert.equal(cardTypeLabel({ type: "spell" }), "SPELL");
-  assert.equal(cardTypeLabel({ type: "trap" }), "TRAP");
+  assert.equal(cardTypeLabel({ type: "monster" }), "怪兽");
+  assert.equal(cardTypeLabel({ type: "spell" }), "魔法");
+  assert.equal(cardTypeLabel({ type: "trap" }), "陷阱");
 });
 
 test("builds card display tags and rule summaries", () => {

@@ -19,7 +19,7 @@ test("describes monster details with current status", () => {
   };
 
   assert.equal(cardRuleLine(card), "强化+300 / 损耗-200");
-  assert.match(cardDetailText(card), /ATK 1800 \/ DEF 900/);
+  assert.match(cardDetailText(card), /攻击 1800 \/ 守备 900/);
   assert.match(cardDetailText(card), /战斗损耗 200/);
   assert.match(cardZoomMeta(card), /当前状态：强化\+300 \/ 损耗-200/);
 });

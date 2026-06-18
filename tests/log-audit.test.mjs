@@ -77,7 +77,7 @@ test("does not flag direct attacks after permission or clear-board logs", () => 
 
 test("flags attack previews that are followed by another action without resolution", () => {
   const audit = auditLogEntries([
-    { step: 1, text: "攻击预判：星轨枪兵 ATK 1800 对 铁壁守卫 DEF 2100，攻击方预计承受 300 点伤害。" },
+    { step: 1, text: "攻击预判：星轨枪兵 攻击 1800 对 铁壁守卫 守备 2100，攻击方预计承受 300 点伤害。" },
     { step: 2, text: "你 发动魔法卡 战意高扬。" }
   ]);
 
@@ -93,13 +93,13 @@ test("accepts attack previews followed by battle or trap resolution", () => {
   ]).ok, true);
 
   assert.equal(auditLogEntries([
-    { step: 1, text: "攻击预判：星轨枪兵 ATK 1800 对 铁壁守卫 DEF 2100，攻击方预计承受 300 点伤害。" },
-    { step: 2, text: "星轨枪兵 ATK 1800 低于 铁壁守卫 DEF 2100，攻击方受到 300 点生命值伤害。" }
+    { step: 1, text: "攻击预判：星轨枪兵 攻击 1800 对 铁壁守卫 守备 2100，攻击方预计承受 300 点伤害。" },
+    { step: 2, text: "星轨枪兵 攻击 1800 低于 铁壁守卫 守备 2100，攻击方受到 300 点生命值伤害。" }
   ]).ok, true);
 
   assert.equal(auditLogEntries([
-    { step: 1, text: "攻击预判：星轨枪兵 ATK 1800 对 铁壁守卫 ATK 900，预计造成 900 点伤害。" },
-    { step: 2, text: "星轨枪兵 ATK 1800 击破 铁壁守卫 ATK 900，差值 900，造成 900 点战斗伤害。" },
+    { step: 1, text: "攻击预判：星轨枪兵 攻击 1800 对 铁壁守卫 攻击 900，预计造成 900 点伤害。" },
+    { step: 2, text: "星轨枪兵 攻击 1800 击破 铁壁守卫 攻击 900，差值 900，造成 900 点战斗伤害。" },
     { step: 3, text: "你盖放了陷阱卡 镜光反制。" }
   ]).ok, true);
 });

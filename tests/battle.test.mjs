@@ -21,8 +21,8 @@ function duelist(overrides = {}) {
 }
 
 test("labels battle stats by monster mode", () => {
-  assert.equal(battleStatLabel(monster({ atk: 1500 })), "ATK 1500");
-  assert.equal(battleStatLabel(monster({ mode: "defense", def: 1800 })), "DEF 1800");
+  assert.equal(battleStatLabel(monster({ atk: 1500 })), "攻击 1500");
+  assert.equal(battleStatLabel(monster({ mode: "defense", def: 1800 })), "守备 1800");
 });
 
 test("describes direct attacks with shield math", () => {
@@ -33,7 +33,7 @@ test("describes direct attacks with shield math", () => {
   assert.equal(outcome.rawDamage, 1800);
   assert.equal(outcome.shieldBlocked, 600);
   assert.equal(outcome.finalDamage, 1200);
-  assert.match(battleLogText(attacker, null, outcome, outcome.finalDamage), /ATK 1800，造成 1200/);
+  assert.match(battleLogText(attacker, null, outcome, outcome.finalDamage), /攻击 1800，造成 1200/);
 });
 
 test("describes attack wins, guard breaks, counters, and clashes", () => {

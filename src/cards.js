@@ -38,9 +38,9 @@ export function cardBadgeText(card) {
 }
 
 export function cardTypeLabel(card) {
-  if (card.type === "monster") return "MONSTER";
-  if (card.type === "trap") return "TRAP";
-  return "SPELL";
+  if (card.type === "monster") return "怪兽";
+  if (card.type === "trap") return "陷阱";
+  return "魔法";
 }
 
 export function spellTargetSummary(effect) {

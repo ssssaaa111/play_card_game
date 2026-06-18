@@ -2659,7 +2659,7 @@ function resolveAfterAttackBattleFeedback(owner, attacker, events) {
     const found = findRuntimeCard(wearEvent.cardId);
     if (found?.card) {
       playEpicAction("损耗", "guard", 900);
-      addLog(`${found.card.name} 承受冲击产生 ${wearEvent.amount} 点战斗损耗，ATK/DEF 下降。`);
+      addLog(`${found.card.name} 承受冲击产生 ${wearEvent.amount} 点战斗损耗，攻击力和守备力下降。`);
       speak(`${found.card.name} 承受冲击，战斗力下降。`);
     }
   }
@@ -3430,7 +3430,7 @@ async function aiAttack() {
       await sleep(900);
     }
     showBattlePreview(card, target, state.ai, state.player);
-    addLog(`AI attack preview: ${battlePreviewText(card, target)}`);
+      addLog(`对手攻击预判：${battlePreviewText(card, target)}`);
     render();
     await sleep(1080);
     const resolved = await attack(state.ai, state.player, attackerIndex, targetIndex);
@@ -3828,9 +3828,9 @@ function playAttackCloseup(attacker, target, owner, rival) {
   `;
   const cards = el.querySelectorAll(".closeup-card");
   cards[0].querySelector("strong").textContent = attacker.name;
-  cards[0].querySelector("span").textContent = `ATK ${totalAtk(attacker)}`;
+  cards[0].querySelector("span").textContent = `攻击 ${totalAtk(attacker)}`;
   cards[1].querySelector("strong").textContent = target ? target.name : duelistName(rival);
-  cards[1].querySelector("span").textContent = target ? `${target.mode === "defense" ? "DEF" : "ATK"} ${battleValue(target)}` : "DIRECT HIT";
+  cards[1].querySelector("span").textContent = target ? `${target.mode === "defense" ? "守备" : "攻击"} ${battleValue(target)}` : "直接攻击";
   els.effectLayer.appendChild(el);
   window.setTimeout(() => el.remove(), 1340);
 }
@@ -3902,7 +3902,7 @@ function playAttackCutIn(attacker, target, owner, rival) {
   left.className = "cutin-card";
   left.innerHTML = `<em>${duelistName(owner)} 攻击宣言</em><strong></strong><span></span>`;
   left.querySelector("strong").textContent = attacker.name;
-  left.querySelector("span").textContent = `ATK ${totalAtk(attacker)}`;
+  left.querySelector("span").textContent = `攻击 ${totalAtk(attacker)}`;
 
   const versus = document.createElement("div");
   versus.className = "cutin-versus";
@@ -3912,7 +3912,7 @@ function playAttackCutIn(attacker, target, owner, rival) {
   right.className = "cutin-card";
   right.innerHTML = `<em>${duelistName(rival)} 目标</em><strong></strong><span></span>`;
   right.querySelector("strong").textContent = target ? target.name : "直接攻击";
-  right.querySelector("span").textContent = target ? `${target.mode === "defense" ? "DEF" : "ATK"} ${battleValue(target)}` : "LP DAMAGE";
+  right.querySelector("span").textContent = target ? `${target.mode === "defense" ? "守备" : "攻击"} ${battleValue(target)}` : "生命伤害";
 
   el.appendChild(left);
   el.appendChild(versus);
@@ -4065,9 +4065,9 @@ function render(animationKey = "") {
   els.endTurnBtn.textContent = "结束回合";
   els.endTurnBtn.title = "结束你的回合";
   els.endTurnBtn.disabled = !canUseTurnControls || Boolean(state.pendingTarget);
-  els.soundBtn.textContent = state.soundOn ? "音效 ON" : "音效 OFF";
+  els.soundBtn.textContent = state.soundOn ? "音效 开" : "音效 关";
   els.soundBtn.classList.toggle("sound-off", !state.soundOn);
-  els.voiceBtn.textContent = state.voiceOn ? "语音 ON" : "语音 OFF";
+  els.voiceBtn.textContent = state.voiceOn ? "语音 开" : "语音 关";
   els.voiceBtn.classList.toggle("sound-off", !state.voiceOn);
   const selectedHand = selectedHandInfo();
   const selectedHandAction = selectedHand ? handActionInfo(selectedHand.card, selectedHand.index) : null;

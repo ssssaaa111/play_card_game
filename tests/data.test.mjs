@@ -47,6 +47,21 @@ test("card library has unique ids and required fields", () => {
   });
 });
 
+test("player-facing card and scenario copy is localized", () => {
+  const englishWord = /[A-Za-z]{3,}/;
+
+  library.forEach((card) => {
+    assert.doesNotMatch(card.name, englishWord, `${card.id} name should be localized`);
+    assert.doesNotMatch(card.text, englishWord, `${card.id} text should be localized`);
+  });
+
+  Object.entries(scenarioSetups).forEach(([key, scenario]) => {
+    assert.doesNotMatch(scenario.label, englishWord, `${key} label should be localized`);
+    assert.doesNotMatch(scenario.text || "", englishWord, `${key} text should be localized`);
+    assert.doesNotMatch(scenario.goal || "", englishWord, `${key} goal should be localized`);
+  });
+});
+
 test("spell cards are backed by spell metadata", () => {
   const spellCards = library.filter((card) => card.type === "spell");
   const effectsFromCards = new Set(spellCards.map((card) => card.effect));
