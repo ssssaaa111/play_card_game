@@ -16,6 +16,8 @@ export function cardStatusText(card, { attacksLocked = false } = {}) {
   if (attacksLocked && !card.used && card.mode !== "defense") parts.push("攻击已跳过");
   if (card.tempAtk > 0) parts.push(`强化+${card.tempAtk}`);
   if (card.tempAtk < 0) parts.push(`弱化${card.tempAtk}`);
+  if (card.tempDef > 0) parts.push(`守备+${card.tempDef}`);
+  if (card.tempDef < 0) parts.push(`守备${card.tempDef}`);
   if (card.battleWear > 0) parts.push(`损耗-${card.battleWear}`);
   if (card.used) parts.push("已行动");
   return parts.slice(0, 2).join(" / ");

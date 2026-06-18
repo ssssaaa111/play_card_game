@@ -11,6 +11,8 @@ export const library = [
   { id: "prism-saint", type: "monster", name: "辉棱圣徒", element: "light", stars: 3, atk: 1000, def: 1800, icon: "棱", text: "召唤时获得 400 护盾。" , onSummon: "shield400" },
   { id: "sky-raider", type: "monster", name: "天岚突袭者", element: "wind", stars: 4, atk: 1550, def: 900, icon: "岚", text: "攻击后，如果你场上有风属性怪兽，抽 1 张卡。", afterAttack: "windDraw" },
   { id: "dusk-alchemist", type: "monster", name: "暮影炼术师", element: "shadow", stars: 4, atk: 1450, def: 1500, icon: "炼", text: "召唤时，如果你场上有暗属性怪兽，对手受到 300 伤害。", onSummon: "shadowBurn" },
+  { id: "nova-squire", type: "monster", name: "Nova Squire", element: "fire", stars: 3, atk: 1250, def: 1100, icon: "NV", text: "Fire rookie monster for equipment practice." },
+  { id: "aegis-mender", type: "monster", name: "Aegis Mender", element: "light", stars: 3, atk: 900, def: 1700, icon: "AM", text: "On summon, gain 400 shield.", onSummon: "shield400" },
   { id: "burst-rune", type: "spell", name: "爆裂符文", icon: "爆", text: "对对手造成 500 点伤害。", effect: "burn500" },
   { id: "renewal", type: "spell", name: "星泉再生", icon: "泉", text: "回复 700 点生命值。", effect: "heal700" },
   { id: "war-chant", type: "spell", name: "战意高扬", icon: "战", text: "你场上攻击力最高的怪兽提升 500 攻击力。", effect: "buff500" },
@@ -25,6 +27,10 @@ export const library = [
   { id: "star-breach", type: "spell", name: "星隙穿透", icon: "隙", text: "本回合获得 1 次直接攻击许可：即使对手有怪兽，也可以点击敌方角色造成直接伤害。", effect: "directStrike" },
   { id: "flame-gale-burst", type: "spell", name: "炎岚合击", icon: "岚", text: "需要我方场上有火和风属性怪兽；对对手造成 400 点伤害，并让我方全体怪兽 ATK 提升 200。", effect: "fireWindCombo" },
   { id: "eclipse-barrier", type: "spell", name: "晨昏星界", icon: "界", text: "需要我方场上有光和暗属性怪兽；获得 600 护盾，并抽 1 张卡。", effect: "lightShadowCombo" },
+  { id: "blade-sigil", type: "spell", name: "Blade Sigil", icon: "BS", text: "Equip to one of your monsters. It gains ATK +300 while this card stays in the spell/trap zone.", effect: "equipBlade" },
+  { id: "aegis-plate", type: "spell", name: "Aegis Plate", icon: "AP", text: "Equip to one of your monsters. It gains DEF +500 while this card stays in the spell/trap zone.", effect: "equipAegis" },
+  { id: "prism-drive", type: "spell", name: "Prism Drive", icon: "PD", text: "Equip to one of your monsters. It gains ATK +200 and DEF +200.", effect: "equipPrism" },
+  { id: "overclock-core", type: "spell", name: "Overclock Core", icon: "OC", text: "Equip to one of your monsters. It gains ATK +600 but DEF -300.", effect: "equipOverclock" },
   { id: "mirror-snare", type: "trap", name: "镜光反制", icon: "镜", text: "盖放后自动触发：对手攻击时，破坏攻击怪兽。", trigger: "attackDestroy" },
   { id: "guard-sigil", type: "trap", name: "守护刻印", icon: "印", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并抽 1 张卡。", trigger: "directShield" },
   { id: "summon-flare", type: "trap", name: "召雷陷阵", icon: "雷", text: "盖放后自动触发：对手召唤怪兽时，对其造成 400 点伤害。", trigger: "summonBurn" },
@@ -49,7 +55,9 @@ export const monsterAssets = {
   "sky-raider": "assets/monster-wind-mage.png",
   "void-hound": "assets/monster-shadow-wolf.png",
   "night-oracle": "assets/monster-shadow-wolf.png",
-  "dusk-alchemist": "assets/monster-shadow-wolf.png"
+  "dusk-alchemist": "assets/monster-shadow-wolf.png",
+  "nova-squire": "assets/monster-fire-dragon.png",
+  "aegis-mender": "assets/monster-light-knight.png"
 };
 
 export const roleProfiles = {
@@ -156,6 +164,7 @@ export const deckPresets = {
       "flame-captain", "sky-raider", "dusk-alchemist",
       "burst-rune", "renewal", "war-chant", "seer-call", "element-echo",
       "pierce-line", "grave-return", "battle-trance", "star-breach", "flame-gale-burst", "eclipse-barrier",
+      "nova-squire", "aegis-mender", "blade-sigil", "aegis-plate", "prism-drive", "overclock-core",
       "mirror-snare", "guard-sigil", "summon-flare", "mirror-snare", "counter-array", "storm-shift", "void-lock", "phantom-switch", "weakening-web", "reversal-flare", "chain-nullifier"
     ]
   },
@@ -171,7 +180,7 @@ export const deckPresets = {
       "star-lancer", "void-hound", "solar-knight",
       "mirror-snare", "summon-flare", "summon-flare", "counter-array", "storm-shift", "void-lock", "phantom-switch",
       "burst-rune", "war-chant", "rally-strike", "seer-call", "twin-summon", "element-echo",
-      "pierce-line", "battle-trance", "star-breach", "flame-gale-burst", "reversal-flare", "chain-nullifier"
+      "pierce-line", "battle-trance", "star-breach", "flame-gale-burst", "nova-squire", "blade-sigil", "overclock-core", "reversal-flare", "chain-nullifier"
     ]
   },
   control: {
@@ -187,7 +196,7 @@ export const deckPresets = {
       "mirror-snare", "mirror-snare", "guard-sigil", "guard-sigil",
       "counter-array", "counter-array", "storm-shift", "storm-shift", "void-lock", "phantom-switch",
       "summon-flare", "star-shield", "element-echo",
-      "grave-return", "pierce-line", "eclipse-barrier", "weakening-web", "reversal-flare", "chain-nullifier"
+      "grave-return", "pierce-line", "eclipse-barrier", "aegis-mender", "aegis-plate", "prism-drive", "weakening-web", "reversal-flare", "chain-nullifier"
     ]
   }
 };
@@ -348,6 +357,17 @@ export const scenarioSetups = {
     ],
     aiField: ["star-lancer"],
     aiHand: ["burst-rune"]
+  },
+  equipment: {
+    label: "Equipment test",
+    text: "Start with a monster and equipment spells to verify continuous spell effects.",
+    goal: "Equip Blade Sigil and Aegis Plate. The cards should stay in the spell/trap zone and modify the target through events.",
+    playerHand: ["blade-sigil", "aegis-plate", "prism-drive", "overclock-core", "nova-squire", "aegis-mender"],
+    playerField: ["star-lancer"],
+    playerDeck: [],
+    aiField: ["iron-guardian"],
+    aiHand: [],
+    aiDeck: []
   },
   target: {
     label: "目标选择",

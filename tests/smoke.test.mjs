@@ -290,6 +290,7 @@ test("serve script uses the fixed local port", () => {
   assert.match(browserSmoke, /data-smoke-status="([^"]+)"/);
   assert.match(browserSmoke, /--user-data-dir=\$\{profileDir\}/);
   assert.match(browserSmoke, /BROWSER_BIN/);
+  assert.match(browserSmoke, /equipment-spell/);
 });
 
 test("project documents the current phase and event flow", () => {
@@ -408,6 +409,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="summonFireBuff">召唤火强化<\/option>/);
   assert.match(html, /<option value="summonShield">召唤护盾<\/option>/);
   assert.match(html, /<option value="summonShadowBurn">召唤暗伤<\/option>/);
+  assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
   assert.match(data, /trapChoice: \{/);
@@ -416,6 +418,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /summonFireBuff: \{/);
   assert.match(data, /summonShield: \{/);
   assert.match(data, /summonShadowBurn: \{/);
+  assert.match(data, /equipment: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
   assert.match(app, /canDispatchSummonEffectFromUiState/);
@@ -449,6 +452,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-mode-event": runAiModeEventSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
   assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
+  assert.match(smoke, /"equipment-spell": runEquipmentSpellSmoke/);
   assert.match(smoke, /"game-over-event": runGameOverEventSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
   assert.match(smoke, /function trapCard/);
@@ -470,6 +474,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /所有可发动陷阱都应该高亮/);
   assert.match(smoke, /连锁场景应该在弹窗内显示三张可选陷阱/);
   assert.match(smoke, /暂停时手牌详情切换/);
+  assert.match(smoke, /Blade Sigil continuous effect registered/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-shield-consume"\)/);
@@ -500,6 +505,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "equipment-spell"\)/);
 });
 
 test("skipped attack lock is visible on field cards", () => {

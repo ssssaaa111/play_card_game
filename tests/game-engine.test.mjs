@@ -276,29 +276,105 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.notEqual(typeof draw2, "function");
 });
 
-test("engine rejects free-code effects and keeps continuous effects separate", () => {
+test("engine rejects free-code effects", () => {
   assert.throws(
     () => new GameEngine(makeState(), { cardEffects: { cheat: () => null } }),
     GameRuleError
   );
+});
 
+test("continuous equip spells stay in the spell trap zone and register effects", () => {
   const state = makeState({
-    cards: [card("aura-1", { templateId: "aura-test", effect: "continuousAura" })],
-    player: { hand: ["aura-1"] }
+    cards: [
+      card("blade-1", { templateId: "blade-sigil", effect: "equipBlade" }),
+      card("lancer-1", { type: "monster", templateId: "star-lancer", atk: 1800, def: 1000 })
+    ],
+    player: {
+      hand: ["blade-1"],
+      monsterZone: ["lancer-1"]
+    }
   });
   const engine = new GameEngine(state, {
     cardEffects: {
-      continuousAura: {
+      equipBlade: {
         duration: EffectDuration.continuous,
-        operations: []
+        target: { player: "self", zone: "monsterZone" },
+        operations: [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }]
       }
     }
   });
 
-  assert.throws(
-    () => engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "aura-1" }),
-    GameRuleError
-  );
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "blade-1",
+    targetCardId: "lancer-1"
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].hand, []);
+  assert.deepEqual(next.players[PLAYER].spellTrapZone, ["blade-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, []);
+  assert.equal(next.cards["lancer-1"].tempAtk, 300);
+  assert.deepEqual(next.continuousEffects, [
+    {
+      id: "continuous:blade-1",
+      playerId: PLAYER,
+      sourceCardId: "blade-1",
+      effectId: "equipBlade",
+      targetCardId: "lancer-1",
+      operations: [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }]
+    }
+  ]);
+  assert.ok(events.some((event) => event.type === "CARD_MOVED" && event.to.zone === "spellTrapZone"));
+  assert.ok(events.some((event) => event.type === "CONTINUOUS_EFFECT_REGISTERED" && event.sourceCardId === "blade-1"));
+  assert.ok(events.some((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === "lancer-1" &&
+    event.stat === "tempAtk" &&
+    event.amount === 300 &&
+    event.duration === EffectDuration.continuous
+  ));
+  assertValidGameState(next);
+});
+
+test("continuous equip spells support multiple stat modifiers", () => {
+  const state = makeState({
+    cards: [
+      card("drive-1", { templateId: "prism-drive", effect: "equipPrism" }),
+      card("guardian-1", { type: "monster", templateId: "iron-guardian", atk: 900, def: 2100 })
+    ],
+    player: {
+      hand: ["drive-1"],
+      monsterZone: ["guardian-1"]
+    }
+  });
+  const engine = new GameEngine(state, {
+    cardEffects: {
+      equipPrism: {
+        duration: EffectDuration.continuous,
+        target: { player: "self", zone: "monsterZone" },
+        operations: [
+          { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
+          { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: 200 }
+        ]
+      }
+    }
+  });
+
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "drive-1",
+    targetCardId: "guardian-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["guardian-1"].tempAtk, 200);
+  assert.equal(next.cards["guardian-1"].tempDef, 200);
+  assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.duration === EffectDuration.continuous).length, 2);
 });
 
 test("burst-rune deals damage and renewal heals with max LP cap", () => {

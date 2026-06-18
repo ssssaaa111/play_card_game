@@ -61,6 +61,8 @@ The engine rejects function effects. One-shot effects and continuous effects use
 
 Monster `onSummon` and `afterAttack` hooks must reference effect ids in the same DSL registry. Adding a monster-triggered effect means adding rule tests first, then registering the DSL operations.
 
+Continuous equipment spells use `EffectDuration.continuous`. Activating one moves the spell from hand to `spellTrapZone`, emits `CONTINUOUS_EFFECT_REGISTERED`, then applies its stat modifiers through `STAT_MODIFIED` events with `duration: "continuous"`. Continuous definitions currently support `modifyStat` operations only; expanding that list requires new rule tests first.
+
 ## Event and validation guarantees
 
 Every successful `dispatch` emits `GameEvent` entries, applies those events, and then runs `assertValidGameState`.
@@ -73,6 +75,7 @@ The current event applier handles:
 - `LP_HEALED`
 - `SHIELD_GAINED`
 - `STAT_MODIFIED`
+- `CONTINUOUS_EFFECT_REGISTERED`
 - `MONSTER_SUMMONED`
 - `PHASE_CHANGED`
 - `TIMING_CHANGED`

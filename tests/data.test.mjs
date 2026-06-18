@@ -137,6 +137,39 @@ test("current card library effects are dispatchable through the engine adapter",
   });
 });
 
+test("equipment starter pack has rule-backed cards", () => {
+  const expectedIds = [
+    "nova-squire",
+    "aegis-mender",
+    "blade-sigil",
+    "aegis-plate",
+    "prism-drive",
+    "overclock-core"
+  ];
+  const cardsById = new Map(library.map((card) => [card.id, card]));
+  expectedIds.forEach((id) => assert.ok(cardsById.has(id), `missing new card ${id}`));
+
+  assert.equal(cardsById.get("aegis-mender").onSummon, "shield400");
+  [
+    ["blade-sigil", "equipBlade", "tempAtk", 300],
+    ["aegis-plate", "equipAegis", "tempDef", 500],
+    ["prism-drive", "equipPrism", "tempAtk", 200],
+    ["overclock-core", "equipOverclock", "tempAtk", 600]
+  ].forEach(([cardId, effectId, stat, amount]) => {
+    const card = cardsById.get(cardId);
+    const effect = getCardEffectDefinition(effectId);
+    assert.equal(card.type, "spell", `${cardId} should be a spell`);
+    assert.equal(card.effect, effectId, `${cardId} should reference ${effectId}`);
+    assert.equal(effect.duration, "continuous", `${effectId} should be continuous`);
+    assert.deepEqual(effect.target, { player: "self", zone: "monsterZone" }, `${effectId} should target own monsters`);
+    assert.ok(effect.operations.some((operation) =>
+      operation.op === "modifyStat" &&
+      operation.stat === stat &&
+      operation.amount === amount
+    ), `${effectId} should modify ${stat} by ${amount}`);
+  });
+});
+
 test("deck presets reference only known cards and have enough cards", () => {
   Object.entries(deckPresets).forEach(([key, preset]) => {
     assert.ok(preset.label, `${key} needs label`);

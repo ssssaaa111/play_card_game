@@ -274,6 +274,22 @@ flowchart TD
 
 Planning functions do not mutate state. They return `spell`, `setTrap`, `summon`, `attack`, `skipAttack`, or `none`. Execution still goes through `GameEngine.dispatch` via the adapter, so AI and player actions share the same rule path.
 
+## Continuous Equipment
+
+Equipment spells are continuous effects, not one-shot graveyard spells. They still enter through `ACTIVATE_CARD`.
+
+```mermaid
+flowchart TD
+    Hand[Spell in hand] --> Activate[ACTIVATE_CARD]
+    Activate --> Validate[validate target and phase]
+    Validate --> Move[CARD_MOVED hand to spellTrapZone]
+    Move --> Register[CONTINUOUS_EFFECT_REGISTERED]
+    Register --> Stats[STAT_MODIFIED duration continuous]
+    Stats --> UI[UI replays events and keeps equipment on field]
+```
+
+Current continuous equipment effects only use declarative `modifyStat` operations. If equipment removal, aura ranges, or non-stat continuous effects are added later, they should add explicit revoke/remove events instead of directly changing card state.
+
 ## Browser Smoke Baseline
 
 `npm run smoke:browser` runs the in-page smoke scenarios through headless Chrome/Edge against the fixed local server.
@@ -289,7 +305,7 @@ flowchart LR
     Status -->|failed or missing| Fail[CLI fail with detail]
 ```
 
-Default browser smoke coverage currently includes `game-over-event`, `mode-auto-end`, `battle-trap`, `chain-trap-choice`, and `combo-spell`. Add a scenario to `src/browser-smoke.js` first, then include it in `scripts/browser-smoke.mjs` when it becomes part of the baseline.
+Default browser smoke coverage currently includes `game-over-event`, `mode-auto-end`, `battle-trap`, `chain-trap-choice`, `combo-spell`, and `equipment-spell`. Add a scenario to `src/browser-smoke.js` first, then include it in `scripts/browser-smoke.mjs` when it becomes part of the baseline.
 
 ## 文档维护规则
 

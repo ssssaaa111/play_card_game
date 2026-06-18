@@ -950,6 +950,38 @@ test("dispatches engine-backed healing and stat spells without direct UI mutatio
   assert.ok(buffEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === strongest.uid));
 });
 
+test("dispatches engine-backed equipment spells into UI spell trap zones", () => {
+  const blade = uiSpell("equip-blade", "equipBlade", "blade-sigil");
+  const lancer = uiMonster("lancer-1", "star-lancer");
+  lancer.atk = 1800;
+  const state = appState();
+  state.player.hand = [blade];
+  state.player.field[0] = lancer;
+
+  assert.equal(canDispatchSpellFromUiState(blade), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: lancer });
+
+  assert.deepEqual(state.player.hand, []);
+  assert.equal(state.player.traps[0], blade);
+  assert.deepEqual(state.player.grave, []);
+  assert.equal(lancer.tempAtk, 300);
+  assert.ok(events.some((event) =>
+    event.type === "CARD_MOVED" &&
+    event.cardId === blade.uid &&
+    event.to.zone === "spellTrapZone"
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "CONTINUOUS_EFFECT_REGISTERED" &&
+    event.sourceCardId === blade.uid &&
+    event.targetCardId === lancer.uid
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === lancer.uid &&
+    event.duration === "continuous"
+  ));
+});
+
 test("dispatches engine-backed damage spells with shield absorption", () => {
   const burst = uiSpell("spell-burn", "burn500", "burst-rune");
   const state = appState();

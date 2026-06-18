@@ -50,6 +50,22 @@ export const spellDefinitions = {
   },
   lightShadowCombo: {
     caption: "光暗交错，展开星界"
+  },
+  equipBlade: {
+    caption: "装备：攻击提升",
+    target: "ownMonster"
+  },
+  equipAegis: {
+    caption: "装备：守备强化",
+    target: "ownMonster"
+  },
+  equipPrism: {
+    caption: "装备：攻守共鸣",
+    target: "ownMonster"
+  },
+  equipOverclock: {
+    caption: "装备：超载攻击",
+    target: "ownMonster"
   }
 };
 
@@ -126,6 +142,14 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
         ? { ok: true }
         : { ok: false, reason: "需要场上同时有光属性和暗属性怪兽，才能发动晨昏星界。" };
     }
+    case "equipBlade":
+    case "equipAegis":
+    case "equipPrism":
+    case "equipOverclock": {
+      if (fieldCards(owner).length === 0) return { ok: false, reason: "场上没有怪兽，不能发动装备魔法。" };
+      if ((owner.traps || []).every(Boolean)) return { ok: false, reason: "魔陷区已满，不能发动装备魔法。" };
+      return { ok: true };
+    }
     default:
       return { ok: true };
   }
@@ -176,6 +200,20 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       if (!elements.has("light") || !elements.has("shadow")) return 0;
       return aiStyle === "control" || owner.lp <= 3000 ? 82 : 60;
     }
+    case "equipBlade":
+      return fieldCards(owner).length > 0 && (owner.traps || []).some((slot) => !slot)
+        ? (aiStyle === "aggressive" ? 66 : 46)
+        : 0;
+    case "equipAegis":
+      return fieldCards(owner).length > 0 && (owner.traps || []).some((slot) => !slot)
+        ? (aiStyle === "control" ? 64 : 36)
+        : 0;
+    case "equipPrism":
+      return fieldCards(owner).length > 0 && (owner.traps || []).some((slot) => !slot) ? 58 : 0;
+    case "equipOverclock":
+      return fieldCards(owner).length > 0 && (owner.traps || []).some((slot) => !slot)
+        ? (aiStyle === "aggressive" ? 74 : 42)
+        : 0;
     default:
       return 0;
   }

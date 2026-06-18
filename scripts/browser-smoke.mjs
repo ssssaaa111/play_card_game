@@ -10,7 +10,8 @@ const DEFAULT_SMOKES = [
   "mode-auto-end",
   "battle-trap",
   "chain-trap-choice",
-  "combo-spell"
+  "combo-spell",
+  "equipment-spell"
 ];
 
 function browserCandidates() {

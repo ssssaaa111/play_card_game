@@ -1,9 +1,11 @@
 import { Ability, GameEngine, Phase, getCardEffectDefinition, projectMachineStateFromEvents } from './game-engine.js';
 import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
+import { spellDefinition } from './spells.js';
 import { PHASES, TIMINGS } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
 const ONE_SHOT_EFFECT = "oneShot";
+const CONTINUOUS_EFFECT = "continuous";
 
 const uiZones = {
   deck: "deck",
@@ -96,6 +98,23 @@ function enginePhaseFromUiPhase(phase) {
   return phase || Phase.main;
 }
 
+function projectContinuousEffectsFromEvents(events = []) {
+  const active = new Map();
+  events.forEach((event) => {
+    if (event.type === "CONTINUOUS_EFFECT_REGISTERED") {
+      active.set(event.id, {
+        id: event.id,
+        playerId: event.playerId,
+        sourceCardId: event.sourceCardId,
+        effectId: event.effectId,
+        targetCardId: event.targetCardId || null,
+        operations: (event.operations || []).map((operation) => ({ ...operation }))
+      });
+    }
+  });
+  return [...active.values()];
+}
+
 export function buildEngineStateFromUiState(uiState) {
   const cards = {};
   const events = Array.isArray(uiState.gameEvents) ? uiState.gameEvents.map((event) => ({ ...event })) : [];
@@ -127,6 +146,7 @@ export function buildEngineStateFromUiState(uiState) {
       ai: uiAbilityEntries(uiState.ai)
     },
     events,
+    continuousEffects: projectContinuousEffectsFromEvents(events),
     nextEventId
   };
 }
@@ -368,7 +388,8 @@ export function applyUiGameEvents(uiState, events = []) {
 }
 
 export function canDispatchSpellFromUiState(card) {
-  return card?.type === "spell" && getCardEffectDefinition(card.effect)?.duration === ONE_SHOT_EFFECT;
+  const duration = getCardEffectDefinition(card?.effect)?.duration;
+  return card?.type === "spell" && (duration === ONE_SHOT_EFFECT || duration === CONTINUOUS_EFFECT);
 }
 
 export function canDispatchSummonEffectFromUiState(card) {
@@ -396,11 +417,14 @@ function targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo) {
   const explicit = cardKey(targetInfo?.card);
   if (explicit) return explicit;
   const sourceCardId = cardKey(card);
+  const definition = spellDefinition(card.effect);
   if (card.effect === "buff500") return strongestMonsterId(uiState, playerId);
   if (card.effect === "battleTrance") return strongestMonsterId(uiState, playerId);
   if (card.effect === "rallyAttack") return strongestMonsterId(uiState, playerId);
   if (card.effect === "pierceLine") return strongestMonsterId(uiState, rivalId);
   if (card.effect === "graveReturn") return firstGraveCardIdExcept(uiState, playerId, sourceCardId);
+  if (definition?.target === "ownMonster") return strongestMonsterId(uiState, playerId);
+  if (definition?.target === "enemyMonster") return strongestMonsterId(uiState, rivalId);
   return null;
 }
 

@@ -1000,6 +1000,44 @@ async function runPauseDetailSmoke(ctx) {
   setSmokeStatus("passed", "pause-detail");
 }
 
+async function runEquipmentSpellSmoke(ctx) {
+  setSmokeStatus("running", "equipment-spell");
+  await startSmokeDuel(ctx, "equipment");
+  const target = ctx.state.player.field[0];
+  if (target?.id !== "star-lancer") throw new Error("equipment scenario missing star-lancer");
+
+  clickSmokeElement(handCard(ctx.els, "blade-sigil"), "Blade Sigil hand card");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "equipBlade" &&
+      fieldCard(ctx.els, "player", "star-lancer")?.classList.contains("targetable"),
+    "Blade Sigil target selection",
+    6000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "equip Blade Sigil to star-lancer");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.tempAtk === 300 &&
+      trapCard(ctx.els, "player", "blade-sigil") &&
+      countGameEvents(ctx.state, "CONTINUOUS_EFFECT_REGISTERED") >= 1,
+    "Blade Sigil continuous effect registered",
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "aegis-plate"), "Aegis Plate hand card");
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "equipAegis", "Aegis Plate target selection", 6000);
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "equip Aegis Plate to star-lancer");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.tempDef === 500 &&
+      trapCard(ctx.els, "player", "aegis-plate") &&
+      countGameEvents(ctx.state, "STAT_MODIFIED") >= 2,
+    "Aegis Plate continuous defense boost",
+    9000
+  );
+  if (ctx.state.player.grave.some((card) => ["blade-sigil", "aegis-plate"].includes(card?.id))) {
+    throw new Error("equipment spells should not go to grave after activation");
+  }
+  setSmokeStatus("passed", "equipment-spell");
+}
+
 async function runGameOverEventSmoke(ctx) {
   setSmokeStatus("running", "game-over-event");
   await startSmokeDuel(ctx, "combo");
@@ -1057,6 +1095,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
     "pause-detail": runPauseDetailSmoke,
+    "equipment-spell": runEquipmentSpellSmoke,
     "game-over-event": runGameOverEventSmoke
   };
   const run = smokeRuns[smoke];

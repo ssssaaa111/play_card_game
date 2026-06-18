@@ -34,6 +34,7 @@ function duelist(overrides = {}) {
     deck: [],
     hand: [],
     field: Array(FIELD_SIZE).fill(null),
+    traps: Array(FIELD_SIZE).fill(null),
     grave: [],
     shield: 0,
     directAttacks: 0,
@@ -140,6 +141,24 @@ test("validates element combo spell requirements", () => {
   assert.deepEqual(validateSpellCondition("lightShadowCombo", { owner: duelist({ field: [monster({ element: "light" }), monster({ element: "shadow" }), null] }) }), { ok: true });
 });
 
+test("validates equipment spell requirements", () => {
+  assert.deepEqual(validateSpellCondition("equipBlade", { owner: duelist() }), {
+    ok: false,
+    reason: "场上没有怪兽，不能发动装备魔法。"
+  });
+  assert.deepEqual(
+    validateSpellCondition("equipBlade", {
+      owner: duelist({
+        field: [monster(), null, null],
+        traps: [spell({ effect: "shield800" }), spell({ effect: "draw2" }), spell({ effect: "burn500" })]
+      })
+    }),
+    { ok: false, reason: "魔陷区已满，不能发动装备魔法。" }
+  );
+  assert.deepEqual(validateSpellCondition("equipBlade", { owner: duelist({ field: [monster(), null, null] }) }), { ok: true });
+  assert.deepEqual(validateSpellCondition("equipPrism", { owner: duelist({ field: [monster(), null, null] }) }), { ok: true });
+});
+
 test("rejects missing spell definitions", () => {
   assert.deepEqual(validateSpellCondition("missingEffect", { owner: duelist(), rival: duelist({ owner: "ai" }) }), {
     ok: false,
@@ -191,4 +210,22 @@ test("scores AI direct strike and combo spells", () => {
     }),
     82
   );
+});
+
+test("scores AI equipment spells by board state", () => {
+  assert.equal(scoreSpellForAi("equipBlade", {
+    owner: duelist(),
+    rival: duelist({ owner: "player" }),
+    aiStyle: "aggressive"
+  }), 0);
+  assert.equal(scoreSpellForAi("equipBlade", {
+    owner: duelist({ field: [monster({ atk: 1800 }), null, null] }),
+    rival: duelist({ owner: "player" }),
+    aiStyle: "aggressive"
+  }), 66);
+  assert.equal(scoreSpellForAi("equipAegis", {
+    owner: duelist({ field: [monster({ def: 1800 }), null, null] }),
+    rival: duelist({ owner: "player" }),
+    aiStyle: "control"
+  }), 64);
 });

@@ -2114,6 +2114,15 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       statModifiedCount += 1;
       addLog(`${found.card.name} 因 ${card.name} ${statChangeText(event)}。`);
     }
+    if (event.type === "CONTINUOUS_EFFECT_REGISTERED") {
+      const found = findRuntimeCard(event.targetCardId);
+      if (found) {
+        result.effectTarget = found.card;
+        result.targetOwner = found.owner;
+        addLog(`${card.name} 装备给 ${found.card.name}，持续效果已登记。`);
+        playEpicAction("装备", "guard");
+      }
+    }
     if (event.type === "MONSTER_READIED") {
       const found = findRuntimeCard(event.cardId);
       if (!found) return;

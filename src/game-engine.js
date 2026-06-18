@@ -140,6 +140,20 @@ export const defaultCardEffects = Object.freeze({
     { op: "gainShield", player: "self", amount: 600 },
     { op: "drawCards", player: "self", count: 1 }
   ]),
+  equipBlade: continuous([
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }
+  ], { target: { player: "self", zone: "monsterZone" } }),
+  equipAegis: continuous([
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: 500 }
+  ], { target: { player: "self", zone: "monsterZone" } }),
+  equipPrism: continuous([
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: 200 }
+  ], { target: { player: "self", zone: "monsterZone" } }),
+  equipOverclock: continuous([
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 600 },
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -300 }
+  ], { target: { player: "self", zone: "monsterZone" } }),
   graveReturn: oneShot([
     {
       op: "moveCard",
@@ -329,7 +343,8 @@ export class EffectContext {
         before,
         after: before + delta,
         amount: delta,
-        sourceCardId: options.sourceCardId || null
+        sourceCardId: options.sourceCardId || null,
+        ...(options.duration ? { duration: options.duration } : {})
       });
       return targetCardId;
     });
@@ -527,14 +542,28 @@ export class GameEngine {
 
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };
-    validateEffectRequirements(this.#effects[card.effect], state, preparedAction, card);
-    validateEffectTarget(this.#effects[card.effect], state, preparedAction, card);
+    const definition = this.#effects[card.effect];
+    validateEffectRequirements(definition, state, preparedAction, card);
+    validateEffectTarget(definition, state, preparedAction, card);
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
       cardId: action.cardId,
       cardType: card.type,
       phase: state.turn.phase
     });
+    if (definition?.duration === EffectDuration.continuous) {
+      ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "hand" }, { playerId: action.playerId, zone: "spellTrapZone", index: action.index });
+      emit("CONTINUOUS_EFFECT_REGISTERED", {
+        id: `continuous:${action.cardId}`,
+        playerId: action.playerId,
+        sourceCardId: action.cardId,
+        effectId: card.effect,
+        targetCardId: action.targetCardId || null,
+        operations: clone(definition.operations || [])
+      });
+      runContinuousEffectDefinition(definition, ctx, preparedAction, card);
+      return;
+    }
     ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "hand" }, { playerId: action.playerId, zone: "grave" });
     runEffect(this.#effects, card.effect, ctx, preparedAction, card);
   }
@@ -1416,6 +1445,27 @@ export function assertValidGameState(state) {
       throw new GameStateValidationError("Game-over losers must exist");
     }
   }
+  const continuousEffects = state.continuousEffects || [];
+  if (!Array.isArray(continuousEffects)) {
+    throw new GameStateValidationError("GameState.continuousEffects must be an array");
+  }
+  for (const effect of continuousEffects) {
+    if (!effect.id || !effect.playerId || !effect.sourceCardId || !effect.effectId) {
+      throw new GameStateValidationError("Continuous effect is missing required fields");
+    }
+    if (!state.players[effect.playerId]) {
+      throw new GameStateValidationError("Continuous effect player must exist");
+    }
+    if (!state.cards[effect.sourceCardId]) {
+      throw new GameStateValidationError("Continuous effect source card must exist");
+    }
+    if (effect.targetCardId && !state.cards[effect.targetCardId]) {
+      throw new GameStateValidationError("Continuous effect target card must exist");
+    }
+    if (!Array.isArray(effect.operations)) {
+      throw new GameStateValidationError("Continuous effect operations must be an array");
+    }
+  }
 
   const seenCards = new Map();
   for (const player of Object.values(state.players)) {
@@ -1502,6 +1552,9 @@ export function applyGameEvent(state, event, options = {}) {
       break;
     case "STAT_MODIFIED":
       applyStatModified(state, event);
+      break;
+    case "CONTINUOUS_EFFECT_REGISTERED":
+      applyContinuousEffectRegistered(state, event);
       break;
     case "PHASE_CHANGED":
       applyPhaseChanged(state, event);
@@ -1755,6 +1808,24 @@ function applyStatModified(state, event) {
     throw new GameRuleError(`Unsupported stat ${event.stat}`);
   }
   card[event.stat] = Number(event.after);
+}
+
+function applyContinuousEffectRegistered(state, event) {
+  requirePlayer(state, event.playerId);
+  requireCard(state, event.sourceCardId);
+  if (event.targetCardId) requireCard(state, event.targetCardId);
+  state.continuousEffects = Array.isArray(state.continuousEffects) ? state.continuousEffects : [];
+  if (state.continuousEffects.some((entry) => entry.id === event.id)) {
+    throw new GameRuleError(`Continuous effect ${event.id} is already registered`);
+  }
+  state.continuousEffects.push({
+    id: event.id,
+    playerId: event.playerId,
+    sourceCardId: event.sourceCardId,
+    effectId: event.effectId,
+    targetCardId: event.targetCardId || null,
+    operations: clone(event.operations || [])
+  });
 }
 
 function applyPhaseChanged(state, event) {
@@ -2089,8 +2160,23 @@ function runEffectDefinition(definition, ctx, action, card) {
   }
 }
 
-function runEffectOperation(operation, ctx, action, card) {
-  const source = { sourceCardId: action.cardId || card.id };
+function runContinuousEffectDefinition(definition, ctx, action, card) {
+  if (definition.duration !== EffectDuration.continuous) {
+    throw new GameRuleError(`Effect ${action.cardId} is not a continuous effect`);
+  }
+  for (const operation of definition.operations) {
+    if (operation.op !== "modifyStat") {
+      throw new GameRuleError(`Continuous effect ${action.cardId} cannot use ${operation.op}`);
+    }
+    runEffectOperation(operation, ctx, action, card, { duration: EffectDuration.continuous });
+  }
+}
+
+function runEffectOperation(operation, ctx, action, card, options = {}) {
+  const source = {
+    sourceCardId: action.cardId || card.id,
+    ...(options.duration ? { duration: options.duration } : {})
+  };
   switch (operation.op) {
     case "drawCards":
       return ctx.drawCards(resolvePlayerRef(operation.player, action), operation.count, source);
@@ -2424,6 +2510,14 @@ function oneShot(operations, meta = {}) {
   };
 }
 
+function continuous(operations, meta = {}) {
+  return {
+    ...meta,
+    duration: EffectDuration.continuous,
+    operations: operations.map((operation) => ({ ...operation }))
+  };
+}
+
 function normalizeEffectDefinitions(effects) {
   for (const [effectId, definition] of Object.entries(effects)) {
     if (typeof definition === "function") {
@@ -2444,6 +2538,7 @@ function normalizeState(state) {
   const largestEventId = state.events.reduce((largest, event) => Math.max(largest, Number(event.id) || 0), 0);
   state.nextEventId = Number.isInteger(state.nextEventId) ? state.nextEventId : largestEventId + 1;
   state.gameOver = state.gameOver && typeof state.gameOver === "object" ? state.gameOver : null;
+  state.continuousEffects = Array.isArray(state.continuousEffects) ? state.continuousEffects : [];
   state.machine = {
     phase: state.turn.phase,
     timing: timingForPhase(state.turn.phase),
