@@ -13,6 +13,7 @@ import {
   Timing,
   applyGameEvent,
   assertValidGameState,
+  explainActionLegality,
   getCardEffectDefinition,
   hasAbility,
   projectMachineStateFromEvents
@@ -3096,6 +3097,68 @@ test("phase state machine rejects illegal card activation", () => {
     GameRuleError
   );
   assert.deepEqual(engine.getState().players[PLAYER].hand, ["seer-1"]);
+});
+
+test("explains action legality without mutating the source state", () => {
+  const state = makeState({
+    cards: [
+      card("seer-1", { templateId: "seer-call", effect: "draw2" }),
+      card("deck-1", { type: "monster" }),
+      card("deck-2", { type: "monster" })
+    ],
+    player: {
+      hand: ["seer-1"],
+      deck: ["deck-1", "deck-2"]
+    }
+  });
+
+  const result = explainActionLegality(state, {
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "seer-1"
+  });
+
+  assert.deepEqual(result, { ok: true, reason: "" });
+  assert.deepEqual(state.players[PLAYER].hand, ["seer-1"]);
+  assert.deepEqual(state.players[PLAYER].grave, []);
+  assert.equal(state.events.length, 0);
+});
+
+test("explains illegal phases and missing targets as rule reasons", () => {
+  const drawPhase = makeState({
+    cards: [
+      card("seer-1", { templateId: "seer-call", effect: "draw2" }),
+      card("deck-1", { type: "monster" }),
+      card("deck-2", { type: "monster" })
+    ],
+    player: {
+      hand: ["seer-1"],
+      deck: ["deck-1", "deck-2"]
+    },
+    turn: { phase: Phase.draw }
+  });
+
+  assert.deepEqual(
+    explainActionLegality(drawPhase, { type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "seer-1" }),
+    {
+      ok: false,
+      reason: "ACTIVATE_CARD is not legal during draw phase"
+    }
+  );
+
+  const missingTarget = makeState({
+    cards: [card("blade-1", { templateId: "blade-sigil", effect: "equipBlade" })],
+    player: { hand: ["blade-1"] }
+  });
+
+  assert.deepEqual(
+    explainActionLegality(missingTarget, { type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "blade-1" }),
+    {
+      ok: false,
+      reason: "Effect equipBlade requires action.targetCardId"
+    }
+  );
 });
 
 test("getState returns a defensive copy so UI code cannot mutate live engine state", () => {

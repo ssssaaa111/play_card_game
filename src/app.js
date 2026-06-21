@@ -40,7 +40,8 @@ import {
   dispatchSetTrapFromUiState,
   dispatchStartTurnFromUiState,
   dispatchSummonMonsterFromUiState,
-  dispatchTrapResponseFromUiState
+  dispatchTrapResponseFromUiState,
+  explainActivateSpellFromUiState
 } from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
 import { spellDefinitions, validateSpellCondition } from './spells.js';
@@ -2204,7 +2205,11 @@ function validateSpell(owner, rival, card, handIndex) {
   if (!card || card.type !== "spell") return { ok: false, reason: "请选择魔法卡。" };
   const effect = spellEffects[card.effect];
   if (!effect) return { ok: false, reason: "这个魔法效果还没有实现。" };
-  return validateSpellCondition(card.effect, { owner, rival, card, handIndex });
+  const condition = validateSpellCondition(card.effect, { owner, rival, card, handIndex });
+  if (!condition.ok) return condition;
+  const engineLegality = explainActivateSpellFromUiState(state, owner.owner, rival.owner, handIndex);
+  if (!engineLegality.ok) return { ok: false, reason: engineLegality.reason };
+  return condition;
 }
 
 function spellCaption(card) {

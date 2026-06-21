@@ -7,6 +7,7 @@ import {
   canDispatchTrapFromUiState,
   canDispatchSpellFromUiState,
   canDispatchSummonEffectFromUiState,
+  explainActivateSpellFromUiState,
   applyUiGameEvents,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
@@ -1420,4 +1421,33 @@ test("rejects engine-backed spells in illegal phases without consuming the card"
   assert.deepEqual(state.player.hand, [seer]);
   assert.equal(state.player.grave.length, 0);
   assert.deepEqual(state.gameEvents, []);
+});
+
+test("explains spell activation legality from UI state without consuming cards", () => {
+  const seer = uiSpell("spell-draw-phase", "draw2", "seer-call");
+  const state = appState({ phase: PHASES.draw });
+  state.player.hand = [seer];
+  state.player.deck = [uiMonster("deck-phase-1"), uiMonster("deck-phase-2")];
+
+  const result = explainActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.equal(result.ok, false);
+  assert.match(result.engineReason, /not legal during draw phase/);
+  assert.match(result.reason, /阶段|当前/);
+  assert.deepEqual(state.player.hand, [seer]);
+  assert.deepEqual(state.player.grave, []);
+  assert.deepEqual(state.gameEvents, []);
+});
+
+test("explains missing spell targets through the engine adapter", () => {
+  const blade = uiSpell("blade-no-target", "equipBlade", "blade-sigil");
+  const state = appState();
+  state.player.hand = [blade];
+
+  const result = explainActivateSpellFromUiState(state, "player", "ai", 0);
+
+  assert.equal(result.ok, false);
+  assert.match(result.engineReason, /requires action\.targetCardId/);
+  assert.match(result.reason, /目标/);
+  assert.deepEqual(state.player.hand, [blade]);
 });

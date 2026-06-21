@@ -574,6 +574,7 @@ test("app uses extracted spell metadata", () => {
   assert.match(app, /from '\.\/spells\.js'/);
   assert.match(app, /const spellEffects = spellDefinitions/);
   assert.match(app, /validateSpellCondition\(card\.effect/);
+  assert.match(app, /explainActivateSpellFromUiState\(state,/);
   assert.match(app, /chooseAiSpellAction\(\{/);
   assert.match(ai, /scoreSpellForAi\(card\.effect/);
   assert.doesNotMatch(spellEffectsSource, /apply:/);

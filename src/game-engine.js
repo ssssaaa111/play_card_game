@@ -1438,6 +1438,18 @@ export class GameEngine {
   }
 }
 
+export function explainActionLegality(initialState, action, options = {}) {
+  try {
+    new GameEngine(initialState, options).dispatch(action);
+    return { ok: true, reason: "" };
+  } catch (error) {
+    if (error instanceof GameRuleError) {
+      return { ok: false, reason: error.message };
+    }
+    throw error;
+  }
+}
+
 export function assertValidGameState(state) {
   if (!state || typeof state !== "object") {
     throw new GameStateValidationError("GameState must be an object");

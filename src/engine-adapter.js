@@ -1,4 +1,4 @@
-import { Ability, GameEngine, Phase, getCardEffectDefinition, projectMachineStateFromEvents } from './game-engine.js';
+import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, projectMachineStateFromEvents } from './game-engine.js';
 import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { PHASES, TIMINGS } from './turn-state.js';
@@ -401,6 +401,49 @@ export function canDispatchSummonEffectFromUiState(card) {
 
 export function canDispatchTrapFromUiState(card) {
   return card?.type === "trap" && getCardEffectDefinition(card.trigger || card.effect)?.duration === ONE_SHOT_EFFECT;
+}
+
+export function explainActivateSpellFromUiState(uiState, playerId, rivalId, handIndex, targetInfo = null) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.hand[handIndex];
+  if (!card) return { ok: false, reason: "没有选中手牌。", engineReason: "No hand card at index" };
+  if (card.type !== "spell") return { ok: false, reason: "这张卡不是魔法卡。", engineReason: "Selected card is not a spell" };
+  if (!canDispatchSpellFromUiState(card)) {
+    return {
+      ok: false,
+      reason: "这张魔法卡还没有接入规则引擎。",
+      engineReason: `Spell effect ${card.effect || "(none)"} is not engine-backed`
+    };
+  }
+
+  const action = {
+    type: "ACTIVATE_CARD",
+    playerId,
+    rivalId,
+    cardId: cardKey(card)
+  };
+  const targetCardId = targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo);
+  if (targetCardId) action.targetCardId = targetCardId;
+  const duration = getCardEffectDefinition(card.effect)?.duration;
+  if (duration === CONTINUOUS_EFFECT) {
+    action.index = duelist.traps.findIndex((slot) => !slot);
+  }
+
+  const result = explainActionLegality(buildEngineStateFromUiState(uiState), action);
+  return result.ok
+    ? { ok: true, reason: "", engineReason: "" }
+    : { ok: false, reason: localizeEngineRuleReason(result.reason), engineReason: result.reason };
+}
+
+function localizeEngineRuleReason(message = "") {
+  if (/not legal during/.test(message)) return "当前阶段不能发动这张卡。";
+  if (/requires action\.targetCardId/.test(message)) return "需要先选择一个合法目标。";
+  if (/not in .*monsterZone/.test(message)) return "目标不在合法怪兽区。";
+  if (/not in .*spellTrapZone/.test(message)) return "目标不在合法魔陷区。";
+  if (/not the strongest monster/.test(message)) return "这张卡只能选择规则指定的最高攻击力目标。";
+  if (/requires at least|requires elements/.test(message)) return "场上属性或数量条件不足。";
+  if (/cannot be the source card/.test(message)) return "不能选择这张卡自己作为目标。";
+  return `规则引擎判定不能发动：${message}`;
 }
 
 function strongestMonsterId(uiState, playerId) {
