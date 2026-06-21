@@ -429,21 +429,97 @@ export function explainActivateSpellFromUiState(uiState, playerId, rivalId, hand
     action.index = duelist.traps.findIndex((slot) => !slot);
   }
 
-  const result = explainActionLegality(buildEngineStateFromUiState(uiState), action);
-  return result.ok
-    ? { ok: true, reason: "", engineReason: "" }
-    : { ok: false, reason: localizeEngineRuleReason(result.reason), engineReason: result.reason };
+  return explainUiAction(buildEngineStateFromUiState(uiState), action, "发动这张卡");
 }
 
-function localizeEngineRuleReason(message = "") {
-  if (/not legal during/.test(message)) return "当前阶段不能发动这张卡。";
+export function explainSummonMonsterFromUiState(uiState, playerId, handIndex, fieldIndex = null) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.hand[handIndex];
+  if (!card) return { ok: false, reason: "没有选中手牌。", engineReason: "No hand card at index" };
+  if (card.type !== "monster") return { ok: false, reason: "这张卡不是怪兽卡。", engineReason: "Selected card is not a monster" };
+
+  const index = Number.isInteger(fieldIndex) ? fieldIndex : duelist.field.findIndex((slot) => !slot);
+  if (index < 0) return { ok: false, reason: "召唤区已满。", engineReason: "No monster zone slot is available" };
+  if (duelist.field[index]) return { ok: false, reason: "这个召唤区已有怪兽。", engineReason: "Monster zone slot is occupied" };
+
+  const engineState = buildEngineStateFromUiState(uiState);
+  const cardId = cardKey(card);
+  if (engineState.cards[cardId] && !canDispatchSummonEffectFromUiState(card)) {
+    engineState.cards[cardId] = { ...engineState.cards[cardId], onSummon: null };
+  }
+
+  return explainUiAction(engineState, {
+    type: "SUMMON_MONSTER",
+    playerId,
+    cardId,
+    index
+  }, "召唤这只怪兽");
+}
+
+export function explainSetTrapFromUiState(uiState, playerId, handIndex, trapIndex = null) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.hand[handIndex];
+  if (!card) return { ok: false, reason: "没有选中手牌。", engineReason: "No hand card at index" };
+  if (card.type !== "trap") return { ok: false, reason: "这张卡不是陷阱卡。", engineReason: "Selected card is not a trap" };
+
+  const index = Number.isInteger(trapIndex) ? trapIndex : duelist.traps.findIndex((slot) => !slot);
+  if (index < 0) return { ok: false, reason: "魔陷区已满。", engineReason: "No spell trap zone slot is available" };
+  if (duelist.traps[index]) return { ok: false, reason: "这个魔陷区已有卡牌。", engineReason: "Spell trap zone slot is occupied" };
+
+  return explainUiAction(buildEngineStateFromUiState(uiState), {
+    type: "SET_TRAP",
+    playerId,
+    cardId: cardKey(card),
+    index
+  }, "盖放这张陷阱");
+}
+
+export function explainDeclareAttackFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex) {
+  const duelist = uiDuelist(uiState, playerId);
+  const rival = uiDuelist(uiState, rivalId);
+  const attacker = duelist.field[attackerIndex];
+  if (!attacker) return { ok: false, reason: "没有选中攻击怪兽。", engineReason: "No attacker at index" };
+  const target = targetIndex >= 0 ? rival.field[targetIndex] : null;
+  if (targetIndex >= 0 && !target) {
+    return { ok: false, reason: "不能攻击空的怪兽区。", engineReason: `No battle target at index ${targetIndex}` };
+  }
+
+  const action = {
+    type: "DECLARE_ATTACK",
+    playerId,
+    rivalId,
+    attackerCardId: cardKey(attacker)
+  };
+  if (target) action.targetCardId = cardKey(target);
+
+  return explainUiAction(buildEngineStateFromUiState(uiState), action, "攻击");
+}
+
+function explainUiAction(engineState, action, actionLabel) {
+  const result = explainActionLegality(engineState, action);
+  return result.ok
+    ? { ok: true, reason: "", engineReason: "" }
+    : { ok: false, reason: localizeEngineRuleReason(result.reason, actionLabel), engineReason: result.reason };
+}
+
+function localizeEngineRuleReason(message = "", actionLabel = "操作") {
+  if (/not legal during/.test(message)) return `当前阶段不能${actionLabel}。`;
   if (/requires action\.targetCardId/.test(message)) return "需要先选择一个合法目标。";
   if (/not in .*monsterZone/.test(message)) return "目标不在合法怪兽区。";
   if (/not in .*spellTrapZone/.test(message)) return "目标不在合法魔陷区。";
+  if (/is not a monster/.test(message)) return "这张卡不是怪兽卡。";
+  if (/is not a trap/.test(message)) return "这张卡不是陷阱卡。";
+  if (/has no normal or extra summon/.test(message)) return "本回合没有可用的通常召唤或额外召唤次数。";
+  if (/monsterZone is full/.test(message)) return "召唤区已满。";
+  if (/spellTrapZone is full/.test(message)) return "魔陷区已满。";
+  if (/already attacked/.test(message)) return "这只怪兽已经攻击过。";
+  if (/Defense position monsters cannot attack/.test(message)) return "守备表示怪兽不能攻击。";
+  if (/must attack a monster/.test(message)) return "对方场上还有怪兽，不能直接攻击玩家。";
+  if (/skipped attacks/.test(message)) return "本回合已经跳过攻击，不能再攻击。";
   if (/not the strongest monster/.test(message)) return "这张卡只能选择规则指定的最高攻击力目标。";
   if (/requires at least|requires elements/.test(message)) return "场上属性或数量条件不足。";
   if (/cannot be the source card/.test(message)) return "不能选择这张卡自己作为目标。";
-  return `规则引擎判定不能发动：${message}`;
+  return `规则引擎判定不能${actionLabel}：${message}`;
 }
 
 function strongestMonsterId(uiState, playerId) {

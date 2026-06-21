@@ -45,6 +45,22 @@ test("describes hand actions for common cards", () => {
   assert.equal(describeHandAction(trap, { ...base, hasTrapZone: false }).label, "陷阱满");
   assert.equal(describeHandAction(spell, { ...base, spellValidation: { ok: false, reason: "生命值已满。" } }).reason, "生命值已满。");
   assert.equal(describeHandAction(spell, { ...base, selected: true, spellValidation: { ok: true } }).label, "待确认");
+  assert.deepEqual(describeHandAction(monster, {
+    ...base,
+    monsterValidation: { ok: false, reason: "当前阶段不能召唤这只怪兽。" }
+  }), {
+    ok: false,
+    label: "不可召唤",
+    reason: "当前阶段不能召唤这只怪兽。"
+  });
+  assert.deepEqual(describeHandAction(trap, {
+    ...base,
+    trapValidation: { ok: false, reason: "当前阶段不能盖放这张陷阱。" }
+  }), {
+    ok: false,
+    label: "不可盖放",
+    reason: "当前阶段不能盖放这张陷阱。"
+  });
 });
 
 test("describes pending target selection", () => {

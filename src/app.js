@@ -41,7 +41,10 @@ import {
   dispatchStartTurnFromUiState,
   dispatchSummonMonsterFromUiState,
   dispatchTrapResponseFromUiState,
-  explainActivateSpellFromUiState
+  explainActivateSpellFromUiState,
+  explainDeclareAttackFromUiState,
+  explainSetTrapFromUiState,
+  explainSummonMonsterFromUiState
 } from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
 import { spellDefinitions, validateSpellCondition } from './spells.js';
@@ -2792,6 +2795,14 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     addLog(`${duelistLabel(owner)}的攻击被规则拦截：${targetValidation.reason}`);
     return false;
   }
+  const engineLegality = explainDeclareAttackFromUiState(state, owner.owner, rival.owner, attackerIndex, targetIndex);
+  if (!engineLegality.ok) {
+    if (owner.owner === "player") {
+      cue(engineLegality.reason);
+    }
+    addLog(`${duelistLabel(owner)}的攻击被引擎拦截：${engineLegality.reason}`);
+    return false;
+  }
   const impactBefore = attackImpactSnapshot(owner, rival);
   const attackContext = { attackerIndex, targetIndex, engineResponse: true };
   const declarationEvents = declareAttackWithEngine(owner, rival, attackerIndex, targetIndex);
@@ -4364,6 +4375,8 @@ function handActionInfo(card, handIndex) {
     hasTrapZone: state.player.traps.some((slot) => !slot),
     summonedThisTurn: state.player.normalSummonsUsed > 0,
     extraSummon: state.player.extraSummon,
+    monsterValidation: card.type === "monster" ? explainSummonMonsterFromUiState(state, "player", handIndex) : { ok: true },
+    trapValidation: card.type === "trap" ? explainSetTrapFromUiState(state, "player", handIndex) : { ok: true },
     spellValidation: card.type === "spell" ? validateSpell(state.player, state.ai, card, handIndex) : { ok: true },
     spellNeedsManualTarget: needsTarget,
     spellTargetPrompt: needsTarget

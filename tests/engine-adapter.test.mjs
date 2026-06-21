@@ -8,6 +8,9 @@ import {
   canDispatchSpellFromUiState,
   canDispatchSummonEffectFromUiState,
   explainActivateSpellFromUiState,
+  explainDeclareAttackFromUiState,
+  explainSetTrapFromUiState,
+  explainSummonMonsterFromUiState,
   applyUiGameEvents,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
@@ -1450,4 +1453,64 @@ test("explains missing spell targets through the engine adapter", () => {
   assert.match(result.engineReason, /requires action\.targetCardId/);
   assert.match(result.reason, /目标/);
   assert.deepEqual(state.player.hand, [blade]);
+});
+
+test("explains monster summon legality from UI state without consuming cards", () => {
+  const monster = uiMonster("summon-locked");
+  const state = appState();
+  state.player.hand = [monster];
+  state.player.normalSummonsUsed = 1;
+
+  const result = explainSummonMonsterFromUiState(state, "player", 0, 0);
+
+  assert.equal(result.ok, false);
+  assert.match(result.engineReason, /no normal or extra summon/);
+  assert.deepEqual(state.player.hand, [monster]);
+  assert.deepEqual(state.player.field.filter(Boolean), []);
+  assert.deepEqual(state.gameEvents, []);
+});
+
+test("explains occupied summon slots before compacting UI monster zones", () => {
+  const monster = uiMonster("summon-slot");
+  const existing = uiMonster("summon-existing");
+  const state = appState();
+  state.player.hand = [monster];
+  state.player.field[0] = existing;
+
+  const result = explainSummonMonsterFromUiState(state, "player", 0, 0);
+
+  assert.equal(result.ok, false);
+  assert.match(result.engineReason, /Monster zone slot is occupied/);
+  assert.deepEqual(state.player.hand, [monster]);
+  assert.equal(state.player.field[0], existing);
+  assert.deepEqual(state.gameEvents, []);
+});
+
+test("explains trap setting legality from UI state without consuming cards", () => {
+  const trap = uiTrap("trap-draw-phase");
+  const state = appState({ phase: PHASES.draw });
+  state.player.hand = [trap];
+
+  const result = explainSetTrapFromUiState(state, "player", 0, 0);
+
+  assert.equal(result.ok, false);
+  assert.match(result.engineReason, /not legal during draw phase/);
+  assert.deepEqual(state.player.hand, [trap]);
+  assert.deepEqual(state.player.traps.filter(Boolean), []);
+  assert.deepEqual(state.gameEvents, []);
+});
+
+test("explains attack target legality from UI state without opening response windows", () => {
+  const attacker = uiMonster("attack-direct");
+  const guard = uiMonster("attack-guard");
+  const state = appState({ phase: PHASES.battle });
+  state.player.field[0] = attacker;
+  state.ai.field[0] = guard;
+
+  const result = explainDeclareAttackFromUiState(state, "player", "ai", 0, -1);
+
+  assert.equal(result.ok, false);
+  assert.match(result.engineReason, /must attack a monster/);
+  assert.equal(attacker.used, undefined);
+  assert.deepEqual(state.gameEvents, []);
 });

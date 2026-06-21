@@ -53,6 +53,8 @@ export function describeHandAction(card, {
   hasTrapZone = false,
   summonedThisTurn = false,
   extraSummon = 0,
+  monsterValidation = { ok: true },
+  trapValidation = { ok: true },
   spellValidation = { ok: false, reason: "这张魔法卡当前不能发动。" },
   spellNeedsManualTarget = false,
   spellTargetPrompt = ""
@@ -71,10 +73,12 @@ export function describeHandAction(card, {
   if (card.type === "monster") {
     if (!hasMonsterZone) return { ok: false, label: "场已满", reason: "我方召唤区已满。" };
     if (summonedThisTurn && extraSummon <= 0) return { ok: false, label: "已召唤", reason: "本回合已经通常召唤过。" };
+    if (!monsterValidation.ok) return { ok: false, label: "不可召唤", reason: monsterValidation.reason };
     return { ok: true, label: "可召唤", reason: "选中后点击我方空召唤区。" };
   }
   if (card.type === "trap") {
     if (!hasTrapZone) return { ok: false, label: "陷阱满", reason: "我方陷阱区已满。" };
+    if (!trapValidation.ok) return { ok: false, label: "不可盖放", reason: trapValidation.reason };
     return { ok: true, label: "可盖放", reason: "选中后点击我方空陷阱区。" };
   }
   if (card.type === "spell") {
