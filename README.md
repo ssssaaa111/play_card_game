@@ -53,9 +53,9 @@ npm test
 - `tests/view-model.test.mjs`：覆盖回合状态、中心提示和手牌行动标签文案。
 - `tests/smoke.test.mjs`：检查模块语法、页面关键挂点和已知兼容性问题。
 
-后续新增规则或卡牌时，先给规则/数据补测试，再跑 `npm test`；真实浏览器点击流程使用 `http://localhost:5177/?test=1` 作为回归入口，这个模式会跳过规则弹窗并默认关闭音效/语音。
+后续新增规则或卡牌时，先给规则/数据补测试，再跑 `npm test`；如果 Windows 权限拦截 npm 包装命令，可以直接跑 `node --test tests`。真实浏览器点击流程使用 `http://localhost:5177/?test=1` 作为回归入口，这个模式会跳过规则弹窗并默认关闭音效/语音。
 
-浏览器回归优先点测这些路径：`换位陷阱` 场景盖放 `幻影换位` 后确认连锁提示，`跳攻锁定` 场景验证跳过攻击后新召唤怪兽也不能继续攻击，`直击许可` 场景验证对手有怪兽时不能裸点角色直击。测试模式会暴露只读 `window.__starDuelTest.snapshot()`，方便检查当前回合、场面、连锁弹窗、音频开关和日志审计结果。自动冒烟入口包括 `smoke=skip-lock`、`smoke=direct-guard`、`smoke=combo-spell`、`smoke=ace-attack` 和 `smoke=chain-trap-choice`；关键长链路会同时校验最终日志审计结果，完成后在 `document.body.dataset.smokeStatus` 标记 `passed` 或 `failed`。
+浏览器回归优先点测这些路径：`换位陷阱` 场景盖放 `幻影换位` 后确认连锁提示，`跳攻锁定` 场景验证跳过攻击后新召唤怪兽也不能继续攻击，`直击许可` 场景验证对手有怪兽时不能裸点角色直击。测试模式会暴露只读 `window.__starDuelTest.snapshot()`，方便检查当前回合、场面、连锁弹窗、音频开关和日志审计结果。自动冒烟入口包括 `smoke=skip-lock`、`smoke=direct-guard`、`smoke=combo-spell`、`smoke=ace-attack` 和 `smoke=chain-trap-choice`；关键长链路会同时校验最终日志审计结果，完成后在 `document.body.dataset.smokeStatus` 标记 `passed` 或 `failed`。如果 `npm run smoke:browser` 被 Windows 拦截，可以在服务已启动时直接运行 `node scripts/browser-smoke.mjs equipment-spell`；脚本会先尝试项目 `.tmp`，失败后退到系统临时目录创建浏览器 profile。
 
 需要验证固定结算次数的规则测试场景可以声明 `playerDeck` 或 `aiDeck`，避免随机抽牌、组合技或额外召唤让回归结果漂移。
 

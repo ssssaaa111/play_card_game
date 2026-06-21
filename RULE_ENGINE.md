@@ -137,7 +137,7 @@ The validator catches:
 
 - AI decision functions in `src/ai.js` are pure planners. They return command-shaped actions such as `spell`, `setTrap`, `summon`, `attack`, `skipAttack`, or `none`; they must not mutate game state.
 - AI execution in `src/app.js` should consume those planned actions and then use the same adapter/`GameEngine.dispatch` path as player actions.
-- Browser smoke baselines run with `npm run smoke:browser` against `127.0.0.1:5177`. A scenario should first be implemented in `src/browser-smoke.js`, then added to `scripts/browser-smoke.mjs` when it becomes part of the default regression set.
+- Browser smoke baselines run with `npm run smoke:browser` against `127.0.0.1:5177`. If Windows blocks the npm wrapper, run the same entrypoint directly with `node scripts/browser-smoke.mjs <smoke-name>`. The runner first creates Chrome profiles under project `.tmp`, then falls back to the OS temp directory when that path is denied. A scenario should first be implemented in `src/browser-smoke.js`, then added to `scripts/browser-smoke.mjs` when it becomes part of the default regression set.
 
 ## Turn handoff and auto-end
 

@@ -110,10 +110,28 @@ function smokeStatusFromDom(html) {
   return { status, detail };
 }
 
+function browserProfileRoots() {
+  return [
+    path.join(process.cwd(), ".tmp"),
+    path.join(tmpdir(), "star-card-duel-browser-smoke")
+  ];
+}
+
+async function createBrowserProfileDir() {
+  const errors = [];
+  for (const root of browserProfileRoots()) {
+    try {
+      await mkdir(root, { recursive: true });
+      return await mkdtemp(path.join(root, "browser-smoke-profile-"));
+    } catch (error) {
+      errors.push(`${root}: ${error.message}`);
+    }
+  }
+  throw new Error(`Unable to create browser smoke profile directory. ${errors.join(" | ")}`);
+}
+
 async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin }) {
-  const profileRoot = path.join(process.cwd(), ".tmp");
-  await mkdir(profileRoot, { recursive: true });
-  const profileDir = await mkdtemp(path.join(profileRoot, "browser-smoke-profile-"));
+  const profileDir = await createBrowserProfileDir();
   const url = `${baseUrl}/?test=1&smoke=${encodeURIComponent(smoke)}&t=${Date.now()}`;
   try {
     const result = await runBrowser({ browserBin, profileDir, url, timeoutMs });

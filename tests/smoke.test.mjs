@@ -290,6 +290,9 @@ test("serve script uses the fixed local port", () => {
   assert.match(browserSmoke, /DEFAULT_BASE_URL = "http:\/\/127\.0\.0\.1:5177"/);
   assert.match(browserSmoke, /data-smoke-status="([^"]+)"/);
   assert.match(browserSmoke, /--user-data-dir=\$\{profileDir\}/);
+  assert.match(browserSmoke, /function browserProfileRoots\(\)/);
+  assert.match(browserSmoke, /path\.join\(tmpdir\(\), "star-card-duel-browser-smoke"\)/);
+  assert.match(browserSmoke, /Unable to create browser smoke profile directory/);
   assert.match(browserSmoke, /BROWSER_BIN/);
   assert.match(browserSmoke, /equipment-spell/);
 });

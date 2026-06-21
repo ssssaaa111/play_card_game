@@ -340,11 +340,11 @@ flowchart TD
 
 ## Browser Smoke Baseline
 
-`npm run smoke:browser` runs the in-page smoke scenarios through headless Chrome/Edge against the fixed local server.
+`npm run smoke:browser` runs the in-page smoke scenarios through headless Chrome/Edge against the fixed local server. If the npm wrapper is blocked by Windows permissions, run `node scripts/browser-smoke.mjs <smoke-name>` directly; the runner uses project `.tmp` for Chrome profiles and falls back to the OS temp directory when needed.
 
 ```mermaid
 flowchart LR
-    Serve[npm run serve on 127.0.0.1:5177] --> Script[npm run smoke:browser]
+    Serve["npm run serve on 127.0.0.1:5177"] --> Script["npm run smoke:browser or node scripts/browser-smoke.mjs"]
     Script --> Browser[Headless Chrome/Edge]
     Browser --> Page[/?test=1&smoke=name]
     Page --> SelfTest[scheduleBrowserSmoke]
