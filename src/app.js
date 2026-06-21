@@ -12,6 +12,7 @@ import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { cardDetailText, cardZoomMeta } from './card-detail.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
+import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import {
   canDispatchSummonEffectFromUiState,
   canDispatchSpellFromUiState,
@@ -1073,10 +1074,6 @@ function drawCards(duelist, count, { announce = true, reason = "effect", sourceC
   }
 
   return applyDrawEventFeedback(duelist, events, announce);
-}
-
-function duelistLabel(duelist) {
-  return duelist.owner === "player" ? "你" : "AI";
 }
 
 function resolveElementCombos(owner, rival, source = "") {
@@ -3643,23 +3640,6 @@ function playDuelistLine(owner, text, force = false, voiceKey = "") {
   }
 }
 
-function lineFor(owner, action, card, detail = "") {
-  const player = owner === "player";
-  const name = card?.name || "";
-  const lines = {
-    summon: player ? `回应我的呼唤，${name}，降临战场！` : `现身吧，${name}，压碎他的防线。`,
-    ace: player ? `王牌登场，${name}！撕开战局吧！` : `这就是终结战局的王牌，${name}。`,
-    spell: player ? `魔法发动，${name}！星光听我号令！` : `发动魔法卡，${name}。局势已经改变了。`,
-    trap: player ? `连锁发动，${name}！就是现在！` : `陷阱已经等你很久了，${name}。`,
-    attack: player ? `${name}，全力攻击！` : `${name}，粉碎目标。`,
-    hit: player ? "这点冲击还挡不住我。" : "哼，还差得远。",
-    break: player ? "击破目标，继续压制！" : "目标破坏，攻势继续。",
-    direct: player ? "直接攻击，贯穿生命值！" : "直接攻击，生命值下降。",
-    clash: "双方怪兽同归于尽。"
-  };
-  return detail || lines[action] || name || "效果发动。";
-}
-
 function sleep(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms)).then(waitWhilePaused);
 }
@@ -4077,10 +4057,6 @@ function playMonsterBurst(targetEl) {
   el.style.setProperty("--y", `${pos.y - 59}px`);
   els.effectLayer.appendChild(el);
   window.setTimeout(() => el.remove(), 820);
-}
-
-function duelistName(owner) {
-  return owner === "player" ? "你" : "AI";
 }
 
 function monsterAsset(card) {
@@ -4526,14 +4502,6 @@ function showAce(card, owner = "player") {
   playSound("ace");
   window.setTimeout(() => els.aceOverlay.classList.remove("show"), 2300);
   playDuelistLine(owner, lineFor(owner, "ace", card), true, "ace");
-}
-
-function aceLine(card) {
-  if (card.element === "fire") return "熔炎升腾，王牌降临";
-  if (card.element === "wind") return "疾风开路，王牌降临";
-  if (card.element === "shadow") return "暗影蔓延，王牌降临";
-  if (card.element === "light") return "星辉照耀，王牌降临";
-  return "星魂觉醒，王牌降临";
 }
 
 function showGuide() {

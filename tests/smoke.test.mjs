@@ -537,6 +537,23 @@ test("app uses extracted card details", () => {
   assert.doesNotMatch(app, /cardTagText\(card\)/);
 });
 
+test("app uses extracted duelist line text", () => {
+  const app = readProjectFile("src/app.js");
+  const lines = readProjectFile("src/duelist-lines.js");
+  const readme = readProjectFile("README.md");
+
+  assert.match(app, /from '\.\/duelist-lines\.js'/);
+  assert.match(app, /lineFor\(owner\.owner, "summon", card\)/);
+  assert.match(app, /aceLine\(card\)/);
+  assert.match(lines, /export function lineFor/);
+  assert.match(lines, /export function aceLine/);
+  assert.match(readme, /src\/duelist-lines\.js/);
+  assert.doesNotMatch(app, /function lineFor\(/);
+  assert.doesNotMatch(app, /function aceLine\(/);
+  assert.doesNotMatch(app, /function duelistName\(/);
+  assert.doesNotMatch(app, /function duelistLabel\(/);
+});
+
 test("app delegates scenario setup to extracted state builder", () => {
   const app = readProjectFile("src/app.js");
   const scenarioState = readProjectFile("src/scenario-state.js");
