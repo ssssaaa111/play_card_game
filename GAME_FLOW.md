@@ -1,6 +1,6 @@
 # 游戏流程与状态机
 
-最后更新：2026-06-17
+最后更新：2026-06-22
 
 本文描述当前实现中的真实流程。规则变化时，应同时更新对应流程图、阶段表和事件说明。
 
@@ -111,6 +111,28 @@ flowchart LR
     Timer -->|到期且 windowId 未变化| Timeout[执行该窗口的超时策略]
     Timer -->|窗口已变化| Ignore[忽略旧计时器]
 ```
+
+### 合法动作投影
+
+UI 不再只靠手牌类型和本地标记判断“还能做什么”。当前基础路径是：
+
+```mermaid
+flowchart LR
+    UIState[UI state] --> Adapter[getLegalActionsFromUiState]
+    Adapter --> EngineState[buildEngineStateFromUiState]
+    EngineState --> Legal[getLegalActions]
+    Legal --> Trial[枚举候选命令并调用 explainActionLegality]
+    Trial --> Summary[返回 summon setTrap activateCard declareAttack changeMode endTurn]
+    Summary --> Window[playerActionWindowDecision]
+    Window --> ActionWindow[OPEN_ACTION_WINDOW 或 REQUEST_AUTO_END]
+```
+
+- `getLegalActions` 属于核心引擎，只读取规则状态，不修改事件日志。
+- 它通过枚举候选 `Command` 并复用 `dispatch` 的校验路径过滤非法动作，避免 UI 另写一套召唤、攻击、目标选择规则。
+- `hasAny` 只表示还有会阻止自动结束的可玩动作；`endTurn` 单独通过 `can.endTurn` 暴露，不参与自动结束判断。
+- 普通动作在 `responseWindow`、未结算连锁、`targetSelect`、`resolution`、`autoEnd`、`ai` 和 `gameOver` 窗口中不会被列出。
+- `getLegalActionsFromUiState` 负责把固定槽位 UI 投影为引擎状态，并兼容尚未完全 DSL 化的旧召唤效果。
+- 当前魔法卡仍保留 `validateSpellCondition` 作为 UI 侧补充过滤；后续应把这些资源和使用条件继续迁移到卡牌 DSL，让引擎成为唯一判断来源。
 
 ### 自动结束回合事件链
 

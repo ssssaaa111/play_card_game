@@ -15,6 +15,7 @@ import {
   assertValidGameState,
   explainActionLegality,
   getCardEffectDefinition,
+  getLegalActions,
   hasAbility,
   projectMachineStateFromEvents
 } from "../src/game-engine.js";
@@ -59,7 +60,7 @@ function card(id, overrides = {}) {
   };
 }
 
-function makeState({ cards = [], player = {}, ai = {}, turn = {}, continuousEffects = [] } = {}) {
+function makeState({ cards = [], player = {}, ai = {}, turn = {}, machine = {}, continuousEffects = [] } = {}) {
   return {
     cards: Object.fromEntries(cards.map((entry) => [entry.id, entry])),
     players: {
@@ -77,7 +78,8 @@ function makeState({ cards = [], player = {}, ai = {}, turn = {}, continuousEffe
       responseWindow: null,
       chain: [],
       actionWindow: null,
-      autoEnd: null
+      autoEnd: null,
+      ...machine
     },
     abilities: {
       [PLAYER]: [],
@@ -3159,6 +3161,137 @@ test("explains illegal phases and missing targets as rule reasons", () => {
       reason: "Effect equipBlade requires action.targetCardId"
     }
   );
+});
+
+test("lists main-phase legal actions without mutating the source state", () => {
+  const state = makeState({
+    cards: [
+      card("summon-1", { type: "monster", templateId: "ember-drake", atk: 1200, def: 900 }),
+      card("trap-1", { type: "trap", trigger: "attackNegate" }),
+      card("burn-1", { templateId: "burst-rune", effect: "burn500" }),
+      card("field-1", { type: "monster", templateId: "star-lancer", atk: 1500, def: 1000 })
+    ],
+    player: {
+      hand: ["summon-1", "trap-1", "burn-1"],
+      monsterZone: ["field-1"]
+    }
+  });
+
+  const legal = getLegalActions(state, PLAYER);
+
+  assert.equal(legal.phase, Phase.main);
+  assert.equal(legal.can.summon, true);
+  assert.equal(legal.can.setTrap, true);
+  assert.equal(legal.can.activateCard, true);
+  assert.equal(legal.can.changeMode, true);
+  assert.equal(legal.can.declareAttack, false);
+  assert.equal(legal.can.endTurn, true);
+  assert.deepEqual(legal.actions.summon.map((action) => action.cardId), ["summon-1"]);
+  assert.deepEqual(legal.actions.setTrap.map((action) => action.cardId), ["trap-1"]);
+  assert.deepEqual(legal.actions.activateCard.map((action) => action.cardId), ["burn-1"]);
+  assert.deepEqual(legal.actions.changeMode.map((action) => action.cardId), ["field-1"]);
+  assert.deepEqual(state.players[PLAYER].hand, ["summon-1", "trap-1", "burn-1"]);
+  assert.deepEqual(state.events, []);
+});
+
+test("lists battle-phase attacks and excludes illegal direct attacks while monsters remain", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { type: "monster", templateId: "star-lancer", atk: 1500, def: 1000 }),
+      card("trap-1", { type: "trap", trigger: "attackNegate" }),
+      card("burn-1", { templateId: "burst-rune", effect: "burn500" }),
+      card("guard-1", { ownerId: AI, type: "monster", templateId: "iron-guardian", atk: 900, def: 2100 })
+    ],
+    player: {
+      hand: ["trap-1", "burn-1"],
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      monsterZone: ["guard-1"]
+    },
+    turn: { phase: Phase.battle }
+  });
+
+  const legal = getLegalActions(state, PLAYER);
+
+  assert.equal(legal.can.declareAttack, true);
+  assert.equal(legal.can.summon, false);
+  assert.equal(legal.can.setTrap, true);
+  assert.equal(legal.can.activateCard, true);
+  assert.equal(legal.can.changeMode, false);
+  assert.equal(legal.can.endTurn, true);
+  assert.deepEqual(legal.actions.declareAttack, [{
+    type: "DECLARE_ATTACK",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "guard-1"
+  }]);
+});
+
+test("lists only legal targets for targeted card effects", () => {
+  const state = makeState({
+    cards: [
+      card("buff-1", { templateId: "battle-banner", effect: "buff500" }),
+      card("low-1", { type: "monster", templateId: "ember-drake", atk: 1000, def: 900 }),
+      card("high-1", { type: "monster", templateId: "star-lancer", atk: 1800, def: 1000 })
+    ],
+    player: {
+      hand: ["buff-1"],
+      monsterZone: ["low-1", "high-1"]
+    }
+  });
+
+  const legal = getLegalActions(state, PLAYER);
+
+  assert.deepEqual(legal.actions.activateCard, [{
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "buff-1",
+    targetCardId: "high-1"
+  }]);
+});
+
+test("does not list normal actions while a response window is open", () => {
+  const state = makeState({
+    cards: [
+      card("summon-1", { type: "monster", templateId: "ember-drake", atk: 1200, def: 900 }),
+      card("field-1", { type: "monster", templateId: "star-lancer", atk: 1500, def: 1000 })
+    ],
+    player: {
+      hand: ["summon-1"],
+      monsterZone: ["field-1"]
+    },
+    machine: {
+      responseWindow: {
+        playerId: PLAYER,
+        timing: Timing.attackDeclaration,
+        type: ResponseWindow.optional,
+        triggerEventId: 99,
+        prompt: "attack",
+        context: {}
+      }
+    }
+  });
+
+  const legal = getLegalActions(state, PLAYER);
+
+  assert.equal(legal.can.summon, false);
+  assert.equal(legal.can.activateCard, false);
+  assert.equal(legal.can.declareAttack, false);
+  assert.equal(legal.can.changeMode, false);
+  assert.equal(legal.can.endTurn, false);
+  assert.equal(legal.hasAny, false);
+});
+
+test("does not count manual end turn as a playable board action", () => {
+  const state = makeState();
+
+  const legal = getLegalActions(state, PLAYER);
+
+  assert.equal(legal.can.endTurn, true);
+  assert.equal(legal.hasAny, false);
 });
 
 test("getState returns a defensive copy so UI code cannot mutate live engine state", () => {

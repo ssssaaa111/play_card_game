@@ -1,4 +1,4 @@
-import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, projectMachineStateFromEvents } from './game-engine.js';
+import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents } from './game-engine.js';
 import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { PHASES, TIMINGS } from './turn-state.js';
@@ -493,6 +493,20 @@ export function explainDeclareAttackFromUiState(uiState, playerId, rivalId, atta
   if (target) action.targetCardId = cardKey(target);
 
   return explainUiAction(buildEngineStateFromUiState(uiState), action, "攻击");
+}
+
+export function getLegalActionsFromUiState(uiState, playerId = uiState.turn || "player") {
+  const engineState = buildEngineStateFromUiState(uiState);
+  stripNonEngineSummonEffects(engineState);
+  return getLegalActions(engineState, playerId);
+}
+
+function stripNonEngineSummonEffects(engineState) {
+  Object.values(engineState.cards || {}).forEach((card) => {
+    if (card?.type === "monster" && card.onSummon && getCardEffectDefinition(card.onSummon)?.duration !== ONE_SHOT_EFFECT) {
+      card.onSummon = null;
+    }
+  });
 }
 
 function explainUiAction(engineState, action, actionLabel) {

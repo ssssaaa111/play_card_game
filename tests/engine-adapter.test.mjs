@@ -11,6 +11,7 @@ import {
   explainDeclareAttackFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
+  getLegalActionsFromUiState,
   applyUiGameEvents,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
@@ -1512,5 +1513,29 @@ test("explains attack target legality from UI state without opening response win
   assert.equal(result.ok, false);
   assert.match(result.engineReason, /must attack a monster/);
   assert.equal(attacker.used, undefined);
+  assert.deepEqual(state.gameEvents, []);
+});
+
+test("projects legal actions from UI state through the engine", () => {
+  const monster = uiMonster("legal-summon");
+  const trap = uiTrap("legal-trap");
+  const spell = uiSpell("legal-burn", "burn500", "burst-rune");
+  const attacker = uiMonster("legal-attacker");
+  const guard = uiMonster("legal-guard");
+  guard.ownerId = "ai";
+  const state = appState({ phase: PHASES.battle });
+  state.player.hand = [monster, trap, spell];
+  state.player.field[0] = attacker;
+  state.ai.field[0] = guard;
+
+  const legal = getLegalActionsFromUiState(state, "player");
+
+  assert.equal(legal.can.summon, false);
+  assert.equal(legal.can.setTrap, true);
+  assert.equal(legal.can.activateCard, true);
+  assert.equal(legal.can.declareAttack, true);
+  assert.deepEqual(legal.actions.setTrap.map((action) => action.cardId), [trap.uid]);
+  assert.deepEqual(legal.actions.activateCard.map((action) => action.cardId), [spell.uid]);
+  assert.deepEqual(legal.actions.declareAttack.map((action) => action.targetCardId), [guard.uid]);
   assert.deepEqual(state.gameEvents, []);
 });

@@ -310,6 +310,7 @@ test("project documents the current phase and event flow", () => {
   assert.match(flow, /AUTO_END_REQUESTED/);
   assert.match(flow, /COMMIT_AUTO_END/);
   assert.match(flow, /TURN_ENDED/);
+  assert.match(flow, /getLegalActions/);
   assert.match(flow, /GAME_OVER_DECLARED/);
   assert.match(flow, /AI Command Planning/);
   assert.match(flow, /chooseAiSpellAction/);
@@ -578,6 +579,7 @@ test("app uses extracted spell metadata", () => {
   assert.match(app, /explainSummonMonsterFromUiState\(state,/);
   assert.match(app, /explainSetTrapFromUiState\(state,/);
   assert.match(app, /explainDeclareAttackFromUiState\(state,/);
+  assert.match(app, /getLegalActionsFromUiState\(state, "player"\)/);
   assert.match(app, /chooseAiSpellAction\(\{/);
   assert.match(ai, /scoreSpellForAi\(card\.effect/);
   assert.doesNotMatch(spellEffectsSource, /apply:/);

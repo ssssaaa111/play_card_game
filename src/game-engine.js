@@ -1450,6 +1450,153 @@ export function explainActionLegality(initialState, action, options = {}) {
   }
 }
 
+export function getLegalActions(initialState, playerId = initialState?.turn?.playerId, options = {}) {
+  const state = new GameEngine(initialState, options).getState();
+  const player = requirePlayer(state, playerId);
+  const rivalId = otherPlayerId(state, playerId);
+  const effects = normalizeEffectDefinitions({ ...defaultCardEffects, ...(options.cardEffects || {}) });
+  const actions = {
+    summon: [],
+    setTrap: [],
+    activateCard: [],
+    declareAttack: [],
+    changeMode: [],
+    endTurn: []
+  };
+
+  if (normalActionsBlocked(state)) {
+    return summarizeLegalActions(state, playerId, rivalId, actions);
+  }
+
+  const consider = (bucket, action) => {
+    const result = explainActionLegality(state, action, options);
+    if (result.ok) actions[bucket].push(clone(action));
+  };
+
+  player.hand.forEach((cardId) => {
+    const card = requireCard(state, cardId);
+    if (card.type === "monster") {
+      consider("summon", {
+        type: "SUMMON_MONSTER",
+        playerId,
+        rivalId,
+        cardId,
+        index: player.monsterZone.length
+      });
+    }
+    if (card.type === "trap") {
+      consider("setTrap", {
+        type: "SET_TRAP",
+        playerId,
+        cardId,
+        index: player.spellTrapZone.length
+      });
+    }
+    if (card.type === "spell") {
+      activationCandidates(state, effects, playerId, rivalId, card).forEach((action) => {
+        consider("activateCard", action);
+      });
+    }
+  });
+
+  player.monsterZone.forEach((attackerCardId) => {
+    const attackBase = {
+      type: "DECLARE_ATTACK",
+      playerId,
+      rivalId,
+      attackerCardId
+    };
+    const rival = requirePlayer(state, rivalId);
+    rival.monsterZone.forEach((targetCardId) => {
+      consider("declareAttack", { ...attackBase, targetCardId });
+    });
+    consider("declareAttack", attackBase);
+
+    const card = requireCard(state, attackerCardId);
+    const before = card.mode || "attack";
+    const nextMode = before === "attack" ? "defense" : "attack";
+    consider("changeMode", {
+      type: "CHANGE_MONSTER_MODE",
+      playerId,
+      cardId: attackerCardId,
+      mode: nextMode
+    });
+  });
+
+  consider("endTurn", {
+    type: "END_TURN",
+    playerId,
+    reason: "legal-actions",
+    endedBy: "legal-actions"
+  });
+
+  return summarizeLegalActions(state, playerId, rivalId, actions);
+}
+
+function activationCandidates(state, effects, playerId, rivalId, card) {
+  const definition = effects[card.effect];
+  const base = {
+    type: "ACTIVATE_CARD",
+    playerId,
+    rivalId,
+    cardId: card.id
+  };
+  if (definition?.duration === EffectDuration.continuous) {
+    base.index = requirePlayer(state, playerId).spellTrapZone.length;
+  }
+
+  if (!definition?.target) return [base];
+  const targetIds = candidateTargetCardIds(state, definition, base);
+  if (targetIds.length === 0) return [base];
+  return targetIds.map((targetCardId) => ({ ...base, targetCardId }));
+}
+
+function candidateTargetCardIds(state, definition, action) {
+  try {
+    const targetPlayerId = resolvePlayerRef(definition.target.player, action);
+    const player = requirePlayer(state, targetPlayerId);
+    return requireZone(player, definition.target.zone).slice();
+  } catch (error) {
+    if (error instanceof GameRuleError) return [];
+    throw error;
+  }
+}
+
+function normalActionsBlocked(state) {
+  if (state.gameOver) return true;
+  if (state.machine.responseWindow) return true;
+  if ((state.machine.chain || []).length > 0) return true;
+  const windowName = state.machine.actionWindow?.window;
+  return [
+    ActionWindow.targetSelect,
+    ActionWindow.response,
+    ActionWindow.resolution,
+    ActionWindow.autoEnd,
+    ActionWindow.ai,
+    ActionWindow.gameOver
+  ].includes(windowName);
+}
+
+function summarizeLegalActions(state, playerId, rivalId, actions) {
+  const can = {
+    summon: actions.summon.length > 0,
+    setTrap: actions.setTrap.length > 0,
+    activateCard: actions.activateCard.length > 0,
+    declareAttack: actions.declareAttack.length > 0,
+    changeMode: actions.changeMode.length > 0,
+    endTurn: actions.endTurn.length > 0
+  };
+  return {
+    playerId,
+    rivalId,
+    phase: state.turn.phase,
+    timing: state.machine.timing,
+    can,
+    hasAny: can.summon || can.setTrap || can.activateCard || can.declareAttack || can.changeMode,
+    actions
+  };
+}
+
 export function assertValidGameState(state) {
   if (!state || typeof state !== "object") {
     throw new GameStateValidationError("GameState must be an object");

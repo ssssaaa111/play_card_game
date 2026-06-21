@@ -44,7 +44,8 @@ import {
   explainActivateSpellFromUiState,
   explainDeclareAttackFromUiState,
   explainSetTrapFromUiState,
-  explainSummonMonsterFromUiState
+  explainSummonMonsterFromUiState,
+  getLegalActionsFromUiState
 } from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
 import { spellDefinitions, validateSpellCondition } from './spells.js';
@@ -1218,6 +1219,18 @@ function currentPlayerActions() {
     summonedThisTurn: state.player.normalSummonsUsed > 0,
     canSpell: (card, index) => card.type === "spell" && validateSpell(state.player, state.ai, card, index).ok
   });
+  try {
+    const legal = getLegalActionsFromUiState(state, "player");
+    summary.attack = legal.can.declareAttack;
+    summary.summon = legal.can.summon;
+    summary.trap = legal.can.setTrap;
+    summary.mode = legal.can.changeMode;
+    summary.modeBlocksMain = summary.mode && summary.modeBlocksMain;
+    summary.spell = summary.spell && legal.can.activateCard;
+    summary.hasAny = summary.targetSelect || summary.attack || summary.spell || summary.summon || summary.trap || summary.mode;
+  } catch (error) {
+    console.error("Failed to project legal player actions", error);
+  }
   const actions = actionsForPhase(summary, state.phase);
   if (canPlayerAct()) return actions;
   return {
