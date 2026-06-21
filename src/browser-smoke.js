@@ -1061,7 +1061,7 @@ async function runEquipmentSpellSmoke(ctx) {
     "解印射线选择敌方魔陷目标",
     6000
   );
-  clickSmokeElement(ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"]'), "解印射线破坏敌方装备");
+  clickSmokeElement(handCard(ctx.els, "dispelling-ray"), "再次点击解印射线默认选择唯一魔陷");
   await waitForSmoke(
     () => !ctx.state.ai.traps[0] &&
       ctx.state.ai.grave.some((card) => card?.id === "blade-sigil") &&

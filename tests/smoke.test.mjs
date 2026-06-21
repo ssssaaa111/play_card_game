@@ -175,6 +175,7 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /function cancelSelectedHandAction\(\)/);
   assert.match(app, /els\.handConfirmBtn\.textContent = state\.pendingTarget \? "确认默认目标" : handConfirmLabel\(selectedHand\?\.card\)/);
   assert.match(app, /function resolvePendingSpellDefault\(\)/);
+  assert.match(app, /resolvePendingSpellTarget\(targets\[0\]\.owner, targets\[0\]\.index, targets\[0\]\.zone\)/);
   assert.match(app, /beginSpellTargetSelection\(handIndex, card\)/);
   assert.match(app, /已取消 \$\{previousCardName\} 的目标选择，改选 \$\{card\.name\}/);
   assert.match(app, /playSpell\(state\.player, state\.ai, selected\.index\)/);
@@ -212,7 +213,7 @@ test("target selection uses standardized timed action windows", () => {
   assert.match(app, /dispatchOpenActionWindowFromUiState[\s\S]*timeoutSeconds/);
   assert.match(app, /setActionWindow\(ACTION_WINDOWS\.targetSelect, \{ reason: `target:\$\{card\.uid\}` \}\)/);
   assert.match(app, /function handleTargetSelectionTimeout\(\)/);
-  assert.match(app, /resolvePendingSpellTarget\(targets\[0\]\.owner, targets\[0\]\.index\)/);
+  assert.match(app, /resolvePendingSpellTarget\(targets\[0\]\.owner, targets\[0\]\.index, targets\[0\]\.zone\)/);
   assert.match(app, /handleActionWindowTimeout\(windowId\)/);
   assert.match(app, /setActionWindow\(ACTION_WINDOWS\.response, \{ reason: `trap-choice:\$\{eventName\}` \}\)/);
   assert.match(app, /pendingTrapChoice/);
@@ -476,6 +477,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /连锁场景应该在弹窗内显示三张可选陷阱/);
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /Blade Sigil continuous effect registered/);
+  assert.match(smoke, /再次点击解印射线默认选择唯一魔陷/);
+  assert.doesNotMatch(app, /AI attacks with|AI prepares a direct attack|switches to defense mode/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-shield-consume"\)/);

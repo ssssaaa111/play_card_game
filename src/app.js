@@ -1380,7 +1380,7 @@ function resolvePendingSpellDefault() {
     return true;
   }
   cue(`默认选择 ${targets[0].card.name}。`);
-  return resolvePendingSpellTarget(targets[0].owner, targets[0].index);
+  return resolvePendingSpellTarget(targets[0].owner, targets[0].index, targets[0].zone);
 }
 
 function canChangeAnyPlayerMode() {
@@ -3456,10 +3456,10 @@ async function aiSummon() {
   })) {
     try {
       dispatchChangeMonsterModeFromUiState(state, "ai", action.fieldIndex, "defense");
-      addLog(`${summoned.name} switches to defense mode.`);
-      speak(`${summoned.name} switches to defense mode.`);
+      addLog(`对手将 ${summoned.name} 切换为守备表示。`);
+      speak(`对手将 ${summoned.name} 切换为守备表示。`, false, "ai");
     } catch (error) {
-      addLog(`${summoned.name} cannot switch to defense mode: ${error.message}`);
+      addLog(`${summoned.name} 无法切换表示：${error.message}`);
       console.error(error);
     }
   }
@@ -3491,15 +3491,15 @@ async function aiAttack() {
     if (state.gameOver || !state.ai.field[attackerIndex]) return;
     if (action.type === "skipAttack") {
       skippedAttackers.add(action.cardUid);
-      addLog(`AI holds ${card.name} to avoid a bad attack.`);
+      addLog(`对手保留 ${card.name} 的攻击机会，避免不利战斗。`);
       continue;
     }
-    cue(`AI attacks with ${card.name}.`);
+    cue(`对手用 ${card.name} 发起攻击。`);
     await sleep(900);
     if (targetIndex < 0) {
-      cue(`AI prepares a direct attack with ${card.name}.`);
+      cue(`对手准备让 ${card.name} 直接攻击。`);
       playEpicAction("Direct", "attack", 980);
-      playVoice("ai", "direct", "AI prepares a direct attack.");
+      playVoice("ai", "direct", "对手准备直接攻击。");
       await sleep(900);
     }
     showBattlePreview(card, target, state.ai, state.player);
@@ -3768,7 +3768,7 @@ function handleTargetSelectionTimeout() {
   if (targets.length === 1) {
     addLog(`${cardName} 目标选择超时，自动选择唯一合法目标 ${targets[0].card.name}。`);
     cue(`已自动选择 ${targets[0].card.name}`);
-    resolvePendingSpellTarget(targets[0].owner, targets[0].index);
+    resolvePendingSpellTarget(targets[0].owner, targets[0].index, targets[0].zone);
     return;
   }
 
