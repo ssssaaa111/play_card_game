@@ -89,6 +89,10 @@ function appState(overrides = {}) {
   };
 }
 
+function snapshotUiState(state) {
+  return JSON.parse(JSON.stringify(state));
+}
+
 test("dispatches SET_TRAP and applies CARD_MOVED to a fixed UI trap slot", () => {
   const mirror = uiTrap("mirror-1");
   const existing = uiTrap("existing-1", "guard-sigil");
@@ -431,6 +435,32 @@ test("dispatches engine-backed stat traps through UI event replay", () => {
   assert.equal(attacker.tempAtk, -500);
   assert.equal(attacker.tempDef, -500);
   assert.equal(weakenEvents.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === attacker.uid).length, 2);
+});
+
+test("rejects missing trap engine effects without mutating UI state", () => {
+  const trap = uiTrap("trap-missing", "guard-sigil");
+  trap.trigger = "missingTrapEffect";
+  const attacker = uiMonster("attacker-before", "star-lancer");
+  const guard = uiMonster("guard-before", "iron-guardian");
+  attacker.ownerId = "ai";
+  const state = appState({ phase: PHASES.battle });
+  state.player.traps[0] = trap;
+  state.player.field[0] = guard;
+  state.ai.field[0] = attacker;
+  state.ai.lp = 3100;
+  const before = snapshotUiState(state);
+
+  assert.equal(canDispatchTrapFromUiState(trap), false);
+  assert.throws(
+    () => dispatchActivateTrapFromUiState(state, "player", "ai", 0, {
+      attacker,
+      attackerIndex: 0,
+      targetIndex: 0,
+      targetEffectId: "attack-before"
+    }),
+    /not engine-backed/
+  );
+  assert.deepEqual(snapshotUiState(state), before);
 });
 
 test("dispatches battle resolution and applies direct damage to UI state", () => {
@@ -1425,6 +1455,28 @@ test("rejects engine-backed spells in illegal phases without consuming the card"
   assert.deepEqual(state.player.hand, [seer]);
   assert.equal(state.player.grave.length, 0);
   assert.deepEqual(state.gameEvents, []);
+});
+
+test("rejects missing spell engine effects without mutating UI state", () => {
+  const mystery = uiSpell("spell-missing", "missingSpellEffect", "mystery-spell");
+  const graveCard = uiMonster("grave-before", "ember-drake");
+  const fieldCard = uiMonster("field-before", "star-lancer");
+  const enemyCard = uiMonster("enemy-before", "iron-guardian");
+  enemyCard.ownerId = "ai";
+  const state = appState();
+  state.player.hand = [mystery];
+  state.player.grave = [graveCard];
+  state.player.field[0] = fieldCard;
+  state.ai.field[0] = enemyCard;
+  state.ai.lp = 3200;
+  const before = snapshotUiState(state);
+
+  assert.equal(canDispatchSpellFromUiState(mystery), false);
+  assert.throws(
+    () => dispatchActivateSpellFromUiState(state, "player", "ai", 0),
+    /not engine-backed/
+  );
+  assert.deepEqual(snapshotUiState(state), before);
 });
 
 test("explains spell activation legality from UI state without consuming cards", () => {

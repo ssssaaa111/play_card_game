@@ -71,6 +71,7 @@ test("spell cards are backed by spell metadata", () => {
   spellCards.forEach((card) => {
     const definition = spellDefinitions[card.effect];
     assert.ok(definition, `${card.id} references missing spell definition: ${card.effect}`);
+    assert.ok(getCardEffectDefinition(card.effect), `${card.id} spell effect must have engine DSL metadata: ${card.effect}`);
     assert.ok(definition.caption, `${card.effect} needs a caption`);
     if (definition.target) {
       assert.ok(validTargets.has(definition.target), `${card.effect} has invalid target mode`);

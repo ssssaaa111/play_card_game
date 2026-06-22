@@ -21,6 +21,7 @@ For new cards, the rule test is part of the card definition. Do not add a card e
 - UI code should treat `GameEngine.getState()` as read-only. It returns a defensive copy, so mutating it cannot mutate live engine state.
 - Card effect functions receive `EffectContext`, not raw state.
 - The client should be treated as presentation only. The engine state and event log are the source of truth.
+- If a spell or trap has no engine-backed effect definition, UI code must fail visibly and leave hand, grave, LP, field, and spell/trap zones unchanged. It must not move the card or apply a free JavaScript fallback.
 
 ## Command and event log
 

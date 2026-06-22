@@ -659,7 +659,19 @@ test("app reports missing engine effects instead of silent fallbacks", () => {
 
   assert.match(app, /function reportMissingEngineEffect\(card, kind\)/);
   assert.match(app, /reportMissingEngineEffect\(card, "summon"\)/);
+  assert.match(app, /reportMissingEngineEffect\(card, "spell"\)/);
   assert.match(app, /reportMissingEngineEffect\(trap, "trap"\)/);
+
+  const playSpellStart = app.indexOf("function playSpell");
+  const playSpellEnd = app.indexOf("function runtimeCardId", playSpellStart);
+  assert.ok(playSpellStart >= 0, "playSpell should exist");
+  assert.ok(playSpellEnd > playSpellStart, "playSpell should end before runtimeCardId");
+  const playSpellSource = app.slice(playSpellStart, playSpellEnd);
+  assert.doesNotMatch(playSpellSource, /owner\.hand\.splice/);
+  assert.doesNotMatch(playSpellSource, /owner\.grave\.push/);
+  assert.doesNotMatch(playSpellSource, /effect\?\.apply/);
+  assert.doesNotMatch(playSpellSource, /\.lp\s*[+\-]?=/);
+
   assert.doesNotMatch(app, /function resolveSummonEffect/);
   assert.doesNotMatch(app, /旧式直接结算/);
   assert.doesNotMatch(app, /尚未接入规则引擎，已跳过/);

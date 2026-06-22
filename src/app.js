@@ -1413,34 +1413,32 @@ function playSpell(owner, rival, handIndex, targetInfo = null) {
     return false;
   }
   const card = selectedCard;
-  let engineEvents = null;
+  let engineEvents = [];
   let result = {};
-  if (canDispatchSpellFromUiState(card)) {
-    try {
-      engineEvents = dispatchActivateSpellFromUiState(state, owner.owner, rival.owner, handIndex, targetInfo);
-    } catch (error) {
-      if (owner.owner === "player") cue(error.message || "魔法卡发动失败。");
-      console.error(error);
-      if (owner.owner === "player") resumePlayerIdleCountdownAfterPassiveIntent();
-      return false;
+  if (!canDispatchSpellFromUiState(card)) {
+    reportMissingEngineEffect(card, "spell");
+    if (owner.owner === "player") {
+      cue("Rule setup error: spell effect is missing from GameEngine.");
+      resumePlayerIdleCountdownAfterPassiveIntent();
     }
-  } else {
-    owner.hand.splice(handIndex, 1);
-    owner.grave.push(card);
+    return false;
+  }
+  try {
+    engineEvents = dispatchActivateSpellFromUiState(state, owner.owner, rival.owner, handIndex, targetInfo);
+  } catch (error) {
+    if (owner.owner === "player") cue(error.message || "\u9b54\u6cd5\u5361\u53d1\u52a8\u5931\u8d25\u3002");
+    console.error(error);
+    if (owner.owner === "player") resumePlayerIdleCountdownAfterPassiveIntent();
+    return false;
   }
   playSound(`spell-${card.effect}`);
   animateAvatar(owner.owner, "cast");
   playCenterCardEffect(card, spellCaption(card));
-  playEpicAction("魔法", "draw");
-  addLog(`${owner.owner === "player" ? "你" : "AI"} 发动魔法卡 ${card.name}。`);
-  speak(`${owner.owner === "player" ? "你发动" : "对手发动"}魔法卡，${card.name}。`);
+  playEpicAction("\u9b54\u6cd5", "draw");
+  addLog(`${owner.owner === "player" ? "\u4f60" : "AI"} \u53d1\u52a8\u9b54\u6cd5\u5361 ${card.name}\u3002`);
+  speak(`${owner.owner === "player" ? "\u4f60\u53d1\u52a8" : "\u5bf9\u624b\u53d1\u52a8"}\u9b54\u6cd5\u5361\uff0c${card.name}\u3002`);
   playDuelistLine(owner.owner, lineFor(owner.owner, "spell", card), false, "spell");
-  if (engineEvents) {
-    result = resolveEngineSpellFeedback(owner, rival, card, engineEvents, targetInfo);
-  } else {
-    const effect = spellEffects[card.effect];
-    result = effect?.apply?.({ owner, rival, card, handIndex, targetInfo }) || {};
-  }
+  result = resolveEngineSpellFeedback(owner, rival, card, engineEvents, targetInfo);
   playSpellEffect(owner, rival, card, result.effectTarget || null, result.targetOwner || targetInfo?.owner || owner.owner);
   resolveElementCombos(owner, rival, "spell");
   clearPendingTarget();
