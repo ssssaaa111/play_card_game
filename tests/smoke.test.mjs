@@ -26,6 +26,7 @@ function checkModuleSyntax(path) {
 test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/actions.js");
   checkModuleSyntax("src/app.js");
+  checkModuleSyntax("src/audio.js");
   checkModuleSyntax("src/battle.js");
   checkModuleSyntax("src/browser-smoke.js");
   checkModuleSyntax("src/card-detail.js");
@@ -74,6 +75,16 @@ test("app uses the extracted rules module", () => {
   assert.match(app, /from '\.\/rules\.js'/);
   assert.doesNotMatch(app, /const MAX_LP =/);
   assert.doesNotMatch(app, /const FIELD_SIZE =/);
+});
+
+test("app delegates audio and voice playback to the audio module", () => {
+  const app = readProjectFile("src/app.js");
+
+  assert.match(app, /from '\.\/audio\.js'/);
+  assert.match(app, /createAudioController\(\{/);
+  assert.doesNotMatch(app, /function playSound\(name\)/);
+  assert.doesNotMatch(app, /function speak\(text/);
+  assert.doesNotMatch(app, /\baudio\.ctx\b/);
 });
 
 test("rule docs describe event-sourced turn draw and after-attack effects", () => {
@@ -354,15 +365,16 @@ test("app uses extracted card renderer", () => {
 
 test("browser test mode disables sound and guide blocking", () => {
   const app = readProjectFile("src/app.js");
+  const audio = readProjectFile("src/audio.js");
   const smoke = readProjectFile("src/browser-smoke.js");
 
   assert.match(app, /const BROWSER_TEST_MODE = new URLSearchParams\(window\.location\.search\)\.has\("test"\)/);
   assert.match(app, /const BROWSER_SMOKE = BROWSER_TEST_MODE \? new URLSearchParams\(window\.location\.search\)\.get\("smoke"\)/);
   assert.match(app, /soundOn: !BROWSER_TEST_MODE/);
   assert.match(app, /voiceReady: BROWSER_TEST_MODE/);
-  assert.match(app, /if \(!state\.soundOn\) return false;/);
-  assert.match(app, /if \(!state\.voiceOn\) return false;/);
-  assert.match(app, /if \(!state\.voiceReady && !force\) return false;/);
+  assert.match(audio, /if \(!getState\(\)\.soundOn\) return false;/);
+  assert.match(audio, /if \(!getState\(\)\.voiceOn\) return false;/);
+  assert.match(audio, /if \(!getState\(\)\.voiceReady && !force\) return false;/);
   assert.match(app, /else \{\s*stopVoiceAudio\(\);\s*\}/);
   assert.match(app, /if \(BROWSER_TEST_MODE\) return true;/);
   assert.match(app, /window\.__starDuelTest = Object\.freeze\(\{/);
@@ -686,7 +698,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/app.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/app.js", "src/audio.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });
