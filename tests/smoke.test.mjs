@@ -261,9 +261,14 @@ test("app dispatches battle state changes through the engine adapter", () => {
 
   assert.match(app, /dispatchResolveBattleFromUiState/);
   assert.match(app, /dispatchDeclareAttackFromUiState/);
+  assert.match(app, /dispatchCancelAttackFromUiState/);
+  assert.match(app, /function isAttackFlowPending\(\)/);
+  assert.match(app, /if \(isAttackFlowPending\(\)\) return/);
   assert.match(attackSource, /declareAttackWithEngine\(owner, rival, attackerIndex, targetIndex\)/);
   assert.match(attackSource, /targetEffectId = attackEvent\.id/);
   assert.match(attackSource, /declarationEventId: attackContext\.targetEffectId/);
+  assert.match(attackSource, /consumeAttack: trapResult\.consumesAttack/);
+  assert.match(attackSource, /consumeAttack: shield\.consumesAttack/);
   assert.match(attackSource, /resolveBattleWithEngine\(owner, rival, attackerIndex, resolvedTargetIndex, \{/);
   assert.doesNotMatch(attackSource, /const dealt = damage\(/);
   assert.doesNotMatch(attackSource, /rival\.field\[resolvedTargetIndex\]\s*=/);

@@ -511,6 +511,9 @@ export class GameEngine {
       case "MARK_MONSTER_USED":
         this.#markMonsterUsed(workingState, emit, action);
         break;
+      case "CANCEL_ATTACK":
+        this.#cancelAttack(workingState, emit, action);
+        break;
       case "SKIP_REMAINING_ATTACKS":
         this.#skipRemainingAttacks(workingState, emit, action);
         break;
@@ -791,6 +794,15 @@ export class GameEngine {
   #declareAttack(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.battle], action.type);
+    if (state.machine.pendingAttack) {
+      throw new GameRuleError("Cannot declare attack while another attack is pending");
+    }
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("Cannot declare attack while a response window is open");
+    }
+    if (state.machine.chain.length > 0) {
+      throw new GameRuleError("Cannot declare attack while a chain is unresolved");
+    }
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const { target, direct } = validateBattleDeclaration(state, action.playerId, rivalId, action);
 
@@ -829,10 +841,17 @@ export class GameEngine {
   #resolveBattle(state, ctx, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.battle], action.type);
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("Cannot resolve battle while a response window is open");
+    }
+    if (state.machine.chain.length > 0) {
+      throw new GameRuleError("Cannot resolve battle while a chain is unresolved");
+    }
+    assertBattleResolutionMatchesPendingAttack(state, action);
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const { attacker, target, direct } = validateBattleDeclaration(state, action.playerId, rivalId, action);
 
-    let declarationEventId = action.declarationEventId || null;
+    let declarationEventId = action.declarationEventId || state.machine.pendingAttack?.declarationEventId || null;
     if (!declarationEventId) {
       emit("TIMING_CHANGED", {
         playerId: action.playerId,
@@ -910,6 +929,9 @@ export class GameEngine {
   #markMonsterUsed(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.battle], action.type);
+    if (state.machine.pendingAttack) {
+      throw new GameRuleError("Cannot mark monster used while an attack is pending; cancel the attack instead");
+    }
     const card = requireMonsterInZone(state, action.playerId, "monsterZone", action.cardId, "attacker");
     if (card.used) {
       throw new GameRuleError(`Monster ${action.cardId} has already attacked`);
@@ -924,11 +946,53 @@ export class GameEngine {
     consumeAttackResetForMonster(state, emit, action.playerId, action.cardId);
   }
 
+  #cancelAttack(state, emit, action) {
+    requireCurrentTurn(state, action.playerId);
+    requirePhase(state, [Phase.battle], action.type);
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("Cannot cancel attack while a response window is open");
+    }
+    if (state.machine.chain.length > 0) {
+      throw new GameRuleError("Cannot cancel attack while a chain is unresolved");
+    }
+    const pending = requirePendingAttack(state, action.playerId);
+    if (action.declarationEventId && String(action.declarationEventId) !== String(pending.declarationEventId)) {
+      throw new GameRuleError(`Pending attack declaration ${pending.declarationEventId} does not match ${action.declarationEventId}`);
+    }
+    if (action.consumeAttack) {
+      const attacker = requireMonsterInZone(state, pending.playerId, "monsterZone", pending.attackerCardId, "attacker");
+      if (!attacker.used) {
+        emit("MONSTER_USED", {
+          playerId: pending.playerId,
+          cardId: pending.attackerCardId,
+          beforeUsed: Boolean(attacker.used),
+          afterUsed: true,
+          reason: "attackCanceled"
+        });
+        consumeAttackResetForMonster(state, emit, pending.playerId, pending.attackerCardId);
+      }
+    }
+    emit("ATTACK_CANCELED", {
+      playerId: pending.playerId,
+      rivalId: pending.rivalId,
+      attackerCardId: pending.attackerCardId,
+      targetCardId: pending.targetCardId || null,
+      targetPlayerId: pending.targetPlayerId || null,
+      direct: Boolean(pending.direct),
+      declarationEventId: pending.declarationEventId,
+      reason: action.reason || "canceled",
+      consumeAttack: Boolean(action.consumeAttack)
+    });
+  }
+
   #skipRemainingAttacks(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.battle], action.type);
     if (state.machine.responseWindow) {
       throw new GameRuleError("Cannot skip attacks while a response window is open");
+    }
+    if (state.machine.pendingAttack) {
+      throw new GameRuleError("Cannot skip attacks while an attack is pending");
     }
     const player = requirePlayer(state, action.playerId);
     if (player.attacksSkipped || hasAbility(state, action.playerId, Ability.skipAttackLock)) {
@@ -1015,6 +1079,9 @@ export class GameEngine {
     if (state.machine.chain.length > 0) {
       throw new GameRuleError("Cannot start a turn while a chain is unresolved");
     }
+    if (state.machine.pendingAttack) {
+      throw new GameRuleError("Cannot start a turn while an attack is pending");
+    }
 
     const previousPlayerId = state.turn.playerId;
     const player = requirePlayer(state, action.playerId);
@@ -1062,6 +1129,9 @@ export class GameEngine {
     if (state.machine.chain.length > 0) {
       throw new GameRuleError("Cannot end a turn while a chain is unresolved");
     }
+    if (state.machine.pendingAttack) {
+      throw new GameRuleError("Cannot end a turn while an attack is pending");
+    }
 
     const nextPlayerId = action.nextPlayerId || otherPlayerId(state, action.playerId);
     requirePlayer(state, nextPlayerId);
@@ -1085,6 +1155,9 @@ export class GameEngine {
     }
     if (state.machine.chain.length > 0) {
       throw new GameRuleError("Cannot request auto-end while a chain is unresolved");
+    }
+    if (state.machine.pendingAttack) {
+      throw new GameRuleError("Cannot request auto-end while an attack is pending");
     }
 
     const requestedAt = Number(action.requestedAt);
@@ -1136,6 +1209,9 @@ export class GameEngine {
     }
     if (state.machine.chain.length > 0) {
       throw new GameRuleError("Cannot commit auto-end while a chain is unresolved");
+    }
+    if (state.machine.pendingAttack) {
+      throw new GameRuleError("Cannot commit auto-end while an attack is pending");
     }
 
     const committedAt = Number.isFinite(Number(action.committedAt)) ? Number(action.committedAt) : null;
@@ -1221,6 +1297,15 @@ export class GameEngine {
     if (!PHASE_ORDER.includes(action.phase)) {
       throw new GameRuleError(`Unknown phase ${action.phase}`);
     }
+    if (state.machine.responseWindow) {
+      throw new GameRuleError("Cannot change phase while a response window is open");
+    }
+    if (state.machine.chain.length > 0) {
+      throw new GameRuleError("Cannot change phase while a chain is unresolved");
+    }
+    if (state.machine.pendingAttack) {
+      throw new GameRuleError("Cannot change phase while an attack is pending");
+    }
 
     const before = state.turn.phase;
     emit("PHASE_CHANGED", {
@@ -1259,6 +1344,12 @@ export class GameEngine {
     requirePlayer(state, action.playerId);
     if (!ACTION_WINDOWS.has(action.window)) {
       throw new GameRuleError(`Unknown action window ${action.window}`);
+    }
+    if (state.machine.responseWindow || state.machine.chain.length > 0 || state.machine.pendingAttack) {
+      const allowedDuringResolution = [ActionWindow.response, ActionWindow.resolution].includes(action.window);
+      if (!allowedDuringResolution) {
+        throw new GameRuleError(`Cannot open ${action.window} action window while attack or chain resolution is pending`);
+      }
     }
     const openedAt = Number(action.openedAt);
     const timeoutSeconds = Math.max(0, Number(action.timeoutSeconds) || 0);
@@ -1566,6 +1657,7 @@ function normalActionsBlocked(state) {
   if (state.gameOver) return true;
   if (state.machine.responseWindow) return true;
   if ((state.machine.chain || []).length > 0) return true;
+  if (state.machine.pendingAttack) return true;
   const windowName = state.machine.actionWindow?.window;
   return [
     ActionWindow.targetSelect,
@@ -1643,6 +1735,31 @@ export function assertValidGameState(state) {
   }
   if (state.machine.responseWindow && !RESPONSE_WINDOWS.has(state.machine.responseWindow.type)) {
     throw new GameStateValidationError(`Unknown response window ${state.machine.responseWindow.type}`);
+  }
+  if (state.machine.chain.length > 0) {
+    const chainWindow = state.machine.actionWindow?.window;
+    if (!state.machine.responseWindow && ![ActionWindow.response, ActionWindow.resolution].includes(chainWindow)) {
+      throw new GameStateValidationError("Unresolved chain requires response window or response/resolution action window");
+    }
+  }
+  if (state.machine.pendingAttack) {
+    const pending = state.machine.pendingAttack;
+    if (state.turn.phase !== Phase.battle || state.machine.phase !== Phase.battle) {
+      throw new GameStateValidationError("Pending attack requires battle phase");
+    }
+    if (state.machine.autoEnd || state.machine.actionWindow?.window === ActionWindow.autoEnd) {
+      throw new GameStateValidationError("Pending attack cannot coexist with auto-end");
+    }
+    if (pending.playerId !== state.turn.playerId) {
+      throw new GameStateValidationError("Pending attack player must remain the current turn player");
+    }
+    if (!state.players[pending.playerId] || !state.players[pending.rivalId]) {
+      throw new GameStateValidationError("Pending attack players must exist");
+    }
+    requireCardInZone(state, pending.playerId, "monsterZone", pending.attackerCardId);
+    if (pending.targetCardId) {
+      requireCardInZone(state, pending.rivalId, "monsterZone", pending.targetCardId);
+    }
   }
   if (state.gameOver) {
     if (typeof state.gameOver !== "object") {
@@ -1870,7 +1987,13 @@ export function applyGameEvent(state, event, options = {}) {
       applyBattleWearApplied(state, event);
       break;
     case "ATTACK_DECLARED":
+      applyAttackDeclared(state, event);
+      break;
     case "BATTLE_RESOLVED":
+      applyBattleResolved(state, event);
+      break;
+    case "ATTACK_CANCELED":
+      applyAttackCanceled(state, event);
       break;
     default:
       throw new GameRuleError(`Unknown GameEvent type ${event.type}`);
@@ -1957,6 +2080,7 @@ function applyGameOverDeclared(state, event) {
   state.machine.responseWindow = null;
   state.machine.chain = [];
   state.machine.autoEnd = null;
+  state.machine.pendingAttack = null;
   state.machine.actionWindow = {
     playerId: windowPlayerId,
     window: ActionWindow.gameOver,
@@ -2007,6 +2131,46 @@ function applyBattleWearApplied(state, event) {
   card.battleWear = Math.max(0, Number(event.after) || 0);
   card.tempAtk = Number(event.tempAtkAfter);
   card.tempDef = Number(event.tempDefAfter);
+}
+
+function applyAttackDeclared(state, event) {
+  requirePlayer(state, event.playerId);
+  requirePlayer(state, event.rivalId);
+  requireCardInZone(state, event.playerId, "monsterZone", event.attackerCardId);
+  if (event.targetCardId) {
+    requireCardInZone(state, event.rivalId, "monsterZone", event.targetCardId);
+  }
+  state.machine.pendingAttack = {
+    playerId: event.playerId,
+    rivalId: event.rivalId,
+    attackerCardId: event.attackerCardId,
+    targetCardId: event.targetCardId || null,
+    targetPlayerId: event.targetPlayerId || null,
+    direct: Boolean(event.direct),
+    declarationEventId: event.id,
+    timing: event.timing || Timing.attackDeclaration
+  };
+}
+
+function applyBattleResolved(state, event) {
+  if (state.machine.pendingAttack) {
+    const pending = state.machine.pendingAttack;
+    if (event.declarationEventId && String(event.declarationEventId) !== String(pending.declarationEventId)) {
+      throw new GameRuleError(`Battle resolution ${event.declarationEventId} does not match pending attack ${pending.declarationEventId}`);
+    }
+  }
+  state.machine.pendingAttack = null;
+}
+
+function applyAttackCanceled(state, event) {
+  if (!state.machine.pendingAttack) {
+    throw new GameRuleError("ATTACK_CANCELED requires a pending attack");
+  }
+  const pending = state.machine.pendingAttack;
+  if (String(event.declarationEventId) !== String(pending.declarationEventId)) {
+    throw new GameRuleError(`Canceled attack ${event.declarationEventId} does not match pending attack ${pending.declarationEventId}`);
+  }
+  state.machine.pendingAttack = null;
 }
 
 function applyLpHealed(state, event) {
@@ -2071,6 +2235,7 @@ function applyPhaseChanged(state, event) {
   state.machine.chain = [];
   state.machine.actionWindow = null;
   state.machine.autoEnd = null;
+  state.machine.pendingAttack = null;
 }
 
 function applyTurnStarted(state, event) {
@@ -2083,6 +2248,7 @@ function applyTurnStarted(state, event) {
   state.machine.chain = [];
   state.machine.actionWindow = null;
   state.machine.autoEnd = null;
+  state.machine.pendingAttack = null;
   player.attacksSkipped = false;
   player.comboThisTurn = false;
   player.comboFlags = {};
@@ -2103,6 +2269,7 @@ function applyTurnEnded(state, event) {
   state.machine.chain = [];
   state.machine.actionWindow = null;
   state.machine.autoEnd = null;
+  state.machine.pendingAttack = null;
 }
 
 function applyComboTriggered(state, event) {
@@ -2126,6 +2293,7 @@ function applyResponseWindowOpened(state, event) {
   requirePlayer(state, event.playerId);
   requireTiming(event.timing);
   requireResponseWindow(event.windowType);
+  const openedAt = Number(event.openedAt) || Number(event.id) || 0;
   state.machine.responseWindow = {
     playerId: event.playerId,
     type: event.windowType,
@@ -2135,11 +2303,22 @@ function applyResponseWindowOpened(state, event) {
     prompt: event.prompt || null,
     context: clone(event.context || {})
   };
+  state.machine.actionWindow = {
+    playerId: event.playerId,
+    window: ActionWindow.response,
+    windowId: event.windowId || `${ActionWindow.response}:${openedAt}`,
+    reason: event.prompt || "response-window",
+    openedAt,
+    deadline: Number(event.deadline) || openedAt
+  };
 }
 
 function applyResponseWindowClosed(state, event) {
   requirePlayer(state, event.playerId);
   state.machine.responseWindow = null;
+  if (state.machine.actionWindow?.window === ActionWindow.response) {
+    state.machine.actionWindow = null;
+  }
 }
 
 function applyActionWindowOpened(state, event) {
@@ -2553,6 +2732,35 @@ function validateBattleDeclaration(state, playerId, rivalId, action) {
   return { attacker, target, direct };
 }
 
+function requirePendingAttack(state, playerId = null) {
+  const pending = state.machine.pendingAttack;
+  if (!pending) {
+    throw new GameRuleError("No attack is pending");
+  }
+  if (playerId && pending.playerId !== playerId) {
+    throw new GameRuleError(`Pending attack belongs to ${pending.playerId}`);
+  }
+  return pending;
+}
+
+function assertBattleResolutionMatchesPendingAttack(state, action) {
+  const pending = state.machine.pendingAttack;
+  if (!pending) return;
+  if (pending.playerId !== action.playerId) {
+    throw new GameRuleError(`Pending attack belongs to ${pending.playerId}`);
+  }
+  if (pending.attackerCardId !== action.attackerCardId) {
+    throw new GameRuleError(`Pending attack attacker ${pending.attackerCardId} does not match ${action.attackerCardId}`);
+  }
+  const targetCardId = action.targetCardId || null;
+  if ((pending.targetCardId || null) !== targetCardId) {
+    throw new GameRuleError(`Pending attack target ${pending.targetCardId || "(direct)"} does not match ${targetCardId || "(direct)"}`);
+  }
+  if (action.declarationEventId && String(action.declarationEventId) !== String(pending.declarationEventId)) {
+    throw new GameRuleError(`Pending attack declaration ${pending.declarationEventId} does not match ${action.declarationEventId}`);
+  }
+}
+
 function attackAbilityBlocked(state, playerId, ability) {
   return [Ability.attackReset, Ability.directAttack].includes(ability) &&
     hasAbility(state, playerId, Ability.skipAttackLock);
@@ -2793,6 +3001,7 @@ function normalizeState(state) {
     chain: [],
     actionWindow: null,
     autoEnd: null,
+    pendingAttack: null,
     ...(state.machine || {}),
     phase: state.turn.phase
   };
@@ -2981,7 +3190,8 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
     responseWindow: null,
     chain: [],
     actionWindow: null,
-    autoEnd: null
+    autoEnd: null,
+    pendingAttack: null
   };
 
   for (const event of events) {
@@ -2992,6 +3202,7 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
       machine.chain = [];
       machine.actionWindow = null;
       machine.autoEnd = null;
+      machine.pendingAttack = null;
     }
     if (event.type === "TURN_ENDED") {
       machine.phase = Phase.end;
@@ -3000,6 +3211,7 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
       machine.chain = [];
       machine.actionWindow = null;
       machine.autoEnd = null;
+      machine.pendingAttack = null;
     }
     if (event.type === "PHASE_CHANGED") {
       machine.phase = event.to;
@@ -3008,11 +3220,13 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
       machine.chain = [];
       machine.actionWindow = null;
       machine.autoEnd = null;
+      machine.pendingAttack = null;
     }
     if (event.type === "TIMING_CHANGED" && TIMINGS.has(event.to)) {
       machine.timing = event.to;
     }
     if (event.type === "RESPONSE_WINDOW_OPENED") {
+      const openedAt = Number(event.openedAt) || Number(event.id) || 0;
       machine.responseWindow = {
         playerId: event.playerId,
         type: event.windowType,
@@ -3022,9 +3236,35 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
         prompt: event.prompt || null,
         context: clone(event.context || {})
       };
+      machine.actionWindow = {
+        playerId: event.playerId,
+        window: ActionWindow.response,
+        windowId: event.windowId || `${ActionWindow.response}:${openedAt}`,
+        reason: event.prompt || "response-window",
+        openedAt,
+        deadline: Number(event.deadline) || openedAt
+      };
     }
     if (event.type === "RESPONSE_WINDOW_CLOSED") {
       machine.responseWindow = null;
+      if (machine.actionWindow?.window === ActionWindow.response) {
+        machine.actionWindow = null;
+      }
+    }
+    if (event.type === "ATTACK_DECLARED") {
+      machine.pendingAttack = {
+        playerId: event.playerId,
+        rivalId: event.rivalId,
+        attackerCardId: event.attackerCardId,
+        targetCardId: event.targetCardId || null,
+        targetPlayerId: event.targetPlayerId || null,
+        direct: Boolean(event.direct),
+        declarationEventId: event.id,
+        timing: event.timing || Timing.attackDeclaration
+      };
+    }
+    if (event.type === "BATTLE_RESOLVED" || event.type === "ATTACK_CANCELED") {
+      machine.pendingAttack = null;
     }
     if (event.type === "ACTION_WINDOW_OPENED") {
       machine.actionWindow = {
@@ -3085,7 +3325,8 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
       responseWindow: null,
       chain: [],
       actionWindow: null,
-      autoEnd: null
+      autoEnd: null,
+      pendingAttack: null
     };
   }
   return machine;

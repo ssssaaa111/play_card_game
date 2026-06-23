@@ -15,11 +15,13 @@ import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import {
+  buildEngineStateFromUiState,
   canDispatchSummonEffectFromUiState,
   canDispatchSpellFromUiState,
   canDispatchTrapFromUiState,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
+  dispatchCancelAttackFromUiState,
   dispatchCancelAutoEndFromUiState,
   dispatchChangePhaseFromUiState,
   dispatchChangeMonsterModeFromUiState,
@@ -28,7 +30,6 @@ import {
   dispatchDeclareAttackFromUiState,
   dispatchDrawCardsFromUiState,
   dispatchEndTurnFromUiState,
-  dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
   dispatchOpenActionWindowFromUiState,
   dispatchPassResponsePriorityFromUiState,
@@ -543,6 +544,26 @@ function canUseBattleActions() {
   return canPlayerAct() && state.phase === PHASES.battle && state.actionWindow === ACTION_WINDOWS.battle;
 }
 
+function currentEngineMachine() {
+  try {
+    return buildEngineStateFromUiState(state).machine;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function isAttackFlowPending() {
+  const machine = currentEngineMachine();
+  return Boolean(
+    state.pendingTrapChoice ||
+    pendingTrapChoiceResolver ||
+    machine?.pendingAttack ||
+    machine?.responseWindow ||
+    (machine?.chain || []).length > 0
+  );
+}
+
 function setActionWindow(windowName, options = {}) {
   try {
     return dispatchOpenActionWindowFromUiState(
@@ -780,6 +801,7 @@ function hasPlayerMainAction() {
 }
 
 function resolvePlayerActionWindow(reason = "操作完成") {
+  if (isAttackFlowPending()) return;
   const actions = currentPlayerActions();
   const decision = playerActionWindowDecision(state, {
     hasMainAction: actions.hasMain,
@@ -2149,14 +2171,17 @@ function resolveBattleWithEngine(owner, rival, attackerIndex, targetIndex, optio
   }
 }
 
-function consumeCancelledAttackWithEngine(owner, attacker, attackerIndex) {
-  if (runtimeCardId(owner.field[attackerIndex]) !== runtimeCardId(attacker)) return true;
+function consumeCancelledAttackWithEngine(owner, attacker, options = {}) {
   try {
-    const events = dispatchMarkMonsterUsedFromUiState(state, owner.owner, attackerIndex);
+    const events = dispatchCancelAttackFromUiState(state, owner.owner, {
+      declarationEventId: options.declarationEventId,
+      consumeAttack: Boolean(options.consumeAttack),
+      reason: options.reason || "trap-canceled"
+    });
     playAttackResetFeedback(owner, attacker, events);
     return true;
   } catch (error) {
-    cue(error.message || "攻击机会消费失败。");
+    cue(error.message || "攻击取消结算失败。");
     console.error(error);
     return false;
   }
@@ -2213,9 +2238,11 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   }
   const trapResult = await triggerTrap(rival, owner, "attack", attackContext);
   if (trapResult.cancelled) {
-    if (trapResult.consumesAttack) {
-      if (!consumeCancelledAttackWithEngine(owner, attacker, attackerIndex)) return false;
-    }
+    if (!consumeCancelledAttackWithEngine(owner, attacker, {
+      declarationEventId: attackContext.targetEffectId,
+      consumeAttack: trapResult.consumesAttack,
+      reason: "attack-trap"
+    })) return false;
     checkGameOver();
     return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
   }
@@ -2270,9 +2297,11 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       engineResponse: true
     });
     if (shield.cancelled) {
-      if (shield.consumesAttack) {
-        if (!consumeCancelledAttackWithEngine(owner, attacker, attackerIndex)) return false;
-      }
+      if (!consumeCancelledAttackWithEngine(owner, attacker, {
+        declarationEventId: attackContext.targetEffectId,
+        consumeAttack: shield.consumesAttack,
+        reason: "direct-trap"
+      })) return false;
       checkGameOver();
       return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的直接攻击`);
     }
@@ -2618,6 +2647,7 @@ function togglePause() {
 function scheduleAutoEnd(reason = "操作完成", force = false) {
   if (!canPlayerAct() || state.autoEnding) return;
   if (state.pendingTarget) return;
+  if (isAttackFlowPending()) return;
   const actions = currentPlayerActions();
   if (!force && actions.hasAny) {
     setActionWindow(state.phase === PHASES.battle ? ACTION_WINDOWS.battle : ACTION_WINDOWS.main, { reason });
@@ -3161,6 +3191,7 @@ function handleActionWindowTimeout(windowId) {
     answerChain(false);
     return;
   }
+  if (isAttackFlowPending()) return;
   if (canPlayerAct() && state.phase === PHASES.main && state.actionWindow === ACTION_WINDOWS.main) {
     scheduleAutoEnd("暂时没有操作", true);
   }

@@ -79,6 +79,7 @@ function makeState({ cards = [], player = {}, ai = {}, turn = {}, machine = {}, 
       chain: [],
       actionWindow: null,
       autoEnd: null,
+      pendingAttack: null,
       ...machine
     },
     abilities: {
@@ -1759,9 +1760,15 @@ test("attack declaration opens an engine-owned response window without resolving
   assert.deepEqual(next.players[AI].monsterZone, ["target-1"]);
   assert.equal(next.players[PLAYER].lp, MAX_LP);
   assert.equal(next.machine.timing, Timing.attackDeclaration);
+  assert.equal(next.machine.pendingAttack.playerId, PLAYER);
+  assert.equal(next.machine.pendingAttack.rivalId, AI);
+  assert.equal(next.machine.pendingAttack.attackerCardId, "attacker-1");
+  assert.equal(next.machine.pendingAttack.targetCardId, "target-1");
+  assert.equal(next.machine.pendingAttack.declarationEventId, declared.id);
   assert.equal(next.machine.responseWindow.playerId, AI);
   assert.equal(next.machine.responseWindow.type, ResponseWindow.optional);
   assert.equal(next.machine.responseWindow.timing, Timing.attackDeclaration);
+  assert.equal(next.machine.actionWindow.window, ActionWindow.response);
   assert.equal(declared.targetCardId, "target-1");
   assert.equal(windowOpened.triggerEventId, declared.id);
   assert.equal(windowOpened.context.attackerCardId, "attacker-1");
@@ -1769,6 +1776,122 @@ test("attack declaration opens an engine-owned response window without resolving
   assert.ok(events.some((event) => event.type === "TIMING_CHANGED" && event.to === Timing.attackDeclaration));
   assert.ok(!events.some((event) => event.type === "DAMAGE_DEALT"));
   assert.ok(!events.some((event) => event.type === "MONSTER_USED"));
+  assertValidGameState(next);
+});
+
+test("pending attack blocks auto-end and turn handoff until battle resolves or is canceled", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("target-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      monsterZone: ["target-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const declarationEvents = engine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1"
+  });
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+
+  engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: AI, reason: "declined" });
+  let next = engine.getState();
+  assert.equal(next.turn.phase, Phase.battle);
+  assert.equal(next.machine.phase, Phase.battle);
+  assert.equal(next.machine.responseWindow, null);
+  assert.equal(next.machine.pendingAttack.declarationEventId, declaration.id);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "REQUEST_AUTO_END",
+      playerId: PLAYER,
+      requestedAt: 2000,
+      timeoutSeconds: 2
+    }),
+    /attack is pending/
+  );
+  assert.throws(
+    () => engine.dispatch({ type: "END_TURN", playerId: PLAYER }),
+    /attack is pending/
+  );
+  assert.throws(
+    () => engine.dispatch({ type: "START_TURN", playerId: AI }),
+    /attack is pending/
+  );
+
+  const legal = getLegalActions(engine.getState(), PLAYER);
+  assert.equal(legal.hasAny, false);
+  assert.equal(legal.can.endTurn, false);
+
+  engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1",
+    declarationEventId: declaration.id
+  });
+  next = engine.getState();
+  assert.equal(next.machine.pendingAttack, null);
+  assert.equal(next.turn.phase, Phase.battle);
+  assert.equal(next.cards["attacker-1"].used, true);
+});
+
+test("canceling a responded attack clears pending attack and optionally consumes the attacker", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("target-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      monsterZone: ["target-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const declarationEvents = engine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1"
+  });
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: AI, reason: "trap-resolved" });
+  const cancelEvents = engine.dispatch({
+    type: "CANCEL_ATTACK",
+    playerId: PLAYER,
+    declarationEventId: declaration.id,
+    consumeAttack: true,
+    reason: "attackNegate"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.machine.pendingAttack, null);
+  assert.equal(next.turn.phase, Phase.battle);
+  assert.equal(next.cards["attacker-1"].used, true);
+  assert.ok(cancelEvents.some((event) => event.type === "MONSTER_USED" && event.reason === "attackCanceled"));
+  assert.ok(cancelEvents.some((event) => event.type === "ATTACK_CANCELED" && event.declarationEventId === declaration.id));
   assertValidGameState(next);
 });
 
@@ -2164,6 +2287,78 @@ test("start turn rejects unresolved response windows", () => {
   assert.throws(
     () => engine.dispatch({ type: "START_TURN", playerId: PLAYER }),
     /response window is open/
+  );
+});
+
+test("response windows and unresolved chains block auto-end and turn end", () => {
+  const responseState = makeState({
+    turn: { phase: Phase.battle },
+    machine: {
+      phase: Phase.battle,
+      timing: Timing.attackDeclaration,
+      responseWindow: {
+        playerId: AI,
+        type: ResponseWindow.optional,
+        timing: Timing.attackDeclaration,
+        resumeTiming: Timing.battleOpen,
+        triggerEventId: "attack-open"
+      },
+      actionWindow: {
+        playerId: AI,
+        window: ActionWindow.response,
+        windowId: "response:1",
+        reason: "attack",
+        openedAt: 1,
+        deadline: 1
+      }
+    }
+  });
+  const responseEngine = new GameEngine(responseState);
+  assert.throws(
+    () => responseEngine.dispatch({
+      type: "REQUEST_AUTO_END",
+      playerId: PLAYER,
+      requestedAt: 1000,
+      timeoutSeconds: 2
+    }),
+    /response window is open/
+  );
+  assert.throws(
+    () => responseEngine.dispatch({ type: "END_TURN", playerId: PLAYER }),
+    /response window is open/
+  );
+
+  const chainState = makeState({
+    cards: [card("trap-1", { type: "trap", trigger: "attackNegate" })],
+    player: { spellTrapZone: ["trap-1"] },
+    turn: { phase: Phase.battle },
+    machine: {
+      phase: Phase.battle,
+      timing: Timing.chainResolution,
+      chain: [{ linkId: 1, playerId: PLAYER, cardId: "trap-1", effectId: "attackNegate", committed: true }],
+      actionWindow: {
+        playerId: PLAYER,
+        window: ActionWindow.resolution,
+        windowId: "resolution:1",
+        reason: "chain",
+        openedAt: 1,
+        deadline: 1
+      }
+    }
+  });
+  const chainEngine = new GameEngine(chainState);
+  assert.throws(
+    () => chainEngine.dispatch({
+      type: "REQUEST_AUTO_END",
+      playerId: PLAYER,
+      requestedAt: 1000,
+      timeoutSeconds: 2
+    }),
+    /chain is unresolved/
+  );
+  assert.throws(
+    () => chainEngine.dispatch({ type: "END_TURN", playerId: PLAYER }),
+    /chain is unresolved/
   );
 });
 
@@ -3330,6 +3525,73 @@ test("assertValidGameState catches invalid zones, LP, and turn owner", () => {
   assert.throws(
     () => assertValidGameState(makeState({ turn: { playerId: "missing-player" } })),
     GameStateValidationError
+  );
+});
+
+test("assertValidGameState catches unresolved attack and chain state machine drift", () => {
+  assert.throws(
+    () => assertValidGameState(makeState({
+      turn: { phase: Phase.battle },
+      machine: {
+        phase: Phase.battle,
+        timing: Timing.attackDeclaration,
+        chain: [{ linkId: 1, playerId: PLAYER, cardId: "trap-1", effectId: "attackNegate" }],
+        actionWindow: null
+      }
+    })),
+    /Unresolved chain requires response window or response\/resolution action window/
+  );
+
+  const pendingBase = {
+    cards: [
+      card("attacker-1", { type: "monster" }),
+      card("target-1", { ownerId: AI, type: "monster" })
+    ],
+    player: { monsterZone: ["attacker-1"] },
+    ai: { monsterZone: ["target-1"] },
+    turn: { phase: Phase.battle },
+    machine: {
+      phase: Phase.battle,
+      timing: Timing.attackDeclaration,
+      pendingAttack: {
+        playerId: PLAYER,
+        rivalId: AI,
+        attackerCardId: "attacker-1",
+        targetCardId: "target-1",
+        declarationEventId: 7
+      }
+    }
+  };
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      ...pendingBase,
+      machine: {
+        ...pendingBase.machine,
+        autoEnd: { playerId: PLAYER, requestedAt: 1000, deadline: 3000 },
+        actionWindow: {
+          playerId: PLAYER,
+          window: ActionWindow.autoEnd,
+          windowId: "autoEnd:1000",
+          reason: "bad",
+          openedAt: 1000,
+          deadline: 3000
+        }
+      }
+    })),
+    /Pending attack cannot coexist with auto-end/
+  );
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      ...pendingBase,
+      turn: { playerId: AI, phase: Phase.battle },
+      machine: {
+        ...pendingBase.machine,
+        phase: Phase.battle
+      }
+    })),
+    /Pending attack player must remain the current turn player/
   );
 });
 

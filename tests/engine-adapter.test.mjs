@@ -19,6 +19,7 @@ import {
   dispatchCloseResponseWindowFromUiState,
   dispatchChangePhaseFromUiState,
   dispatchChangeMonsterModeFromUiState,
+  dispatchCancelAttackFromUiState,
   dispatchCommitAutoEndFromUiState,
   dispatchDeclareAttackFromUiState,
   dispatchDrawCardsFromUiState,
@@ -504,8 +505,47 @@ test("dispatches attack declaration as a response-window event without resolving
   assert.equal(windowOpened.playerId, "ai");
   assert.equal(windowOpened.triggerEventId, declared.id);
   assert.equal(windowOpened.context.attackerCardId, attacker.uid);
+  assert.equal(state.actionWindow, "response");
+  assert.equal(state.actionWindowReason, "attack");
+  assert.equal(buildEngineStateFromUiState(state).machine.pendingAttack.declarationEventId, declared.id);
   assert.ok(!events.some((event) => event.type === "DAMAGE_DEALT"));
   assert.equal(state.gameEvents.at(-1).type, "RESPONSE_WINDOW_OPENED");
+});
+
+test("pending attack blocks UI auto-end until response is declined and attack is canceled", () => {
+  const attacker = uiMonster("attacker-pending", "star-lancer");
+  const target = uiMonster("target-pending", "iron-guardian");
+  target.ownerId = "ai";
+  const state = appState({ phase: PHASES.battle });
+  state.player.field[0] = attacker;
+  state.ai.field[0] = target;
+
+  const declarationEvents = dispatchDeclareAttackFromUiState(state, "player", "ai", 0, 0);
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  assert.equal(state.actionWindow, "response");
+
+  dispatchCloseResponseWindowFromUiState(state, "ai", "declined");
+  assert.equal(buildEngineStateFromUiState(state).machine.pendingAttack.declarationEventId, declaration.id);
+  assert.throws(
+    () => dispatchRequestAutoEndFromUiState(state, "player", {
+      reason: "should wait",
+      now: 2000,
+      timeoutSeconds: 2
+    }),
+    /attack is pending/
+  );
+  assert.equal(state.autoEnding, false);
+  assert.equal(state.phase, PHASES.battle);
+  assert.equal(state.turn, "player");
+
+  const cancelEvents = dispatchCancelAttackFromUiState(state, "player", {
+    declarationEventId: declaration.id,
+    consumeAttack: true,
+    reason: "test-cancel"
+  });
+  assert.equal(buildEngineStateFromUiState(state).machine.pendingAttack, null);
+  assert.equal(attacker.used, true);
+  assert.ok(cancelEvents.some((event) => event.type === "ATTACK_CANCELED"));
 });
 
 test("rebuilds the open response window and resolves a selected trap as one event chain", () => {

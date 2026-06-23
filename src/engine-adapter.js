@@ -1,7 +1,7 @@
 import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents } from './game-engine.js';
 import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
-import { PHASES, TIMINGS } from './turn-state.js';
+import { ACTION_WINDOWS, PHASES, TIMINGS } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
 const ONE_SHOT_EFFECT = "oneShot";
@@ -273,6 +273,24 @@ export function applyUiGameEvents(uiState, events = []) {
       uiState.actionWindowReason = event.reason || "";
       uiState.actionDeadline = Math.max(0, Number(event.deadline) || 0);
       uiState.timing = uiTimingByActionWindow[event.window] || uiState.timing;
+    }
+    if (event.type === "RESPONSE_WINDOW_OPENED") {
+      const openedAt = Math.max(0, Number(event.openedAt) || Number(event.id) || 0);
+      uiState.actionWindow = ACTION_WINDOWS.response;
+      uiState.actionWindowId = event.windowId || `${ACTION_WINDOWS.response}:${openedAt}`;
+      uiState.actionWindowReason = event.prompt || "response-window";
+      uiState.actionDeadline = Math.max(0, Number(event.deadline) || openedAt);
+      uiState.timing = TIMINGS.responseWindow;
+      uiState.autoEnding = false;
+    }
+    if (event.type === "RESPONSE_WINDOW_CLOSED") {
+      if (uiState.actionWindow === ACTION_WINDOWS.response) {
+        uiState.actionWindow = null;
+        uiState.actionWindowId = null;
+        uiState.actionWindowReason = "";
+        uiState.actionDeadline = 0;
+      }
+      uiState.timing = event.resumeTiming || uiTimingByPhase[uiState.phase] || uiState.timing;
     }
     if (event.type === "AUTO_END_REQUESTED") {
       uiState.autoEnding = true;
@@ -827,6 +845,23 @@ export function dispatchMarkMonsterUsedFromUiState(uiState, playerId, fieldIndex
     playerId,
     cardId: cardKey(card)
   });
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchCancelAttackFromUiState(uiState, playerId, {
+  declarationEventId = null,
+  consumeAttack = false,
+  reason = "canceled"
+} = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const action = {
+    type: "CANCEL_ATTACK",
+    playerId,
+    reason,
+    consumeAttack
+  };
+  if (declarationEventId) action.declarationEventId = declarationEventId;
+  const events = engine.dispatch(action);
   return applyUiGameEvents(uiState, events);
 }
 
