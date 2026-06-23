@@ -661,11 +661,16 @@ test("app uses extracted trap metadata", () => {
 
 test("app reports missing engine effects instead of silent fallbacks", () => {
   const app = readProjectFile("src/app.js");
+  const adapter = readProjectFile("src/engine-adapter.js");
 
   assert.match(app, /function reportMissingEngineEffect\(card, kind\)/);
   assert.match(app, /reportMissingEngineEffect\(card, "summon"\)/);
   assert.match(app, /reportMissingEngineEffect\(card, "spell"\)/);
   assert.match(app, /reportMissingEngineEffect\(trap, "trap"\)/);
+  assert.match(adapter, /import \{ spellDefinition \} from '\.\/spells\.js'/);
+  assert.match(adapter, /import \{ trapDefinition \} from '\.\/traps\.js'/);
+  assert.match(adapter, /Boolean\(spellDefinition\(card\.effect\)\)/);
+  assert.match(adapter, /Boolean\(trapDefinition\(effectId\)\)/);
 
   const playSpellStart = app.indexOf("function playSpell");
   const playSpellEnd = app.indexOf("function runtimeCardId", playSpellStart);
@@ -676,6 +681,40 @@ test("app reports missing engine effects instead of silent fallbacks", () => {
   assert.doesNotMatch(playSpellSource, /owner\.grave\.push/);
   assert.doesNotMatch(playSpellSource, /effect\?\.apply/);
   assert.doesNotMatch(playSpellSource, /\.lp\s*[+\-]?=/);
+
+  const trapStart = app.indexOf("function resolveTrapCard");
+  const trapEnd = app.indexOf("function playBattleDamageFeedback", trapStart);
+  assert.ok(trapStart >= 0, "resolveTrapCard should exist");
+  assert.ok(trapEnd > trapStart, "resolveTrapCard should end before battle feedback");
+  const trapSource = app.slice(trapStart, trapEnd);
+  assert.doesNotMatch(trapSource, /owner\.traps\[trapIndex\]\s*=/);
+  assert.doesNotMatch(trapSource, /owner\.grave\.push/);
+  assert.doesNotMatch(trapSource, /rival\.grave\.push/);
+  assert.doesNotMatch(trapSource, /rival\.lp\s*[+\-]?=/);
+  assert.doesNotMatch(trapSource, /owner\.lp\s*[+\-]?=/);
+
+  const spellDispatchStart = adapter.indexOf("export function dispatchActivateSpellFromUiState");
+  const spellDispatchEnd = adapter.length;
+  assert.ok(spellDispatchStart >= 0, "spell dispatch adapter should exist");
+  const spellDispatchSource = adapter.slice(spellDispatchStart, spellDispatchEnd);
+  assert.match(spellDispatchSource, /new GameEngine\(buildEngineStateFromUiState\(uiState\)\)/);
+  assert.match(spellDispatchSource, /engine\.dispatch\(action\)/);
+  assert.match(spellDispatchSource, /applyUiGameEvents\(uiState, events\)/);
+  assert.doesNotMatch(spellDispatchSource, /\.hand\.splice/);
+  assert.doesNotMatch(spellDispatchSource, /\.grave\.push/);
+  assert.doesNotMatch(spellDispatchSource, /\.lp\s*[+\-]?=/);
+
+  const trapDispatchStart = adapter.indexOf("export function dispatchActivateTrapFromUiState");
+  const trapDispatchEnd = adapter.indexOf("export function dispatchPassResponsePriorityFromUiState", trapDispatchStart);
+  assert.ok(trapDispatchStart >= 0, "trap dispatch adapter should exist");
+  assert.ok(trapDispatchEnd > trapDispatchStart, "trap dispatch adapter should end before response priority adapter");
+  const trapDispatchSource = adapter.slice(trapDispatchStart, trapDispatchEnd);
+  assert.match(trapDispatchSource, /new GameEngine\(buildEngineStateFromUiState\(uiState\)\)/);
+  assert.match(trapDispatchSource, /engine\.dispatch\(action\)/);
+  assert.match(trapDispatchSource, /applyUiGameEvents\(uiState, events\)/);
+  assert.doesNotMatch(trapDispatchSource, /\.traps\[[^\]]+\]\s*=/);
+  assert.doesNotMatch(trapDispatchSource, /\.grave\.push/);
+  assert.doesNotMatch(trapDispatchSource, /\.lp\s*[+\-]?=/);
 
   assert.doesNotMatch(app, /function resolveSummonEffect/);
   assert.doesNotMatch(app, /旧式直接结算/);

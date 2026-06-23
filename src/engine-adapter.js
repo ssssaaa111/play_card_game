@@ -1,6 +1,7 @@
 import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents } from './game-engine.js';
 import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
+import { trapDefinition } from './traps.js';
 import { ACTION_WINDOWS, PHASES, TIMINGS } from './turn-state.js';
 
 const ownerIds = ["player", "ai"];
@@ -410,7 +411,7 @@ export function applyUiGameEvents(uiState, events = []) {
 
 export function canDispatchSpellFromUiState(card) {
   const duration = getCardEffectDefinition(card?.effect)?.duration;
-  return card?.type === "spell" && (duration === ONE_SHOT_EFFECT || duration === CONTINUOUS_EFFECT);
+  return card?.type === "spell" && Boolean(spellDefinition(card.effect)) && (duration === ONE_SHOT_EFFECT || duration === CONTINUOUS_EFFECT);
 }
 
 export function canDispatchSummonEffectFromUiState(card) {
@@ -418,7 +419,8 @@ export function canDispatchSummonEffectFromUiState(card) {
 }
 
 export function canDispatchTrapFromUiState(card) {
-  return card?.type === "trap" && getCardEffectDefinition(card.trigger || card.effect)?.duration === ONE_SHOT_EFFECT;
+  const effectId = card?.trigger || card?.effect;
+  return card?.type === "trap" && Boolean(trapDefinition(effectId)) && getCardEffectDefinition(effectId)?.duration === ONE_SHOT_EFFECT;
 }
 
 export function explainActivateSpellFromUiState(uiState, playerId, rivalId, handIndex, targetInfo = null) {

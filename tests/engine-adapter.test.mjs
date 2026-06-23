@@ -464,6 +464,33 @@ test("rejects missing trap engine effects without mutating UI state", () => {
   assert.deepEqual(snapshotUiState(state), before);
 });
 
+test("rejects traps that have engine DSL but no trap metadata without mutating UI state", () => {
+  const trap = uiTrap("trap-wrong-kind", "guard-sigil");
+  trap.trigger = "burn500";
+  const attacker = uiMonster("attacker-wrong-kind", "star-lancer");
+  const guard = uiMonster("guard-wrong-kind", "iron-guardian");
+  attacker.ownerId = "ai";
+  const state = appState({ phase: PHASES.battle });
+  state.player.traps[0] = trap;
+  state.player.field[0] = guard;
+  state.player.lp = 2600;
+  state.ai.field[0] = attacker;
+  state.ai.lp = 3100;
+  const before = snapshotUiState(state);
+
+  assert.equal(canDispatchTrapFromUiState(trap), false);
+  assert.throws(
+    () => dispatchActivateTrapFromUiState(state, "player", "ai", 0, {
+      attacker,
+      attackerIndex: 0,
+      targetIndex: 0,
+      targetEffectId: "attack-wrong-kind"
+    }),
+    /not engine-backed/
+  );
+  assert.deepEqual(snapshotUiState(state), before);
+});
+
 test("dispatches battle resolution and applies direct damage to UI state", () => {
   const attacker = uiMonster("attacker-direct", "star-lancer");
   attacker.atk = 1500;
@@ -1507,6 +1534,30 @@ test("rejects missing spell engine effects without mutating UI state", () => {
   state.player.hand = [mystery];
   state.player.grave = [graveCard];
   state.player.field[0] = fieldCard;
+  state.ai.field[0] = enemyCard;
+  state.ai.lp = 3200;
+  const before = snapshotUiState(state);
+
+  assert.equal(canDispatchSpellFromUiState(mystery), false);
+  assert.throws(
+    () => dispatchActivateSpellFromUiState(state, "player", "ai", 0),
+    /not engine-backed/
+  );
+  assert.deepEqual(snapshotUiState(state), before);
+});
+
+test("rejects spells that have engine DSL but no spell metadata without mutating UI state", () => {
+  const mystery = uiSpell("spell-wrong-kind", "burn200", "mystery-spell");
+  const graveCard = uiMonster("grave-wrong-kind", "ember-drake");
+  const fieldCard = uiMonster("field-wrong-kind", "star-lancer");
+  const enemyCard = uiMonster("enemy-wrong-kind", "iron-guardian");
+  enemyCard.ownerId = "ai";
+  const state = appState();
+  state.player.hand = [mystery];
+  state.player.grave = [graveCard];
+  state.player.field[0] = fieldCard;
+  state.player.traps[0] = uiTrap("trap-before-wrong-kind", "mirror-snare");
+  state.player.lp = 2800;
   state.ai.field[0] = enemyCard;
   state.ai.lp = 3200;
   const before = snapshotUiState(state);
