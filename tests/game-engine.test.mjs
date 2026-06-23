@@ -1816,6 +1816,16 @@ test("pending attack blocks auto-end and turn handoff until battle resolves or i
 
   assert.throws(
     () => engine.dispatch({
+      type: "DECLARE_ATTACK",
+      playerId: PLAYER,
+      rivalId: AI,
+      attackerCardId: "attacker-1",
+      targetCardId: "target-1"
+    }),
+    /another attack is pending/
+  );
+  assert.throws(
+    () => engine.dispatch({
       type: "REQUEST_AUTO_END",
       playerId: PLAYER,
       requestedAt: 2000,
@@ -1825,6 +1835,14 @@ test("pending attack blocks auto-end and turn handoff until battle resolves or i
   );
   assert.throws(
     () => engine.dispatch({ type: "END_TURN", playerId: PLAYER }),
+    /attack is pending/
+  );
+  assert.throws(
+    () => engine.dispatch({ type: "COMMIT_AUTO_END", playerId: PLAYER, committedAt: 2200 }),
+    /attack is pending/
+  );
+  assert.throws(
+    () => engine.dispatch({ type: "CHANGE_PHASE", playerId: PLAYER, phase: Phase.end }),
     /attack is pending/
   );
   assert.throws(
@@ -1892,6 +1910,138 @@ test("canceling a responded attack clears pending attack and optionally consumes
   assert.equal(next.cards["attacker-1"].used, true);
   assert.ok(cancelEvents.some((event) => event.type === "MONSTER_USED" && event.reason === "attackCanceled"));
   assert.ok(cancelEvents.some((event) => event.type === "ATTACK_CANCELED" && event.declarationEventId === declaration.id));
+  assertValidGameState(next);
+});
+
+test("chain resolution cancels pending attack when the attacker leaves the monster zone", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("target-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" }),
+      card("mirror-1", { templateId: "mirror-snare", ownerId: AI, type: "trap", trigger: "attackDestroy" })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      monsterZone: ["target-1"],
+      spellTrapZone: ["mirror-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const declarationEvents = engine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1"
+  });
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: AI,
+    cardId: "mirror-1",
+    effectId: "attackDestroy",
+    targetEffectId: declaration.id
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: "mirror-1",
+    attackerCardId: "attacker-1",
+    targetEffectId: declaration.id
+  });
+  const chainEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: AI });
+  const next = engine.getState();
+
+  assert.equal(next.machine.pendingAttack, null);
+  assert.equal(next.machine.responseWindow, null);
+  assert.deepEqual(next.players[PLAYER].grave, ["attacker-1"]);
+  assert.deepEqual(next.players[AI].grave, ["mirror-1"]);
+  assert.ok(chainEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "attacker-1"));
+  assert.ok(chainEvents.some((event) =>
+    event.type === "ATTACK_CANCELED" &&
+    event.declarationEventId === declaration.id &&
+    event.reason === "attacker-left-field" &&
+    event.consumeAttack === false
+  ));
+  assertValidGameState(next);
+});
+
+test("chain resolution cancels pending attack when the declared target leaves the monster zone", () => {
+  const state = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("target-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" }),
+      card("target-break-1", { templateId: "target-break-test", ownerId: AI, type: "trap", trigger: "destroyDeclaredTarget" })
+    ],
+    player: {
+      monsterZone: ["attacker-1"]
+    },
+    ai: {
+      monsterZone: ["target-1"],
+      spellTrapZone: ["target-break-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state, {
+    cardEffects: {
+      destroyDeclaredTarget: {
+        duration: EffectDuration.oneShot,
+        operations: [{ op: "destroyCard", cardId: "$action.targetCardId" }]
+      }
+    }
+  });
+  const declarationEvents = engine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1"
+  });
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: AI,
+    cardId: "target-break-1",
+    effectId: "destroyDeclaredTarget",
+    targetEffectId: declaration.id
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: "target-break-1",
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1",
+    targetEffectId: declaration.id
+  });
+  const chainEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: AI });
+  const next = engine.getState();
+
+  assert.equal(next.machine.pendingAttack, null);
+  assert.equal(next.machine.responseWindow, null);
+  assert.deepEqual(next.players[AI].grave, ["target-break-1", "target-1"]);
+  assert.equal(next.cards["attacker-1"].used, undefined);
+  assert.ok(chainEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "target-1"));
+  assert.ok(chainEvents.some((event) =>
+    event.type === "ATTACK_CANCELED" &&
+    event.declarationEventId === declaration.id &&
+    event.reason === "target-left-field" &&
+    event.consumeAttack === false
+  ));
   assertValidGameState(next);
 });
 
@@ -3592,6 +3742,79 @@ test("assertValidGameState catches unresolved attack and chain state machine dri
       }
     })),
     /Pending attack player must remain the current turn player/
+  );
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      ...pendingBase,
+      machine: {
+        ...pendingBase.machine,
+        pendingAttack: {
+          ...pendingBase.machine.pendingAttack,
+          declarationEventId: null
+        }
+      }
+    })),
+    /Pending attack requires declaration event id/
+  );
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      ...pendingBase,
+      machine: {
+        ...pendingBase.machine,
+        pendingAttack: {
+          ...pendingBase.machine.pendingAttack,
+          direct: true,
+          targetPlayerId: AI
+        }
+      }
+    })),
+    /Direct pending attack cannot have a target card/
+  );
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      ...pendingBase,
+      machine: {
+        ...pendingBase.machine,
+        pendingAttack: {
+          ...pendingBase.machine.pendingAttack,
+          targetPlayerId: AI
+        }
+      }
+    })),
+    /Monster pending attack cannot target a player/
+  );
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      ...pendingBase,
+      player: { monsterZone: [] }
+    })),
+    /Card attacker-1 is not in player\.monsterZone/
+  );
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      ...pendingBase,
+      cards: [
+        card("attacker-1", { type: "spell" }),
+        card("target-1", { ownerId: AI, type: "monster" })
+      ]
+    })),
+    /Pending attack attacker must be a monster/
+  );
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      ...pendingBase,
+      cards: [
+        card("attacker-1", { type: "monster" }),
+        card("target-1", { ownerId: AI, type: "spell" })
+      ]
+    })),
+    /Pending attack target must be a monster/
   );
 });
 

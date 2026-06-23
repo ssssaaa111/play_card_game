@@ -2173,6 +2173,9 @@ function resolveBattleWithEngine(owner, rival, attackerIndex, targetIndex, optio
 
 function consumeCancelledAttackWithEngine(owner, attacker, options = {}) {
   try {
+    if (!currentEngineMachine()?.pendingAttack) {
+      return true;
+    }
     const events = dispatchCancelAttackFromUiState(state, owner.owner, {
       declarationEventId: options.declarationEventId,
       consumeAttack: Boolean(options.consumeAttack),

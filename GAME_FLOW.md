@@ -224,7 +224,7 @@ flowchart TD
 - 每只攻击表示且未行动的怪兽通常每回合可攻击一次。
 - `ATTACK_DECLARED` 会建立 `machine.pendingAttack`，直到 `RESOLVE_BATTLE` 或 `CANCEL_ATTACK` 清理。
 - 存在 `pendingAttack`、响应窗口或未结算连锁时，不得请求 auto-end、切换阶段或交接回合。
-- 攻击被某些陷阱取消时，是否消耗攻击次数由陷阱规则决定。
+- `CANCEL_ATTACK` 只有在 `consumeAttack: true` 时消耗攻击次数；攻击怪兽或声明目标在连锁结算中离场时，引擎会以 `consumeAttack: false` 自动取消本次 pending attack。
 - `attackReset` 在攻击次数被消耗后自动消费；攻击怪兽仍在场时产生 `MONSTER_READIED`。
 - 怪兽的 `afterAttack` 效果通过默认或注入的卡牌 DSL 结算，不能在战斗结算中新增硬编码分支。
 - “跳过攻击”通过 `SKIP_REMAINING_ATTACKS` 将当前可攻击怪兽标记为已行动，清空攻击重置和直击许可，并授予本回合 `skipAttackLock`。新召唤怪兽也不能绕过该锁。

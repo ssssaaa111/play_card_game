@@ -1200,10 +1200,6 @@ export class GameEngine {
 
   #commitAutoEnd(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
-    const pending = state.machine.autoEnd;
-    if (!pending || pending.playerId !== action.playerId) {
-      throw new GameRuleError("Cannot commit auto-end without a pending auto-end request");
-    }
     if (state.machine.responseWindow) {
       throw new GameRuleError("Cannot commit auto-end while a response window is open");
     }
@@ -1212,6 +1208,10 @@ export class GameEngine {
     }
     if (state.machine.pendingAttack) {
       throw new GameRuleError("Cannot commit auto-end while an attack is pending");
+    }
+    const pending = state.machine.autoEnd;
+    if (!pending || pending.playerId !== action.playerId) {
+      throw new GameRuleError("Cannot commit auto-end without a pending auto-end request");
     }
 
     const committedAt = Number.isFinite(Number(action.committedAt)) ? Number(action.committedAt) : null;
@@ -1479,6 +1479,7 @@ export class GameEngine {
       playerId: action.playerId,
       resolvedLinks: resolutionOrder.map((link) => ({ ...link }))
     });
+    cancelPendingAttackIfContextLost(state, emit);
     if (state.machine.responseWindow) {
       emit("RESPONSE_WINDOW_CLOSED", {
         playerId: action.playerId,
@@ -1756,9 +1757,33 @@ export function assertValidGameState(state) {
     if (!state.players[pending.playerId] || !state.players[pending.rivalId]) {
       throw new GameStateValidationError("Pending attack players must exist");
     }
-    requireCardInZone(state, pending.playerId, "monsterZone", pending.attackerCardId);
+    if (!pending.declarationEventId) {
+      throw new GameStateValidationError("Pending attack requires declaration event id");
+    }
+    if (pending.playerId === pending.rivalId) {
+      throw new GameStateValidationError("Pending attack players must be opponents");
+    }
+    if (pending.direct) {
+      if (pending.targetCardId) {
+        throw new GameStateValidationError("Direct pending attack cannot have a target card");
+      }
+      if (pending.targetPlayerId !== pending.rivalId) {
+        throw new GameStateValidationError("Direct pending attack must target the rival player");
+      }
+    } else if (!pending.targetCardId) {
+      throw new GameStateValidationError("Monster pending attack requires a target card");
+    } else if (pending.targetPlayerId) {
+      throw new GameStateValidationError("Monster pending attack cannot target a player");
+    }
+    const attacker = requireCardInZone(state, pending.playerId, "monsterZone", pending.attackerCardId);
+    if (attacker.type !== "monster") {
+      throw new GameStateValidationError("Pending attack attacker must be a monster");
+    }
     if (pending.targetCardId) {
-      requireCardInZone(state, pending.rivalId, "monsterZone", pending.targetCardId);
+      const target = requireCardInZone(state, pending.rivalId, "monsterZone", pending.targetCardId);
+      if (target.type !== "monster") {
+        throw new GameStateValidationError("Pending attack target must be a monster");
+      }
     }
   }
   if (state.gameOver) {
@@ -2730,6 +2755,40 @@ function validateBattleDeclaration(state, playerId, rivalId, action) {
   }
 
   return { attacker, target, direct };
+}
+
+function cardIsInZone(state, playerId, zone, cardId) {
+  return Boolean(state.players[playerId]?.[zone]?.includes(cardId));
+}
+
+function pendingAttackContextLossReason(state) {
+  const pending = state.machine.pendingAttack;
+  if (!pending) return "";
+  if (!cardIsInZone(state, pending.playerId, "monsterZone", pending.attackerCardId)) {
+    return "attacker-left-field";
+  }
+  if (pending.targetCardId && !cardIsInZone(state, pending.rivalId, "monsterZone", pending.targetCardId)) {
+    return "target-left-field";
+  }
+  return "";
+}
+
+function cancelPendingAttackIfContextLost(state, emit) {
+  const pending = state.machine.pendingAttack;
+  const reason = pendingAttackContextLossReason(state);
+  if (!pending || !reason) return false;
+  emit("ATTACK_CANCELED", {
+    playerId: pending.playerId,
+    rivalId: pending.rivalId,
+    attackerCardId: pending.attackerCardId,
+    targetCardId: pending.targetCardId || null,
+    targetPlayerId: pending.targetPlayerId || null,
+    direct: Boolean(pending.direct),
+    declarationEventId: pending.declarationEventId,
+    reason,
+    consumeAttack: false
+  });
+  return true;
 }
 
 function requirePendingAttack(state, playerId = null) {

@@ -118,6 +118,8 @@ The validator catches:
 - `ResponseWindow` models whether a response is optional or mandatory.
 - Chain links are stored under `state.machine.chain` and only change through chain events.
 - `ATTACK_DECLARED` stores the unresolved attack under `state.machine.pendingAttack`; only `RESOLVE_BATTLE` or `CANCEL_ATTACK` clears it.
+- `CANCEL_ATTACK` consumes the attack chance only when the command carries `consumeAttack: true`; context-loss cancellations from chain resolution use `consumeAttack: false`.
+- If chain resolution moves the attacking monster or declared monster target out of its monster zone, the engine emits `ATTACK_CANCELED` with `attacker-left-field` or `target-left-field` and clears `pendingAttack`.
 - While a pending attack, response window, or unresolved chain exists, `REQUEST_AUTO_END`, `COMMIT_AUTO_END`, `END_TURN`, phase changes, and turn start are illegal.
 - Complex permissions such as direct attack, extra summon, and attack reset should be represented as abilities, then granted or spent through events.
 - Skipping remaining attacks uses `SKIP_REMAINING_ATTACKS`, consumes attack-only abilities through events, and grants the turn-scoped `skipAttackLock` ability.
