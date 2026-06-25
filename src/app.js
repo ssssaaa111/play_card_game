@@ -1,4 +1,4 @@
-import { createAudioController } from './audio.js';
+import { createAudioController, createAudioSettings } from './audio.js';
 import { monsterAssets, roleProfiles, aiProfiles, deckPresets, characterProfiles, scenarioSetups } from './data.js';
 import { actionsForPhase, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import {
@@ -124,9 +124,7 @@ const state = {
   scenarioId: "normal",
   stats: loadDuelStats(),
   statsRecorded: false,
-  soundOn: !BROWSER_TEST_MODE,
-  voiceOn: !BROWSER_TEST_MODE,
-  voiceReady: BROWSER_TEST_MODE,
+  ...createAudioSettings({ testMode: BROWSER_TEST_MODE }),
   gameOver: false,
   gameOverWinner: null,
   gameOverLosers: [],
@@ -229,11 +227,26 @@ const els = {
 };
 
 const audioController = createAudioController({
-  getState: () => state,
+  getSettings: () => ({
+    soundOn: state.soundOn,
+    voiceOn: state.voiceOn,
+    voiceReady: state.voiceReady
+  }),
+  setSettings: (audioSettings) => Object.assign(state, audioSettings),
   announce
 });
 
-const { ensureAudio, playSound, playVoice, stopVoiceAudio, speak, cue } = audioController;
+const {
+  isVoiceReady,
+  playSound,
+  playVoice,
+  stopAll,
+  speak,
+  cue,
+  toggleSound: toggleAudioSound,
+  toggleVoice: toggleAudioVoice,
+  unlock: unlockAudio
+} = audioController;
 function showBattlePreview(attacker, target, owner = null, rival = null) {
   state.battlePreview = makeBattlePreview(attacker, target, owner, rival);
 }
@@ -321,7 +334,7 @@ function applyScenarioSetup() {
 }
 
 function startGame() {
-  stopVoiceAudio();
+  stopAll();
   closeTrapChoicePrompt();
   applySetupChoices();
   Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
@@ -374,7 +387,7 @@ function startGame() {
 }
 
 function prepareGame() {
-  stopVoiceAudio();
+  stopAll();
   closeTrapChoicePrompt();
   applySetupChoices();
   syncSetupControls();
@@ -2583,7 +2596,7 @@ function togglePause() {
   state.paused = !state.paused;
   if (state.paused) {
     clearPlayerIdleTimers();
-    stopVoiceAudio();
+    stopAll();
     addLog("决斗已暂停。");
   } else {
     addLog("决斗继续。");
@@ -2734,7 +2747,7 @@ function autoPlayerDraw() {
 
 function scheduleOpeningDraw(delay = 700) {
   if (!canPlayerAct() || state.phase !== PHASES.draw) return;
-  if (state.voiceReady) {
+  if (isVoiceReady()) {
     window.setTimeout(autoPlayerDraw, delay);
   } else {
     state.pendingOpeningDraw = true;
@@ -3833,24 +3846,12 @@ function renderTimeline() {
 }
 
 function toggleSound() {
-  state.soundOn = !state.soundOn;
-  if (state.soundOn) {
-    ensureAudio();
-    playSound("turn");
-  } else {
-    stopVoiceAudio();
-  }
+  toggleAudioSound({ previewSound: "turn" });
   render();
 }
 
 function toggleVoice() {
-  state.voiceReady = true;
-  state.voiceOn = !state.voiceOn;
-  if (state.voiceOn) {
-    playVoice("player", "start", "语音提示已开启。", true);
-  } else {
-    stopVoiceAudio();
-  }
+  toggleAudioVoice({ owner: "player", key: "start", text: "语音提示已开启。", force: true });
   render();
 }
 
@@ -3903,8 +3904,7 @@ function markGuideSeen() {
 }
 
 document.addEventListener("pointerdown", () => {
-  state.voiceReady = true;
-  ensureAudio();
+  unlockAudio();
   if (state.started && !state.paused && state.pendingOpeningDraw && state.turn === "player" && state.phase === PHASES.draw && !state.gameOver) {
     window.setTimeout(autoPlayerDraw, 250);
   }

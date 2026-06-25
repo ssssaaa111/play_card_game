@@ -79,12 +79,26 @@ test("app uses the extracted rules module", () => {
 
 test("app delegates audio and voice playback to the audio module", () => {
   const app = readProjectFile("src/app.js");
+  const audio = readProjectFile("src/audio.js");
 
   assert.match(app, /from '\.\/audio\.js'/);
+  assert.match(app, /createAudioSettings\(\{ testMode: BROWSER_TEST_MODE \}\)/);
   assert.match(app, /createAudioController\(\{/);
+  assert.match(app, /toggleSound: toggleAudioSound/);
+  assert.match(app, /toggleVoice: toggleAudioVoice/);
+  assert.match(app, /unlock: unlockAudio/);
   assert.doesNotMatch(app, /function playSound\(name\)/);
   assert.doesNotMatch(app, /function speak\(text/);
   assert.doesNotMatch(app, /\baudio\.ctx\b/);
+  assert.doesNotMatch(app, /\bAudioContext\b/);
+  assert.doesNotMatch(app, /\bspeechSynthesis\b/);
+  assert.doesNotMatch(app, /state\.soundOn = !state\.soundOn/);
+  assert.doesNotMatch(app, /state\.voiceOn = !state\.voiceOn/);
+  assert.doesNotMatch(app, /state\.voiceReady = true/);
+  assert.doesNotMatch(app, /stopVoiceAudio\(\)/);
+  assert.doesNotMatch(audio, /\bgetState\b/);
+  assert.doesNotMatch(audio, /dispatch[A-Z]/);
+  assert.doesNotMatch(audio, /engine-adapter|game-engine/);
 });
 
 test("rule docs describe event-sourced turn draw and after-attack effects", () => {
@@ -375,12 +389,17 @@ test("browser test mode disables sound and guide blocking", () => {
 
   assert.match(app, /const BROWSER_TEST_MODE = new URLSearchParams\(window\.location\.search\)\.has\("test"\)/);
   assert.match(app, /const BROWSER_SMOKE = BROWSER_TEST_MODE \? new URLSearchParams\(window\.location\.search\)\.get\("smoke"\)/);
-  assert.match(app, /soundOn: !BROWSER_TEST_MODE/);
-  assert.match(app, /voiceReady: BROWSER_TEST_MODE/);
-  assert.match(audio, /if \(!getState\(\)\.soundOn\) return false;/);
-  assert.match(audio, /if \(!getState\(\)\.voiceOn\) return false;/);
-  assert.match(audio, /if \(!getState\(\)\.voiceReady && !force\) return false;/);
-  assert.match(app, /else \{\s*stopVoiceAudio\(\);\s*\}/);
+  assert.match(app, /createAudioSettings\(\{ testMode: BROWSER_TEST_MODE \}\)/);
+  assert.match(audio, /export function createAudioSettings/);
+  assert.match(audio, /soundOn: !testMode/);
+  assert.match(audio, /voiceOn: !testMode/);
+  assert.match(audio, /voiceReady: testMode/);
+  assert.match(audio, /if \(!settings\.soundOn && !force\) return null;/);
+  assert.match(audio, /if \(!settings\.soundOn\) return false;/);
+  assert.match(audio, /if \(!settings\.voiceOn\) return false;/);
+  assert.match(audio, /if \(!settings\.voiceReady && !force\) return false;/);
+  assert.match(app, /toggleAudioSound\(\{ previewSound: "turn" \}\)/);
+  assert.match(app, /toggleAudioVoice\(\{ owner: "player", key: "start", text: "语音提示已开启。", force: true \}\)/);
   assert.match(app, /if \(BROWSER_TEST_MODE\) return true;/);
   assert.match(app, /window\.__starDuelTest = Object\.freeze\(\{/);
   assert.match(app, /snapshot: createTestSnapshot\(\{/);

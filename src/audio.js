@@ -1,4 +1,12 @@
-export function createAudioController({ getState, announce }) {
+export function createAudioSettings({ testMode = false } = {}) {
+  return {
+    soundOn: !testMode,
+    voiceOn: !testMode,
+    voiceReady: testMode
+  };
+}
+
+export function createAudioController({ getSettings, setSettings, announce }) {
   const audio = {
     ctx: null,
     master: null,
@@ -63,8 +71,27 @@ export function createAudioController({ getState, announce }) {
     };
   }
 
+  function readSettings() {
+    const current = getSettings?.() || {};
+    return {
+      soundOn: current.soundOn !== false,
+      voiceOn: current.voiceOn !== false,
+      voiceReady: Boolean(current.voiceReady)
+    };
+  }
+
+  function writeSettings(patch) {
+    if (setSettings) {
+      setSettings(patch);
+      return;
+    }
+    const current = getSettings?.();
+    if (current) Object.assign(current, patch);
+  }
+
   function ensureAudio(force = false) {
-    if (!getState().soundOn && !force) return null;
+    const settings = readSettings();
+    if (!settings.soundOn && !force) return null;
     if (!audio.ctx) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return null;
@@ -172,7 +199,7 @@ export function createAudioController({ getState, announce }) {
   }
 
   function playSound(name) {
-    if (!getState().soundOn) return;
+    if (!readSettings().soundOn) return;
     if (name === "draw") {
       noiseSweep(0, 0.18, 2800, 720, 0.09, "bandpass");
       sweep(360, 1200, 0.02, 0.16, "triangle", 0.07);
@@ -410,6 +437,57 @@ export function createAudioController({ getState, announce }) {
     }
   }
 
+  function stopAll() {
+    stopVoiceAudio();
+  }
+
+  function setSoundOn(soundOn, { previewSound = "" } = {}) {
+    const enabled = Boolean(soundOn);
+    writeSettings({ soundOn: enabled });
+    if (enabled) {
+      ensureAudio();
+      if (previewSound) playSound(previewSound);
+    } else {
+      stopAll();
+    }
+    return enabled;
+  }
+
+  function toggleSound(options = {}) {
+    return setSoundOn(!readSettings().soundOn, options);
+  }
+
+  function setVoiceOn(voiceOn, { owner = "player", key = "start", text = "", force = true } = {}) {
+    const enabled = Boolean(voiceOn);
+    writeSettings({
+      voiceReady: true,
+      voiceOn: enabled
+    });
+    if (enabled) {
+      playVoice(owner, key, text, force);
+    } else {
+      stopAll();
+    }
+    return enabled;
+  }
+
+  function toggleVoice(options = {}) {
+    return setVoiceOn(!readSettings().voiceOn, options);
+  }
+
+  function markVoiceReady() {
+    writeSettings({ voiceReady: true });
+  }
+
+  function isVoiceReady() {
+    return readSettings().voiceReady;
+  }
+
+  function unlock() {
+    markVoiceReady();
+    ensureAudio();
+  }
+
   function playVoice(owner, key, fallback = "", force = false) {
     return speak(fallback, force, owner);
   }
@@ -595,9 +673,10 @@ export function createAudioController({ getState, announce }) {
 
   function speak(text, force = false, owner = "player") {
     if (!text) return false;
-    if (!getState().soundOn) return false;
-    if (!getState().voiceOn) return false;
-    if (!getState().voiceReady && !force) return false;
+    const settings = readSettings();
+    if (!settings.soundOn) return false;
+    if (!settings.voiceOn) return false;
+    if (!settings.voiceReady && !force) return false;
     if (!("speechSynthesis" in window)) return false;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
@@ -622,10 +701,18 @@ export function createAudioController({ getState, announce }) {
 
   return {
     ensureAudio,
+    isVoiceReady,
+    markVoiceReady,
     playSound,
     playVoice,
+    setSoundOn,
+    setVoiceOn,
     stopVoiceAudio,
+    stopAll,
     speak,
-    cue
+    cue,
+    toggleSound,
+    toggleVoice,
+    unlock
   };
 }
