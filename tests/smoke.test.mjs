@@ -104,7 +104,7 @@ test("app uses extracted player action summary", () => {
   const app = readProjectFile("src/app.js");
 
   assert.match(app, /from '\.\/actions\.js'/);
-  assert.match(app, /canDuelistAttack\(state\.player\)/);
+  assert.match(app, /projectBattleFromUiState\(state, "player"\)\.canAttack/);
   assert.match(app, /dispatchSkipRemainingAttacksFromUiState\(state, "player"\)/);
   assert.doesNotMatch(app, /skipAvailableAttacks\(state\.player\.field\)/);
   assert.doesNotMatch(app, /state\.player\.attacksSkipped\s*=/);
@@ -621,7 +621,7 @@ test("app uses extracted spell metadata", () => {
   assert.match(app, /explainSummonMonsterFromUiState\(state,/);
   assert.match(app, /explainSetTrapFromUiState\(state,/);
   assert.match(app, /explainDeclareAttackFromUiState\(state,/);
-  assert.match(app, /getLegalActionsFromUiState\(state, "player"\)/);
+  assert.match(app, /projectBattleFromUiState\(state, "player"\)/);
   assert.match(app, /chooseAiSpellAction\(\{/);
   assert.match(ai, /scoreSpellForAi\(card\.effect/);
   assert.doesNotMatch(spellEffectsSource, /apply:/);

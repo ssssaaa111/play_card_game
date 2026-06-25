@@ -1,6 +1,6 @@
 import { createAudioController } from './audio.js';
 import { monsterAssets, roleProfiles, aiProfiles, deckPresets, characterProfiles, scenarioSetups } from './data.js';
-import { actionsForPhase, canDuelistAttack, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
+import { actionsForPhase, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import {
   chooseAiAttackAction,
   chooseAiSetTrapAction,
@@ -48,8 +48,7 @@ import {
   explainDeclareAttackFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
-  getBattleLegalActionsFromUiState,
-  getLegalActionsFromUiState
+  projectBattleFromUiState
 } from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
 import { spellDefinitions, validateSpellCondition } from './spells.js';
@@ -84,12 +83,10 @@ import {
   battleValue,
   fieldCards,
   fieldElements,
-  legalAttackTargets,
   makeBattlePreview,
   spellTargetPrompt,
   strongestMonster,
   totalAtk,
-  validateAttackTarget,
   validateSpellTargetRule,
   weakestMonster
 } from './rules.js';
@@ -542,7 +539,7 @@ function canUseHandCards(card = null) {
 }
 
 function canUseBattleActions() {
-  return canPlayerAct() && state.phase === PHASES.battle && state.actionWindow === ACTION_WINDOWS.battle;
+  return canPlayerAct() && projectBattleFromUiState(state, "player").inBattleWindow;
 }
 
 function currentEngineMachine() {
@@ -630,10 +627,9 @@ function currentPlayerActions() {
     canSpell: (card, index) => card.type === "spell" && validateSpell(state.player, state.ai, card, index).ok
   });
   try {
-    const legal = getLegalActionsFromUiState(state, "player");
-    const battleLegal = state.phase === PHASES.main
-      ? getBattleLegalActionsFromUiState(state, "player")
-      : legal;
+    const projection = projectBattleFromUiState(state, "player");
+    const legal = projection.legal;
+    const battleLegal = projection.battleLegal;
     summary.attack = legal.can.declareAttack || battleLegal.can.declareAttack;
     summary.summon = legal.can.summon;
     summary.trap = legal.can.setTrap;
@@ -837,7 +833,7 @@ function resolvePlayerActionWindow(reason = "操作完成") {
 }
 
 function hasAvailablePlayerAttack() {
-  return canDuelistAttack(state.player);
+  return projectBattleFromUiState(state, "player").canAttack;
 }
 
 function selectHandCard(uid) {
@@ -917,7 +913,7 @@ async function queuePendingAttack(targetIndex) {
     return false;
   }
   clearBattlePreview();
-  const validation = validateAttackTarget(state.player, state.ai, attacker, targetIndex);
+  const validation = explainDeclareAttackFromUiState(state, "player", "ai", attackerIndex, targetIndex);
   if (!validation.ok) {
     cue(validation.reason);
     addLog(`攻击无效：${validation.reason}`);
@@ -955,9 +951,7 @@ async function queuePendingAttack(targetIndex) {
 }
 
 function canUseAttackIntentWindow() {
-  return canPlayerAct() &&
-    [PHASES.main, PHASES.battle].includes(state.phase) &&
-    [ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(state.actionWindow);
+  return canPlayerAct() && projectBattleFromUiState(state, "player").inAttackIntentWindow;
 }
 
 async function quickAttackOnlyTarget(attackerIndex) {
@@ -977,7 +971,7 @@ async function quickAttackOnlyTarget(attackerIndex) {
   state.selected = { zone: "playerField", index: attackerIndex };
   clearBattlePreview();
   showDetail(attacker);
-  const targets = legalAttackTargets(state.player, state.ai, attacker);
+  const targets = projectBattleFromUiState(state, "player", { attackerIndex }).attackActions;
   if (targets.length !== 1) {
     render();
     cue(targets.length > 1 ? "有多个可攻击目标，请点选具体目标。" : "这只怪兽当前没有合法攻击目标。");
@@ -1272,17 +1266,6 @@ async function handleAiSlot(index) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
-  const attacker = state.player.field[state.selected.index];
-  if (!attacker || attacker.used) {
-    announce("这只怪兽本回合不能再攻击");
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return;
-  }
-  if (state.player.attacksSkipped) {
-    cue("你已经跳过本回合攻击。");
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return;
-  }
   await queuePendingAttack(index);
 }
 
@@ -1305,22 +1288,6 @@ async function handleAiPanelAttack() {
   }
   if (!state.selected || state.selected.zone !== "playerField") {
     cue("先选择你场上的怪兽。");
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return;
-  }
-  const attacker = state.player.field[state.selected.index];
-  if (!attacker || attacker.used) {
-    announce("这只怪兽本回合不能再攻击。");
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return;
-  }
-  if (state.player.attacksSkipped) {
-    cue("你已经跳过本回合攻击。");
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return;
-  }
-  if (attacker.mode === "defense") {
-    cue("守备表示的怪兽不能攻击。");
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
@@ -2208,24 +2175,6 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   state.ruleCheckIssue = null;
   const attacker = owner.field[attackerIndex];
   if (!attacker || attacker.used) return;
-  if (owner.attacksSkipped) {
-    const reason = `${duelistLabel(owner)}已经跳过本回合攻击。`;
-    if (owner.owner === "player") cue("你已经跳过本回合攻击。");
-    addLog(reason);
-    return false;
-  }
-  if (attacker.mode === "defense") {
-    cue("守备表示的怪兽不能攻击。");
-    return;
-  }
-  const targetValidation = validateAttackTarget(owner, rival, attacker, targetIndex);
-  if (!targetValidation.ok) {
-    if (owner.owner === "player") {
-      cue(targetValidation.reason);
-    }
-    addLog(`${duelistLabel(owner)}的攻击被规则拦截：${targetValidation.reason}`);
-    return false;
-  }
   const engineLegality = explainDeclareAttackFromUiState(state, owner.owner, rival.owner, attackerIndex, targetIndex);
   if (!engineLegality.ok) {
     if (owner.owner === "player") {
@@ -3654,25 +3603,15 @@ function renderBattlePreview() {
 
 function isAttackTargetSlot(ownerName, index) {
   if (ownerName !== "ai" || state.pendingTarget) return false;
-  const canChooseAttack = canPlayerAct() &&
-    [PHASES.main, PHASES.battle].includes(state.phase) &&
-    [ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(state.actionWindow);
-  if (!canChooseAttack || state.selected?.zone !== "playerField") return false;
-  if (state.player.attacksSkipped) return false;
-  const attacker = state.player.field[state.selected.index];
-  if (!attacker || attacker.used || attacker.mode === "defense") return false;
-  return validateAttackTarget(state.player, state.ai, attacker, index).ok;
+  if (!canPlayerAct() || state.selected?.zone !== "playerField") return false;
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex: state.selected.index });
+  return projection.inAttackIntentWindow && projection.targetIndexes.includes(index);
 }
 
 function canPlayerTargetAiPanel() {
-  const canChooseAttack = canPlayerAct() &&
-    [PHASES.main, PHASES.battle].includes(state.phase) &&
-    [ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(state.actionWindow);
-  if (state.pendingTarget || !canChooseAttack || state.selected?.zone !== "playerField") return false;
-  if (state.player.attacksSkipped) return false;
-  const attacker = state.player.field[state.selected.index];
-  if (!attacker || attacker.used || attacker.mode === "defense") return false;
-  return validateAttackTarget(state.player, state.ai, attacker, -1).ok;
+  if (state.pendingTarget || !canPlayerAct() || state.selected?.zone !== "playerField") return false;
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex: state.selected.index });
+  return projection.inAttackIntentWindow && projection.canDirectAttack;
 }
 
 function renderField(root, duelist, owner, animationKey) {

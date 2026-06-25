@@ -538,6 +538,59 @@ export function getBattleLegalActionsFromUiState(uiState, playerId = uiState.tur
   }, playerId);
 }
 
+function otherUiPlayerId(playerId) {
+  return ownerIds.find((ownerId) => ownerId !== playerId) || "ai";
+}
+
+function actionTargetIndex(uiState, rivalId, action) {
+  if (!action.targetCardId) return -1;
+  return uiDuelist(uiState, rivalId).field.findIndex((card) => cardKey(card) === action.targetCardId);
+}
+
+export function projectBattleFromUiState(uiState, playerId = uiState.turn || "player", options = {}) {
+  const rivalId = options.rivalId || otherUiPlayerId(playerId);
+  const legal = getLegalActionsFromUiState(uiState, playerId);
+  const battleLegal = getBattleLegalActionsFromUiState(uiState, playerId);
+  const attackerIndex = Number.isInteger(options.attackerIndex) ? options.attackerIndex : -1;
+  const attacker = attackerIndex >= 0 ? uiDuelist(uiState, playerId).field[attackerIndex] : null;
+  const attackerCardId = cardKey(attacker);
+  const attackActions = (battleLegal.actions?.declareAttack || [])
+    .filter((action) => !attackerCardId || action.attackerCardId === attackerCardId)
+    .map((action) => ({
+      ...action,
+      targetIndex: actionTargetIndex(uiState, rivalId, action),
+      direct: !action.targetCardId
+    }))
+    .filter((action) => action.direct || action.targetIndex >= 0);
+  const targetIndexes = attackActions
+    .filter((action) => !action.direct)
+    .map((action) => action.targetIndex);
+  const inBattleWindow = uiState.phase === PHASES.battle && uiState.actionWindow === ACTION_WINDOWS.battle;
+  const inAttackIntentWindow = [PHASES.main, PHASES.battle].includes(uiState.phase) &&
+    [ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(uiState.actionWindow);
+  const hasBattleAction = Boolean(
+    battleLegal.can.declareAttack ||
+    battleLegal.can.activateCard ||
+    battleLegal.can.setTrap
+  );
+
+  return {
+    playerId,
+    rivalId,
+    legal,
+    battleLegal,
+    inBattleWindow,
+    inAttackIntentWindow,
+    canEnterBattle: uiState.phase === PHASES.main && uiState.actionWindow === ACTION_WINDOWS.main && hasBattleAction,
+    hasBattleAction,
+    canAttack: Boolean(battleLegal.can.declareAttack),
+    attackerCanAttack: Boolean(attackerCardId && attackActions.length),
+    targetIndexes,
+    canDirectAttack: attackActions.some((action) => action.direct),
+    attackActions
+  };
+}
+
 function stripNonEngineSummonEffects(engineState) {
   Object.values(engineState.cards || {}).forEach((card) => {
     if (card?.type === "monster" && card.onSummon && getCardEffectDefinition(card.onSummon)?.duration !== ONE_SHOT_EFFECT) {

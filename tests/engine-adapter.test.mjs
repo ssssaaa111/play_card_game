@@ -13,6 +13,7 @@ import {
   explainSummonMonsterFromUiState,
   getBattleLegalActionsFromUiState,
   getLegalActionsFromUiState,
+  projectBattleFromUiState,
   applyUiGameEvents,
   dispatchActivateTrapFromUiState,
   dispatchActivateSpellFromUiState,
@@ -110,6 +111,38 @@ test("projects battle attacks from main phase without mutating UI state", () => 
   assert.equal(current.can.declareAttack, false);
   assert.equal(battle.can.declareAttack, true);
   assert.deepEqual(snapshotUiState(state), before);
+});
+
+test("projects selected attacker battle targets without mutating UI state", () => {
+  const attacker = uiMonster("projection-attacker", "iron-guardian");
+  const target = uiMonster("projection-target", "sky-raider");
+  target.ownerId = "ai";
+  const state = appState({ phase: PHASES.main, actionWindow: ACTION_WINDOWS.main });
+  state.player.field[1] = attacker;
+  state.ai.field[2] = target;
+  const before = snapshotUiState(state);
+
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex: 1 });
+
+  assert.equal(projection.inAttackIntentWindow, true);
+  assert.equal(projection.canEnterBattle, true);
+  assert.equal(projection.canAttack, true);
+  assert.equal(projection.attackerCanAttack, true);
+  assert.deepEqual(projection.targetIndexes, [2]);
+  assert.equal(projection.canDirectAttack, false);
+  assert.deepEqual(snapshotUiState(state), before);
+});
+
+test("projects direct battle target when rival field is empty", () => {
+  const attacker = uiMonster("direct-projection-attacker", "iron-guardian");
+  const state = appState({ phase: PHASES.battle, actionWindow: ACTION_WINDOWS.battle });
+  state.player.field[0] = attacker;
+
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex: 0 });
+
+  assert.deepEqual(projection.targetIndexes, []);
+  assert.equal(projection.canDirectAttack, true);
+  assert.equal(projection.attackActions[0].targetIndex, -1);
 });
 
 test("dispatches SET_TRAP and applies CARD_MOVED to a fixed UI trap slot", () => {
