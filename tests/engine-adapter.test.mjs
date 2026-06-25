@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createDuelist } from "../src/deck.js";
+import { library } from "../src/data.js";
 import {
   buildEngineStateFromUiState,
   canDispatchTrapFromUiState,
@@ -44,6 +45,8 @@ import {
 } from "../src/engine-adapter.js";
 import { ACTION_WINDOWS, PHASES } from "../src/turn-state.js";
 import { MAX_LP } from "../src/rules.js";
+import { spellDefinitions } from "../src/spells.js";
+import { trapDefinitions } from "../src/traps.js";
 
 function uiTrap(uid, id = "mirror-snare") {
   return {
@@ -111,6 +114,20 @@ test("projects battle attacks from main phase without mutating UI state", () => 
   assert.equal(current.can.declareAttack, false);
   assert.equal(battle.can.declareAttack, true);
   assert.deepEqual(snapshotUiState(state), before);
+});
+
+test("all library spell and trap cards are backed by engine-recognized definitions", () => {
+  const missingSpells = library
+    .filter((card) => card.type === "spell")
+    .filter((card) => !canDispatchSpellFromUiState(card))
+    .map((card) => `${card.id}:${card.effect || "(none)"}`);
+  const missingTraps = library
+    .filter((card) => card.type === "trap")
+    .filter((card) => !canDispatchTrapFromUiState(card))
+    .map((card) => `${card.id}:${card.trigger || card.effect || "(none)"}`);
+
+  assert.deepEqual(missingSpells, []);
+  assert.deepEqual(missingTraps, []);
 });
 
 test("projects selected attacker battle targets without mutating UI state", () => {
@@ -513,6 +530,44 @@ test("rejects missing trap engine effects without mutating UI state", () => {
     /not engine-backed/
   );
   assert.deepEqual(snapshotUiState(state), before);
+});
+
+test("rejects UI-known traps that lack engine DSL without mutating UI state", () => {
+  const trigger = "adapterTestMissingTrapDsl";
+  trapDefinitions[trigger] = {
+    event: "attack",
+    caption: "adapter fixture",
+    triggerText: "adapter fixture"
+  };
+
+  try {
+    const trap = uiTrap("trap-ui-known-missing-dsl", "guard-sigil");
+    trap.trigger = trigger;
+    const attacker = uiMonster("attacker-ui-known-missing-dsl", "star-lancer");
+    const guard = uiMonster("guard-ui-known-missing-dsl", "iron-guardian");
+    attacker.ownerId = "ai";
+    const state = appState({ phase: PHASES.battle });
+    state.player.traps[0] = trap;
+    state.player.field[0] = guard;
+    state.player.lp = 2600;
+    state.ai.field[0] = attacker;
+    state.ai.lp = 3100;
+    const before = snapshotUiState(state);
+
+    assert.equal(canDispatchTrapFromUiState(trap), false);
+    assert.throws(
+      () => dispatchActivateTrapFromUiState(state, "player", "ai", 0, {
+        attacker,
+        attackerIndex: 0,
+        targetIndex: 0,
+        targetEffectId: "attack-ui-known-missing-dsl"
+      }),
+      /not engine-backed/
+    );
+    assert.deepEqual(snapshotUiState(state), before);
+  } finally {
+    delete trapDefinitions[trigger];
+  }
 });
 
 test("rejects traps that have engine DSL but no trap metadata without mutating UI state", () => {
@@ -1595,6 +1650,39 @@ test("rejects missing spell engine effects without mutating UI state", () => {
     /not engine-backed/
   );
   assert.deepEqual(snapshotUiState(state), before);
+});
+
+test("rejects UI-known spells that lack engine DSL without mutating UI state", () => {
+  const effect = "adapterTestMissingSpellDsl";
+  spellDefinitions[effect] = {
+    caption: "adapter fixture"
+  };
+
+  try {
+    const mystery = uiSpell("spell-ui-known-missing-dsl", effect, "mystery-spell");
+    const graveCard = uiMonster("grave-ui-known-missing-dsl", "ember-drake");
+    const fieldCard = uiMonster("field-ui-known-missing-dsl", "star-lancer");
+    const enemyCard = uiMonster("enemy-ui-known-missing-dsl", "iron-guardian");
+    enemyCard.ownerId = "ai";
+    const state = appState();
+    state.player.hand = [mystery];
+    state.player.grave = [graveCard];
+    state.player.field[0] = fieldCard;
+    state.player.traps[0] = uiTrap("trap-ui-known-missing-dsl", "mirror-snare");
+    state.player.lp = 2800;
+    state.ai.field[0] = enemyCard;
+    state.ai.lp = 3200;
+    const before = snapshotUiState(state);
+
+    assert.equal(canDispatchSpellFromUiState(mystery), false);
+    assert.throws(
+      () => dispatchActivateSpellFromUiState(state, "player", "ai", 0),
+      /not engine-backed/
+    );
+    assert.deepEqual(snapshotUiState(state), before);
+  } finally {
+    delete spellDefinitions[effect];
+  }
 });
 
 test("rejects spells that have engine DSL but no spell metadata without mutating UI state", () => {

@@ -679,8 +679,14 @@ test("app reports missing engine effects instead of silent fallbacks", () => {
   assert.ok(playSpellStart >= 0, "playSpell should exist");
   assert.ok(playSpellEnd > playSpellStart, "playSpell should end before runtimeCardId");
   const playSpellSource = app.slice(playSpellStart, playSpellEnd);
+  const missingSpellCheck = playSpellSource.indexOf("if (!canDispatchSpellFromUiState(card))");
+  const validationCheck = playSpellSource.indexOf("const validation = validateSpell");
+  assert.ok(missingSpellCheck >= 0, "playSpell should reject missing engine-backed spells");
+  assert.ok(validationCheck > missingSpellCheck, "playSpell should report missing engine-backed spells before generic validation");
   assert.doesNotMatch(playSpellSource, /owner\.hand\.splice/);
   assert.doesNotMatch(playSpellSource, /owner\.grave\.push/);
+  assert.doesNotMatch(playSpellSource, /owner\.(field|traps)\[[^\]]+\]\s*=/);
+  assert.doesNotMatch(playSpellSource, /rival\.(field|traps)\[[^\]]+\]\s*=/);
   assert.doesNotMatch(playSpellSource, /effect\?\.apply/);
   assert.doesNotMatch(playSpellSource, /\.lp\s*[+\-]?=/);
 

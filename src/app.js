@@ -1395,7 +1395,16 @@ function playSpell(owner, rival, handIndex, targetInfo = null) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
   }
-  const validation = validateSpell(owner, rival, selectedCard, handIndex);
+  const card = selectedCard;
+  if (!canDispatchSpellFromUiState(card)) {
+    reportMissingEngineEffect(card, "spell");
+    if (owner.owner === "player") {
+      cue("Rule setup error: spell effect is missing from GameEngine.");
+      resumePlayerIdleCountdownAfterPassiveIntent();
+    }
+    return false;
+  }
+  const validation = validateSpell(owner, rival, card, handIndex);
   if (!validation.ok) {
     if (owner.owner === "player") cue(validation.reason);
     if (owner.owner === "player") resumePlayerIdleCountdownAfterPassiveIntent();
@@ -1405,17 +1414,8 @@ function playSpell(owner, rival, handIndex, targetInfo = null) {
     beginSpellTargetSelection(handIndex, selectedCard);
     return false;
   }
-  const card = selectedCard;
   let engineEvents = [];
   let result = {};
-  if (!canDispatchSpellFromUiState(card)) {
-    reportMissingEngineEffect(card, "spell");
-    if (owner.owner === "player") {
-      cue("Rule setup error: spell effect is missing from GameEngine.");
-      resumePlayerIdleCountdownAfterPassiveIntent();
-    }
-    return false;
-  }
   try {
     engineEvents = dispatchActivateSpellFromUiState(state, owner.owner, rival.owner, handIndex, targetInfo);
   } catch (error) {
