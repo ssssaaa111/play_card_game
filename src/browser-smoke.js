@@ -1,18 +1,55 @@
 import { auditLogEntries } from './log-audit.js';
 import { cloneCardById } from './deck.js';
+import { projectMachineStateFromEvents } from './game-engine.js';
 
 function cardIds(list = []) {
   return list.map((card) => card?.id || null);
 }
 
+function selectedCardSnapshot(state) {
+  const selected = state.selected || null;
+  if (!selected) return null;
+  if (selected.zone === "hand") {
+    const card = state.player.hand.find((entry) => entry?.uid === selected.uid);
+    return card ? { zone: "hand", id: card.id, uid: card.uid || null, type: card.type } : { ...selected };
+  }
+  if (selected.zone === "playerField") {
+    const card = state.player.field[selected.index];
+    return card ? { zone: "playerField", index: selected.index, id: card.id, uid: card.uid || null, used: Boolean(card.used), mode: card.mode || "attack" } : { ...selected };
+  }
+  return { ...selected };
+}
+
+function activeMonsterSnapshots(state) {
+  const current = state[state.turn] || state.player;
+  return (current.field || []).map((card, index) => {
+    if (!card) return null;
+    const canAttack = card.type === "monster" &&
+      !current.attacksSkipped &&
+      !card.used &&
+      (card.mode || "attack") !== "defense";
+    return {
+      index,
+      id: card.id,
+      uid: card.uid || null,
+      used: Boolean(card.used),
+      hasAttacked: Boolean(card.used),
+      mode: card.mode || "attack",
+      canAttack
+    };
+  });
+}
+
 export function createTestSnapshot({ testMode = false, state, els, currentPlayerActions }) {
   return function testSnapshot() {
     const actions = currentPlayerActions();
+    const machine = projectMachineStateFromEvents(state.gameEvents || [], state.phase);
     return {
       mode: testMode ? "test" : "normal",
       started: state.started,
       paused: state.paused,
       turn: state.turn,
+      currentPlayer: state.turn,
       phase: state.phase,
       timing: state.timing,
       actionWindow: state.actionWindow,
@@ -23,6 +60,38 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       latestLog: state.log[0] || "",
       gameEventCount: state.gameEvents?.length || 0,
       latestGameEvents: (state.gameEvents || []).slice(-5).map((event) => event.type),
+      latestGameEventDetails: (state.gameEvents || []).slice(-5).map((event) => ({
+        id: event.id || null,
+        type: event.type,
+        playerId: event.playerId || null,
+        cardId: event.cardId || event.attackerCardId || event.sourceCardId || null,
+        targetCardId: event.targetCardId || null,
+        reason: event.reason || null
+      })),
+      machine: {
+        phase: machine.phase,
+        timing: machine.timing,
+        actionWindow: machine.actionWindow ? {
+          playerId: machine.actionWindow.playerId,
+          window: machine.actionWindow.window,
+          reason: machine.actionWindow.reason || ""
+        } : null,
+        pendingAttack: machine.pendingAttack ? { ...machine.pendingAttack } : null,
+        responseWindow: machine.responseWindow ? {
+          playerId: machine.responseWindow.playerId,
+          timing: machine.responseWindow.timing,
+          prompt: machine.responseWindow.prompt || null
+        } : null,
+        chainLength: machine.chain?.length || 0
+      },
+      selectedCard: selectedCardSnapshot(state),
+      activePlayerMonsters: activeMonsterSnapshots(state),
+      controls: {
+        skipAttackButtonDisabled: Boolean(els.skipAttackBtn?.disabled),
+        endTurnButtonDisabled: Boolean(els.endTurnBtn?.disabled),
+        handConfirmButtonDisabled: Boolean(els.handConfirmBtn?.disabled),
+        aiPanelDirectTarget: Boolean(els.aiPanel?.classList.contains("direct-target"))
+      },
       pendingTarget: state.pendingTarget ? {
         mode: state.pendingTarget.mode,
         cardName: state.pendingTarget.cardName,
@@ -52,6 +121,30 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       audit: auditLogEntries(state.timeline)
     };
   };
+}
+
+function smokeDebug(ctx) {
+  const machine = projectMachineStateFromEvents(ctx.state.gameEvents || [], ctx.state.phase);
+  return JSON.stringify({
+    turn: ctx.state.turn,
+    phase: ctx.state.phase,
+    actionWindow: ctx.state.actionWindow,
+    selected: ctx.state.selected || null,
+    pendingAttack: machine.pendingAttack,
+    responseWindow: machine.responseWindow,
+    chainLength: machine.chain?.length || 0,
+    playerMonsters: activeMonsterSnapshots({ ...ctx.state, turn: "player" }),
+    actions: ctx.currentPlayerActions(),
+    skipAttackButtonDisabled: Boolean(ctx.els.skipAttackBtn?.disabled),
+    latestGameEvents: (ctx.state.gameEvents || []).slice(-8).map((event) => ({
+      id: event.id,
+      type: event.type,
+      playerId: event.playerId || null,
+      cardId: event.cardId || event.attackerCardId || event.sourceCardId || null,
+      targetCardId: event.targetCardId || null,
+      reason: event.reason || null
+    }))
+  });
 }
 
 function setSmokeStatus(status, detail = "") {
@@ -810,6 +903,73 @@ async function runChainTrapChoiceSmoke(ctx) {
   setSmokeStatus("passed", "chain-trap-choice");
 }
 
+async function runChainAttackReentrySmoke(ctx) {
+  setSmokeStatus("running", "chain-attack-reentry");
+  await startSmokeDuel(ctx, "chain");
+  ctx.state.ai.hand = [];
+  ctx.state.ai.deck = [];
+  ctx.render?.();
+
+  clickSmokeElement(handCard(ctx.els, "iron-guardian"), "summon iron guardian");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), "player monster slot 1");
+  await waitForSmoke(() => ctx.state.player.field[0]?.id === "iron-guardian", "player monster summoned");
+
+  clickSmokeElement(handCard(ctx.els, "counter-array"), "select counter-array");
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "set counter-array");
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "counter-array"), "counter-array set");
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "player trap response opens", 20000);
+  if (ctx.els.chainYes.disabled) {
+    throw new Error(`Counter trap prompt opened but confirm is disabled. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(ctx.els.chainYes, "activate counter-array");
+  await waitForSmoke(
+    () => !ctx.els.chainModal.classList.contains("show") &&
+      countGameEvents(ctx.state, "ATTACK_CANCELED") >= 1 &&
+      !ctx.state.player.traps.some((card) => card?.id === "counter-array"),
+    "counter-array chain resolves and cancels AI attack",
+    12000
+  );
+
+  await waitForSmoke(
+    () => ctx.state.turn === "player" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.aiRunning &&
+      !ctx.els.chainModal.classList.contains("show"),
+    "duel returns to player main window after chain",
+    24000
+  );
+  const readyMonster = ctx.state.player.field.some((card) =>
+    card?.type === "monster" && !card.used && (card.mode || "attack") !== "defense"
+  );
+  if (!readyMonster) {
+    throw new Error(`No player monster remains attack-ready after chain. ${smokeDebug(ctx)}`);
+  }
+
+  const attackerEl = fieldCard(ctx.els, "player", "iron-guardian");
+  const targetEl = fieldCard(ctx.els, "ai", "sky-raider");
+  if (!attackerEl || !targetEl) {
+    throw new Error(`Expected attacker and target to remain on field. ${smokeDebug(ctx)}`);
+  }
+  const declaredBefore = countGameEvents(ctx.state, "ATTACK_DECLARED");
+  clickSmokeElement(attackerEl, "select iron guardian after chain");
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "sky-raider")?.classList.contains("attack-target"),
+    `sky-raider becomes an attack target after selecting iron guardian. ${smokeDebug(ctx)}`,
+    6000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "sky-raider"), "attack sky-raider after chain");
+  await waitForSmoke(
+    () => countGameEvents(ctx.state, "ATTACK_DECLARED") > declaredBefore &&
+      (ctx.state.gameEvents || []).some((event) => event.type === "ATTACK_DECLARED" && event.playerId === "player"),
+    `post-chain player attack dispatches ATTACK_DECLARED. ${smokeDebug(ctx)}`,
+    9000
+  );
+
+  setSmokeStatus("passed", "chain-attack-reentry");
+}
+
 async function runChainWeakenResolutionSmoke(ctx) {
   setSmokeStatus("running", "chain-weaken-resolution");
   await startSmokeDuel(ctx, "chain");
@@ -1125,6 +1285,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trap-choice-double": runTrapChoiceDoubleSmoke,
     "response-restart": runResponseRestartSmoke,
     "chain-trap-choice": runChainTrapChoiceSmoke,
+    "chain-attack-reentry": runChainAttackReentrySmoke,
     "chain-weaken-resolution": runChainWeakenResolutionSmoke,
     "ai-counter-chain": runAiCounterChainSmoke,
     "mode-auto-end": runModeAutoEndSmoke,

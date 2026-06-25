@@ -48,6 +48,7 @@ import {
   explainDeclareAttackFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
+  getBattleLegalActionsFromUiState,
   getLegalActionsFromUiState
 } from './engine-adapter.js';
 import { auditLogEntries } from './log-audit.js';
@@ -630,7 +631,10 @@ function currentPlayerActions() {
   });
   try {
     const legal = getLegalActionsFromUiState(state, "player");
-    summary.attack = legal.can.declareAttack;
+    const battleLegal = state.phase === PHASES.main
+      ? getBattleLegalActionsFromUiState(state, "player")
+      : legal;
+    summary.attack = legal.can.declareAttack || battleLegal.can.declareAttack;
     summary.summon = legal.can.summon;
     summary.trap = legal.can.setTrap;
     summary.mode = legal.can.changeMode;

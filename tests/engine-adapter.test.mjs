@@ -11,6 +11,7 @@ import {
   explainDeclareAttackFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
+  getBattleLegalActionsFromUiState,
   getLegalActionsFromUiState,
   applyUiGameEvents,
   dispatchActivateTrapFromUiState,
@@ -40,7 +41,7 @@ import {
   dispatchSetTrapFromUiState,
   dispatchSummonMonsterFromUiState
 } from "../src/engine-adapter.js";
-import { PHASES } from "../src/turn-state.js";
+import { ACTION_WINDOWS, PHASES } from "../src/turn-state.js";
 import { MAX_LP } from "../src/rules.js";
 
 function uiTrap(uid, id = "mirror-snare") {
@@ -93,6 +94,23 @@ function appState(overrides = {}) {
 function snapshotUiState(state) {
   return JSON.parse(JSON.stringify(state));
 }
+
+test("projects battle attacks from main phase without mutating UI state", () => {
+  const attacker = uiMonster("main-battle-attacker", "iron-guardian");
+  const target = uiMonster("main-battle-target", "sky-raider");
+  target.ownerId = "ai";
+  const state = appState({ phase: PHASES.main, actionWindow: ACTION_WINDOWS.main });
+  state.player.field[0] = attacker;
+  state.ai.field[0] = target;
+  const before = snapshotUiState(state);
+
+  const current = getLegalActionsFromUiState(state, "player");
+  const battle = getBattleLegalActionsFromUiState(state, "player");
+
+  assert.equal(current.can.declareAttack, false);
+  assert.equal(battle.can.declareAttack, true);
+  assert.deepEqual(snapshotUiState(state), before);
+});
 
 test("dispatches SET_TRAP and applies CARD_MOVED to a fixed UI trap slot", () => {
   const mirror = uiTrap("mirror-1");

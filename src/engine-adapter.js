@@ -521,6 +521,23 @@ export function getLegalActionsFromUiState(uiState, playerId = uiState.turn || "
   return getLegalActions(engineState, playerId);
 }
 
+export function getBattleLegalActionsFromUiState(uiState, playerId = uiState.turn || "player") {
+  if (![PHASES.main, PHASES.battle].includes(uiState.phase) ||
+      ![ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(uiState.actionWindow)) {
+    return getLegalActionsFromUiState(uiState, playerId);
+  }
+  return getLegalActionsFromUiState({
+    ...uiState,
+    phase: PHASES.battle,
+    timing: TIMINGS.battleOpen,
+    actionWindow: ACTION_WINDOWS.battle,
+    actionWindowId: null,
+    actionWindowReason: "battle projection",
+    actionDeadline: 0,
+    autoEnding: false
+  }, playerId);
+}
+
 function stripNonEngineSummonEffects(engineState) {
   Object.values(engineState.cards || {}).forEach((card) => {
     if (card?.type === "monster" && card.onSummon && getCardEffectDefinition(card.onSummon)?.duration !== ONE_SHOT_EFFECT) {

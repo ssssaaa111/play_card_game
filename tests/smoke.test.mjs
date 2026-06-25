@@ -468,6 +468,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"trap-choice-double": runTrapChoiceDoubleSmoke/);
   assert.match(smoke, /"response-restart": runResponseRestartSmoke/);
   assert.match(smoke, /"chain-trap-choice": runChainTrapChoiceSmoke/);
+  assert.match(smoke, /"chain-attack-reentry": runChainAttackReentrySmoke/);
   assert.match(smoke, /"chain-weaken-resolution": runChainWeakenResolutionSmoke/);
   assert.match(smoke, /"ai-counter-chain": runAiCounterChainSmoke/);
   assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
@@ -522,6 +523,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "response-restart"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-trap-choice"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "chain-attack-reentry"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "game-over-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
