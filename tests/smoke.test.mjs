@@ -25,6 +25,7 @@ function checkModuleSyntax(path) {
 
 test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/actions.js");
+  checkModuleSyntax("src/animation.js");
   checkModuleSyntax("src/app.js");
   checkModuleSyntax("src/audio.js");
   checkModuleSyntax("src/battle.js");
@@ -99,6 +100,45 @@ test("app delegates audio and voice playback to the audio module", () => {
   assert.doesNotMatch(audio, /\bgetState\b/);
   assert.doesNotMatch(audio, /dispatch[A-Z]/);
   assert.doesNotMatch(audio, /engine-adapter|game-engine/);
+});
+
+test("app delegates DOM animation effects to the animation module", () => {
+  const app = readProjectFile("src/app.js");
+  const animation = readProjectFile("src/animation.js");
+  const movedAnimationFunctions = [
+    "animateAvatar",
+    "playDuelistLine",
+    "playArrow",
+    "playEpicAction",
+    "playLifeDelta",
+    "playAttackCloseup",
+    "playAceStrike",
+    "playSlashBurst",
+    "playGuardShield",
+    "shakeScreen",
+    "playCenterCardEffect",
+    "playAttackCutIn",
+    "playMonsterMotion",
+    "playMonsterPhantom",
+    "playMonsterCounterPhantom",
+    "playImpactExplosion",
+    "playDuelistImpact",
+    "playMonsterBurst"
+  ];
+
+  assert.match(app, /from '\.\/animation\.js'/);
+  assert.match(app, /createAnimationController\(\{/);
+  assert.match(app, /playDrawSequence\(duelist\.owner, drawn\)/);
+  assert.match(animation, /export function createAnimationController/);
+  assert.match(animation, /function playDrawSequence\(owner, cards = \[\]\)/);
+  assert.match(animation, /win\.setTimeout\(\(\) => \{/);
+  for (const name of movedAnimationFunctions) {
+    assert.doesNotMatch(app, new RegExp(`function ${name}\\(`));
+    assert.match(animation, new RegExp(`function ${name}\\(`));
+  }
+  assert.doesNotMatch(animation, /dispatch[A-Z]/);
+  assert.doesNotMatch(animation, /\bstate\./);
+  assert.doesNotMatch(animation, /engine-adapter|game-engine/);
 });
 
 test("rule docs describe event-sourced turn draw and after-attack effects", () => {
@@ -781,7 +821,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/app.js", "src/audio.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/app.js", "src/audio.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });
