@@ -9,6 +9,7 @@ const DEFAULT_SMOKES = [
   "game-over-event",
   "mode-auto-end",
   "battle-trap",
+  "basic-expansion",
   "chain-trap-choice",
   "combo-spell",
   "equipment-spell"

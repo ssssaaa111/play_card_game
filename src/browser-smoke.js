@@ -136,6 +136,7 @@ function smokeDebug(ctx) {
     playerMonsters: activeMonsterSnapshots({ ...ctx.state, turn: "player" }),
     actions: ctx.currentPlayerActions(),
     skipAttackButtonDisabled: Boolean(ctx.els.skipAttackBtn?.disabled),
+    log: (ctx.state.log || []).slice(0, 6),
     latestGameEvents: (ctx.state.gameEvents || []).slice(-8).map((event) => ({
       id: event.id,
       type: event.type,
@@ -507,6 +508,69 @@ async function runSummonTrapResponseSmoke(ctx) {
     throw new Error("召唤陷阱必须记录召唤响应窗口和完整连锁事件");
   }
   setSmokeStatus("passed", "summon-trap-response");
+}
+
+async function runBasicExpansionSmoke(ctx) {
+  setSmokeStatus("running", "basic-expansion");
+  await startSmokeDuel(ctx, "expansionParry");
+  clickSmokeElement(handCard(ctx.els, "rift-bulwark"), "召唤裂隙壁卫");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), "裂隙壁卫召唤区");
+  await waitForSmoke(
+    () => ctx.state.player.field[1]?.id === "rift-bulwark" &&
+      ctx.state.player.shield === 300 &&
+      countGameEvents(ctx.state, "SHIELD_GAINED") >= 1,
+    "裂隙壁卫召唤护盾通过规则事件结算",
+    9000
+  );
+
+  await waitForSmoke(
+    () => ctx.state.actionWindow === "main" &&
+      ctx.currentPlayerActions().spell &&
+      Boolean(handCard(ctx.els, "soul-resonance")),
+    "星魂共鸣可发动",
+    6000
+  );
+  clickSmokeElement(handCard(ctx.els, "soul-resonance"), "星魂共鸣手牌");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "soulResonance" &&
+      fieldCard(ctx.els, "player", "rift-bulwark")?.classList.contains("targetable"),
+    "星魂共鸣目标选择",
+    6000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "rift-bulwark"), "星魂共鸣选择裂隙壁卫");
+  await waitForSmoke(
+    () => ctx.state.player.field[1]?.tempAtk === 200 &&
+      ctx.state.player.field[1]?.tempDef === 200 &&
+      countGameEvents(ctx.state, "STAT_MODIFIED") >= 2,
+    "星魂共鸣通过规则事件强化目标",
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "soul-parry"), "星魂格挡手牌");
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "盖放星魂格挡");
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "soul-parry"), "星魂格挡盖放成功");
+
+  const shieldEventsBeforeTrap = countGameEvents(ctx.state, "SHIELD_GAINED");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "星魂格挡攻击响应窗口", 18000);
+  if (!ctx.els.chainText.textContent.includes("星魂格挡")) {
+    throw new Error("星魂格挡响应提示缺少陷阱名称");
+  }
+  clickSmokeElement(ctx.els.chainYes, "确认发动星魂格挡");
+  await waitForSmoke(
+    () => countGameEvents(ctx.state, "SHIELD_GAINED") > shieldEventsBeforeTrap &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "STAT_MODIFIED" && event.amount === -300 && event.stat === "tempAtk"
+      ) &&
+      !ctx.state.player.traps.some((card) => card?.id === "soul-parry") &&
+      ctx.state.log.some((entry) => entry.includes("星魂格挡") && entry.includes("攻击继续结算")),
+    "星魂格挡削弱攻击怪兽并获得护盾",
+    12000
+  );
+  if (!ctx.state.log.some((entry) => entry.includes("星魂格挡") && entry.includes("攻击继续结算"))) {
+    throw new Error(`星魂格挡日志应说明攻击继续结算：${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "basic-expansion");
 }
 
 async function runRedirectPromptSmoke(ctx) {
@@ -1272,6 +1336,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-shield": runSummonShieldSmoke,
     "summon-shadow-burn": runSummonShadowBurnSmoke,
     "summon-trap-response": runSummonTrapResponseSmoke,
+    "basic-expansion": runBasicExpansionSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,

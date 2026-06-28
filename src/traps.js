@@ -43,6 +43,13 @@ export const trapDefinitions = {
     cancelsEvent: false,
     consumesAttack: false
   },
+  soulParry: {
+    event: "attack",
+    caption: "削弱攻击怪兽并获得护盾",
+    triggerText: "对手攻击时",
+    cancelsEvent: false,
+    consumesAttack: false
+  },
   directShield: {
     event: "direct",
     caption: "直击伤害归零",

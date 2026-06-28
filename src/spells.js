@@ -15,6 +15,11 @@ export const spellDefinitions = {
     target: "ownMonster",
     targetRule: "strongest"
   },
+  soulResonance: {
+    caption: "星魂共鸣强化",
+    target: "ownMonster",
+    targetRule: "strongest"
+  },
   shield800: {
     caption: "展开护盾"
   },
@@ -95,6 +100,10 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       return fieldCards(owner).length > 0
         ? { ok: true }
         : { ok: false, reason: "场上没有怪兽，不能发动强化魔法。" };
+    case "soulResonance":
+      return fieldCards(owner).length > 0
+        ? { ok: true }
+        : { ok: false, reason: "场上没有怪兽，不能发动星魂共鸣。" };
     case "shield800":
       return owner.shield <= 1600
         ? { ok: true }
@@ -173,6 +182,8 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       return owner.hand.length <= (aiStyle === "control" ? 5 : 4) ? 58 : 18;
     case "buff500":
       return fieldCards(owner).length > 0 ? (aiStyle === "aggressive" ? 76 : 50) : 0;
+    case "soulResonance":
+      return fieldCards(owner).length > 0 ? (aiStyle === "control" ? 58 : 54) : 0;
     case "shield800":
       return (owner.lp <= (aiStyle === "control" ? 3400 : 2800) || owner.shield <= (aiStyle === "control" ? 500 : 0)) ? 64 : 10;
     case "extraSummon":

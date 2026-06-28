@@ -68,6 +68,11 @@ test("validates field and hand dependent spell requirements", () => {
     reason: "场上没有怪兽，不能发动强化魔法。"
   });
   assert.deepEqual(validateSpellCondition("buff500", { owner: duelist({ field: [monster(), null, null] }) }), { ok: true });
+  assert.deepEqual(validateSpellCondition("soulResonance", { owner: duelist() }), {
+    ok: false,
+    reason: "场上没有怪兽，不能发动星魂共鸣。"
+  });
+  assert.deepEqual(validateSpellCondition("soulResonance", { owner: duelist({ field: [monster(), null, null] }) }), { ok: true });
 
   assert.deepEqual(
     validateSpellCondition("extraSummon", {
@@ -189,6 +194,8 @@ test("scores AI spell priorities by style and board state", () => {
 
   assert.equal(scoreSpellForAi("buff500", { owner: duelist(), rival: duelist({ owner: "player" }), aiStyle: "aggressive" }), 0);
   assert.equal(scoreSpellForAi("buff500", { owner: duelist({ field: [monster(), null, null] }), rival: duelist({ owner: "player" }), aiStyle: "aggressive" }), 76);
+  assert.equal(scoreSpellForAi("soulResonance", { owner: duelist(), rival: duelist({ owner: "player" }), aiStyle: "balanced" }), 0);
+  assert.equal(scoreSpellForAi("soulResonance", { owner: duelist({ field: [monster(), null, null] }), rival: duelist({ owner: "player" }), aiStyle: "balanced" }), 54);
 });
 
 test("scores AI direct strike and combo spells", () => {

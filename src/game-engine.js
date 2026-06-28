@@ -87,6 +87,14 @@ export const defaultCardEffects = Object.freeze({
   heal700: oneShot([{ op: "heal", player: "self", amount: 700 }]),
   shield400: oneShot([{ op: "gainShield", player: "self", amount: 400 }]),
   shield800: oneShot([{ op: "gainShield", player: "self", amount: 800 }]),
+  starSoulSurvey: oneShot(
+    [{ op: "drawCards", player: "self", count: 1 }],
+    { requirements: [{ type: "minDistinctElements", player: "self", count: 2 }] }
+  ),
+  riftShelter: oneShot(
+    [{ op: "gainShield", player: "self", amount: 300 }],
+    { requirements: [{ type: "minElementCount", player: "self", element: "shadow", count: 2 }] }
+  ),
   fireBuff: oneShot(
     [{ op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "strongestAtk" }, stat: "tempAtk", amount: 300 }],
     { requirements: [{ type: "minElementCount", player: "self", element: "fire", count: 2 }] }
@@ -99,6 +107,10 @@ export const defaultCardEffects = Object.freeze({
     [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 500 }],
     { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }
   ),
+  soulResonance: oneShot([
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: 200 }
+  ], { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }),
   pierceLine: oneShot([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -400 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -400 },
@@ -177,6 +189,10 @@ export const defaultCardEffects = Object.freeze({
   weakenAttack: oneShot([
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -500 },
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempDef", amount: -500 }
+  ]),
+  soulParry: oneShot([
+    { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -300 },
+    { op: "gainShield", player: "self", amount: 300 }
   ]),
   directShield: oneShot([{ op: "drawCards", player: "self", count: 1 }]),
   directRebound: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),

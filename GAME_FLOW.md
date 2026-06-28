@@ -348,14 +348,14 @@ flowchart TD
 flowchart LR
     Serve["npm run serve on 127.0.0.1:5177"] --> Script["npm run smoke:browser or node scripts/browser-smoke.mjs"]
     Script --> Browser[Headless Chrome/Edge]
-    Browser --> Page[/?test=1&smoke=name]
+    Browser --> Page["/?test=1&amp;smoke=name"]
     Page --> SelfTest[scheduleBrowserSmoke]
     SelfTest --> Status[data-smoke-status]
     Status -->|passed| OK[CLI pass]
     Status -->|failed or missing| Fail[CLI fail with detail]
 ```
 
-Default browser smoke coverage currently includes `game-over-event`, `mode-auto-end`, `battle-trap`, `chain-trap-choice`, `combo-spell`, and `equipment-spell`. Add a scenario to `src/browser-smoke.js` first, then include it in `scripts/browser-smoke.mjs` when it becomes part of the baseline.
+Default browser smoke coverage currently includes `game-over-event`, `mode-auto-end`, `battle-trap`, `basic-expansion`, `chain-trap-choice`, `combo-spell`, and `equipment-spell`. Add a scenario to `src/browser-smoke.js` first, then include it in `scripts/browser-smoke.mjs` when it becomes part of the baseline.
 
 ## 文档维护规则
 

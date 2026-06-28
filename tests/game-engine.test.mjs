@@ -191,6 +191,10 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const fireWindCombo = getCardEffectDefinition("fireWindCombo");
   const grow200 = getCardEffectDefinition("grow200");
   const windDraw = getCardEffectDefinition("windDraw");
+  const starSoulSurvey = getCardEffectDefinition("starSoulSurvey");
+  const riftShelter = getCardEffectDefinition("riftShelter");
+  const soulResonance = getCardEffectDefinition("soulResonance");
+  const soulParry = getCardEffectDefinition("soulParry");
 
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw1.operations, [{ op: "drawCards", player: "self", count: 1 }]);
@@ -278,6 +282,23 @@ test("default card effects are declarative one-shot DSL definitions", () => {
     { type: "minElementCount", player: "self", element: "wind", count: 1 }
   ]);
   assert.deepEqual(windDraw.operations, [{ op: "drawCards", player: "self", count: 1 }]);
+  assert.deepEqual(starSoulSurvey.requirements, [
+    { type: "minDistinctElements", player: "self", count: 2 }
+  ]);
+  assert.deepEqual(starSoulSurvey.operations, [{ op: "drawCards", player: "self", count: 1 }]);
+  assert.deepEqual(riftShelter.requirements, [
+    { type: "minElementCount", player: "self", element: "shadow", count: 2 }
+  ]);
+  assert.deepEqual(riftShelter.operations, [{ op: "gainShield", player: "self", amount: 300 }]);
+  assert.deepEqual(soulResonance.target, { player: "self", zone: "monsterZone", rule: "strongestAtk" });
+  assert.deepEqual(soulResonance.operations, [
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: 200 }
+  ]);
+  assert.deepEqual(soulParry.operations, [
+    { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -300 },
+    { op: "gainShield", player: "self", amount: 300 }
+  ]);
   assert.notEqual(typeof draw2, "function");
 });
 
@@ -664,6 +685,68 @@ test("war-chant modifies only the declared target through dispatch events", () =
   assert.equal(next.cards["drake-1"].tempAtk || 0, 0);
   assert.deepEqual(next.players[PLAYER].grave, ["chant-1"]);
   assert.ok(events.some((event) => event.type === "STAT_MODIFIED" && event.cardId === "lancer-1" && event.amount === 500));
+});
+
+test("soul-resonance targets the strongest monster and resolves paired stat boosts", () => {
+  const state = makeState({
+    cards: [
+      card("resonance-1", { templateId: "soul-resonance", effect: "soulResonance" }),
+      card("low-1", { templateId: "ember-drake", type: "monster", atk: 1200, def: 900 }),
+      card("high-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 })
+    ],
+    player: {
+      hand: ["resonance-1"],
+      monsterZone: ["low-1", "high-1"]
+    }
+  });
+  const legal = getLegalActions(state, PLAYER);
+  assert.deepEqual(legal.actions.activateCard, [{
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "resonance-1",
+    targetCardId: "high-1"
+  }]);
+
+  const failingEngine = new GameEngine(makeState({
+    cards: [
+      card("resonance-1", { templateId: "soul-resonance", effect: "soulResonance" }),
+      card("low-1", { templateId: "ember-drake", type: "monster", atk: 1200, def: 900 }),
+      card("high-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 })
+    ],
+    player: {
+      hand: ["resonance-1"],
+      monsterZone: ["low-1", "high-1"]
+    }
+  }));
+  assert.throws(
+    () => failingEngine.dispatch({
+      type: "ACTIVATE_CARD",
+      playerId: PLAYER,
+      rivalId: AI,
+      cardId: "resonance-1",
+      targetCardId: "low-1"
+    }),
+    /not the strongest monster/
+  );
+  assert.deepEqual(failingEngine.getState().players[PLAYER].hand, ["resonance-1"]);
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "resonance-1",
+    targetCardId: "high-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["high-1"].tempAtk, 200);
+  assert.equal(next.cards["high-1"].tempDef, 200);
+  assert.equal(next.cards["low-1"].tempAtk || 0, 0);
+  assert.deepEqual(next.players[PLAYER].grave, ["resonance-1"]);
+  assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === "high-1").length, 2);
+  assertValidGameState(next);
 });
 
 test("pierce-line weakens the declared target and deals damage through events", () => {
@@ -1366,6 +1449,110 @@ test("conditional on-summon effects can be skipped without rejecting the summon"
   assertValidGameState(next);
 });
 
+test("basic expansion summon effects resolve or skip from declarative requirements", () => {
+  const surveyState = makeState({
+    cards: [
+      card("wind-ally", { templateId: "gale-mage", type: "monster", element: "wind", atk: 1200, def: 1400 }),
+      card("apprentice-1", {
+        templateId: "star-soul-apprentice",
+        type: "monster",
+        element: "light",
+        atk: 1100,
+        def: 1300,
+        onSummon: "starSoulSurvey"
+      }),
+      card("deck-1", { templateId: "solar-knight", type: "monster", element: "light", atk: 1700, def: 1200 })
+    ],
+    player: {
+      monsterZone: ["wind-ally"],
+      hand: ["apprentice-1"],
+      deck: ["deck-1"]
+    }
+  });
+  const surveyEngine = new GameEngine(surveyState);
+  const surveyEvents = surveyEngine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "apprentice-1",
+    index: 1
+  });
+
+  assert.deepEqual(surveyEngine.getState().players[PLAYER].hand, ["deck-1"]);
+  assert.ok(surveyEvents.some((event) =>
+    event.type === "CARDS_DRAWN" &&
+    event.sourceCardId === "apprentice-1" &&
+    event.cardIds.includes("deck-1")
+  ));
+
+  const shelterState = makeState({
+    cards: [
+      card("shadow-ally", { templateId: "night-oracle", type: "monster", element: "shadow", atk: 1100, def: 1600 }),
+      card("bulwark-1", {
+        templateId: "rift-bulwark",
+        type: "monster",
+        element: "shadow",
+        atk: 1300,
+        def: 1900,
+        onSummon: "riftShelter"
+      })
+    ],
+    player: {
+      monsterZone: ["shadow-ally"],
+      hand: ["bulwark-1"]
+    }
+  });
+  const shelterEngine = new GameEngine(shelterState);
+  const shelterEvents = shelterEngine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "bulwark-1",
+    index: 1
+  });
+
+  assert.equal(shelterEngine.getState().players[PLAYER].shield, 300);
+  assert.ok(shelterEvents.some((event) =>
+    event.type === "SHIELD_GAINED" &&
+    event.amount === 300 &&
+    event.sourceCardId === "bulwark-1"
+  ));
+
+  const skippedState = makeState({
+    cards: [
+      card("apprentice-skip", {
+        templateId: "star-soul-apprentice",
+        type: "monster",
+        element: "light",
+        atk: 1100,
+        def: 1300,
+        onSummon: "starSoulSurvey"
+      }),
+      card("deck-skip", { templateId: "solar-knight", type: "monster", element: "light", atk: 1700, def: 1200 })
+    ],
+    player: {
+      hand: ["apprentice-skip"],
+      deck: ["deck-skip"]
+    }
+  });
+  const skippedEngine = new GameEngine(skippedState);
+  const skippedEvents = skippedEngine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "apprentice-skip",
+    index: 0
+  });
+
+  assert.deepEqual(skippedEngine.getState().players[PLAYER].monsterZone, ["apprentice-skip"]);
+  assert.deepEqual(skippedEngine.getState().players[PLAYER].deck, ["deck-skip"]);
+  assert.ok(skippedEvents.some((event) =>
+    event.type === "EFFECT_SKIPPED" &&
+    event.effectId === "starSoulSurvey" &&
+    /distinct elements/.test(event.reason)
+  ));
+});
+
 test("void-lock can only trigger in battle phase and logs negation", () => {
   const state = makeState({
     cards: [
@@ -1548,6 +1735,70 @@ test("direct and summon traps resolve draw and damage through events", () => {
 
   assert.equal(summonBurnEngine.getState().players[AI].lp, 3600);
   assert.ok(summonBurnEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.amount === 400 && event.sourceCardId === "flare-1"));
+});
+
+test("soul-parry weakens attackers, gains shield, and requires attacker context", () => {
+  const state = makeState({
+    cards: [
+      card("parry-1", { templateId: "soul-parry", type: "trap", trigger: "soulParry" }),
+      card("attacker-1", { templateId: "star-lancer", ownerId: AI, type: "monster", atk: 1800, def: 1000 })
+    ],
+    player: {
+      spellTrapZone: ["parry-1"]
+    },
+    ai: {
+      monsterZone: ["attacker-1"]
+    },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "parry-1",
+    attackerCardId: "attacker-1"
+  });
+
+  assert.equal(engine.getState().cards["attacker-1"].tempAtk, -300);
+  assert.equal(engine.getState().players[PLAYER].shield, 300);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, ["parry-1"]);
+  assert.ok(events.some((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === "attacker-1" &&
+    event.amount === -300 &&
+    event.sourceCardId === "parry-1"
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "SHIELD_GAINED" &&
+    event.amount === 300 &&
+    event.sourceCardId === "parry-1"
+  ));
+
+  const failingState = makeState({
+    cards: [card("parry-fail", { templateId: "soul-parry", type: "trap", trigger: "soulParry" })],
+    player: {
+      spellTrapZone: ["parry-fail"]
+    },
+    turn: { phase: Phase.battle }
+  });
+  failingState.machine.phase = Phase.battle;
+  failingState.machine.timing = Timing.battleOpen;
+  const failingEngine = new GameEngine(failingState);
+
+  assert.throws(
+    () => failingEngine.dispatch({
+      type: "ACTIVATE_TRAP",
+      playerId: PLAYER,
+      rivalId: AI,
+      cardId: "parry-fail"
+    }),
+    /requires action.attackerCardId/
+  );
+  assert.deepEqual(failingEngine.getState().players[PLAYER].spellTrapZone, ["parry-fail"]);
+  assert.deepEqual(failingEngine.getState().players[PLAYER].grave, []);
 });
 
 test("battle resolution deals direct damage and marks the attacker through events", () => {

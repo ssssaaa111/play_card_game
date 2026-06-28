@@ -64,6 +64,18 @@ test("builds preset decks as cloned card instances", () => {
   assert.ok(deck.every((card) => card.uid && card.mode === "attack"));
 });
 
+test("builds the basic expansion preset with cloned expansion cards", () => {
+  const deck = buildDeck("basicExpansion");
+  const ids = deck.map((card) => card.id);
+
+  assert.equal(deck.length, deckPresets.basicExpansion.ids.length);
+  assert.ok(ids.includes("star-soul-apprentice"));
+  assert.ok(ids.includes("rift-bulwark"));
+  assert.ok(ids.includes("soul-resonance"));
+  assert.ok(ids.includes("soul-parry"));
+  assert.ok(deck.every((card) => card.uid && card.mode === "attack"));
+});
+
 test("builds scenario decks without reserved cards", () => {
   const reserved = ["ember-drake", "ember-drake", "seer-call"];
   const deck = buildScenarioDeck("balanced", reserved);

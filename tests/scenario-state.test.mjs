@@ -133,6 +133,30 @@ test("conditional summon scenarios expose engine-backed summon triggers", () => 
   assert.equal(shadow.player.hand[0].onSummon, "shadowBurn");
 });
 
+test("basic expansion scenarios expose new summon spell and trap cards", () => {
+  const summon = buildScenarioState(scenarioSetups.expansionSummon, {
+    playerPreset: "basicExpansion",
+    aiPreset: "balanced"
+  });
+  const parry = buildScenarioState(scenarioSetups.expansionParry, {
+    playerPreset: "basicExpansion",
+    aiPreset: "balanced"
+  });
+
+  assert.deepEqual(ids(summon.player.field).slice(0, 1), ["gale-mage"]);
+  assert.deepEqual(ids(summon.player.hand), ["star-soul-apprentice", "soul-resonance"]);
+  assert.equal(summon.player.hand[0].onSummon, "starSoulSurvey");
+  assert.equal(summon.player.hand[1].effect, "soulResonance");
+  assert.deepEqual(ids(summon.player.deck), ["solar-knight"]);
+
+  assert.deepEqual(ids(parry.player.field).slice(0, 1), ["night-oracle"]);
+  assert.deepEqual(ids(parry.player.hand), ["rift-bulwark", "soul-resonance", "soul-parry"]);
+  assert.equal(parry.player.hand[0].onSummon, "riftShelter");
+  assert.equal(parry.player.hand[1].effect, "soulResonance");
+  assert.equal(parry.player.hand[2].trigger, "soulParry");
+  assert.deepEqual(ids(parry.ai.field).slice(0, 1), ["star-lancer"]);
+});
+
 test("builds preset scenario decks without cards reserved in visible zones", () => {
   const setup = buildScenarioState(scenarioSetups.combo, {
     playerPreset: "balanced",

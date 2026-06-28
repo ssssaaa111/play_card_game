@@ -12,7 +12,7 @@ export function inferRarity(card) {
 
 export function inferArchetype(card) {
   if (card.element) return `${elementLabel(card.element)}属性`;
-  if (["buff500", "rallyAttack", "elementEcho", "battleTrance", "fireWindCombo", "lightShadowCombo"].includes(card.effect)) return "连携";
+  if (["buff500", "soulResonance", "rallyAttack", "elementEcho", "battleTrance", "fireWindCombo", "lightShadowCombo"].includes(card.effect)) return "连携";
   if (["equipBlade", "equipAegis", "equipPrism", "equipOverclock"].includes(card.effect)) return "装备";
   if (["draw2", "extraSummon", "graveReturn"].includes(card.effect)) return "资源";
   if (["pierceLine", "directStrike", "destroySpellTrap"].includes(card.effect) || ["weakenAttack", "directRebound"].includes(card.trigger)) return "破阵";

@@ -365,6 +365,7 @@ test("serve script uses the fixed local port", () => {
   assert.match(browserSmoke, /Unable to create browser smoke profile directory/);
   assert.match(browserSmoke, /BROWSER_BIN/);
   assert.match(browserSmoke, /equipment-spell/);
+  assert.match(browserSmoke, /basic-expansion/);
 });
 
 test("project documents the current phase and event flow", () => {
@@ -491,6 +492,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="summonShield">召唤护盾<\/option>/);
   assert.match(html, /<option value="summonShadowBurn">召唤暗伤<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
+  assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
+  assert.match(html, /<option value="expansionSummon">扩展召唤演示<\/option>/);
+  assert.match(html, /<option value="expansionParry">扩展格挡演示<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
   assert.match(data, /trapChoice: \{/);
@@ -500,6 +504,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /summonShield: \{/);
   assert.match(data, /summonShadowBurn: \{/);
   assert.match(data, /equipment: \{/);
+  assert.match(data, /basicExpansion: \{/);
+  assert.match(data, /expansionSummon: \{/);
+  assert.match(data, /expansionParry: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
   assert.match(app, /canDispatchSummonEffectFromUiState/);
@@ -514,6 +521,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-shield": runSummonShieldSmoke/);
   assert.match(smoke, /"summon-shadow-burn": runSummonShadowBurnSmoke/);
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
+  assert.match(smoke, /"basic-expansion": runBasicExpansionSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
@@ -558,6 +566,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /Blade Sigil continuous effect registered/);
   assert.match(smoke, /再次点击解印射线默认选择唯一魔陷/);
+  assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
   assert.doesNotMatch(app, /AI attacks with|AI prepares a direct attack|switches to defense mode/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
@@ -569,6 +578,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "summon-shield"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "summon-shadow-burn"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "summon-trap-response"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);

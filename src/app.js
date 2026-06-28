@@ -1708,6 +1708,14 @@ function eventsForTrap(events, trap) {
   );
 }
 
+function attackContextCard(rival, context = {}, event = null) {
+  return findRuntimeCard(event?.cardId)?.card ||
+    findRuntimeCard(context.attackerCardId)?.card ||
+    rival.field?.[context.attackerIndex] ||
+    context.attacker ||
+    null;
+}
+
 async function resolveEngineTrapChain(owner, rival, eventName, context, trapIndex) {
   const links = [];
   const firstLink = queueTrapChainLink(owner, rival, eventName, context, trapIndex, 1);
@@ -2052,7 +2060,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
 
   if (trap.trigger === "weakenAttack") {
     const statEvent = trapEvents.find((event) => event.type === "STAT_MODIFIED");
-    const attacker = statEvent ? findRuntimeCard(statEvent.cardId)?.card : rival.field[context.attackerIndex];
+    const attacker = attackContextCard(rival, context, statEvent);
     const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
     playArrow(trapSource, attackerEl, "trap", trap.name);
     if (attacker) {
@@ -2060,6 +2068,20 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
       playEpicAction("弱化", "guard");
       addLog(`${trap.name} 削弱了 ${attacker.name}，攻击继续结算。`);
       speak(`${trap.name} 削弱攻击怪兽，攻击继续。`);
+    }
+    return { cancelled: false };
+  }
+
+  if (trap.trigger === "soulParry") {
+    const statEvent = trapEvents.find((event) => event.type === "STAT_MODIFIED");
+    const attacker = attackContextCard(rival, context, statEvent);
+    const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
+    playArrow(trapSource, attackerEl, "trap", trap.name);
+    playGuardShield(panelElement(owner.owner));
+    if (attacker) {
+      playEpicAction("格挡", "guard");
+      addLog(`${trap.name} 削弱了 ${attacker.name}，并展开护盾。攻击继续结算。`);
+      speak(`${trap.name} 格挡攻击，护盾展开。`);
     }
     return { cancelled: false };
   }

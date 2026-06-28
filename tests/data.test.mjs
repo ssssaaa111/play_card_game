@@ -90,7 +90,8 @@ test("spell cards are backed by spell metadata", () => {
 test("engine-backed targeted spells keep UI and rules targets aligned", () => {
   const expectedEngineTargets = {
     buff500: { player: "self", zone: "monsterZone", rule: "strongestAtk" },
-    pierceLine: { player: "rival", zone: "monsterZone", rule: "strongestAtk" }
+    pierceLine: { player: "rival", zone: "monsterZone", rule: "strongestAtk" },
+    soulResonance: { player: "self", zone: "monsterZone", rule: "strongestAtk" }
   };
 
   Object.entries(expectedEngineTargets).forEach(([effect, expected]) => {
@@ -197,6 +198,34 @@ test("equipment starter pack has rule-backed cards", () => {
       operation.amount === amount
     ), `${effectId} should modify ${stat} by ${amount}`);
   });
+});
+
+test("basic star soul expansion pack has rule-backed cards and a preset deck", () => {
+  const expectedIds = [
+    "star-soul-apprentice",
+    "rift-bulwark",
+    "soul-resonance",
+    "soul-parry"
+  ];
+  expectedIds.forEach((id) => assert.ok(cardsById.has(id), `missing basic expansion card ${id}`));
+
+  assert.equal(cardsById.get("star-soul-apprentice").onSummon, "starSoulSurvey");
+  assert.equal(cardsById.get("rift-bulwark").onSummon, "riftShelter");
+  assert.equal(cardsById.get("soul-resonance").effect, "soulResonance");
+  assert.equal(cardsById.get("soul-parry").trigger, "soulParry");
+
+  assert.deepEqual(getCardEffectDefinition("starSoulSurvey").operations, [{ op: "drawCards", player: "self", count: 1 }]);
+  assert.deepEqual(getCardEffectDefinition("riftShelter").operations, [{ op: "gainShield", player: "self", amount: 300 }]);
+  assert.deepEqual(getCardEffectDefinition("soulResonance").target, { player: "self", zone: "monsterZone", rule: "strongestAtk" });
+  assert.deepEqual(getCardEffectDefinition("soulParry").operations, [
+    { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -300 },
+    { op: "gainShield", player: "self", amount: 300 }
+  ]);
+
+  assert.ok(deckPresets.basicExpansion, "basic expansion preset should exist");
+  assert.ok(deckPresets.basicExpansion.ids.includes("star-soul-apprentice"));
+  assert.ok(deckPresets.basicExpansion.ids.includes("soul-resonance"));
+  assert.ok(deckPresets.basicExpansion.ids.includes("soul-parry"));
 });
 
 test("deck presets reference only known cards and have enough cards", () => {

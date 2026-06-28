@@ -13,6 +13,8 @@ export const library = [
   { id: "dusk-alchemist", type: "monster", name: "暮影炼术师", element: "shadow", stars: 4, atk: 1450, def: 1500, icon: "炼", text: "召唤时，如果你场上有暗属性怪兽，对手受到 300 伤害。", onSummon: "shadowBurn" },
   { id: "nova-squire", type: "monster", name: "新星侍从", element: "fire", stars: 3, atk: 1250, def: 1100, icon: "新", text: "用于装备练习的火属性新手怪兽。" },
   { id: "aegis-mender", type: "monster", name: "庇护修补师", element: "light", stars: 3, atk: 900, def: 1700, icon: "护", text: "召唤时获得 400 护盾。", onSummon: "shield400" },
+  { id: "star-soul-apprentice", type: "monster", name: "星魂学徒", element: "light", stars: 3, atk: 1100, def: 1300, icon: "魂", text: "召唤时，若我方场上有至少 2 种属性的怪兽，抽 1 张卡。", onSummon: "starSoulSurvey" },
+  { id: "rift-bulwark", type: "monster", name: "裂隙壁卫", element: "shadow", stars: 4, atk: 1300, def: 1900, icon: "壁", text: "召唤时，若我方场上有至少 2 只暗属性怪兽，获得 300 护盾。", onSummon: "riftShelter" },
   { id: "burst-rune", type: "spell", name: "爆裂符文", icon: "爆", text: "对对手造成 500 点伤害。", effect: "burn500" },
   { id: "renewal", type: "spell", name: "星泉再生", icon: "泉", text: "回复 700 点生命值。", effect: "heal700" },
   { id: "war-chant", type: "spell", name: "战意高扬", icon: "战", text: "你场上攻击力最高的怪兽提升 500 攻击力。", effect: "buff500" },
@@ -32,6 +34,7 @@ export const library = [
   { id: "prism-drive", type: "spell", name: "棱光驱动", icon: "棱", text: "装备给我方 1 只怪兽。目标攻击力 +200、守备力 +200。", effect: "equipPrism" },
   { id: "overclock-core", type: "spell", name: "超频核心", icon: "核", text: "装备给我方 1 只怪兽。目标攻击力 +600、守备力 -300。", effect: "equipOverclock" },
   { id: "dispelling-ray", type: "spell", name: "解印射线", icon: "解", text: "选择对手魔陷区 1 张卡破坏。若破坏装备魔法，持续加成会立刻失效。", effect: "destroySpellTrap" },
+  { id: "soul-resonance", type: "spell", name: "星魂共鸣", icon: "鸣", text: "我方攻击力最高的怪兽攻击力和守备力提升 200。", effect: "soulResonance" },
   { id: "mirror-snare", type: "trap", name: "镜光反制", icon: "镜", text: "盖放后自动触发：对手攻击时，破坏攻击怪兽。", trigger: "attackDestroy" },
   { id: "guard-sigil", type: "trap", name: "守护刻印", icon: "印", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并抽 1 张卡。", trigger: "directShield" },
   { id: "summon-flare", type: "trap", name: "召雷陷阵", icon: "雷", text: "盖放后自动触发：对手召唤怪兽时，对其造成 400 点伤害。", trigger: "summonBurn" },
@@ -40,6 +43,7 @@ export const library = [
   { id: "void-lock", type: "trap", name: "星界封锁", icon: "封", text: "盖放后自动触发：对手攻击时，无效本次攻击并消耗攻击机会。", trigger: "attackNegate" },
   { id: "phantom-switch", type: "trap", name: "幻影换位", icon: "换", text: "盖放后自动触发：对手攻击时，将攻击目标改为我方另一只守备力最高的怪兽。", trigger: "redirectAttack" },
   { id: "weakening-web", type: "trap", name: "弱化力场", icon: "弱", text: "盖放后自动触发：对手攻击时，攻击怪兽攻击力和守备力下降 500，攻击继续结算。", trigger: "weakenAttack" },
+  { id: "soul-parry", type: "trap", name: "星魂格挡", icon: "格", text: "盖放后自动触发：对手攻击时，攻击怪兽攻击力下降 300，并获得 300 护盾，攻击继续结算。", trigger: "soulParry" },
   { id: "reversal-flare", type: "trap", name: "逆焰护壁", icon: "返", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并反弹 500 点伤害。", trigger: "directRebound" },
   { id: "chain-nullifier", type: "trap", name: "断链裁决", icon: "断", text: "对手发动陷阱时可以连锁发动：无效那张陷阱的效果。", trigger: "chainNegate" }
 ];
@@ -58,7 +62,9 @@ export const monsterAssets = {
   "night-oracle": "assets/monster-shadow-wolf.png",
   "dusk-alchemist": "assets/monster-shadow-wolf.png",
   "nova-squire": "assets/monster-fire-dragon.png",
-  "aegis-mender": "assets/monster-light-knight.png"
+  "aegis-mender": "assets/monster-light-knight.png",
+  "star-soul-apprentice": "assets/monster-light-knight.png",
+  "rift-bulwark": "assets/monster-shadow-wolf.png"
 };
 
 export const roleProfiles = {
@@ -198,6 +204,22 @@ export const deckPresets = {
       "counter-array", "counter-array", "storm-shift", "storm-shift", "void-lock", "phantom-switch",
       "summon-flare", "star-shield", "element-echo",
       "grave-return", "pierce-line", "eclipse-barrier", "aegis-mender", "aegis-plate", "prism-drive", "dispelling-ray", "weakening-web", "reversal-flare", "chain-nullifier"
+    ]
+  },
+  basicExpansion: {
+    label: "星魂基础扩展 01",
+    ids: [
+      "star-soul-apprentice", "star-soul-apprentice", "rift-bulwark", "rift-bulwark",
+      "gale-mage", "night-oracle", "solar-knight", "iron-guardian",
+      "sky-raider", "dusk-alchemist", "nova-squire", "aegis-mender",
+      "ember-drake", "star-lancer", "prism-saint", "void-hound",
+      "soul-resonance", "soul-resonance", "seer-call", "seer-call",
+      "element-echo", "star-shield", "war-chant", "twin-summon",
+      "battle-trance", "grave-return", "pierce-line", "eclipse-barrier",
+      "blade-sigil", "aegis-plate", "dispelling-ray",
+      "soul-parry", "soul-parry", "weakening-web", "storm-shift",
+      "guard-sigil", "mirror-snare", "counter-array", "void-lock",
+      "reversal-flare", "chain-nullifier", "summon-flare"
     ]
   }
 };
@@ -369,6 +391,28 @@ export const scenarioSetups = {
     aiField: ["iron-guardian"],
     aiHand: [],
     aiDeck: []
+  },
+  expansionSummon: {
+    label: "扩展召唤演示",
+    text: "起手包含星魂学徒和星魂共鸣，场上已有风属性怪兽，用来验证基础扩展的召唤抽牌和目标魔法。",
+    goal: "召唤星魂学徒应通过规则事件抽卡；发动星魂共鸣只能选择我方攻击力最高的怪兽。",
+    playerHand: ["star-soul-apprentice", "soul-resonance"],
+    playerField: ["gale-mage"],
+    playerDeck: ["solar-knight"],
+    aiField: ["iron-guardian"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
+  expansionParry: {
+    label: "扩展格挡演示",
+    text: "起手包含裂隙壁卫和星魂格挡，场上已有暗属性怪兽，用来验证基础扩展的护盾与攻击响应。",
+    goal: "召唤裂隙壁卫获得护盾，盖放星魂格挡后让对手攻击，陷阱应削弱攻击怪兽并继续结算。",
+    playerHand: ["rift-bulwark", "soul-resonance", "soul-parry"],
+    playerField: ["night-oracle"],
+    playerDeck: [],
+    aiField: ["star-lancer"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
   },
   target: {
     label: "目标选择",
