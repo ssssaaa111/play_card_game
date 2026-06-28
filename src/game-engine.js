@@ -185,7 +185,7 @@ export const defaultCardEffects = Object.freeze({
   ]),
   attackShift: oneShot([{ op: "gainShield", player: "self", amount: 400 }]),
   attackNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }]),
-  redirectAttack: oneShot([]),
+  redirectAttack: oneShot([{ op: "redirectAttackTarget", targetCardId: "$action.targetCardId" }]),
   weakenAttack: oneShot([
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -500 },
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempDef", amount: -500 }
@@ -422,6 +422,28 @@ export class EffectContext {
       targetEffectId: targetEffectId || null,
       sourceCardId: options.sourceCardId || null
     });
+  }
+
+  redirectAttackTarget(targetCardId, options = {}) {
+    const pending = requirePendingAttack(this.#state);
+    const target = requireCardInZone(this.#state, pending.rivalId, "monsterZone", targetCardId);
+    if (target.type !== "monster") {
+      throw new GameRuleError(`Redirect target ${targetCardId} is not a monster`);
+    }
+    if (targetCardId === pending.targetCardId) return false;
+    this.#emit("ATTACK_TARGET_CHANGED", {
+      playerId: pending.playerId,
+      rivalId: pending.rivalId,
+      attackerCardId: pending.attackerCardId,
+      fromTargetCardId: pending.targetCardId || null,
+      toTargetCardId: targetCardId,
+      targetCardId,
+      targetPlayerId: null,
+      direct: false,
+      declarationEventId: pending.declarationEventId,
+      sourceCardId: options.sourceCardId || null
+    });
+    return true;
   }
 
   grantAbility(playerId, ability, options = {}) {
@@ -2030,6 +2052,9 @@ export function applyGameEvent(state, event, options = {}) {
     case "ATTACK_DECLARED":
       applyAttackDeclared(state, event);
       break;
+    case "ATTACK_TARGET_CHANGED":
+      applyAttackTargetChanged(state, event);
+      break;
     case "BATTLE_RESOLVED":
       applyBattleResolved(state, event);
       break;
@@ -2191,6 +2216,27 @@ function applyAttackDeclared(state, event) {
     declarationEventId: event.id,
     timing: event.timing || Timing.attackDeclaration
   };
+}
+
+function applyAttackTargetChanged(state, event) {
+  const pending = requirePendingAttack(state, event.playerId);
+  const targetCardId = event.toTargetCardId || event.targetCardId || null;
+  if (!targetCardId) {
+    throw new GameRuleError("ATTACK_TARGET_CHANGED requires a target card");
+  }
+  if (event.declarationEventId && String(event.declarationEventId) !== String(pending.declarationEventId)) {
+    throw new GameRuleError(`Redirected attack ${event.declarationEventId} does not match pending attack ${pending.declarationEventId}`);
+  }
+  if (event.attackerCardId && event.attackerCardId !== pending.attackerCardId) {
+    throw new GameRuleError(`Redirected attack attacker ${event.attackerCardId} does not match ${pending.attackerCardId}`);
+  }
+  const target = requireCardInZone(state, pending.rivalId, "monsterZone", targetCardId);
+  if (target.type !== "monster") {
+    throw new GameRuleError(`Redirected attack target ${targetCardId} is not a monster`);
+  }
+  pending.targetCardId = targetCardId;
+  pending.targetPlayerId = null;
+  pending.direct = false;
 }
 
 function applyBattleResolved(state, event) {
@@ -2647,6 +2693,8 @@ function runEffectOperation(operation, ctx, action, card, options = {}) {
       return ctx.modifyStat(resolveValue(operation.cardId, action, card), operation.stat, operation.amount, source);
     case "negateEffect":
       return ctx.negateEffect(resolveValue(operation.targetEffectId, action, card), source);
+    case "redirectAttackTarget":
+      return ctx.redirectAttackTarget(resolveValue(operation.targetCardId, action, card), source);
     case "grantAbility":
       return ctx.grantAbility(resolvePlayerRef(operation.player, action), operation.ability, {
         ...source,
@@ -3337,6 +3385,13 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
         declarationEventId: event.id,
         timing: event.timing || Timing.attackDeclaration
       };
+    }
+    if (event.type === "ATTACK_TARGET_CHANGED" && machine.pendingAttack) {
+      if (!event.declarationEventId || String(event.declarationEventId) === String(machine.pendingAttack.declarationEventId)) {
+        machine.pendingAttack.targetCardId = event.toTargetCardId || event.targetCardId || null;
+        machine.pendingAttack.targetPlayerId = null;
+        machine.pendingAttack.direct = false;
+      }
     }
     if (event.type === "BATTLE_RESOLVED" || event.type === "ATTACK_CANCELED") {
       machine.pendingAttack = null;

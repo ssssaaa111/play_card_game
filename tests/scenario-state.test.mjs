@@ -157,6 +157,20 @@ test("basic expansion scenarios expose new summon spell and trap cards", () => {
   assert.deepEqual(ids(parry.ai.field).slice(0, 1), ["star-lancer"]);
 });
 
+test("phantom redirect scenario exposes the redirected attack fixture", () => {
+  const setup = buildScenarioState(scenarioSetups.phantomRedirect, {
+    playerPreset: "balanced",
+    aiPreset: "balanced"
+  });
+
+  assert.deepEqual(ids(setup.player.hand), ["phantom-switch"]);
+  assert.deepEqual(ids(setup.player.field).slice(0, 2), ["dusk-alchemist", "iron-guardian"]);
+  assert.equal(setup.player.field[0].mode, "attack");
+  assert.equal(setup.player.field[1].mode, "defense");
+  assert.deepEqual(ids(setup.ai.field).slice(0, 1), ["sky-raider"]);
+  assert.deepEqual(ids(setup.ai.hand), ["war-chant"]);
+});
+
 test("builds preset scenario decks without cards reserved in visible zones", () => {
   const setup = buildScenarioState(scenarioSetups.combo, {
     playerPreset: "balanced",

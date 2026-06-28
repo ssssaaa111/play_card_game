@@ -223,6 +223,90 @@ function countGameEvents(state, type) {
   return (state.gameEvents || []).filter((event) => event.type === type).length;
 }
 
+function cardSnapshot(card) {
+  return card ? {
+    id: card.id,
+    name: card.name,
+    uid: card.uid || null,
+    mode: card.mode || null,
+    atk: card.atk,
+    def: card.def,
+    tempAtk: card.tempAtk || 0,
+    tempDef: card.tempDef || 0,
+    used: Boolean(card.used)
+  } : null;
+}
+
+function eventSnapshot(event) {
+  if (!event) return null;
+  return {
+    id: event.id,
+    type: event.type,
+    playerId: event.playerId || null,
+    rivalId: event.rivalId || null,
+    attackerCardId: event.attackerCardId || null,
+    targetCardId: event.targetCardId || null,
+    targetPlayerId: event.targetPlayerId || null,
+    cardId: event.cardId || null,
+    sourceCardId: event.sourceCardId || null,
+    declarationEventId: event.declarationEventId || null,
+    requested: event.requested ?? null,
+    amount: event.amount ?? null,
+    blocked: event.blocked ?? null,
+    shieldBefore: event.shieldBefore ?? null,
+    shieldAfter: event.shieldAfter ?? null,
+    outcome: event.outcome ? {
+      kind: event.outcome.kind,
+      attack: event.outcome.attack,
+      targetValue: event.outcome.targetValue,
+      diff: event.outcome.diff,
+      rawDamage: event.outcome.rawDamage,
+      finalDamage: event.outcome.finalDamage,
+      shieldBlocked: event.outcome.shieldBlocked,
+      damagePlayerId: event.outcome.damagePlayerId || null
+    } : null
+  };
+}
+
+function phantomRedirectDiagnostics(ctx, markers = {}) {
+  const events = ctx.state.gameEvents || [];
+  const attackDeclared = markers.attackDeclared ||
+    events.find((event) => event.type === "ATTACK_DECLARED" && event.attackerCardId === markers.attackerCardId) ||
+    events.find((event) => event.type === "ATTACK_DECLARED");
+  const battleResolved = events.find((event) =>
+    event.type === "BATTLE_RESOLVED" &&
+    (!attackDeclared?.id || String(event.declarationEventId) === String(attackDeclared.id))
+  ) || events.find((event) => event.type === "BATTLE_RESOLVED");
+  const damageEvents = events.filter((event) => event.type === "DAMAGE_DEALT").map(eventSnapshot);
+  return JSON.stringify({
+    attackDeclared: eventSnapshot(attackDeclared),
+    pendingBeforeTrap: markers.pendingBeforeTrap || null,
+    pendingAfterRedirect: markers.pendingAfterRedirect || null,
+    targetChangedEvents: events.filter((event) => /TARGET.*CHANGED|ATTACK.*REDIRECT/i.test(event.type)).map(eventSnapshot),
+    trapResolvedEvents: events.filter((event) =>
+      ["CHAIN_LINK_RESOLVED", "CHAIN_RESOLVED", "CARD_ACTIVATED"].includes(event.type) &&
+      (!markers.trapCardId || event.cardId === markers.trapCardId)
+    ).map(eventSnapshot),
+    damageEvents,
+    battleResolved: eventSnapshot(battleResolved),
+    player: {
+      lp: ctx.state.player.lp,
+      shield: ctx.state.player.shield,
+      field: ctx.state.player.field.map(cardSnapshot),
+      grave: ctx.state.player.grave.map(cardSnapshot),
+      traps: ctx.state.player.traps.map(cardSnapshot)
+    },
+    ai: {
+      lp: ctx.state.ai.lp,
+      shield: ctx.state.ai.shield,
+      field: ctx.state.ai.field.map(cardSnapshot),
+      grave: ctx.state.ai.grave.map(cardSnapshot)
+    },
+    logs: (ctx.state.log || []).slice(0, 10),
+    promptText: markers.promptText || ""
+  });
+}
+
 async function runSkipLockSmoke(ctx) {
   setSmokeStatus("running", "skip-lock");
   await startSmokeDuel(ctx, "skipLock");
@@ -605,6 +689,100 @@ async function runRedirectPromptSmoke(ctx) {
   setSmokeStatus("passed", "redirect-prompt");
 }
 
+async function runPhantomSwitchRedirectSmoke(ctx) {
+  setSmokeStatus("running", "phantom-switch-redirect");
+  await startSmokeDuel(ctx, "phantomRedirect");
+
+  const dusk = ctx.state.player.field[0];
+  const iron = ctx.state.player.field[1];
+  if (!dusk || dusk.id !== "dusk-alchemist" || !iron || iron.id !== "iron-guardian") {
+    throw new Error(`幻影换位复现场景初始怪兽不正确：${phantomRedirectDiagnostics(ctx)}`);
+  }
+  dusk.tempAtk = 50;
+  iron.tempDef = 100;
+  ctx.state.player.shield = 550;
+  ctx.render?.();
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.tempAtk === 50 &&
+      ctx.state.player.field[1]?.tempDef === 100 &&
+      ctx.state.player.shield === 550,
+    "幻影换位复现场景数值校准"
+  );
+
+  const originalTargetCardId = ctx.state.player.field[0]?.uid;
+  const redirectedTargetCardId = ctx.state.player.field[1]?.uid;
+  clickSmokeElement(handCard(ctx.els, "phantom-switch"), "幻影换位手牌");
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "盖放幻影换位");
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "phantom-switch"), "幻影换位盖放成功");
+  const trapCardId = ctx.state.player.traps.find((card) => card?.id === "phantom-switch")?.uid || null;
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "幻影换位攻击响应窗口", 24000);
+  const promptText = ctx.els.chainText.textContent;
+  const attackDeclared = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "ATTACK_DECLARED" &&
+    event.targetCardId === originalTargetCardId
+  );
+  const pendingBeforeTrap = projectMachineStateFromEvents(ctx.state.gameEvents || [], ctx.state.phase).pendingAttack;
+  if (!attackDeclared || pendingBeforeTrap?.targetCardId !== originalTargetCardId) {
+    throw new Error(`幻影换位响应前攻击宣言或 pendingAttack 不正确：${phantomRedirectDiagnostics(ctx, { promptText, pendingBeforeTrap, trapCardId })}`);
+  }
+  if (!promptText.includes("幻影换位") || !promptText.includes("暮影炼术师") || !promptText.includes("铁壁守卫")) {
+    throw new Error(`幻影换位响应提示缺少原目标或新目标：${phantomRedirectDiagnostics(ctx, { attackDeclared, pendingBeforeTrap, promptText, trapCardId })}`);
+  }
+  const playerShieldBeforeRedirect = ctx.state.player.shield;
+
+  clickSmokeElement(ctx.els.chainYes, "确认发动幻影换位");
+  await waitForSmoke(
+    () => ctx.state.log.some((entry) => entry.includes("幻影换位") && entry.includes("铁壁守卫")),
+    "幻影换位写入改目标日志",
+    9000
+  );
+  const pendingAfterRedirect = projectMachineStateFromEvents(ctx.state.gameEvents || [], ctx.state.phase).pendingAttack;
+
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).some((event) =>
+      event.type === "BATTLE_RESOLVED" && String(event.declarationEventId) === String(attackDeclared.id)
+    ),
+    "幻影换位后战斗完成",
+    24000
+  );
+
+  const battleResolved = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "BATTLE_RESOLVED" && String(event.declarationEventId) === String(attackDeclared.id)
+  );
+  const oldTargetDamage = (ctx.state.gameEvents || []).some((event) =>
+    event.type === "DAMAGE_DEALT" &&
+    event.playerId === "player" &&
+    event.requested === 550 &&
+    event.blocked === 550
+  );
+  const duskStillOnField = ctx.state.player.field.some((card) => card?.uid === originalTargetCardId);
+  const ironStillOnField = ctx.state.player.field.some((card) => card?.uid === redirectedTargetCardId);
+  const finalLogUsesIron = ctx.state.log.some((entry) =>
+    entry.includes("天岚突袭者") && entry.includes("铁壁守卫")
+  );
+  const diagnostics = phantomRedirectDiagnostics(ctx, {
+    attackDeclared,
+    pendingBeforeTrap,
+    pendingAfterRedirect,
+    promptText,
+    trapCardId,
+    playerShieldBeforeRedirect
+  });
+  if (pendingAfterRedirect?.targetCardId !== redirectedTargetCardId ||
+      battleResolved?.targetCardId !== redirectedTargetCardId ||
+      oldTargetDamage ||
+      !duskStillOnField ||
+      !ironStillOnField ||
+      ctx.state.player.shield !== playerShieldBeforeRedirect ||
+      !finalLogUsesIron) {
+    throw new Error(`幻影换位重定向后仍未按新目标结算：${diagnostics}`);
+  }
+
+  setSmokeStatus("passed", "phantom-switch-redirect");
+}
+
 async function runTargetWindowSmoke(ctx) {
   setSmokeStatus("running", "target-window");
   await startSmokeDuel(ctx, "target");
@@ -937,7 +1115,11 @@ async function runChainTrapChoiceSmoke(ctx) {
   }
   const choiceCount = ctx.els.chainChoices?.querySelectorAll("[data-trap-choice-index]").length || 0;
   if (choiceCount !== 3) {
-    throw new Error(`连锁场景应该在弹窗内显示三张可选陷阱，实际 ${choiceCount} 张`);
+    const choiceIds = [...(ctx.els.chainChoices?.querySelectorAll("[data-card-id]") || [])]
+      .map((button) => button.dataset.cardId)
+      .join(",");
+    const trapIds = ctx.state.player.traps.map((card) => card?.id || "-").join(",");
+    throw new Error(`连锁场景应该在弹窗内显示三张可选陷阱，实际 ${choiceCount} 张：choices=${choiceIds || "-"} traps=${trapIds} text=${ctx.els.chainText.textContent}`);
   }
   if (!ctx.els.chainYes.disabled) {
     throw new Error("连锁场景多陷阱响应时必须先选择再确认");
@@ -1338,6 +1520,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-trap-response": runSummonTrapResponseSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
+    "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
     "battle-trap": runBattleTrapSmoke,

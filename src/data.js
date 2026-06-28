@@ -381,6 +381,20 @@ export const scenarioSetups = {
     aiField: ["star-lancer"],
     aiHand: ["burst-rune"]
   },
+  phantomRedirect: {
+    label: "幻影换位回归",
+    text: "按连锁测试牌面预置天岚突袭者、暮影炼术师、铁壁守卫和幻影换位，用来复现攻击目标重定向后的结算目标。",
+    goal: "盖放幻影换位后结束回合；AI 强化天岚突袭者并攻击暮影炼术师，发动陷阱后应改为铁壁守卫承接战斗。",
+    playerHand: ["phantom-switch"],
+    playerField: [
+      { id: "dusk-alchemist", mode: "attack" },
+      { id: "iron-guardian", mode: "defense" }
+    ],
+    playerDeck: ["seer-call"],
+    aiField: ["sky-raider"],
+    aiHand: ["war-chant"],
+    aiDeck: ["guard-sigil"]
+  },
   equipment: {
     label: "装备魔法",
     text: "起手包含怪兽和装备魔法，用来验证持续魔法效果。",

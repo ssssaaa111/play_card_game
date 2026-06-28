@@ -1681,17 +1681,32 @@ function announceTrapActivation(owner, trap, chainIndex) {
   playDuelistLine(owner.owner, lineFor(owner.owner, "trap", trap), false, "trap");
 }
 
+function redirectTrapContext(owner, trap, context = {}) {
+  if (trap?.trigger !== "redirectAttack") return { ...context };
+  const redirectTargetIndex = Number.isInteger(context.redirectTargetIndex)
+    ? context.redirectTargetIndex
+    : selectRedirectTarget(owner.field, context.targetIndex);
+  const redirectTarget = owner.field[redirectTargetIndex];
+  if (!redirectTarget) return { ...context };
+  return {
+    ...context,
+    redirectTargetIndex,
+    targetCardId: runtimeCardId(redirectTarget)
+  };
+}
+
 function queueTrapChainLink(owner, rival, eventName, context, trapIndex, chainIndex) {
   const trap = owner.traps[trapIndex];
   if (!trap) return null;
   const trapSource = trapElement(owner.owner, trapIndex) || panelElement(owner.owner);
+  const trapContext = redirectTrapContext(owner, trap, context);
   try {
     const events = dispatchQueueTrapResponseFromUiState(state, owner.owner, rival.owner, trapIndex, {
-      ...context,
-      targetEffectId: context.targetEffectId || `${trap.uid || trap.id}:${eventName}`
+      ...trapContext,
+      targetEffectId: trapContext.targetEffectId || `${trap.uid || trap.id}:${eventName}`
     });
     announceTrapActivation(owner, trap, chainIndex);
-    return { owner, rival, eventName, context: { ...context }, trap, trapIndex, trapSource, chainIndex, events };
+    return { owner, rival, eventName, context: { ...trapContext }, trap, trapIndex, trapSource, chainIndex, events };
   } catch (error) {
     cue(error.message || "陷阱卡加入连锁失败。");
     console.error(error);
@@ -1938,6 +1953,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
   const trap = options.trap || owner.traps[trapIndex];
   if (!trap) return { cancelled: false, shielded: false };
   const trapSource = options.trapSource || trapElement(owner.owner, trapIndex) || panelElement(owner.owner);
+  const trapContext = redirectTrapContext(owner, trap, context);
   let trapEvents = Array.isArray(options.events) ? options.events : [];
   if (!Array.isArray(options.events) && canDispatchTrapFromUiState(trap)) {
     try {
@@ -1945,8 +1961,8 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
         ? dispatchTrapResponseFromUiState
         : dispatchActivateTrapFromUiState;
       trapEvents = dispatchTrap(state, owner.owner, rival.owner, trapIndex, {
-        ...context,
-        targetEffectId: context.targetEffectId || `${trap.uid || trap.id}:${eventName}`
+        ...trapContext,
+        targetEffectId: trapContext.targetEffectId || `${trap.uid || trap.id}:${eventName}`
       });
     } catch (error) {
       cue(error.message || "陷阱卡发动失败。");
@@ -2038,7 +2054,9 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
   }
 
   if (trap.trigger === "redirectAttack") {
-    const redirectIndex = selectRedirectTarget(owner.field, context.targetIndex);
+    const redirectIndex = Number.isInteger(trapContext.redirectTargetIndex)
+      ? trapContext.redirectTargetIndex
+      : selectRedirectTarget(owner.field, context.targetIndex);
     const redirectTarget = owner.field[redirectIndex];
     const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
     const redirectEl = fieldElement(owner.owner, redirectIndex) || panelElement(owner.owner);
@@ -2049,6 +2067,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playArrow(originalEl, redirectEl, "trap", "改目标");
     if (redirectTarget) {
       context.targetIndex = redirectIndex;
+      trapContext.targetIndex = redirectIndex;
       playGuardShield(redirectEl);
       playMonsterMotion(owner.owner, redirectIndex, "stand");
       playEpicAction("换位", "guard");
@@ -2201,6 +2220,14 @@ function resolveBattleWithEngine(owner, rival, attackerIndex, targetIndex, optio
   }
 }
 
+function pendingAttackTargetIndex(rival, fallbackIndex) {
+  const pending = currentEngineMachine()?.pendingAttack;
+  if (!pending || pending.direct) return fallbackIndex;
+  if (pending.rivalId !== rival.owner || !pending.targetCardId) return fallbackIndex;
+  const targetIndex = rival.field.findIndex((card) => runtimeCardId(card) === pending.targetCardId);
+  return targetIndex >= 0 ? targetIndex : fallbackIndex;
+}
+
 function consumeCancelledAttackWithEngine(owner, attacker, options = {}) {
   try {
     if (!currentEngineMachine()?.pendingAttack) {
@@ -2261,7 +2288,8 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     checkGameOver();
     return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
   }
-  const resolvedTargetIndex = attackContext.targetIndex;
+  const resolvedTargetIndex = pendingAttackTargetIndex(rival, attackContext.targetIndex);
+  attackContext.targetIndex = resolvedTargetIndex;
   const target = rival.field[resolvedTargetIndex];
   const fromEl = fieldElement(owner.owner, attackerIndex);
   const toEl = fieldElement(rival.owner, resolvedTargetIndex) || panelElement(rival.owner);

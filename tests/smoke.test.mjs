@@ -495,6 +495,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
   assert.match(html, /<option value="expansionSummon">扩展召唤演示<\/option>/);
   assert.match(html, /<option value="expansionParry">扩展格挡演示<\/option>/);
+  assert.match(html, /<option value="phantomRedirect">幻影换位回归<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
   assert.match(data, /trapChoice: \{/);
@@ -507,6 +508,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /basicExpansion: \{/);
   assert.match(data, /expansionSummon: \{/);
   assert.match(data, /expansionParry: \{/);
+  assert.match(data, /phantomRedirect: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
   assert.match(app, /canDispatchSummonEffectFromUiState/);
@@ -523,6 +525,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
   assert.match(smoke, /"basic-expansion": runBasicExpansionSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
+  assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
@@ -567,6 +570,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /Blade Sigil continuous effect registered/);
   assert.match(smoke, /再次点击解印射线默认选择唯一魔陷/);
   assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
+  assert.match(smoke, /targetChangedEvents/);
+  assert.match(smoke, /幻影换位重定向后仍未按新目标结算/);
   assert.doesNotMatch(app, /AI attacks with|AI prepares a direct attack|switches to defense mode/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
@@ -580,6 +585,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "summon-trap-response"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "phantom-switch-redirect"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);

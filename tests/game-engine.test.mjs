@@ -214,7 +214,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   ]);
   assert.deepEqual(attackShift.operations, [{ op: "gainShield", player: "self", amount: 400 }]);
   assert.deepEqual(attackNegate.operations, [{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }]);
-  assert.deepEqual(redirectAttack.operations, []);
+  assert.deepEqual(redirectAttack.operations, [{ op: "redirectAttackTarget", targetCardId: "$action.targetCardId" }]);
   assert.deepEqual(weakenAttack.operations, [
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -500 },
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempDef", amount: -500 }
@@ -1675,18 +1675,52 @@ test("attack traps resolve destruction boost shield weaken and empty redirect th
   assert.equal(weakenEvents.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === "attacker-1").length, 2);
 
   const redirectState = makeState({
-    cards: [card("switch-1", { templateId: "phantom-switch", type: "trap", trigger: "redirectAttack" })],
-    player: { spellTrapZone: ["switch-1"] },
-    turn: { phase: Phase.battle }
+    cards: [
+      card("switch-1", { templateId: "phantom-switch", type: "trap", trigger: "redirectAttack" }),
+      card("attacker-redirect", { templateId: "sky-raider", ownerId: AI, type: "monster", atk: 2050, def: 900 }),
+      card("old-target", { templateId: "dusk-alchemist", type: "monster", atk: 1500, def: 1500 }),
+      card("new-target", { templateId: "iron-guardian", type: "monster", atk: 900, def: 2200, mode: "defense" })
+    ],
+    player: {
+      spellTrapZone: ["switch-1"],
+      monsterZone: ["old-target", "new-target"]
+    },
+    ai: { monsterZone: ["attacker-redirect"] },
+    turn: { playerId: AI, phase: Phase.battle },
+    machine: {
+      pendingAttack: {
+        playerId: AI,
+        rivalId: PLAYER,
+        attackerCardId: "attacker-redirect",
+        targetCardId: "old-target",
+        targetPlayerId: null,
+        direct: false,
+        declarationEventId: 42,
+        timing: Timing.attackDeclaration
+      }
+    }
   });
   redirectState.machine.phase = Phase.battle;
-  redirectState.machine.timing = Timing.battleOpen;
+  redirectState.machine.timing = Timing.attackDeclaration;
   const redirectEngine = new GameEngine(redirectState);
-  const redirectEvents = redirectEngine.dispatch({ type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "switch-1" });
+  const redirectEvents = redirectEngine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "switch-1",
+    attackerCardId: "attacker-redirect",
+    targetCardId: "new-target"
+  });
 
   assert.deepEqual(redirectEngine.getState().players[PLAYER].spellTrapZone, []);
   assert.deepEqual(redirectEngine.getState().players[PLAYER].grave, ["switch-1"]);
   assert.ok(redirectEvents.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === "switch-1"));
+  assert.ok(redirectEvents.some((event) =>
+    event.type === "ATTACK_TARGET_CHANGED" &&
+    event.fromTargetCardId === "old-target" &&
+    event.toTargetCardId === "new-target"
+  ));
+  assert.equal(redirectEngine.getState().machine.pendingAttack.targetCardId, "new-target");
 });
 
 test("direct and summon traps resolve draw and damage through events", () => {
@@ -2028,6 +2062,82 @@ test("attack declaration opens an engine-owned response window without resolving
   assert.ok(!events.some((event) => event.type === "DAMAGE_DEALT"));
   assert.ok(!events.some((event) => event.type === "MONSTER_USED"));
   assertValidGameState(next);
+});
+
+test("redirect trap updates pending attack and battle resolves against the new defender", () => {
+  const state = makeState({
+    cards: [
+      card("sky-1", { templateId: "sky-raider", ownerId: AI, type: "monster", atk: 1550, def: 900, tempAtk: 500 }),
+      card("dusk-1", { templateId: "dusk-alchemist", type: "monster", atk: 1450, def: 1500, tempAtk: 50 }),
+      card("guard-1", { templateId: "iron-guardian", type: "monster", atk: 900, def: 2100, tempDef: 100, mode: "defense" }),
+      card("switch-1", { templateId: "phantom-switch", type: "trap", trigger: "redirectAttack" })
+    ],
+    player: {
+      monsterZone: ["dusk-1", "guard-1"],
+      spellTrapZone: ["switch-1"],
+      shield: 550
+    },
+    ai: {
+      monsterZone: ["sky-1"]
+    },
+    turn: {
+      playerId: AI,
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+  const declarationEvents = engine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: AI,
+    rivalId: PLAYER,
+    attackerCardId: "sky-1",
+    targetCardId: "dusk-1"
+  });
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  assert.equal(engine.getState().machine.pendingAttack.targetCardId, "dusk-1");
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "switch-1",
+    effectId: "redirectAttack",
+    targetEffectId: declaration.id
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "switch-1",
+    attackerCardId: "sky-1",
+    targetCardId: "guard-1",
+    targetEffectId: declaration.id
+  });
+  const chainEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: PLAYER });
+  const redirectEvent = chainEvents.find((event) => event.type === "ATTACK_TARGET_CHANGED");
+  assert.equal(redirectEvent.fromTargetCardId, "dusk-1");
+  assert.equal(redirectEvent.toTargetCardId, "guard-1");
+  assert.equal(engine.getState().machine.pendingAttack.targetCardId, "guard-1");
+  assert.equal(projectMachineStateFromEvents(engine.getState().events, Phase.battle).pendingAttack.targetCardId, "guard-1");
+
+  const battleEvents = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: AI,
+    rivalId: PLAYER,
+    attackerCardId: "sky-1",
+    targetCardId: "guard-1",
+    declarationEventId: declaration.id
+  });
+  const battleResolved = battleEvents.find((event) => event.type === "BATTLE_RESOLVED");
+  assert.equal(battleResolved.targetCardId, "guard-1");
+  assert.equal(battleResolved.outcome.kind, "guardCounter");
+  assert.equal(battleResolved.outcome.diff, -150);
+  assert.ok(!battleEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === PLAYER && event.requested === 550));
+  assert.deepEqual(engine.getState().players[PLAYER].monsterZone, ["dusk-1", "guard-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, ["switch-1"]);
+  assert.equal(engine.getState().players[PLAYER].shield, 550);
+  assert.equal(engine.getState().players[AI].lp, MAX_LP - 150);
 });
 
 test("pending attack blocks auto-end and turn handoff until battle resolves or is canceled", () => {

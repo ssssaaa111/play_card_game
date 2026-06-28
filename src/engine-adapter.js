@@ -712,6 +712,10 @@ function trapResponseAction(uiState, playerId, rivalId, trapIndex, context = {})
   };
   const attackerCardId = cardKey(context.attacker) || cardKey(rival.field?.[context.attackerIndex]);
   if (attackerCardId) action.attackerCardId = attackerCardId;
+  const targetCardId = typeof context.targetCardId === "string"
+    ? context.targetCardId
+    : cardKey(context.targetCardId);
+  if (targetCardId) action.targetCardId = targetCardId;
   if (context.targetEffectId) action.targetEffectId = context.targetEffectId;
   return { card, action };
 }

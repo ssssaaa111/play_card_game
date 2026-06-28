@@ -710,6 +710,53 @@ test("rebuilds the open response window and resolves a selected trap as one even
   assert.deepEqual(buildEngineStateFromUiState(state).machine.chain, []);
 });
 
+test("redirect trap response updates pending attack before UI battle resolution", () => {
+  const trap = uiTrap("redirect-response", "phantom-switch");
+  trap.trigger = "redirectAttack";
+  const attacker = uiMonster("sky-redirect", "sky-raider");
+  attacker.ownerId = "ai";
+  attacker.atk = 1550;
+  attacker.tempAtk = 500;
+  const original = uiMonster("dusk-redirect", "dusk-alchemist");
+  original.atk = 1450;
+  original.tempAtk = 50;
+  const guard = uiMonster("guard-redirect", "iron-guardian");
+  guard.mode = "defense";
+  guard.def = 2100;
+  guard.tempDef = 100;
+  const state = appState({ phase: PHASES.battle, turn: "ai" });
+  state.player.shield = 550;
+  state.player.traps[0] = trap;
+  state.player.field[0] = original;
+  state.player.field[1] = guard;
+  state.ai.field[0] = attacker;
+
+  const declarationEvents = dispatchDeclareAttackFromUiState(state, "ai", "player", 0, 0);
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  const responseEvents = dispatchTrapResponseFromUiState(state, "player", "ai", 0, {
+    attackerIndex: 0,
+    targetIndex: 0,
+    targetCardId: guard.uid,
+    targetEffectId: declaration.id
+  });
+  const redirected = responseEvents.find((event) => event.type === "ATTACK_TARGET_CHANGED");
+  assert.equal(redirected.fromTargetCardId, original.uid);
+  assert.equal(redirected.toTargetCardId, guard.uid);
+  assert.equal(buildEngineStateFromUiState(state).machine.pendingAttack.targetCardId, guard.uid);
+
+  const battleEvents = dispatchResolveBattleFromUiState(state, "ai", "player", 0, 1, {
+    declarationEventId: declaration.id
+  });
+  const battleResolved = battleEvents.find((event) => event.type === "BATTLE_RESOLVED");
+  assert.equal(battleResolved.targetCardId, guard.uid);
+  assert.equal(battleResolved.outcome.diff, -150);
+  assert.equal(state.player.field[0], original);
+  assert.equal(state.player.field[1], guard);
+  assert.equal(state.player.shield, 550);
+  assert.equal(state.ai.lp, 3850);
+  assert.ok(!battleEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "player" && event.requested === 550));
+});
+
 test("queues opposing trap responses before resolving the shared chain in reverse order", () => {
   const playerTrap = uiTrap("player-chain-flare", "summon-flare");
   playerTrap.trigger = "summonBurn";
