@@ -596,11 +596,18 @@ function chooseNextAction(state, rng, context, balanceStats = null) {
   return { type: "CHANGE_PHASE", playerId, phase: Phase.draw };
 }
 
+export function createSimulatorActionEntries(state, playerId = state?.turn?.playerId || PLAYER, balanceStats = null) {
+  if (!state?.turn || !state?.players?.[playerId]) return [];
+  if (state.turn.phase === Phase.main) return mainPhaseActions(state, playerId, balanceStats);
+  if (state.turn.phase === Phase.battle) return battlePhaseActions(state, playerId, balanceStats);
+  return [];
+}
+
 function mainPhaseActions(state, playerId, balanceStats = null) {
   const actions = [
-    ...summonActions(state, playerId, balanceStats).map((action) => ({ weight: 32, action })),
-    ...spellActions(state, playerId, balanceStats).map((action) => ({ weight: 24, action })),
-    ...setTrapActions(state, playerId, balanceStats).map((action) => ({ weight: 14, action })),
+    ...summonActions(state, playerId, balanceStats).map((action) => ({ weight: summonActionWeight(state, playerId, action), action })),
+    ...spellActions(state, playerId, balanceStats).map((action) => ({ weight: spellActionWeight(state, playerId, action, 24), action })),
+    ...setTrapActions(state, playerId, balanceStats).map((action) => ({ weight: setTrapActionWeight(state, action, 14), action })),
     ...modeActions(state, playerId, balanceStats).map((action) => ({ weight: 4, action }))
   ];
   if (battleActionsAvailable(state, playerId)) {
@@ -614,8 +621,8 @@ function battlePhaseActions(state, playerId, balanceStats = null) {
   const attackActions = declareAttackActions(state, playerId, balanceStats);
   const actions = [
     ...attackActions.map((action) => ({ weight: 45, action })),
-    ...spellActions(state, playerId, balanceStats).map((action) => ({ weight: 12, action })),
-    ...setTrapActions(state, playerId, balanceStats).map((action) => ({ weight: 8, action }))
+    ...spellActions(state, playerId, balanceStats).map((action) => ({ weight: spellActionWeight(state, playerId, action, 12), action })),
+    ...setTrapActions(state, playerId, balanceStats).map((action) => ({ weight: setTrapActionWeight(state, action, 8), action }))
   ];
   const skip = skipAttackAction(state, playerId, balanceStats);
   if (skip) actions.push({ weight: 7, action: skip });
@@ -626,17 +633,10 @@ function battlePhaseActions(state, playerId, balanceStats = null) {
 function summonActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
   if (!player) return [];
-  const monsterIds = player.hand.filter((cardId) => state.cards[cardId]?.type === "monster");
   if (player.monsterZone.length >= FIELD_SIZE) {
-    for (const cardId of monsterIds) {
-      recordBalanceActionRejected(balanceStats, { type: "SUMMON_MONSTER", playerId, cardId }, "monster zone is full", { state, source: "projection" });
-    }
     return [];
   }
   if (player.normalSummonsUsed >= 1 && !hasAbility(state, playerId, Ability.extraSummon)) {
-    for (const cardId of monsterIds) {
-      recordBalanceActionRejected(balanceStats, { type: "SUMMON_MONSTER", playerId, cardId }, "normal summon already used", { state, source: "projection" });
-    }
     return [];
   }
   return player.hand
@@ -664,6 +664,9 @@ function spellActions(state, playerId, balanceStats = null) {
       continue;
     }
     for (const targetCardId of targets) {
+      if (definition.duration === "continuous" && player.spellTrapZone.length >= FIELD_SIZE) {
+        continue;
+      }
       const action = {
         type: "ACTIVATE_CARD",
         playerId,
@@ -698,11 +701,7 @@ function spellTargetCandidates(state, playerId, rivalId, card, definition) {
 function setTrapActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
   if (!player) return [];
-  const trapIds = player.hand.filter((cardId) => state.cards[cardId]?.type === "trap");
   if (player.spellTrapZone.length >= FIELD_SIZE) {
-    for (const cardId of trapIds) {
-      recordBalanceActionRejected(balanceStats, { type: "SET_TRAP", playerId, cardId }, "spell trap zone is full", { state, source: "projection" });
-    }
     return [];
   }
   return player.hand
@@ -747,6 +746,143 @@ function declareAttackActions(state, playerId, balanceStats = null) {
     }
   }
   return actions.filter((action) => canDispatch(state, action, balanceStats));
+}
+
+function summonActionWeight(state, playerId, action) {
+  const player = state.players[playerId];
+  const card = state.cards[action.cardId];
+  if (!player || !card) return 0;
+  let weight = 32;
+  if (summonWouldMeetOnSummonRequirements(state, playerId, card)) {
+    weight += 52;
+  } else if (card.onSummon) {
+    weight += 8;
+  }
+  if (summonSupportsHandCondition(state, playerId, card)) {
+    weight += 14;
+  }
+  const remainingSlotsAfterSummon = FIELD_SIZE - (player.monsterZone.length + 1);
+  if (remainingSlotsAfterSummon <= 0 && !card.onSummon && !card.afterAttack) {
+    weight = Math.max(8, Math.round(weight * 0.45));
+  }
+  return weight;
+}
+
+function spellActionWeight(state, playerId, action, baseWeight) {
+  const card = state.cards[action.cardId];
+  let weight = baseWeight;
+  if (card?.effect === "extraSummon" && extraSummonWouldEnableMonster(state, playerId)) {
+    weight += 30;
+  }
+  return weight;
+}
+
+function setTrapActionWeight(state, action, baseWeight) {
+  const card = state.cards[action.cardId];
+  if (!card) return baseWeight;
+  const trapClass = trapClassForCard(card);
+  if (trapClass === "continueBattle") return baseWeight + 12;
+  if (trapClass === "cancelAttack" || trapClass === "redirectTarget") return baseWeight + 8;
+  return baseWeight;
+}
+
+function attackResponseTrapWeight(state, action) {
+  const card = state.cards[action.cardId];
+  const trapClass = trapClassForCard(card);
+  if (trapClass === "continueBattle") return 3;
+  if (trapClass === "cancelAttack" || trapClass === "redirectTarget") return 2;
+  return 1;
+}
+
+function summonWouldMeetOnSummonRequirements(state, playerId, card) {
+  const definition = getCardEffectDefinition(card?.onSummon);
+  const requirements = Array.isArray(definition?.requirements) ? definition.requirements : [];
+  if (requirements.length === 0) return false;
+  return requirements.every((requirement) => requirementSatisfiedAfterSummon(state, playerId, card, requirement));
+}
+
+function summonSupportsHandCondition(state, playerId, card) {
+  if (!card?.element) return false;
+  const player = state.players[playerId];
+  if (!player) return false;
+  return player.hand.some((cardId) => {
+    if (cardId === card.id) return false;
+    const handCard = state.cards[cardId];
+    const definition = getCardEffectDefinition(handCard?.onSummon);
+    const requirements = Array.isArray(definition?.requirements) ? definition.requirements : [];
+    return requirements.some((requirement) => requirementProgressesAfterSummon(state, playerId, card, requirement));
+  });
+}
+
+function requirementSatisfiedAfterSummon(state, playerId, card, requirement) {
+  const elements = monsterElementsAfterSummon(state, playerId, card);
+  if (requirement.type === "minDistinctElements") {
+    return elements.size >= Math.max(0, Number(requirement.count) || 0);
+  }
+  if (requirement.type === "requiredElements") {
+    const required = Array.isArray(requirement.elements) ? requirement.elements : [];
+    return required.every((element) => elements.has(element));
+  }
+  if (requirement.type === "minElementCount") {
+    const count = Math.max(0, Number(requirement.count) || 0);
+    return monsterElementCountAfterSummon(state, playerId, card, requirement.element) >= count;
+  }
+  return false;
+}
+
+function requirementProgressesAfterSummon(state, playerId, card, requirement) {
+  if (requirement.type === "minDistinctElements") {
+    const before = monsterElementSetForPlayer(state, playerId);
+    const after = monsterElementsAfterSummon(state, playerId, card);
+    const count = Math.max(0, Number(requirement.count) || 0);
+    return before.size < count && after.size > before.size;
+  }
+  if (requirement.type === "requiredElements") {
+    const before = monsterElementSetForPlayer(state, playerId);
+    const after = monsterElementsAfterSummon(state, playerId, card);
+    const required = Array.isArray(requirement.elements) ? requirement.elements : [];
+    return required.some((element) => !before.has(element) && after.has(element));
+  }
+  if (requirement.type === "minElementCount") {
+    const count = Math.max(0, Number(requirement.count) || 0);
+    const before = monsterElementCountForPlayer(state, playerId, requirement.element);
+    const after = monsterElementCountAfterSummon(state, playerId, card, requirement.element);
+    return before < count && after > before;
+  }
+  return false;
+}
+
+function extraSummonWouldEnableMonster(state, playerId) {
+  const player = state.players[playerId];
+  if (!player || player.monsterZone.length >= FIELD_SIZE) return false;
+  if (player.normalSummonsUsed < 1) return false;
+  if (hasAbility(state, playerId, Ability.extraSummon)) return false;
+  return player.hand.some((cardId) => state.cards[cardId]?.type === "monster");
+}
+
+function monsterElementsAfterSummon(state, playerId, card) {
+  const elements = monsterElementSetForPlayer(state, playerId);
+  if (card?.element) elements.add(card.element);
+  return elements;
+}
+
+function monsterElementSetForPlayer(state, playerId) {
+  const player = state.players[playerId];
+  return new Set((player?.monsterZone || [])
+    .map((cardId) => state.cards[cardId]?.element)
+    .filter(Boolean));
+}
+
+function monsterElementCountAfterSummon(state, playerId, card, element) {
+  return monsterElementCountForPlayer(state, playerId, element) + (card?.element === element ? 1 : 0);
+}
+
+function monsterElementCountForPlayer(state, playerId, element) {
+  const player = state.players[playerId];
+  return (player?.monsterZone || [])
+    .map((cardId) => state.cards[cardId]?.element)
+    .filter((entry) => entry === element)
+    .length;
 }
 
 function resolvePendingBattleAction(state, context) {
@@ -799,9 +935,10 @@ function responseWindowAction(state, rng, context, balanceStats = null) {
     return { type: "RESOLVE_CHAIN", playerId };
   }
 
-  const trapAction = chooseWeightedAction(attackResponseTrapActions(state, playerId, window.context || {}, balanceStats)
-    .map((action) => ({ weight: 1, action })), rng);
-  if (trapAction && rng() < 0.8) {
+  const trapEntries = attackResponseTrapActions(state, playerId, window.context || {}, balanceStats)
+    .map((action) => ({ weight: attackResponseTrapWeight(state, action), action }));
+  const trapAction = chooseWeightedAction(trapEntries, rng);
+  if (trapAction && rng() < 0.9) {
     return trapAction;
   }
   return { type: "CLOSE_RESPONSE_WINDOW", playerId, reason: "sim-pass" };

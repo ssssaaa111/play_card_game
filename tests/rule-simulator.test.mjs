@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  createSimulatorActionEntries,
   createBalanceStats,
   finalizeBalanceReport,
   recordBalanceActionRejected,
@@ -10,6 +11,9 @@ import {
   simulateChainTrapScenario,
   simulateRandomDuels
 } from "../src/rule-simulator.js";
+import { library } from "../src/data.js";
+import { GameEngine, Phase, Timing } from "../src/game-engine.js";
+import { FIELD_SIZE, MAX_LP } from "../src/rules.js";
 
 test("random duel simulator exercises core rules through dispatch", () => {
   const result = simulateRandomDuels({
@@ -268,6 +272,83 @@ test("random duel simulator is deterministic for the same seed", () => {
   assert.deepEqual(second, first);
 });
 
+test("simulator strategy entries remain legal dispatch candidates", () => {
+  const state = simulatorTestState({
+    playerCards: [
+      runtimeCard("shadow-field", "void-hound", "player"),
+      runtimeCard("bulwark", "rift-bulwark", "player"),
+      runtimeCard("resonance", "soul-resonance", "player"),
+      runtimeCard("parry", "soul-parry", "player")
+    ],
+    hand: ["bulwark", "resonance", "parry"],
+    monsterZone: ["shadow-field"]
+  });
+
+  const entries = createSimulatorActionEntries(state, "player");
+  assert.ok(entries.length > 0);
+  for (const { action } of entries) {
+    assert.doesNotThrow(() => new GameEngine(cloneState(state)).dispatch(action));
+  }
+});
+
+test("simulator avoids normal summon projection noise after summon is spent", () => {
+  const stats = createBalanceStats();
+  const state = simulatorTestState({
+    playerCards: [runtimeCard("bulwark", "rift-bulwark", "player")],
+    hand: ["bulwark"],
+    normalSummonsUsed: 1
+  });
+
+  const entries = createSimulatorActionEntries(state, "player", stats);
+  assert.equal(entries.some((entry) => entry.action.type === "SUMMON_MONSTER"), false);
+  const report = finalizeBalanceReport(stats);
+  assert.equal(report.diagnostics.actionRejected.byReason["normal summon already used"] || 0, 0);
+});
+
+test("simulator avoids monster-zone-full summon projection noise", () => {
+  const stats = createBalanceStats();
+  const field = Array.from({ length: FIELD_SIZE }, (_, index) => `field-${index}`);
+  const state = simulatorTestState({
+    playerCards: [
+      ...field.map((id) => runtimeCard(id, "solar-knight", "player")),
+      runtimeCard("bulwark", "rift-bulwark", "player")
+    ],
+    hand: ["bulwark"],
+    monsterZone: field
+  });
+
+  const entries = createSimulatorActionEntries(state, "player", stats);
+  assert.equal(entries.some((entry) => entry.action.type === "SUMMON_MONSTER"), false);
+  const report = finalizeBalanceReport(stats);
+  assert.equal(report.diagnostics.actionRejected.byReason["monster zone is full"] || 0, 0);
+});
+
+test("simulator prioritizes field-condition summon when requirements are met", () => {
+  const state = simulatorTestState({
+    playerCards: [
+      runtimeCard("shadow-field", "void-hound", "player"),
+      runtimeCard("bulwark", "rift-bulwark", "player"),
+      runtimeCard("plain", "solar-knight", "player")
+    ],
+    hand: ["bulwark", "plain"],
+    monsterZone: ["shadow-field"]
+  });
+
+  const entries = createSimulatorActionEntries(state, "player");
+  const summonWeights = Object.fromEntries(entries
+    .filter((entry) => entry.action.type === "SUMMON_MONSTER")
+    .map((entry) => [entry.action.cardId, entry.weight]));
+  assert.ok(summonWeights.bulwark > summonWeights.plain);
+});
+
+test("simulator action entry generation handles empty states", () => {
+  assert.deepEqual(createSimulatorActionEntries(null), []);
+
+  const state = simulatorTestState();
+  const entries = createSimulatorActionEntries(state, "player");
+  assert.ok(entries.some((entry) => entry.action.type === "END_TURN"));
+});
+
 test("chain trap scenario resolves through response window and chain events", () => {
   const result = simulateChainTrapScenario();
 
@@ -281,3 +362,84 @@ test("chain trap scenario resolves through response window and chain events", ()
   assert.ok(result.eventTypes.CHAIN_RESOLVED >= 1);
   assert.ok(result.eventTypes.BATTLE_RESOLVED >= 1);
 });
+
+function simulatorTestState({
+  playerCards = [],
+  aiCards = [],
+  hand = [],
+  monsterZone = [],
+  spellTrapZone = [],
+  normalSummonsUsed = 0,
+  phase = Phase.main
+} = {}) {
+  const cards = Object.fromEntries([...playerCards, ...aiCards].map((card) => [card.id, card]));
+  return {
+    cards,
+    players: {
+      player: testPlayer("player", { hand, monsterZone, spellTrapZone, normalSummonsUsed }),
+      ai: testPlayer("ai")
+    },
+    turn: {
+      playerId: "player",
+      phase
+    },
+    machine: {
+      phase,
+      timing: phase === Phase.battle ? Timing.battleOpen : Timing.mainOpen,
+      responseWindow: null,
+      chain: [],
+      actionWindow: null,
+      autoEnd: null
+    },
+    abilities: {
+      player: [],
+      ai: []
+    },
+    continuousEffects: [],
+    events: [],
+    nextEventId: 1,
+    gameOver: null
+  };
+}
+
+function testPlayer(id, overrides = {}) {
+  return {
+    id,
+    lp: MAX_LP,
+    shield: 0,
+    deck: [],
+    hand: [],
+    monsterZone: [],
+    spellTrapZone: [],
+    grave: [],
+    banished: [],
+    attacksSkipped: false,
+    comboThisTurn: false,
+    comboFlags: {},
+    normalSummonsUsed: 0,
+    ...overrides
+  };
+}
+
+function runtimeCard(id, templateId, ownerId, overrides = {}) {
+  const template = library.find((entry) => entry.id === templateId);
+  if (!template) throw new Error(`Unknown card template ${templateId}`);
+  return {
+    ...template,
+    id,
+    uid: id,
+    templateId,
+    ownerId,
+    tempAtk: 0,
+    tempDef: 0,
+    battleWear: 0,
+    mode: template.type === "monster" ? "attack" : undefined,
+    used: false,
+    changedMode: false,
+    ...overrides
+  };
+}
+
+function cloneState(state) {
+  return JSON.parse(JSON.stringify(state));
+}

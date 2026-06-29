@@ -11,158 +11,155 @@
     "totalGames": 20,
     "completedGames": 20,
     "wins": {
-      "player": 10,
-      "ai": 10,
-      "none": 0
+      "player": 15,
+      "ai": 4,
+      "none": 1
     },
     "winRates": {
-      "player": 0.5,
-      "ai": 0.5
+      "player": 0.75,
+      "ai": 0.2
     },
     "averages": {
-      "turns": 8.4,
-      "spellsActivated": 6.65,
-      "trapsActivated": 1,
-      "attackDeclarations": 6.9,
-      "battleResolutions": 6.6,
-      "damageDealt": 4717.5
+      "turns": 9,
+      "spellsActivated": 7.3,
+      "trapsActivated": 1.25,
+      "attackDeclarations": 8.15,
+      "battleResolutions": 7.75,
+      "damageDealt": 4780
     },
     "totals": {
-      "turns": 168,
-      "spellsActivated": 133,
-      "trapsActivated": 20,
-      "attackDeclarations": 138,
-      "battleResolutions": 132,
-      "damageDealt": 94350,
+      "turns": 180,
+      "spellsActivated": 146,
+      "trapsActivated": 25,
+      "attackDeclarations": 163,
+      "battleResolutions": 155,
+      "damageDealt": 95600,
       "deckOuts": 0,
       "deckOutCardsMissing": 0,
-      "maxStepTruncations": 0
+      "maxStepTruncations": 1
     },
     "deckOuts": 0,
-    "maxStepTruncations": 0,
+    "maxStepTruncations": 1,
     "gameOverReasons": {
-      "lp-zero": 20
+      "lp-zero": 19
     },
-    "abnormalEndReasons": {},
+    "abnormalEndReasons": {
+      "stepLimit": 1
+    },
     "expansion01": {
       "star-soul-apprentice": {
         "id": "star-soul-apprentice",
         "name": "星魂学徒",
         "type": "monster",
-        "appeared": 14,
-        "summoned": 10,
+        "appeared": 21,
+        "summoned": 15,
         "activated": 0,
-        "resolved": 3
+        "resolved": 8
       },
       "rift-bulwark": {
         "id": "rift-bulwark",
         "name": "裂隙壁卫",
         "type": "monster",
-        "appeared": 28,
-        "summoned": 12,
+        "appeared": 27,
+        "summoned": 20,
         "activated": 0,
-        "resolved": 1
+        "resolved": 5
       },
       "soul-resonance": {
         "id": "soul-resonance",
         "name": "星魂共鸣",
         "type": "spell",
-        "appeared": 22,
+        "appeared": 25,
         "summoned": 0,
-        "activated": 19,
-        "resolved": 19
+        "activated": 20,
+        "resolved": 20
       },
       "soul-parry": {
         "id": "soul-parry",
         "name": "星魂格挡",
         "type": "trap",
-        "appeared": 21,
+        "appeared": 10,
         "summoned": 0,
-        "activated": 7,
-        "resolved": 6
+        "activated": 5,
+        "resolved": 5
       }
     },
     "complexBattleEvents": {
-      "ATTACK_DECLARED": 138,
+      "ATTACK_DECLARED": 163,
       "ATTACK_TARGET_CHANGED": 0,
-      "BATTLE_RESOLVED": 132,
-      "DAMAGE_DEALT": 136,
-      "CARD_DESTROYED": 78,
-      "TRAP_ACTIVATED": 20,
-      "CHAIN_RESOLVED": 18,
+      "BATTLE_RESOLVED": 155,
+      "DAMAGE_DEALT": 161,
+      "CARD_DESTROYED": 93,
+      "TRAP_ACTIVATED": 25,
+      "CHAIN_RESOLVED": 24,
       "attackDeclaredTargetFinalDefenderMismatches": 0
     },
     "diagnostics": {
       "effectSkipped": {
-        "total": 25,
+        "total": 28,
         "byCategory": {
-          "condition-not-met": 23,
-          "negated": 2
+          "condition-not-met": 27,
+          "negated": 1
         },
         "byCard": {
-          "rift-bulwark": 11,
+          "rift-bulwark": 15,
           "star-soul-apprentice": 7,
           "dusk-alchemist": 5,
-          "soul-parry": 1,
-          "weakening-web": 1
+          "mirror-snare": 1
         }
       },
       "actionRejected": {
-        "total": 780,
+        "total": 315,
         "byCategory": {
-          "resource-unavailable": 451,
-          "no-valid-target": 212,
-          "condition-not-met": 117
+          "no-valid-target": 171,
+          "condition-not-met": 144
         },
         "byAction": {
-          "SUMMON_MONSTER": 338,
-          "ACTIVATE_CARD": 329,
-          "SET_TRAP": 113
+          "ACTIVATE_CARD": 315
         },
         "bySource": {
-          "projection": 780
+          "projection": 315
         },
         "byCard": {
-          "element-echo": 117,
-          "rift-bulwark": 70,
-          "pierce-line": 57,
-          "dispelling-ray": 55,
-          "soul-parry": 26,
-          "soul-resonance": 21
+          "element-echo": 144,
+          "soul-resonance": 37,
+          "grave-return": 26,
+          "war-chant": 21,
+          "pierce-line": 20,
+          "battle-trance": 19
         }
       },
       "fizzled": {
-        "total": 32,
+        "total": 36,
         "noValidTarget": 0,
         "byReason": {
-          "Effect riftShelter requires at least 2 shadow monsters": 11,
-          "attacker-left-field": 6,
+          "Effect riftShelter requires at least 2 shadow monsters": 15,
+          "attacker-left-field": 8,
           "Effect shadowBurn requires at least 2 shadow monsters": 5,
-          "negated": 2,
-          "skipAttackLock": 1
+          "negated": 1
         }
       },
       "legalButNotChosen": {
-        "total": 2163,
+        "total": 1999,
         "byAction": {
-          "SET_TRAP": 717,
-          "ACTIVATE_CARD": 604,
-          "CHANGE_MONSTER_MODE": 472,
-          "SUMMON_MONSTER": 370
+          "CHANGE_MONSTER_MODE": 590,
+          "ACTIVATE_CARD": 550,
+          "SET_TRAP": 469,
+          "SUMMON_MONSTER": 390
         },
         "byCard": {
-          "rift-bulwark": 131,
-          "soul-parry": 97,
-          "star-soul-apprentice": 68,
-          "soul-resonance": 40
+          "rift-bulwark": 156,
+          "star-soul-apprentice": 78,
+          "soul-resonance": 75,
+          "soul-parry": 43
         }
       },
       "trapClasses": {
         "cancelAttack": {
-          "activated": 6,
-          "resolved": 6,
-          "skipped": 0,
-          "negated": 0
+          "activated": 9,
+          "resolved": 8,
+          "skipped": 1,
+          "negated": 1
         },
         "redirectTarget": {
           "activated": 0,
@@ -171,30 +168,30 @@
           "negated": 0
         },
         "continueBattle": {
-          "activated": 12,
-          "resolved": 10,
-          "skipped": 2,
-          "negated": 2
+          "activated": 15,
+          "resolved": 15,
+          "skipped": 0,
+          "negated": 0
         },
         "other": {
-          "activated": 2,
-          "resolved": 2,
+          "activated": 1,
+          "resolved": 1,
           "skipped": 0,
           "negated": 0
         }
       },
       "damageSources": {
         "battle": {
-          "events": 126,
-          "requested": 122000,
-          "shieldBlocked": 15350,
-          "dealt": 92950
+          "events": 139,
+          "requested": 120600,
+          "shieldBlocked": 15550,
+          "dealt": 92600
         },
         "effect": {
-          "events": 10,
-          "requested": 2000,
-          "shieldBlocked": 600,
-          "dealt": 1400
+          "events": 22,
+          "requested": 4700,
+          "shieldBlocked": 1700,
+          "dealt": 3000
         },
         "deckOut": {
           "events": 0,
@@ -210,24 +207,24 @@
         }
       },
       "drawToUseDelay": {
-        "samples": 258,
-        "averageEvents": 81.73,
+        "samples": 293,
+        "averageEvents": 85.16,
         "byCard": {
           "rift-bulwark": {
-            "samples": 12,
-            "averageEvents": 52.92
+            "samples": 20,
+            "averageEvents": 124.45
           },
           "soul-resonance": {
-            "samples": 18,
-            "averageEvents": 33.67
+            "samples": 20,
+            "averageEvents": 51.75
           },
           "soul-parry": {
-            "samples": 7,
-            "averageEvents": 119
+            "samples": 5,
+            "averageEvents": 124
           },
           "star-soul-apprentice": {
-            "samples": 10,
-            "averageEvents": 108.1
+            "samples": 15,
+            "averageEvents": 64.13
           }
         }
       },
@@ -236,55 +233,44 @@
           "id": "rift-bulwark",
           "name": "裂隙壁卫",
           "type": "monster",
-          "skipped": 11,
-          "rejected": 70,
-          "fizzled": 11,
+          "skipped": 15,
+          "rejected": 0,
+          "fizzled": 15,
           "noValidTarget": 0,
-          "conditionNotMet": 11,
+          "conditionNotMet": 15,
           "timingWindowMismatch": 0,
           "negated": 0,
-          "resourceUnavailable": 70,
-          "legalButNotChosen": 131,
+          "resourceUnavailable": 0,
+          "legalButNotChosen": 156,
           "skippedReasons": {
-            "Effect riftShelter requires at least 2 shadow monsters": 11
+            "Effect riftShelter requires at least 2 shadow monsters": 15
           },
-          "rejectedReasons": {
-            "normal summon already used": 55,
-            "monster zone is full": 15
-          },
-          "rejectedCategories": {
-            "resource-unavailable": 70
-          },
+          "rejectedReasons": {},
+          "rejectedCategories": {},
           "drawToUseDelay": {
-            "samples": 12,
-            "averageEvents": 52.92
+            "samples": 20,
+            "averageEvents": 124.45
           }
         },
         "soul-parry": {
           "id": "soul-parry",
           "name": "星魂格挡",
           "type": "trap",
-          "skipped": 1,
-          "rejected": 26,
-          "fizzled": 1,
+          "skipped": 0,
+          "rejected": 0,
+          "fizzled": 0,
           "noValidTarget": 0,
           "conditionNotMet": 0,
           "timingWindowMismatch": 0,
-          "negated": 1,
-          "resourceUnavailable": 26,
-          "legalButNotChosen": 97,
-          "skippedReasons": {
-            "negated": 1
-          },
-          "rejectedReasons": {
-            "spell trap zone is full": 26
-          },
-          "rejectedCategories": {
-            "resource-unavailable": 26
-          },
+          "negated": 0,
+          "resourceUnavailable": 0,
+          "legalButNotChosen": 43,
+          "skippedReasons": {},
+          "rejectedReasons": {},
+          "rejectedCategories": {},
           "drawToUseDelay": {
-            "samples": 7,
-            "averageEvents": 119
+            "samples": 5,
+            "averageEvents": 124
           }
         }
       }
