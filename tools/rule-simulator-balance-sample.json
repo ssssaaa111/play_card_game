@@ -7,6 +7,9 @@
     "player": "basicExpansion",
     "ai": "basicExpansion"
   },
+  "completedGames": 20,
+  "gameOvers": 19,
+  "maxStepsReached": 1,
   "balanceReport": {
     "totalGames": 20,
     "completedGames": 20,
@@ -97,6 +100,18 @@
     "diagnostics": {
       "effectSkipped": {
         "total": 28,
+        "byReason": {
+          "Effect riftShelter requires at least 2 shadow monsters": 15,
+          "Effect shadowBurn requires at least 2 shadow monsters": 5,
+          "Effect g10-a-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g13-p-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g14-p-1-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g2-a-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g4-a-1-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g6-p-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g7-a-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "negated": 1
+        },
         "byCategory": {
           "condition-not-met": 27,
           "negated": 1
@@ -110,6 +125,10 @@
       },
       "actionRejected": {
         "total": 315,
+        "byReason": {
+          "no valid target": 171,
+          "Effect elementEcho requires at least 2 distinct elements": 144
+        },
         "byCategory": {
           "no-valid-target": 171,
           "condition-not-met": 144
@@ -126,7 +145,10 @@
           "grave-return": 26,
           "war-chant": 21,
           "pierce-line": 20,
-          "battle-trance": 19
+          "battle-trance": 19,
+          "aegis-plate": 18,
+          "dispelling-ray": 16,
+          "blade-sigil": 14
         }
       },
       "fizzled": {
@@ -136,6 +158,13 @@
           "Effect riftShelter requires at least 2 shadow monsters": 15,
           "attacker-left-field": 8,
           "Effect shadowBurn requires at least 2 shadow monsters": 5,
+          "Effect g10-a-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g13-p-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g14-p-1-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g2-a-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g4-a-1-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g6-p-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+          "Effect g7-a-0-star-soul-apprentice requires at least 2 distinct elements": 1,
           "negated": 1
         }
       },
@@ -149,9 +178,42 @@
         },
         "byCard": {
           "rift-bulwark": 156,
+          "void-hound": 93,
+          "star-lancer": 90,
+          "reversal-flare": 84,
           "star-soul-apprentice": 78,
           "soul-resonance": 75,
-          "soul-parry": 43
+          "seer-call": 74,
+          "nova-squire": 73,
+          "twin-summon": 71,
+          "chain-nullifier": 67,
+          "ember-drake": 67,
+          "solar-knight": 62,
+          "prism-saint": 58,
+          "dusk-alchemist": 56,
+          "dispelling-ray": 55,
+          "void-lock": 55,
+          "night-oracle": 53,
+          "gale-mage": 52,
+          "storm-shift": 52,
+          "iron-guardian": 51,
+          "sky-raider": 50,
+          "eclipse-barrier": 43,
+          "soul-parry": 43,
+          "weakening-web": 42,
+          "aegis-mender": 41,
+          "battle-trance": 41,
+          "aegis-plate": 39,
+          "summon-flare": 39,
+          "mirror-snare": 35,
+          "blade-sigil": 34,
+          "war-chant": 32,
+          "guard-sigil": 27,
+          "star-shield": 26,
+          "counter-array": 25,
+          "element-echo": 24,
+          "pierce-line": 20,
+          "grave-return": 16
         }
       },
       "trapClasses": {
@@ -210,6 +272,10 @@
         "samples": 293,
         "averageEvents": 85.16,
         "byCard": {
+          "star-soul-apprentice": {
+            "samples": 15,
+            "averageEvents": 64.13
+          },
           "rift-bulwark": {
             "samples": 20,
             "averageEvents": 124.45
@@ -221,14 +287,480 @@
           "soul-parry": {
             "samples": 5,
             "averageEvents": 124
-          },
-          "star-soul-apprentice": {
-            "samples": 15,
-            "averageEvents": 64.13
           }
         }
       },
+      "longGames": {
+        "total": 1,
+        "samples": [
+          {
+            "gameIndex": 5,
+            "steps": 260,
+            "events": 1016,
+            "finalTurn": {
+              "playerId": "player",
+              "phase": "main",
+              "timing": "mainOpen",
+              "turnsResolved": 27
+            },
+            "finalBoardState": {
+              "player": {
+                "lp": 3300,
+                "shield": 1250,
+                "deck": 10,
+                "hand": 6,
+                "grave": 21,
+                "banished": 0,
+                "normalSummonsUsed": 0,
+                "attacksSkipped": false,
+                "monsterZone": [
+                  {
+                    "id": "g5-p-2-rift-bulwark",
+                    "templateId": "rift-bulwark",
+                    "name": "裂隙壁卫",
+                    "type": "monster",
+                    "element": "shadow",
+                    "mode": "defense",
+                    "atk": 1050,
+                    "def": 1650,
+                    "used": false
+                  },
+                  {
+                    "id": "g5-p-11-aegis-mender",
+                    "templateId": "aegis-mender",
+                    "name": "庇护修补师",
+                    "type": "monster",
+                    "element": "light",
+                    "mode": "attack",
+                    "atk": 900,
+                    "def": 1700,
+                    "used": false
+                  }
+                ],
+                "spellTrapZone": [
+                  {
+                    "id": "g5-p-37-counter-array",
+                    "templateId": "counter-array",
+                    "name": "反击阵列",
+                    "type": "trap",
+                    "trigger": "counterBoost"
+                  },
+                  {
+                    "id": "g5-p-34-storm-shift",
+                    "templateId": "storm-shift",
+                    "name": "风暴转移",
+                    "type": "trap",
+                    "trigger": "attackShift"
+                  },
+                  {
+                    "id": "g5-p-39-reversal-flare",
+                    "templateId": "reversal-flare",
+                    "name": "逆焰护壁",
+                    "type": "trap",
+                    "trigger": "directRebound"
+                  }
+                ]
+              },
+              "ai": {
+                "lp": 100,
+                "shield": 0,
+                "deck": 16,
+                "hand": 0,
+                "grave": 22,
+                "banished": 0,
+                "normalSummonsUsed": 1,
+                "attacksSkipped": false,
+                "monsterZone": [
+                  {
+                    "id": "g5-a-15-void-hound",
+                    "templateId": "void-hound",
+                    "name": "虚影猎犬",
+                    "type": "monster",
+                    "element": "shadow",
+                    "mode": "attack",
+                    "atk": 1800,
+                    "def": 800,
+                    "used": true
+                  }
+                ],
+                "spellTrapZone": [
+                  {
+                    "id": "g5-a-41-summon-flare",
+                    "templateId": "summon-flare",
+                    "name": "召雷陷阵",
+                    "type": "trap",
+                    "trigger": "summonBurn"
+                  },
+                  {
+                    "id": "g5-a-39-reversal-flare",
+                    "templateId": "reversal-flare",
+                    "name": "逆焰护壁",
+                    "type": "trap",
+                    "trigger": "directRebound"
+                  },
+                  {
+                    "id": "g5-a-35-guard-sigil",
+                    "templateId": "guard-sigil",
+                    "name": "守护刻印",
+                    "type": "trap",
+                    "trigger": "directShield"
+                  }
+                ]
+              }
+            },
+            "lastEvents": [
+              {
+                "action": {
+                  "type": "SUMMON_MONSTER",
+                  "playerId": "ai",
+                  "cardId": "g5-a-15-void-hound",
+                  "attackerCardId": null,
+                  "targetCardId": null,
+                  "phase": null,
+                  "reason": null
+                },
+                "events": [
+                  {
+                    "id": 985,
+                    "type": "COMMAND_DISPATCHED",
+                    "playerId": "ai",
+                    "cardId": null
+                  },
+                  {
+                    "id": 986,
+                    "type": "NORMAL_SUMMON_USED",
+                    "playerId": "ai",
+                    "cardId": "g5-a-15-void-hound"
+                  },
+                  {
+                    "id": 987,
+                    "type": "CARD_ACTIVATED",
+                    "playerId": "ai",
+                    "cardId": "g5-a-15-void-hound"
+                  },
+                  {
+                    "id": 988,
+                    "type": "CARD_MOVED",
+                    "playerId": null,
+                    "cardId": "g5-a-15-void-hound"
+                  },
+                  {
+                    "id": 989,
+                    "type": "MONSTER_SUMMONED",
+                    "playerId": "ai",
+                    "cardId": "g5-a-15-void-hound"
+                  }
+                ]
+              },
+              {
+                "action": {
+                  "type": "CHANGE_PHASE",
+                  "playerId": "ai",
+                  "cardId": null,
+                  "attackerCardId": null,
+                  "targetCardId": null,
+                  "phase": "battle",
+                  "reason": null
+                },
+                "events": [
+                  {
+                    "id": 990,
+                    "type": "COMMAND_DISPATCHED",
+                    "playerId": "ai",
+                    "cardId": null
+                  },
+                  {
+                    "id": 991,
+                    "type": "PHASE_CHANGED",
+                    "playerId": "ai",
+                    "cardId": null
+                  }
+                ]
+              },
+              {
+                "action": {
+                  "type": "DECLARE_ATTACK",
+                  "playerId": "ai",
+                  "cardId": null,
+                  "attackerCardId": "g5-a-15-void-hound",
+                  "targetCardId": "g5-p-8-sky-raider",
+                  "phase": null,
+                  "reason": null
+                },
+                "events": [
+                  {
+                    "id": 992,
+                    "type": "COMMAND_DISPATCHED",
+                    "playerId": "ai",
+                    "cardId": null
+                  },
+                  {
+                    "id": 993,
+                    "type": "TIMING_CHANGED",
+                    "playerId": "ai",
+                    "cardId": null
+                  },
+                  {
+                    "id": 994,
+                    "type": "ATTACK_DECLARED",
+                    "playerId": "ai",
+                    "cardId": "g5-a-15-void-hound"
+                  },
+                  {
+                    "id": 995,
+                    "type": "RESPONSE_WINDOW_OPENED",
+                    "playerId": "player",
+                    "cardId": null
+                  }
+                ]
+              },
+              {
+                "action": {
+                  "type": "CLOSE_RESPONSE_WINDOW",
+                  "playerId": "player",
+                  "cardId": null,
+                  "attackerCardId": null,
+                  "targetCardId": null,
+                  "phase": null,
+                  "reason": "sim-pass"
+                },
+                "events": [
+                  {
+                    "id": 996,
+                    "type": "COMMAND_DISPATCHED",
+                    "playerId": "player",
+                    "cardId": null
+                  },
+                  {
+                    "id": 997,
+                    "type": "RESPONSE_WINDOW_CLOSED",
+                    "playerId": "player",
+                    "cardId": null
+                  }
+                ]
+              },
+              {
+                "action": {
+                  "type": "RESOLVE_BATTLE",
+                  "playerId": "ai",
+                  "cardId": null,
+                  "attackerCardId": "g5-a-15-void-hound",
+                  "targetCardId": "g5-p-8-sky-raider",
+                  "phase": null,
+                  "reason": null
+                },
+                "events": [
+                  {
+                    "id": 998,
+                    "type": "COMMAND_DISPATCHED",
+                    "playerId": "ai",
+                    "cardId": null
+                  },
+                  {
+                    "id": 999,
+                    "type": "TIMING_CHANGED",
+                    "playerId": "ai",
+                    "cardId": null
+                  },
+                  {
+                    "id": 1000,
+                    "type": "MONSTER_USED",
+                    "playerId": "ai",
+                    "cardId": "g5-a-15-void-hound"
+                  },
+                  {
+                    "id": 1001,
+                    "type": "DAMAGE_DEALT",
+                    "playerId": "player",
+                    "cardId": null
+                  },
+                  {
+                    "id": 1002,
+                    "type": "CARD_MOVED",
+                    "playerId": null,
+                    "cardId": "g5-p-8-sky-raider"
+                  },
+                  {
+                    "id": 1003,
+                    "type": "CARD_DESTROYED",
+                    "playerId": "player",
+                    "cardId": "g5-p-8-sky-raider"
+                  },
+                  {
+                    "id": 1004,
+                    "type": "STAT_MODIFIED",
+                    "playerId": null,
+                    "cardId": "g5-a-15-void-hound"
+                  },
+                  {
+                    "id": 1005,
+                    "type": "BATTLE_RESOLVED",
+                    "playerId": "ai",
+                    "cardId": "g5-a-15-void-hound"
+                  },
+                  {
+                    "id": 1006,
+                    "type": "TIMING_CHANGED",
+                    "playerId": "ai",
+                    "cardId": null
+                  }
+                ]
+              },
+              {
+                "action": {
+                  "type": "END_TURN",
+                  "playerId": "ai",
+                  "cardId": null,
+                  "attackerCardId": null,
+                  "targetCardId": null,
+                  "phase": null,
+                  "reason": "sim-battle"
+                },
+                "events": [
+                  {
+                    "id": 1007,
+                    "type": "COMMAND_DISPATCHED",
+                    "playerId": "ai",
+                    "cardId": null
+                  },
+                  {
+                    "id": 1008,
+                    "type": "TURN_ENDED",
+                    "playerId": "ai",
+                    "cardId": null
+                  }
+                ]
+              },
+              {
+                "action": {
+                  "type": "START_TURN",
+                  "playerId": "player",
+                  "cardId": null,
+                  "attackerCardId": null,
+                  "targetCardId": null,
+                  "phase": null,
+                  "reason": null
+                },
+                "events": [
+                  {
+                    "id": 1009,
+                    "type": "COMMAND_DISPATCHED",
+                    "playerId": "player",
+                    "cardId": null
+                  },
+                  {
+                    "id": 1010,
+                    "type": "TURN_STARTED",
+                    "playerId": "player",
+                    "cardId": null
+                  },
+                  {
+                    "id": 1011,
+                    "type": "MONSTER_TURN_RESET",
+                    "playerId": "player",
+                    "cardId": "g5-p-11-aegis-mender"
+                  },
+                  {
+                    "id": 1012,
+                    "type": "TURN_ABILITIES_EXPIRED",
+                    "playerId": "player",
+                    "cardId": null
+                  }
+                ]
+              },
+              {
+                "action": {
+                  "type": "RESOLVE_TURN_DRAW",
+                  "playerId": "player",
+                  "cardId": null,
+                  "attackerCardId": null,
+                  "targetCardId": null,
+                  "phase": null,
+                  "reason": null
+                },
+                "events": [
+                  {
+                    "id": 1013,
+                    "type": "COMMAND_DISPATCHED",
+                    "playerId": "player",
+                    "cardId": null
+                  },
+                  {
+                    "id": 1014,
+                    "type": "CARDS_DRAWN",
+                    "playerId": "player",
+                    "cardId": null
+                  },
+                  {
+                    "id": 1015,
+                    "type": "TURN_DRAW_RESOLVED",
+                    "playerId": "player",
+                    "cardId": null
+                  },
+                  {
+                    "id": 1016,
+                    "type": "PHASE_CHANGED",
+                    "playerId": "player",
+                    "cardId": null
+                  }
+                ]
+              }
+            ],
+            "zeroDamageBattleCount": 13,
+            "turnsWithoutDamage": 1,
+            "fullMonsterZoneTurns": {
+              "player": 4,
+              "ai": 1,
+              "any": 5,
+              "both": 0
+            },
+            "fullSpellTrapZoneTurns": {
+              "player": 8,
+              "ai": 3,
+              "any": 8,
+              "both": 3
+            },
+            "totals": {
+              "damageDealt": 5200,
+              "damageEvents": 16,
+              "battleResolutions": 26,
+              "attackDeclarations": 27,
+              "trapsActivated": 6,
+              "attacksSkipped": 3
+            }
+          }
+        ]
+      },
       "cards": {
+        "star-soul-apprentice": {
+          "id": "star-soul-apprentice",
+          "name": "星魂学徒",
+          "type": "monster",
+          "skipped": 7,
+          "rejected": 0,
+          "fizzled": 7,
+          "noValidTarget": 0,
+          "conditionNotMet": 7,
+          "timingWindowMismatch": 0,
+          "negated": 0,
+          "resourceUnavailable": 0,
+          "legalButNotChosen": 78,
+          "skippedReasons": {
+            "Effect g10-a-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+            "Effect g13-p-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+            "Effect g14-p-1-star-soul-apprentice requires at least 2 distinct elements": 1,
+            "Effect g2-a-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+            "Effect g4-a-1-star-soul-apprentice requires at least 2 distinct elements": 1,
+            "Effect g6-p-0-star-soul-apprentice requires at least 2 distinct elements": 1,
+            "Effect g7-a-0-star-soul-apprentice requires at least 2 distinct elements": 1
+          },
+          "rejectedReasons": {},
+          "rejectedCategories": {},
+          "drawToUseDelay": {
+            "samples": 15,
+            "averageEvents": 64.13
+          }
+        },
         "rift-bulwark": {
           "id": "rift-bulwark",
           "name": "裂隙壁卫",
@@ -250,6 +782,31 @@
           "drawToUseDelay": {
             "samples": 20,
             "averageEvents": 124.45
+          }
+        },
+        "soul-resonance": {
+          "id": "soul-resonance",
+          "name": "星魂共鸣",
+          "type": "spell",
+          "skipped": 0,
+          "rejected": 37,
+          "fizzled": 0,
+          "noValidTarget": 37,
+          "conditionNotMet": 0,
+          "timingWindowMismatch": 0,
+          "negated": 0,
+          "resourceUnavailable": 0,
+          "legalButNotChosen": 75,
+          "skippedReasons": {},
+          "rejectedReasons": {
+            "no valid target": 37
+          },
+          "rejectedCategories": {
+            "no-valid-target": 37
+          },
+          "drawToUseDelay": {
+            "samples": 20,
+            "averageEvents": 51.75
           }
         },
         "soul-parry": {

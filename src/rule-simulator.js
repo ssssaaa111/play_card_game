@@ -315,6 +315,7 @@ export function recordBalanceGameResult(stats, game = {}) {
   if (game.endedBy === "stepLimit") {
     stats.maxStepTruncations += 1;
     incrementCount(stats.abnormalEndReasons, "stepLimit");
+    recordLongGameSample(stats, game.longGameDiagnostics);
   } else {
     incrementCount(stats.abnormalEndReasons, game.endedBy || "unknown");
   }
@@ -473,6 +474,7 @@ function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSiz
   const actionCounts = {};
   const eventCounts = {};
   const context = { pendingBattle: null };
+  const longGameStats = createLongGameStats();
   let steps = 0;
   let eventCount = 0;
 
@@ -483,6 +485,7 @@ function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSiz
       count: openingHandSize,
       reason: "opening"
     }, { trace, actionCounts, eventCounts, context, balanceStats });
+    recordLongGameStep(longGameStats, engine.getState(), events);
     eventCount += events.length;
   }
 
@@ -511,6 +514,7 @@ function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSiz
     }
 
     const events = dispatchSimulatedAction(engine, action, { trace, actionCounts, eventCounts, context, balanceStats });
+    recordLongGameStep(longGameStats, engine.getState(), events);
     eventCount += events.length;
     steps += 1;
   }
@@ -524,7 +528,17 @@ function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSiz
     events: eventCount,
     actions: actionCounts,
     eventTypes: eventCounts,
-    presets: state.presets || null
+    presets: state.presets || null,
+    longGameDiagnostics: finalState.gameOver ? null : summarizeLongGameDiagnostics({
+      gameIndex,
+      state: finalState,
+      trace,
+      longGameStats,
+      steps,
+      events: eventCount,
+      actionCounts,
+      eventCounts
+    })
   };
 }
 
@@ -1392,6 +1406,10 @@ function createDiagnosticsStats() {
       total: 0,
       samples: 0,
       byCard: {}
+    },
+    longGames: {
+      total: 0,
+      samples: []
     }
   };
 }
@@ -1440,6 +1458,169 @@ function createExpansionCardCounter(cardId) {
     activated: 0,
     resolved: 0
   };
+}
+
+function createLongGameStats() {
+  return {
+    turnsResolved: 0,
+    totalDamage: 0,
+    damageEvents: 0,
+    zeroDamageBattleCount: 0,
+    turnsWithoutDamage: 0,
+    currentTurnHadDamage: false,
+    fullMonsterZoneTurns: createFullZoneCounter(),
+    fullSpellTrapZoneTurns: createFullZoneCounter()
+  };
+}
+
+function createFullZoneCounter(source = {}) {
+  return {
+    player: Math.max(0, Number(source.player) || 0),
+    ai: Math.max(0, Number(source.ai) || 0),
+    any: Math.max(0, Number(source.any) || 0),
+    both: Math.max(0, Number(source.both) || 0)
+  };
+}
+
+function recordLongGameStep(stats, state, events = []) {
+  if (!stats || !Array.isArray(events)) return stats;
+  const damageThisStep = events
+    .filter((event) => event.type === "DAMAGE_DEALT")
+    .reduce((sum, event) => sum + Math.max(0, Number(event.amount) || 0), 0);
+  if (damageThisStep > 0) {
+    stats.totalDamage += damageThisStep;
+    stats.damageEvents += events.filter((event) => event.type === "DAMAGE_DEALT" && Math.max(0, Number(event.amount) || 0) > 0).length;
+    stats.currentTurnHadDamage = true;
+  }
+
+  const battleResolutions = events.filter((event) => event.type === "BATTLE_RESOLVED").length;
+  if (battleResolutions > 0 && damageThisStep <= 0) {
+    stats.zeroDamageBattleCount += battleResolutions;
+  }
+
+  for (const event of events) {
+    if (event.type !== "TURN_DRAW_RESOLVED") continue;
+    stats.turnsResolved += 1;
+    if (stats.currentTurnHadDamage) {
+      stats.turnsWithoutDamage = 0;
+    } else {
+      stats.turnsWithoutDamage += 1;
+    }
+    stats.currentTurnHadDamage = false;
+    recordFullZoneTurn(stats.fullMonsterZoneTurns, state, "monsterZone");
+    recordFullZoneTurn(stats.fullSpellTrapZoneTurns, state, "spellTrapZone");
+  }
+
+  return stats;
+}
+
+function recordFullZoneTurn(counter, state, zone) {
+  const playerFull = (state.players?.[PLAYER]?.[zone]?.length || 0) >= FIELD_SIZE;
+  const aiFull = (state.players?.[AI]?.[zone]?.length || 0) >= FIELD_SIZE;
+  if (playerFull) counter.player += 1;
+  if (aiFull) counter.ai += 1;
+  if (playerFull || aiFull) counter.any += 1;
+  if (playerFull && aiFull) counter.both += 1;
+}
+
+function summarizeLongGameDiagnostics({ gameIndex, state, trace, longGameStats, steps, events, actionCounts, eventCounts }) {
+  return {
+    gameIndex,
+    steps,
+    events,
+    finalTurn: {
+      playerId: state.turn?.playerId || null,
+      phase: state.turn?.phase || null,
+      timing: state.machine?.timing || null,
+      turnsResolved: longGameStats.turnsResolved
+    },
+    finalBoardState: summarizeBoardState(state),
+    lastEvents: summarizeTraceEvents(trace),
+    zeroDamageBattleCount: longGameStats.zeroDamageBattleCount,
+    turnsWithoutDamage: longGameStats.turnsWithoutDamage,
+    fullMonsterZoneTurns: createFullZoneCounter(longGameStats.fullMonsterZoneTurns),
+    fullSpellTrapZoneTurns: createFullZoneCounter(longGameStats.fullSpellTrapZoneTurns),
+    totals: {
+      damageDealt: longGameStats.totalDamage,
+      damageEvents: longGameStats.damageEvents,
+      battleResolutions: Math.max(0, Number(eventCounts.BATTLE_RESOLVED) || 0),
+      attackDeclarations: Math.max(0, Number(eventCounts.ATTACK_DECLARED) || 0),
+      trapsActivated: Math.max(0, Number(actionCounts.ACTIVATE_TRAP) || 0),
+      attacksSkipped: Math.max(0, Number(actionCounts.SKIP_REMAINING_ATTACKS) || 0)
+    }
+  };
+}
+
+function summarizeBoardState(state) {
+  return Object.fromEntries(PLAYER_IDS.map((playerId) => {
+    const player = state.players[playerId];
+    return [playerId, {
+      lp: player.lp,
+      shield: player.shield || 0,
+      deck: player.deck.length,
+      hand: player.hand.length,
+      grave: player.grave.length,
+      banished: player.banished.length,
+      normalSummonsUsed: player.normalSummonsUsed,
+      attacksSkipped: Boolean(player.attacksSkipped),
+      monsterZone: player.monsterZone.map((cardId) => summarizeBoardCard(state.cards[cardId])),
+      spellTrapZone: player.spellTrapZone.map((cardId) => summarizeBoardCard(state.cards[cardId]))
+    }];
+  }));
+}
+
+function summarizeBoardCard(card) {
+  if (!card) return null;
+  const summary = {
+    id: card.id,
+    templateId: card.templateId || card.id,
+    name: card.name || card.templateId || card.id,
+    type: card.type
+  };
+  if (card.type === "monster") {
+    summary.element = card.element || null;
+    summary.mode = card.mode || null;
+    summary.atk = totalAtk(card);
+    summary.def = totalDef(card);
+    summary.used = Boolean(card.used);
+  }
+  if (card.type === "spell") summary.effect = card.effect || null;
+  if (card.type === "trap") summary.trigger = card.trigger || null;
+  return summary;
+}
+
+function summarizeTraceEvents(trace = []) {
+  return trace.slice(-8).map((entry) => ({
+    action: summarizeAction(entry.action),
+    events: (entry.events || []).map((event) => ({
+      id: event.id,
+      type: event.type,
+      playerId: event.playerId || null,
+      cardId: event.cardId || null
+    }))
+  }));
+}
+
+function summarizeAction(action = {}) {
+  return {
+    type: action.type || null,
+    playerId: action.playerId || null,
+    cardId: action.cardId || null,
+    attackerCardId: action.attackerCardId || null,
+    targetCardId: action.targetCardId || null,
+    phase: action.phase || null,
+    reason: action.reason || null
+  };
+}
+
+function recordLongGameSample(stats, sample) {
+  if (!stats || !sample) return stats;
+  const longGames = stats.diagnostics.longGames;
+  longGames.total += 1;
+  if (longGames.samples.length < 12) {
+    longGames.samples.push(sample);
+  }
+  return stats;
 }
 
 function recordEffectSkipped(stats, cards, event) {
@@ -1614,7 +1795,15 @@ function finalizeDiagnostics(stats) {
     trapClasses: createTrapClassCounters(diagnostics.trapClasses),
     damageSources: createDamageSourceCounters(diagnostics.damageSources),
     drawToUseDelay: finalizeDelay(diagnostics.drawToUseDelay),
+    longGames: finalizeLongGames(diagnostics.longGames),
     cards: finalizeCardDiagnostics(diagnostics.cards)
+  };
+}
+
+function finalizeLongGames(longGames = {}) {
+  return {
+    total: Math.max(0, Number(longGames.total) || 0),
+    samples: Array.isArray(longGames.samples) ? longGames.samples.slice(0, 12) : []
   };
 }
 

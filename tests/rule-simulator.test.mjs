@@ -138,6 +138,8 @@ test("balance report handles empty samples", () => {
   assert.equal(report.diagnostics.effectSkipped.total, 0);
   assert.equal(report.diagnostics.actionRejected.total, 0);
   assert.equal(report.diagnostics.drawToUseDelay.samples, 0);
+  assert.equal(report.diagnostics.longGames.total, 0);
+  assert.deepEqual(report.diagnostics.longGames.samples, []);
 });
 
 test("diagnostics accumulate skipped rejected fizzled and per-card causes", () => {
@@ -263,6 +265,16 @@ test("balance report records max step truncation", () => {
   assert.equal(result.maxStepsReached, 1);
   assert.equal(result.balanceReport.maxStepTruncations, 1);
   assert.equal(result.balanceReport.abnormalEndReasons.stepLimit, 1);
+  assert.equal(result.balanceReport.diagnostics.longGames.total, 1);
+  const sample = result.balanceReport.diagnostics.longGames.samples[0];
+  assert.equal(sample.steps, 1);
+  assert.ok(sample.finalTurn.playerId);
+  assert.ok(sample.finalBoardState.player);
+  assert.ok(Array.isArray(sample.lastEvents));
+  assert.equal(typeof sample.zeroDamageBattleCount, "number");
+  assert.equal(typeof sample.turnsWithoutDamage, "number");
+  assert.equal(typeof sample.fullMonsterZoneTurns.any, "number");
+  assert.equal(typeof sample.fullSpellTrapZoneTurns.any, "number");
 });
 
 test("random duel simulator is deterministic for the same seed", () => {
