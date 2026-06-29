@@ -37,6 +37,20 @@ const EXPANSION_SUCCESS_EVENT_TYPES = Object.freeze({
   "soul-parry": new Set(["STAT_MODIFIED", "SHIELD_GAINED"])
 });
 const ATTACK_RESPONSE_TRIGGERS = new Set(["attackDestroy", "weakenAttack", "redirectAttack", "soulParry"]);
+const TRAP_CLASS_BY_TRIGGER = Object.freeze({
+  attackDestroy: "cancelAttack",
+  counterBoost: "cancelAttack",
+  attackShift: "cancelAttack",
+  attackNegate: "cancelAttack",
+  directShield: "cancelAttack",
+  directRebound: "cancelAttack",
+  redirectAttack: "redirectTarget",
+  weakenAttack: "continueBattle",
+  soulParry: "continueBattle",
+  summonBurn: "other",
+  chainNegate: "other"
+});
+const DAMAGE_SOURCE_TYPES = Object.freeze(["battle", "effect", "deckOut", "unknown"]);
 
 export function simulateRandomDuels({
   games = 10,
@@ -112,12 +126,15 @@ export function createBalanceStats() {
     abnormalEndReasons: {},
     complexEvents: createComplexEventCounters(),
     attackTargetMismatches: 0,
+    diagnostics: createDiagnosticsStats(),
     expansionCards: createExpansionCardCounters(),
-    _attackDeclarations: {}
+    _attackDeclarations: {},
+    _cardFirstSeenEventIds: {},
+    _cardDelayRecorded: {}
   };
 }
 
-export function recordBalanceEvents(stats, events, { state = null } = {}) {
+export function recordBalanceEvents(stats, events, { state = null, action = null } = {}) {
   if (!stats || !Array.isArray(events)) return stats;
   const cards = state?.cards || {};
   const successfulExpansionCardIds = new Set();
@@ -136,6 +153,7 @@ export function recordBalanceEvents(stats, events, { state = null } = {}) {
       const templateId = templateIdForCard(cards, event.cardId);
       if (event.cardType === "spell") {
         stats.totalSpellActivations += 1;
+        recordDrawToUseDelay(stats, cards, event.cardId, event.id);
         if (stats.expansionCards[templateId]) {
           stats.expansionCards[templateId].activated += 1;
         }
@@ -143,6 +161,8 @@ export function recordBalanceEvents(stats, events, { state = null } = {}) {
       if (event.cardType === "trap") {
         stats.totalTrapActivations += 1;
         stats.complexEvents.TRAP_ACTIVATED += 1;
+        recordDrawToUseDelay(stats, cards, event.cardId, event.id);
+        recordTrapClassActivation(stats, cards, event.cardId);
         if (stats.expansionCards[templateId]) {
           stats.expansionCards[templateId].activated += 1;
         }
@@ -151,6 +171,7 @@ export function recordBalanceEvents(stats, events, { state = null } = {}) {
 
     if (event.type === "MONSTER_SUMMONED") {
       const templateId = templateIdForCard(cards, event.cardId);
+      recordDrawToUseDelay(stats, cards, event.cardId, event.id);
       if (stats.expansionCards[templateId]) {
         stats.expansionCards[templateId].summoned += 1;
       }
@@ -158,6 +179,9 @@ export function recordBalanceEvents(stats, events, { state = null } = {}) {
 
     if (event.type === "CARDS_DRAWN") {
       for (const cardId of event.cardIds || []) {
+        if (stats._cardFirstSeenEventIds[cardId] == null) {
+          stats._cardFirstSeenEventIds[cardId] = event.id;
+        }
         const templateId = templateIdForCard(cards, cardId);
         if (stats.expansionCards[templateId]) {
           stats.expansionCards[templateId].appeared += 1;
@@ -185,6 +209,7 @@ export function recordBalanceEvents(stats, events, { state = null } = {}) {
 
     if (event.type === "DAMAGE_DEALT") {
       stats.totalDamageDealt += Math.max(0, Number(event.amount) || 0);
+      recordDamageSource(stats, event, action);
     }
 
     if (event.type === "DRAW_FAILED") {
@@ -196,6 +221,34 @@ export function recordBalanceEvents(stats, events, { state = null } = {}) {
       const templateId = templateIdForCard(cards, event.cardId);
       if (templateId === "soul-parry") {
         successfulExpansionCardIds.add(event.cardId);
+      }
+      recordTrapClassResolution(stats, cards, event.cardId, "resolved");
+    }
+
+    if (event.type === "CHAIN_LINK_RESOLVED" && event.skipped) {
+      recordTrapClassResolution(stats, cards, event.cardId, "skipped");
+    }
+
+    if (event.type === "EFFECT_SKIPPED") {
+      recordEffectSkipped(stats, cards, event);
+    }
+
+    if (event.type === "ABILITY_GRANT_BLOCKED") {
+      const reason = event.reason || "ability-grant-blocked";
+      const cardDiagnostics = ensureCardDiagnostics(stats.diagnostics, cards, event.sourceCardId);
+      cardDiagnostics.fizzled += 1;
+      incrementCount(cardDiagnostics.skippedReasons, reason);
+      incrementCardCategory(cardDiagnostics, "condition-not-met");
+      incrementCount(stats.diagnostics.fizzled.byReason, reason);
+      stats.diagnostics.fizzled.total += 1;
+    }
+
+    if (event.type === "ATTACK_CANCELED") {
+      const category = event.reason === "target-left-field" ? "no-valid-target" : "fizzled";
+      incrementCount(stats.diagnostics.fizzled.byReason, event.reason || "attack-canceled");
+      stats.diagnostics.fizzled.total += 1;
+      if (category === "no-valid-target") {
+        stats.diagnostics.fizzled.noValidTarget += 1;
       }
     }
 
@@ -213,6 +266,33 @@ export function recordBalanceEvents(stats, events, { state = null } = {}) {
       stats.expansionCards[templateId].resolved += 1;
     }
   }
+
+  return stats;
+}
+
+export function recordBalanceActionRejected(stats, action = {}, reason = "rejected", { state = null, source = "projection", category = null } = {}) {
+  if (!stats) return stats;
+  const diagnostics = stats.diagnostics;
+  const normalizedReason = reason || "rejected";
+  const normalizedCategory = category || categorizeDiagnosticReason(normalizedReason);
+  const cardId = action.cardId || action.attackerCardId || action.targetCardId || null;
+  const cards = state?.cards || {};
+  const templateId = templateIdForCard(cards, cardId) || action.templateId || cardId || "unknown";
+
+  diagnostics.actionRejected.total += 1;
+  incrementCount(diagnostics.actionRejected.byReason, normalizedReason);
+  incrementCount(diagnostics.actionRejected.byCategory, normalizedCategory);
+  incrementCount(diagnostics.actionRejected.byAction, action.type || "unknown");
+  incrementCount(diagnostics.actionRejected.bySource, source || "unknown");
+  if (templateId !== "unknown") {
+    incrementCount(diagnostics.actionRejected.byCard, templateId);
+  }
+
+  const cardDiagnostics = ensureCardDiagnostics(diagnostics, cards, cardId, templateId);
+  cardDiagnostics.rejected += 1;
+  incrementCount(cardDiagnostics.rejectedReasons, normalizedReason);
+  incrementCount(cardDiagnostics.rejectedCategories, normalizedCategory);
+  incrementCardCategory(cardDiagnostics, normalizedCategory);
 
   return stats;
 }
@@ -297,7 +377,8 @@ export function finalizeBalanceReport(stats = createBalanceStats()) {
     complexBattleEvents: {
       ...createComplexEventCounters(stats.complexEvents),
       attackDeclaredTargetFinalDefenderMismatches: Math.max(0, Number(stats.attackTargetMismatches) || 0)
-    }
+    },
+    diagnostics: finalizeDiagnostics(stats)
   };
 }
 
@@ -421,7 +502,7 @@ function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSiz
       };
     }
 
-    const action = chooseNextAction(current, rng, context);
+    const action = chooseNextAction(current, rng, context, balanceStats);
     if (!action) {
       throw simulationError("No legal simulator action was available", {
         state: snapshotState(current),
@@ -458,7 +539,7 @@ function dispatchSimulatedAction(engine, action, { trace, actionCounts, eventCou
     for (const event of events) {
       eventCounts[event.type] = (eventCounts[event.type] || 0) + 1;
     }
-    recordBalanceEvents(balanceStats, events, { state });
+    recordBalanceEvents(balanceStats, events, { state, action });
     updateSimulationContext(context, events, action);
     trace.push({
       action: clone(action),
@@ -473,6 +554,7 @@ function dispatchSimulatedAction(engine, action, { trace, actionCounts, eventCou
     if (trace.length > 24) trace.shift();
     return events;
   } catch (error) {
+    recordBalanceActionRejected(balanceStats, action, error.message, { state: engine.getState(), source: "dispatch" });
     throw simulationError(`Dispatch failed for ${action.type}: ${error.message}`, {
       cause: error,
       action,
@@ -482,16 +564,16 @@ function dispatchSimulatedAction(engine, action, { trace, actionCounts, eventCou
   }
 }
 
-function chooseNextAction(state, rng, context) {
+function chooseNextAction(state, rng, context, balanceStats = null) {
   const playerId = state.turn.playerId;
   if (state.machine.responseWindow) {
-    return responseWindowAction(state, rng, context);
+    return responseWindowAction(state, rng, context, balanceStats);
   }
   if (context?.pendingBattle) {
     const pendingAction = resolvePendingBattleAction(state, context);
     if (pendingAction) return pendingAction;
     context.pendingBattle = null;
-    return chooseNextAction(state, rng, context);
+    return chooseNextAction(state, rng, context, balanceStats);
   }
   if (state.turn.phase === Phase.draw) {
     return { type: "RESOLVE_TURN_DRAW", playerId, count: 1 };
@@ -500,20 +582,26 @@ function chooseNextAction(state, rng, context) {
     return { type: "START_TURN", playerId: otherPlayerId(playerId) };
   }
   if (state.turn.phase === Phase.main) {
-    return chooseWeightedAction(mainPhaseActions(state, playerId), rng);
+    const entries = mainPhaseActions(state, playerId, balanceStats);
+    const action = chooseWeightedAction(entries, rng);
+    recordLegalActionOptions(balanceStats, entries, action, state);
+    return action;
   }
   if (state.turn.phase === Phase.battle) {
-    return chooseWeightedAction(battlePhaseActions(state, playerId), rng);
+    const entries = battlePhaseActions(state, playerId, balanceStats);
+    const action = chooseWeightedAction(entries, rng);
+    recordLegalActionOptions(balanceStats, entries, action, state);
+    return action;
   }
   return { type: "CHANGE_PHASE", playerId, phase: Phase.draw };
 }
 
-function mainPhaseActions(state, playerId) {
+function mainPhaseActions(state, playerId, balanceStats = null) {
   const actions = [
-    ...summonActions(state, playerId).map((action) => ({ weight: 32, action })),
-    ...spellActions(state, playerId).map((action) => ({ weight: 24, action })),
-    ...setTrapActions(state, playerId).map((action) => ({ weight: 14, action })),
-    ...modeActions(state, playerId).map((action) => ({ weight: 4, action }))
+    ...summonActions(state, playerId, balanceStats).map((action) => ({ weight: 32, action })),
+    ...spellActions(state, playerId, balanceStats).map((action) => ({ weight: 24, action })),
+    ...setTrapActions(state, playerId, balanceStats).map((action) => ({ weight: 14, action })),
+    ...modeActions(state, playerId, balanceStats).map((action) => ({ weight: 4, action }))
   ];
   if (battleActionsAvailable(state, playerId)) {
     actions.push({ weight: 24, action: { type: "CHANGE_PHASE", playerId, phase: Phase.battle } });
@@ -522,30 +610,42 @@ function mainPhaseActions(state, playerId) {
   return actions;
 }
 
-function battlePhaseActions(state, playerId) {
-  const attackActions = declareAttackActions(state, playerId);
+function battlePhaseActions(state, playerId, balanceStats = null) {
+  const attackActions = declareAttackActions(state, playerId, balanceStats);
   const actions = [
     ...attackActions.map((action) => ({ weight: 45, action })),
-    ...spellActions(state, playerId).map((action) => ({ weight: 12, action })),
-    ...setTrapActions(state, playerId).map((action) => ({ weight: 8, action }))
+    ...spellActions(state, playerId, balanceStats).map((action) => ({ weight: 12, action })),
+    ...setTrapActions(state, playerId, balanceStats).map((action) => ({ weight: 8, action }))
   ];
-  const skip = skipAttackAction(state, playerId);
+  const skip = skipAttackAction(state, playerId, balanceStats);
   if (skip) actions.push({ weight: 7, action: skip });
   actions.push({ weight: attackActions.length > 0 ? 3 : 45, action: { type: "END_TURN", playerId, nextPlayerId: otherPlayerId(playerId), reason: "sim-battle" } });
   return actions;
 }
 
-function summonActions(state, playerId) {
+function summonActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
-  if (!player || player.monsterZone.length >= FIELD_SIZE) return [];
-  if (player.normalSummonsUsed >= 1 && !hasAbility(state, playerId, Ability.extraSummon)) return [];
+  if (!player) return [];
+  const monsterIds = player.hand.filter((cardId) => state.cards[cardId]?.type === "monster");
+  if (player.monsterZone.length >= FIELD_SIZE) {
+    for (const cardId of monsterIds) {
+      recordBalanceActionRejected(balanceStats, { type: "SUMMON_MONSTER", playerId, cardId }, "monster zone is full", { state, source: "projection" });
+    }
+    return [];
+  }
+  if (player.normalSummonsUsed >= 1 && !hasAbility(state, playerId, Ability.extraSummon)) {
+    for (const cardId of monsterIds) {
+      recordBalanceActionRejected(balanceStats, { type: "SUMMON_MONSTER", playerId, cardId }, "normal summon already used", { state, source: "projection" });
+    }
+    return [];
+  }
   return player.hand
     .filter((cardId) => state.cards[cardId]?.type === "monster")
     .map((cardId) => ({ type: "SUMMON_MONSTER", playerId, cardId, index: player.monsterZone.length }))
-    .filter((action) => canDispatch(state, action));
+    .filter((action) => canDispatch(state, action, balanceStats));
 }
 
-function spellActions(state, playerId) {
+function spellActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
   if (!player) return [];
   const rivalId = otherPlayerId(playerId);
@@ -554,8 +654,15 @@ function spellActions(state, playerId) {
     const card = state.cards[cardId];
     if (card?.type !== "spell") continue;
     const definition = getCardEffectDefinition(card.effect);
-    if (!definition) continue;
+    if (!definition) {
+      recordBalanceActionRejected(balanceStats, { type: "ACTIVATE_CARD", playerId, rivalId, cardId }, "missing effect definition", { state, source: "projection" });
+      continue;
+    }
     const targets = spellTargetCandidates(state, playerId, rivalId, card, definition);
+    if (targets.length === 0) {
+      recordBalanceActionRejected(balanceStats, { type: "ACTIVATE_CARD", playerId, rivalId, cardId }, "no valid target", { state, source: "projection", category: "no-valid-target" });
+      continue;
+    }
     for (const targetCardId of targets) {
       const action = {
         type: "ACTIVATE_CARD",
@@ -565,7 +672,7 @@ function spellActions(state, playerId) {
       };
       if (targetCardId) action.targetCardId = targetCardId;
       if (definition.duration === "continuous") action.index = player.spellTrapZone.length;
-      if (canDispatch(state, action)) actions.push(action);
+      if (canDispatch(state, action, balanceStats)) actions.push(action);
     }
   }
   return actions;
@@ -588,16 +695,23 @@ function spellTargetCandidates(state, playerId, rivalId, card, definition) {
   return candidates.length > 0 ? candidates : [];
 }
 
-function setTrapActions(state, playerId) {
+function setTrapActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
-  if (!player || player.spellTrapZone.length >= FIELD_SIZE) return [];
+  if (!player) return [];
+  const trapIds = player.hand.filter((cardId) => state.cards[cardId]?.type === "trap");
+  if (player.spellTrapZone.length >= FIELD_SIZE) {
+    for (const cardId of trapIds) {
+      recordBalanceActionRejected(balanceStats, { type: "SET_TRAP", playerId, cardId }, "spell trap zone is full", { state, source: "projection" });
+    }
+    return [];
+  }
   return player.hand
     .filter((cardId) => state.cards[cardId]?.type === "trap")
     .map((cardId) => ({ type: "SET_TRAP", playerId, cardId, index: player.spellTrapZone.length }))
-    .filter((action) => canDispatch(state, action));
+    .filter((action) => canDispatch(state, action, balanceStats));
 }
 
-function modeActions(state, playerId) {
+function modeActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
   if (!player) return [];
   return player.monsterZone
@@ -609,10 +723,10 @@ function modeActions(state, playerId) {
       cardId: card.id,
       mode: card.mode === "defense" ? "attack" : "defense"
     }))
-    .filter((action) => canDispatch(state, action));
+    .filter((action) => canDispatch(state, action, balanceStats));
 }
 
-function declareAttackActions(state, playerId) {
+function declareAttackActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
   const rivalId = otherPlayerId(playerId);
   const rival = state.players[rivalId];
@@ -632,7 +746,7 @@ function declareAttackActions(state, playerId) {
       actions.push({ type: "DECLARE_ATTACK", playerId, rivalId, attackerCardId: attackerId });
     }
   }
-  return actions.filter((action) => canDispatch(state, action));
+  return actions.filter((action) => canDispatch(state, action, balanceStats));
 }
 
 function resolvePendingBattleAction(state, context) {
@@ -656,7 +770,7 @@ function resolvePendingBattleAction(state, context) {
   return canDispatch(state, action) ? action : null;
 }
 
-function responseWindowAction(state, rng, context) {
+function responseWindowAction(state, rng, context, balanceStats = null) {
   const window = state.machine.responseWindow;
   const playerId = window.playerId;
   const chain = state.machine.chain || [];
@@ -685,7 +799,7 @@ function responseWindowAction(state, rng, context) {
     return { type: "RESOLVE_CHAIN", playerId };
   }
 
-  const trapAction = chooseWeightedAction(attackResponseTrapActions(state, playerId, window.context || {})
+  const trapAction = chooseWeightedAction(attackResponseTrapActions(state, playerId, window.context || {}, balanceStats)
     .map((action) => ({ weight: 1, action })), rng);
   if (trapAction && rng() < 0.8) {
     return trapAction;
@@ -722,14 +836,20 @@ function activateQueuedTrapAction(state, link, context) {
   return action;
 }
 
-function attackResponseTrapActions(state, playerId, responseContext) {
+function attackResponseTrapActions(state, playerId, responseContext, balanceStats = null) {
   if (responseContext.direct) return [];
   const player = state.players[playerId];
   if (!player) return [];
   return player.spellTrapZone
     .map((cardId) => state.cards[cardId])
     .filter((card) => card?.type === "trap" && ATTACK_RESPONSE_TRIGGERS.has(card.trigger))
-    .filter((card) => card.trigger !== "redirectAttack" || redirectAttackTargetCandidate(state, playerId, responseContext))
+    .filter((card) => {
+      const ok = card.trigger !== "redirectAttack" || redirectAttackTargetCandidate(state, playerId, responseContext);
+      if (!ok) {
+        recordBalanceActionRejected(balanceStats, { type: "ADD_CHAIN_LINK", playerId, cardId: card.id, effectId: card.trigger }, "no valid redirect target", { state, source: "projection", category: "no-valid-target" });
+      }
+      return ok;
+    })
     .map((card) => ({
       type: "ADD_CHAIN_LINK",
       playerId,
@@ -737,7 +857,7 @@ function attackResponseTrapActions(state, playerId, responseContext) {
       effectId: card.trigger,
       targetEffectId: state.machine.responseWindow?.triggerEventId || null
     }))
-    .filter((action) => canDispatch(state, action));
+    .filter((action) => canDispatch(state, action, balanceStats));
 }
 
 function chainNegateTrap(state, playerId, targetEffectId) {
@@ -755,7 +875,7 @@ function chainNegateTrap(state, playerId, targetEffectId) {
   return canDispatch(state, action) ? state.cards[trapId] : null;
 }
 
-function skipAttackAction(state, playerId) {
+function skipAttackAction(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
   if (!player || player.attacksSkipped || hasAbility(state, playerId, Ability.skipAttackLock)) return null;
   const hasRemainingAttack = player.monsterZone.some((cardId) => {
@@ -763,7 +883,7 @@ function skipAttackAction(state, playerId) {
     return card?.type === "monster" && card.mode !== "defense" && !card.used;
   });
   const action = { type: "SKIP_REMAINING_ATTACKS", playerId };
-  return hasRemainingAttack && canDispatch(state, action) ? action : null;
+  return hasRemainingAttack && canDispatch(state, action, balanceStats) ? action : null;
 }
 
 function battleActionsAvailable(state, playerId) {
@@ -805,12 +925,15 @@ function updateSimulationContext(context, events, action) {
   }
 }
 
-function canDispatch(state, action) {
+function canDispatch(state, action, balanceStats = null) {
   try {
     new GameEngine(state).dispatch(action);
     return true;
   } catch (error) {
-    if (error instanceof GameRuleError) return false;
+    if (error instanceof GameRuleError) {
+      recordBalanceActionRejected(balanceStats, action, error.message, { state, source: "projection" });
+      return false;
+    }
     throw error;
   }
 }
@@ -1099,8 +1222,70 @@ function presetForGame(config, playerId, gameIndex) {
   return rotation[(gameIndex + offset) % rotation.length] || DEFAULT_PRESETS[0];
 }
 
+function createDiagnosticsStats() {
+  return {
+    effectSkipped: {
+      total: 0,
+      byReason: {},
+      byCategory: {},
+      byCard: {}
+    },
+    actionRejected: {
+      total: 0,
+      byReason: {},
+      byCategory: {},
+      byAction: {},
+      bySource: {},
+      byCard: {}
+    },
+    fizzled: {
+      total: 0,
+      noValidTarget: 0,
+      byReason: {}
+    },
+    legalButNotChosen: {
+      total: 0,
+      byAction: {},
+      byCard: {}
+    },
+    cards: {},
+    trapClasses: createTrapClassCounters(),
+    damageSources: createDamageSourceCounters(),
+    drawToUseDelay: {
+      total: 0,
+      samples: 0,
+      byCard: {}
+    }
+  };
+}
+
 function createComplexEventCounters(source = {}) {
   return Object.fromEntries(COMPLEX_EVENT_TYPES.map((type) => [type, Math.max(0, Number(source[type]) || 0)]));
+}
+
+function createTrapClassCounters(source = {}) {
+  return Object.fromEntries(["cancelAttack", "redirectTarget", "continueBattle", "other"].map((type) => {
+    const current = source[type] || {};
+    return [type, {
+      activated: Math.max(0, Number(current.activated) || 0),
+      resolved: Math.max(0, Number(current.resolved) || 0),
+      skipped: Math.max(0, Number(current.skipped) || 0),
+      negated: Math.max(0, Number(current.negated) || 0)
+    }];
+  }));
+}
+
+function createDamageSourceCounters(source = {}) {
+  return Object.fromEntries(DAMAGE_SOURCE_TYPES.map((type) => [type, createDamageSourceCounter(source[type])]));
+}
+
+function createDamageSourceCounter(source = {}) {
+  return {
+    events: Math.max(0, Number(source?.events) || 0),
+    requested: Math.max(0, Number(source?.requested) || 0),
+    shieldBlocked: Math.max(0, Number(source?.shieldBlocked) || 0),
+    dealt: Math.max(0, Number(source?.dealt) || 0)
+  };
 }
 
 function createExpansionCardCounters() {
@@ -1118,6 +1303,224 @@ function createExpansionCardCounter(cardId) {
     activated: 0,
     resolved: 0
   };
+}
+
+function recordEffectSkipped(stats, cards, event) {
+  const reason = event.reason || "skipped";
+  const category = categorizeDiagnosticReason(reason);
+  const templateId = templateIdForCard(cards, event.cardId) || event.cardId || "unknown";
+  stats.diagnostics.effectSkipped.total += 1;
+  incrementCount(stats.diagnostics.effectSkipped.byReason, reason);
+  incrementCount(stats.diagnostics.effectSkipped.byCategory, category);
+  if (templateId !== "unknown") {
+    incrementCount(stats.diagnostics.effectSkipped.byCard, templateId);
+  }
+  const cardDiagnostics = ensureCardDiagnostics(stats.diagnostics, cards, event.cardId, templateId);
+  cardDiagnostics.skipped += 1;
+  cardDiagnostics.fizzled += 1;
+  incrementCount(cardDiagnostics.skippedReasons, reason);
+  incrementCardCategory(cardDiagnostics, category);
+  incrementCount(stats.diagnostics.fizzled.byReason, reason);
+  stats.diagnostics.fizzled.total += 1;
+  if (category === "no-valid-target") {
+    stats.diagnostics.fizzled.noValidTarget += 1;
+  }
+  recordTrapClassResolution(stats, cards, event.cardId, category === "negated" ? "negated" : "skipped");
+}
+
+function recordTrapClassActivation(stats, cards, cardId) {
+  const trapClass = trapClassForCard(cards?.[cardId]);
+  stats.diagnostics.trapClasses[trapClass].activated += 1;
+}
+
+function recordTrapClassResolution(stats, cards, cardId, field) {
+  const card = cards?.[cardId];
+  if (card?.type !== "trap" && !card?.trigger) return;
+  const trapClass = trapClassForCard(card);
+  stats.diagnostics.trapClasses[trapClass][field] += 1;
+}
+
+function trapClassForCard(card) {
+  return TRAP_CLASS_BY_TRIGGER[card?.trigger] || "other";
+}
+
+function recordDamageSource(stats, event, action = null) {
+  const type = damageSourceType(event, action);
+  const entry = stats.diagnostics.damageSources[type] || stats.diagnostics.damageSources.unknown;
+  entry.events += 1;
+  entry.requested += Math.max(0, Number(event.requested) || Number(event.amount) || 0);
+  entry.shieldBlocked += Math.max(0, Number(event.blocked) || 0);
+  entry.dealt += Math.max(0, Number(event.amount) || 0);
+}
+
+function damageSourceType(event, action = null) {
+  if ((action?.type === "DRAW_CARDS" || action?.type === "RESOLVE_TURN_DRAW") && !event.sourceCardId) {
+    return "deckOut";
+  }
+  if (action?.type === "RESOLVE_BATTLE" && event.sourceCardId && event.sourceCardId === action.attackerCardId) {
+    return "battle";
+  }
+  if (event.sourceCardId) return "effect";
+  return "unknown";
+}
+
+function recordDrawToUseDelay(stats, cards, cardId, eventId) {
+  if (!cardId || stats._cardDelayRecorded[cardId]) return;
+  const firstSeenEventId = stats._cardFirstSeenEventIds[cardId];
+  if (firstSeenEventId == null || eventId == null) return;
+  const delay = Math.max(0, Number(eventId) - Number(firstSeenEventId));
+  const templateId = templateIdForCard(cards, cardId) || cardId;
+  stats._cardDelayRecorded[cardId] = true;
+  stats.diagnostics.drawToUseDelay.total += delay;
+  stats.diagnostics.drawToUseDelay.samples += 1;
+  const byCard = stats.diagnostics.drawToUseDelay.byCard[templateId] ||= { total: 0, samples: 0 };
+  byCard.total += delay;
+  byCard.samples += 1;
+  const cardDiagnostics = ensureCardDiagnostics(stats.diagnostics, cards, cardId, templateId);
+  cardDiagnostics.drawToUseDelay.total += delay;
+  cardDiagnostics.drawToUseDelay.samples += 1;
+}
+
+function recordLegalActionOptions(stats, entries, chosenAction, state) {
+  if (!stats || !Array.isArray(entries)) return;
+  for (const entry of entries) {
+    const action = entry?.action;
+    if (!action?.cardId) continue;
+    if (chosenAction && sameActionIdentity(action, chosenAction)) continue;
+    const templateId = templateIdForCard(state?.cards || {}, action.cardId) || action.cardId;
+    stats.diagnostics.legalButNotChosen.total += 1;
+    incrementCount(stats.diagnostics.legalButNotChosen.byAction, action.type || "unknown");
+    incrementCount(stats.diagnostics.legalButNotChosen.byCard, templateId);
+    const cardDiagnostics = ensureCardDiagnostics(stats.diagnostics, state?.cards || {}, action.cardId, templateId);
+    cardDiagnostics.legalButNotChosen += 1;
+  }
+}
+
+function sameActionIdentity(left, right) {
+  return left?.type === right?.type &&
+    (left.cardId || null) === (right.cardId || null) &&
+    (left.attackerCardId || null) === (right.attackerCardId || null) &&
+    (left.targetCardId || null) === (right.targetCardId || null);
+}
+
+function ensureCardDiagnostics(diagnostics, cards, cardId, fallbackTemplateId = null) {
+  const templateId = templateIdForCard(cards, cardId) || fallbackTemplateId || "unknown";
+  if (!diagnostics.cards[templateId]) {
+    const template = library.find((entry) => entry.id === templateId) || cards?.[cardId] || { id: templateId, name: templateId, type: "unknown" };
+    diagnostics.cards[templateId] = {
+      id: templateId,
+      name: template.name || templateId,
+      type: template.type || "unknown",
+      skipped: 0,
+      rejected: 0,
+      fizzled: 0,
+      noValidTarget: 0,
+      conditionNotMet: 0,
+      timingWindowMismatch: 0,
+      negated: 0,
+      resourceUnavailable: 0,
+      legalButNotChosen: 0,
+      skippedReasons: {},
+      rejectedReasons: {},
+      rejectedCategories: {},
+      drawToUseDelay: { total: 0, samples: 0 }
+    };
+  }
+  return diagnostics.cards[templateId];
+}
+
+function incrementCardCategory(cardDiagnostics, category) {
+  if (category === "no-valid-target") cardDiagnostics.noValidTarget += 1;
+  else if (category === "condition-not-met") cardDiagnostics.conditionNotMet += 1;
+  else if (category === "timing-window-mismatch") cardDiagnostics.timingWindowMismatch += 1;
+  else if (category === "negated") cardDiagnostics.negated += 1;
+  else if (category === "resource-unavailable") cardDiagnostics.resourceUnavailable += 1;
+}
+
+function categorizeDiagnosticReason(reason = "") {
+  const text = String(reason).toLowerCase();
+  if (/negated|无效/.test(text)) return "negated";
+  if (/no valid target|target .*not|requires action\.targetcardid|target-left|没有可|no .*target|redirect target/.test(text)) return "no-valid-target";
+  if (/requires|need|条件|至少|element|distinct|min|not enough/.test(text)) return "condition-not-met";
+  if (/zone is full|full|空间不足|已满|normal summon already used/.test(text)) return "resource-unavailable";
+  if (/not legal during|cannot .* while|response window|current .* belongs|must join|wrong phase|timing|turn/.test(text)) return "timing-window-mismatch";
+  return "fizzled";
+}
+
+function finalizeDiagnostics(stats) {
+  const diagnostics = stats?.diagnostics || createDiagnosticsStats();
+  return {
+    effectSkipped: {
+      total: diagnostics.effectSkipped.total,
+      byReason: sortCounts(diagnostics.effectSkipped.byReason),
+      byCategory: sortCounts(diagnostics.effectSkipped.byCategory),
+      byCard: sortCounts(diagnostics.effectSkipped.byCard)
+    },
+    actionRejected: {
+      total: diagnostics.actionRejected.total,
+      byReason: sortCounts(diagnostics.actionRejected.byReason),
+      byCategory: sortCounts(diagnostics.actionRejected.byCategory),
+      byAction: sortCounts(diagnostics.actionRejected.byAction),
+      bySource: sortCounts(diagnostics.actionRejected.bySource),
+      byCard: sortCounts(diagnostics.actionRejected.byCard)
+    },
+    fizzled: {
+      total: diagnostics.fizzled.total,
+      noValidTarget: diagnostics.fizzled.noValidTarget,
+      byReason: sortCounts(diagnostics.fizzled.byReason)
+    },
+    legalButNotChosen: {
+      total: diagnostics.legalButNotChosen.total,
+      byAction: sortCounts(diagnostics.legalButNotChosen.byAction),
+      byCard: sortCounts(diagnostics.legalButNotChosen.byCard)
+    },
+    trapClasses: createTrapClassCounters(diagnostics.trapClasses),
+    damageSources: createDamageSourceCounters(diagnostics.damageSources),
+    drawToUseDelay: finalizeDelay(diagnostics.drawToUseDelay),
+    cards: finalizeCardDiagnostics(diagnostics.cards)
+  };
+}
+
+function finalizeDelay(entry = {}) {
+  const samples = Math.max(0, Number(entry.samples) || 0);
+  const result = {
+    samples,
+    averageEvents: average(entry.total, samples),
+    byCard: {}
+  };
+  for (const [cardId, cardEntry] of Object.entries(entry.byCard || {})) {
+    result.byCard[cardId] = {
+      samples: Math.max(0, Number(cardEntry.samples) || 0),
+      averageEvents: average(cardEntry.total, cardEntry.samples)
+    };
+  }
+  return result;
+}
+
+function finalizeCardDiagnostics(cards = {}) {
+  return Object.fromEntries(Object.entries(cards)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([cardId, entry]) => [cardId, {
+      id: entry.id,
+      name: entry.name,
+      type: entry.type,
+      skipped: entry.skipped,
+      rejected: entry.rejected,
+      fizzled: entry.fizzled,
+      noValidTarget: entry.noValidTarget,
+      conditionNotMet: entry.conditionNotMet,
+      timingWindowMismatch: entry.timingWindowMismatch,
+      negated: entry.negated,
+      resourceUnavailable: entry.resourceUnavailable,
+      legalButNotChosen: entry.legalButNotChosen,
+      skippedReasons: sortCounts(entry.skippedReasons),
+      rejectedReasons: sortCounts(entry.rejectedReasons),
+      rejectedCategories: sortCounts(entry.rejectedCategories),
+      drawToUseDelay: {
+        samples: Math.max(0, Number(entry.drawToUseDelay.samples) || 0),
+        averageEvents: average(entry.drawToUseDelay.total, entry.drawToUseDelay.samples)
+      }
+    }]));
 }
 
 function templateIdForCard(cards, cardId) {

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   createBalanceStats,
   finalizeBalanceReport,
+  recordBalanceActionRejected,
   recordBalanceEvents,
   recordBalanceGameResult,
   simulateChainTrapScenario,
@@ -130,6 +131,121 @@ test("balance report handles empty samples", () => {
   assert.equal(report.winRates.ai, 0);
   assert.equal(report.averages.turns, 0);
   assert.equal(report.expansion01["star-soul-apprentice"].appeared, 0);
+  assert.equal(report.diagnostics.effectSkipped.total, 0);
+  assert.equal(report.diagnostics.actionRejected.total, 0);
+  assert.equal(report.diagnostics.drawToUseDelay.samples, 0);
+});
+
+test("diagnostics accumulate skipped rejected fizzled and per-card causes", () => {
+  const stats = createBalanceStats();
+  const state = {
+    cards: {
+      bulwark: { id: "bulwark", templateId: "rift-bulwark", name: "裂隙壁卫", type: "monster" },
+      parry: { id: "parry", templateId: "soul-parry", name: "星魂格挡", type: "trap", trigger: "soulParry" },
+      resonance: { id: "resonance", templateId: "soul-resonance", name: "星魂共鸣", type: "spell" }
+    }
+  };
+
+  recordBalanceEvents(stats, [
+    {
+      id: 1,
+      type: "EFFECT_SKIPPED",
+      cardId: "bulwark",
+      effectId: "riftShelter",
+      reason: "Effect riftShelter requires at least 2 shadow monsters"
+    },
+    {
+      id: 2,
+      type: "EFFECT_SKIPPED",
+      cardId: "parry",
+      effectId: "soulParry",
+      reason: "negated"
+    }
+  ], { state });
+  recordBalanceActionRejected(stats, { type: "ACTIVATE_CARD", cardId: "resonance" }, "no valid target", { state, category: "no-valid-target" });
+
+  const report = finalizeBalanceReport(stats);
+  assert.equal(report.diagnostics.effectSkipped.total, 2);
+  assert.equal(report.diagnostics.effectSkipped.byCategory["condition-not-met"], 1);
+  assert.equal(report.diagnostics.effectSkipped.byCategory.negated, 1);
+  assert.equal(report.diagnostics.actionRejected.total, 1);
+  assert.equal(report.diagnostics.actionRejected.byCategory["no-valid-target"], 1);
+  assert.equal(report.diagnostics.fizzled.total, 2);
+  assert.equal(report.diagnostics.cards["rift-bulwark"].conditionNotMet, 1);
+  assert.equal(report.diagnostics.cards["soul-parry"].negated, 1);
+  assert.equal(report.diagnostics.cards["soul-resonance"].noValidTarget, 1);
+});
+
+test("diagnostics classify redirected traps and target-change events", () => {
+  const stats = createBalanceStats();
+  const state = {
+    cards: {
+      switch: { id: "switch", templateId: "phantom-switch", name: "幻影换位", type: "trap", trigger: "redirectAttack" },
+      oldTarget: { id: "oldTarget", templateId: "dusk-alchemist", type: "monster" },
+      newTarget: { id: "newTarget", templateId: "iron-guardian", type: "monster" }
+    }
+  };
+
+  recordBalanceEvents(stats, [
+    { id: 1, type: "CARD_ACTIVATED", cardId: "switch", cardType: "trap" },
+    {
+      id: 2,
+      type: "ATTACK_TARGET_CHANGED",
+      sourceCardId: "switch",
+      fromTargetCardId: "oldTarget",
+      toTargetCardId: "newTarget"
+    },
+    { id: 3, type: "CHAIN_LINK_RESOLVED", cardId: "switch", skipped: false }
+  ], { state });
+
+  const report = finalizeBalanceReport(stats);
+  assert.equal(report.complexBattleEvents.ATTACK_TARGET_CHANGED, 1);
+  assert.equal(report.diagnostics.trapClasses.redirectTarget.activated, 1);
+  assert.equal(report.diagnostics.trapClasses.redirectTarget.resolved, 1);
+});
+
+test("diagnostics accumulate damage source distribution", () => {
+  const stats = createBalanceStats();
+  const state = {
+    cards: {
+      attacker: { id: "attacker", templateId: "star-lancer", type: "monster" },
+      spell: { id: "spell", templateId: "burst-rune", type: "spell" }
+    }
+  };
+
+  recordBalanceEvents(stats, [
+    { id: 1, type: "DAMAGE_DEALT", sourceCardId: "attacker", requested: 900, blocked: 200, amount: 700 }
+  ], { state, action: { type: "RESOLVE_BATTLE", attackerCardId: "attacker" } });
+  recordBalanceEvents(stats, [
+    { id: 2, type: "DAMAGE_DEALT", sourceCardId: "spell", requested: 500, blocked: 0, amount: 500 }
+  ], { state, action: { type: "ACTIVATE_CARD", cardId: "spell" } });
+  recordBalanceEvents(stats, [
+    { id: 3, type: "DAMAGE_DEALT", requested: 500, blocked: 100, amount: 400 }
+  ], { state, action: { type: "RESOLVE_TURN_DRAW" } });
+
+  const damage = finalizeBalanceReport(stats).diagnostics.damageSources;
+  assert.deepEqual(damage.battle, { events: 1, requested: 900, shieldBlocked: 200, dealt: 700 });
+  assert.deepEqual(damage.effect, { events: 1, requested: 500, shieldBlocked: 0, dealt: 500 });
+  assert.deepEqual(damage.deckOut, { events: 1, requested: 500, shieldBlocked: 100, dealt: 400 });
+});
+
+test("diagnostics track draw-to-use delay in event distance", () => {
+  const stats = createBalanceStats();
+  const state = {
+    cards: {
+      resonance: { id: "resonance", templateId: "soul-resonance", name: "星魂共鸣", type: "spell" }
+    }
+  };
+
+  recordBalanceEvents(stats, [
+    { id: 2, type: "CARDS_DRAWN", cardIds: ["resonance"] },
+    { id: 7, type: "CARD_ACTIVATED", cardId: "resonance", cardType: "spell" }
+  ], { state });
+
+  const delay = finalizeBalanceReport(stats).diagnostics.drawToUseDelay;
+  assert.equal(delay.samples, 1);
+  assert.equal(delay.averageEvents, 5);
+  assert.equal(delay.byCard["soul-resonance"].averageEvents, 5);
 });
 
 test("balance report records max step truncation", () => {
