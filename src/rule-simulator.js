@@ -15,17 +15,45 @@ const PLAYER = "player";
 const AI = "ai";
 const PLAYER_IDS = Object.freeze([PLAYER, AI]);
 const DEFAULT_PRESETS = Object.freeze(["balanced", "aggressive", "control"]);
+const COMPLEX_EVENT_TYPES = Object.freeze([
+  "ATTACK_DECLARED",
+  "ATTACK_TARGET_CHANGED",
+  "BATTLE_RESOLVED",
+  "DAMAGE_DEALT",
+  "CARD_DESTROYED",
+  "TRAP_ACTIVATED",
+  "CHAIN_RESOLVED"
+]);
+const EXPANSION_CARD_IDS = Object.freeze([
+  "star-soul-apprentice",
+  "rift-bulwark",
+  "soul-resonance",
+  "soul-parry"
+]);
+const EXPANSION_SUCCESS_EVENT_TYPES = Object.freeze({
+  "star-soul-apprentice": new Set(["CARDS_DRAWN"]),
+  "rift-bulwark": new Set(["SHIELD_GAINED"]),
+  "soul-resonance": new Set(["STAT_MODIFIED"]),
+  "soul-parry": new Set(["STAT_MODIFIED", "SHIELD_GAINED"])
+});
+const ATTACK_RESPONSE_TRIGGERS = new Set(["attackDestroy", "weakenAttack", "redirectAttack", "soulParry"]);
 
 export function simulateRandomDuels({
   games = 10,
   seed = "rule-simulator",
   maxStepsPerGame = 240,
-  openingHandSize = 5
+  openingHandSize = 5,
+  playerPreset = null,
+  aiPreset = null,
+  presets = null
 } = {}) {
   const rng = createSeededRandom(seed);
+  const presetConfig = normalizePresetConfig({ playerPreset, aiPreset, presets });
+  const balanceStats = createBalanceStats();
   const summary = {
     seed,
     games,
+    presets: presetConfig.report,
     completedGames: 0,
     gameOvers: 0,
     maxStepsReached: 0,
@@ -42,7 +70,9 @@ export function simulateRandomDuels({
         gameIndex,
         rng,
         maxStepsPerGame,
-        openingHandSize
+        openingHandSize,
+        presetConfig,
+        balanceStats
       });
       summary.completedGames += 1;
       summary.totalSteps += game.steps;
@@ -51,12 +81,224 @@ export function simulateRandomDuels({
       if (game.endedBy === "stepLimit") summary.maxStepsReached += 1;
       mergeCounts(summary.actions, game.actions);
       mergeCounts(summary.eventTypes, game.eventTypes);
+      recordBalanceGameResult(balanceStats, game);
     } catch (error) {
       summary.failures.push(serializeSimulationError(error, gameIndex));
+      recordBalanceFailure(balanceStats, error);
     }
   }
 
+  summary.balanceReport = finalizeBalanceReport(balanceStats);
   return summary;
+}
+
+export function createBalanceStats() {
+  return {
+    totalGames: 0,
+    completedGames: 0,
+    playerWins: 0,
+    aiWins: 0,
+    noWinnerGames: 0,
+    totalTurns: 0,
+    totalSpellActivations: 0,
+    totalTrapActivations: 0,
+    totalAttackDeclarations: 0,
+    totalBattleResolutions: 0,
+    totalDamageDealt: 0,
+    deckOuts: 0,
+    deckOutCardsMissing: 0,
+    maxStepTruncations: 0,
+    gameOverReasons: {},
+    abnormalEndReasons: {},
+    complexEvents: createComplexEventCounters(),
+    attackTargetMismatches: 0,
+    expansionCards: createExpansionCardCounters(),
+    _attackDeclarations: {}
+  };
+}
+
+export function recordBalanceEvents(stats, events, { state = null } = {}) {
+  if (!stats || !Array.isArray(events)) return stats;
+  const cards = state?.cards || {};
+  const successfulExpansionCardIds = new Set();
+
+  for (const event of events) {
+    if (!event?.type) continue;
+    if (Object.hasOwn(stats.complexEvents, event.type)) {
+      stats.complexEvents[event.type] += 1;
+    }
+
+    if (event.type === "TURN_DRAW_RESOLVED") {
+      stats.totalTurns += 1;
+    }
+
+    if (event.type === "CARD_ACTIVATED") {
+      const templateId = templateIdForCard(cards, event.cardId);
+      if (event.cardType === "spell") {
+        stats.totalSpellActivations += 1;
+        if (stats.expansionCards[templateId]) {
+          stats.expansionCards[templateId].activated += 1;
+        }
+      }
+      if (event.cardType === "trap") {
+        stats.totalTrapActivations += 1;
+        stats.complexEvents.TRAP_ACTIVATED += 1;
+        if (stats.expansionCards[templateId]) {
+          stats.expansionCards[templateId].activated += 1;
+        }
+      }
+    }
+
+    if (event.type === "MONSTER_SUMMONED") {
+      const templateId = templateIdForCard(cards, event.cardId);
+      if (stats.expansionCards[templateId]) {
+        stats.expansionCards[templateId].summoned += 1;
+      }
+    }
+
+    if (event.type === "CARDS_DRAWN") {
+      for (const cardId of event.cardIds || []) {
+        const templateId = templateIdForCard(cards, cardId);
+        if (stats.expansionCards[templateId]) {
+          stats.expansionCards[templateId].appeared += 1;
+        }
+      }
+    }
+
+    if (event.type === "ATTACK_DECLARED") {
+      stats.totalAttackDeclarations += 1;
+      stats._attackDeclarations[String(event.id)] = event.targetCardId || null;
+    }
+
+    if (event.type === "BATTLE_RESOLVED") {
+      stats.totalBattleResolutions += 1;
+      const declarationId = event.declarationEventId == null ? null : String(event.declarationEventId);
+      if (declarationId && Object.hasOwn(stats._attackDeclarations, declarationId)) {
+        const declaredTargetCardId = stats._attackDeclarations[declarationId] || null;
+        const finalTargetCardId = event.targetCardId || null;
+        if (declaredTargetCardId !== finalTargetCardId) {
+          stats.attackTargetMismatches += 1;
+        }
+        delete stats._attackDeclarations[declarationId];
+      }
+    }
+
+    if (event.type === "DAMAGE_DEALT") {
+      stats.totalDamageDealt += Math.max(0, Number(event.amount) || 0);
+    }
+
+    if (event.type === "DRAW_FAILED") {
+      stats.deckOuts += 1;
+      stats.deckOutCardsMissing += Math.max(0, Number(event.missing) || 0);
+    }
+
+    if (event.type === "CHAIN_LINK_RESOLVED" && !event.skipped) {
+      const templateId = templateIdForCard(cards, event.cardId);
+      if (templateId === "soul-parry") {
+        successfulExpansionCardIds.add(event.cardId);
+      }
+    }
+
+    if (event.sourceCardId) {
+      const templateId = templateIdForCard(cards, event.sourceCardId);
+      if (EXPANSION_SUCCESS_EVENT_TYPES[templateId]?.has(event.type)) {
+        successfulExpansionCardIds.add(event.sourceCardId);
+      }
+    }
+  }
+
+  for (const cardId of successfulExpansionCardIds) {
+    const templateId = templateIdForCard(cards, cardId);
+    if (stats.expansionCards[templateId]) {
+      stats.expansionCards[templateId].resolved += 1;
+    }
+  }
+
+  return stats;
+}
+
+export function recordBalanceGameResult(stats, game = {}) {
+  if (!stats) return stats;
+  stats.totalGames += 1;
+  stats.completedGames += 1;
+
+  if (game.endedBy === "gameOver") {
+    const winnerId = game.winnerId || null;
+    if (winnerId === PLAYER) stats.playerWins += 1;
+    else if (winnerId === AI) stats.aiWins += 1;
+    else stats.noWinnerGames += 1;
+    incrementCount(stats.gameOverReasons, game.gameOverReason || "unknown");
+    return stats;
+  }
+
+  stats.noWinnerGames += 1;
+  if (game.endedBy === "stepLimit") {
+    stats.maxStepTruncations += 1;
+    incrementCount(stats.abnormalEndReasons, "stepLimit");
+  } else {
+    incrementCount(stats.abnormalEndReasons, game.endedBy || "unknown");
+  }
+  return stats;
+}
+
+export function finalizeBalanceReport(stats = createBalanceStats()) {
+  const totalGames = Math.max(0, Number(stats.totalGames) || 0);
+  const averageDenominator = totalGames || 0;
+  const reportExpansionCards = {};
+  for (const cardId of EXPANSION_CARD_IDS) {
+    const entry = stats.expansionCards?.[cardId] || createExpansionCardCounter(cardId);
+    reportExpansionCards[cardId] = {
+      id: entry.id,
+      name: entry.name,
+      type: entry.type,
+      appeared: entry.appeared,
+      summoned: entry.summoned,
+      activated: entry.activated,
+      resolved: entry.resolved
+    };
+  }
+
+  return {
+    totalGames,
+    completedGames: Math.max(0, Number(stats.completedGames) || 0),
+    wins: {
+      player: Math.max(0, Number(stats.playerWins) || 0),
+      ai: Math.max(0, Number(stats.aiWins) || 0),
+      none: Math.max(0, Number(stats.noWinnerGames) || 0)
+    },
+    winRates: {
+      player: ratio(stats.playerWins, totalGames),
+      ai: ratio(stats.aiWins, totalGames)
+    },
+    averages: {
+      turns: average(stats.totalTurns, averageDenominator),
+      spellsActivated: average(stats.totalSpellActivations, averageDenominator),
+      trapsActivated: average(stats.totalTrapActivations, averageDenominator),
+      attackDeclarations: average(stats.totalAttackDeclarations, averageDenominator),
+      battleResolutions: average(stats.totalBattleResolutions, averageDenominator),
+      damageDealt: average(stats.totalDamageDealt, averageDenominator)
+    },
+    totals: {
+      turns: Math.max(0, Number(stats.totalTurns) || 0),
+      spellsActivated: Math.max(0, Number(stats.totalSpellActivations) || 0),
+      trapsActivated: Math.max(0, Number(stats.totalTrapActivations) || 0),
+      attackDeclarations: Math.max(0, Number(stats.totalAttackDeclarations) || 0),
+      battleResolutions: Math.max(0, Number(stats.totalBattleResolutions) || 0),
+      damageDealt: Math.max(0, Number(stats.totalDamageDealt) || 0),
+      deckOuts: Math.max(0, Number(stats.deckOuts) || 0),
+      deckOutCardsMissing: Math.max(0, Number(stats.deckOutCardsMissing) || 0),
+      maxStepTruncations: Math.max(0, Number(stats.maxStepTruncations) || 0)
+    },
+    deckOuts: Math.max(0, Number(stats.deckOuts) || 0),
+    maxStepTruncations: Math.max(0, Number(stats.maxStepTruncations) || 0),
+    gameOverReasons: sortCounts(stats.gameOverReasons),
+    abnormalEndReasons: sortCounts(stats.abnormalEndReasons),
+    expansion01: reportExpansionCards,
+    complexBattleEvents: {
+      ...createComplexEventCounters(stats.complexEvents),
+      attackDeclaredTargetFinalDefenderMismatches: Math.max(0, Number(stats.attackTargetMismatches) || 0)
+    }
+  };
 }
 
 export function simulateChainTrapScenario() {
@@ -143,8 +385,8 @@ export function simulateChainTrapScenario() {
   }
 }
 
-function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSize }) {
-  const state = createRandomDuelState({ gameIndex, rng });
+function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSize, presetConfig, balanceStats }) {
+  const state = createRandomDuelState({ gameIndex, rng, presetConfig });
   const engine = new GameEngine(state);
   const trace = [];
   const actionCounts = {};
@@ -159,7 +401,7 @@ function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSiz
       playerId,
       count: openingHandSize,
       reason: "opening"
-    }, { trace, actionCounts, eventCounts, context });
+    }, { trace, actionCounts, eventCounts, context, balanceStats });
     eventCount += events.length;
   }
 
@@ -169,10 +411,13 @@ function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSiz
     if (current.gameOver) {
       return {
         endedBy: "gameOver",
+        winnerId: current.gameOver.winnerId || null,
+        gameOverReason: current.gameOver.reason || null,
         steps,
         events: eventCount,
         actions: actionCounts,
-        eventTypes: eventCounts
+        eventTypes: eventCounts,
+        presets: state.presets || null
       };
     }
 
@@ -184,21 +429,25 @@ function simulateOneRandomDuel({ gameIndex, rng, maxStepsPerGame, openingHandSiz
       });
     }
 
-    const events = dispatchSimulatedAction(engine, action, { trace, actionCounts, eventCounts, context });
+    const events = dispatchSimulatedAction(engine, action, { trace, actionCounts, eventCounts, context, balanceStats });
     eventCount += events.length;
     steps += 1;
   }
 
+  const finalState = engine.getState();
   return {
-    endedBy: engine.getState().gameOver ? "gameOver" : "stepLimit",
+    endedBy: finalState.gameOver ? "gameOver" : "stepLimit",
+    winnerId: finalState.gameOver?.winnerId || null,
+    gameOverReason: finalState.gameOver?.reason || null,
     steps,
     events: eventCount,
     actions: actionCounts,
-    eventTypes: eventCounts
+    eventTypes: eventCounts,
+    presets: state.presets || null
   };
 }
 
-function dispatchSimulatedAction(engine, action, { trace, actionCounts, eventCounts, context }) {
+function dispatchSimulatedAction(engine, action, { trace, actionCounts, eventCounts, context, balanceStats = null }) {
   try {
     const events = engine.dispatch(action);
     const state = engine.getState();
@@ -209,6 +458,7 @@ function dispatchSimulatedAction(engine, action, { trace, actionCounts, eventCou
     for (const event of events) {
       eventCounts[event.type] = (eventCounts[event.type] || 0) + 1;
     }
+    recordBalanceEvents(balanceStats, events, { state });
     updateSimulationContext(context, events, action);
     trace.push({
       action: clone(action),
@@ -435,14 +685,10 @@ function responseWindowAction(state, rng, context) {
     return { type: "RESOLVE_CHAIN", playerId };
   }
 
-  const trap = attackResponseTrap(state, playerId, window.context || {});
-  if (trap && rng() < 0.8) {
-    return {
-      type: "ADD_CHAIN_LINK",
-      playerId,
-      cardId: trap.id,
-      effectId: trap.trigger
-    };
+  const trapAction = chooseWeightedAction(attackResponseTrapActions(state, playerId, window.context || {})
+    .map((action) => ({ weight: 1, action })), rng);
+  if (trapAction && rng() < 0.8) {
+    return trapAction;
   }
   return { type: "CLOSE_RESPONSE_WINDOW", playerId, reason: "sim-pass" };
 }
@@ -459,24 +705,39 @@ function activateQueuedTrapAction(state, link, context) {
     action.attackerCardId = context?.pendingBattle?.attackerCardId ||
       state.machine.responseWindow?.context?.attackerCardId;
   }
+  if (card?.trigger === "soulParry" || card?.trigger === "attackDestroy" || card?.trigger === "redirectAttack") {
+    action.attackerCardId = context?.pendingBattle?.attackerCardId ||
+      state.machine.responseWindow?.context?.attackerCardId;
+  }
+  if (card?.trigger === "redirectAttack") {
+    const targetCardId = redirectAttackTargetCandidate(state, link.playerId, context?.pendingBattle || state.machine.responseWindow?.context || {});
+    if (targetCardId) action.targetCardId = targetCardId;
+  }
   if (card?.trigger === "chainNegate") {
+    action.targetEffectId = link.targetEffectId;
+  }
+  if (link.targetEffectId && !action.targetEffectId) {
     action.targetEffectId = link.targetEffectId;
   }
   return action;
 }
 
-function attackResponseTrap(state, playerId, responseContext) {
-  if (responseContext.direct) return null;
+function attackResponseTrapActions(state, playerId, responseContext) {
+  if (responseContext.direct) return [];
   const player = state.players[playerId];
-  const trapId = player?.spellTrapZone.find((cardId) => state.cards[cardId]?.trigger === "weakenAttack");
-  if (!trapId) return null;
-  const action = {
-    type: "ADD_CHAIN_LINK",
-    playerId,
-    cardId: trapId,
-    effectId: state.cards[trapId].trigger
-  };
-  return canDispatch(state, action) ? state.cards[trapId] : null;
+  if (!player) return [];
+  return player.spellTrapZone
+    .map((cardId) => state.cards[cardId])
+    .filter((card) => card?.type === "trap" && ATTACK_RESPONSE_TRIGGERS.has(card.trigger))
+    .filter((card) => card.trigger !== "redirectAttack" || redirectAttackTargetCandidate(state, playerId, responseContext))
+    .map((card) => ({
+      type: "ADD_CHAIN_LINK",
+      playerId,
+      cardId: card.id,
+      effectId: card.trigger,
+      targetEffectId: state.machine.responseWindow?.triggerEventId || null
+    }))
+    .filter((action) => canDispatch(state, action));
 }
 
 function chainNegateTrap(state, playerId, targetEffectId) {
@@ -529,7 +790,14 @@ function updateSimulationContext(context, events, action) {
       declarationEventId: declared.id
     };
   }
-  if (events.some((event) => event.type === "BATTLE_RESOLVED" || event.type === "TURN_ENDED" || event.type === "TURN_STARTED")) {
+  const redirected = events.find((event) => event.type === "ATTACK_TARGET_CHANGED");
+  if (redirected && context.pendingBattle) {
+    if (!redirected.declarationEventId || String(redirected.declarationEventId) === String(context.pendingBattle.declarationEventId)) {
+      context.pendingBattle.targetCardId = redirected.toTargetCardId || redirected.targetCardId || null;
+      context.pendingBattle.direct = false;
+    }
+  }
+  if (events.some((event) => event.type === "BATTLE_RESOLVED" || event.type === "ATTACK_CANCELED" || event.type === "TURN_ENDED" || event.type === "TURN_STARTED")) {
     context.pendingBattle = null;
   }
   if (action.type === "SKIP_REMAINING_ATTACKS") {
@@ -559,13 +827,17 @@ function chooseWeightedAction(entries, rng) {
   return candidates.at(-1).action;
 }
 
-function createRandomDuelState({ gameIndex, rng }) {
-  const playerPreset = DEFAULT_PRESETS[gameIndex % DEFAULT_PRESETS.length];
-  const aiPreset = DEFAULT_PRESETS[(gameIndex + 1) % DEFAULT_PRESETS.length];
+function createRandomDuelState({ gameIndex, rng, presetConfig = normalizePresetConfig() }) {
+  const playerPreset = presetForGame(presetConfig, "player", gameIndex);
+  const aiPreset = presetForGame(presetConfig, "ai", gameIndex);
   const cards = {};
   const playerDeck = createDeckCards({ ownerId: PLAYER, presetId: playerPreset, prefix: `g${gameIndex}-p`, rng, cards });
   const aiDeck = createDeckCards({ ownerId: AI, presetId: aiPreset, prefix: `g${gameIndex}-a`, rng, cards });
   return {
+    presets: {
+      player: playerPreset,
+      ai: aiPreset
+    },
     cards,
     players: {
       [PLAYER]: basePlayer(PLAYER, playerDeck),
@@ -773,12 +1045,124 @@ function serializeSimulationError(error, gameIndex) {
   };
 }
 
+function recordBalanceFailure(stats, error) {
+  if (!stats) return stats;
+  stats.totalGames += 1;
+  incrementCount(stats.abnormalEndReasons, `failure:${error.name || "Error"}`);
+  return stats;
+}
+
 function simulationError(message, details = {}) {
   const error = new Error(message);
   error.name = "RuleSimulationError";
   error.details = details;
   if (details.cause) error.cause = details.cause;
   return error;
+}
+
+function normalizePresetConfig({ playerPreset = null, aiPreset = null, presets = null } = {}) {
+  const rotation = normalizePresetList(presets);
+  const fixedPlayerPreset = normalizePresetId(playerPreset);
+  const fixedAiPreset = normalizePresetId(aiPreset);
+  return {
+    playerPreset: fixedPlayerPreset,
+    aiPreset: fixedAiPreset,
+    rotation,
+    report: {
+      player: fixedPlayerPreset || "rotation",
+      ai: fixedAiPreset || "rotation",
+      rotation
+    }
+  };
+}
+
+function normalizePresetList(presets) {
+  const rawList = Array.isArray(presets)
+    ? presets
+    : typeof presets === "string"
+      ? presets.split(",")
+      : DEFAULT_PRESETS;
+  const normalized = rawList.map(normalizePresetId).filter(Boolean);
+  return normalized.length > 0 ? normalized : DEFAULT_PRESETS.slice();
+}
+
+function normalizePresetId(presetId) {
+  const text = String(presetId || "").trim();
+  return deckPresets[text] ? text : null;
+}
+
+function presetForGame(config, playerId, gameIndex) {
+  if (playerId === PLAYER && config?.playerPreset) return config.playerPreset;
+  if (playerId === AI && config?.aiPreset) return config.aiPreset;
+  const rotation = config?.rotation?.length ? config.rotation : DEFAULT_PRESETS;
+  const offset = playerId === AI ? 1 : 0;
+  return rotation[(gameIndex + offset) % rotation.length] || DEFAULT_PRESETS[0];
+}
+
+function createComplexEventCounters(source = {}) {
+  return Object.fromEntries(COMPLEX_EVENT_TYPES.map((type) => [type, Math.max(0, Number(source[type]) || 0)]));
+}
+
+function createExpansionCardCounters() {
+  return Object.fromEntries(EXPANSION_CARD_IDS.map((cardId) => [cardId, createExpansionCardCounter(cardId)]));
+}
+
+function createExpansionCardCounter(cardId) {
+  const template = library.find((entry) => entry.id === cardId) || { id: cardId, type: "unknown", name: cardId };
+  return {
+    id: cardId,
+    name: template.name || cardId,
+    type: template.type || "unknown",
+    appeared: 0,
+    summoned: 0,
+    activated: 0,
+    resolved: 0
+  };
+}
+
+function templateIdForCard(cards, cardId) {
+  if (!cardId) return null;
+  const card = cards?.[cardId];
+  return card?.templateId || card?.template || card?.id || cardId;
+}
+
+function redirectAttackTargetCandidate(state, playerId, responseContext = {}) {
+  const player = state.players[playerId];
+  const currentTargetCardId = responseContext.targetCardId || responseContext.toTargetCardId || null;
+  if (!player) return null;
+  const candidates = player.monsterZone
+    .filter((cardId) => cardId !== currentTargetCardId)
+    .map((cardId, index) => ({ cardId, index, card: state.cards[cardId] }))
+    .filter((entry) => entry.card?.type === "monster")
+    .sort((a, b) => totalDef(b.card) - totalDef(a.card) || totalAtk(b.card) - totalAtk(a.card) || a.index - b.index);
+  return candidates[0]?.cardId || null;
+}
+
+function incrementCount(target, key, amount = 1) {
+  const normalizedKey = key || "unknown";
+  target[normalizedKey] = (target[normalizedKey] || 0) + amount;
+}
+
+function sortCounts(counts = {}) {
+  return Object.fromEntries(
+    Object.entries(counts)
+      .filter(([, value]) => Number(value) > 0)
+      .sort(([leftKey, leftValue], [rightKey, rightValue]) => Number(rightValue) - Number(leftValue) || leftKey.localeCompare(rightKey))
+  );
+}
+
+function average(value, denominator) {
+  if (!denominator) return 0;
+  return round2((Number(value) || 0) / denominator);
+}
+
+function ratio(value, denominator) {
+  if (!denominator) return 0;
+  return round2((Number(value) || 0) / denominator);
+}
+
+function round2(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
 }
 
 function mergeCounts(target, source) {
@@ -793,6 +1177,10 @@ function otherPlayerId(playerId) {
 
 function totalAtk(card) {
   return Math.max(0, (Number(card?.atk) || 0) + (Number(card?.tempAtk) || 0));
+}
+
+function totalDef(card) {
+  return Math.max(0, (Number(card?.def) || 0) + (Number(card?.tempDef) || 0));
 }
 
 function shuffle(items, rng) {

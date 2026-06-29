@@ -27,6 +27,13 @@ function parseArgs(args) {
     if (key === "games") options.games = positiveInteger(rawValue, options.games);
     if (key === "seed" && rawValue) options.seed = rawValue;
     if (key === "max-steps") options.maxStepsPerGame = positiveInteger(rawValue, options.maxStepsPerGame);
+    if (key === "preset" && rawValue) {
+      options.playerPreset = rawValue;
+      options.aiPreset = rawValue;
+    }
+    if (key === "player-preset" && rawValue) options.playerPreset = rawValue;
+    if (key === "ai-preset" && rawValue) options.aiPreset = rawValue;
+    if (key === "presets" && rawValue) options.presets = rawValue;
   }
   return options;
 }

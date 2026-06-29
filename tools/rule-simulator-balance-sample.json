@@ -1,0 +1,95 @@
+{
+  "command": "node scripts/rule-simulator.mjs --games=20 --seed=basic-expansion-report --max-steps=260 --preset=basicExpansion",
+  "seed": "basic-expansion-report",
+  "games": 20,
+  "presets": {
+    "player": "basicExpansion",
+    "ai": "basicExpansion"
+  },
+  "balanceReport": {
+    "totalGames": 20,
+    "completedGames": 20,
+    "wins": {
+      "player": 10,
+      "ai": 10,
+      "none": 0
+    },
+    "winRates": {
+      "player": 0.5,
+      "ai": 0.5
+    },
+    "averages": {
+      "turns": 8.4,
+      "spellsActivated": 6.65,
+      "trapsActivated": 1,
+      "attackDeclarations": 6.9,
+      "battleResolutions": 6.6,
+      "damageDealt": 4717.5
+    },
+    "totals": {
+      "turns": 168,
+      "spellsActivated": 133,
+      "trapsActivated": 20,
+      "attackDeclarations": 138,
+      "battleResolutions": 132,
+      "damageDealt": 94350,
+      "deckOuts": 0,
+      "deckOutCardsMissing": 0,
+      "maxStepTruncations": 0
+    },
+    "deckOuts": 0,
+    "maxStepTruncations": 0,
+    "gameOverReasons": {
+      "lp-zero": 20
+    },
+    "abnormalEndReasons": {},
+    "expansion01": {
+      "star-soul-apprentice": {
+        "id": "star-soul-apprentice",
+        "name": "星魂学徒",
+        "type": "monster",
+        "appeared": 14,
+        "summoned": 10,
+        "activated": 0,
+        "resolved": 3
+      },
+      "rift-bulwark": {
+        "id": "rift-bulwark",
+        "name": "裂隙壁卫",
+        "type": "monster",
+        "appeared": 28,
+        "summoned": 12,
+        "activated": 0,
+        "resolved": 1
+      },
+      "soul-resonance": {
+        "id": "soul-resonance",
+        "name": "星魂共鸣",
+        "type": "spell",
+        "appeared": 22,
+        "summoned": 0,
+        "activated": 19,
+        "resolved": 19
+      },
+      "soul-parry": {
+        "id": "soul-parry",
+        "name": "星魂格挡",
+        "type": "trap",
+        "appeared": 21,
+        "summoned": 0,
+        "activated": 7,
+        "resolved": 6
+      }
+    },
+    "complexBattleEvents": {
+      "ATTACK_DECLARED": 138,
+      "ATTACK_TARGET_CHANGED": 0,
+      "BATTLE_RESOLVED": 132,
+      "DAMAGE_DEALT": 136,
+      "CARD_DESTROYED": 78,
+      "TRAP_ACTIVATED": 20,
+      "CHAIN_RESOLVED": 18,
+      "attackDeclaredTargetFinalDefenderMismatches": 0
+    }
+  }
+}
