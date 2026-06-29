@@ -116,6 +116,49 @@ test("seer-call draws two cards only through dispatch and logs events", () => {
   assertValidGameState(next);
 });
 
+test("last-spark draw succeeds with enough deck and fails before consuming resources when short", () => {
+  const successState = makeState({
+    cards: [
+      card("spark-1", { templateId: "last-spark", effect: "comebackDraw" }),
+      card("deck-1", { type: "monster", templateId: "spark-runner" }),
+      card("deck-2", { type: "trap", templateId: "backlash-mirror", trigger: "directRebound" })
+    ],
+    player: {
+      hand: ["spark-1"],
+      deck: ["deck-1", "deck-2"]
+    }
+  });
+  const successEngine = new GameEngine(successState);
+  const events = successEngine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "spark-1" });
+  const successNext = successEngine.getState();
+
+  assert.deepEqual(successNext.players[PLAYER].hand, ["deck-1", "deck-2"]);
+  assert.deepEqual(successNext.players[PLAYER].deck, []);
+  assert.deepEqual(successNext.players[PLAYER].grave, ["spark-1"]);
+  assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.count === 2 && event.sourceCardId === "spark-1"));
+  assertValidGameState(successNext);
+
+  const failState = makeState({
+    cards: [
+      card("spark-short", { templateId: "last-spark", effect: "comebackDraw" }),
+      card("only-deck", { type: "monster", templateId: "spark-runner" })
+    ],
+    player: {
+      hand: ["spark-short"],
+      deck: ["only-deck"]
+    }
+  });
+  const failEngine = new GameEngine(failState);
+
+  assert.throws(
+    () => failEngine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "spark-short" }),
+    /requires at least 2 cards in deck/
+  );
+  assert.deepEqual(failEngine.getState().players[PLAYER].hand, ["spark-short"]);
+  assert.deepEqual(failEngine.getState().players[PLAYER].deck, ["only-deck"]);
+  assert.deepEqual(failEngine.getState().players[PLAYER].grave, []);
+});
+
 test("spell activation is legal in battle phase action windows", () => {
   const state = makeState({
     cards: [
@@ -162,6 +205,7 @@ test("dispatch records commands before derived events", () => {
 
 test("default card effects are declarative one-shot DSL definitions", () => {
   const draw2 = getCardEffectDefinition("draw2");
+  const comebackDraw = getCardEffectDefinition("comebackDraw");
   const draw1 = getCardEffectDefinition("draw1");
   const burn200 = getCardEffectDefinition("burn200");
   const fireBuff = getCardEffectDefinition("fireBuff");
@@ -184,6 +228,9 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const extraSummon = getCardEffectDefinition("extraSummon");
   const shield800 = getCardEffectDefinition("shield800");
   const graveReturn = getCardEffectDefinition("graveReturn");
+  const graveRevive = getCardEffectDefinition("graveRevive");
+  const dawnEdge = getCardEffectDefinition("dawnEdge");
+  const lastStandSurge = getCardEffectDefinition("lastStandSurge");
   const rallyAttack = getCardEffectDefinition("rallyAttack");
   const battleTrance = getCardEffectDefinition("battleTrance");
   const lightShadowCombo = getCardEffectDefinition("lightShadowCombo");
@@ -199,6 +246,10 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.equal(draw2.duration, EffectDuration.oneShot);
   assert.deepEqual(draw1.operations, [{ op: "drawCards", player: "self", count: 1 }]);
   assert.deepEqual(draw2.operations, [{ op: "drawCards", player: "self", count: 2 }]);
+  assert.deepEqual(comebackDraw.requirements, [
+    { type: "minDeckCount", player: "self", count: 2 }
+  ]);
+  assert.deepEqual(comebackDraw.operations, [{ op: "drawCards", player: "self", count: 2 }]);
   assert.deepEqual(burn200.operations, [{ op: "dealDamage", player: "rival", amount: 200 }]);
   assert.deepEqual(fireBuff.operations, [
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "strongestAtk" }, stat: "tempAtk", amount: 300 }
@@ -234,6 +285,23 @@ test("default card effects are declarative one-shot DSL definitions", () => {
       to: { playerId: "$action.playerId", zone: "deck", index: 0 }
     },
     { op: "drawCards", player: "self", count: 1 }
+  ]);
+  assert.deepEqual(graveRevive.target, { player: "self", zone: "grave", cardType: "monster" });
+  assert.deepEqual(graveRevive.operations, [{
+    op: "moveCard",
+    cardId: "$action.targetCardId",
+    from: { playerId: "$action.playerId", zone: "grave" },
+    to: { playerId: "$action.playerId", zone: "monsterZone" }
+  }]);
+  assert.deepEqual(dawnEdge.operations, [
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 900 }
+  ]);
+  assert.deepEqual(lastStandSurge.requirements, [
+    { type: "maxLp", player: "self", amount: 1500 }
+  ]);
+  assert.deepEqual(lastStandSurge.target, { player: "self", zone: "monsterZone", rule: "strongestAtk" });
+  assert.deepEqual(lastStandSurge.operations, [
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 700 }
   ]);
   assert.deepEqual(rallyAttack.operations, [
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 },
@@ -900,6 +968,116 @@ test("grave-return recovers a grave card through movement and draw events", () =
     event.sourceCardId === "return-1"
   ));
   assertValidGameState(next);
+});
+
+test("starwake recall revives only legal graveyard monster targets", () => {
+  const state = makeState({
+    cards: [
+      card("recall-1", { templateId: "starwake-recall", effect: "graveRevive" }),
+      card("fallen-ace", { templateId: "astral-comet-ace", type: "monster", atk: 2300, def: 1800 }),
+      card("spent-spell", { templateId: "last-spark", effect: "comebackDraw" })
+    ],
+    player: {
+      hand: ["recall-1"],
+      grave: ["spent-spell", "fallen-ace"]
+    }
+  });
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "ACTIVATE_CARD",
+      playerId: PLAYER,
+      rivalId: AI,
+      cardId: "recall-1",
+      targetCardId: "spent-spell"
+    }),
+    /requires a monster target/
+  );
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["recall-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, ["spent-spell", "fallen-ace"]);
+
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "recall-1",
+    targetCardId: "fallen-ace"
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["fallen-ace"]);
+  assert.deepEqual(next.players[PLAYER].grave, ["spent-spell", "recall-1"]);
+  assert.ok(events.some((event) =>
+    event.type === "CARD_MOVED" &&
+    event.cardId === "fallen-ace" &&
+    event.from.zone === "grave" &&
+    event.to.zone === "monsterZone"
+  ));
+  assertValidGameState(next);
+});
+
+test("dawn edge and last stand surge apply protagonist attack boosts through stat events", () => {
+  const state = makeState({
+    cards: [
+      card("edge-1", { templateId: "dawn-edge", effect: "dawnEdge" }),
+      card("oath-1", { templateId: "limit-break-oath", effect: "lastStandSurge" }),
+      card("ace-1", { templateId: "astral-comet-ace", type: "monster", atk: 2300, def: 1800 }),
+      card("runner-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 })
+    ],
+    player: {
+      lp: 900,
+      hand: ["edge-1", "oath-1"],
+      monsterZone: ["runner-1", "ace-1"]
+    }
+  });
+  const engine = new GameEngine(state);
+  const edgeEvents = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "edge-1",
+    targetCardId: "ace-1"
+  });
+  const oathEvents = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "oath-1",
+    targetCardId: "ace-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["ace-1"].tempAtk, 1600);
+  assert.equal(next.cards["runner-1"].tempAtk || 0, 0);
+  assert.deepEqual(next.players[PLAYER].grave, ["edge-1", "oath-1"]);
+  assert.ok(edgeEvents.some((event) => event.type === "STAT_MODIFIED" && event.amount === 900));
+  assert.ok(oathEvents.some((event) => event.type === "STAT_MODIFIED" && event.amount === 700));
+  assertValidGameState(next);
+
+  const highLpState = makeState({
+    cards: [
+      card("oath-high", { templateId: "limit-break-oath", effect: "lastStandSurge" }),
+      card("ace-high", { templateId: "astral-comet-ace", type: "monster", atk: 2300, def: 1800 })
+    ],
+    player: {
+      lp: 2400,
+      hand: ["oath-high"],
+      monsterZone: ["ace-high"]
+    }
+  });
+  const highLpEngine = new GameEngine(highLpState);
+  assert.throws(
+    () => highLpEngine.dispatch({
+      type: "ACTIVATE_CARD",
+      playerId: PLAYER,
+      rivalId: AI,
+      cardId: "oath-high",
+      targetCardId: "ace-high"
+    }),
+    /requires LP at most 1500/
+  );
+  assert.equal(highLpEngine.getState().cards["ace-high"].tempAtk || 0, 0);
 });
 
 test("rally-attack buffs the strongest monster and readies an already used monster through events", () => {

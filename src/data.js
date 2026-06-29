@@ -46,6 +46,15 @@ export const library = [
   { id: "soul-parry", type: "trap", name: "星魂格挡", icon: "格", text: "盖放后自动触发：对手攻击时，攻击怪兽攻击力下降 300，并获得 300 护盾，攻击继续结算。", trigger: "soulParry" },
   { id: "reversal-flare", type: "trap", name: "逆焰护壁", icon: "返", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并反弹 500 点伤害。", trigger: "directRebound" },
   { id: "chain-nullifier", type: "trap", name: "断链裁决", icon: "断", text: "对手发动陷阱时可以连锁发动：无效那张陷阱的效果。", trigger: "chainNegate" }
+  ,
+  { id: "spark-runner", type: "monster", name: "星火信使", element: "wind", stars: 2, atk: 800, def: 1200, icon: "信", text: "召唤时抽 1 张卡。逆境中用来补足场面的小型星魂。", onSummon: "draw1" },
+  { id: "astral-comet-ace", type: "monster", name: "天穹逆星者", element: "light", stars: 5, atk: 2300, def: 1800, icon: "逆", text: "攻击后自身攻击力提升 200。主角在濒败时呼唤的反击核心。", afterAttack: "grow200" },
+  { id: "last-spark", type: "spell", name: "余烬星愿", icon: "愿", text: "抽 2 张卡。卡组不足 2 张时不能发动。", effect: "comebackDraw" },
+  { id: "starwake-recall", type: "spell", name: "醒星回召", icon: "召", text: "选择我方墓地 1 只怪兽，特殊回到怪兽区。", effect: "graveRevive" },
+  { id: "dawn-edge", type: "spell", name: "破晓锋印", icon: "锋", text: "选择我方 1 只怪兽，攻击力提升 900。", effect: "dawnEdge" },
+  { id: "limit-break-oath", type: "spell", name: "临界誓辉", icon: "誓", text: "生命值 1500 以下才能发动；选择我方攻击力最高的怪兽，攻击力提升 700。", effect: "lastStandSurge" },
+  { id: "last-light-guard", type: "trap", name: "残光护幕", icon: "幕", text: "盖放后自动触发：对手攻击时，无效本次攻击并消耗攻击机会。", trigger: "attackNegate" },
+  { id: "backlash-mirror", type: "trap", name: "逆光折返", icon: "返", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并反弹 500 点伤害。", trigger: "directRebound" }
 ];
 
 export const monsterAssets = {
@@ -64,7 +73,9 @@ export const monsterAssets = {
   "nova-squire": "assets/monster-fire-dragon.png",
   "aegis-mender": "assets/monster-light-knight.png",
   "star-soul-apprentice": "assets/monster-light-knight.png",
-  "rift-bulwark": "assets/monster-shadow-wolf.png"
+  "rift-bulwark": "assets/monster-shadow-wolf.png",
+  "spark-runner": "assets/monster-wind-mage.png",
+  "astral-comet-ace": "assets/monster-light-knight.png"
 };
 
 export const roleProfiles = {
@@ -220,6 +231,38 @@ export const deckPresets = {
       "soul-parry", "soul-parry", "weakening-web", "storm-shift",
       "guard-sigil", "mirror-snare", "counter-array", "void-lock",
       "reversal-flare", "chain-nullifier", "summon-flare"
+    ]
+  },
+  protagonistComeback: {
+    label: "星魂主角战役 01：逆境觉醒",
+    ids: [
+      "spark-runner", "spark-runner", "astral-comet-ace", "astral-comet-ace",
+      "star-soul-apprentice", "gale-mage", "night-oracle", "solar-knight",
+      "iron-guardian", "aegis-mender", "nova-squire", "void-hound",
+      "star-lancer", "sky-raider", "ember-drake", "prism-saint",
+      "last-spark", "last-spark", "starwake-recall", "starwake-recall",
+      "dawn-edge", "dawn-edge", "limit-break-oath", "war-chant",
+      "seer-call", "seer-call", "battle-trance", "rally-strike",
+      "grave-return", "star-shield", "element-echo",
+      "blade-sigil", "prism-drive", "pierce-line", "burst-rune",
+      "last-light-guard", "last-light-guard", "backlash-mirror", "backlash-mirror",
+      "mirror-snare"
+    ]
+  },
+  suppressionRival: {
+    label: "压制型对手",
+    ids: [
+      "star-lancer", "star-lancer", "flare-titan", "flare-titan",
+      "sky-raider", "sky-raider", "ember-drake", "ember-drake",
+      "flame-captain", "flame-captain", "void-hound", "dusk-alchemist",
+      "solar-knight", "iron-guardian", "gale-mage", "nova-squire",
+      "burst-rune", "burst-rune", "war-chant", "war-chant",
+      "rally-strike", "rally-strike", "pierce-line", "pierce-line",
+      "battle-trance", "star-breach", "flame-gale-burst", "element-echo",
+      "overclock-core", "blade-sigil", "dispelling-ray",
+      "summon-flare", "summon-flare", "mirror-snare", "mirror-snare",
+      "counter-array", "void-lock", "phantom-switch", "weakening-web",
+      "reversal-flare", "chain-nullifier", "guard-sigil"
     ]
   }
 };
@@ -424,6 +467,34 @@ export const scenarioSetups = {
     playerHand: ["rift-bulwark", "soul-resonance", "soul-parry"],
     playerField: ["night-oracle"],
     playerDeck: [],
+    aiField: ["star-lancer"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
+  protagonistComeback: {
+    label: "逆境觉醒演示",
+    text: "主角生命值很低，场面落后；手牌和墓地预置抽牌、复活、加攻与防御陷阱，用来演示关键资源到手后的翻盘节奏。",
+    goal: "发动余烬星愿补资源，醒星回召复活天穹逆星者，盖放残光护幕后挡下对手攻击，再用强化后的王牌完成反击。",
+    playerLp: 900,
+    aiLp: 3000,
+    playerHand: ["last-spark", "starwake-recall", "dawn-edge", "last-light-guard", "limit-break-oath"],
+    playerDeck: ["spark-runner", "backlash-mirror", "star-shield"],
+    playerField: ["spark-runner"],
+    playerGrave: ["astral-comet-ace"],
+    aiField: ["flare-titan"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
+  protagonistFinalCounter: {
+    label: "终局反击演示",
+    text: "主角空场低生命值，预置直击反弹陷阱和复活资源，展示先挡下终结攻击再返场的终局感。",
+    goal: "盖放逆光折返并结束回合；对手直击时反弹伤害，随后利用墓地王牌寻找反击窗口。",
+    playerLp: 700,
+    aiLp: 1200,
+    playerHand: ["backlash-mirror", "starwake-recall", "dawn-edge"],
+    playerDeck: ["last-spark", "spark-runner"],
+    playerField: [],
+    playerGrave: ["astral-comet-ace"],
     aiField: ["star-lancer"],
     aiHand: [],
     aiDeck: ["guard-sigil"]

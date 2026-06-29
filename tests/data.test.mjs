@@ -228,6 +228,47 @@ test("basic star soul expansion pack has rule-backed cards and a preset deck", (
   assert.ok(deckPresets.basicExpansion.ids.includes("soul-parry"));
 });
 
+test("protagonist comeback pack has rule-backed cards decks and scenarios", () => {
+  const expectedIds = [
+    "spark-runner",
+    "astral-comet-ace",
+    "last-spark",
+    "starwake-recall",
+    "dawn-edge",
+    "limit-break-oath",
+    "last-light-guard",
+    "backlash-mirror"
+  ];
+  expectedIds.forEach((id) => assert.ok(cardsById.has(id), `missing protagonist comeback card ${id}`));
+
+  assert.equal(cardsById.get("spark-runner").onSummon, "draw1");
+  assert.equal(cardsById.get("astral-comet-ace").afterAttack, "grow200");
+  assert.equal(cardsById.get("last-spark").effect, "comebackDraw");
+  assert.equal(cardsById.get("starwake-recall").effect, "graveRevive");
+  assert.equal(cardsById.get("dawn-edge").effect, "dawnEdge");
+  assert.equal(cardsById.get("limit-break-oath").effect, "lastStandSurge");
+  assert.equal(cardsById.get("last-light-guard").trigger, "attackNegate");
+  assert.equal(cardsById.get("backlash-mirror").trigger, "directRebound");
+
+  assert.deepEqual(getCardEffectDefinition("comebackDraw").requirements, [
+    { type: "minDeckCount", player: "self", count: 2 }
+  ]);
+  assert.deepEqual(getCardEffectDefinition("graveRevive").target, { player: "self", zone: "grave", cardType: "monster" });
+  assert.deepEqual(getCardEffectDefinition("dawnEdge").operations, [
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 900 }
+  ]);
+  assert.deepEqual(getCardEffectDefinition("lastStandSurge").requirements, [
+    { type: "maxLp", player: "self", amount: 1500 }
+  ]);
+
+  assert.ok(deckPresets.protagonistComeback.ids.includes("last-spark"));
+  assert.ok(deckPresets.protagonistComeback.ids.includes("starwake-recall"));
+  assert.ok(deckPresets.suppressionRival.ids.includes("flare-titan"));
+  assert.ok(deckPresets.suppressionRival.ids.includes("summon-flare"));
+  assert.deepEqual(scenarioSetups.protagonistComeback.playerGrave, ["astral-comet-ace"]);
+  assert.equal(scenarioSetups.protagonistComeback.playerLp, 900);
+});
+
 test("deck presets reference only known cards and have enough cards", () => {
   Object.entries(deckPresets).forEach(([key, preset]) => {
     assert.ok(preset.label, `${key} needs label`);
@@ -238,7 +279,7 @@ test("deck presets reference only known cards and have enough cards", () => {
 });
 
 test("scenario setups reference only known cards", () => {
-  const cardListKeys = ["playerDeck", "playerHand", "aiDeck", "aiHand", "playerField", "aiField", "playerTraps", "aiTraps"];
+  const cardListKeys = ["playerDeck", "playerHand", "playerGrave", "aiDeck", "aiHand", "aiGrave", "playerField", "aiField", "playerTraps", "aiTraps"];
 
   Object.entries(scenarioSetups).forEach(([key, scenario]) => {
     assert.ok(scenario.label, `${key} needs label`);

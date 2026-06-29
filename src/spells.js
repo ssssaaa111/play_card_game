@@ -10,6 +10,21 @@ export const spellDefinitions = {
   draw2: {
     caption: "预见未来，抽两张卡"
   },
+  comebackDraw: {
+    caption: "余烬续抽，补足反击资源"
+  },
+  graveRevive: {
+    caption: "醒星回召，墓地怪兽回场"
+  },
+  dawnEdge: {
+    caption: "破晓锋印，攻击爆发",
+    target: "ownMonster"
+  },
+  lastStandSurge: {
+    caption: "临界誓辉，低生命强化",
+    target: "ownMonster",
+    targetRule: "strongest"
+  },
   buff500: {
     caption: "攻击力提升",
     target: "ownMonster",
@@ -96,6 +111,28 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       return owner.deck.length >= 2
         ? { ok: true }
         : { ok: false, reason: "卡组不足 2 张，不能发动抽卡魔法。" };
+    case "comebackDraw":
+      return owner.deck.length >= 2
+        ? { ok: true }
+        : { ok: false, reason: "卡组不足 2 张，不能发动余烬星愿。" };
+    case "graveRevive": {
+      if (!owner.grave.some((card) => card?.type === "monster")) {
+        return { ok: false, reason: "墓地没有可回召的怪兽。" };
+      }
+      if (!owner.field.some((slot) => !slot)) {
+        return { ok: false, reason: "怪兽区已满，不能回召墓地怪兽。" };
+      }
+      return { ok: true };
+    }
+    case "dawnEdge":
+      return fieldCards(owner).length > 0
+        ? { ok: true }
+        : { ok: false, reason: "场上没有怪兽，不能发动破晓锋印。" };
+    case "lastStandSurge":
+      if (owner.lp > 1500) return { ok: false, reason: "生命值高于 1500，不能发动临界誓辉。" };
+      return fieldCards(owner).length > 0
+        ? { ok: true }
+        : { ok: false, reason: "场上没有怪兽，不能发动临界誓辉。" };
     case "buff500":
       return fieldCards(owner).length > 0
         ? { ok: true }
@@ -180,6 +217,14 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       return owner.lp <= (aiStyle === "control" ? 3200 : 2600) ? 72 : 0;
     case "draw2":
       return owner.hand.length <= (aiStyle === "control" ? 5 : 4) ? 58 : 18;
+    case "comebackDraw":
+      return owner.deck.length >= 2 && owner.hand.length <= 5 ? (owner.lp <= 1800 ? 82 : 56) : 0;
+    case "graveRevive":
+      return owner.grave.some((card) => card?.type === "monster") && owner.field.some((slot) => !slot) ? 78 : 0;
+    case "dawnEdge":
+      return fieldCards(owner).length > 0 ? (aiStyle === "aggressive" ? 84 : 62) : 0;
+    case "lastStandSurge":
+      return owner.lp <= 1500 && fieldCards(owner).length > 0 ? 88 : 0;
     case "buff500":
       return fieldCards(owner).length > 0 ? (aiStyle === "aggressive" ? 76 : 50) : 0;
     case "soulResonance":

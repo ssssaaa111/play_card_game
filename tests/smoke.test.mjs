@@ -493,8 +493,12 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="summonShadowBurn">召唤暗伤<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
+  assert.match(html, /<option value="protagonistComeback">星魂主角战役 01：逆境觉醒<\/option>/);
+  assert.match(html, /<option value="suppressionRival">压制型对手<\/option>/);
   assert.match(html, /<option value="expansionSummon">扩展召唤演示<\/option>/);
   assert.match(html, /<option value="expansionParry">扩展格挡演示<\/option>/);
+  assert.match(html, /<option value="protagonistComeback">逆境觉醒演示<\/option>/);
+  assert.match(html, /<option value="protagonistFinalCounter">终局反击演示<\/option>/);
   assert.match(html, /<option value="phantomRedirect">幻影换位回归<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
@@ -506,8 +510,11 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /summonShadowBurn: \{/);
   assert.match(data, /equipment: \{/);
   assert.match(data, /basicExpansion: \{/);
+  assert.match(data, /protagonistComeback: \{/);
+  assert.match(data, /suppressionRival: \{/);
   assert.match(data, /expansionSummon: \{/);
   assert.match(data, /expansionParry: \{/);
+  assert.match(data, /protagonistFinalCounter: \{/);
   assert.match(data, /phantomRedirect: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
@@ -524,6 +531,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-shadow-burn": runSummonShadowBurnSmoke/);
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
   assert.match(smoke, /"basic-expansion": runBasicExpansionSmoke/);
+  assert.match(smoke, /"protagonist-comeback-demo": runProtagonistComebackDemoSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
@@ -572,6 +580,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
   assert.match(smoke, /targetChangedEvents/);
   assert.match(smoke, /幻影换位重定向后仍未按新目标结算/);
+  assert.match(smoke, /醒星回召把墓地王牌移回怪兽区/);
+  assert.match(smoke, /被无效的攻击不应继续复用旧战斗结算/);
   assert.doesNotMatch(app, /AI attacks with|AI prepares a direct attack|switches to defense mode/);
   assert.match(smoke, /setSmokeStatus\("passed", "skip-lock"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "direct-guard"\)/);
@@ -584,6 +594,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "summon-shadow-burn"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "summon-trap-response"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "phantom-switch-redirect"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);

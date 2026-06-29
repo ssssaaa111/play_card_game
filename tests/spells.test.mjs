@@ -60,6 +60,27 @@ test("validates basic spell resource requirements", () => {
     reason: "墓地没有可回收的卡，不能发动星尘回收。"
   });
   assert.deepEqual(validateSpellCondition("graveReturn", { owner: duelist({ grave: [monster()] }) }), { ok: true });
+
+  assert.deepEqual(validateSpellCondition("comebackDraw", { owner: duelist({ deck: [monster()] }) }), {
+    ok: false,
+    reason: "卡组不足 2 张，不能发动余烬星愿。"
+  });
+  assert.deepEqual(validateSpellCondition("comebackDraw", { owner: duelist({ deck: [monster(), monster()] }) }), { ok: true });
+
+  assert.deepEqual(validateSpellCondition("graveRevive", { owner: duelist({ grave: [spell()] }) }), {
+    ok: false,
+    reason: "墓地没有可回召的怪兽。"
+  });
+  assert.deepEqual(validateSpellCondition("graveRevive", {
+    owner: duelist({
+      field: [monster(), monster(), monster()],
+      grave: [monster()]
+    })
+  }), {
+    ok: false,
+    reason: "怪兽区已满，不能回召墓地怪兽。"
+  });
+  assert.deepEqual(validateSpellCondition("graveRevive", { owner: duelist({ grave: [monster()] }) }), { ok: true });
 });
 
 test("validates field and hand dependent spell requirements", () => {
@@ -73,6 +94,16 @@ test("validates field and hand dependent spell requirements", () => {
     reason: "场上没有怪兽，不能发动星魂共鸣。"
   });
   assert.deepEqual(validateSpellCondition("soulResonance", { owner: duelist({ field: [monster(), null, null] }) }), { ok: true });
+  assert.deepEqual(validateSpellCondition("dawnEdge", { owner: duelist() }), {
+    ok: false,
+    reason: "场上没有怪兽，不能发动破晓锋印。"
+  });
+  assert.deepEqual(validateSpellCondition("dawnEdge", { owner: duelist({ field: [monster(), null, null] }) }), { ok: true });
+  assert.deepEqual(validateSpellCondition("lastStandSurge", { owner: duelist({ lp: 2000, field: [monster(), null, null] }) }), {
+    ok: false,
+    reason: "生命值高于 1500，不能发动临界誓辉。"
+  });
+  assert.deepEqual(validateSpellCondition("lastStandSurge", { owner: duelist({ lp: 1200, field: [monster(), null, null] }) }), { ok: true });
 
   assert.deepEqual(
     validateSpellCondition("extraSummon", {
@@ -196,6 +227,9 @@ test("scores AI spell priorities by style and board state", () => {
   assert.equal(scoreSpellForAi("buff500", { owner: duelist({ field: [monster(), null, null] }), rival: duelist({ owner: "player" }), aiStyle: "aggressive" }), 76);
   assert.equal(scoreSpellForAi("soulResonance", { owner: duelist(), rival: duelist({ owner: "player" }), aiStyle: "balanced" }), 0);
   assert.equal(scoreSpellForAi("soulResonance", { owner: duelist({ field: [monster(), null, null] }), rival: duelist({ owner: "player" }), aiStyle: "balanced" }), 54);
+  assert.equal(scoreSpellForAi("comebackDraw", { owner: duelist({ lp: 1200, deck: [monster(), monster()] }), rival: duelist({ owner: "player" }) }), 82);
+  assert.equal(scoreSpellForAi("graveRevive", { owner: duelist({ grave: [monster()] }), rival: duelist({ owner: "player" }) }), 78);
+  assert.equal(scoreSpellForAi("lastStandSurge", { owner: duelist({ lp: 1200, field: [monster(), null, null] }), rival: duelist({ owner: "player" }) }), 88);
 });
 
 test("scores AI direct strike and combo spells", () => {

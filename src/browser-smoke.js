@@ -657,6 +657,116 @@ async function runBasicExpansionSmoke(ctx) {
   setSmokeStatus("passed", "basic-expansion");
 }
 
+async function runProtagonistComebackDemoSmoke(ctx) {
+  setSmokeStatus("running", "protagonist-comeback-demo");
+  await startSmokeDuel(ctx, "protagonistComeback");
+  if (ctx.state.player.lp !== 900 || !ctx.state.player.grave.some((card) => card?.id === "astral-comet-ace")) {
+    throw new Error(`逆境觉醒初始状态不正确：${smokeDebug(ctx)}`);
+  }
+
+  const drawEventsBefore = countGameEvents(ctx.state, "CARDS_DRAWN");
+  clickSmokeElement(handCard(ctx.els, "last-spark"), "余烬星愿手牌");
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "余烬星愿确认可用");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认发动余烬星愿");
+  await waitForSmoke(
+    () => countGameEvents(ctx.state, "CARDS_DRAWN") > drawEventsBefore &&
+      ctx.state.player.hand.some((card) => card?.id === "spark-runner") &&
+      ctx.state.player.hand.some((card) => card?.id === "backlash-mirror") &&
+      ctx.state.player.grave.some((card) => card?.id === "last-spark"),
+    "余烬星愿通过规则事件抽到反击资源",
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "starwake-recall"), "醒星回召手牌");
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "醒星回召确认可用");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认发动醒星回召");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace") &&
+      !ctx.state.player.grave.some((card) => card?.id === "astral-comet-ace") &&
+      ctx.state.gameEvents.some((event) =>
+        event.type === "CARD_MOVED" &&
+        event.from?.zone === "grave" &&
+        event.to?.zone === "monsterZone"
+      ),
+    "醒星回召把墓地王牌移回怪兽区",
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "dawn-edge"), "破晓锋印手牌");
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "dawnEdge", "破晓锋印目标选择");
+  clickSmokeElement(fieldCard(ctx.els, "player", "astral-comet-ace"), "破晓锋印选择天穹逆星者");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace" && (card.tempAtk || 0) >= 900),
+    "破晓锋印加攻结算",
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "limit-break-oath"), "临界誓辉手牌");
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "lastStandSurge", "临界誓辉目标选择");
+  clickSmokeElement(fieldCard(ctx.els, "player", "astral-comet-ace"), "临界誓辉选择天穹逆星者");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace" && (card.tempAtk || 0) >= 1600),
+    "临界誓辉低生命强化结算",
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "last-light-guard"), "残光护幕手牌");
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "盖放残光护幕");
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "last-light-guard"), "残光护幕盖放成功");
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "残光护幕攻击响应窗口", 24000);
+  const guardName = ctx.state.player.traps.find((card) => card?.id === "last-light-guard")?.name || "残光护幕";
+  const attackDeclared = (ctx.state.gameEvents || []).filter((event) => event.type === "ATTACK_DECLARED").at(-1);
+  if (!attackDeclared || !ctx.els.chainText.textContent.includes(guardName)) {
+    throw new Error(`残光护幕响应缺少攻击宣言或提示：${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(ctx.els.chainYes, "确认发动残光护幕");
+  await waitForSmoke(
+    () => ctx.state.gameEvents.some((event) =>
+      event.type === "EFFECT_NEGATED" &&
+      String(event.targetEffectId) === String(attackDeclared.id)
+    ) &&
+      ctx.state.gameEvents.some((event) =>
+        event.type === "ATTACK_CANCELED" &&
+        String(event.declarationEventId) === String(attackDeclared.id)
+      ) &&
+      !ctx.state.player.traps.some((card) => card?.id === "last-light-guard"),
+    "残光护幕无效并取消对手关键攻击",
+    12000
+  );
+  if (ctx.state.gameEvents.some((event) =>
+    event.type === "BATTLE_RESOLVED" &&
+    String(event.declarationEventId) === String(attackDeclared.id)
+  )) {
+    throw new Error(`被无效的攻击不应继续复用旧战斗结算：${smokeDebug(ctx)}`);
+  }
+
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && ctx.state.phase === "main" && ctx.state.actionWindow === "main",
+    "残光护幕后回到主角回合",
+    24000
+  );
+
+  const aiLpBeforeCounter = ctx.state.ai.lp;
+  const ace = fieldCard(ctx.els, "player", "astral-comet-ace");
+  clickSmokeElement(ace, "选择复活后的天穹逆星者");
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "flare-titan")?.classList.contains("attack-target"), "反击攻击目标高亮");
+  clickSmokeElement(fieldCard(ctx.els, "ai", "flare-titan"), "天穹逆星者反击熔核巨像");
+  await waitForSmoke(
+    () => ctx.state.gameEvents.some((event) =>
+      event.type === "BATTLE_RESOLVED" &&
+      event.playerId === "player" &&
+      event.attackerCardId === ctx.state.player.field.find((card) => card?.id === "astral-comet-ace")?.uid
+    ) &&
+      ctx.state.ai.lp < aiLpBeforeCounter,
+    "主角完成反击攻击并造成关键伤害",
+    12000
+  );
+
+  setSmokeStatus("passed", "protagonist-comeback-demo");
+}
+
 async function runRedirectPromptSmoke(ctx) {
   setSmokeStatus("running", "redirect-prompt");
   await startSmokeDuel(ctx, "redirect");
@@ -1519,6 +1629,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-shadow-burn": runSummonShadowBurnSmoke,
     "summon-trap-response": runSummonTrapResponseSmoke,
     "basic-expansion": runBasicExpansionSmoke,
+    "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "target-window": runTargetWindowSmoke,

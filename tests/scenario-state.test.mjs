@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { deckPresets, scenarioSetups } from "../src/data.js";
+import { createDuelist } from "../src/deck.js";
+import { buildEngineStateFromUiState } from "../src/engine-adapter.js";
+import { assertValidGameState } from "../src/game-engine.js";
 import { FIELD_SIZE } from "../src/rules.js";
 import { buildScenarioState, scenarioReservedIds } from "../src/scenario-state.js";
 
@@ -169,6 +172,29 @@ test("phantom redirect scenario exposes the redirected attack fixture", () => {
   assert.equal(setup.player.field[1].mode, "defense");
   assert.deepEqual(ids(setup.ai.field).slice(0, 1), ["sky-raider"]);
   assert.deepEqual(ids(setup.ai.hand), ["war-chant"]);
+});
+
+test("protagonist comeback scenarios can preload lp graveyard and valid engine state", () => {
+  const setup = buildScenarioState(scenarioSetups.protagonistComeback, {
+    playerPreset: "protagonistComeback",
+    aiPreset: "suppressionRival"
+  });
+
+  assert.equal(setup.player.lp, 900);
+  assert.equal(setup.ai.lp, 3000);
+  assert.deepEqual(ids(setup.player.hand), ["last-spark", "starwake-recall", "dawn-edge", "last-light-guard", "limit-break-oath"]);
+  assert.deepEqual(ids(setup.player.grave), ["astral-comet-ace"]);
+  assert.deepEqual(ids(setup.player.deck), ["spark-runner", "backlash-mirror", "star-shield"]);
+  assert.deepEqual(ids(setup.ai.field).slice(0, 1), ["flare-titan"]);
+
+  const uiState = {
+    player: { ...createDuelist("player"), ...setup.player },
+    ai: { ...createDuelist("ai"), ...setup.ai },
+    turn: "player",
+    phase: "main",
+    gameEvents: []
+  };
+  assertValidGameState(buildEngineStateFromUiState(uiState));
 });
 
 test("builds preset scenario decks without cards reserved in visible zones", () => {

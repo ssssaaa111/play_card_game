@@ -81,6 +81,10 @@ export class GameStateValidationError extends Error {
 export const defaultCardEffects = Object.freeze({
   draw1: oneShot([{ op: "drawCards", player: "self", count: 1 }]),
   draw2: oneShot([{ op: "drawCards", player: "self", count: 2 }]),
+  comebackDraw: oneShot(
+    [{ op: "drawCards", player: "self", count: 2 }],
+    { requirements: [{ type: "minDeckCount", player: "self", count: 2 }] }
+  ),
   burn200: oneShot([{ op: "dealDamage", player: "rival", amount: 200 }]),
   burn500: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
   heal300: oneShot([{ op: "heal", player: "self", amount: 300 }]),
@@ -106,6 +110,23 @@ export const defaultCardEffects = Object.freeze({
   buff500: oneShot(
     [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 500 }],
     { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }
+  ),
+  graveRevive: oneShot([{
+    op: "moveCard",
+    cardId: "$action.targetCardId",
+    from: { playerId: "$action.playerId", zone: "grave" },
+    to: { playerId: "$action.playerId", zone: "monsterZone" }
+  }], { target: { player: "self", zone: "grave", cardType: "monster" } }),
+  dawnEdge: oneShot(
+    [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 900 }],
+    { target: { player: "self", zone: "monsterZone" } }
+  ),
+  lastStandSurge: oneShot(
+    [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 700 }],
+    {
+      requirements: [{ type: "maxLp", player: "self", amount: 1500 }],
+      target: { player: "self", zone: "monsterZone", rule: "strongestAtk" }
+    }
   ),
   soulResonance: oneShot([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
@@ -1685,7 +1706,9 @@ function candidateTargetCardIds(state, definition, action) {
   try {
     const targetPlayerId = resolvePlayerRef(definition.target.player, action);
     const player = requirePlayer(state, targetPlayerId);
-    return requireZone(player, definition.target.zone).slice();
+    return requireZone(player, definition.target.zone)
+      .filter((cardId) => cardMatchesTargetDefinition(state, cardId, definition.target))
+      .slice();
   } catch (error) {
     if (error instanceof GameRuleError) return [];
     throw error;
@@ -2585,6 +2608,24 @@ function validateEffectRequirements(definition, state, action, card) {
       }
       continue;
     }
+    if (requirement.type === "minDeckCount") {
+      const playerId = resolvePlayerRef(requirement.player, action);
+      const count = Math.max(0, Number(requirement.count) || 0);
+      const actual = requirePlayer(state, playerId).deck.length;
+      if (actual < count) {
+        throw new GameRuleError(`Effect ${card.effect || card.id} requires at least ${count} cards in deck`);
+      }
+      continue;
+    }
+    if (requirement.type === "maxLp") {
+      const playerId = resolvePlayerRef(requirement.player, action);
+      const amount = Math.max(0, Number(requirement.amount) || 0);
+      const actual = requirePlayer(state, playerId).lp;
+      if (actual > amount) {
+        throw new GameRuleError(`Effect ${card.effect || card.id} requires LP at most ${amount}`);
+      }
+      continue;
+    }
     throw new GameRuleError(`Unsupported effect requirement ${requirement.type}`);
   }
 }
@@ -2616,6 +2657,11 @@ function monsterElementCount(state, playerId, element) {
     .length;
 }
 
+function cardMatchesTargetDefinition(state, cardId, targetDefinition = {}) {
+  if (!targetDefinition.cardType) return true;
+  return requireCard(state, cardId).type === targetDefinition.cardType;
+}
+
 function validateEffectTarget(definition, state, action, card) {
   if (!definition?.target) return;
   if (!action.targetCardId) {
@@ -2631,8 +2677,13 @@ function validateEffectTarget(definition, state, action, card) {
   }
 
   const target = requireCard(state, action.targetCardId);
+  if (!cardMatchesTargetDefinition(state, action.targetCardId, definition.target)) {
+    throw new GameRuleError(`Target ${action.targetCardId} requires a ${definition.target.cardType} target`);
+  }
   if (definition.target.rule === "strongestAtk") {
-    const candidates = cards.map((cardId) => requireCard(state, cardId));
+    const candidates = cards
+      .filter((cardId) => cardMatchesTargetDefinition(state, cardId, definition.target))
+      .map((cardId) => requireCard(state, cardId));
     const maxAtk = Math.max(...candidates.map(engineTotalAtk));
     if (engineTotalAtk(target) !== maxAtk) {
       throw new GameRuleError(`Target ${action.targetCardId} is not the strongest monster for this effect`);

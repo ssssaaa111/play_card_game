@@ -702,10 +702,14 @@ function spellTargetCandidates(state, playerId, rivalId, card, definition) {
   const targetPlayer = state.players[targetPlayerId];
   const zoneIds = Array.isArray(targetPlayer?.[zone]) ? targetPlayer[zone] : [];
   let candidates = zoneIds.filter((cardId) => Boolean(state.cards[cardId]));
+  if (definition.target.cardType) {
+    candidates = candidates.filter((cardId) => state.cards[cardId]?.type === definition.target.cardType);
+  }
   if (definition.target.rule === "notSource") {
     candidates = candidates.filter((cardId) => cardId !== card.id);
   }
   if (definition.target.rule === "strongestAtk") {
+    if (candidates.length === 0) return [];
     const maxAtk = Math.max(...candidates.map((cardId) => totalAtk(state.cards[cardId])));
     candidates = candidates.filter((cardId) => totalAtk(state.cards[cardId]) === maxAtk);
   }

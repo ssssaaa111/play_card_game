@@ -1524,6 +1524,15 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
   let totalDamageDealt = 0;
   let statModifiedCount = 0;
   events.forEach((event) => {
+    if (event.type === "CARD_MOVED" && event.from?.zone === "grave" && event.to?.zone === "monsterZone") {
+      const found = findRuntimeCard(event.cardId);
+      if (found?.card) {
+        result.effectTarget = found.card;
+        result.targetOwner = found.owner;
+        addLog(`${found.card.name} 因 ${card.name} 从墓地回到场上。`);
+        playEpicAction("回召", "draw");
+      }
+    }
     if (event.type === "CARD_MOVED" && event.from?.zone === "grave" && event.to?.zone === "deck") {
       const found = findRuntimeCard(event.cardId);
       const movedName = found?.card?.name || "墓地卡";

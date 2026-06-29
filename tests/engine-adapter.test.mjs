@@ -710,6 +710,64 @@ test("rebuilds the open response window and resolves a selected trap as one even
   assert.deepEqual(buildEngineStateFromUiState(state).machine.chain, []);
 });
 
+test("protagonist defense traps resolve without replaying stale battle resolution", () => {
+  const negate = uiTrap("last-light-negate", "last-light-guard");
+  negate.trigger = "attackNegate";
+  const attacker = uiMonster("ai-comeback-attacker", "flare-titan");
+  attacker.ownerId = "ai";
+  const target = uiMonster("player-comeback-target", "spark-runner");
+  const state = appState({ phase: PHASES.battle, turn: "ai" });
+  state.player.traps[0] = negate;
+  state.player.field[0] = target;
+  state.ai.field[0] = attacker;
+
+  const declarationEvents = dispatchDeclareAttackFromUiState(state, "ai", "player", 0, 0);
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  const responseEvents = dispatchTrapResponseFromUiState(state, "player", "ai", 0, {
+    attackerIndex: 0,
+    targetIndex: 0,
+    targetEffectId: declaration.id
+  });
+  const cancelEvents = dispatchCancelAttackFromUiState(state, "ai", {
+    declarationEventId: declaration.id,
+    consumeAttack: true,
+    reason: "attackNegate"
+  });
+
+  assert.ok(responseEvents.some((event) => event.type === "EFFECT_NEGATED" && event.targetEffectId === declaration.id));
+  assert.ok(cancelEvents.some((event) => event.type === "ATTACK_CANCELED" && event.declarationEventId === declaration.id));
+  assert.ok(![...responseEvents, ...cancelEvents].some((event) => event.type === "BATTLE_RESOLVED"));
+  assert.equal(attacker.used, true);
+  assert.equal(state.player.field[0], target);
+  assert.equal(state.ai.field[0], attacker);
+
+  const rebound = uiTrap("backlash-direct", "backlash-mirror");
+  rebound.trigger = "directRebound";
+  const directAttacker = uiMonster("ai-direct-comeback", "star-lancer");
+  directAttacker.ownerId = "ai";
+  const reboundState = appState({ phase: PHASES.battle, turn: "ai" });
+  reboundState.player.traps[0] = rebound;
+  reboundState.ai.field[0] = directAttacker;
+
+  const directDeclarationEvents = dispatchDeclareAttackFromUiState(reboundState, "ai", "player", 0, -1);
+  const directDeclaration = directDeclarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  const reboundEvents = dispatchTrapResponseFromUiState(reboundState, "player", "ai", 0, {
+    attackerIndex: 0,
+    targetIndex: -1,
+    targetEffectId: directDeclaration.id
+  });
+  const directCancelEvents = dispatchCancelAttackFromUiState(reboundState, "ai", {
+    declarationEventId: directDeclaration.id,
+    consumeAttack: true,
+    reason: "directRebound"
+  });
+
+  assert.equal(reboundState.ai.lp, 3500);
+  assert.ok(reboundEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 500));
+  assert.ok(directCancelEvents.some((event) => event.type === "ATTACK_CANCELED" && event.declarationEventId === directDeclaration.id));
+  assert.ok(![...reboundEvents, ...directCancelEvents].some((event) => event.type === "BATTLE_RESOLVED"));
+});
+
 test("redirect trap response updates pending attack before UI battle resolution", () => {
   const trap = uiTrap("redirect-response", "phantom-switch");
   trap.trigger = "redirectAttack";

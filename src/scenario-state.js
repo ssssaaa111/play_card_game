@@ -10,7 +10,8 @@ export function scenarioReservedIds(scenario = {}, owner = "player") {
   return [
     ...(scenario[`${prefix}Hand`] || []),
     ...(scenario[`${prefix}Field`] || []),
-    ...(scenario[`${prefix}Traps`] || [])
+    ...(scenario[`${prefix}Traps`] || []),
+    ...(scenario[`${prefix}Grave`] || [])
   ].map(scenarioEntryId).filter(Boolean);
 }
 
@@ -39,12 +40,19 @@ function scenarioDeck(scenario, owner, preset) {
 }
 
 function scenarioDuelistState(scenario, owner, preset) {
-  return {
+  const prefix = owner === "ai" ? "ai" : "player";
+  const state = {
     hand: loadCardList(scenario[`${owner}Hand`]),
     deck: scenarioDeck(scenario, owner, preset),
     field: scenarioZone(scenario[`${owner}Field`]),
-    traps: scenarioZone(scenario[`${owner}Traps`])
+    traps: scenarioZone(scenario[`${owner}Traps`]),
+    grave: loadCardList(scenario[`${owner}Grave`])
   };
+  const lp = Number(scenario[`${prefix}Lp`]);
+  if (Number.isFinite(lp)) state.lp = Math.max(0, lp);
+  const shield = Number(scenario[`${prefix}Shield`]);
+  if (Number.isFinite(shield)) state.shield = Math.max(0, shield);
+  return state;
 }
 
 export function buildScenarioState(scenario = {}, {
