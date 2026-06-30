@@ -483,6 +483,16 @@ test("browser smoke runner covers key click regressions", () => {
   const app = readProjectFile("src/app.js");
   const smoke = readProjectFile("src/browser-smoke.js");
 
+  assert.match(html, /<option value="protagonistAceEvolution">/);
+  assert.match(html, /<option value="aceSuppressionRival">/);
+  assert.match(html, /<option value="protagonistAceProtection">/);
+  assert.match(data, /protagonistAceEvolution: \{/);
+  assert.match(data, /aceSuppressionRival: \{/);
+  assert.match(smoke, /"protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke/);
+  assert.match(smoke, /"protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke/);
+  assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-evolution-demo"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-protection-demo"\)/);
+
   assert.match(html, /<option value="skipLock">跳攻锁定<\/option>/);
   assert.match(html, /<option value="directTrap">直击陷阱<\/option>/);
   assert.match(html, /<option value="trapChoice">陷阱选择<\/option>/);

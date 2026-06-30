@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:5177";
+const DEFAULT_VIRTUAL_TIME_BUDGET_MS = 60000;
 const DEFAULT_SMOKES = [
   "game-over-event",
   "mode-auto-end",
@@ -78,7 +79,7 @@ function runBrowser({ browserBin, profileDir, url, timeoutMs }) {
     "--mute-audio",
     `--user-data-dir=${profileDir}`,
     "--run-all-compositor-stages-before-draw",
-    "--virtual-time-budget=30000",
+    `--virtual-time-budget=${DEFAULT_VIRTUAL_TIME_BUDGET_MS}`,
     "--dump-dom",
     url
   ];

@@ -197,6 +197,38 @@ test("protagonist comeback scenarios can preload lp graveyard and valid engine s
   assertValidGameState(buildEngineStateFromUiState(uiState));
 });
 
+test("protagonist ace evolution scenarios expose material and protection fixtures", () => {
+  const evolution = buildScenarioState(scenarioSetups.protagonistAceEvolution, {
+    playerPreset: "protagonistAceEvolution",
+    aiPreset: "aceSuppressionRival"
+  });
+  assert.deepEqual(ids(evolution.player.field).slice(0, 2), ["ember-soul-initiate", "lumen-gearlet"]);
+  assert.deepEqual(ids(evolution.player.hand), ["soulforge-ascent", "starwell-runner", "material-reclaim"]);
+  assert.deepEqual(ids(evolution.player.deck), ["astral-forge-dragon", "ace-vow-guard", "battle-trance"]);
+  assert.deepEqual(ids(evolution.ai.field).slice(0, 1), ["void-siege-breaker"]);
+
+  const protection = buildScenarioState(scenarioSetups.protagonistAceProtection, {
+    playerPreset: "protagonistAceEvolution",
+    aiPreset: "aceSuppressionRival"
+  });
+  assert.deepEqual(ids(protection.player.field).slice(0, 1), ["astral-forge-dragon"]);
+  assert.deepEqual(ids(protection.player.hand), ["ace-vow-guard", "battle-trance"]);
+  assert.deepEqual(ids(protection.player.traps).slice(0, 1), ["last-light-guard"]);
+  assert.deepEqual(ids(protection.ai.field).slice(0, 1), ["void-siege-breaker"]);
+  assert.deepEqual(ids(protection.ai.hand), ["corebreak-edict"]);
+
+  for (const setup of [evolution, protection]) {
+    const uiState = {
+      player: { ...createDuelist("player"), ...setup.player },
+      ai: { ...createDuelist("ai"), ...setup.ai },
+      turn: "player",
+      phase: "main",
+      gameEvents: []
+    };
+    assertValidGameState(buildEngineStateFromUiState(uiState));
+  }
+});
+
 test("builds preset scenario decks without cards reserved in visible zones", () => {
   const setup = buildScenarioState(scenarioSetups.combo, {
     playerPreset: "balanced",

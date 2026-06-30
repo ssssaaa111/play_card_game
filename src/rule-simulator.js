@@ -36,12 +36,13 @@ const EXPANSION_SUCCESS_EVENT_TYPES = Object.freeze({
   "soul-resonance": new Set(["STAT_MODIFIED"]),
   "soul-parry": new Set(["STAT_MODIFIED", "SHIELD_GAINED"])
 });
-const ATTACK_RESPONSE_TRIGGERS = new Set(["attackDestroy", "weakenAttack", "redirectAttack", "soulParry"]);
+const ATTACK_RESPONSE_TRIGGERS = new Set(["attackDestroy", "weakenAttack", "redirectAttack", "soulParry", "aceGuard"]);
 const TRAP_CLASS_BY_TRIGGER = Object.freeze({
   attackDestroy: "cancelAttack",
   counterBoost: "cancelAttack",
   attackShift: "cancelAttack",
   attackNegate: "cancelAttack",
+  aceGuard: "cancelAttack",
   directShield: "cancelAttack",
   directRebound: "cancelAttack",
   redirectAttack: "redirectTarget",

@@ -35,6 +35,14 @@ export const spellDefinitions = {
     target: "ownMonster",
     targetRule: "strongest"
   },
+  aceEvolution: {
+    caption: "素材升阶，王牌登场"
+  },
+  aceCrackdown: {
+    caption: "压制王牌核心",
+    target: "enemyMonster",
+    targetRule: "strongest"
+  },
   shield800: {
     caption: "展开护盾"
   },
@@ -97,6 +105,27 @@ export function spellDefinition(effect) {
   return spellDefinitions[effect] || null;
 }
 
+const ACE_EVOLUTION_MATERIALS = Object.freeze(["ember-soul-initiate", "lumen-gearlet"]);
+const ACE_EVOLUTION_ACE = "astral-forge-dragon";
+
+function cardTemplateId(card) {
+  return card?.templateId || card?.id || "";
+}
+
+function hasMaterialCards(owner, materialIds = ACE_EVOLUTION_MATERIALS) {
+  const available = fieldCards(owner).map(cardTemplateId);
+  return materialIds.every((id) => {
+    const index = available.indexOf(id);
+    if (index < 0) return false;
+    available.splice(index, 1);
+    return true;
+  });
+}
+
+function hasCardInHandOrDeck(owner, templateId) {
+  return [...(owner?.hand || []), ...(owner?.deck || [])].some((card) => cardTemplateId(card) === templateId);
+}
+
 export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } = {}) {
   if (!spellDefinition(effect)) {
     return { ok: false, reason: "这个魔法效果还没有实现。" };
@@ -141,6 +170,17 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       return fieldCards(owner).length > 0
         ? { ok: true }
         : { ok: false, reason: "场上没有怪兽，不能发动星魂共鸣。" };
+    case "aceEvolution":
+      if (!hasMaterialCards(owner)) {
+        return { ok: false, reason: "需要星火引魂童和微光机巧卫在场，才能发动王牌进化。" };
+      }
+      return hasCardInHandOrDeck(owner, ACE_EVOLUTION_ACE)
+        ? { ok: true }
+        : { ok: false, reason: "手牌或卡组里没有可进化登场的王牌。" };
+    case "aceCrackdown":
+      return fieldCards(rival).length > 0
+        ? { ok: true }
+        : { ok: false, reason: "对手场上没有怪兽，不能发动裂核裁令。" };
     case "shield800":
       return owner.shield <= 1600
         ? { ok: true }
@@ -229,6 +269,10 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       return fieldCards(owner).length > 0 ? (aiStyle === "aggressive" ? 76 : 50) : 0;
     case "soulResonance":
       return fieldCards(owner).length > 0 ? (aiStyle === "control" ? 58 : 54) : 0;
+    case "aceEvolution":
+      return hasMaterialCards(owner) && hasCardInHandOrDeck(owner, ACE_EVOLUTION_ACE) ? 92 : 0;
+    case "aceCrackdown":
+      return fieldCards(rival).length > 0 ? 86 : 0;
     case "shield800":
       return (owner.lp <= (aiStyle === "control" ? 3400 : 2800) || owner.shield <= (aiStyle === "control" ? 500 : 0)) ? 64 : 10;
     case "extraSummon":

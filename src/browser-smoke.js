@@ -128,7 +128,15 @@ function smokeDebug(ctx) {
   return JSON.stringify({
     turn: ctx.state.turn,
     phase: ctx.state.phase,
+    paused: Boolean(ctx.state.paused),
+    aiRunning: Boolean(ctx.state.aiRunning),
     actionWindow: ctx.state.actionWindow,
+    ruleCheckIssue: ctx.state.ruleCheckIssue || null,
+    pendingTrapChoice: ctx.state.pendingTrapChoice ? {
+      eventName: ctx.state.pendingTrapChoice.eventName,
+      trapIndexes: ctx.state.pendingTrapChoice.trapIndexes,
+      selectedIndex: ctx.state.pendingTrapChoice.selectedIndex
+    } : null,
     selected: ctx.state.selected || null,
     pendingAttack: machine.pendingAttack,
     responseWindow: machine.responseWindow,
@@ -136,6 +144,9 @@ function smokeDebug(ctx) {
     playerMonsters: activeMonsterSnapshots({ ...ctx.state, turn: "player" }),
     actions: ctx.currentPlayerActions(),
     skipAttackButtonDisabled: Boolean(ctx.els.skipAttackBtn?.disabled),
+    chainOpen: Boolean(ctx.els.chainModal?.classList.contains("show")),
+    chainYesDisabled: Boolean(ctx.els.chainYes?.disabled),
+    chainText: ctx.els.chainText?.textContent || "",
     log: (ctx.state.log || []).slice(0, 6),
     latestGameEvents: (ctx.state.gameEvents || []).slice(-8).map((event) => ({
       id: event.id,
@@ -767,6 +778,140 @@ async function runProtagonistComebackDemoSmoke(ctx) {
   setSmokeStatus("passed", "protagonist-comeback-demo");
 }
 
+async function runProtagonistAceEvolutionDemoSmoke(ctx) {
+  setSmokeStatus("running", "protagonist-ace-evolution-demo");
+  await startSmokeDuel(ctx, "protagonistAceEvolution");
+  const materialUids = ctx.state.player.field
+    .filter((card) => ["ember-soul-initiate", "lumen-gearlet"].includes(card?.id))
+    .map((card) => card.uid);
+  const aceAvailable = [...ctx.state.player.hand, ...ctx.state.player.deck]
+    .some((card) => card?.id === "astral-forge-dragon");
+  if (materialUids.length !== 2 || !aceAvailable) {
+    throw new Error(`王牌进化演示初始素材或卡组王牌不正确：${smokeDebug(ctx)}`);
+  }
+
+  const statEventsBefore = countGameEvents(ctx.state, "STAT_MODIFIED");
+  clickSmokeElement(handCard(ctx.els, "soulforge-ascent"), "星魂铸升手牌");
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "星魂铸升确认可用");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认发动星魂铸升");
+  await waitForSmoke(
+    () => materialUids.every((uid) => ctx.state.player.grave.some((card) => card?.uid === uid)) &&
+      ctx.state.player.field.some((card) => card?.id === "astral-forge-dragon") &&
+      (ctx.state.gameEvents || []).some((event) => event.type === "MATERIALS_SENT") &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "MONSTER_SUMMONED" &&
+        event.summonType === "special" &&
+        event.cardId === ctx.state.player.field.find((card) => card?.id === "astral-forge-dragon")?.uid
+      ) &&
+      countGameEvents(ctx.state, "STAT_MODIFIED") > statEventsBefore &&
+      ctx.state.ai.field.some((card) => card?.id === "void-siege-breaker" && (card.tempAtk || 0) < 0),
+    `星魂铸升必须送墓素材、特殊召唤王牌并压低对手怪兽。${smokeDebug(ctx)}`,
+    10000
+  );
+
+  const aiLpBeforeAttack = ctx.state.ai.lp;
+  clickSmokeElement(fieldCard(ctx.els, "player", "astral-forge-dragon"), "选择天炉星铠王");
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "void-siege-breaker")?.classList.contains("attack-target"),
+    `王牌进化后反击目标应该可选。${smokeDebug(ctx)}`,
+    6000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "void-siege-breaker"), "天炉星铠王攻击虚痕镇压者");
+  await waitForSmoke(
+    () => ctx.state.ai.lp < aiLpBeforeAttack &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "BATTLE_RESOLVED" &&
+        event.playerId === "player" &&
+        event.attackerCardId === ctx.state.player.field.find((card) => card?.id === "astral-forge-dragon")?.uid
+      ),
+    `进化王牌应该能完成一次攻击反击。${smokeDebug(ctx)}`,
+    12000
+  );
+  setSmokeStatus("passed", "protagonist-ace-evolution-demo");
+}
+
+async function runProtagonistAceProtectionDemoSmoke(ctx) {
+  setSmokeStatus("running", "protagonist-ace-protection-demo");
+  await startSmokeDuel(ctx, "protagonistAceProtection");
+  if (!ctx.state.player.field.some((card) => card?.id === "astral-forge-dragon") ||
+      !ctx.state.player.hand.some((card) => card?.id === "ace-vow-guard")) {
+    throw new Error(`王牌守护演示初始状态不正确：${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "ace-vow-guard"), "王牌誓护手牌");
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "盖放王牌誓护");
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "ace-vow-guard"), "王牌誓护盖放成功");
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.ai.grave.some((card) => card?.id === "corebreak-edict") &&
+      ctx.state.player.field.some((card) => card?.id === "astral-forge-dragon" && (card.tempAtk || 0) < 0),
+    `对手应先发动裂核裁令削弱王牌。${smokeDebug(ctx)}`,
+    22000
+  );
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `王牌誓护攻击响应窗口。${smokeDebug(ctx)}`, 18000);
+  const attackDeclared = (ctx.state.gameEvents || []).filter((event) => event.type === "ATTACK_DECLARED").at(-1);
+  if (!attackDeclared || !ctx.els.chainText.textContent.includes("王牌誓护")) {
+    throw new Error(`王牌誓护响应缺少攻击声明或提示：${smokeDebug(ctx)}`);
+  }
+  if (!chainChoiceButton(ctx.els, "ace-vow-guard")) {
+    throw new Error(`王牌誓护必须出现在弹窗候选中：${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(chainChoiceButton(ctx.els, "ace-vow-guard"), "在弹窗内选择王牌誓护");
+  await waitForSmoke(
+    () => !ctx.els.chainYes.disabled && ctx.els.chainText.textContent.includes("王牌誓护"),
+    `王牌誓护确认按钮必须可用。${smokeDebug(ctx)}`,
+    6000
+  );
+  clickSmokeElement(ctx.els.chainYes, "确认发动王牌誓护");
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).some((event) =>
+        event.type === "EFFECT_NEGATED" &&
+        String(event.targetEffectId) === String(attackDeclared.id)
+      ) &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "ATTACK_CANCELED" &&
+        String(event.declarationEventId) === String(attackDeclared.id)
+      ) &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "STAT_MODIFIED" &&
+        event.sourceCardId === ctx.state.player.grave.find((card) => card?.id === "ace-vow-guard")?.uid &&
+        event.amount === 900
+      ) &&
+      !ctx.state.player.traps.some((card) => card?.id === "ace-vow-guard") &&
+      ctx.state.player.field.some((card) => card?.id === "astral-forge-dragon"),
+    `王牌誓护必须无效攻击、强化王牌并离场。${smokeDebug(ctx)}`,
+    12000
+  );
+
+  await waitForSmoke(
+    () => !ctx.state.aiRunning && ctx.state.turn === "player" && ctx.state.phase === "main" && ctx.state.actionWindow === "main",
+    `王牌守护后应回到玩家主阶段。${smokeDebug(ctx)}`,
+    24000
+  );
+
+  const aiLpBeforeCounter = ctx.state.ai.lp;
+  clickSmokeElement(fieldCard(ctx.els, "player", "astral-forge-dragon"), "选择守住后的天炉星铠王");
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "void-siege-breaker")?.classList.contains("attack-target"),
+    `守护后的王牌应该可以反击。${smokeDebug(ctx)}`,
+    6000
+  );
+  clickSmokeElement(fieldSlot(ctx.els, "ai", 0), "天炉星铠王反击虚痕镇压者");
+  await waitForSmoke(
+    () => (ctx.state.ai.lp < aiLpBeforeCounter ||
+        ctx.state.ai.grave.some((card) => card?.id === "void-siege-breaker")) &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "BATTLE_RESOLVED" &&
+        event.playerId === "player" &&
+        event.attackerCardId === ctx.state.player.field.find((card) => card?.id === "astral-forge-dragon")?.uid
+      ),
+    `守住王牌后应该完成关键反击。${smokeDebug(ctx)}`,
+    12000
+  );
+  setSmokeStatus("passed", "protagonist-ace-protection-demo");
+}
+
 async function runRedirectPromptSmoke(ctx) {
   setSmokeStatus("running", "redirect-prompt");
   await startSmokeDuel(ctx, "redirect");
@@ -861,6 +1006,11 @@ async function runPhantomSwitchRedirectSmoke(ctx) {
   const battleResolved = (ctx.state.gameEvents || []).find((event) =>
     event.type === "BATTLE_RESOLVED" && String(event.declarationEventId) === String(attackDeclared.id)
   );
+  const targetChanged = (ctx.state.gameEvents || []).some((event) =>
+    event.type === "ATTACK_TARGET_CHANGED" &&
+    String(event.declarationEventId) === String(attackDeclared.id) &&
+    event.targetCardId === redirectedTargetCardId
+  );
   const oldTargetDamage = (ctx.state.gameEvents || []).some((event) =>
     event.type === "DAMAGE_DEALT" &&
     event.playerId === "player" &&
@@ -880,7 +1030,7 @@ async function runPhantomSwitchRedirectSmoke(ctx) {
     trapCardId,
     playerShieldBeforeRedirect
   });
-  if (pendingAfterRedirect?.targetCardId !== redirectedTargetCardId ||
+  if (!targetChanged ||
       battleResolved?.targetCardId !== redirectedTargetCardId ||
       oldTargetDamage ||
       !duskStillOnField ||
@@ -1630,6 +1780,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-trap-response": runSummonTrapResponseSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,
+    "protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke,
+    "protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "target-window": runTargetWindowSmoke,

@@ -269,6 +269,56 @@ test("protagonist comeback pack has rule-backed cards decks and scenarios", () =
   assert.equal(scenarioSetups.protagonistComeback.playerLp, 900);
 });
 
+test("protagonist ace evolution pack has rule-backed cards decks and scenarios", () => {
+  const expectedIds = [
+    "ember-soul-initiate",
+    "lumen-gearlet",
+    "starwell-runner",
+    "astral-forge-dragon",
+    "void-siege-breaker",
+    "soulforge-ascent",
+    "material-reclaim",
+    "corebreak-edict",
+    "ace-vow-guard"
+  ];
+  expectedIds.forEach((id) => assert.ok(cardsById.has(id), `missing protagonist ace evolution card ${id}`));
+
+  assert.equal(cardsById.get("starwell-runner").onSummon, "draw1");
+  assert.equal(cardsById.get("astral-forge-dragon").afterAttack, "grow200");
+  assert.equal(cardsById.get("soulforge-ascent").effect, "aceEvolution");
+  assert.equal(cardsById.get("material-reclaim").effect, "graveReturn");
+  assert.equal(cardsById.get("corebreak-edict").effect, "aceCrackdown");
+  assert.equal(cardsById.get("ace-vow-guard").trigger, "aceGuard");
+
+  assert.deepEqual(getCardEffectDefinition("aceEvolution").requirements, [
+    { type: "requireFieldCards", player: "self", materials: ["ember-soul-initiate", "lumen-gearlet"] }
+  ]);
+  assert.deepEqual(getCardEffectDefinition("aceEvolution").operations, [
+    { op: "sendMaterialsToGrave", player: "self", materials: ["ember-soul-initiate", "lumen-gearlet"] },
+    { op: "specialSummonFromDeckOrHand", player: "self", templateId: "astral-forge-dragon" },
+    { op: "modifyStat", cardId: { playerId: "$action.rivalId", zone: "monsterZone" }, stat: "tempAtk", amount: -500 },
+    { op: "modifyStat", cardId: { playerId: "$action.rivalId", zone: "monsterZone" }, stat: "tempDef", amount: -500 },
+    { op: "gainShield", player: "self", amount: 300 }
+  ]);
+  assert.deepEqual(getCardEffectDefinition("aceCrackdown").target, { player: "rival", zone: "monsterZone", rule: "strongestAtk" });
+  assert.deepEqual(getCardEffectDefinition("aceGuard").operations, [
+    { op: "negateEffect", targetEffectId: "$action.targetEffectId" },
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "strongestAtk" }, stat: "tempAtk", amount: 900 }
+  ]);
+
+  assert.ok(deckPresets.protagonistAceEvolution.ids.includes("soulforge-ascent"));
+  assert.ok(deckPresets.protagonistAceEvolution.ids.includes("astral-forge-dragon"));
+  assert.ok(deckPresets.protagonistAceEvolution.ids.includes("ace-vow-guard"));
+  assert.ok(deckPresets.aceSuppressionRival.ids.includes("void-siege-breaker"));
+  assert.ok(deckPresets.aceSuppressionRival.ids.includes("corebreak-edict"));
+  assert.deepEqual(scenarioSetups.protagonistAceEvolution.playerField, ["ember-soul-initiate", "lumen-gearlet"]);
+  assert.equal(scenarioSetups.protagonistAceEvolution.playerHand[0], "soulforge-ascent");
+  assert.equal(scenarioSetups.protagonistAceEvolution.playerDeck[0], "astral-forge-dragon");
+  assert.deepEqual(scenarioSetups.protagonistAceProtection.playerField, ["astral-forge-dragon"]);
+  assert.ok(scenarioSetups.protagonistAceProtection.playerHand.includes("ace-vow-guard"));
+  assert.ok(scenarioSetups.protagonistAceProtection.aiHand.includes("corebreak-edict"));
+});
+
 test("deck presets reference only known cards and have enough cards", () => {
   Object.entries(deckPresets).forEach(([key, preset]) => {
     assert.ok(preset.label, `${key} needs label`);

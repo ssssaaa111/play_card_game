@@ -132,6 +132,21 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: 200 }
   ], { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }),
+  aceEvolution: oneShot([
+    { op: "sendMaterialsToGrave", player: "self", materials: ["ember-soul-initiate", "lumen-gearlet"] },
+    { op: "specialSummonFromDeckOrHand", player: "self", templateId: "astral-forge-dragon" },
+    { op: "modifyStat", cardId: { playerId: "$action.rivalId", zone: "monsterZone" }, stat: "tempAtk", amount: -500 },
+    { op: "modifyStat", cardId: { playerId: "$action.rivalId", zone: "monsterZone" }, stat: "tempDef", amount: -500 },
+    { op: "gainShield", player: "self", amount: 300 }
+  ], { requirements: [{ type: "requireFieldCards", player: "self", materials: ["ember-soul-initiate", "lumen-gearlet"] }] }),
+  aceCrackdown: oneShot([
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -500 },
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -500 }
+  ], { target: { player: "rival", zone: "monsterZone", rule: "strongestAtk" } }),
+  aceGuard: oneShot([
+    { op: "negateEffect", targetEffectId: "$action.targetEffectId" },
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "strongestAtk" }, stat: "tempAtk", amount: 900 }
+  ], { requirements: [{ type: "responseWindow", prompt: "attack" }] }),
   pierceLine: oneShot([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -400 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -400 },
@@ -336,6 +351,49 @@ export class EffectContext {
       from: source,
       to: { playerId: to.playerId, zone: to.zone, index: to.index ?? null }
     });
+  }
+
+  sendMaterialsToGrave(playerId, materials = [], options = {}) {
+    requirePlayer(this.#state, playerId);
+    const materialCardIds = selectMaterialCardIds(this.#state, playerId, materials);
+    for (const materialCardId of materialCardIds) {
+      this.moveCard(materialCardId, { playerId, zone: "monsterZone" }, { playerId, zone: "grave" });
+    }
+    this.#emit("MATERIALS_SENT", {
+      playerId,
+      materialCardIds,
+      materials: normalizeMaterialRequirements(materials),
+      destination: "grave",
+      sourceCardId: options.sourceCardId || null
+    });
+    return materialCardIds;
+  }
+
+  specialSummonFromDeckOrHand(playerId, templateId, options = {}) {
+    requirePlayer(this.#state, playerId);
+    if (!templateId) {
+      throw new GameRuleError("specialSummonFromDeckOrHand requires a templateId");
+    }
+    const found = findCardByTemplateInZones(this.#state, playerId, templateId, ["hand", "deck"]);
+    if (!found) {
+      throw new GameRuleError(`No ${templateId} is available in hand or deck`);
+    }
+    if (found.card.type !== "monster") {
+      throw new GameRuleError(`Card ${found.cardId} is not a monster`);
+    }
+
+    this.moveCard(found.cardId, { playerId, zone: found.zone }, { playerId, zone: "monsterZone", index: options.index });
+    this.#emit("MONSTER_SUMMONED", {
+      playerId,
+      cardId: found.cardId,
+      sourceCardId: options.sourceCardId || found.cardId,
+      mode: options.mode || found.card.mode || "attack",
+      used: false,
+      changedMode: false,
+      summonType: "special",
+      fromZone: found.zone
+    });
+    return found.cardId;
   }
 
   #releaseContinuousEffectsForMove(cardId, from, to) {
@@ -2046,6 +2104,7 @@ export function applyGameEvent(state, event, options = {}) {
     case "CARD_ACTIVATED":
     case "TRAP_SET":
     case "CARD_DESTROYED":
+    case "MATERIALS_SENT":
     case "EFFECT_NEGATED":
     case "EFFECT_SKIPPED":
     case "DRAW_FAILED":
@@ -2626,6 +2685,24 @@ function validateEffectRequirements(definition, state, action, card) {
       }
       continue;
     }
+    if (requirement.type === "requireFieldCards") {
+      const playerId = resolvePlayerRef(requirement.player, action);
+      const missing = missingMaterialRequirements(state, playerId, requirement.materials || requirement.cards || requirement.templates || []);
+      if (missing.length > 0) {
+        throw new GameRuleError(`Effect ${card.effect || card.id} requires field materials ${missing.join(", ")}`);
+      }
+      continue;
+    }
+    if (requirement.type === "responseWindow") {
+      const responseWindow = state.machine.responseWindow;
+      if (!responseWindow) {
+        throw new GameRuleError(`Effect ${card.trigger || card.effect || card.id} requires a response window`);
+      }
+      if (requirement.prompt && responseWindow.prompt !== requirement.prompt) {
+        throw new GameRuleError(`Effect ${card.trigger || card.effect || card.id} requires ${requirement.prompt} response window`);
+      }
+      continue;
+    }
     throw new GameRuleError(`Unsupported effect requirement ${requirement.type}`);
   }
 }
@@ -2655,6 +2732,57 @@ function monsterElementCount(state, playerId, element) {
     .map((cardId) => requireCard(state, cardId).element)
     .filter((entry) => entry === element)
     .length;
+}
+
+function normalizeMaterialRequirements(materials = []) {
+  return (Array.isArray(materials) ? materials : [materials])
+    .map((entry) => typeof entry === "string"
+      ? { templateId: entry, count: 1 }
+      : { templateId: entry?.templateId || entry?.id, count: Math.max(1, Number(entry?.count) || 1) })
+    .filter((entry) => entry.templateId);
+}
+
+function cardMatchesTemplate(card, templateId) {
+  return Boolean(card && templateId && (card.templateId === templateId || card.id === templateId));
+}
+
+function selectMaterialCardIds(state, playerId, materials = []) {
+  const player = requirePlayer(state, playerId);
+  const available = player.monsterZone.slice();
+  const selected = [];
+  for (const requirement of normalizeMaterialRequirements(materials)) {
+    for (let index = 0; index < requirement.count; index += 1) {
+      const foundIndex = available.findIndex((cardId) => cardMatchesTemplate(requireCard(state, cardId), requirement.templateId));
+      if (foundIndex < 0) {
+        throw new GameRuleError(`Missing field material ${requirement.templateId}`);
+      }
+      const [cardId] = available.splice(foundIndex, 1);
+      selected.push(cardId);
+    }
+  }
+  return selected;
+}
+
+function missingMaterialRequirements(state, playerId, materials = []) {
+  try {
+    selectMaterialCardIds(state, playerId, materials);
+    return [];
+  } catch (error) {
+    if (error instanceof GameRuleError) {
+      return normalizeMaterialRequirements(materials).map((entry) => entry.templateId);
+    }
+    throw error;
+  }
+}
+
+function findCardByTemplateInZones(state, playerId, templateId, zones = []) {
+  const player = requirePlayer(state, playerId);
+  for (const zone of zones) {
+    const cardIds = requireZone(player, zone);
+    const cardId = cardIds.find((candidateId) => cardMatchesTemplate(requireCard(state, candidateId), templateId));
+    if (cardId) return { cardId, card: requireCard(state, cardId), zone };
+  }
+  return null;
 }
 
 function cardMatchesTargetDefinition(state, cardId, targetDefinition = {}) {
@@ -2736,6 +2864,14 @@ function runEffectOperation(operation, ctx, action, card, options = {}) {
       return ctx.gainShield(resolvePlayerRef(operation.player, action), operation.amount, source);
     case "moveCard":
       return ctx.moveCard(resolveValue(operation.cardId, action, card), resolveValue(operation.from, action, card), resolveValue(operation.to, action, card));
+    case "sendMaterialsToGrave":
+      return ctx.sendMaterialsToGrave(resolvePlayerRef(operation.player, action), resolveValue(operation.materials || [], action, card), source);
+    case "specialSummonFromDeckOrHand":
+      return ctx.specialSummonFromDeckOrHand(resolvePlayerRef(operation.player, action), resolveValue(operation.templateId, action, card), {
+        ...source,
+        index: operation.index,
+        mode: operation.mode
+      });
     case "destroyCard":
       return ctx.destroyCard(resolveValue(operation.cardId, action, card), source);
     case "summonMonster":

@@ -128,6 +128,37 @@ test("validates field and hand dependent spell requirements", () => {
   );
 });
 
+test("validates ace evolution spell requirements", () => {
+  const materialField = [
+    monster({ id: "ember-soul-initiate" }),
+    monster({ id: "lumen-gearlet" }),
+    null
+  ];
+  const readyOwner = duelist({
+    field: materialField,
+    deck: [monster({ id: "astral-forge-dragon" })]
+  });
+
+  assert.deepEqual(validateSpellCondition("aceEvolution", { owner: readyOwner }), { ok: true });
+  assert.equal(validateSpellCondition("aceEvolution", {
+    owner: duelist({
+      field: [monster({ id: "ember-soul-initiate" }), null, null],
+      deck: [monster({ id: "astral-forge-dragon" })]
+    })
+  }).ok, false);
+  assert.equal(validateSpellCondition("aceEvolution", {
+    owner: duelist({ field: materialField })
+  }).ok, false);
+  assert.equal(validateSpellCondition("aceCrackdown", {
+    owner: duelist(),
+    rival: duelist({ owner: "ai" })
+  }).ok, false);
+  assert.deepEqual(validateSpellCondition("aceCrackdown", {
+    owner: duelist(),
+    rival: duelist({ owner: "ai", field: [monster(), null, null] })
+  }), { ok: true });
+});
+
 test("validates direct attack spell requirements", () => {
   assert.deepEqual(validateSpellCondition("directStrike", { owner: duelist(), rival: duelist({ owner: "ai", field: [monster(), null, null] }) }), {
     ok: false,
@@ -227,6 +258,17 @@ test("scores AI spell priorities by style and board state", () => {
   assert.equal(scoreSpellForAi("buff500", { owner: duelist({ field: [monster(), null, null] }), rival: duelist({ owner: "player" }), aiStyle: "aggressive" }), 76);
   assert.equal(scoreSpellForAi("soulResonance", { owner: duelist(), rival: duelist({ owner: "player" }), aiStyle: "balanced" }), 0);
   assert.equal(scoreSpellForAi("soulResonance", { owner: duelist({ field: [monster(), null, null] }), rival: duelist({ owner: "player" }), aiStyle: "balanced" }), 54);
+  assert.equal(scoreSpellForAi("aceEvolution", {
+    owner: duelist({
+      field: [monster({ id: "ember-soul-initiate" }), monster({ id: "lumen-gearlet" }), null],
+      deck: [monster({ id: "astral-forge-dragon" })]
+    }),
+    rival: duelist({ owner: "player" })
+  }), 92);
+  assert.equal(scoreSpellForAi("aceCrackdown", {
+    owner: duelist(),
+    rival: duelist({ owner: "player", field: [monster(), null, null] })
+  }), 86);
   assert.equal(scoreSpellForAi("comebackDraw", { owner: duelist({ lp: 1200, deck: [monster(), monster()] }), rival: duelist({ owner: "player" }) }), 82);
   assert.equal(scoreSpellForAi("graveRevive", { owner: duelist({ grave: [monster()] }), rival: duelist({ owner: "player" }) }), 78);
   assert.equal(scoreSpellForAi("lastStandSurge", { owner: duelist({ lp: 1200, field: [monster(), null, null] }), rival: duelist({ owner: "player" }) }), 88);

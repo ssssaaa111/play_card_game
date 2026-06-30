@@ -29,6 +29,13 @@ export const trapDefinitions = {
     cancelsEvent: true,
     consumesAttack: true
   },
+  aceGuard: {
+    event: "attack",
+    caption: "无效攻击并强化王牌",
+    triggerText: "对手攻击时",
+    cancelsEvent: true,
+    consumesAttack: true
+  },
   redirectAttack: {
     event: "attack",
     caption: "改为攻击另一只怪兽",

@@ -25,6 +25,7 @@ test("matches trap triggers to battle events", () => {
   assert.equal(trapMatchesEvent(trap("counterBoost"), "attack"), true);
   assert.equal(trapMatchesEvent(trap("attackShift"), "attack"), true);
   assert.equal(trapMatchesEvent(trap("attackNegate"), "attack"), true);
+  assert.equal(trapMatchesEvent(trap("aceGuard"), "attack"), true);
   assert.equal(trapMatchesEvent(trap("redirectAttack"), "attack"), true);
   assert.equal(trapMatchesEvent(trap("weakenAttack"), "attack"), true);
   assert.equal(trapMatchesEvent(trap("soulParry"), "attack"), true);
@@ -49,6 +50,7 @@ test("provides player-facing trap trigger text", () => {
   assert.equal(trapTriggerText("attackDestroy"), "对手攻击时");
   assert.equal(trapTriggerText("attackShift"), "对手攻击时");
   assert.equal(trapTriggerText("attackNegate"), "对手攻击时");
+  assert.equal(trapTriggerText("aceGuard"), "对手攻击时");
   assert.equal(trapTriggerText("redirectAttack"), "对手攻击时");
   assert.equal(trapTriggerText("soulParry"), "对手攻击时");
   assert.equal(trapTriggerText("directShield"), "受到直接攻击时");
@@ -61,6 +63,7 @@ test("marks which cancelled traps consume the attack chance", () => {
   assert.equal(trapConsumesAttack("counterBoost"), true);
   assert.equal(trapConsumesAttack("attackShift"), true);
   assert.equal(trapConsumesAttack("attackNegate"), true);
+  assert.equal(trapConsumesAttack("aceGuard"), true);
   assert.equal(trapConsumesAttack("redirectAttack"), false);
   assert.equal(trapConsumesAttack("soulParry"), false);
   assert.equal(trapConsumesAttack("attackDestroy"), false);
@@ -73,6 +76,7 @@ test("summarizes trap trigger timing and effect", () => {
   assert.equal(trapSummaryText("counterBoost"), "对手攻击时 / 取消攻击并强化防线 / 消耗攻击");
   assert.equal(trapSummaryText("attackShift"), "对手攻击时 / 取消攻击并获得护盾 / 消耗攻击");
   assert.equal(trapSummaryText("attackNegate"), "对手攻击时 / 无效本次攻击 / 消耗攻击");
+  assert.equal(trapSummaryText("aceGuard"), "对手攻击时 / 无效攻击并强化王牌 / 消耗攻击");
   assert.equal(trapSummaryText("redirectAttack"), "对手攻击时 / 改为攻击另一只怪兽");
   assert.equal(trapSummaryText("soulParry"), "对手攻击时 / 削弱攻击怪兽并获得护盾");
   assert.equal(trapSummaryText("attackDestroy"), "对手攻击时 / 破坏攻击怪兽");

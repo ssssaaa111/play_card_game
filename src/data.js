@@ -54,7 +54,16 @@ export const library = [
   { id: "dawn-edge", type: "spell", name: "破晓锋印", icon: "锋", text: "选择我方 1 只怪兽，攻击力提升 900。", effect: "dawnEdge" },
   { id: "limit-break-oath", type: "spell", name: "临界誓辉", icon: "誓", text: "生命值 1500 以下才能发动；选择我方攻击力最高的怪兽，攻击力提升 700。", effect: "lastStandSurge" },
   { id: "last-light-guard", type: "trap", name: "残光护幕", icon: "幕", text: "盖放后自动触发：对手攻击时，无效本次攻击并消耗攻击机会。", trigger: "attackNegate" },
-  { id: "backlash-mirror", type: "trap", name: "逆光折返", icon: "返", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并反弹 500 点伤害。", trigger: "directRebound" }
+  { id: "backlash-mirror", type: "trap", name: "逆光折返", icon: "返", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并反弹 500 点伤害。", trigger: "directRebound" },
+  { id: "ember-soul-initiate", type: "monster", name: "星火引魂童", element: "fire", stars: 2, atk: 700, def: 1000, icon: "引", text: "王牌进化素材。小型星魂，擅长把火种接入更高阶的星铠。" },
+  { id: "lumen-gearlet", type: "monster", name: "微光机巧卫", element: "light", stars: 2, atk: 900, def: 900, icon: "机", text: "王牌进化素材。守住场面并为星铠展开供能。" },
+  { id: "starwell-runner", type: "monster", name: "星井巡游者", element: "wind", stars: 3, atk: 1000, def: 1300, icon: "巡", text: "召唤时抽 1 张卡，用来寻找进化资源。", onSummon: "draw1" },
+  { id: "astral-forge-dragon", type: "monster", name: "天炉星铠王", element: "light", stars: 6, atk: 2500, def: 2100, icon: "铠", text: "由星魂铸升特殊召唤的王牌。攻击后自身攻击力提升 200。", afterAttack: "grow200" },
+  { id: "void-siege-breaker", type: "monster", name: "虚痕镇压者", element: "shadow", stars: 5, atk: 2600, def: 1200, icon: "镇", text: "对手压制用高攻怪兽，擅长逼迫主角交出守护资源。" },
+  { id: "soulforge-ascent", type: "spell", name: "星魂铸升", icon: "升", text: "需要我方场上有星火引魂童和微光机巧卫；将它们送入墓地，从手牌或卡组特殊召唤天炉星铠王，并压低对手场上怪兽。", effect: "aceEvolution" },
+  { id: "material-reclaim", type: "spell", name: "星屑返轨", icon: "返", text: "将墓地 1 张非本卡的卡放回卡组顶，然后抽 1 张卡。", effect: "graveReturn" },
+  { id: "corebreak-edict", type: "spell", name: "裂核裁令", icon: "裁", text: "选择对手攻击力最高的怪兽，攻击力和守备力下降 500。", effect: "aceCrackdown" },
+  { id: "ace-vow-guard", type: "trap", name: "王牌誓护", icon: "誓", text: "盖放后自动触发：对手攻击时，无效本次攻击，并让我方攻击力最高的怪兽提升 900。", trigger: "aceGuard" }
 ];
 
 export const monsterAssets = {
@@ -75,7 +84,12 @@ export const monsterAssets = {
   "star-soul-apprentice": "assets/monster-light-knight.png",
   "rift-bulwark": "assets/monster-shadow-wolf.png",
   "spark-runner": "assets/monster-wind-mage.png",
-  "astral-comet-ace": "assets/monster-light-knight.png"
+  "astral-comet-ace": "assets/monster-light-knight.png",
+  "ember-soul-initiate": "assets/monster-fire-dragon.png",
+  "lumen-gearlet": "assets/monster-light-knight.png",
+  "starwell-runner": "assets/monster-wind-mage.png",
+  "astral-forge-dragon": "assets/monster-light-knight.png",
+  "void-siege-breaker": "assets/monster-shadow-wolf.png"
 };
 
 export const roleProfiles = {
@@ -247,6 +261,40 @@ export const deckPresets = {
       "blade-sigil", "prism-drive", "pierce-line", "burst-rune",
       "last-light-guard", "last-light-guard", "backlash-mirror", "backlash-mirror",
       "mirror-snare"
+    ]
+  },
+  protagonistAceEvolution: {
+    label: "星魂主角战役 02：王牌进化",
+    ids: [
+      "ember-soul-initiate", "ember-soul-initiate", "ember-soul-initiate",
+      "lumen-gearlet", "lumen-gearlet", "lumen-gearlet",
+      "starwell-runner", "starwell-runner", "spark-runner", "spark-runner",
+      "astral-forge-dragon", "astral-forge-dragon",
+      "star-soul-apprentice", "gale-mage", "night-oracle", "solar-knight",
+      "aegis-mender", "nova-squire", "prism-saint", "void-hound",
+      "soulforge-ascent", "soulforge-ascent", "soulforge-ascent",
+      "material-reclaim", "material-reclaim", "seer-call", "seer-call",
+      "battle-trance", "battle-trance", "rally-strike", "star-shield",
+      "soul-resonance", "dawn-edge", "grave-return", "element-echo",
+      "ace-vow-guard", "ace-vow-guard", "last-light-guard", "backlash-mirror",
+      "soul-parry", "storm-shift", "mirror-snare", "guard-sigil"
+    ]
+  },
+  aceSuppressionRival: {
+    label: "王牌压制对手",
+    ids: [
+      "void-siege-breaker", "void-siege-breaker", "void-siege-breaker",
+      "corebreak-edict", "corebreak-edict", "corebreak-edict",
+      "star-lancer", "star-lancer", "flare-titan", "flare-titan",
+      "sky-raider", "sky-raider", "ember-drake", "ember-drake",
+      "flame-captain", "flame-captain", "void-hound", "dusk-alchemist",
+      "solar-knight", "iron-guardian", "gale-mage", "nova-squire",
+      "burst-rune", "burst-rune", "war-chant", "war-chant",
+      "rally-strike", "rally-strike", "pierce-line", "pierce-line",
+      "battle-trance", "star-breach", "flame-gale-burst", "element-echo",
+      "overclock-core", "blade-sigil", "dispelling-ray",
+      "summon-flare", "summon-flare", "mirror-snare", "counter-array",
+      "void-lock", "phantom-switch", "weakening-web", "chain-nullifier"
     ]
   },
   suppressionRival: {
@@ -497,6 +545,30 @@ export const scenarioSetups = {
     playerGrave: ["astral-comet-ace"],
     aiField: ["star-lancer"],
     aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
+  protagonistAceEvolution: {
+    label: "王牌进化演示",
+    text: "主角已经站住两只进化素材，手牌持有星魂铸升；对手场上有压制怪，适合演示素材送墓、王牌从卡组登场和登场压场。",
+    goal: "发动星魂铸升，将两只素材送墓，特殊召唤天炉星铠王，并观察对手场上怪兽被压低。",
+    playerHand: ["soulforge-ascent", "starwell-runner", "material-reclaim"],
+    playerDeck: ["astral-forge-dragon", "ace-vow-guard", "battle-trance"],
+    playerField: ["ember-soul-initiate", "lumen-gearlet"],
+    playerGrave: ["spark-runner"],
+    aiField: ["void-siege-breaker"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
+  protagonistAceProtection: {
+    label: "王牌守护演示",
+    text: "主角王牌已登场，对手握有裂核裁令并准备高攻压制；主角需要盖放王牌誓护守住王牌，再完成反击。",
+    goal: "盖放王牌誓护并结束回合；对手削弱并攻击王牌时发动陷阱守住，再用王牌反击。",
+    playerHand: ["ace-vow-guard", "battle-trance"],
+    playerDeck: ["soulforge-ascent", "material-reclaim"],
+    playerField: ["astral-forge-dragon"],
+    playerTraps: ["last-light-guard"],
+    aiField: ["void-siege-breaker"],
+    aiHand: ["corebreak-edict"],
     aiDeck: ["guard-sigil"]
   },
   target: {

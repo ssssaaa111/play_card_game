@@ -95,6 +95,7 @@ import {
 const BROWSER_TEST_MODE = new URLSearchParams(window.location.search).has("test");
 const BROWSER_SMOKE = BROWSER_TEST_MODE ? new URLSearchParams(window.location.search).get("smoke") || "" : "";
 const AUTO_END_DELAY_MS = 2800;
+const BROWSER_TEST_SLEEP_CAP_MS = 80;
 
 const state = {
   player: createDuelist("player"),
@@ -611,9 +612,12 @@ function isAttackFlowPending() {
 
 function setActionWindow(windowName, options = {}) {
   try {
+    const responsePlayerId = windowName === ACTION_WINDOWS.response
+      ? currentEngineMachine()?.responseWindow?.playerId
+      : null;
     return dispatchOpenActionWindowFromUiState(
       state,
-      options.playerId || state.turn || "player",
+      options.playerId || responsePlayerId || state.turn || "player",
       windowName,
       {
         now: options.now ?? Date.now(),
@@ -979,7 +983,7 @@ async function queuePendingAttack(targetIndex) {
   render();
   let resolved = false;
   try {
-    await sleep(360);
+    if (!BROWSER_TEST_MODE) await sleep(360);
     resolved = await attack(state.player, state.ai, attackerIndex, targetIndex);
   } finally {
     if (!state.gameOver && state.actionWindow === ACTION_WINDOWS.resolution) {
@@ -1538,6 +1542,24 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       const movedName = found?.card?.name || "墓地卡";
       addLog(`${movedName} 因 ${card.name} 回到卡组顶。`);
     }
+    if (event.type === "MATERIALS_SENT") {
+      const names = (event.materialCardIds || [])
+        .map((cardId) => findRuntimeCard(cardId)?.card?.name)
+        .filter(Boolean)
+        .join("、");
+      addLog(`${card.name} 将${names || "素材"}送入墓地，进化条件达成。`);
+      playEpicAction("进化素材", "draw");
+    }
+    if (event.type === "MONSTER_SUMMONED" && event.sourceCardId === runtimeCardId(card)) {
+      const found = findRuntimeCard(event.cardId);
+      if (found?.card) {
+        result.effectTarget = found.card;
+        result.targetOwner = found.owner;
+        addLog(`${found.card.name} 因 ${card.name} 特殊登场。`);
+        playEpicAction("王牌进化", "summon");
+        if (found.card.stars >= 5) showAce(found.card, found.owner);
+      }
+    }
     if (event.type === "CARDS_DRAWN" && event.count > 0) {
       const drawn = (event.cardIds || []).map((cardId) => findRuntimeCard(cardId)?.card).filter(Boolean);
       playDrawSequence(owner.owner, drawn);
@@ -1718,6 +1740,8 @@ function queueTrapChainLink(owner, rival, eventName, context, trapIndex, chainIn
     return { owner, rival, eventName, context: { ...trapContext }, trap, trapIndex, trapSource, chainIndex, events };
   } catch (error) {
     cue(error.message || "陷阱卡加入连锁失败。");
+    state.ruleCheckIssue = error.message || "Trap chain queue failed.";
+    addLog(`规则引擎拒绝陷阱连锁：${state.ruleCheckIssue}`);
     console.error(error);
     return null;
   }
@@ -1824,6 +1848,11 @@ async function triggerTrap(owner, rival, eventName, context) {
   if (state.gameOver) return result;
   const engineResponse = Boolean(context?.engineResponse);
   const choice = await chooseTrapIndex(owner, rival, eventName, context);
+  if (!choice) {
+    state.ruleCheckIssue = "Trap response choice did not resolve.";
+    addLog(`规则引擎拒绝陷阱响应：${state.ruleCheckIssue}`);
+    return result;
+  }
   if (choice.trapIndex < 0) {
     if (choice.declined) {
       addLog(choice.skippedName ? `你没有发动 ${choice.skippedName}。` : "你没有发动陷阱。");
@@ -1834,9 +1863,18 @@ async function triggerTrap(owner, rival, eventName, context) {
     return result;
   }
 
-  const outcome = engineResponse
-    ? await resolveEngineTrapChain(owner, rival, eventName, context, choice.trapIndex)
-    : resolveTrapCard(owner, rival, eventName, context, choice.trapIndex, 1);
+  let outcome = { cancelled: false, shielded: false, consumesAttack: false };
+  try {
+    outcome = engineResponse
+      ? await resolveEngineTrapChain(owner, rival, eventName, context, choice.trapIndex)
+      : resolveTrapCard(owner, rival, eventName, context, choice.trapIndex, 1);
+  } catch (error) {
+    state.ruleCheckIssue = error.message || "Trap response failed.";
+    addLog(`规则引擎拒绝陷阱响应：${state.ruleCheckIssue}`);
+    cue(state.ruleCheckIssue);
+    console.error(error);
+    return result;
+  }
   result.activated = outcome.activated || 1;
   result.cancelled = Boolean(outcome.cancelled);
   result.shielded = Boolean(outcome.shielded);
@@ -2059,6 +2097,23 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playEpicAction("无效", "guard");
     addLog(`${trap.name} 无效了本次攻击。攻击机会已消耗。`);
     speak(`${trap.name} 无效攻击。`);
+    return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
+  }
+
+  if (trap.trigger === "aceGuard") {
+    const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
+    const statEvent = trapEvents.find((event) => event.type === "STAT_MODIFIED" && event.amount > 0);
+    const ace = statEvent ? findRuntimeCard(statEvent.cardId)?.card : strongestMonster(owner);
+    const aceIndex = owner.field.indexOf(ace);
+    const aceEl = aceIndex >= 0 ? fieldElement(owner.owner, aceIndex) || panelElement(owner.owner) : panelElement(owner.owner);
+    playArrow(trapSource, attackerEl, "trap", trap.name);
+    playGuardShield(aceEl);
+    if (aceIndex >= 0) {
+      playMonsterMotion(owner.owner, aceIndex, "stand");
+    }
+    playEpicAction("王牌守护", "guard");
+    addLog(`${trap.name} 无效了本次攻击，并让 ${ace?.name || "王牌"} 攻击力提升 900。攻击机会已消耗。`);
+    speak(`${trap.name}，守住王牌。`);
     return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
@@ -2287,7 +2342,13 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     attackContext.targetEffectId = attackEvent.id;
     attackContext.attackerCardId = attackEvent.attackerCardId;
   }
-  const trapResult = await triggerTrap(rival, owner, "attack", attackContext);
+  const hasAttackTrapResponse = trapCandidates(rival, "attack", attackContext).length > 0;
+  let trapResult = { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
+  if (hasAttackTrapResponse) {
+    trapResult = await triggerTrap(rival, owner, "attack", attackContext);
+  } else if (!closeTrapResponseWindow(rival.owner, "no-legal-trap")) {
+    trapResult.cancelled = true;
+  }
   if (trapResult.cancelled) {
     if (!consumeCancelledAttackWithEngine(owner, attacker, {
       declarationEventId: attackContext.targetEffectId,
@@ -2306,13 +2367,13 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     playSound("ace");
     playAceStrike(attacker, owner.owner, target);
     playEpicAction("王牌攻势", "attack", 1300);
-    await sleep(360);
+    if (!BROWSER_TEST_MODE) await sleep(360);
   }
   playSound("attack-charge");
   playAttackCloseup(attacker, target, owner.owner, rival.owner);
   playEpicAction("攻击宣言", "attack", 1260);
   playDuelistLine(owner.owner, lineFor(owner.owner, "attack", attacker), false, "attack");
-  await sleep(520);
+  if (!BROWSER_TEST_MODE) await sleep(520);
   playSound("attack");
   animateAvatar(owner.owner, "attack");
   playMonsterMotion(owner.owner, attackerIndex, "attack");
@@ -2324,7 +2385,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   playSlashBurst(fromEl, toEl);
   playEpicAction("冲击", "attack", 900);
   playAttackCutIn(attacker, target, owner.owner, rival.owner);
-  await sleep(620);
+  if (!BROWSER_TEST_MODE) await sleep(620);
 
   const outcome = target ? describeBattleOutcome(attacker, target, owner, rival) : null;
   let battleEvents = [];
@@ -2536,9 +2597,16 @@ function promptTrapChoice(candidates, eventName, details = {}) {
       setActionWindow(previousWindow.actionWindow, {
         reason: previousWindow.actionWindowReason || "trap response resolved"
       });
-      closeTrapChoicePrompt();
-      render();
-      resolve(resolution.ok ? resolution : { trapIndex: -1, skippedName: "" });
+      const resolvedChoice = resolution.ok ? resolution : { trapIndex: -1, skippedName: "" };
+      resolve(resolvedChoice);
+      try {
+        closeTrapChoicePrompt();
+        render();
+      } catch (error) {
+        state.ruleCheckIssue = error.message || "Trap response render failed.";
+        addLog(`陷阱响应界面刷新失败：${state.ruleCheckIssue}`);
+        console.error(error);
+      }
     };
   });
 }
@@ -2547,6 +2615,14 @@ function answerChain(answer) {
   if (pendingTrapChoiceResolver) {
     pendingTrapChoiceResolver(answer);
   }
+}
+
+function confirmTrapChoice() {
+  if (state.pendingTrapChoice) {
+    const selectedIndex = state.pendingTrapChoice.selectedIndex;
+    if (activatePendingTrapChoice(selectedIndex)) return;
+  }
+  answerChain(true);
 }
 
 function handOffToAiTurn() {
@@ -3048,7 +3124,8 @@ function announce(text) {
 }
 
 function sleep(ms) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms)).then(waitWhilePaused);
+  const delay = BROWSER_TEST_MODE ? Math.min(ms, BROWSER_TEST_SLEEP_CAP_MS) : ms;
+  return new Promise((resolve) => window.setTimeout(resolve, delay)).then(waitWhilePaused);
 }
 
 function waitWhilePaused() {
@@ -3459,6 +3536,11 @@ function renderTraps(root, duelist, owner) {
           render();
           if (canPlayerAct()) resumePlayerIdleCountdownAfterPassiveIntent();
         });
+        cardEl.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          activatePendingTrapChoice(index);
+        });
       }
       slot.appendChild(cardEl);
     }
@@ -3666,7 +3748,7 @@ els.modeBtn.addEventListener("click", toggleSelectedMode);
 els.detailBtn.addEventListener("click", openFocusedCardDetail);
 els.aiPanel.addEventListener("click", handleAiPanelAttack);
 els.zoomClose.addEventListener("click", closeCardDetail);
-els.chainYes.addEventListener("click", () => answerChain(true));
+els.chainYes.addEventListener("click", confirmTrapChoice);
 els.chainNo.addEventListener("click", () => answerChain(false));
 els.restartBtn.addEventListener("click", prepareGame);
 els.modalRestart.addEventListener("click", () => {
