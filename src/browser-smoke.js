@@ -1201,6 +1201,160 @@ async function runProtagonistAceProtectionDemoSmoke(ctx) {
   setSmokeStatus("passed", "protagonist-ace-protection-demo");
 }
 
+function assertTrioOmegaInitial(ctx, label) {
+  const aiAces = ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"];
+  if (!aiAces.every((id) => ctx.state.ai.field.some((card) => card?.id === id))) {
+    throw new Error(`${label}：三曜王牌初始压场不完整。${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion")) {
+    throw new Error(`${label}：月曜帷幕未预置。${smokeDebug(ctx)}`);
+  }
+  const decoy = ctx.state.player.field.find((card) => card?.id === "trio-decoy-ward");
+  if (!decoy || (decoy.tempAtk || 0) >= 0 || (decoy.tempDef || 0) >= 0) {
+    throw new Error(`${label}：折光诱标卫应被月曜帷幕持续削弱。${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.player.grave.some((card) => card?.id === "trio-ember-pawn")) {
+    throw new Error(`${label}：余烁小卫应埋在墓地作为终局资源。${smokeDebug(ctx)}`);
+  }
+}
+
+async function runTrioOmegaCorrectLine(ctx, scenarioId, smokeName, expectedDifficulty) {
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, scenarioId);
+  assertScenarioBrief(ctx.els, {
+    difficulty: expectedDifficulty,
+    objectives: ["三曜", "低星"],
+    hints: ["月曜帷幕"]
+  });
+  assertTrioOmegaInitial(ctx, smokeName);
+
+  const initialStrongestPlayerAtk = Math.max(...ctx.state.player.field.filter(Boolean).map((card) => card.atk + (card.tempAtk || 0)));
+  if (initialStrongestPlayerAtk >= 3000) {
+    throw new Error(`${smokeName}：初始场面不应存在可硬打日曜的高攻怪兽。${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}：选择日冕诱锁`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}：盖下日冕诱锁`);
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "trio-solar-snare"), `${smokeName}：日冕诱锁盖放`);
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `${smokeName}：日曜攻击响应窗口`, 26000);
+  if (!ctx.els.chainText.textContent.includes("曜冕裁决者")) {
+    throw new Error(`${smokeName}：第一轮响应应来自日曜攻击。${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}：发动日冕诱锁`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.state.ai.grave.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.state.player.grave.some((card) => card?.id === "trio-solar-snare"),
+    `${smokeName}：日曜被诱锁破解`,
+    12000
+  );
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && ctx.state.phase === "main",
+    `${smokeName}：回到玩家反击回合。${smokeDebug(ctx)}`,
+    32000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}：选择碎月解幕`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}：碎月解幕目标选择`);
+  clickSmokeElement(ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}：破坏月曜帷幕`);
+  await waitForSmoke(
+    () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
+      ctx.state.player.field.some((card) => card?.id === "trio-decoy-ward" && (card.tempAtk || 0) === 0 && (card.tempDef || 0) === 0),
+    `${smokeName}：月曜帷幕被清除并释放修正`,
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "trio-ember-recall"), `${smokeName}：选择余烁归轨`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", `${smokeName}：余烁归轨墓地目标`);
+  clickSmokeElement(graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}：回召余烁小卫`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn") &&
+      !ctx.state.player.grave.some((card) => card?.id === "trio-ember-pawn"),
+    `${smokeName}：余烁小卫回场`,
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "trio-final-counter"), `${smokeName}：选择三曜终断`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}：三曜终断确认`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}：发动三曜终断`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && card.atk === 600 && (card.tempAtk || 0) >= 2100),
+    `${smokeName}：低攻关键怪获得终局突破力`,
+    9000
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}：选择余烁小卫第一次攻击`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), `${smokeName}：月曜目标高亮`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}：余烁小卫击破月曜`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") &&
+      ctx.state.ai.lp === 300 &&
+      ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && !card.used),
+    `${smokeName}：攻击重置保留第二击。${smokeDebug(ctx)}`,
+    12000
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}：选择余烁小卫第二次攻击`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), `${smokeName}：星曜目标高亮`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}：余烁小卫击破星曜`);
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "player" &&
+      ctx.state.ai.grave.some((card) => card?.id === "trio-star-herald"),
+    `${smokeName}：低攻怪完成终局胜利`,
+    12000
+  );
+
+  const finalPawn = ctx.state.player.field.find((card) => card?.id === "trio-ember-pawn");
+  if (!finalPawn || finalPawn.atk !== 600) {
+    throw new Error(`${smokeName}：最终胜利必须来自原始低攻余烁小卫。${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioOmegaDemoSmoke(ctx) {
+  await runTrioOmegaCorrectLine(ctx, "protagonistTrioOmega", "trio-omega-demo", "演示版");
+  setSmokeStatus("passed", "trio-omega-demo");
+}
+
+async function runTrioOmegaChallengeSmoke(ctx) {
+  await runTrioOmegaCorrectLine(ctx, "protagonistTrioOmegaChallenge", "trio-omega-challenge", "挑战版");
+  setSmokeStatus("passed", "trio-omega-challenge");
+}
+
+async function runTrioOmegaAutopilotFailsSmoke(ctx) {
+  setSmokeStatus("running", "trio-omega-autopilot-fails");
+  await startSmokeDuel(ctx, "protagonistTrioOmegaChallenge");
+  assertTrioOmegaInitial(ctx, "trio-omega-autopilot-fails");
+
+  clickSmokeElement(handCard(ctx.els, "trio-ember-recall"), "乱点：先回召余烁小卫");
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", "乱点：墓地目标");
+  clickSmokeElement(graveTargetCard(ctx.els, "trio-ember-pawn"), "乱点：选择余烁小卫");
+  await waitForSmoke(() => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn"), "乱点：余烁小卫回场");
+
+  clickSmokeElement(handCard(ctx.els, "trio-final-counter"), "乱点：尝试无视月曜帷幕发动三曜终断");
+  await waitForSmoke(
+    () => ctx.state.player.hand.some((card) => card?.id === "trio-final-counter") &&
+      ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"),
+    "乱点：三曜终断不能越过月曜帷幕",
+    6000
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), "乱点：选择低攻怪硬打日曜");
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-sun-judicator")?.classList.contains("attack-target"), "乱点：日曜目标高亮");
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-sun-judicator"), "乱点：直接攻击最高攻击王牌");
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "ai",
+    `乱点：直接硬打日曜应失败。${smokeDebug(ctx)}`,
+    12000
+  );
+  if (ctx.state.gameOverWinner === "player" || !ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator")) {
+    throw new Error(`乱点路线不应等价通关或破解日曜。${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "trio-omega-autopilot-fails");
+}
+
 async function runRedirectPromptSmoke(ctx) {
   setSmokeStatus("running", "redirect-prompt");
   await startSmokeDuel(ctx, "redirect");
@@ -2073,6 +2227,9 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "protagonist-comeback-autopilot-fails": runProtagonistComebackAutopilotFailsSmoke,
     "protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke,
     "protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke,
+    "trio-omega-demo": runTrioOmegaDemoSmoke,
+    "trio-omega-challenge": runTrioOmegaChallengeSmoke,
+    "trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "target-window": runTargetWindowSmoke,

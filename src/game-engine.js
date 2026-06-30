@@ -147,6 +147,34 @@ export const defaultCardEffects = Object.freeze({
     { op: "negateEffect", targetEffectId: "$action.targetEffectId" },
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "strongestAtk" }, stat: "tempAtk", amount: 900 }
   ], { requirements: [{ type: "responseWindow", prompt: "attack" }] }),
+  sunflareSunder: oneShot([
+    { op: "destroyCard", cardId: { playerId: "$action.rivalId", zone: "spellTrapZone", rule: "first" } }
+  ]),
+  starDoomCharge: oneShot([
+    { op: "dealDamage", player: "rival", amount: 300 },
+    { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: 300 }
+  ]),
+  lunarDominion: continuous([
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -900 },
+    { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -900 }
+  ], { target: { player: "rival", zone: "monsterZone" } }),
+  trioFinalCounter: oneShot([
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "tempAtk", amount: 2100 },
+    {
+      op: "readyMonsterOrGrantAbility",
+      player: "self",
+      cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" },
+      ability: Ability.attackReset,
+      uses: 1,
+      duration: "turn"
+    }
+  ], {
+    requirements: [
+      { type: "maxLp", player: "self", amount: 1600 },
+      { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
+      { type: "noSpellTrapTemplate", player: "rival", templateId: "trio-moon-dominion" }
+    ]
+  }),
   pierceLine: oneShot([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -400 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -400 },
@@ -443,16 +471,19 @@ export class EffectContext {
   }
 
   destroyCard(cardId, options = {}) {
-    const card = requireCard(this.#state, cardId);
-    const location = findCardLocations(this.#state, cardId)[0] || null;
-    const ownerId = location?.playerId || card.ownerId;
+    return resolveCardIdInput(this.#state, cardId).map((targetCardId) => {
+      const card = requireCard(this.#state, targetCardId);
+      const location = findCardLocations(this.#state, targetCardId)[0] || null;
+      const ownerId = location?.playerId || card.ownerId;
 
-    this.moveCard(cardId, location, { playerId: ownerId, zone: "grave" });
-    this.#emit("CARD_DESTROYED", {
-      cardId,
-      playerId: ownerId,
-      reason: options.reason || null,
-      sourceCardId: options.sourceCardId || null
+      this.moveCard(targetCardId, location, { playerId: ownerId, zone: "grave" });
+      this.#emit("CARD_DESTROYED", {
+        cardId: targetCardId,
+        playerId: ownerId,
+        reason: options.reason || null,
+        sourceCardId: options.sourceCardId || null
+      });
+      return targetCardId;
     });
   }
 
@@ -2693,6 +2724,16 @@ function validateEffectRequirements(definition, state, action, card) {
       }
       continue;
     }
+    if (requirement.type === "noSpellTrapTemplate") {
+      const playerId = resolvePlayerRef(requirement.player, action);
+      const templateId = requirement.templateId || requirement.id;
+      const player = requirePlayer(state, playerId);
+      const blocked = player.spellTrapZone.some((cardId) => cardMatchesTemplate(requireCard(state, cardId), templateId));
+      if (blocked) {
+        throw new GameRuleError(`Effect ${card.effect || card.id} requires no ${templateId} in ${playerId}.spellTrapZone`);
+      }
+      continue;
+    }
     if (requirement.type === "responseWindow") {
       const responseWindow = state.machine.responseWindow;
       if (!responseWindow) {
@@ -2943,6 +2984,9 @@ function resolveCardIdInput(state, cardId) {
     if (cardId.rule === "firstUsed") {
       const found = cardIds.find((targetCardId) => Boolean(requireCard(state, targetCardId).used));
       return found ? [found] : [];
+    }
+    if (cardId.rule === "first") {
+      return cardIds.length > 0 ? [cardIds[0]] : [];
     }
     if (cardId.rule === "strongestAtk") {
       if (cardIds.length === 0) return [];

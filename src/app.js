@@ -437,6 +437,7 @@ function applyScenarioSetup() {
   });
   Object.assign(state.player, setup.player);
   Object.assign(state.ai, setup.ai);
+  state.gameEvents = Array.isArray(setup.gameEvents) ? setup.gameEvents.map((event) => ({ ...event })) : [];
   addLog(`规则测试场景：${scenario.label}。${scenario.text}`);
   if (scenario.goal) {
     addLog(`测试目标：${scenario.goal}`);

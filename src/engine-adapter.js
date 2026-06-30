@@ -626,6 +626,7 @@ function localizeEngineRuleReason(message = "", actionLabel = "操作") {
   if (/skipped attacks/.test(message)) return "本回合已经跳过攻击，不能再攻击。";
   if (/not the strongest monster/.test(message)) return "这张卡只能选择规则指定的最高攻击力目标。";
   if (/requires at least|requires elements/.test(message)) return "场上属性或数量条件不足。";
+  if (/requires no .*spellTrapZone/.test(message)) return "必须先清除指定压制卡。";
   if (/cannot be the source card/.test(message)) return "不能选择这张卡自己作为目标。";
   return `规则引擎判定不能${actionLabel}：${message}`;
 }

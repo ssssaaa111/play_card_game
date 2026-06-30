@@ -63,7 +63,18 @@ export const library = [
   { id: "soulforge-ascent", type: "spell", name: "星魂铸升", icon: "升", text: "需要我方场上有星火引魂童和微光机巧卫；将它们送入墓地，从手牌或卡组特殊召唤天炉星铠王，并压低对手场上怪兽。", effect: "aceEvolution" },
   { id: "material-reclaim", type: "spell", name: "星屑返轨", icon: "返", text: "将墓地 1 张非本卡的卡放回卡组顶，然后抽 1 张卡。", effect: "graveReturn" },
   { id: "corebreak-edict", type: "spell", name: "裂核裁令", icon: "裁", text: "选择对手攻击力最高的怪兽，攻击力和守备力下降 500。", effect: "aceCrackdown" },
-  { id: "ace-vow-guard", type: "trap", name: "王牌誓护", icon: "誓", text: "盖放后自动触发：对手攻击时，无效本次攻击，并让我方攻击力最高的怪兽提升 900。", trigger: "aceGuard" }
+  { id: "ace-vow-guard", type: "trap", name: "王牌誓护", icon: "誓", text: "盖放后自动触发：对手攻击时，无效本次攻击，并让我方攻击力最高的怪兽提升 900。", trigger: "aceGuard" },
+  { id: "trio-sun-judicator", type: "monster", name: "曜冕裁决者", element: "light", stars: 7, atk: 3000, def: 1800, icon: "日", text: "三曜王牌之一。攻击结算后会破坏对手最靠前的魔陷区卡牌，逼迫防御资源提前交出。", afterAttack: "sunflareSunder" },
+  { id: "trio-moon-warden", type: "monster", name: "月蚀守密者", element: "light", stars: 6, atk: 2100, def: 2500, icon: "月", text: "三曜王牌之一。配合月曜帷幕压低关键怪兽，使墓地回场后的反击无法直接成形。" },
+  { id: "trio-star-herald", type: "monster", name: "星坠宣告者", element: "light", stars: 6, atk: 2400, def: 1400, icon: "星", text: "三曜王牌之一。攻击后追加 300 点终局压力，并提升自身攻击力 300。", afterAttack: "starDoomCharge" },
+  { id: "trio-decoy-ward", type: "monster", name: "折光诱标卫", element: "light", stars: 2, atk: 1000, def: 3700, icon: "诱", text: "低星防线。正确路线中用来吸引日曜攻势，为反击回合争取窗口。" },
+  { id: "trio-ember-pawn", type: "monster", name: "余烁小卫", element: "fire", stars: 1, atk: 600, def: 600, icon: "烁", text: "表面攻击力很低的终局关键怪兽。只有资源铺垫完成后才能突破三曜阵线。" },
+  { id: "trio-moon-dominion", type: "spell", name: "月曜帷幕", icon: "幕", text: "持续魔法：选择对手 1 只怪兽，攻击力和守备力下降 900。此卡离场时修正会失效。", effect: "lunarDominion" },
+  { id: "trio-solar-snare", type: "trap", name: "日冕诱锁", icon: "锁", text: "盖放后自动触发：对手攻击时，破坏攻击怪兽。用来诱导第一张三曜王牌踏入反制。", trigger: "attackDestroy" },
+  { id: "trio-moonbreaker-ray", type: "spell", name: "碎月解幕", icon: "碎", text: "选择对手魔陷区 1 张卡破坏。用于清除持续压制后再展开墓地资源。", effect: "destroySpellTrap" },
+  { id: "trio-ember-recall", type: "spell", name: "余烁归轨", icon: "归", text: "选择我方墓地 1 只怪兽，特殊回到怪兽区。终局战中用来让低星关键怪回场。", effect: "graveRevive" },
+  { id: "trio-chain-veil", type: "trap", name: "星线护续", icon: "续", text: "盖放后自动触发：对手攻击时，无效本次攻击并消耗攻击机会。", trigger: "attackNegate" },
+  { id: "trio-final-counter", type: "spell", name: "三曜终断", icon: "断", text: "生命值 1600 以下、余烁小卫在场，且月曜帷幕不在对手魔陷区时才能发动；强化攻击力最低的我方怪兽并获得一次攻击重置。", effect: "trioFinalCounter" }
 ];
 
 export const monsterAssets = {
@@ -89,7 +100,12 @@ export const monsterAssets = {
   "lumen-gearlet": "assets/monster-light-knight.png",
   "starwell-runner": "assets/monster-wind-mage.png",
   "astral-forge-dragon": "assets/monster-light-knight.png",
-  "void-siege-breaker": "assets/monster-shadow-wolf.png"
+  "void-siege-breaker": "assets/monster-shadow-wolf.png",
+  "trio-sun-judicator": "assets/monster-fire-dragon.png",
+  "trio-moon-warden": "assets/monster-shadow-wolf.png",
+  "trio-star-herald": "assets/monster-light-knight.png",
+  "trio-decoy-ward": "assets/monster-light-knight.png",
+  "trio-ember-pawn": "assets/monster-fire-dragon.png"
 };
 
 export const roleProfiles = {
@@ -295,6 +311,40 @@ export const deckPresets = {
       "overclock-core", "blade-sigil", "dispelling-ray",
       "summon-flare", "summon-flare", "mirror-snare", "counter-array",
       "void-lock", "phantom-switch", "weakening-web", "chain-nullifier"
+    ]
+  },
+  protagonistTrioOmega: {
+    label: "星魂主角战役 03：终局三曜",
+    ids: [
+      "trio-decoy-ward", "trio-decoy-ward", "trio-decoy-ward",
+      "trio-ember-pawn", "trio-ember-pawn", "trio-ember-pawn",
+      "spark-runner", "spark-runner", "starwell-runner", "starwell-runner",
+      "star-soul-apprentice", "gale-mage", "night-oracle", "aegis-mender",
+      "solar-knight", "iron-guardian", "prism-saint", "nova-squire",
+      "trio-ember-recall", "trio-ember-recall", "starwake-recall",
+      "trio-moonbreaker-ray", "trio-moonbreaker-ray", "dispelling-ray",
+      "trio-final-counter", "trio-final-counter", "last-spark", "seer-call",
+      "battle-trance", "rally-strike", "soul-resonance", "star-shield",
+      "trio-solar-snare", "trio-solar-snare", "trio-chain-veil", "trio-chain-veil",
+      "last-light-guard", "backlash-mirror", "soul-parry", "phantom-switch",
+      "weakening-web", "guard-sigil"
+    ]
+  },
+  trioOmegaRival: {
+    label: "三曜压制对手",
+    ids: [
+      "trio-sun-judicator", "trio-sun-judicator", "trio-sun-judicator",
+      "trio-moon-warden", "trio-moon-warden", "trio-moon-warden",
+      "trio-star-herald", "trio-star-herald", "trio-star-herald",
+      "trio-moon-dominion", "trio-moon-dominion", "trio-moon-dominion",
+      "void-siege-breaker", "void-siege-breaker", "flare-titan", "flare-titan",
+      "star-lancer", "star-lancer", "sky-raider", "sky-raider",
+      "void-hound", "dusk-alchemist", "ember-drake", "flame-captain",
+      "corebreak-edict", "corebreak-edict", "war-chant", "war-chant",
+      "pierce-line", "pierce-line", "battle-trance", "rally-strike",
+      "star-breach", "flame-gale-burst", "overclock-core", "blade-sigil",
+      "summon-flare", "summon-flare", "mirror-snare", "counter-array",
+      "void-lock", "phantom-switch", "chain-nullifier"
     ]
   },
   suppressionRival: {
@@ -633,6 +683,84 @@ export const scenarioSetups = {
     aiField: ["void-siege-breaker"],
     aiHand: ["corebreak-edict"],
     aiDeck: ["guard-sigil"]
+  },
+  protagonistTrioOmega: {
+    label: "终局三曜演示",
+    text: "对手已经展开日曜、月曜、星曜三张压场王牌；月曜帷幕正在削弱诱标卫，玩家需要先盖下诱锁挡住日曜攻击，再清除帷幕、回收墓地小怪并完成终局反击。",
+    goal: "盖放日冕诱锁并结束回合；挡下日曜攻击后，用碎月解幕清掉月曜帷幕，余烁归轨回场余烁小卫，再发动三曜终断连续突破月曜与星曜。",
+    difficulty: "demo",
+    objectives: [
+      "观察三曜王牌同时压场：高攻、持续削弱、终局追击。",
+      "用日冕诱锁诱导并破解日曜攻击。",
+      "清除月曜帷幕后，让墓地低星怪成为终局突破点。"
+    ],
+    hints: [
+      "折光诱标卫被月曜帷幕压低，清除帷幕后数值会由规则引擎释放。",
+      "三曜终断不能在月曜帷幕仍在场时发动。",
+      "胜利来自余烁小卫的连续攻击，不是高攻怪兽碾压。"
+    ],
+    recommendedLine: [
+      "盖放日冕诱锁并结束回合",
+      "在日曜攻击响应中发动日冕诱锁",
+      "碎月解幕破坏月曜帷幕",
+      "余烁归轨选择余烁小卫",
+      "三曜终断后连续攻击月曜与星曜"
+    ],
+    playerLp: 1300,
+    aiLp: 900,
+    playerHand: ["trio-solar-snare", "trio-moonbreaker-ray", "trio-ember-recall", "trio-final-counter"],
+    playerDeck: ["trio-chain-veil", "last-spark"],
+    playerField: [{ id: "trio-decoy-ward", mode: "defense", changedMode: true }],
+    playerGrave: ["trio-ember-pawn"],
+    aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiTraps: ["trio-moon-dominion"],
+    aiHand: [],
+    aiDeck: ["eclipse-barrier"],
+    setupContinuousEffects: [{
+      source: { owner: "ai", zone: "traps", index: 0 },
+      target: { owner: "player", zone: "field", index: 0 },
+      effectId: "lunarDominion"
+    }]
+  },
+  protagonistTrioOmegaChallenge: {
+    label: "终局三曜挑战",
+    text: "终局战结构复现：三张原创三曜王牌分工压制，直接硬打会被日曜高攻击倒，不清月曜帷幕会卡住终局反击，不保留反制则会在对手回合被星曜追击带走。",
+    goal: "第一回合先盖下日冕诱锁并结束回合，借攻击响应破解日曜；下一回合先用碎月解幕清除持续压制，再回召余烁小卫，最后用三曜终断让低星怪连续突破。",
+    difficulty: "challenge",
+    objectives: [
+      "不要直接攻击曜冕裁决者，低星怪会被高攻反杀。",
+      "先保留并盖下防御/反制手段，挡住第一轮日曜攻击。",
+      "反击前必须清除月曜帷幕，否则三曜终断不能发动。",
+      "用余烁小卫完成最后两次突破，而不是靠高攻怪兽硬压。"
+    ],
+    hints: [
+      "如果跳过日冕诱锁，对手会先破坏诱标卫，再用后续三曜攻击结束决斗。",
+      "碎月解幕的首要目标是月曜帷幕，不是怪兽。",
+      "余烁归轨要选择余烁小卫；它才是三曜终断的前置资源。",
+      "三曜终断提供攻击重置，第一次打月曜，第二次打星曜。"
+    ],
+    recommendedLine: [
+      "盖放日冕诱锁",
+      "结束回合并在日曜攻击时发动诱锁",
+      "碎月解幕清除月曜帷幕",
+      "余烁归轨选择余烁小卫",
+      "三曜终断强化余烁小卫，连续攻击月曜和星曜"
+    ],
+    playerLp: 1300,
+    aiLp: 900,
+    playerHand: ["trio-solar-snare", "trio-moonbreaker-ray", "trio-ember-recall", "trio-final-counter"],
+    playerDeck: ["trio-chain-veil", "last-spark"],
+    playerField: [{ id: "trio-decoy-ward", mode: "defense", changedMode: true }],
+    playerGrave: ["trio-ember-pawn"],
+    aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiTraps: ["trio-moon-dominion"],
+    aiHand: [],
+    aiDeck: ["eclipse-barrier"],
+    setupContinuousEffects: [{
+      source: { owner: "ai", zone: "traps", index: 0 },
+      target: { owner: "player", zone: "field", index: 0 },
+      effectId: "lunarDominion"
+    }]
   },
   target: {
     label: "目标选择",

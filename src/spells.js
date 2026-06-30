@@ -44,6 +44,13 @@ export const spellDefinitions = {
     target: "enemyMonster",
     targetRule: "strongest"
   },
+  lunarDominion: {
+    caption: "月曜帷幕，持续压低目标",
+    target: "enemyMonster"
+  },
+  trioFinalCounter: {
+    caption: "终局三曜反击"
+  },
   shield800: {
     caption: "展开护盾"
   },
@@ -182,6 +189,19 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       return fieldCards(rival).length > 0
         ? { ok: true }
         : { ok: false, reason: "对手场上没有怪兽，不能发动裂核裁令。" };
+    case "lunarDominion":
+      if (fieldCards(rival).length === 0) return { ok: false, reason: "对手场上没有怪兽，不能展开月曜帷幕。" };
+      if ((owner.traps || []).every(Boolean)) return { ok: false, reason: "魔陷区已满，不能展开月曜帷幕。" };
+      return { ok: true };
+    case "trioFinalCounter":
+      if (owner.lp > 1600) return { ok: false, reason: "生命值还没有进入终局反击条件。" };
+      if (!fieldCards(owner).some((card) => cardTemplateId(card) === "trio-ember-pawn")) {
+        return { ok: false, reason: "余烁小卫不在场，不能发动终局反击。" };
+      }
+      if ((rival?.traps || []).some((card) => cardTemplateId(card) === "trio-moon-dominion")) {
+        return { ok: false, reason: "月曜帷幕仍在压制，必须先清除。" };
+      }
+      return { ok: true };
     case "shield800":
       return owner.shield <= 1600
         ? { ok: true }
@@ -274,6 +294,14 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       return hasMaterialCards(owner) && hasCardInHandOrDeck(owner, ACE_EVOLUTION_ACE) ? 92 : 0;
     case "aceCrackdown":
       return fieldCards(rival).length > 0 ? 86 : 0;
+    case "lunarDominion":
+      return fieldCards(rival).length > 0 && (owner.traps || []).some((slot) => !slot) ? 88 : 0;
+    case "trioFinalCounter":
+      return owner.lp <= 1600 &&
+        fieldCards(owner).some((card) => cardTemplateId(card) === "trio-ember-pawn") &&
+        !(rival?.traps || []).some((card) => cardTemplateId(card) === "trio-moon-dominion")
+        ? 92
+        : 0;
     case "shield800":
       return (owner.lp <= (aiStyle === "control" ? 3400 : 2800) || owner.shield <= (aiStyle === "control" ? 500 : 0)) ? 64 : 10;
     case "extraSummon":

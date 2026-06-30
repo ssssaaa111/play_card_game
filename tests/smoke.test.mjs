@@ -486,12 +486,22 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="protagonistAceEvolution">/);
   assert.match(html, /<option value="aceSuppressionRival">/);
   assert.match(html, /<option value="protagonistAceProtection">/);
+  assert.match(html, /<option value="protagonistTrioOmega">/);
+  assert.match(html, /<option value="trioOmegaRival">/);
   assert.match(data, /protagonistAceEvolution: \{/);
   assert.match(data, /aceSuppressionRival: \{/);
+  assert.match(data, /protagonistTrioOmega: \{/);
+  assert.match(data, /trioOmegaRival: \{/);
   assert.match(smoke, /"protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke/);
   assert.match(smoke, /"protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke/);
+  assert.match(smoke, /"trio-omega-demo": runTrioOmegaDemoSmoke/);
+  assert.match(smoke, /"trio-omega-challenge": runTrioOmegaChallengeSmoke/);
+  assert.match(smoke, /"trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-evolution-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-protection-demo"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-demo"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-challenge"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
 
   assert.match(html, /<option value="skipLock">跳攻锁定<\/option>/);
   assert.match(html, /<option value="directTrap">直击陷阱<\/option>/);
@@ -504,12 +514,16 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
   assert.match(html, /<option value="protagonistComeback">星魂主角战役 01：逆境觉醒<\/option>/);
+  assert.match(html, /<option value="protagonistTrioOmega">星魂主角战役 03：终局三曜<\/option>/);
   assert.match(html, /<option value="suppressionRival">压制型对手<\/option>/);
+  assert.match(html, /<option value="trioOmegaRival">三曜压制对手<\/option>/);
   assert.match(html, /<option value="expansionSummon">扩展召唤演示<\/option>/);
   assert.match(html, /<option value="expansionParry">扩展格挡演示<\/option>/);
   assert.match(html, /<option value="protagonistComeback">逆境觉醒演示<\/option>/);
   assert.match(html, /<option value="protagonistComebackChallenge">逆境觉醒挑战<\/option>/);
   assert.match(html, /<option value="protagonistFinalCounter">终局反击演示<\/option>/);
+  assert.match(html, /<option value="protagonistTrioOmega">终局三曜演示<\/option>/);
+  assert.match(html, /<option value="protagonistTrioOmegaChallenge">终局三曜挑战<\/option>/);
   assert.match(html, /id="graveTargets"/);
   assert.match(html, /id="scenarioBrief"/);
   assert.match(html, /id="scenarioDifficulty"/);
@@ -538,6 +552,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /expansionSummon: \{/);
   assert.match(data, /expansionParry: \{/);
   assert.match(data, /protagonistFinalCounter: \{/);
+  assert.match(data, /protagonistTrioOmegaChallenge: \{/);
+  assert.match(data, /setupContinuousEffects: \[/);
   assert.match(data, /phantomRedirect: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
@@ -562,6 +578,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"protagonist-comeback-demo": runProtagonistComebackDemoSmoke/);
   assert.match(smoke, /"protagonist-comeback-challenge": runProtagonistComebackChallengeSmoke/);
   assert.match(smoke, /"protagonist-comeback-autopilot-fails": runProtagonistComebackAutopilotFailsSmoke/);
+  assert.match(smoke, /"trio-omega-demo": runTrioOmegaDemoSmoke/);
+  assert.match(smoke, /"trio-omega-challenge": runTrioOmegaChallengeSmoke/);
+  assert.match(smoke, /"trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
