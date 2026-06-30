@@ -611,6 +611,7 @@ function localizeEngineRuleReason(message = "", actionLabel = "操作") {
   if (/requires action\.targetCardId/.test(message)) return "需要先选择一个合法目标。";
   if (/not in .*monsterZone/.test(message)) return "目标不在合法怪兽区。";
   if (/not in .*spellTrapZone/.test(message)) return "目标不在合法魔陷区。";
+  if (/not in .*grave/.test(message)) return "目标不在墓地。";
   if (/requires a monster target/.test(message)) return "目标必须是墓地中的怪兽。";
   if (/requires at least .* cards in deck/.test(message)) return "卡组剩余数量不足。";
   if (/requires LP at most/.test(message)) return "生命值还没有降到发动条件。";

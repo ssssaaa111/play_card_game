@@ -195,6 +195,26 @@ test("protagonist comeback scenarios can preload lp graveyard and valid engine s
     gameEvents: []
   };
   assertValidGameState(buildEngineStateFromUiState(uiState));
+
+  const challenge = buildScenarioState(scenarioSetups.protagonistComebackChallenge, {
+    playerPreset: "protagonistComeback",
+    aiPreset: "suppressionRival"
+  });
+  assert.equal(challenge.player.lp, 900);
+  assert.equal(challenge.ai.lp, 3400);
+  assert.deepEqual(ids(challenge.player.hand), ["dawn-edge", "last-spark", "starwake-recall", "last-light-guard", "limit-break-oath"]);
+  assert.deepEqual(ids(challenge.player.grave), ["spark-runner", "astral-comet-ace"]);
+  assert.deepEqual(ids(challenge.player.deck), ["battle-trance", "backlash-mirror", "dispelling-ray"]);
+  assert.deepEqual(ids(challenge.ai.traps).slice(0, 1), ["mirror-snare"]);
+
+  const challengeUiState = {
+    player: { ...createDuelist("player"), ...challenge.player },
+    ai: { ...createDuelist("ai"), ...challenge.ai },
+    turn: "player",
+    phase: "main",
+    gameEvents: []
+  };
+  assertValidGameState(buildEngineStateFromUiState(challengeUiState));
 });
 
 test("protagonist ace evolution scenarios expose material and protection fixtures", () => {

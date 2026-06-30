@@ -65,7 +65,7 @@ test("player-facing card and scenario copy is localized", () => {
 test("spell cards are backed by spell metadata", () => {
   const spellCards = library.filter((card) => card.type === "spell");
   const effectsFromCards = new Set(spellCards.map((card) => card.effect));
-  const validTargets = new Set(["ownMonster", "enemyMonster", "enemySpellTrap"]);
+  const validTargets = new Set(["ownMonster", "ownGraveMonster", "enemyMonster", "enemySpellTrap"]);
   const validTargetRules = new Set(["strongest"]);
 
   spellCards.forEach((card) => {
@@ -267,6 +267,9 @@ test("protagonist comeback pack has rule-backed cards decks and scenarios", () =
   assert.ok(deckPresets.suppressionRival.ids.includes("summon-flare"));
   assert.deepEqual(scenarioSetups.protagonistComeback.playerGrave, ["astral-comet-ace"]);
   assert.equal(scenarioSetups.protagonistComeback.playerLp, 900);
+  assert.deepEqual(scenarioSetups.protagonistComebackChallenge.playerGrave, ["spark-runner", "astral-comet-ace"]);
+  assert.deepEqual(scenarioSetups.protagonistComebackChallenge.aiTraps, ["mirror-snare"]);
+  assert.equal(scenarioSetups.protagonistComebackChallenge.playerDeck[2], "dispelling-ray");
 });
 
 test("protagonist ace evolution pack has rule-backed cards decks and scenarios", () => {

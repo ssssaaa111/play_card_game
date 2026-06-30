@@ -533,6 +533,21 @@ export const scenarioSetups = {
     aiHand: [],
     aiDeck: ["guard-sigil"]
   },
+  protagonistComebackChallenge: {
+    label: "逆境觉醒挑战",
+    text: "主角仍处在低生命值与场面劣势中，但墓地、手牌和对手盖卡都会惩罚无脑全点。需要先补资源，正确回召王牌，保留再攻击资源，并在反击前处理对手的反制陷阱。",
+    goal: "先用余烬星愿补牌，醒星回召必须选择天穹逆星者；第一回合盖下残光护幕并忍住不攻，挡下对手攻击后抽到解印射线，先清掉对手盖卡，再用战斗狂热开启反击。",
+    playerLp: 900,
+    aiLp: 3400,
+    playerHand: ["dawn-edge", "last-spark", "starwake-recall", "last-light-guard", "limit-break-oath"],
+    playerDeck: ["battle-trance", "backlash-mirror", "dispelling-ray"],
+    playerField: ["spark-runner"],
+    playerGrave: ["spark-runner", "astral-comet-ace"],
+    aiField: ["flare-titan"],
+    aiTraps: ["mirror-snare"],
+    aiHand: [],
+    aiDeck: ["renewal"]
+  },
   protagonistFinalCounter: {
     label: "终局反击演示",
     text: "主角空场低生命值，预置直击反弹陷阱和复活资源，展示先挡下终结攻击再返场的终局感。",

@@ -508,7 +508,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="expansionSummon">扩展召唤演示<\/option>/);
   assert.match(html, /<option value="expansionParry">扩展格挡演示<\/option>/);
   assert.match(html, /<option value="protagonistComeback">逆境觉醒演示<\/option>/);
+  assert.match(html, /<option value="protagonistComebackChallenge">逆境觉醒挑战<\/option>/);
   assert.match(html, /<option value="protagonistFinalCounter">终局反击演示<\/option>/);
+  assert.match(html, /id="graveTargets"/);
   assert.match(html, /<option value="phantomRedirect">幻影换位回归<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
@@ -521,6 +523,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /equipment: \{/);
   assert.match(data, /basicExpansion: \{/);
   assert.match(data, /protagonistComeback: \{/);
+  assert.match(data, /protagonistComebackChallenge: \{/);
+  assert.match(data, /playerGrave: \["spark-runner", "astral-comet-ace"\]/);
   assert.match(data, /suppressionRival: \{/);
   assert.match(data, /expansionSummon: \{/);
   assert.match(data, /expansionParry: \{/);
@@ -528,6 +532,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /phantomRedirect: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
+  assert.match(app, /graveTargets: document\.querySelector\("#graveTargets"\)/);
+  assert.match(app, /pending\.mode === "ownGraveMonster"/);
   assert.match(app, /canDispatchSummonEffectFromUiState/);
   assert.doesNotMatch(app, /card\.onSummon === "(burn200|draw1|heal300|fireBuff|shield400|shadowBurn)"/);
   assert.match(smoke, /"skip-lock": runSkipLockSmoke/);
@@ -542,6 +548,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
   assert.match(smoke, /"basic-expansion": runBasicExpansionSmoke/);
   assert.match(smoke, /"protagonist-comeback-demo": runProtagonistComebackDemoSmoke/);
+  assert.match(smoke, /"protagonist-comeback-challenge": runProtagonistComebackChallengeSmoke/);
+  assert.match(smoke, /"protagonist-comeback-autopilot-fails": runProtagonistComebackAutopilotFailsSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
@@ -567,6 +575,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"game-over-event": runGameOverEventSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
   assert.match(smoke, /function trapCard/);
+  assert.match(smoke, /function graveTargetCard/);
   assert.match(smoke, /function doubleClickSmokeElement/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
   assert.match(smoke, /ctx\.els\.choiceConfirmBtn/);
@@ -605,6 +614,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "summon-trap-response"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-demo"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-challenge"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-autopilot-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "phantom-switch-redirect"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);

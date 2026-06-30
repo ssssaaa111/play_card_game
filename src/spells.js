@@ -14,7 +14,8 @@ export const spellDefinitions = {
     caption: "余烬续抽，补足反击资源"
   },
   graveRevive: {
-    caption: "醒星回召，墓地怪兽回场"
+    caption: "醒星回召，墓地怪兽回场",
+    target: "ownGraveMonster"
   },
   dawnEdge: {
     caption: "破晓锋印，攻击爆发",

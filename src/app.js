@@ -180,6 +180,7 @@ const els = {
   playerTraps: document.querySelector("#playerTraps"),
   aiTraps: document.querySelector("#aiTraps"),
   hand: document.querySelector("#hand"),
+  graveTargets: document.querySelector("#graveTargets"),
   log: document.querySelector("#log"),
   timeline: document.querySelector("#timeline"),
   timelineCount: document.querySelector("#timelineCount"),
@@ -764,6 +765,17 @@ function validateSpellTarget(pending, ownerName, index, zone = "field") {
     }
     const target = duelist.traps[index];
     if (!target) return { ok: false, reason: "请选择敌方魔陷区的卡作为目标。" };
+    return { ok: true, target, targetOwner: ownerName, targetIndex: index, targetZone: zone };
+  }
+
+  if (pending.mode === "ownGraveMonster") {
+    if (zone !== "grave" || ownerName !== "player") {
+      return { ok: false, reason: "这个效果需要选择我方墓地中的怪兽。" };
+    }
+    const target = duelist.grave[index];
+    if (!target || target.type !== "monster") {
+      return { ok: false, reason: "请选择我方墓地中的怪兽作为目标。" };
+    }
     return { ok: true, target, targetOwner: ownerName, targetIndex: index, targetZone: zone };
   }
 
@@ -3217,6 +3229,13 @@ function legalPendingTargets(pending = state.pendingTarget) {
         targets.push(targetInfo);
       }
     });
+    duelist.grave.forEach((card, index) => {
+      if (!card) return;
+      const targetInfo = targetInfoFromPending(ownerName, index, "grave");
+      if (targetInfo.ok) {
+        targets.push(targetInfo);
+      }
+    });
   });
   return targets;
 }
@@ -3383,6 +3402,7 @@ function render(animationKey = "") {
   renderTraps(els.playerTraps, state.player, "player");
   renderTraps(els.aiTraps, state.ai, "ai");
   renderHand(animationKey);
+  renderGraveTargets();
   renderLog();
   renderTimeline();
   renderBattlePreview();
@@ -3598,6 +3618,28 @@ function renderHand(animationKey) {
       selectHandCard(card.uid);
     });
     els.hand.appendChild(cardEl);
+  });
+}
+
+function renderGraveTargets() {
+  const root = els.graveTargets;
+  if (!root) return;
+  root.innerHTML = "";
+  const active = state.pendingTarget?.mode === "ownGraveMonster";
+  root.hidden = !active;
+  if (!active) return;
+  state.player.grave.forEach((card, index) => {
+    if (!card) return;
+    const targetInfo = targetInfoFromPending("player", index, "grave");
+    if (!targetInfo.ok) return;
+    const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
+    cardEl.dataset.zone = "player-grave";
+    cardEl.classList.add("grave-target-card", "targetable");
+    cardEl.title = `选择墓地目标：${card.name}`;
+    cardEl.addEventListener("click", () => {
+      resolvePendingSpellTarget("player", index, "grave");
+    });
+    root.appendChild(cardEl);
   });
 }
 

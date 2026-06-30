@@ -215,6 +215,10 @@ test("builds spell target prompts from target mode and rule", () => {
     spellTargetPrompt("enemyMonster", "破阵星芒"),
     "请选择敌方怪兽作为「破阵星芒」的目标。"
   );
+  assert.equal(
+    spellTargetPrompt("ownGraveMonster", "醒星回召"),
+    "请选择我方墓地中的怪兽作为「醒星回召」的目标。"
+  );
 });
 
 test("validates strongest-only spell target rules", () => {
