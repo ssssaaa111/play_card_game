@@ -6,6 +6,10 @@ function cardIds(list = []) {
   return list.map((card) => card?.id || null);
 }
 
+function listText(root) {
+  return Array.from(root?.querySelectorAll("li") || []).map((item) => item.textContent || "");
+}
+
 function selectedCardSnapshot(state) {
   const selected = state.selected || null;
   if (!selected) return null;
@@ -91,6 +95,14 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         endTurnButtonDisabled: Boolean(els.endTurnBtn?.disabled),
         handConfirmButtonDisabled: Boolean(els.handConfirmBtn?.disabled),
         aiPanelDirectTarget: Boolean(els.aiPanel?.classList.contains("direct-target"))
+      },
+      scenarioBrief: {
+        title: els.scenarioBriefTitle?.textContent || "",
+        difficulty: els.scenarioDifficulty?.textContent || "",
+        objectives: listText(els.scenarioObjectives),
+        hints: listText(els.scenarioHints),
+        hintsHidden: Boolean(els.scenarioHints?.hidden),
+        hintToggleText: els.scenarioHintToggle?.textContent || ""
       },
       pendingTarget: state.pendingTarget ? {
         mode: state.pendingTarget.mode,
@@ -201,6 +213,28 @@ async function startSmokeDuel(ctx, scenarioId) {
   selectScenario(ctx.els, scenarioId);
   clickSmokeElement(ctx.els.modal?.classList.contains("show") ? ctx.els.modalRestart : ctx.els.startBtn, "开始按钮");
   await waitForSmoke(() => ctx.state.started && ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.pendingOpeningDraw, "玩家主阶段");
+}
+
+function assertScenarioBrief(els, { difficulty, objectives = [], hints = [] }) {
+  const objectiveText = Array.from(els.scenarioObjectives?.querySelectorAll("li") || [])
+    .map((item) => item.textContent || "")
+    .join("\n");
+  const hintText = Array.from(els.scenarioHints?.querySelectorAll("li") || [])
+    .map((item) => item.textContent || "")
+    .join("\n");
+  if (difficulty && els.scenarioDifficulty?.textContent !== difficulty) {
+    throw new Error(`场景难度标签不正确：${els.scenarioDifficulty?.textContent || ""}`);
+  }
+  objectives.forEach((entry) => {
+    if (!objectiveText.includes(entry)) {
+      throw new Error(`场景目标未渲染：${entry}`);
+    }
+  });
+  hints.forEach((entry) => {
+    if (!hintText.includes(entry)) {
+      throw new Error(`场景提示未渲染：${entry}`);
+    }
+  });
 }
 
 async function finishPlayerTurn(ctx) {
@@ -675,6 +709,10 @@ async function runBasicExpansionSmoke(ctx) {
 async function runProtagonistComebackDemoSmoke(ctx) {
   setSmokeStatus("running", "protagonist-comeback-demo");
   await startSmokeDuel(ctx, "protagonistComeback");
+  assertScenarioBrief(ctx.els, {
+    difficulty: "演示版",
+    objectives: ["复活天穹逆星者", "完成一次反击攻击"]
+  });
   if (ctx.state.player.lp !== 900 || !ctx.state.player.grave.some((card) => card?.id === "astral-comet-ace")) {
     throw new Error(`逆境觉醒初始状态不正确：${smokeDebug(ctx)}`);
   }
@@ -785,6 +823,11 @@ async function runProtagonistComebackDemoSmoke(ctx) {
 async function runProtagonistComebackChallengeSmoke(ctx) {
   setSmokeStatus("running", "protagonist-comeback-challenge");
   await startSmokeDuel(ctx, "protagonistComebackChallenge");
+  assertScenarioBrief(ctx.els, {
+    difficulty: "挑战版",
+    objectives: ["醒星回召选择天穹逆星者", "反击前先用解印射线清掉镜光反制"],
+    hints: ["低星怪只是干扰目标"]
+  });
   if (ctx.state.player.lp !== 900 ||
       ctx.state.ai.lp !== 3400 ||
       !ctx.state.player.grave.some((card) => card?.id === "spark-runner") ||

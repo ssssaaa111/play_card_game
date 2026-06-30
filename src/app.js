@@ -141,6 +141,7 @@ const state = {
 };
 
 let pendingTrapChoiceResolver = null;
+let scenarioHintsVisible = false;
 
 const els = {
   phaseText: document.querySelector("#phaseText"),
@@ -213,6 +214,12 @@ const els = {
   aiSelect: document.querySelector("#aiSelect"),
   scenarioSelect: document.querySelector("#scenarioSelect"),
   setupStats: document.querySelector("#setupStats"),
+  scenarioBrief: document.querySelector("#scenarioBrief"),
+  scenarioBriefTitle: document.querySelector("#scenarioBriefTitle"),
+  scenarioDifficulty: document.querySelector("#scenarioDifficulty"),
+  scenarioObjectives: document.querySelector("#scenarioObjectives"),
+  scenarioHintToggle: document.querySelector("#scenarioHintToggle"),
+  scenarioHints: document.querySelector("#scenarioHints"),
   guideModal: document.querySelector("#guideModal"),
   guideClose: document.querySelector("#guideClose"),
   cardModal: document.querySelector("#cardModal"),
@@ -323,6 +330,68 @@ function setupLabel(map, key) {
   return map[key]?.label || key;
 }
 
+function scenarioDifficultyText(difficulty) {
+  if (difficulty === "demo") return "演示版";
+  if (difficulty === "challenge") return "挑战版";
+  return "";
+}
+
+function scenarioObjectiveList(scenario = {}) {
+  if (Array.isArray(scenario.objectives) && scenario.objectives.length) {
+    return scenario.objectives.filter(Boolean);
+  }
+  return scenario.goal ? [scenario.goal] : [];
+}
+
+function scenarioHintList(scenario = {}) {
+  return Array.isArray(scenario.hints) ? scenario.hints.filter(Boolean) : [];
+}
+
+function renderTextList(root, entries) {
+  if (!root) return;
+  root.innerHTML = "";
+  entries.forEach((entry) => {
+    const item = document.createElement("li");
+    item.textContent = entry;
+    root.appendChild(item);
+  });
+}
+
+function renderScenarioBrief(scenario = {}) {
+  const root = els.scenarioBrief;
+  if (!root) return;
+  const objectives = scenarioObjectiveList(scenario);
+  const hints = scenarioHintList(scenario);
+  const difficultyText = scenarioDifficultyText(scenario.difficulty);
+  const hasBrief = Boolean(difficultyText || objectives.length || hints.length);
+
+  root.hidden = !hasBrief;
+  if (!hasBrief) return;
+
+  if (els.scenarioBriefTitle) {
+    els.scenarioBriefTitle.textContent = scenario.label || "";
+  }
+  if (els.scenarioDifficulty) {
+    els.scenarioDifficulty.textContent = difficultyText || "场景";
+    els.scenarioDifficulty.classList.toggle("challenge", scenario.difficulty === "challenge");
+  }
+  renderTextList(els.scenarioObjectives, objectives);
+
+  if (!hints.length) {
+    scenarioHintsVisible = false;
+  }
+  if (els.scenarioHintToggle) {
+    els.scenarioHintToggle.disabled = !hints.length;
+    els.scenarioHintToggle.textContent = hints.length
+      ? (scenarioHintsVisible ? "隐藏提示" : "显示提示")
+      : "无提示";
+  }
+  if (els.scenarioHints) {
+    renderTextList(els.scenarioHints, hints);
+    els.scenarioHints.hidden = !scenarioHintsVisible || !hints.length;
+  }
+}
+
 function statsLine() {
   const stats = state.stats;
   return `战绩 ${stats.wins}胜/${stats.losses}负 / 总局数 ${stats.duels} / 当前连胜 ${stats.streak} / 最高连胜 ${stats.bestStreak}`;
@@ -430,6 +499,7 @@ function startGame() {
 function prepareGame() {
   stopAll();
   closeTrapChoicePrompt();
+  scenarioHintsVisible = false;
   applySetupChoices();
   syncSetupControls();
   Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
@@ -3375,6 +3445,7 @@ function render(animationKey = "") {
   if (els.setupPanel) {
     els.setupPanel.hidden = state.started || state.gameOver;
   }
+  renderScenarioBrief(scenario);
   if (els.setupStats) {
     const aiLabel = aiProfiles[state.aiStyle]?.label || characterProfiles.ai.name;
     els.setupStats.textContent = `${statsLine()} / 当前配置：${characterProfiles.player.name}、${setupLabel(deckPresets, state.deckPreset)}、${aiLabel} / ${scenario.label}${scenario.goal ? ` / 目标：${scenario.goal}` : ""}`;
@@ -3793,6 +3864,12 @@ els.zoomClose.addEventListener("click", closeCardDetail);
 els.chainYes.addEventListener("click", confirmTrapChoice);
 els.chainNo.addEventListener("click", () => answerChain(false));
 els.restartBtn.addEventListener("click", prepareGame);
+if (els.scenarioHintToggle) {
+  els.scenarioHintToggle.addEventListener("click", () => {
+    scenarioHintsVisible = !scenarioHintsVisible;
+    render();
+  });
+}
 els.modalRestart.addEventListener("click", () => {
   if (state.gameOver) {
     prepareGame();
@@ -3802,6 +3879,9 @@ els.modalRestart.addEventListener("click", () => {
 });
 [els.roleSelect, els.deckSelect, els.aiSelect, els.scenarioSelect].filter(Boolean).forEach((select) => {
   select.addEventListener("change", () => {
+    if (select === els.scenarioSelect) {
+      scenarioHintsVisible = false;
+    }
     applySetupChoices();
     render();
   });

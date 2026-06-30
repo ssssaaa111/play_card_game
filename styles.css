@@ -2049,6 +2049,74 @@ h1 {
   line-height: 1.45;
 }
 
+.scenario-brief {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(84, 210, 210, 0.24);
+  background: rgba(11, 16, 28, 0.58);
+  color: #d8e2ef;
+}
+
+.scenario-brief[hidden] {
+  display: none;
+}
+
+.scenario-brief-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.scenario-brief-head strong {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.scenario-difficulty {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f6d98a;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.scenario-difficulty.challenge {
+  border-color: rgba(255, 111, 145, 0.42);
+  background: rgba(255, 111, 145, 0.14);
+  color: #ffb0c4;
+}
+
+.scenario-objectives,
+.scenario-hints {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 8px 16px;
+  padding: 0;
+  color: #cbd8e8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.scenario-hints[hidden] {
+  display: none;
+}
+
+.scenario-hint-toggle {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.scenario-hint-toggle:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
 .guide-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

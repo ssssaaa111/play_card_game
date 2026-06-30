@@ -511,6 +511,11 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="protagonistComebackChallenge">逆境觉醒挑战<\/option>/);
   assert.match(html, /<option value="protagonistFinalCounter">终局反击演示<\/option>/);
   assert.match(html, /id="graveTargets"/);
+  assert.match(html, /id="scenarioBrief"/);
+  assert.match(html, /id="scenarioDifficulty"/);
+  assert.match(html, /id="scenarioObjectives"/);
+  assert.match(html, /id="scenarioHintToggle"/);
+  assert.match(html, /id="scenarioHints"/);
   assert.match(html, /<option value="phantomRedirect">幻影换位回归<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
@@ -524,6 +529,10 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /basicExpansion: \{/);
   assert.match(data, /protagonistComeback: \{/);
   assert.match(data, /protagonistComebackChallenge: \{/);
+  assert.match(data, /difficulty: "challenge"/);
+  assert.match(data, /objectives: \[/);
+  assert.match(data, /hints: \[/);
+  assert.match(data, /recommendedLine: \[/);
   assert.match(data, /playerGrave: \["spark-runner", "astral-comet-ace"\]/);
   assert.match(data, /suppressionRival: \{/);
   assert.match(data, /expansionSummon: \{/);
@@ -533,6 +542,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /from '\.\/browser-smoke\.js'/);
   assert.match(app, /scheduleBrowserSmoke\(\{/);
   assert.match(app, /graveTargets: document\.querySelector\("#graveTargets"\)/);
+  assert.match(app, /scenarioBrief: document\.querySelector\("#scenarioBrief"\)/);
+  assert.match(app, /function renderScenarioBrief/);
+  assert.match(app, /scenarioHintsVisible = !scenarioHintsVisible/);
   assert.match(app, /pending\.mode === "ownGraveMonster"/);
   assert.match(app, /canDispatchSummonEffectFromUiState/);
   assert.doesNotMatch(app, /card\.onSummon === "(burn200|draw1|heal300|fireBuff|shield400|shadowBurn)"/);
@@ -576,6 +588,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
   assert.match(smoke, /function trapCard/);
   assert.match(smoke, /function graveTargetCard/);
+  assert.match(smoke, /scenarioBrief: \{/);
+  assert.match(smoke, /function assertScenarioBrief/);
   assert.match(smoke, /function doubleClickSmokeElement/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
   assert.match(smoke, /ctx\.els\.choiceConfirmBtn/);

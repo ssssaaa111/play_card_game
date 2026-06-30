@@ -501,6 +501,11 @@ export const scenarioSetups = {
     label: "扩展召唤演示",
     text: "起手包含星魂学徒和星魂共鸣，场上已有风属性怪兽，用来验证基础扩展的召唤抽牌和目标魔法。",
     goal: "召唤星魂学徒应通过规则事件抽卡；发动星魂共鸣只能选择我方攻击力最高的怪兽。",
+    difficulty: "demo",
+    objectives: [
+      "召唤星魂学徒，确认召唤抽牌由规则事件结算。",
+      "发动星魂共鸣，观察目标必须是我方攻击力最高的怪兽。"
+    ],
     playerHand: ["star-soul-apprentice", "soul-resonance"],
     playerField: ["gale-mage"],
     playerDeck: ["solar-knight"],
@@ -512,6 +517,12 @@ export const scenarioSetups = {
     label: "扩展格挡演示",
     text: "起手包含裂隙壁卫和星魂格挡，场上已有暗属性怪兽，用来验证基础扩展的护盾与攻击响应。",
     goal: "召唤裂隙壁卫获得护盾，盖放星魂格挡后让对手攻击，陷阱应削弱攻击怪兽并继续结算。",
+    difficulty: "demo",
+    objectives: [
+      "召唤裂隙壁卫，确认护盾获得由规则事件结算。",
+      "发动星魂共鸣，强化当前最高攻击的我方怪兽。",
+      "盖下星魂格挡，展示攻击响应和减攻结算。"
+    ],
     playerHand: ["rift-bulwark", "soul-resonance", "soul-parry"],
     playerField: ["night-oracle"],
     playerDeck: [],
@@ -523,6 +534,12 @@ export const scenarioSetups = {
     label: "逆境觉醒演示",
     text: "主角生命值很低，场面落后；手牌和墓地预置抽牌、复活、加攻与防御陷阱，用来演示关键资源到手后的翻盘节奏。",
     goal: "发动余烬星愿补资源，醒星回召复活天穹逆星者，盖放残光护幕后挡下对手攻击，再用强化后的王牌完成反击。",
+    difficulty: "demo",
+    objectives: [
+      "体验低生命值下抽牌、复活、盖陷阱的连续爽点。",
+      "复活天穹逆星者并叠加爆发，展示主角王牌返场。",
+      "用残光护幕挡下攻击，再完成一次反击攻击。"
+    ],
     playerLp: 900,
     aiLp: 3000,
     playerHand: ["last-spark", "starwake-recall", "dawn-edge", "last-light-guard", "limit-break-oath"],
@@ -537,6 +554,25 @@ export const scenarioSetups = {
     label: "逆境觉醒挑战",
     text: "主角仍处在低生命值与场面劣势中，但墓地、手牌和对手盖卡都会惩罚无脑全点。需要先补资源，正确回召王牌，保留再攻击资源，并在反击前处理对手的反制陷阱。",
     goal: "先用余烬星愿补牌，醒星回召必须选择天穹逆星者；第一回合盖下残光护幕并忍住不攻，挡下对手攻击后抽到解印射线，先清掉对手盖卡，再用战斗狂热开启反击。",
+    difficulty: "challenge",
+    objectives: [
+      "先补两张资源，不要先把强化交给低星怪。",
+      "醒星回召选择天穹逆星者，而不是星火信使。",
+      "第一回合盖下残光护幕，挡住对手关键攻击。",
+      "反击前先用解印射线清掉镜光反制。"
+    ],
+    hints: [
+      "墓地列表从左到右不是推荐顺序，低星怪只是干扰目标。",
+      "战斗狂热最好留到反击回合，确保王牌能连续攻击。",
+      "如果没有盖残光护幕，对手攻击星火信使会直接形成斩杀。"
+    ],
+    recommendedLine: [
+      "余烬星愿补资源",
+      "醒星回召选择天穹逆星者",
+      "破晓锋印和临界誓辉交给王牌",
+      "盖残光护幕并结束回合",
+      "解印射线清反制后战斗狂热反击"
+    ],
     playerLp: 900,
     aiLp: 3400,
     playerHand: ["dawn-edge", "last-spark", "starwake-recall", "last-light-guard", "limit-break-oath"],
@@ -566,6 +602,12 @@ export const scenarioSetups = {
     label: "王牌进化演示",
     text: "主角已经站住两只进化素材，手牌持有星魂铸升；对手场上有压制怪，适合演示素材送墓、王牌从卡组登场和登场压场。",
     goal: "发动星魂铸升，将两只素材送墓，特殊召唤天炉星铠王，并观察对手场上怪兽被压低。",
+    difficulty: "demo",
+    objectives: [
+      "用两只素材发动星魂铸升，展示素材送墓。",
+      "从卡组特殊召唤天炉星铠王。",
+      "观察登场后压低对手场面并形成反击。"
+    ],
     playerHand: ["soulforge-ascent", "starwell-runner", "material-reclaim"],
     playerDeck: ["astral-forge-dragon", "ace-vow-guard", "battle-trance"],
     playerField: ["ember-soul-initiate", "lumen-gearlet"],
@@ -578,6 +620,12 @@ export const scenarioSetups = {
     label: "王牌守护演示",
     text: "主角王牌已登场，对手握有裂核裁令并准备高攻压制；主角需要盖放王牌誓护守住王牌，再完成反击。",
     goal: "盖放王牌誓护并结束回合；对手削弱并攻击王牌时发动陷阱守住，再用王牌反击。",
+    difficulty: "demo",
+    objectives: [
+      "盖下王牌誓护，准备应对对手解场。",
+      "在对手攻击响应中守住王牌。",
+      "用存活的王牌完成反击。"
+    ],
     playerHand: ["ace-vow-guard", "battle-trance"],
     playerDeck: ["soulforge-ascent", "material-reclaim"],
     playerField: ["astral-forge-dragon"],

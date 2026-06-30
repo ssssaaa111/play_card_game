@@ -21,6 +21,17 @@ function assertKnownCardIds(ids = [], context) {
   });
 }
 
+function assertLocalizedTextList(list = [], context) {
+  const englishWord = /[A-Za-z]{3,}/;
+  assert.ok(Array.isArray(list), `${context} should be an array`);
+  assert.ok(list.length <= 5, `${context} should stay concise`);
+  list.forEach((entry, index) => {
+    assert.equal(typeof entry, "string", `${context}.${index} should be text`);
+    assert.ok(entry.trim(), `${context}.${index} should not be empty`);
+    assert.doesNotMatch(entry, englishWord, `${context}.${index} should be localized`);
+  });
+}
+
 test("card library has unique ids and required fields", () => {
   assert.equal(cardsById.size, library.length, "card ids should be unique");
 
@@ -59,7 +70,43 @@ test("player-facing card and scenario copy is localized", () => {
     assert.doesNotMatch(scenario.label, englishWord, `${key} label should be localized`);
     assert.doesNotMatch(scenario.text || "", englishWord, `${key} text should be localized`);
     assert.doesNotMatch(scenario.goal || "", englishWord, `${key} goal should be localized`);
+    (scenario.objectives || []).forEach((entry, index) => {
+      assert.doesNotMatch(entry, englishWord, `${key}.objectives.${index} should be localized`);
+    });
+    (scenario.hints || []).forEach((entry, index) => {
+      assert.doesNotMatch(entry, englishWord, `${key}.hints.${index} should be localized`);
+    });
+    (scenario.recommendedLine || []).forEach((entry, index) => {
+      assert.doesNotMatch(entry, englishWord, `${key}.recommendedLine.${index} should be localized`);
+    });
   });
+});
+
+test("featured scenario metadata describes difficulty objectives and hints", () => {
+  const validDifficulties = new Set(["demo", "challenge"]);
+  Object.entries(scenarioSetups).forEach(([key, scenario]) => {
+    if (scenario.difficulty) {
+      assert.ok(validDifficulties.has(scenario.difficulty), `${key} has invalid difficulty`);
+    }
+    if (scenario.objectives) assertLocalizedTextList(scenario.objectives, `${key}.objectives`);
+    if (scenario.hints) assertLocalizedTextList(scenario.hints, `${key}.hints`);
+    if (scenario.recommendedLine) assertLocalizedTextList(scenario.recommendedLine, `${key}.recommendedLine`);
+  });
+
+  ["protagonistComeback", "protagonistAceEvolution", "protagonistAceProtection", "expansionSummon", "expansionParry"].forEach((key) => {
+    const scenario = scenarioSetups[key];
+    assert.equal(scenario.difficulty, "demo", `${key} should be a demo scenario`);
+    assertLocalizedTextList(scenario.objectives, `${key}.objectives`);
+    assert.ok(scenario.objectives.length >= 2 && scenario.objectives.length <= 4, `${key} should have two to four objectives`);
+  });
+
+  const challenge = scenarioSetups.protagonistComebackChallenge;
+  assert.equal(challenge.difficulty, "challenge");
+  assertLocalizedTextList(challenge.objectives, "protagonistComebackChallenge.objectives");
+  assertLocalizedTextList(challenge.hints, "protagonistComebackChallenge.hints");
+  assertLocalizedTextList(challenge.recommendedLine, "protagonistComebackChallenge.recommendedLine");
+  assert.ok(challenge.objectives.length >= 3 && challenge.objectives.length <= 4);
+  assert.ok(challenge.hints.length >= 2);
 });
 
 test("spell cards are backed by spell metadata", () => {
