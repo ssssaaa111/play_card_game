@@ -431,9 +431,11 @@ function syncSetupControls() {
 function applyScenarioSetup() {
   const scenario = scenarioSetups[state.scenarioId];
   if (!scenario || state.scenarioId === "normal") return;
+  const scenarioAiStyle = scenario.aiStyle || state.aiStyle;
+  if (scenario.aiStyle) state.aiStyle = scenario.aiStyle;
   const setup = buildScenarioState(scenario, {
     playerPreset: state.deckPreset,
-    aiPreset: aiProfiles[state.aiStyle]?.deckPreset || "balanced"
+    aiPreset: aiProfiles[scenarioAiStyle]?.deckPreset || "balanced"
   });
   Object.assign(state.player, setup.player);
   Object.assign(state.ai, setup.ai);
@@ -442,6 +444,7 @@ function applyScenarioSetup() {
   if (scenario.goal) {
     addLog(`测试目标：${scenario.goal}`);
   }
+  return scenario;
 }
 
 function startGame() {
@@ -483,7 +486,12 @@ function startGame() {
     drawCards(state.player, 5, { announce: false, reason: "opening" });
     drawCards(state.ai, 5, { announce: false, reason: "opening" });
   } else {
-    applyScenarioSetup();
+    const scenario = applyScenarioSetup();
+    const openingDrawCount = Math.max(0, Math.min(10, Number(scenario?.openingDrawCount) || 0));
+    if (openingDrawCount > 0) {
+      drawCards(state.player, openingDrawCount, { announce: false, reason: "opening" });
+      drawCards(state.ai, openingDrawCount, { announce: false, reason: "opening" });
+    }
   }
   addLog("决斗开始。你先攻，抽卡后展开第一波攻势。");
   addLog(`基础扩展已启用：${characterProfiles.player.skill} / ${setupLabel(deckPresets, state.deckPreset)} / ${characterProfiles.ai.name}。`);
@@ -3096,7 +3104,8 @@ async function aiSummon() {
 function aiSetTraps() {
   const action = chooseAiSetTrapAction({
     hand: state.ai.hand,
-    traps: state.ai.traps
+    traps: state.ai.traps,
+    aiStyle: state.aiStyle
   });
   return action ? setTrap(state.ai, action.handIndex, action.trapIndex) : false;
 }

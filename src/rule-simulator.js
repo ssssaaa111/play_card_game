@@ -757,10 +757,10 @@ function declareAttackActions(state, playerId, balanceStats = null) {
       for (const targetCardId of rival.monsterZone) {
         actions.push({ type: "DECLARE_ATTACK", playerId, rivalId, attackerCardId: attackerId, targetCardId });
       }
-      if (attacker.canDirectAttack || hasAbility(state, playerId, Ability.directAttack)) {
+      if ((attacker.canDirectAttack || hasAbility(state, playerId, Ability.directAttack)) && totalAtk(attacker) > 0) {
         actions.push({ type: "DECLARE_ATTACK", playerId, rivalId, attackerCardId: attackerId });
       }
-    } else {
+    } else if (totalAtk(attacker) > 0) {
       actions.push({ type: "DECLARE_ATTACK", playerId, rivalId, attackerCardId: attackerId });
     }
   }

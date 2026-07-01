@@ -16,10 +16,13 @@ function cardByTemplate(id) {
   return card;
 }
 
-function scenarioUiState(key) {
+function scenarioUiState(key, {
+  playerPreset = "protagonistTrioOmega",
+  aiPreset = "trioOmegaRival"
+} = {}) {
   const setup = buildScenarioState(scenarioSetups[key], {
-    playerPreset: "protagonistTrioOmega",
-    aiPreset: "trioOmegaRival"
+    playerPreset,
+    aiPreset
   });
   return {
     player: { ...createDuelist(PLAYER), ...setup.player },
@@ -28,6 +31,22 @@ function scenarioUiState(key) {
     phase: Phase.main,
     gameEvents: setup.gameEvents || []
   };
+}
+
+function drawOpeningHands(uiState, count = 5) {
+  for (const duelist of [uiState.player, uiState.ai]) {
+    const drawn = duelist.deck.splice(0, count);
+    duelist.hand.push(...drawn);
+  }
+  return uiState;
+}
+
+function fullScenarioUiState({ opening = false } = {}) {
+  const uiState = scenarioUiState("protagonistTrioOmegaFull", {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+  return opening ? drawOpeningHands(uiState) : uiState;
 }
 
 function engineStateWithOpeningDraw(key) {
@@ -109,6 +128,9 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
   assert.equal(cardByTemplate("trio-final-counter").effect, "trioFinalCounter");
 
   assert.equal(getCardEffectDefinition("lunarDominion").duration, EffectDuration.continuous);
+  assert.deepEqual(getCardEffectDefinition("lunarDominion").requirements, [
+    { type: "noSpellTrapTemplate", player: "self", templateId: "trio-moon-dominion" }
+  ]);
   assert.deepEqual(getCardEffectDefinition("lunarDominion").operations, [
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -900 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -900 }
@@ -162,6 +184,112 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
   assert.equal(challenge.player.deck[0].id, "trio-chain-veil");
   assert.equal(challenge.player.deck[1].id, "trio-moonbreaker-ray");
   assert.deepEqual(challenge.player.grave.map((card) => card.id), ["flare-titan", "trio-ember-pawn"]);
+});
+
+test("trio omega full duel starts from full decks and does not reveal the puzzle answer", () => {
+  assert.equal(deckPresets.protagonistTrioOmegaFull.ids.length, 40);
+  assert.equal(deckPresets.trioOmegaRivalFull.ids.length, 40);
+  assert.equal(scenarioSetups.protagonistTrioOmegaFull.difficulty, "challenge");
+  assert.equal(scenarioSetups.protagonistTrioOmegaFull.aiStyle, "scriptedPressure");
+  assert.equal(scenarioSetups.protagonistTrioOmegaFull.openingDrawCount, 5);
+
+  const setup = buildScenarioState(scenarioSetups.protagonistTrioOmegaFull, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+  assert.equal(setup.player.lp, 4000);
+  assert.equal(setup.ai.lp, 4000);
+  assert.equal(setup.player.hand.length, 0);
+  assert.equal(setup.ai.hand.length, 0);
+  assert.equal(setup.player.deck.length, 40);
+  assert.equal(setup.ai.deck.length, 40);
+  assertValidGameState(buildEngineStateFromUiState(fullScenarioUiState()));
+
+  const opened = fullScenarioUiState({ opening: true });
+  const playerOpening = opened.player.hand.map((card) => card.id);
+  const aiOpening = opened.ai.hand.map((card) => card.id);
+
+  assert.deepEqual(playerOpening, [
+    "spark-runner",
+    "trio-solar-snare",
+    "seer-call",
+    "star-shield",
+    "trio-ember-recall"
+  ]);
+  assert.equal(playerOpening.includes("trio-moonbreaker-ray"), false);
+  assert.equal(playerOpening.includes("trio-final-counter"), false);
+  assert.equal(playerOpening.includes("trio-ember-pawn"), false);
+  assert.equal(opened.player.deck.length, 35);
+  assert.equal(opened.ai.deck.length, 35);
+  assert.ok(aiOpening.includes("trio-moon-dominion"));
+  assert.ok(aiOpening.includes("trio-sun-judicator"));
+  assert.ok(aiOpening.includes("trio-moon-warden"));
+  assert.ok(aiOpening.includes("trio-star-herald"));
+  assertValidGameState(buildEngineStateFromUiState(opened));
+});
+
+test("trio omega full duel does not deck-out in the first two AI draw steps", () => {
+  const engine = new GameEngine(buildEngineStateFromUiState(fullScenarioUiState({ opening: true })));
+  engine.dispatch({ type: "END_TURN", playerId: PLAYER });
+  engine.dispatch({ type: "START_TURN", playerId: AI });
+  engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: AI });
+  engine.dispatch({ type: "END_TURN", playerId: AI });
+  engine.dispatch({ type: "START_TURN", playerId: PLAYER });
+  engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: PLAYER });
+  engine.dispatch({ type: "END_TURN", playerId: PLAYER });
+  engine.dispatch({ type: "START_TURN", playerId: AI });
+  engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: AI });
+
+  const state = engine.getState();
+  assert.equal(state.players[AI].lp, 4000);
+  assert.equal(state.players[AI].deck.length, 33);
+  assert.equal(state.events.some((event) => event.type === "DRAW_FAILED" && event.playerId === AI), false);
+  assertValidGameState(state);
+});
+
+test("trio omega full duel has multiple setup routes and no opening high-attack solution", () => {
+  const opened = fullScenarioUiState({ opening: true });
+  const playerOpening = opened.player.hand.map((card) => card.id);
+  const nextSeven = opened.player.deck.slice(0, 7).map((card) => card.id);
+  const openingMonsters = opened.player.hand.filter((card) => card.type === "monster");
+  const highestOpeningAtk = Math.max(...openingMonsters.map((card) => card.atk));
+
+  assert.ok(playerOpening.includes("trio-solar-snare"), "defensive trap route is available");
+  assert.ok(playerOpening.includes("star-shield"), "shield route is available");
+  assert.ok(playerOpening.includes("seer-call"), "draw/filter route is available");
+  assert.ok(nextSeven.includes("trio-moonbreaker-ray"), "clear-pressure route is drawn into, not opened with");
+  assert.ok(nextSeven.includes("trio-ember-pawn"), "low-star resource route is drawn into, not opened with");
+  assert.ok(nextSeven.includes("battle-trance") || nextSeven.includes("trio-chain-veil"));
+  assert.ok(highestOpeningAtk < cardByTemplate("trio-sun-judicator").atk);
+  assert.equal(opened.player.lp, 4000);
+  assert.deepEqual(getCardEffectDefinition("trioFinalCounter").requirements.slice(0, 2), [
+    { type: "maxLp", player: "self", amount: 1600 },
+    { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] }
+  ]);
+});
+
+test("trio omega full duel first turn can build resources but cannot convert into a high-attack win", () => {
+  const engine = new GameEngine(buildEngineStateFromUiState(fullScenarioUiState({ opening: true })));
+  let state = engine.getState();
+  const sparkId = findCardId(state, PLAYER, "hand", "spark-runner");
+  engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: sparkId, index: 0 });
+
+  state = engine.getState();
+  assert.ok(state.players[PLAYER].hand.some((cardId) => state.cards[cardId].templateId === "trio-moonbreaker-ray"));
+  const shieldId = findCardId(state, PLAYER, "hand", "star-shield");
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: shieldId });
+  const snareId = findCardId(engine.getState(), PLAYER, "hand", "trio-solar-snare");
+  engine.dispatch({ type: "SET_TRAP", playerId: PLAYER, cardId: snareId, index: 0 });
+
+  state = engine.getState();
+  const playerAttackers = state.players[PLAYER].monsterZone
+    .map((cardId) => state.cards[cardId])
+    .filter(Boolean);
+  assert.equal(state.gameOver, null);
+  assert.equal(state.players[AI].lp, 4000);
+  assert.ok(Math.max(...playerAttackers.map((card) => card.atk + card.tempAtk)) < cardByTemplate("trio-sun-judicator").atk);
+  assert.equal(state.players[PLAYER].hand.some((cardId) => state.cards[cardId].templateId === "trio-final-counter"), false);
+  assertValidGameState(state);
 });
 
 test("trio ace pressure resolves and clearing moon pressure releases the continuous modifier", () => {

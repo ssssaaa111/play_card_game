@@ -157,7 +157,10 @@ export const defaultCardEffects = Object.freeze({
   lunarDominion: continuous([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -900 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -900 }
-  ], { target: { player: "rival", zone: "monsterZone" } }),
+  ], {
+    target: { player: "rival", zone: "monsterZone" },
+    requirements: [{ type: "noSpellTrapTemplate", player: "self", templateId: "trio-moon-dominion" }]
+  }),
   trioFinalCounter: oneShot([
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "tempAtk", amount: 2100 },
     {

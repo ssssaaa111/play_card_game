@@ -192,6 +192,9 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
     case "lunarDominion":
       if (fieldCards(rival).length === 0) return { ok: false, reason: "对手场上没有怪兽，不能展开月曜帷幕。" };
       if ((owner.traps || []).every(Boolean)) return { ok: false, reason: "魔陷区已满，不能展开月曜帷幕。" };
+      if ((owner.traps || []).some((card) => cardTemplateId(card) === "trio-moon-dominion")) {
+        return { ok: false, reason: "月曜帷幕已经在场，不能重复展开。" };
+      }
       return { ok: true };
     case "trioFinalCounter":
       if (owner.lp > 1600) return { ok: false, reason: "生命值还没有进入终局反击条件。" };

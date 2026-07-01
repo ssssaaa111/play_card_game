@@ -487,23 +487,29 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="aceSuppressionRival">/);
   assert.match(html, /<option value="protagonistAceProtection">/);
   assert.match(html, /<option value="protagonistTrioOmega">/);
+  assert.match(html, /<option value="protagonistTrioOmegaFull">/);
   assert.match(html, /<option value="trioOmegaRival">/);
+  assert.match(html, /<option value="trioOmegaRivalFull">/);
   assert.match(data, /protagonistAceEvolution: \{/);
   assert.match(data, /aceSuppressionRival: \{/);
   assert.match(data, /protagonistTrioOmega: \{/);
+  assert.match(data, /protagonistTrioOmegaFull: \{/);
   assert.match(data, /trioOmegaRival: \{/);
+  assert.match(data, /trioOmegaRivalFull: \{/);
   assert.match(smoke, /"protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke/);
   assert.match(smoke, /"protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke/);
   assert.match(smoke, /"trio-omega-demo": runTrioOmegaDemoSmoke/);
   assert.match(smoke, /"trio-omega-challenge": runTrioOmegaChallengeSmoke/);
   assert.match(smoke, /"trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke/);
   assert.match(smoke, /"trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke/);
+  assert.match(smoke, /"trio-omega-full-duel": runTrioOmegaFullDuelSmoke/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-evolution-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-protection-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-challenge"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-happy-clicker-fails"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-full-duel"\)/);
 
   assert.match(html, /<option value="skipLock">跳攻锁定<\/option>/);
   assert.match(html, /<option value="directTrap">直击陷阱<\/option>/);
@@ -555,6 +561,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /expansionParry: \{/);
   assert.match(data, /protagonistFinalCounter: \{/);
   assert.match(data, /protagonistTrioOmegaChallenge: \{/);
+  assert.match(data, /openingDrawCount: 5/);
+  assert.match(data, /aiStyle: "scriptedPressure"/);
   assert.match(data, /playerHand: \["trio-solar-snare", "trio-ember-recall", "trio-final-counter"\]/);
   assert.match(data, /playerDeck: \["trio-chain-veil", "trio-moonbreaker-ray", "last-spark"\]/);
   assert.match(data, /playerGrave: \["flare-titan", "trio-ember-pawn"\]/);

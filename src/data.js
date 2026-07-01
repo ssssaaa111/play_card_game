@@ -330,6 +330,19 @@ export const deckPresets = {
       "weakening-web", "guard-sigil"
     ]
   },
+  protagonistTrioOmegaFull: {
+    label: "星魂主角战役 03：终局三曜完整对局",
+    ids: [
+      "spark-runner", "trio-solar-snare", "seer-call", "star-shield", "trio-ember-recall",
+      "trio-moonbreaker-ray", "trio-ember-pawn", "trio-final-counter", "battle-trance", "trio-chain-veil",
+      "starwell-runner", "trio-decoy-ward", "soul-resonance", "rally-strike", "trio-ember-pawn",
+      "gale-mage", "star-soul-apprentice", "dispelling-ray", "last-spark", "trio-solar-snare",
+      "iron-guardian", "prism-saint", "trio-ember-recall", "trio-moonbreaker-ray", "backlash-mirror",
+      "last-light-guard", "aegis-mender", "spark-runner", "star-shield", "seer-call",
+      "trio-decoy-ward", "spark-runner", "seer-call", "battle-trance", "rally-strike",
+      "trio-solar-snare", "trio-chain-veil", "dispelling-ray", "starwake-recall", "grave-return"
+    ]
+  },
   trioOmegaRival: {
     label: "三曜压制对手",
     ids: [
@@ -345,6 +358,19 @@ export const deckPresets = {
       "star-breach", "flame-gale-burst", "overclock-core", "blade-sigil",
       "summon-flare", "summon-flare", "mirror-snare", "counter-array",
       "void-lock", "phantom-switch", "chain-nullifier"
+    ]
+  },
+  trioOmegaRivalFull: {
+    label: "三曜完整压制对手",
+    ids: [
+      "trio-moon-dominion", "trio-sun-judicator", "trio-moon-warden", "trio-star-herald", "mirror-snare",
+      "chain-nullifier", "trio-star-herald", "trio-sun-judicator", "war-chant", "trio-moon-dominion",
+      "trio-moon-warden", "void-siege-breaker", "corebreak-edict", "summon-flare", "pierce-line",
+      "trio-moon-dominion", "flare-titan", "star-lancer", "trio-sun-judicator", "void-lock",
+      "trio-star-herald", "battle-trance", "trio-moon-warden", "mirror-snare", "overclock-core",
+      "sky-raider", "dusk-alchemist", "ember-drake", "chain-nullifier", "rally-strike",
+      "trio-moon-dominion", "trio-sun-judicator", "trio-moon-warden", "trio-star-herald", "mirror-snare",
+      "chain-nullifier", "void-siege-breaker", "corebreak-edict", "pierce-line", "summon-flare"
     ]
   },
   suppressionRival: {
@@ -758,6 +784,39 @@ export const scenarioSetups = {
       target: { owner: "player", zone: "field", index: 0 },
       effectId: "lunarDominion"
     }]
+  },
+  protagonistTrioOmegaFull: {
+    label: "终局三曜完整对局",
+    text: "从 4000 生命值和完整牌堆开始的三曜主题对局。对手会优先建立三曜压制，玩家需要用低星资源、抽滤、防御陷阱和墓地回收逐步换取反击窗口。",
+    goal: "在正常起手和长牌堆中识别三曜压制核心；先守住关键资源，再清理持续压制并利用保留下来的低星资源建立优势。",
+    difficulty: "challenge",
+    aiStyle: "scriptedPressure",
+    objectives: [
+      "在完整对局中识别三曜压制核心。",
+      "不要把回召资源浪费在看似更直观的高攻诱饵上。",
+      "保留防御手段，等待反击窗口。"
+    ],
+    hints: [
+      "对手场上最亮眼的攻击力不一定是第一优先目标。",
+      "先铺资源或防御通常比立刻打出所有手牌更稳。",
+      "持续压制不清掉时，墓地资源和终局反击都很难转化成胜势。"
+    ],
+    recommendedLine: [
+      "用低星怪和防御陷阱撑过第一轮压制。",
+      "等对手三曜压力落地后，再选择清后场或保留墓地回收。",
+      "反击窗口来自前面留下的低星资源和防御交换，而不是起手高攻碾压。"
+    ],
+    playerLp: 4000,
+    aiLp: 4000,
+    openingDrawCount: 5,
+    playerHand: [],
+    aiHand: [],
+    playerField: [],
+    aiField: [],
+    playerGrave: [],
+    aiGrave: [],
+    playerDeck: deckPresets.protagonistTrioOmegaFull.ids,
+    aiDeck: deckPresets.trioOmegaRivalFull.ids
   },
   target: {
     label: "目标选择",

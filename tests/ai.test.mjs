@@ -151,6 +151,22 @@ test("AI trap planner returns the first hand trap and first empty trap zone", ()
   });
 });
 
+test("scripted pressure AI protects trio pressure before generic traps", () => {
+  const action = chooseAiSetTrapAction({
+    hand: [
+      trap({ id: "guard-sigil" }),
+      trap({ id: "mirror-snare" }),
+      trap({ id: "chain-nullifier" })
+    ],
+    traps: [null, null, null],
+    aiStyle: "scriptedPressure"
+  });
+
+  assert.equal(action.type, "setTrap");
+  assert.equal(action.handIndex, 1);
+  assert.equal(action.card.id, "mirror-snare");
+});
+
 test("AI summon planner chooses the best monster for its style", () => {
   const action = chooseAiSummonAction({
     hand: [
@@ -164,6 +180,21 @@ test("AI summon planner chooses the best monster for its style", () => {
   assert.equal(action.type, "summon");
   assert.equal(action.handIndex, 1);
   assert.equal(action.fieldIndex, 0);
+});
+
+test("scripted pressure AI prioritizes trio pressure bodies over raw generic attack", () => {
+  const action = chooseAiSummonAction({
+    hand: [
+      monster({ id: "flare-titan", name: "generic", atk: 2200, def: 1400, stars: 5 }),
+      monster({ id: "trio-moon-warden", name: "moon", atk: 2100, def: 2600, stars: 6 })
+    ],
+    field: [null, null, null],
+    aiStyle: "scriptedPressure"
+  });
+
+  assert.equal(action.type, "summon");
+  assert.equal(action.handIndex, 1);
+  assert.equal(action.card.id, "trio-moon-warden");
 });
 
 test("AI defense switch policy is explicit", () => {
