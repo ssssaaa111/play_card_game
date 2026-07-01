@@ -724,34 +724,31 @@ export const scenarioSetups = {
   },
   protagonistTrioOmegaChallenge: {
     label: "终局三曜挑战",
-    text: "终局战结构复现：三张原创三曜王牌分工压制，直接硬打会被日曜高攻击倒，不清月曜帷幕会卡住终局反击，不保留反制则会在对手回合被星曜追击带走。",
-    goal: "第一回合先盖下日冕诱锁并结束回合，借攻击响应破解日曜；下一回合先用碎月解幕清除持续压制，再回召余烁小卫，最后用三曜终断让低星怪连续突破。",
+    text: "终局战结构复现：三张原创三曜王牌分工压制。挑战版不再把答案一次交到手里，错误回召或急着攻击都会消耗关键资源，必须先撑过对手回合再组织反击。",
+    goal: "保留墓地里的真正终局资源，先布置防御并撑过日曜攻势；回到自己回合后再判断清场、回召和终断的顺序。",
     difficulty: "challenge",
     objectives: [
       "不要直接攻击曜冕裁决者，低星怪会被高攻反杀。",
-      "先保留并盖下防御/反制手段，挡住第一轮日曜攻击。",
-      "反击前必须清除月曜帷幕，否则三曜终断不能发动。",
-      "用余烁小卫完成最后两次突破，而不是靠高攻怪兽硬压。"
+      "不要把唯一回召浪费在看起来更强的墓地怪兽上。",
+      "第一回合不能完成胜利，必须先布置防御并跨过对手回合。",
+      "反击前必须清除月曜帷幕，否则三曜终断不能转化为胜势。"
     ],
     hints: [
-      "如果跳过日冕诱锁，对手会先破坏诱标卫，再用后续三曜攻击结束决斗。",
-      "碎月解幕的首要目标是月曜帷幕，不是怪兽。",
-      "余烁归轨要选择余烁小卫；它才是三曜终断的前置资源。",
-      "三曜终断提供攻击重置，第一次打月曜，第二次打星曜。"
+      "墓地里攻击力最高的怪兽并不一定是正确回召目标。",
+      "能点的魔法不代表现在就该点；唯一回召被用掉后不会回来。",
+      "攻击力最高的敌人常常只是诱导错误路线的显眼目标。"
     ],
     recommendedLine: [
-      "盖放日冕诱锁",
-      "结束回合并在日曜攻击时发动诱锁",
-      "碎月解幕清除月曜帷幕",
-      "余烁归轨选择余烁小卫",
-      "三曜终断强化余烁小卫，连续攻击月曜和星曜"
+      "先保住防御窗口，不要急着用完手牌。",
+      "回到自己回合后再处理持续压制。",
+      "最后的胜点来自被保留的低星墓地资源。"
     ],
     playerLp: 1300,
     aiLp: 900,
-    playerHand: ["trio-solar-snare", "trio-moonbreaker-ray", "trio-ember-recall", "trio-final-counter"],
-    playerDeck: ["trio-chain-veil", "last-spark"],
+    playerHand: ["trio-solar-snare", "trio-ember-recall", "trio-final-counter"],
+    playerDeck: ["trio-chain-veil", "trio-moonbreaker-ray", "last-spark"],
     playerField: [{ id: "trio-decoy-ward", mode: "defense", changedMode: true }],
-    playerGrave: ["trio-ember-pawn"],
+    playerGrave: ["flare-titan", "trio-ember-pawn"],
     aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
     aiTraps: ["trio-moon-dominion"],
     aiHand: [],

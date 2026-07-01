@@ -497,11 +497,13 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"trio-omega-demo": runTrioOmegaDemoSmoke/);
   assert.match(smoke, /"trio-omega-challenge": runTrioOmegaChallengeSmoke/);
   assert.match(smoke, /"trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke/);
+  assert.match(smoke, /"trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-evolution-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-protection-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-challenge"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-happy-clicker-fails"\)/);
 
   assert.match(html, /<option value="skipLock">跳攻锁定<\/option>/);
   assert.match(html, /<option value="directTrap">直击陷阱<\/option>/);
@@ -553,6 +555,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /expansionParry: \{/);
   assert.match(data, /protagonistFinalCounter: \{/);
   assert.match(data, /protagonistTrioOmegaChallenge: \{/);
+  assert.match(data, /playerHand: \["trio-solar-snare", "trio-ember-recall", "trio-final-counter"\]/);
+  assert.match(data, /playerDeck: \["trio-chain-veil", "trio-moonbreaker-ray", "last-spark"\]/);
+  assert.match(data, /playerGrave: \["flare-titan", "trio-ember-pawn"\]/);
   assert.match(data, /setupContinuousEffects: \[/);
   assert.match(data, /phantomRedirect: \{/);
   assert.match(app, /from '\.\/browser-smoke\.js'/);
@@ -581,6 +586,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"trio-omega-demo": runTrioOmegaDemoSmoke/);
   assert.match(smoke, /"trio-omega-challenge": runTrioOmegaChallengeSmoke/);
   assert.match(smoke, /"trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke/);
+  assert.match(smoke, /"trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);

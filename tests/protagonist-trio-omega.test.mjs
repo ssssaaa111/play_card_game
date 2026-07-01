@@ -30,6 +30,14 @@ function scenarioUiState(key) {
   };
 }
 
+function engineStateWithOpeningDraw(key) {
+  const state = buildEngineStateFromUiState(scenarioUiState(key));
+  const topCardId = state.players[PLAYER].deck.shift();
+  assert.ok(topCardId, "scenario should have an opening draw card");
+  state.players[PLAYER].hand.push(topCardId);
+  return state;
+}
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -126,7 +134,9 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
   assert.ok(deckPresets.trioOmegaRival.ids.includes("trio-moon-dominion"));
   assert.equal(scenarioSetups.protagonistTrioOmega.difficulty, "demo");
   assert.equal(scenarioSetups.protagonistTrioOmegaChallenge.difficulty, "challenge");
-  assert.ok(scenarioSetups.protagonistTrioOmegaChallenge.recommendedLine.includes("三曜终断强化余烁小卫，连续攻击月曜和星曜"));
+  const challengeLine = scenarioSetups.protagonistTrioOmegaChallenge.recommendedLine.join("\n");
+  assert.match(challengeLine, /先保住防御窗口/);
+  assert.doesNotMatch(challengeLine, /连续攻击月曜和星曜/);
 
   for (const key of ["protagonistTrioOmega", "protagonistTrioOmegaChallenge"]) {
     const setup = buildScenarioState(scenarioSetups[key], {
@@ -139,10 +149,23 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
     assert.ok(setup.gameEvents.some((event) => event.type === "CONTINUOUS_EFFECT_REGISTERED" && event.effectId === "lunarDominion"));
     assertValidGameState(buildEngineStateFromUiState(scenarioUiState(key)));
   }
+
+  const challenge = buildScenarioState(scenarioSetups.protagonistTrioOmegaChallenge, {
+    playerPreset: "protagonistTrioOmega",
+    aiPreset: "trioOmegaRival"
+  });
+  assert.deepEqual(challenge.player.hand.map((card) => card.id), [
+    "trio-solar-snare",
+    "trio-ember-recall",
+    "trio-final-counter"
+  ]);
+  assert.equal(challenge.player.deck[0].id, "trio-chain-veil");
+  assert.equal(challenge.player.deck[1].id, "trio-moonbreaker-ray");
+  assert.deepEqual(challenge.player.grave.map((card) => card.id), ["flare-titan", "trio-ember-pawn"]);
 });
 
 test("trio ace pressure resolves and clearing moon pressure releases the continuous modifier", () => {
-  const uiState = scenarioUiState("protagonistTrioOmegaChallenge");
+  const uiState = scenarioUiState("protagonistTrioOmega");
   const engine = new GameEngine(buildEngineStateFromUiState(uiState));
   let state = engine.getState();
   const decoyId = findCardId(state, PLAYER, "monsterZone", "trio-decoy-ward");
@@ -195,28 +218,85 @@ test("sun and star trio ace pressure effects resolve through battle", () => {
   assertValidGameState(state);
 });
 
-test("wrong trio routes fail before the finale condition is assembled", () => {
+test("trio happy-clicker exposed route cannot win on the first turn", () => {
   const engine = new GameEngine(buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaChallenge")));
-  const recallId = findCardId(engine.getState(), PLAYER, "hand", "trio-ember-recall");
-  const pawnGraveId = findCardId(engine.getState(), PLAYER, "grave", "trio-ember-pawn");
+  let state = engine.getState();
+
+  assert.equal(state.players[PLAYER].hand.some((cardId) => state.cards[cardId].templateId === "trio-moonbreaker-ray"), false);
+
+  const recallId = findCardId(state, PLAYER, "hand", "trio-ember-recall");
+  const pawnGraveId = findCardId(state, PLAYER, "grave", "trio-ember-pawn");
   engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: recallId, targetCardId: pawnGraveId });
 
-  let state = engine.getState();
+  state = engine.getState();
   const finalCounterId = findCardId(state, PLAYER, "hand", "trio-final-counter");
   assert.throws(
     () => engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: finalCounterId }),
     /requires no trio-moon-dominion/
   );
+  assert.equal(engine.getState().gameOver, null);
+});
+
+test("wrong trio revive target spends the only recall and cannot become the finale line", () => {
+  const engine = new GameEngine(buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaChallenge")));
+  let state = engine.getState();
+  const recallId = findCardId(state, PLAYER, "hand", "trio-ember-recall");
+  const flareGraveId = findCardId(state, PLAYER, "grave", "flare-titan");
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: recallId, targetCardId: flareGraveId });
 
   state = engine.getState();
-  const battleEngine = engineWithTurn(state, PLAYER, Phase.battle);
-  const pawnId = findCardId(battleEngine.getState(), PLAYER, "monsterZone", "trio-ember-pawn");
-  const sunId = findCardId(battleEngine.getState(), AI, "monsterZone", "trio-sun-judicator");
+  assert.ok(state.players[PLAYER].monsterZone.includes(flareGraveId));
+  assert.equal(state.players[PLAYER].hand.some((cardId) => state.cards[cardId].templateId === "trio-ember-recall"), false);
+  assert.equal(state.players[PLAYER].grave.some((cardId) => state.cards[cardId].templateId === "trio-ember-pawn"), true);
+
+  const withRay = clone(state);
+  const rayId = findCardId(withRay, PLAYER, "deck", "trio-moonbreaker-ray");
+  withRay.players[PLAYER].deck = withRay.players[PLAYER].deck.filter((cardId) => cardId !== rayId);
+  withRay.players[PLAYER].hand.push(rayId);
+  const rayEngine = new GameEngine(withRay);
+  rayEngine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: rayId, targetCardId: findCardId(withRay, AI, "spellTrapZone", "trio-moon-dominion") });
+
+  state = rayEngine.getState();
+  const finalCounterId = findCardId(state, PLAYER, "hand", "trio-final-counter");
+  assert.throws(
+    () => rayEngine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: finalCounterId }),
+    /requires field materials trio-ember-pawn/
+  );
+});
+
+test("trio final counter cannot convert into victory while moon pressure remains", () => {
+  const engine = new GameEngine(buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaChallenge")));
+  let state = engine.getState();
+  const recallId = findCardId(state, PLAYER, "hand", "trio-ember-recall");
+  const pawnGraveId = findCardId(state, PLAYER, "grave", "trio-ember-pawn");
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: recallId, targetCardId: pawnGraveId });
+
+  state = engine.getState();
+  const finalCounterId = findCardId(state, PLAYER, "hand", "trio-final-counter");
+  assert.throws(
+    () => engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: finalCounterId }),
+    /requires no trio-moon-dominion/
+  );
+  assert.equal(engine.getState().gameOver, null);
+});
+
+test("wrong trio attack into the high-attack ace carries a real penalty", () => {
+  const engine = new GameEngine(buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaChallenge")));
+  let state = engine.getState();
+  const recallId = findCardId(state, PLAYER, "hand", "trio-ember-recall");
+  const pawnGraveId = findCardId(state, PLAYER, "grave", "trio-ember-pawn");
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: recallId, targetCardId: pawnGraveId });
+
+  const battleEngine = engineWithTurn(engine.getState(), PLAYER, Phase.battle);
+  state = battleEngine.getState();
+  const pawnId = findCardId(state, PLAYER, "monsterZone", "trio-ember-pawn");
+  const sunId = findCardId(state, AI, "monsterZone", "trio-sun-judicator");
   const events = resolveAttack(battleEngine, { playerId: PLAYER, rivalId: AI, attackerCardId: pawnId, targetCardId: sunId });
   const next = battleEngine.getState();
 
   assert.equal(next.players[PLAYER].lp, 0);
   assert.equal(next.gameOver.winnerId, AI);
+  assert.ok(next.players[PLAYER].grave.includes(pawnId));
   assert.ok(events.some((event) =>
     event.type === "BATTLE_RESOLVED" &&
     event.outcome.kind === "countered" &&
@@ -224,18 +304,21 @@ test("wrong trio routes fail before the finale condition is assembled", () => {
   ));
 });
 
-test("correct trio line uses bait, clears pressure, revives the low attacker, and wins without raw high attack", () => {
-  const engine = new GameEngine(buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaChallenge")));
+test("correct trio line crosses the rival turn, clears pressure, revives the low attacker, and wins without raw high attack", () => {
+  const engine = new GameEngine(engineStateWithOpeningDraw("protagonistTrioOmegaChallenge"));
   let state = engine.getState();
   const snareId = findCardId(state, PLAYER, "hand", "trio-solar-snare");
   engine.dispatch({ type: "SET_TRAP", playerId: PLAYER, cardId: snareId, index: 0 });
 
-  const aiBattle = engineWithTurn(engine.getState(), AI, Phase.battle);
-  state = aiBattle.getState();
+  engine.dispatch({ type: "END_TURN", playerId: PLAYER });
+  engine.dispatch({ type: "START_TURN", playerId: AI });
+  engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: AI });
+  engine.dispatch({ type: "CHANGE_PHASE", playerId: AI, phase: Phase.battle });
+  state = engine.getState();
   const sunId = findCardId(state, AI, "monsterZone", "trio-sun-judicator");
   const decoyId = findCardId(state, PLAYER, "monsterZone", "trio-decoy-ward");
   const setSnareId = findCardId(state, PLAYER, "spellTrapZone", "trio-solar-snare");
-  const declarationEvents = aiBattle.dispatch({
+  const declarationEvents = engine.dispatch({
     type: "DECLARE_ATTACK",
     playerId: AI,
     rivalId: PLAYER,
@@ -243,7 +326,7 @@ test("correct trio line uses bait, clears pressure, revives the low attacker, an
     targetCardId: decoyId
   });
   const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
-  aiBattle.dispatch({
+  engine.dispatch({
     type: "ADD_CHAIN_LINK",
     playerId: PLAYER,
     cardId: setSnareId,
@@ -251,7 +334,7 @@ test("correct trio line uses bait, clears pressure, revives the low attacker, an
     targetEffectId: declaration.id,
     attackerCardId: sunId
   });
-  aiBattle.dispatch({
+  engine.dispatch({
     type: "ACTIVATE_TRAP",
     playerId: PLAYER,
     rivalId: AI,
@@ -259,43 +342,47 @@ test("correct trio line uses bait, clears pressure, revives the low attacker, an
     targetEffectId: declaration.id,
     attackerCardId: sunId
   });
-  const trapEvents = aiBattle.dispatch({ type: "RESOLVE_CHAIN", playerId: PLAYER });
-  state = aiBattle.getState();
+  const trapEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: PLAYER });
+  state = engine.getState();
 
   assert.ok(state.players[AI].grave.includes(sunId));
   assert.ok(state.players[PLAYER].grave.includes(setSnareId));
   assert.ok(state.players[PLAYER].monsterZone.includes(decoyId));
   assert.ok(trapEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === sunId));
 
-  const playerMain = engineWithTurn(state, PLAYER, Phase.main);
-  state = playerMain.getState();
+  engine.dispatch({ type: "END_TURN", playerId: AI });
+  engine.dispatch({ type: "START_TURN", playerId: PLAYER });
+  engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: PLAYER });
+  state = engine.getState();
+  assert.ok(state.events.some((event) => event.type === "TURN_STARTED" && event.playerId === AI));
   const rayId = findCardId(state, PLAYER, "hand", "trio-moonbreaker-ray");
   const moonDominionId = findCardId(state, AI, "spellTrapZone", "trio-moon-dominion");
-  playerMain.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: rayId, targetCardId: moonDominionId });
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: rayId, targetCardId: moonDominionId });
 
-  state = playerMain.getState();
+  state = engine.getState();
   const recallId = findCardId(state, PLAYER, "hand", "trio-ember-recall");
   const pawnGraveId = findCardId(state, PLAYER, "grave", "trio-ember-pawn");
-  playerMain.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: recallId, targetCardId: pawnGraveId });
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: recallId, targetCardId: pawnGraveId });
 
-  state = playerMain.getState();
+  state = engine.getState();
   const finalCounterId = findCardId(state, PLAYER, "hand", "trio-final-counter");
-  const finalEvents = playerMain.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: finalCounterId });
-  state = playerMain.getState();
+  const finalEvents = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: finalCounterId });
+  state = engine.getState();
   const pawnId = findCardId(state, PLAYER, "monsterZone", "trio-ember-pawn");
 
   assert.equal(state.cards[pawnId].atk, 600);
   assert.equal(state.cards[pawnId].tempAtk, 2100);
   assert.ok(finalEvents.some((event) => event.type === "ABILITY_GRANTED" && event.ability === "attackReset"));
+  assert.ok(engine.getState().events.some((event) => event.type === "TURN_STARTED" && event.playerId === AI));
 
-  const playerBattle = engineWithTurn(state, PLAYER, Phase.battle);
-  state = playerBattle.getState();
+  engine.dispatch({ type: "CHANGE_PHASE", playerId: PLAYER, phase: Phase.battle });
+  state = engine.getState();
   const moonId = findCardId(state, AI, "monsterZone", "trio-moon-warden");
   const starId = findCardId(state, AI, "monsterZone", "trio-star-herald");
-  const firstBattle = resolveAttack(playerBattle, { playerId: PLAYER, rivalId: AI, attackerCardId: pawnId, targetCardId: moonId });
+  const firstBattle = resolveAttack(engine, { playerId: PLAYER, rivalId: AI, attackerCardId: pawnId, targetCardId: moonId });
   assert.ok(firstBattle.some((event) => event.type === "MONSTER_READIED" && event.cardId === pawnId));
-  const secondBattle = resolveAttack(playerBattle, { playerId: PLAYER, rivalId: AI, attackerCardId: pawnId, targetCardId: starId });
-  state = playerBattle.getState();
+  const secondBattle = resolveAttack(engine, { playerId: PLAYER, rivalId: AI, attackerCardId: pawnId, targetCardId: starId });
+  state = engine.getState();
 
   assert.equal(state.players[AI].lp, 0);
   assert.equal(state.gameOver.winnerId, PLAYER);
