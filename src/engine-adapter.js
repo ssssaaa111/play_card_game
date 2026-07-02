@@ -1,5 +1,5 @@
 import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents } from './game-engine.js';
-import { FIELD_SIZE, MAX_LP, MAX_SHIELD, totalAtk } from './rules.js';
+import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { trapDefinition } from './traps.js';
 import { ACTION_WINDOWS, PHASES, TIMINGS } from './turn-state.js';
@@ -187,9 +187,9 @@ function removeCardFromUiState(uiState, cardId) {
   throw new Error(`Card ${cardId} was not found in UI state`);
 }
 
-function placeInFixedZone(zone, card, index) {
+function placeInFixedZone(zone, card, index, size) {
   const targetIndex = Number.isInteger(index) && index >= 0 ? index : zone.findIndex((slot) => !slot);
-  if (targetIndex < 0 || targetIndex >= FIELD_SIZE) {
+  if (targetIndex < 0 || targetIndex >= size) {
     throw new Error("No fixed UI zone slot is available");
   }
   if (zone[targetIndex]) {
@@ -205,7 +205,8 @@ function insertCardIntoUiState(uiState, card, to) {
   const zone = duelist[zoneName];
 
   if (to.zone === "monsterZone" || to.zone === "spellTrapZone") {
-    placeInFixedZone(zone, card, to.index);
+    const size = to.zone === "monsterZone" ? MONSTER_ZONE_SIZE : SPELL_TRAP_ZONE_SIZE;
+    placeInFixedZone(zone, card, to.index, size);
     return;
   }
 

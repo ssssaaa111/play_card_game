@@ -587,6 +587,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-shield": runSummonShieldSmoke/);
   assert.match(smoke, /"summon-shadow-burn": runSummonShadowBurnSmoke/);
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
+  assert.match(smoke, /"five-zone-layout": runFiveZoneLayoutSmoke/);
   assert.match(smoke, /"basic-expansion": runBasicExpansionSmoke/);
   assert.match(smoke, /"protagonist-comeback-demo": runProtagonistComebackDemoSmoke/);
   assert.match(smoke, /"protagonist-comeback-challenge": runProtagonistComebackChallengeSmoke/);
@@ -742,7 +743,8 @@ test("app delegates scenario setup to extracted state builder", () => {
 
   assert.match(scenarioState, /buildScenarioDeck\(preset, scenarioReservedIds\(scenario, owner\)\)/);
   assert.match(scenarioState, /loadCardList\(scenario\[`[^\n]+Hand`\]\)/);
-  assert.match(scenarioState, /Array\(FIELD_SIZE\)\.fill\(null\)/);
+  assert.match(scenarioState, /scenarioZone\(scenario\[`[^\n]+Field`\], MONSTER_ZONE_SIZE\)/);
+  assert.match(scenarioState, /scenarioZone\(scenario\[`[^\n]+Traps`\], SPELL_TRAP_ZONE_SIZE\)/);
 });
 
 test("app uses extracted view model text", () => {

@@ -53,7 +53,7 @@ test("builds fixed-size cloned zones and explicit scenario decks", () => {
 
   assert.deepEqual(ids(setup.player.hand), ["storm-shift"]);
   assert.deepEqual(ids(setup.ai.deck), ["guard-sigil"]);
-  assert.deepEqual(ids(setup.ai.field), ["star-lancer", "sky-raider", "gale-mage"]);
+  assert.deepEqual(ids(setup.ai.field).filter(Boolean), ["star-lancer", "sky-raider", "gale-mage"]);
   assert.equal(setup.player.field.length, FIELD_SIZE);
   assert.equal(setup.ai.field.length, FIELD_SIZE);
   assert.equal(setup.player.traps.length, FIELD_SIZE);

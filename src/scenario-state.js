@@ -1,6 +1,6 @@
 import { buildScenarioDeck, cloneCardById, loadCardList } from './deck.js';
 import { getCardEffectDefinition } from './game-engine.js';
-import { FIELD_SIZE } from './rules.js';
+import { MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from './rules.js';
 
 function scenarioEntryId(entry) {
   return typeof entry === "string" ? entry : entry?.id;
@@ -16,9 +16,9 @@ export function scenarioReservedIds(scenario = {}, owner = "player") {
   ].map(scenarioEntryId).filter(Boolean);
 }
 
-function scenarioZone(entries = []) {
-  const zone = Array(FIELD_SIZE).fill(null);
-  entries.slice(0, FIELD_SIZE).forEach((entry, index) => {
+function scenarioZone(entries = [], size) {
+  const zone = Array(size).fill(null);
+  entries.slice(0, size).forEach((entry, index) => {
     const card = cloneCardById(scenarioEntryId(entry));
     if (!card) return;
     card.used = false;
@@ -48,8 +48,8 @@ function scenarioDuelistState(scenario, owner, preset) {
   const state = {
     hand: loadCardList(scenario[`${owner}Hand`]),
     deck: scenarioDeck(scenario, owner, preset),
-    field: scenarioZone(scenario[`${owner}Field`]),
-    traps: scenarioZone(scenario[`${owner}Traps`]),
+    field: scenarioZone(scenario[`${owner}Field`], MONSTER_ZONE_SIZE),
+    traps: scenarioZone(scenario[`${owner}Traps`], SPELL_TRAP_ZONE_SIZE),
     grave: loadCardList(scenario[`${owner}Grave`])
   };
   const lp = Number(scenario[`${prefix}Lp`]);

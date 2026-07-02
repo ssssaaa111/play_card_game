@@ -9,7 +9,7 @@ import {
   hasAbility
 } from "./game-engine.js";
 import { deckPresets, library } from "./data.js";
-import { FIELD_SIZE, MAX_LP } from "./rules.js";
+import { MAX_LP, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from "./rules.js";
 
 const PLAYER = "player";
 const AI = "ai";
@@ -648,7 +648,7 @@ function battlePhaseActions(state, playerId, balanceStats = null) {
 function summonActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
   if (!player) return [];
-  if (player.monsterZone.length >= FIELD_SIZE) {
+  if (player.monsterZone.length >= MONSTER_ZONE_SIZE) {
     return [];
   }
   if (player.normalSummonsUsed >= 1 && !hasAbility(state, playerId, Ability.extraSummon)) {
@@ -679,7 +679,7 @@ function spellActions(state, playerId, balanceStats = null) {
       continue;
     }
     for (const targetCardId of targets) {
-      if (definition.duration === "continuous" && player.spellTrapZone.length >= FIELD_SIZE) {
+      if (definition.duration === "continuous" && player.spellTrapZone.length >= SPELL_TRAP_ZONE_SIZE) {
         continue;
       }
       const action = {
@@ -720,7 +720,7 @@ function spellTargetCandidates(state, playerId, rivalId, card, definition) {
 function setTrapActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
   if (!player) return [];
-  if (player.spellTrapZone.length >= FIELD_SIZE) {
+  if (player.spellTrapZone.length >= SPELL_TRAP_ZONE_SIZE) {
     return [];
   }
   return player.hand
@@ -780,7 +780,7 @@ function summonActionWeight(state, playerId, action) {
   if (summonSupportsHandCondition(state, playerId, card)) {
     weight += 14;
   }
-  const remainingSlotsAfterSummon = FIELD_SIZE - (player.monsterZone.length + 1);
+  const remainingSlotsAfterSummon = MONSTER_ZONE_SIZE - (player.monsterZone.length + 1);
   if (remainingSlotsAfterSummon <= 0 && !card.onSummon && !card.afterAttack) {
     weight = Math.max(8, Math.round(weight * 0.45));
   }
@@ -873,7 +873,7 @@ function requirementProgressesAfterSummon(state, playerId, card, requirement) {
 
 function extraSummonWouldEnableMonster(state, playerId) {
   const player = state.players[playerId];
-  if (!player || player.monsterZone.length >= FIELD_SIZE) return false;
+  if (!player || player.monsterZone.length >= MONSTER_ZONE_SIZE) return false;
   if (player.normalSummonsUsed < 1) return false;
   if (hasAbility(state, playerId, Ability.extraSummon)) return false;
   return player.hand.some((cardId) => state.cards[cardId]?.type === "monster");
@@ -1520,8 +1520,9 @@ function recordLongGameStep(stats, state, events = []) {
 }
 
 function recordFullZoneTurn(counter, state, zone) {
-  const playerFull = (state.players?.[PLAYER]?.[zone]?.length || 0) >= FIELD_SIZE;
-  const aiFull = (state.players?.[AI]?.[zone]?.length || 0) >= FIELD_SIZE;
+  const limit = zone === "spellTrapZone" ? SPELL_TRAP_ZONE_SIZE : MONSTER_ZONE_SIZE;
+  const playerFull = (state.players?.[PLAYER]?.[zone]?.length || 0) >= limit;
+  const aiFull = (state.players?.[AI]?.[zone]?.length || 0) >= limit;
   if (playerFull) counter.player += 1;
   if (aiFull) counter.ai += 1;
   if (playerFull || aiFull) counter.any += 1;

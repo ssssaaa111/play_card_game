@@ -1,4 +1,4 @@
-import { FIELD_SIZE, MAX_LP, MAX_SHIELD } from "./rules.js";
+import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from "./rules.js";
 import { matchingElementCombos } from "./combos.js";
 
 export const Phase = Object.freeze({
@@ -53,8 +53,8 @@ export const Ability = Object.freeze({
 
 const ZONE_KEYS = Object.freeze(["deck", "hand", "monsterZone", "spellTrapZone", "grave", "banished"]);
 const ZONE_LIMITS = Object.freeze({
-  monsterZone: FIELD_SIZE,
-  spellTrapZone: FIELD_SIZE
+  monsterZone: MONSTER_ZONE_SIZE,
+  spellTrapZone: SPELL_TRAP_ZONE_SIZE
 });
 
 const PHASE_ORDER = Object.freeze([Phase.setup, Phase.draw, Phase.main, Phase.battle, Phase.end]);
@@ -370,6 +370,7 @@ export class EffectContext {
     const destinationPlayer = requirePlayer(this.#state, to.playerId);
     const destinationZone = requireZone(destinationPlayer, to.zone);
     const limit = ZONE_LIMITS[to.zone];
+    assertZoneIndexWithinLimit(to.zone, to.index);
     const destinationLengthAfterMove = destinationZone.filter((existingCardId) => existingCardId !== cardId).length;
     if (limit && destinationLengthAfterMove >= limit) {
       throw new GameRuleError(`${to.zone} is full`);
@@ -2206,6 +2207,7 @@ function applyCardMoved(state, event) {
   const destinationPlayer = requirePlayer(state, event.to.playerId);
   const destinationZone = requireZone(destinationPlayer, event.to.zone);
   const limit = ZONE_LIMITS[event.to.zone];
+  assertZoneIndexWithinLimit(event.to.zone, event.to.index);
   if (limit && destinationZone.length >= limit) {
     throw new GameRuleError(`${event.to.zone} is full`);
   }
@@ -3477,6 +3479,17 @@ function requireZone(player, zone) {
     throw new GameRuleError(`Unknown zone ${zone}`);
   }
   return player[zone];
+}
+
+function assertZoneIndexWithinLimit(zone, index) {
+  const limit = ZONE_LIMITS[zone];
+  if (!limit || index === undefined || index === null) return;
+  if (!Number.isInteger(index)) {
+    throw new GameRuleError(`${zone} index must be an integer`);
+  }
+  if (index < 0 || index >= limit) {
+    throw new GameRuleError(`${zone} index is outside its limit`);
+  }
 }
 
 function requireCardInZone(state, playerId, zone, cardId) {

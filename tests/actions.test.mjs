@@ -81,12 +81,15 @@ test("detects when the player idle countdown should run", () => {
 
 test("detects summon and trap availability from hand and zones", () => {
   assert.equal(canSummonFromHand(duelist({ hand: [monster()] }), false), true);
-  assert.equal(canSummonFromHand(duelist({ hand: [monster()], field: [monster(), monster(), monster()] }), false), false);
+  assert.equal(canSummonFromHand(duelist({ hand: [monster()], field: [monster(), monster(), monster(), monster(), monster()] }), false), false);
   assert.equal(canSummonFromHand(duelist({ hand: [monster()] }), true), false);
   assert.equal(canSummonFromHand(duelist({ hand: [monster()], extraSummon: 1 }), true), true);
 
   assert.equal(canSetTrapFromHand(duelist({ hand: [{ type: "trap" }] })), true);
-  assert.equal(canSetTrapFromHand(duelist({ hand: [{ type: "trap" }], traps: [{ type: "trap" }, { type: "trap" }, { type: "trap" }] })), false);
+  assert.equal(canSetTrapFromHand(duelist({
+    hand: [{ type: "trap" }],
+    traps: [{ type: "trap" }, { type: "trap" }, { type: "trap" }, { type: "trap" }, { type: "trap" }]
+  })), false);
 });
 
 test("summarizes player action windows in one place", () => {

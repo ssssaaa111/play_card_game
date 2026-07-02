@@ -264,6 +264,11 @@ function trapCard(els, owner, cardId) {
   return root.querySelector(`[data-zone="${owner}-trap"][data-card-id="${cardId}"]`);
 }
 
+function trapSlot(els, owner, index) {
+  const root = owner === "player" ? els.playerTraps : els.aiTraps;
+  return root.querySelector(`[data-testid="${owner}-trap-${index}"]`);
+}
+
 function chainChoiceButton(els, cardId) {
   return els.chainChoices?.querySelector(`[data-card-id="${cardId}"]`);
 }
@@ -641,6 +646,100 @@ async function runSummonTrapResponseSmoke(ctx) {
     throw new Error("召唤陷阱必须记录召唤响应窗口和完整连锁事件");
   }
   setSmokeStatus("passed", "summon-trap-response");
+}
+
+async function runFiveZoneLayoutSmoke(ctx) {
+  setSmokeStatus("running", "five-zone-layout");
+  await startSmokeDuel(ctx, "expansionParry");
+
+  const countSlots = (root, selector) => root.querySelectorAll(selector).length;
+  if (countSlots(ctx.els.playerField, "[data-testid^='player-field-']") !== 5) throw new Error("玩家怪兽区没有渲染 5 格");
+  if (countSlots(ctx.els.aiField, "[data-testid^='ai-field-']") !== 5) throw new Error("AI 怪兽区没有渲染 5 格");
+  if (countSlots(ctx.els.playerTraps, "[data-testid^='player-trap-']") !== 5) throw new Error("玩家魔陷区没有渲染 5 格");
+  if (countSlots(ctx.els.aiTraps, "[data-testid^='ai-trap-']") !== 5) throw new Error("AI 魔陷区没有渲染 5 格");
+
+  const cards = [
+    cloneCardById("star-lancer"),
+    cloneCardById("solar-knight"),
+    cloneCardById("mirror-snare"),
+    cloneCardById("guard-sigil")
+  ];
+  if (cards.some((card) => !card)) throw new Error("five-zone-layout 缺少测试卡牌");
+
+  ctx.state.player.field.fill(null);
+  ctx.state.ai.field.fill(null);
+  ctx.state.player.traps.fill(null);
+  ctx.state.ai.traps.fill(null);
+  ctx.state.player.hand = cards;
+  ctx.state.player.normalSummonsUsed = 0;
+  ctx.state.player.extraSummon = 1;
+  ctx.state.selected = null;
+  ctx.state.pendingTarget = null;
+  ctx.state.turn = "player";
+  ctx.state.phase = "main";
+  ctx.state.actionWindow = "main";
+  ctx.render?.();
+
+  clickSmokeElement(handCard(ctx.els, "star-lancer"), "第 4 格召唤手牌");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 3), "玩家第 4 怪兽格");
+  await waitForSmoke(
+    () => ctx.state.player.field[3]?.id === "star-lancer" &&
+      fieldSlot(ctx.els, "player", 3)?.querySelector('[data-card-id="star-lancer"]'),
+    "玩家第 4 怪兽格真实更新",
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "solar-knight"), "第 5 格召唤手牌");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 4), "玩家第 5 怪兽格");
+  await waitForSmoke(
+    () => ctx.state.player.field[4]?.id === "solar-knight" &&
+      fieldSlot(ctx.els, "player", 4)?.querySelector('[data-card-id="solar-knight"]'),
+    "玩家第 5 怪兽格真实更新",
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "mirror-snare"), "第 4 魔陷手牌");
+  clickSmokeElement(trapSlot(ctx.els, "player", 3), "玩家第 4 魔陷格");
+  await waitForSmoke(
+    () => ctx.state.player.traps[3]?.id === "mirror-snare" &&
+      trapCard(ctx.els, "player", "mirror-snare"),
+    "玩家第 4 魔陷格真实更新",
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "guard-sigil"), "第 5 魔陷手牌");
+  clickSmokeElement(trapSlot(ctx.els, "player", 4), "玩家第 5 魔陷格");
+  await waitForSmoke(
+    () => ctx.state.player.traps[4]?.id === "guard-sigil" &&
+      trapCard(ctx.els, "player", "guard-sigil"),
+    "玩家第 5 魔陷格真实更新",
+    9000
+  );
+
+  ctx.state.ai.field[3] = cloneCardById("iron-guardian");
+  ctx.state.ai.field[4] = cloneCardById("flare-titan");
+  ctx.state.ai.traps[3] = cloneCardById("mirror-snare");
+  ctx.state.ai.traps[4] = cloneCardById("guard-sigil");
+  ctx.render?.();
+
+  await waitForSmoke(
+    () => fieldSlot(ctx.els, "ai", 3)?.querySelector('[data-card-id="iron-guardian"]') &&
+      fieldSlot(ctx.els, "ai", 4)?.querySelector('[data-card-id="flare-titan"]') &&
+      trapSlot(ctx.els, "ai", 3)?.querySelector(".card.back") &&
+      trapSlot(ctx.els, "ai", 4)?.querySelector(".card.back"),
+    "AI 第 4 / 第 5 格真实渲染",
+    9000
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "选择第 4 格攻击怪兽");
+  await waitForSmoke(
+    () => fieldSlot(ctx.els, "ai", 3)?.classList.contains("attack-target") &&
+      fieldSlot(ctx.els, "ai", 4)?.classList.contains("attack-target"),
+    "AI 第 4 / 第 5 怪兽格可作为攻击目标",
+    9000
+  );
+
+  setSmokeStatus("passed", "five-zone-layout");
 }
 
 async function runBasicExpansionSmoke(ctx) {
@@ -2573,6 +2672,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-shield": runSummonShieldSmoke,
     "summon-shadow-burn": runSummonShadowBurnSmoke,
     "summon-trap-response": runSummonTrapResponseSmoke,
+    "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,
     "protagonist-comeback-challenge": runProtagonistComebackChallengeSmoke,

@@ -79,7 +79,7 @@ import {
 import { describeHandAction, duelHintText, phaseLabel, turnLabel } from './view-model.js';
 import {
   MAX_LP,
-  FIELD_SIZE,
+  MONSTER_ZONE_SIZE,
   battlePreviewText,
   battleValue,
   fieldCards,
@@ -3112,7 +3112,7 @@ function aiSetTraps() {
 
 async function aiAttack() {
   const skippedAttackers = new Set();
-  const maxAttackSteps = FIELD_SIZE * 3;
+  const maxAttackSteps = MONSTER_ZONE_SIZE * 3;
   for (let step = 0; step < maxAttackSteps; step += 1) {
     const action = chooseAiAttackAction({
       owner: state.ai,

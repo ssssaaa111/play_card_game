@@ -96,7 +96,7 @@ The validator catches:
 
 - a card id appearing in multiple zones
 - a zone referencing a missing card id
-- monster and spell/trap zones exceeding `FIELD_SIZE`
+- monster zones exceeding `MONSTER_ZONE_SIZE`, or spell/trap zones exceeding `SPELL_TRAP_ZONE_SIZE`
 - player LP becoming `NaN` or another non-finite value
 - a missing current turn player
 - active continuous effects whose source is no longer in a spell/trap zone

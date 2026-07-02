@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
   FIELD_SIZE,
   MAX_LP,
+  MONSTER_ZONE_SIZE,
+  SPELL_TRAP_ZONE_SIZE,
   battlePreviewText,
   battleValue,
   canDirectAttack,
@@ -48,7 +50,9 @@ function duelist(overrides = {}) {
 
 test("exports core rule constants", () => {
   assert.equal(MAX_LP, 4000);
-  assert.equal(FIELD_SIZE, 3);
+  assert.equal(MONSTER_ZONE_SIZE, 5);
+  assert.equal(SPELL_TRAP_ZONE_SIZE, 5);
+  assert.equal(FIELD_SIZE, MONSTER_ZONE_SIZE);
 });
 
 test("calculates current battle values from card state", () => {

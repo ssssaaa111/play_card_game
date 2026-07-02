@@ -741,8 +741,8 @@ h1 {
 
 .zone-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
   align-items: stretch;
   min-height: 0;
 }
@@ -782,8 +782,8 @@ h1 {
 
 .trap-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
   min-height: clamp(50px, 7vh, 72px);
 }
 
