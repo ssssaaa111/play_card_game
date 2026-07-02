@@ -571,6 +571,27 @@ h1 {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.log-card-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--gold);
+  font: inherit;
+  font-weight: 900;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.log-card-link:hover,
+.log-card-link:focus-visible {
+  color: #fff0b8;
+  outline: none;
+}
+
 .timeline {
   min-height: 86px;
   max-height: 20vh;
@@ -864,6 +885,33 @@ h1 {
   user-select: none;
   transform-style: preserve-3d;
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+
+.card-detail-trigger {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  background: rgba(8, 12, 20, 0.82);
+  color: #f6bd60;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.card-detail-trigger:hover,
+.card-detail-trigger:focus-visible {
+  border-color: rgba(255, 240, 184, 0.88);
+  color: #fff0b8;
+  outline: none;
 }
 
 .card:hover {

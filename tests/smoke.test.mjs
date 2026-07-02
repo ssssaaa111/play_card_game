@@ -445,7 +445,7 @@ test("browser test mode disables sound and guide blocking", () => {
   assert.match(app, /window\.__starDuelTest = Object\.freeze\(\{/);
   assert.match(app, /snapshot: createTestSnapshot\(\{/);
   assert.match(smoke, /export function createTestSnapshot/);
-  assert.match(smoke, /latestLog: state\.log\[0\] \|\| ""/);
+  assert.match(smoke, /latestLog: logEntryMessage\(state\.log\[0\]\)/);
   assert.match(smoke, /timing: state\.timing/);
   assert.match(smoke, /actionDeadline: state\.actionDeadline/);
   assert.match(smoke, /audit: auditLogEntries\(state\.timeline\)/);
@@ -686,6 +686,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "card-detail-viewer"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "battle-log-card-detail"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "equipment-spell"\)/);
 });
 
@@ -707,7 +709,7 @@ test("app uses extracted card details", () => {
 
   assert.match(app, /from '\.\/card-detail\.js'/);
   assert.match(app, /cardDetailText\(card\)/);
-  assert.match(app, /cardZoomMeta\(card\)/);
+  assert.match(app, /cardDetailViewModel\(cardOrId\)/);
   assert.doesNotMatch(app, /cardTagText\(card\)/);
 });
 
@@ -918,7 +920,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/app.js", "src/audio.js", "src/battle.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

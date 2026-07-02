@@ -1,4 +1,5 @@
 import { auditLogEntries } from './log-audit.js';
+import { logEntryMessage } from './battle-log.js';
 import { cloneCardById } from './deck.js';
 import { projectMachineStateFromEvents } from './game-engine.js';
 
@@ -61,7 +62,7 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       scenarioId: state.scenarioId,
       soundOn: state.soundOn,
       voiceOn: state.voiceOn,
-      latestLog: state.log[0] || "",
+      latestLog: logEntryMessage(state.log[0]),
       gameEventCount: state.gameEvents?.length || 0,
       latestGameEvents: (state.gameEvents || []).slice(-5).map((event) => event.type),
       latestGameEventDetails: (state.gameEvents || []).slice(-5).map((event) => ({
@@ -159,7 +160,7 @@ function smokeDebug(ctx) {
     chainOpen: Boolean(ctx.els.chainModal?.classList.contains("show")),
     chainYesDisabled: Boolean(ctx.els.chainYes?.disabled),
     chainText: ctx.els.chainText?.textContent || "",
-    log: (ctx.state.log || []).slice(0, 6),
+    log: (ctx.state.log || []).slice(0, 6).map(logEntryMessage),
     latestGameEvents: (ctx.state.gameEvents || []).slice(-8).map((event) => ({
       id: event.id,
       type: event.type,
@@ -273,6 +274,27 @@ function chainChoiceButton(els, cardId) {
   return els.chainChoices?.querySelector(`[data-card-id="${cardId}"]`);
 }
 
+function cardDetailTrigger(cardEl) {
+  return cardEl?.querySelector(".card-detail-trigger");
+}
+
+function logCardLink(els, cardId) {
+  return els.log?.querySelector(`.log-card-link[data-card-id="${cardId}"]`);
+}
+
+async function assertCardDetailModal(ctx, card, label) {
+  await waitForSmoke(
+    () => ctx.els.cardModal?.classList.contains("show") &&
+      ctx.els.zoomName?.textContent === card.name &&
+      (ctx.els.zoomText?.textContent || "").includes(card.text || ""),
+    `${label} detail modal`,
+    6000
+  );
+  if (!ctx.els.zoomMeta.textContent.includes("类型：")) {
+    throw new Error(`${label} detail modal missing type metadata`);
+  }
+}
+
 function countGameEvents(state, type) {
   return (state.gameEvents || []).filter((event) => event.type === type).length;
 }
@@ -356,7 +378,7 @@ function phantomRedirectDiagnostics(ctx, markers = {}) {
       field: ctx.state.ai.field.map(cardSnapshot),
       grave: ctx.state.ai.grave.map(cardSnapshot)
     },
-    logs: (ctx.state.log || []).slice(0, 10),
+    logs: (ctx.state.log || []).slice(0, 10).map(logEntryMessage),
     promptText: markers.promptText || ""
   });
 }
@@ -2560,6 +2582,40 @@ async function runPauseDetailSmoke(ctx) {
   setSmokeStatus("passed", "pause-detail");
 }
 
+async function runCardDetailViewerSmoke(ctx) {
+  setSmokeStatus("running", "card-detail-viewer");
+  await startSmokeDuel(ctx, "direct");
+  const card = ctx.state.player.hand.find((entry) => entry?.id === "star-breach") || ctx.state.player.hand.find(Boolean);
+  if (!card) throw new Error("card-detail-viewer: player hand should contain a visible card");
+  clickSmokeElement(cardDetailTrigger(handCard(ctx.els, card.id)), "card-detail-viewer: hand card detail trigger");
+  await assertCardDetailModal(ctx, card, "card-detail-viewer");
+  clickSmokeElement(ctx.els.zoomClose, "card-detail-viewer: close card detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "card-detail-viewer: modal closes");
+  if (!ctx.state.started || ctx.state.turn !== "player") {
+    throw new Error(`card-detail-viewer: duel should continue after closing detail. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "card-detail-viewer");
+}
+
+async function runBattleLogCardDetailSmoke(ctx) {
+  setSmokeStatus("running", "battle-log-card-detail");
+  await startSmokeDuel(ctx, "direct");
+  const card = ctx.state.player.hand.find((entry) => entry?.id === "star-breach");
+  if (!card) throw new Error("battle-log-card-detail: star-breach should be in the opening hand");
+  clickSmokeElement(handCard(ctx.els, "star-breach"), "battle-log-card-detail: select star-breach");
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "battle-log-card-detail: star-breach confirmation");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "battle-log-card-detail: activate star-breach");
+  await waitForSmoke(() => logCardLink(ctx.els, "star-breach"), "battle-log-card-detail: public log card link");
+  clickSmokeElement(logCardLink(ctx.els, "star-breach"), "battle-log-card-detail: open log card detail");
+  await assertCardDetailModal(ctx, card, "battle-log-card-detail");
+  clickSmokeElement(ctx.els.zoomClose, "battle-log-card-detail: close card detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "battle-log-card-detail: modal closes");
+  if (!ctx.state.started || ctx.state.turn !== "player" || ctx.state.gameOver) {
+    throw new Error(`battle-log-card-detail: duel should continue after log detail. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "battle-log-card-detail");
+}
+
 async function runEquipmentSpellSmoke(ctx) {
   setSmokeStatus("running", "equipment-spell");
   await startSmokeDuel(ctx, "equipment");
@@ -2705,6 +2761,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
     "pause-detail": runPauseDetailSmoke,
+    "card-detail-viewer": runCardDetailViewerSmoke,
+    "battle-log-card-detail": runBattleLogCardDetailSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "game-over-event": runGameOverEventSmoke
   };

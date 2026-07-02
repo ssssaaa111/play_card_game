@@ -10,8 +10,9 @@ import {
   shouldSwitchSummonedMonsterToDefense
 } from './ai.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
+import { createBattleLogEntry, logEntryMessage, publicLogCardIds } from './battle-log.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
-import { cardDetailText, cardZoomMeta } from './card-detail.js';
+import { cardDefinitionById, cardDetailText, cardDetailViewModel } from './card-detail.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
@@ -133,6 +134,7 @@ const state = {
   gameOverReason: "",
   gameOverAnnounced: false,
   log: [],
+  logSequence: 0,
   timeline: [],
   timelineStep: 0,
   gameEvents: [],
@@ -477,6 +479,7 @@ function startGame() {
   state.gameOverAnnounced = false;
   state.statsRecorded = false;
   state.log = [];
+  state.logSequence = 0;
   state.timeline = [];
   state.timelineStep = 0;
   state.gameEvents = [];
@@ -534,6 +537,7 @@ function prepareGame() {
   state.gameOverAnnounced = false;
   state.statsRecorded = false;
   state.log = ["点击“开始决斗”后再抽卡开局。"];
+  state.logSequence = 0;
   state.timeline = [];
   state.timelineStep = 0;
   state.gameEvents = [];
@@ -1449,7 +1453,7 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
   }
   playSound("summon");
   animateAvatar(owner.owner, "cast");
-  addLog(`${owner.owner === "player" ? "你" : "AI"} 召唤了 ${card.name}。`);
+  addLog(`${owner.owner === "player" ? "你" : "AI"} 召唤了 ${card.name}。`, cardLogMeta(card, { actor: owner.owner, type: "summon" }));
   speak(`${owner.owner === "player" ? "你召唤" : "对手召唤"}，${card.name}。`);
   if (card.stars >= 5) {
     showAce(card, owner.owner);
@@ -1503,9 +1507,11 @@ function setTrap(owner, handIndex, trapIndex) {
     return false;
   }
   playSound("trap");
-  addLog(owner.owner === "player"
-    ? `你盖放了陷阱卡 ${card.name}。`
-    : "AI 盖放了 1 张陷阱卡。");
+  if (owner.owner === "player") {
+    addLog(`你盖放了陷阱卡 ${card.name}。`, cardLogMeta(card, { actor: owner.owner, type: "set-trap" }));
+  } else {
+    addLog("AI 盖放了 1 张陷阱卡。");
+  }
   speak(owner.owner === "player" ? "陷阱卡盖放。" : "对手盖放了一张陷阱卡。");
   resolveElementCombos(owner, owner.owner === "player" ? state.ai : state.player, "trap");
   return true;
@@ -1570,7 +1576,7 @@ function playSpell(owner, rival, handIndex, targetInfo = null) {
   animateAvatar(owner.owner, "cast");
   playCenterCardEffect(card, spellCaption(card));
   playEpicAction("\u9b54\u6cd5", "draw");
-  addLog(`${owner.owner === "player" ? "\u4f60" : "AI"} \u53d1\u52a8\u9b54\u6cd5\u5361 ${card.name}\u3002`);
+  addLog(`${owner.owner === "player" ? "\u4f60" : "AI"} \u53d1\u52a8\u9b54\u6cd5\u5361 ${card.name}\u3002`, cardLogMeta(card, { actor: owner.owner, type: "spell" }));
   speak(`${owner.owner === "player" ? "\u4f60\u53d1\u52a8" : "\u5bf9\u624b\u53d1\u52a8"}\u9b54\u6cd5\u5361\uff0c${card.name}\u3002`);
   playDuelistLine(owner.owner, lineFor(owner.owner, "spell", card), false, "spell");
   result = resolveEngineSpellFeedback(owner, rival, card, engineEvents, targetInfo);
@@ -1624,21 +1630,27 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       if (found?.card) {
         result.effectTarget = found.card;
         result.targetOwner = found.owner;
-        addLog(`${found.card.name} 因 ${card.name} 从墓地回到场上。`);
+        addLog(`${found.card.name} 因 ${card.name} 从墓地回到场上。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
         playEpicAction("回召", "draw");
       }
     }
     if (event.type === "CARD_MOVED" && event.from?.zone === "grave" && event.to?.zone === "deck") {
       const found = findRuntimeCard(event.cardId);
       const movedName = found?.card?.name || "墓地卡";
-      addLog(`${movedName} 因 ${card.name} 回到卡组顶。`);
+      addLog(`${movedName} 因 ${card.name} 回到卡组顶。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found?.card) }));
     }
     if (event.type === "MATERIALS_SENT") {
       const names = (event.materialCardIds || [])
         .map((cardId) => findRuntimeCard(cardId)?.card?.name)
         .filter(Boolean)
         .join("、");
-      addLog(`${card.name} 将${names || "素材"}送入墓地，进化条件达成。`);
+      addLog(`${card.name} 将${names || "素材"}送入墓地，进化条件达成。`, cardLogMeta(card, {
+        actor: owner.owner,
+        type: "effect",
+        relatedCardIds: (event.materialCardIds || [])
+          .map((cardId) => findRuntimeCard(cardId)?.card?.id)
+          .filter(Boolean)
+      }));
       playEpicAction("进化素材", "draw");
     }
     if (event.type === "MONSTER_SUMMONED" && event.sourceCardId === runtimeCardId(card)) {
@@ -1646,7 +1658,7 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       if (found?.card) {
         result.effectTarget = found.card;
         result.targetOwner = found.owner;
-        addLog(`${found.card.name} 因 ${card.name} 特殊登场。`);
+        addLog(`${found.card.name} 因 ${card.name} 特殊登场。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
         playEpicAction("王牌进化", "summon");
         if (found.card.stars >= 5) showAce(found.card, found.owner);
       }
@@ -1660,7 +1672,7 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
     if (event.type === "LP_HEALED" && event.amount > 0) {
       playSound("spell-heal700");
       playLifeDelta(owner.owner, event.amount);
-      addLog(`${card.name} 为 ${duelistLabel(owner)}回复 ${event.amount} 点生命值。`);
+      addLog(`${card.name} 为 ${duelistLabel(owner)}回复 ${event.amount} 点生命值。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
     }
     if (event.type === "SHIELD_GAINED" && event.amount > 0) {
       const target = event.playerId === owner.owner ? owner : rival;
@@ -1669,7 +1681,7 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       playEpicAction("护盾", "guard");
       playGuardShield(panelElement(target.owner));
       playVoice(target.owner, "shield", "护盾展开。");
-      addLog(`${target.owner === "player" ? "你" : "AI"} 获得 ${event.amount} 点护盾（${card.name}）。`);
+      addLog(`${target.owner === "player" ? "你" : "AI"} 获得 ${event.amount} 点护盾（${card.name}）。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
     }
     if (event.type === "DAMAGE_DEALT") {
       const target = event.playerId === owner.owner ? owner : rival;
@@ -1686,9 +1698,9 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
         playSound("damage");
         playLifeDelta(target.owner, -dealt);
         animateAvatar(target.owner, "hit");
-        addLog(`${card.name} 对 ${duelistLabel(target)}造成 ${dealt} 点伤害。`);
+        addLog(`${card.name} 对 ${duelistLabel(target)}造成 ${dealt} 点伤害。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
       } else if (blocked > 0) {
-        addLog(`${card.name} 的伤害被护盾完全抵消。`);
+        addLog(`${card.name} 的伤害被护盾完全抵消。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
       }
     }
     if (event.type === "STAT_MODIFIED") {
@@ -1697,14 +1709,14 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       result.effectTarget = found.card;
       result.targetOwner = found.owner;
       statModifiedCount += 1;
-      addLog(`${found.card.name} 因 ${card.name} ${statChangeText(event)}。`);
+      addLog(`${found.card.name} 因 ${card.name} ${statChangeText(event)}。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
     }
     if (event.type === "CONTINUOUS_EFFECT_REGISTERED") {
       const found = findRuntimeCard(event.targetCardId);
       if (found) {
         result.effectTarget = found.card;
         result.targetOwner = found.owner;
-        addLog(`${card.name} 装备给 ${found.card.name}，持续效果已登记。`);
+        addLog(`${card.name} 装备给 ${found.card.name}，持续效果已登记。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
         playEpicAction("装备", "guard");
       }
     }
@@ -1717,7 +1729,13 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
         result.effectTarget = target.card;
         result.targetOwner = target.owner;
       }
-      addLog(`${sourceName} 的装备持续效果失效${targetText}。`);
+      addLog(`${sourceName} 的装备持续效果失效${targetText}。`, {
+        actor: owner.owner,
+        type: "effect",
+        public: true,
+        cardId: source?.card?.id || card.id,
+        relatedCardIds: relatedCardIds(target?.card)
+      });
       playEpicAction("装备失效", "draw");
     }
     if (event.type === "CARD_DESTROYED" && event.cardId !== runtimeCardId(card)) {
@@ -1725,14 +1743,14 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       const destroyedName = destroyed?.card?.name || "目标卡";
       result.effectTarget = destroyed?.card || result.effectTarget;
       result.targetOwner = destroyed?.owner || result.targetOwner;
-      addLog(`${card.name} 破坏了 ${destroyedName}。`);
+      addLog(`${card.name} 破坏了 ${destroyedName}。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(destroyed?.card) }));
     }
     if (event.type === "MONSTER_READIED") {
       const found = findRuntimeCard(event.cardId);
       if (!found) return;
       result.effectTarget = found.card;
       result.targetOwner = found.owner;
-      addLog(`${found.card.name} 重新进入可攻击状态。`);
+      addLog(`${found.card.name} 重新进入可攻击状态。`, { actor: owner.owner, type: "effect", public: true, cardId: found.card.id });
       playEpicAction("再攻", "attack");
     }
     if (event.type === "ABILITY_GRANTED" && event.ability === "directAttack") {
@@ -1755,7 +1773,7 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
   });
   if (card.effect === "fireWindCombo" && statModifiedCount > 0) {
     playEpicAction("炎岚", "attack");
-    addLog(`${card.name} 造成 ${totalDamageDealt} 点伤害，并强化我方全体怪兽。`);
+    addLog(`${card.name} 造成 ${totalDamageDealt} 点伤害，并强化我方全体怪兽。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
   }
   return result;
 }
@@ -1798,7 +1816,7 @@ function announceTrapActivation(owner, trap, chainIndex) {
   animateAvatar(owner.owner, "cast");
   playCenterCardEffect(trap, chainIndex > 1 ? `陷阱连锁 ${chainIndex}` : "陷阱连锁发动");
   playEpicAction(chainLabel, "guard");
-  addLog(`${chainLabel}：${owner.owner === "player" ? "你的" : "AI 的"}陷阱卡 ${trap.name} 触发。`);
+  addLog(`${chainLabel}：${owner.owner === "player" ? "你的" : "AI 的"}陷阱卡 ${trap.name} 触发。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
   speak(`陷阱发动，${trap.name}。`);
   playDuelistLine(owner.owner, lineFor(owner.owner, "trap", trap), false, "trap");
 }
@@ -1889,7 +1907,7 @@ async function resolveEngineTrapChain(owner, rival, eventName, context, trapInde
       break;
     }
     if (responder.owner === "ai") {
-      addLog(`AI 检测到 ${sourceTrap.name}，准备追加陷阱连锁。`);
+      addLog(`AI 检测到 ${sourceTrap.name}，准备追加陷阱连锁。`, cardLogMeta(sourceTrap, { actor: "ai", type: "chain-check" }));
       await sleep(620);
     }
     const nextLink = queueTrapChainLink(responder, priorityHolder, "chain", chainContext, choice.trapIndex, chainIndex);
@@ -2120,7 +2138,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
   if (skippedEvent) {
     playSound("guard");
     playEpicAction("连锁无效", "guard");
-    addLog(`${trap.name} 的效果被连锁无效。`);
+    addLog(`${trap.name} 的效果被连锁无效。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
     speak(`${trap.name}，效果无效。`);
     return { cancelled: false, shielded: false, negated: true };
   }
@@ -2130,7 +2148,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     const sourceTrap = context.sourceTrap;
     playArrow(trapSource, panelElement(rival.owner), "trap", trap.name);
     playEpicAction("断链", "guard");
-    addLog(`${trap.name} 无效了${sourceTrap?.name ? ` ${sourceTrap.name}` : "上一张陷阱"}的效果。`);
+    addLog(`${trap.name} 无效了${sourceTrap?.name ? ` ${sourceTrap.name}` : "上一张陷阱"}的效果。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(sourceTrap) }));
     speak(`${trap.name}，连锁无效。`);
     return { cancelled: false, shielded: false };
   }
@@ -2144,7 +2162,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
       playMonsterBurst(attackerEl);
       shakeScreen();
       playEpicAction("反制", "guard");
-      addLog(`${trap.name} 破坏了 ${attacker.name}。`);
+      addLog(`${trap.name} 破坏了 ${attacker.name}。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(attacker) }));
     }
     return { cancelled: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
@@ -2160,7 +2178,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
       playGuardShield(targetEl);
     }
     playEpicAction("反击阵", "guard");
-    addLog(`${trap.name} 取消了攻击，并强化了防线。攻击机会已消耗。`);
+    addLog(`${trap.name} 取消了攻击，并强化了防线。攻击机会已消耗。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
     speak(`${trap.name} 取消攻击，强化怪兽。`);
     return { cancelled: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
@@ -2173,7 +2191,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playArrow(trapSource, attackerEl, "trap", trap.name);
     playGuardShield(shieldTarget);
     playEpicAction("转移", "guard");
-    addLog(`${trap.name} 转移了攻击，获得 400 护盾。攻击机会已消耗。`);
+    addLog(`${trap.name} 转移了攻击，获得 400 护盾。攻击机会已消耗。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
     speak(`${trap.name} 转移攻击，护盾展开。`);
     return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
@@ -2186,7 +2204,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playArrow(trapSource, attackerEl, "trap", trap.name);
     playGuardShield(targetEl);
     playEpicAction("无效", "guard");
-    addLog(`${trap.name} 无效了本次攻击。攻击机会已消耗。`);
+    addLog(`${trap.name} 无效了本次攻击。攻击机会已消耗。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
     speak(`${trap.name} 无效攻击。`);
     return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
@@ -2203,7 +2221,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
       playMonsterMotion(owner.owner, aceIndex, "stand");
     }
     playEpicAction("王牌守护", "guard");
-    addLog(`${trap.name} 无效了本次攻击，并让 ${ace?.name || "王牌"} 攻击力提升 900。攻击机会已消耗。`);
+    addLog(`${trap.name} 无效了本次攻击，并让 ${ace?.name || "王牌"} 攻击力提升 900。攻击机会已消耗。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(ace) }));
     speak(`${trap.name}，守住王牌。`);
     return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
@@ -2226,7 +2244,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
       playGuardShield(redirectEl);
       playMonsterMotion(owner.owner, redirectIndex, "stand");
       playEpicAction("换位", "guard");
-      addLog(`${trap.name} 将攻击目标改为 ${redirectTarget.name}。`);
+      addLog(`${trap.name} 将攻击目标改为 ${redirectTarget.name}。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(redirectTarget) }));
       speak(`${trap.name} 改变攻击目标。`);
     }
     return { cancelled: false, redirected: Boolean(redirectTarget), targetIndex: context.targetIndex };
@@ -2240,7 +2258,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     if (attacker) {
       playGuardShield(attackerEl);
       playEpicAction("弱化", "guard");
-      addLog(`${trap.name} 削弱了 ${attacker.name}，攻击继续结算。`);
+      addLog(`${trap.name} 削弱了 ${attacker.name}，攻击继续结算。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(attacker) }));
       speak(`${trap.name} 削弱攻击怪兽，攻击继续。`);
     }
     return { cancelled: false };
@@ -2254,7 +2272,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playGuardShield(panelElement(owner.owner));
     if (attacker) {
       playEpicAction("格挡", "guard");
-      addLog(`${trap.name} 削弱了 ${attacker.name}，并展开护盾。攻击继续结算。`);
+      addLog(`${trap.name} 削弱了 ${attacker.name}，并展开护盾。攻击继续结算。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(attacker) }));
       speak(`${trap.name} 格挡攻击，护盾展开。`);
     }
     return { cancelled: false };
@@ -2266,7 +2284,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playSound("guard");
     playGuardShield(shieldTarget);
     playEpicAction("防御", "guard");
-    addLog(`${trap.name} 让直接攻击伤害变为 0。`);
+    addLog(`${trap.name} 让直接攻击伤害变为 0。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
     return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
@@ -2279,7 +2297,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     animateAvatar(rival.owner, "hit");
     shakeScreen();
     playEpicAction("反弹", "guard");
-    addLog(`${trap.name} 让直接攻击伤害变为 0，并反弹 500 点伤害。`);
+    addLog(`${trap.name} 让直接攻击伤害变为 0，并反弹 500 点伤害。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
     speak(`${trap.name} 反弹了直接攻击。`);
     return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
@@ -2289,7 +2307,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     animateAvatar(rival.owner, "hit");
     shakeScreen();
     playEpicAction("灼烧", "attack");
-    addLog(`${trap.name} 对召唤者造成 400 点伤害。`);
+    addLog(`${trap.name} 对召唤者造成 400 点伤害。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
   }
 
   return { cancelled: false };
@@ -2334,14 +2352,14 @@ function resolveAfterAttackBattleFeedback(owner, attacker, events) {
     event.amount > 0
   );
   if (growEvent) {
-    addLog(`${attacker.name} 吞噬影子，攻击力提升 ${growEvent.amount}。`);
+    addLog(`${attacker.name} 吞噬影子，攻击力提升 ${growEvent.amount}。`, cardLogMeta(attacker, { actor: owner.owner, type: "effect" }));
   }
   const wearEvent = events.find((event) => event.type === "BATTLE_WEAR_APPLIED");
   if (wearEvent) {
     const found = findRuntimeCard(wearEvent.cardId);
     if (found?.card) {
       playEpicAction("损耗", "guard", 900);
-      addLog(`${found.card.name} 承受冲击产生 ${wearEvent.amount} 点战斗损耗，攻击力和守备力下降。`);
+      addLog(`${found.card.name} 承受冲击产生 ${wearEvent.amount} 点战斗损耗，攻击力和守备力下降。`, { actor: found.owner, type: "battle", public: true, cardId: found.card.id });
       speak(`${found.card.name} 承受冲击，战斗力下降。`);
     }
   }
@@ -2522,7 +2540,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     shakeScreen();
     playEpicAction("直击", "attack");
     playArrow(fromEl, toEl, "attack", "直接攻击");
-    addLog(`${attacker.name} 直接攻击，造成 ${dealt} 点伤害。`);
+    addLog(`${attacker.name} 直接攻击，造成 ${dealt} 点伤害。`, cardLogMeta(attacker, { actor: owner.owner, type: "battle" }));
     playDuelistLine(owner.owner, lineFor(owner.owner, "direct", attacker), false, "direct");
     playDuelistLine(rival.owner, lineFor(rival.owner, "hit"), false, "hit");
   } else {
@@ -2550,7 +2568,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       shakeScreen();
       playEpicAction(target.mode === "defense" ? "破防" : "击破", "attack");
       playArrow(fromEl, toEl, "attack", "攻击");
-      addLog(battleLogText(attacker, target, outcome, dealt));
+      addLog(battleLogText(attacker, target, outcome, dealt), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
       speak(`${attacker.name} 击破目标。`);
       playDuelistLine(owner.owner, lineFor(owner.owner, "break"), false, "break");
     } else if (outcome.diff < 0) {
@@ -2569,7 +2587,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
         playEpicAction("守备反击", "guard");
       }
       playArrow(toEl, fromEl, "attack", "反击");
-      addLog(battleLogText(attacker, target, outcome, dealt));
+      addLog(battleLogText(attacker, target, outcome, dealt), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
       speak(outcome.destroysAttacker
         ? `${attacker.name} 攻击失败，被反击破坏。`
         : `${attacker.name} 攻击受阻，承受反击伤害。`);
@@ -2581,7 +2599,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       playGuardShield(toEl);
       playEpicAction("防御", "guard");
       playArrow(fromEl, toEl, "attack", "防御");
-      addLog(battleLogText(attacker, target, outcome));
+      addLog(battleLogText(attacker, target, outcome), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
       speak(`${target.name} 挡下了攻击。`);
     } else {
       playMonsterBurst(fromEl);
@@ -2594,7 +2612,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       playMonsterMotion(owner.owner, attackerIndex, "hit");
       playMonsterMotion(rival.owner, resolvedTargetIndex, "hit");
       playArrow(fromEl, toEl, "attack", "相杀");
-      addLog(battleLogText(attacker, target, outcome));
+      addLog(battleLogText(attacker, target, outcome), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
       speak(`${attacker.name} 与 ${target.name} 同归于尽。`);
       playDuelistLine(owner.owner, lineFor(owner.owner, "clash"), false, "clash");
     }
@@ -3174,21 +3192,31 @@ function showDetail(card) {
   els.detailText.textContent = cardDetailText(card);
 }
 
-function openFocusedCardDetail() {
-  const card = state.focusedCard;
+function openCardDetail(cardOrId) {
+  const view = cardDetailViewModel(cardOrId);
+  const card = view?.card;
   if (!card) {
-    cue("先选择一张卡。");
+    cue("找不到这张卡的详情。");
     return;
   }
+  state.focusedCard = card;
   resetPlayerIdleCountdown();
-  els.zoomName.textContent = card.name;
+  els.zoomName.textContent = view.name;
   els.zoomCard.innerHTML = "";
   const preview = renderCardElement(document, card, { asset: monsterAsset(card) });
   preview.classList.remove("selected", "used", "defense");
   els.zoomCard.appendChild(preview);
-  els.zoomText.textContent = card.text || "没有效果文本。";
-  els.zoomMeta.textContent = cardZoomMeta(card);
+  els.zoomText.textContent = view.effectText;
+  els.zoomMeta.textContent = view.meta;
   els.cardModal.classList.add("show");
+}
+
+function openFocusedCardDetail() {
+  if (!state.focusedCard) {
+    cue("先选择一张卡。");
+    return;
+  }
+  openCardDetail(state.focusedCard);
 }
 
 function closeCardDetail() {
@@ -3196,10 +3224,34 @@ function closeCardDetail() {
   resetPlayerIdleCountdown();
 }
 
-function addLog(text) {
-  state.log.unshift(text);
+function cardLogMeta(card, metadata = {}) {
+  return {
+    ...metadata,
+    cardId: card?.id || metadata.cardId || null,
+    public: metadata.public ?? true
+  };
+}
+
+function relatedCardIds(...cards) {
+  return cards
+    .map((card) => card?.id || null)
+    .filter(Boolean)
+    .filter((id, index, list) => list.indexOf(id) === index);
+}
+
+function addLog(input, metadata = {}) {
+  const hasMetadata = (input && typeof input === "object" && !Array.isArray(input)) || Object.keys(metadata).length > 0;
+  const entry = hasMetadata
+    ? createBattleLogEntry(input, {
+      id: ++state.logSequence,
+      turn: state.turn,
+      actor: metadata.actor || state.turn,
+      ...metadata
+    })
+    : logEntryMessage(input);
+  state.log.unshift(entry);
   state.log = state.log.slice(0, 12);
-  addTimeline(text);
+  addTimeline(logEntryMessage(entry));
 }
 
 function addTimeline(text) {
@@ -3528,6 +3580,29 @@ function renderBattlePreview() {
   root.appendChild(result);
 }
 
+function attachCardDetailTrigger(cardEl, card) {
+  if (!cardEl || !card) return;
+  const trigger = document.createElement("span");
+  trigger.className = "card-detail-trigger";
+  trigger.dataset.cardDetailId = card.id || "";
+  trigger.textContent = "i";
+  trigger.title = `查看 ${card.name} 详情`;
+  trigger.setAttribute("role", "button");
+  trigger.setAttribute("tabindex", "0");
+  trigger.setAttribute("aria-label", `查看 ${card.name} 详情`);
+  const open = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openCardDetail(card);
+  };
+  trigger.addEventListener("click", open);
+  trigger.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    open(event);
+  });
+  cardEl.appendChild(trigger);
+}
+
 function isAttackTargetSlot(ownerName, index) {
   if (ownerName !== "ai" || state.pendingTarget) return false;
   if (!canPlayerAct() || state.selected?.zone !== "playerField") return false;
@@ -3566,6 +3641,7 @@ function renderField(root, duelist, owner, animationKey) {
     if (card) {
       const attacksLocked = owner === "player" && state.player.attacksSkipped && card.type === "monster" && !card.used && card.mode !== "defense";
       const cardEl = renderCardElement(document, card, { asset: monsterAsset(card), attacksLocked });
+      attachCardDetailTrigger(cardEl, card);
       cardEl.dataset.zone = `${owner}-field`;
       if (card.type === "monster") cardEl.classList.add("field-monster-card");
       cardEl.classList.toggle("selected", state.selected?.zone === "playerField" && state.selected.index === index && owner === "player");
@@ -3618,6 +3694,7 @@ function renderTraps(root, duelist, owner) {
     if (card) {
       const cardEl = owner === "player" ? renderCardElement(document, card, { asset: monsterAsset(card) }) : document.createElement("article");
       cardEl.className = owner === "player" ? `${cardEl.className} player-trap` : "card back";
+      if (owner === "player") attachCardDetailTrigger(cardEl, card);
       cardEl.dataset.zone = `${owner}-trap`;
       if (card) {
         cardEl.dataset.cardId = owner === "player" ? card.id || "" : "hidden";
@@ -3678,6 +3755,7 @@ function renderHand(animationKey) {
   els.hand.innerHTML = "";
   state.player.hand.forEach((card, index) => {
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
+    attachCardDetailTrigger(cardEl, card);
     cardEl.dataset.zone = "hand";
     const action = handActionInfo(card, index);
     cardEl.classList.toggle("selected", state.selected?.zone === "hand" && state.selected.uid === card.uid);
@@ -3714,6 +3792,7 @@ function renderGraveTargets() {
     const targetInfo = targetInfoFromPending("player", index, "grave");
     if (!targetInfo.ok) return;
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
+    attachCardDetailTrigger(cardEl, card);
     cardEl.dataset.zone = "player-grave";
     cardEl.classList.add("grave-target-card", "targetable");
     cardEl.title = `选择墓地目标：${card.name}`;
@@ -3722,6 +3801,54 @@ function renderGraveTargets() {
     });
     root.appendChild(cardEl);
   });
+}
+
+function logCardRefs(entry) {
+  const message = logEntryMessage(entry);
+  return publicLogCardIds(entry)
+    .map((cardId) => cardDefinitionById(cardId))
+    .filter((card) => card?.id && card?.name && message.includes(card.name))
+    .filter((card, index, list) => list.findIndex((item) => item.id === card.id) === index);
+}
+
+function appendLogEntryContent(root, entry) {
+  const message = logEntryMessage(entry);
+  const refs = logCardRefs(entry);
+  if (refs.length === 0) {
+    root.textContent = message;
+    return;
+  }
+  let offset = 0;
+  while (offset < message.length) {
+    let next = null;
+    refs.forEach((card) => {
+      const index = message.indexOf(card.name, offset);
+      if (index < 0) return;
+      if (!next || index < next.index || (index === next.index && card.name.length > next.card.name.length)) {
+        next = { index, card };
+      }
+    });
+    if (!next) {
+      root.appendChild(document.createTextNode(message.slice(offset)));
+      break;
+    }
+    if (next.index > offset) {
+      root.appendChild(document.createTextNode(message.slice(offset, next.index)));
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "log-card-link";
+    button.dataset.cardId = next.card.id;
+    button.textContent = next.card.name;
+    button.title = `查看 ${next.card.name} 详情`;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openCardDetail(next.card.id);
+    });
+    root.appendChild(button);
+    offset = next.index + next.card.name.length;
+  }
 }
 
 function renderLog() {
@@ -3733,12 +3860,12 @@ function renderLog() {
   const latest = state.log[0] || (state.started ? "等待行动结算。" : "准备决斗。");
   const current = document.createElement("div");
   current.className = "log-line";
-  current.textContent = latest;
+  appendLogEntryContent(current, latest);
   els.log.appendChild(current);
   if (state.log[1]) {
     const previous = document.createElement("div");
     previous.className = "log-line secondary";
-    previous.textContent = state.log[1];
+    appendLogEntryContent(previous, state.log[1]);
     els.log.appendChild(previous);
   }
 }
