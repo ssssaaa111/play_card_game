@@ -3582,29 +3582,6 @@ function renderBattlePreview() {
   root.appendChild(result);
 }
 
-function attachCardDetailTrigger(cardEl, card) {
-  if (!cardEl || !card) return;
-  const trigger = document.createElement("span");
-  trigger.className = "card-detail-trigger";
-  trigger.dataset.cardDetailId = card.id || "";
-  trigger.textContent = "i";
-  trigger.title = `查看 ${card.name} 详情`;
-  trigger.setAttribute("role", "button");
-  trigger.setAttribute("tabindex", "0");
-  trigger.setAttribute("aria-label", `查看 ${card.name} 详情`);
-  const open = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openCardDetail(card);
-  };
-  trigger.addEventListener("click", open);
-  trigger.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    open(event);
-  });
-  cardEl.appendChild(trigger);
-}
-
 function isAttackTargetSlot(ownerName, index) {
   if (ownerName !== "ai" || state.pendingTarget) return false;
   if (!canPlayerAct() || state.selected?.zone !== "playerField") return false;
@@ -3643,7 +3620,6 @@ function renderField(root, duelist, owner, animationKey) {
     if (card) {
       const attacksLocked = owner === "player" && state.player.attacksSkipped && card.type === "monster" && !card.used && card.mode !== "defense";
       const cardEl = renderCardElement(document, card, { asset: monsterAsset(card), attacksLocked });
-      attachCardDetailTrigger(cardEl, card);
       cardEl.dataset.zone = `${owner}-field`;
       if (card.type === "monster") cardEl.classList.add("field-monster-card");
       cardEl.classList.toggle("selected", state.selected?.zone === "playerField" && state.selected.index === index && owner === "player");
@@ -3696,7 +3672,6 @@ function renderTraps(root, duelist, owner) {
     if (card) {
       const cardEl = owner === "player" ? renderCardElement(document, card, { asset: monsterAsset(card) }) : document.createElement("article");
       cardEl.className = owner === "player" ? `${cardEl.className} player-trap` : "card back";
-      if (owner === "player") attachCardDetailTrigger(cardEl, card);
       cardEl.dataset.zone = `${owner}-trap`;
       if (card) {
         cardEl.dataset.cardId = owner === "player" ? card.id || "" : "hidden";
@@ -3757,7 +3732,6 @@ function renderHand(animationKey) {
   els.hand.innerHTML = "";
   state.player.hand.forEach((card, index) => {
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
-    attachCardDetailTrigger(cardEl, card);
     cardEl.dataset.zone = "hand";
     const action = handActionInfo(card, index);
     cardEl.classList.toggle("selected", state.selected?.zone === "hand" && state.selected.uid === card.uid);
@@ -3794,7 +3768,6 @@ function renderGraveTargets() {
     const targetInfo = targetInfoFromPending("player", index, "grave");
     if (!targetInfo.ok) return;
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
-    attachCardDetailTrigger(cardEl, card);
     cardEl.dataset.zone = "player-grave";
     cardEl.classList.add("grave-target-card", "targetable");
     cardEl.title = `选择墓地目标：${card.name}`;

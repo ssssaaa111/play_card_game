@@ -274,10 +274,6 @@ function chainChoiceButton(els, cardId) {
   return els.chainChoices?.querySelector(`[data-card-id="${cardId}"]`);
 }
 
-function cardDetailTrigger(cardEl) {
-  return cardEl?.querySelector(".card-detail-trigger");
-}
-
 function logCardLink(els, cardId) {
   return els.log?.querySelector(`.log-card-link[data-card-id="${cardId}"]`);
 }

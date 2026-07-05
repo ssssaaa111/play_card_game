@@ -690,6 +690,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "battle-log-card-detail"\)/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);
   assert.match(smoke, /logCardLink\(ctx\.els, "chain-nullifier"\)/);
+  assert.doesNotMatch(smoke, /cardDetailTrigger/);
   assert.match(smoke, /setSmokeStatus\("passed", "equipment-spell"\)/);
 });
 
@@ -715,6 +716,7 @@ test("app uses extracted card details", () => {
   assert.match(app, /state\.log\.slice\(0, 5\)/);
   assert.match(app, /appendLogEntryContent\(line, entry\)/);
   assert.doesNotMatch(app, /cardTagText\(card\)/);
+  assert.doesNotMatch(app, /attachCardDetailTrigger/);
 });
 
 test("app uses extracted duelist line text", () => {
@@ -922,6 +924,7 @@ test("hand action prompts have visible layout room", () => {
   assert.match(css, /\.hand \.card\s*\{[\s\S]*grid-template-rows: auto minmax\(42px, 0\.7fr\) minmax\(32px, auto\) auto auto;/);
   assert.match(css, /\.action-reason\s*\{[\s\S]*-webkit-line-clamp: 1;/);
   assert.match(css, /\.detail-actions\s*\{[\s\S]*position: relative;[\s\S]*z-index: 9;/);
+  assert.doesNotMatch(css, /\.card-detail-trigger/);
 });
 
 test("required static files exist at documented paths", () => {
