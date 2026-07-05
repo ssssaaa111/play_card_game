@@ -16,6 +16,7 @@ import { cardDefinitionById, cardDetailText, cardDetailViewModel } from './card-
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
+import { buildPreDuelPreview } from './pre-duel-preview.js';
 import {
   buildEngineStateFromUiState,
   canDispatchSummonEffectFromUiState,
@@ -222,6 +223,14 @@ const els = {
   scenarioObjectives: document.querySelector("#scenarioObjectives"),
   scenarioHintToggle: document.querySelector("#scenarioHintToggle"),
   scenarioHints: document.querySelector("#scenarioHints"),
+  preDuelPreview: document.querySelector("#preDuelPreview"),
+  preDuelLp: document.querySelector("#preDuelLp"),
+  preDuelSkillName: document.querySelector("#preDuelSkillName"),
+  preDuelSkillText: document.querySelector("#preDuelSkillText"),
+  preDuelRecommended: document.querySelector("#preDuelRecommended"),
+  preDuelRecommendedList: document.querySelector("#preDuelRecommendedList"),
+  preDuelDeckCount: document.querySelector("#preDuelDeckCount"),
+  preDuelDeckList: document.querySelector("#preDuelDeckList"),
   guideModal: document.querySelector("#guideModal"),
   guideClose: document.querySelector("#guideClose"),
   cardModal: document.querySelector("#cardModal"),
@@ -365,13 +374,13 @@ function renderScenarioBrief(scenario = {}) {
   const objectives = scenarioObjectiveList(scenario);
   const hints = scenarioHintList(scenario);
   const difficultyText = scenarioDifficultyText(scenario.difficulty);
-  const hasBrief = Boolean(difficultyText || objectives.length || hints.length);
+  const hasBrief = Boolean(scenario.label || difficultyText || objectives.length || hints.length);
 
   root.hidden = !hasBrief;
   if (!hasBrief) return;
 
   if (els.scenarioBriefTitle) {
-    els.scenarioBriefTitle.textContent = scenario.label || "";
+    els.scenarioBriefTitle.textContent = scenario.label || "正常决斗";
   }
   if (els.scenarioDifficulty) {
     els.scenarioDifficulty.textContent = difficultyText || "场景";
@@ -391,6 +400,80 @@ function renderScenarioBrief(scenario = {}) {
   if (els.scenarioHints) {
     renderTextList(els.scenarioHints, hints);
     els.scenarioHints.hidden = !scenarioHintsVisible || !hints.length;
+  }
+}
+
+function appendTextNode(root, className, text) {
+  const node = document.createElement("span");
+  node.className = className;
+  node.textContent = text;
+  root.appendChild(node);
+  return node;
+}
+
+function renderPreDuelDeckCard(entry) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "pre-duel-card";
+  button.dataset.cardId = entry.id;
+  button.dataset.zone = entry.zone;
+  button.title = `查看 ${entry.name} 详情`;
+
+  const title = document.createElement("span");
+  title.className = "pre-duel-card-title";
+  appendTextNode(title, "pre-duel-zone", entry.zoneLabel);
+  appendTextNode(title, "pre-duel-card-name", entry.name);
+  button.appendChild(title);
+
+  const meta = document.createElement("span");
+  meta.className = "pre-duel-card-meta";
+  const stats = Number.isFinite(entry.attack) && Number.isFinite(entry.defense)
+    ? ` · ATK ${entry.attack} / DEF ${entry.defense}`
+    : "";
+  meta.textContent = `${entry.type}${stats}`;
+  button.appendChild(meta);
+
+  if (entry.summary) {
+    appendTextNode(button, "pre-duel-card-summary", entry.summary);
+  }
+
+  button.addEventListener("click", () => openCardDetail(entry.id));
+  return button;
+}
+
+function renderPreDuelPreview(scenario = {}) {
+  const root = els.preDuelPreview;
+  if (!root) return;
+  const preview = buildPreDuelPreview({
+    scenarioId: state.scenarioId,
+    scenario,
+    playerPreset: state.deckPreset,
+    playerProfile: characterProfiles.player
+  });
+
+  root.hidden = state.started || state.gameOver;
+  if (els.preDuelLp) {
+    els.preDuelLp.textContent = `己方 ${preview.playerLp} / 对方 ${preview.aiLp}`;
+  }
+  if (els.preDuelSkillName) {
+    els.preDuelSkillName.textContent = preview.skill.name || "无技能";
+  }
+  if (els.preDuelSkillText) {
+    els.preDuelSkillText.textContent = preview.skill.text || "";
+  }
+  if (els.preDuelRecommended) {
+    els.preDuelRecommended.hidden = !preview.recommendedLine.length;
+  }
+  renderTextList(els.preDuelRecommendedList, preview.recommendedLine);
+
+  if (els.preDuelDeckCount) {
+    els.preDuelDeckCount.textContent = `${preview.deckCards.length} 张`;
+  }
+  if (els.preDuelDeckList) {
+    els.preDuelDeckList.innerHTML = "";
+    preview.deckCards.forEach((entry) => {
+      els.preDuelDeckList.appendChild(renderPreDuelDeckCard(entry));
+    });
   }
 }
 
@@ -483,7 +566,7 @@ function startGame() {
   state.timeline = [];
   state.timelineStep = 0;
   state.gameEvents = [];
-  els.modal.classList.remove("show");
+  els.modal.classList.remove("show", "setup-modal");
   els.modalRestart.textContent = "再来一局";
   if (state.scenarioId === "normal") {
     drawCards(state.player, 5, { announce: false, reason: "opening" });
@@ -511,7 +594,7 @@ function startGame() {
 function prepareGame() {
   stopAll();
   closeTrapChoicePrompt();
-  scenarioHintsVisible = false;
+  scenarioHintsVisible = true;
   applySetupChoices();
   syncSetupControls();
   Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
@@ -536,16 +619,16 @@ function prepareGame() {
   state.gameOverReason = "";
   state.gameOverAnnounced = false;
   state.statsRecorded = false;
-  state.log = ["点击“开始决斗”后再抽卡开局。"];
+  state.log = ["先查看场景目标、提示和己方卡组，再点击“开始决斗”。"];
   state.logSequence = 0;
   state.timeline = [];
   state.timelineStep = 0;
   state.gameEvents = [];
   clearPlayerIdleTimers();
-  els.modalTitle.textContent = "准备决斗";
-  els.modalText.textContent = "确认准备好后再开始。开局后也可以随时暂停。";
+  els.modalTitle.textContent = "战前准备";
+  els.modalText.textContent = "先熟悉己方卡组、技能和场景目标，再开始决斗。";
   els.modalRestart.textContent = "开始决斗";
-  els.modal.classList.add("show");
+  els.modal.classList.add("show", "setup-modal");
   render();
 }
 
@@ -3182,6 +3265,7 @@ function checkGameOver() {
       ? `星魂回应了你的召唤。${statsLine()}。`
       : `AI 抢到了节奏。调整卡组顺序或更早展开怪兽试试看。${statsLine()}。`;
     els.modalRestart.textContent = "回到准备";
+    els.modal.classList.remove("setup-modal");
     window.setTimeout(() => els.modal.classList.add("show"), 260);
   }
 }
@@ -3510,6 +3594,7 @@ function render(animationKey = "") {
     els.setupPanel.hidden = state.started || state.gameOver;
   }
   renderScenarioBrief(scenario);
+  renderPreDuelPreview(scenario);
   if (els.setupStats) {
     const aiLabel = aiProfiles[state.aiStyle]?.label || characterProfiles.ai.name;
     els.setupStats.textContent = `${statsLine()} / 当前配置：${characterProfiles.player.name}、${setupLabel(deckPresets, state.deckPreset)}、${aiLabel} / ${scenario.label}${scenario.goal ? ` / 目标：${scenario.goal}` : ""}`;
@@ -3990,7 +4075,7 @@ els.modalRestart.addEventListener("click", () => {
 [els.roleSelect, els.deckSelect, els.aiSelect, els.scenarioSelect].filter(Boolean).forEach((select) => {
   select.addEventListener("change", () => {
     if (select === els.scenarioSelect) {
-      scenarioHintsVisible = false;
+      scenarioHintsVisible = true;
     }
     applySetupChoices();
     render();

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20260706-card-detail-no-card-button" />
+  <link rel="stylesheet" href="styles.css?v=20260706-pre-duel-preview" />
 </head>
 <body>
   <div id="app">
@@ -222,6 +222,30 @@
           <button class="btn ghost scenario-hint-toggle" id="scenarioHintToggle" type="button">显示提示</button>
           <ul class="scenario-hints" id="scenarioHints" hidden></ul>
         </div>
+        <div class="pre-duel-preview" id="preDuelPreview">
+          <div class="pre-duel-summary">
+            <div class="pre-duel-stat">
+              <span>生命值</span>
+              <strong id="preDuelLp"></strong>
+            </div>
+            <div class="pre-duel-stat pre-duel-skill">
+              <span>己方技能</span>
+              <strong id="preDuelSkillName"></strong>
+              <small id="preDuelSkillText"></small>
+            </div>
+          </div>
+          <div class="pre-duel-route" id="preDuelRecommended" hidden>
+            <strong>推荐路线</strong>
+            <ul id="preDuelRecommendedList"></ul>
+          </div>
+          <div class="pre-duel-deck">
+            <div class="pre-duel-deck-head">
+              <strong>己方卡组预览</strong>
+              <span id="preDuelDeckCount"></span>
+            </div>
+            <div class="pre-duel-deck-list" id="preDuelDeckList"></div>
+          </div>
+        </div>
         <div class="setup-stats" id="setupStats"></div>
       </div>
       <button class="btn primary" id="modalRestart">再来一局</button>
@@ -277,6 +301,6 @@
     </div>
   </div>
 
-  <script type="module" src="src/app.js?v=20260706-card-detail-no-card-button"></script>
+  <script type="module" src="src/app.js?v=20260706-pre-duel-preview"></script>
 </body>
 </html>

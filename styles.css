@@ -1803,6 +1803,11 @@ h1 {
   text-align: center;
 }
 
+.modal.setup-modal .modal-box {
+  width: min(760px, 100%);
+  text-align: left;
+}
+
 .modal-box.guide {
   width: min(760px, 100%);
   max-height: calc(100vh - 36px);
@@ -2141,6 +2146,149 @@ h1 {
 .scenario-hint-toggle:disabled {
   cursor: default;
   opacity: 0.62;
+}
+
+.pre-duel-preview {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.pre-duel-preview[hidden] {
+  display: none;
+}
+
+.pre-duel-summary {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.pre-duel-stat,
+.pre-duel-route,
+.pre-duel-deck {
+  border: 1px solid rgba(84, 210, 210, 0.22);
+  background: rgba(11, 16, 28, 0.58);
+  padding: 10px;
+}
+
+.pre-duel-stat {
+  display: grid;
+  gap: 4px;
+}
+
+.pre-duel-stat span,
+.pre-duel-route strong,
+.pre-duel-deck-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pre-duel-stat strong,
+.pre-duel-deck-head strong {
+  color: #f6d98a;
+  font-size: 14px;
+}
+
+.pre-duel-skill small {
+  color: #cbd8e8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pre-duel-route[hidden] {
+  display: none;
+}
+
+.pre-duel-route ul {
+  display: grid;
+  gap: 5px;
+  margin: 7px 0 0 16px;
+  padding: 0;
+  color: #cbd8e8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pre-duel-deck-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pre-duel-deck-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  max-height: 300px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.pre-duel-card {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 82px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.055);
+  color: #eaf2ff;
+  padding: 9px 10px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pre-duel-card:hover,
+.pre-duel-card:focus-visible {
+  border-color: rgba(246, 189, 96, 0.7);
+  background: rgba(246, 189, 96, 0.12);
+  outline: none;
+}
+
+.pre-duel-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.pre-duel-zone {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border: 1px solid rgba(84, 210, 210, 0.28);
+  color: #8ee7e7;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.pre-duel-card-name {
+  min-width: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pre-duel-card-meta {
+  color: #f6d98a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pre-duel-card-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #cbd8e8;
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .guide-grid {
@@ -3606,6 +3754,15 @@ h1 {
 
   .setup-grid {
     grid-template-columns: 1fr;
+  }
+
+  .pre-duel-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .pre-duel-deck-list {
+    grid-template-columns: 1fr;
+    max-height: 250px;
   }
 
   .zoom-layout {

@@ -105,6 +105,16 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         hintsHidden: Boolean(els.scenarioHints?.hidden),
         hintToggleText: els.scenarioHintToggle?.textContent || ""
       },
+      preDuelPreview: {
+        visible: Boolean(els.preDuelPreview && !els.preDuelPreview.hidden),
+        lp: els.preDuelLp?.textContent || "",
+        skill: els.preDuelSkillName?.textContent || "",
+        deckCards: Array.from(els.preDuelDeckList?.querySelectorAll(".pre-duel-card") || []).map((item) => ({
+          id: item.dataset.cardId || "",
+          zone: item.dataset.zone || "",
+          text: item.textContent || ""
+        }))
+      },
       pendingTarget: state.pendingTarget ? {
         mode: state.pendingTarget.mode,
         cardName: state.pendingTarget.cardName,
@@ -254,6 +264,10 @@ function fieldSlot(els, owner, index) {
 
 function handCard(els, cardId) {
   return els.hand.querySelector(`[data-zone="hand"][data-card-id="${cardId}"]`);
+}
+
+function preDuelDeckCard(els, cardId) {
+  return els.preDuelDeckList?.querySelector(`.pre-duel-card[data-card-id="${cardId}"]`);
 }
 
 function graveTargetCard(els, cardId) {
@@ -2618,6 +2632,66 @@ async function runBattleLogCardDetailSmoke(ctx) {
   setSmokeStatus("passed", "battle-log-card-detail");
 }
 
+async function runPreDuelDeckPreviewSmoke(ctx) {
+  setSmokeStatus("running", "pre-duel-deck-preview");
+  selectScenario(ctx.els, "protagonistComebackChallenge");
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") &&
+      !ctx.els.setupPanel?.hidden &&
+      !ctx.state.started,
+    "pre-duel-deck-preview: setup screen visible",
+    6000
+  );
+  assertScenarioBrief(ctx.els, {
+    difficulty: "挑战版",
+    objectives: ["先补两张资源", "反击前先用解印射线清掉镜光反制"],
+    hints: ["墓地列表从左到右不是推荐顺序", "战斗狂热最好留到反击回合"]
+  });
+  if (ctx.els.scenarioHints?.hidden) {
+    throw new Error("pre-duel-deck-preview: hints should be visible before duel");
+  }
+  if (!ctx.els.preDuelLp?.textContent.includes("己方 900") || !ctx.els.preDuelLp.textContent.includes("对方 3400")) {
+    throw new Error(`pre-duel-deck-preview: LP preview missing expected values: ${ctx.els.preDuelLp?.textContent || ""}`);
+  }
+  const routeText = ctx.els.preDuelRecommendedList?.textContent || "";
+  if (!routeText.includes("醒星回召选择天穹逆星者")) {
+    throw new Error("pre-duel-deck-preview: recommended line should be rendered");
+  }
+  const previewCard = preDuelDeckCard(ctx.els, "dawn-edge");
+  const deckCard = preDuelDeckCard(ctx.els, "battle-trance");
+  if (!previewCard || !deckCard) {
+    throw new Error("pre-duel-deck-preview: own starting cards and deck cards should be visible");
+  }
+  if (!previewCard.textContent.includes("魔法")) {
+    throw new Error("pre-duel-deck-preview: preview card row should show type");
+  }
+  if (previewCard.textContent.includes("ATK") || previewCard.textContent.includes("DEF")) {
+    throw new Error("pre-duel-deck-preview: spell preview should not show monster stats");
+  }
+  const card = cloneCardById("dawn-edge");
+  if (!card) throw new Error("pre-duel-deck-preview: dawn-edge definition should exist");
+  clickSmokeElement(previewCard, "pre-duel-deck-preview: open preview card detail");
+  await assertCardDetailModal(ctx, card, "pre-duel-deck-preview");
+  clickSmokeElement(ctx.els.zoomClose, "pre-duel-deck-preview: close card detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "pre-duel-deck-preview: modal closes");
+
+  clickSmokeElement(ctx.els.modalRestart, "pre-duel-deck-preview: start duel");
+  await waitForSmoke(
+    () => ctx.state.started && ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.pendingOpeningDraw,
+    "pre-duel-deck-preview: duel reaches original player main phase",
+    9000
+  );
+  const expectedHand = ["dawn-edge", "last-spark", "starwake-recall", "last-light-guard", "limit-break-oath"];
+  const actualHand = cardIds(ctx.state.player.hand).slice(0, expectedHand.length);
+  if (expectedHand.some((id, index) => actualHand[index] !== id)) {
+    throw new Error(`pre-duel-deck-preview: initial hand order changed: ${actualHand.join(",")}`);
+  }
+  if (!handCard(ctx.els, "dawn-edge")) {
+    throw new Error("pre-duel-deck-preview: duel hand should render after start");
+  }
+  setSmokeStatus("passed", "pre-duel-deck-preview");
+}
+
 async function runEquipmentSpellSmoke(ctx) {
   setSmokeStatus("running", "equipment-spell");
   await startSmokeDuel(ctx, "equipment");
@@ -2765,6 +2839,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "pause-detail": runPauseDetailSmoke,
     "card-detail-viewer": runCardDetailViewerSmoke,
     "battle-log-card-detail": runBattleLogCardDetailSmoke,
+    "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "game-over-event": runGameOverEventSmoke
   };
