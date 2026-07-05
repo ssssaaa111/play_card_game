@@ -2587,7 +2587,9 @@ async function runCardDetailViewerSmoke(ctx) {
   await startSmokeDuel(ctx, "direct");
   const card = ctx.state.player.hand.find((entry) => entry?.id === "star-breach") || ctx.state.player.hand.find(Boolean);
   if (!card) throw new Error("card-detail-viewer: player hand should contain a visible card");
-  clickSmokeElement(cardDetailTrigger(handCard(ctx.els, card.id)), "card-detail-viewer: hand card detail trigger");
+  clickSmokeElement(handCard(ctx.els, card.id), "card-detail-viewer: select visible hand card");
+  await waitForSmoke(() => !ctx.els.detailBtn.disabled, "card-detail-viewer: unified detail action enabled");
+  clickSmokeElement(ctx.els.detailBtn, "card-detail-viewer: open selected card detail");
   await assertCardDetailModal(ctx, card, "card-detail-viewer");
   clickSmokeElement(ctx.els.zoomClose, "card-detail-viewer: close card detail");
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "card-detail-viewer: modal closes");
@@ -2599,18 +2601,22 @@ async function runCardDetailViewerSmoke(ctx) {
 
 async function runBattleLogCardDetailSmoke(ctx) {
   setSmokeStatus("running", "battle-log-card-detail");
-  await startSmokeDuel(ctx, "direct");
-  const card = ctx.state.player.hand.find((entry) => entry?.id === "star-breach");
-  if (!card) throw new Error("battle-log-card-detail: star-breach should be in the opening hand");
-  clickSmokeElement(handCard(ctx.els, "star-breach"), "battle-log-card-detail: select star-breach");
-  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "battle-log-card-detail: star-breach confirmation");
-  clickSmokeElement(ctx.els.choiceConfirmBtn, "battle-log-card-detail: activate star-breach");
-  await waitForSmoke(() => logCardLink(ctx.els, "star-breach"), "battle-log-card-detail: public log card link");
-  clickSmokeElement(logCardLink(ctx.els, "star-breach"), "battle-log-card-detail: open log card detail");
+  await startSmokeDuel(ctx, "counterChain");
+  const card = cloneCardById("chain-nullifier");
+  if (!card) throw new Error("battle-log-card-detail: chain-nullifier definition should exist");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") && ctx.els.chainText.textContent.includes("反击阵列") && !ctx.els.chainYes.disabled,
+    "battle-log-card-detail: counter-array response window",
+    16000
+  );
+  clickSmokeElement(ctx.els.chainYes, "battle-log-card-detail: activate counter-array");
+  await waitForSmoke(() => logCardLink(ctx.els, "chain-nullifier"), "battle-log-card-detail: AI public log card link", 16000);
+  clickSmokeElement(logCardLink(ctx.els, "chain-nullifier"), "battle-log-card-detail: open AI log card detail");
   await assertCardDetailModal(ctx, card, "battle-log-card-detail");
   clickSmokeElement(ctx.els.zoomClose, "battle-log-card-detail: close card detail");
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "battle-log-card-detail: modal closes");
-  if (!ctx.state.started || ctx.state.turn !== "player" || ctx.state.gameOver) {
+  if (!ctx.state.started || ctx.state.gameOver) {
     throw new Error(`battle-log-card-detail: duel should continue after log detail. ${smokeDebug(ctx)}`);
   }
   setSmokeStatus("passed", "battle-log-card-detail");

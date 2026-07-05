@@ -3252,6 +3252,8 @@ function addLog(input, metadata = {}) {
   state.log.unshift(entry);
   state.log = state.log.slice(0, 12);
   addTimeline(logEntryMessage(entry));
+  renderLog();
+  renderTimeline();
 }
 
 function addTimeline(text) {
@@ -3857,17 +3859,15 @@ function renderLog() {
   head.className = "log-head";
   head.innerHTML = `<span>当前战况</span><span class="log-badge">最近</span>`;
   els.log.appendChild(head);
-  const latest = state.log[0] || (state.started ? "等待行动结算。" : "准备决斗。");
-  const current = document.createElement("div");
-  current.className = "log-line";
-  appendLogEntryContent(current, latest);
-  els.log.appendChild(current);
-  if (state.log[1]) {
-    const previous = document.createElement("div");
-    previous.className = "log-line secondary";
-    appendLogEntryContent(previous, state.log[1]);
-    els.log.appendChild(previous);
-  }
+  const entries = state.log.length
+    ? state.log.slice(0, 5)
+    : [state.started ? "等待行动结算。" : "准备决斗。"];
+  entries.forEach((entry, index) => {
+    const line = document.createElement("div");
+    line.className = index === 0 ? "log-line" : "log-line secondary";
+    appendLogEntryContent(line, entry);
+    els.log.appendChild(line);
+  });
 }
 
 function auditIssueLabel(issue) {
