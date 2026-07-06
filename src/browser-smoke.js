@@ -2845,6 +2845,55 @@ async function runGameOverEventSmoke(ctx) {
   setSmokeStatus("passed", "game-over-event");
 }
 
+async function runPostDuelLogReviewSmoke(ctx) {
+  setSmokeStatus("running", "post-duel-log-review");
+  await startSmokeDuel(ctx, "direct");
+  const attacker = cloneCardById("star-lancer");
+  if (!attacker) throw new Error("post-duel-log-review: star-lancer definition should exist");
+  ctx.state.ai.lp = 400;
+  ctx.state.ai.shield = 0;
+  ctx.render?.();
+  clickSmokeElement(handCard(ctx.els, "star-breach"), "post-duel-log-review: select direct attack spell");
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    "post-duel-log-review: direct attack spell confirmation enabled"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "post-duel-log-review: cast direct attack spell");
+  await waitForSmoke(() => ctx.state.player.directAttacks > 0, "post-duel-log-review: direct attack permission granted");
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "post-duel-log-review: select attacker");
+  await waitForSmoke(
+    () => ctx.els.aiPanel.classList.contains("direct-target"),
+    "post-duel-log-review: direct attack target highlighted",
+    6000
+  );
+  clickSmokeElement(ctx.els.aiPanel, "post-duel-log-review: direct attack for game over");
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "player",
+    "post-duel-log-review: game over declared",
+    6000
+  );
+  await waitForSmoke(
+    () => ctx.els.modal.classList.contains("show") && ctx.els.modalReviewLog && !ctx.els.modalReviewLog.hidden,
+    "post-duel-log-review: result review action visible",
+    4000
+  );
+  clickSmokeElement(ctx.els.modalReviewLog, "post-duel-log-review: open battle log review");
+  await waitForSmoke(
+    () => !ctx.els.modal.classList.contains("show") && ctx.state.gameOver && ctx.state.gameOverWinner === "player",
+    "post-duel-log-review: result closes without resetting duel",
+    4000
+  );
+  await waitForSmoke(() => logCardLink(ctx.els, "star-lancer"), "post-duel-log-review: public battle log link", 6000);
+  clickSmokeElement(logCardLink(ctx.els, "star-lancer"), "post-duel-log-review: open log card detail");
+  await assertCardDetailModal(ctx, attacker, "post-duel-log-review");
+  clickSmokeElement(ctx.els.zoomClose, "post-duel-log-review: close detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "post-duel-log-review: detail closes");
+  if (!ctx.state.gameOver || ctx.state.gameOverWinner !== "player") {
+    throw new Error(`post-duel-log-review: reviewing logs should not reset game over. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "post-duel-log-review");
+}
+
 export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActions, render = null }) {
   if (!smoke) return;
   const smokeRuns = {
@@ -2896,7 +2945,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-card-reveal-confirm": runAiCardRevealConfirmSmoke,
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
-    "game-over-event": runGameOverEventSmoke
+    "game-over-event": runGameOverEventSmoke,
+    "post-duel-log-review": runPostDuelLogReviewSmoke
   };
   const run = smokeRuns[smoke];
   if (!run) {

@@ -74,6 +74,7 @@ test("index keeps critical app mount points wired", () => {
   assert.match(html, /id="preDuelDeckList"/);
   assert.match(html, /id="aiRevealModal"/);
   assert.match(html, /id="aiRevealContinue"/);
+  assert.match(html, /id="modalReviewLog"/);
 });
 
 test("app uses the extracted rules module", () => {
@@ -635,6 +636,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"pre-duel-deck-preview": runPreDuelDeckPreviewSmoke/);
   assert.match(smoke, /"equipment-spell": runEquipmentSpellSmoke/);
   assert.match(smoke, /"game-over-event": runGameOverEventSmoke/);
+  assert.match(smoke, /"post-duel-log-review": runPostDuelLogReviewSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
   assert.match(smoke, /function trapCard/);
   assert.match(smoke, /function graveTargetCard/);
@@ -710,6 +712,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "battle-log-card-detail"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-confirm"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);
   assert.match(smoke, /logCardLink\(ctx\.els, "chain-nullifier"\)/);
   assert.doesNotMatch(smoke, /cardDetailTrigger/);
@@ -935,8 +938,29 @@ test("setup modal keeps the start action reachable", () => {
   assert.match(app, /els\.startBtn\.disabled = setupModalOpen \|\| \(state\.started && !state\.gameOver\)/);
   assert.match(css, /\.modal \{[\s\S]*overflow: auto;/);
   assert.match(css, /\.modal-box \{[\s\S]*max-height: calc\(100vh - 36px\);[\s\S]*overflow: auto;/);
-  assert.match(css, /#modalRestart \{[\s\S]*position: sticky;[\s\S]*width: 100%;/);
+  assert.match(css, /\.modal-actions \{[\s\S]*position: sticky;[\s\S]*width: 100%;/);
+  assert.match(css, /#modalRestart \{[\s\S]*width: 100%;[\s\S]*min-height: 44px;/);
   assert.match(css, /grid-template-columns: repeat\(auto-fit, minmax\(128px, 1fr\)\)/);
+});
+
+test("game-over modal can reveal the battle log without resetting duel state", () => {
+  const app = readProjectFile("src/app.js");
+  const html = readProjectFile("index.html");
+  const reviewStart = app.indexOf('els.modalReviewLog.addEventListener("click"');
+  const reviewEnd = app.indexOf("[els.roleSelect", reviewStart);
+
+  assert.match(html, /id="modalReviewLog"[^>]*hidden/);
+  assert.match(app, /modalReviewLog: document\.querySelector\("#modalReviewLog"\)/);
+  assert.match(app, /if \(els\.modalReviewLog\) els\.modalReviewLog\.hidden = false;/);
+  assert.ok(reviewStart >= 0, "modal review log click handler should exist");
+  assert.ok(reviewEnd > reviewStart, "modal review log click handler should be bounded");
+
+  const reviewSource = app.slice(reviewStart, reviewEnd);
+  assert.match(reviewSource, /els\.modal\.classList\.remove\("show"\)/);
+  assert.match(reviewSource, /resetPlayerIdleCountdown\(\)/);
+  assert.doesNotMatch(reviewSource, /prepareGame\(/);
+  assert.doesNotMatch(reviewSource, /startGame\(/);
+  assert.doesNotMatch(reviewSource, /state\.gameOver\s*=/);
 });
 
 test("hand action prompts have visible layout room", () => {

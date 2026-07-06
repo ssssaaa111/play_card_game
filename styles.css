@@ -2374,9 +2374,21 @@ h1 {
   margin-top: 4px;
 }
 
-#modalRestart {
+.modal-actions {
   position: sticky;
   bottom: 0;
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.modal-actions .btn {
+  flex: 1 1 0;
+  min-height: 44px;
+}
+
+#modalRestart {
   width: 100%;
   min-height: 44px;
 }

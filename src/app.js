@@ -214,6 +214,7 @@ const els = {
   modalTitle: document.querySelector("#modalTitle"),
   modalText: document.querySelector("#modalText"),
   modalRestart: document.querySelector("#modalRestart"),
+  modalReviewLog: document.querySelector("#modalReviewLog"),
   setupPanel: document.querySelector("#setupPanel"),
   roleSelect: document.querySelector("#roleSelect"),
   deckSelect: document.querySelector("#deckSelect"),
@@ -618,6 +619,7 @@ function startGame() {
   state.gameEvents = [];
   els.modal.classList.remove("show", "setup-modal");
   els.modalRestart.textContent = "再来一局";
+  if (els.modalReviewLog) els.modalReviewLog.hidden = true;
   if (state.scenarioId === "normal") {
     drawCards(state.player, 5, { announce: false, reason: "opening" });
     drawCards(state.ai, 5, { announce: false, reason: "opening" });
@@ -679,6 +681,7 @@ function prepareGame() {
   els.modalTitle.textContent = "战前准备";
   els.modalText.textContent = "先熟悉己方卡组、技能和场景目标，再开始决斗。";
   els.modalRestart.textContent = "开始决斗";
+  if (els.modalReviewLog) els.modalReviewLog.hidden = true;
   els.modal.classList.add("show", "setup-modal");
   render();
 }
@@ -3350,6 +3353,7 @@ function checkGameOver() {
       ? `星魂回应了你的召唤。${statsLine()}。`
       : `AI 抢到了节奏。调整卡组顺序或更早展开怪兽试试看。${statsLine()}。`;
     els.modalRestart.textContent = "回到准备";
+    if (els.modalReviewLog) els.modalReviewLog.hidden = false;
     els.modal.classList.remove("setup-modal");
     window.setTimeout(() => els.modal.classList.add("show"), 260);
   }
@@ -4163,6 +4167,12 @@ els.modalRestart.addEventListener("click", () => {
     startGame();
   }
 });
+if (els.modalReviewLog) {
+  els.modalReviewLog.addEventListener("click", () => {
+    els.modal.classList.remove("show");
+    resetPlayerIdleCountdown();
+  });
+}
 [els.roleSelect, els.deckSelect, els.aiSelect, els.scenarioSelect].filter(Boolean).forEach((select) => {
   select.addEventListener("change", () => {
     if (select === els.scenarioSelect) {
