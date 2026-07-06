@@ -26,6 +26,7 @@ function checkModuleSyntax(path) {
 test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/actions.js");
   checkModuleSyntax("src/animation.js");
+  checkModuleSyntax("src/ai-card-reveal.js");
   checkModuleSyntax("src/app.js");
   checkModuleSyntax("src/audio.js");
   checkModuleSyntax("src/battle.js");
@@ -71,6 +72,8 @@ test("index keeps critical app mount points wired", () => {
   assert.match(html, /id="endTurnBtn"/);
   assert.match(html, /id="preDuelPreview"/);
   assert.match(html, /id="preDuelDeckList"/);
+  assert.match(html, /id="aiRevealModal"/);
+  assert.match(html, /id="aiRevealContinue"/);
 });
 
 test("app uses the extracted rules module", () => {
@@ -576,8 +579,12 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /graveTargets: document\.querySelector\("#graveTargets"\)/);
   assert.match(app, /scenarioBrief: document\.querySelector\("#scenarioBrief"\)/);
   assert.match(app, /preDuelDeckList: document\.querySelector\("#preDuelDeckList"\)/);
+  assert.match(app, /aiRevealModal: document\.querySelector\("#aiRevealModal"\)/);
   assert.match(app, /function renderScenarioBrief/);
   assert.match(app, /function renderPreDuelPreview/);
+  assert.match(app, /function waitForAiReveal/);
+  assert.match(app, /Boolean\(BROWSER_SMOKE\) && BROWSER_SMOKE !== "ai-card-reveal-confirm"/);
+  assert.match(app, /buildAiCardReveal\(/);
   assert.match(app, /buildPreDuelPreview\(\{/);
   assert.match(app, /openCardDetail\(entry\.id\)/);
   assert.match(app, /scenarioHintsVisible = !scenarioHintsVisible/);
@@ -624,6 +631,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-mode-event": runAiModeEventSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
   assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
+  assert.match(smoke, /"ai-card-reveal-confirm": runAiCardRevealConfirmSmoke/);
   assert.match(smoke, /"pre-duel-deck-preview": runPreDuelDeckPreviewSmoke/);
   assert.match(smoke, /"equipment-spell": runEquipmentSpellSmoke/);
   assert.match(smoke, /"game-over-event": runGameOverEventSmoke/);
@@ -631,8 +639,10 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /function trapCard/);
   assert.match(smoke, /function graveTargetCard/);
   assert.match(smoke, /function preDuelDeckCard/);
+  assert.match(smoke, /function aiRevealVisible/);
   assert.match(smoke, /scenarioBrief: \{/);
   assert.match(smoke, /preDuelPreview: \{/);
+  assert.match(smoke, /aiReveal: \{/);
   assert.match(smoke, /function assertScenarioBrief/);
   assert.match(smoke, /function doubleClickSmokeElement/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
@@ -698,6 +708,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "card-detail-viewer"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-log-card-detail"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-confirm"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);
   assert.match(smoke, /logCardLink\(ctx\.els, "chain-nullifier"\)/);
@@ -939,7 +950,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

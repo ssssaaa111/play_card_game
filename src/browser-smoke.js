@@ -115,6 +115,13 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
           text: item.textContent || ""
         }))
       },
+      aiReveal: {
+        visible: Boolean(els.aiRevealModal?.classList.contains("show")),
+        cardId: els.aiRevealModal?.dataset.cardId || "",
+        title: els.aiRevealTitle?.textContent || "",
+        type: els.aiRevealType?.textContent || "",
+        summary: els.aiRevealSummary?.textContent || ""
+      },
       pendingTarget: state.pendingTarget ? {
         mode: state.pendingTarget.mode,
         cardName: state.pendingTarget.cardName,
@@ -290,6 +297,11 @@ function chainChoiceButton(els, cardId) {
 
 function logCardLink(els, cardId) {
   return els.log?.querySelector(`.log-card-link[data-card-id="${cardId}"]`);
+}
+
+function aiRevealVisible(els, cardId) {
+  return els.aiRevealModal?.classList.contains("show") &&
+    (!cardId || els.aiRevealModal.dataset.cardId === cardId);
 }
 
 async function assertCardDetailModal(ctx, card, label) {
@@ -2632,6 +2644,48 @@ async function runBattleLogCardDetailSmoke(ctx) {
   setSmokeStatus("passed", "battle-log-card-detail");
 }
 
+async function runAiCardRevealConfirmSmoke(ctx) {
+  setSmokeStatus("running", "ai-card-reveal-confirm");
+  await startSmokeDuel(ctx, "counterChain");
+  const card = cloneCardById("chain-nullifier");
+  if (!card) throw new Error("ai-card-reveal-confirm: chain-nullifier definition should exist");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") && ctx.els.chainText.textContent.includes("反击阵列") && !ctx.els.chainYes.disabled,
+    "ai-card-reveal-confirm: player response window has priority",
+    16000
+  );
+  clickSmokeElement(ctx.els.chainYes, "ai-card-reveal-confirm: activate counter-array");
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "chain-nullifier"),
+    "ai-card-reveal-confirm: AI reveal panel",
+    16000
+  );
+  if (!ctx.els.aiRevealTitle.textContent.includes(card.name)) {
+    throw new Error("ai-card-reveal-confirm: reveal title should include card name");
+  }
+  if (!ctx.els.aiRevealType.textContent.includes("陷阱")) {
+    throw new Error("ai-card-reveal-confirm: reveal type should be trap");
+  }
+  if (!ctx.els.aiRevealSummary.textContent.includes(card.text)) {
+    throw new Error("ai-card-reveal-confirm: reveal summary should include card effect text");
+  }
+  clickSmokeElement(ctx.els.aiRevealDetail, "ai-card-reveal-confirm: open detail");
+  await assertCardDetailModal(ctx, card, "ai-card-reveal-confirm");
+  clickSmokeElement(ctx.els.zoomClose, "ai-card-reveal-confirm: close detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "ai-card-reveal-confirm: detail closes");
+  clickSmokeElement(ctx.els.aiRevealContinue, "ai-card-reveal-confirm: continue reveal");
+  await waitForSmoke(() => !ctx.els.aiRevealModal.classList.contains("show"), "ai-card-reveal-confirm: reveal closes");
+  await waitForSmoke(() => logCardLink(ctx.els, "chain-nullifier"), "ai-card-reveal-confirm: public log card link remains", 6000);
+  clickSmokeElement(logCardLink(ctx.els, "chain-nullifier"), "ai-card-reveal-confirm: open log card detail");
+  await assertCardDetailModal(ctx, card, "ai-card-reveal-confirm log");
+  clickSmokeElement(ctx.els.zoomClose, "ai-card-reveal-confirm: close log detail");
+  if (!ctx.state.started || ctx.state.gameOver) {
+    throw new Error(`ai-card-reveal-confirm: duel should continue after reveal. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "ai-card-reveal-confirm");
+}
+
 async function runPreDuelDeckPreviewSmoke(ctx) {
   setSmokeStatus("running", "pre-duel-deck-preview");
   selectScenario(ctx.els, "protagonistComebackChallenge");
@@ -2839,6 +2893,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "pause-detail": runPauseDetailSmoke,
     "card-detail-viewer": runCardDetailViewerSmoke,
     "battle-log-card-detail": runBattleLogCardDetailSmoke,
+    "ai-card-reveal-confirm": runAiCardRevealConfirmSmoke,
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "game-over-event": runGameOverEventSmoke

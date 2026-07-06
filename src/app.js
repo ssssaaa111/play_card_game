@@ -17,6 +17,7 @@ import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import { buildPreDuelPreview } from './pre-duel-preview.js';
+import { buildAiCardReveal } from './ai-card-reveal.js';
 import {
   buildEngineStateFromUiState,
   canDispatchSummonEffectFromUiState,
@@ -145,6 +146,8 @@ const state = {
 
 let pendingTrapChoiceResolver = null;
 let scenarioHintsVisible = false;
+let pendingAiReveal = null;
+let pendingAiRevealResolver = null;
 
 const els = {
   phaseText: document.querySelector("#phaseText"),
@@ -233,6 +236,12 @@ const els = {
   preDuelDeckList: document.querySelector("#preDuelDeckList"),
   guideModal: document.querySelector("#guideModal"),
   guideClose: document.querySelector("#guideClose"),
+  aiRevealModal: document.querySelector("#aiRevealModal"),
+  aiRevealTitle: document.querySelector("#aiRevealTitle"),
+  aiRevealType: document.querySelector("#aiRevealType"),
+  aiRevealSummary: document.querySelector("#aiRevealSummary"),
+  aiRevealDetail: document.querySelector("#aiRevealDetail"),
+  aiRevealContinue: document.querySelector("#aiRevealContinue"),
   cardModal: document.querySelector("#cardModal"),
   zoomName: document.querySelector("#zoomName"),
   zoomCard: document.querySelector("#zoomCard"),
@@ -477,6 +486,46 @@ function renderPreDuelPreview(scenario = {}) {
   }
 }
 
+function renderAiReveal() {
+  if (!els.aiRevealModal) return;
+  const reveal = pendingAiReveal;
+  els.aiRevealModal.classList.toggle("show", Boolean(reveal));
+  if (!reveal) return;
+  els.aiRevealModal.dataset.cardId = reveal.cardId;
+  if (els.aiRevealTitle) els.aiRevealTitle.textContent = reveal.title;
+  if (els.aiRevealType) els.aiRevealType.textContent = reveal.type;
+  if (els.aiRevealSummary) els.aiRevealSummary.textContent = reveal.summary;
+}
+
+function clearAiReveal(resolveValue = false) {
+  pendingAiReveal = null;
+  renderAiReveal();
+  const resolver = pendingAiRevealResolver;
+  pendingAiRevealResolver = null;
+  if (resolver) resolver(resolveValue);
+}
+
+function confirmAiRevealContinue() {
+  clearAiReveal(true);
+}
+
+function shouldAutoContinueAiReveal() {
+  return Boolean(BROWSER_SMOKE) && BROWSER_SMOKE !== "ai-card-reveal-confirm";
+}
+
+function waitForAiReveal(input) {
+  const reveal = buildAiCardReveal(input);
+  if (!reveal || state.gameOver) return Promise.resolve(false);
+  pendingAiReveal = reveal;
+  renderAiReveal();
+  if (shouldAutoContinueAiReveal()) {
+    window.setTimeout(confirmAiRevealContinue, 70);
+  }
+  return new Promise((resolve) => {
+    pendingAiRevealResolver = resolve;
+  });
+}
+
 function statsLine() {
   const stats = state.stats;
   return `战绩 ${stats.wins}胜/${stats.losses}负 / 总局数 ${stats.duels} / 当前连胜 ${stats.streak} / 最高连胜 ${stats.bestStreak}`;
@@ -535,6 +584,7 @@ function applyScenarioSetup() {
 function startGame() {
   stopAll();
   closeTrapChoicePrompt();
+  clearAiReveal(false);
   applySetupChoices();
   Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
   Object.assign(state.ai, createDuelist("ai", characterProfiles.ai.passive));
@@ -594,6 +644,7 @@ function startGame() {
 function prepareGame() {
   stopAll();
   closeTrapChoicePrompt();
+  clearAiReveal(false);
   scenarioHintsVisible = true;
   applySetupChoices();
   syncSetupControls();
@@ -981,7 +1032,7 @@ function targetInfoFromPending(ownerName, index, zone = "field") {
   };
 }
 
-function resolvePendingSpellTarget(ownerName, index, zone = "field") {
+async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
   notePlayerIntent();
   const targetInfo = targetInfoFromPending(ownerName, index, zone);
@@ -999,11 +1050,11 @@ function resolvePendingSpellTarget(ownerName, index, zone = "field") {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return true;
   }
-  playSpell(state.player, state.ai, handIndex, targetInfo);
+  await playSpell(state.player, state.ai, handIndex, targetInfo);
   return true;
 }
 
-function resolvePendingSpellDefault() {
+async function resolvePendingSpellDefault() {
   if (!state.pendingTarget) return false;
   const cardName = state.pendingTarget.cardName;
   const targets = legalPendingTargets();
@@ -1018,7 +1069,7 @@ function resolvePendingSpellDefault() {
     return true;
   }
   cue(`默认选择 ${targets[0].card.name}。`);
-  return resolvePendingSpellTarget(targets[0].owner, targets[0].index, targets[0].zone);
+  return await resolvePendingSpellTarget(targets[0].owner, targets[0].index, targets[0].zone);
 }
 
 function canChangeAnyPlayerMode() {
@@ -1065,7 +1116,7 @@ function hasAvailablePlayerAttack() {
   return projectBattleFromUiState(state, "player").canAttack;
 }
 
-function selectHandCard(uid) {
+async function selectHandCard(uid) {
   const card = state.player.hand.find((item) => item.uid === uid);
   if (!card) return;
   if (!canPlayerAct()) {
@@ -1084,7 +1135,7 @@ function selectHandCard(uid) {
     notePlayerIntent();
     const sameCard = state.pendingTarget.handUid === uid;
     if (sameCard) {
-      resolvePendingSpellDefault();
+      await resolvePendingSpellDefault();
       return;
     } else {
       const previousCardName = state.pendingTarget.cardName;
@@ -1232,7 +1283,7 @@ function handConfirmLabel(card) {
 
 async function confirmSelectedHandAction() {
   if (state.pendingTarget) {
-    resolvePendingSpellDefault();
+    await resolvePendingSpellDefault();
     return;
   }
   const selected = selectedHandInfo();
@@ -1253,7 +1304,7 @@ async function confirmSelectedHandAction() {
     return;
   }
   if (selected.card.type === "spell") {
-    playSpell(state.player, state.ai, selected.index);
+    await playSpell(state.player, state.ai, selected.index);
     return;
   }
   if (selected.card.type === "monster") {
@@ -1273,7 +1324,7 @@ async function confirmSelectedHandAction() {
       resumePlayerIdleCountdownAfterPassiveIntent();
       return;
     }
-    handlePlayerTrapSlot(empty);
+    await handlePlayerTrapSlot(empty);
   }
 }
 
@@ -1294,7 +1345,7 @@ function cancelSelectedHandAction() {
   resolvePlayerActionWindow(hadPendingTarget ? "取消目标选择" : "取消选择");
 }
 
-function selectPlayerMonster(index) {
+async function selectPlayerMonster(index) {
   const card = state.player.field[index];
   if (!card) return;
   if (!canPlayerAct()) {
@@ -1308,7 +1359,7 @@ function selectPlayerMonster(index) {
     return;
   }
   if (state.pendingTarget) {
-    resolvePendingSpellTarget("player", index);
+    await resolvePendingSpellTarget("player", index);
     return;
   }
   notePlayerIntent();
@@ -1322,13 +1373,13 @@ function selectPlayerMonster(index) {
 
 async function handlePlayerSlot(index) {
   if (state.pendingTarget) {
-    resolvePendingSpellTarget("player", index);
+    await resolvePendingSpellTarget("player", index);
     return;
   }
   if (!canPlayerAct() || !state.selected) return;
   notePlayerIntent();
   if (state.selected.zone !== "hand") {
-    selectPlayerMonster(index);
+    await selectPlayerMonster(index);
     return;
   }
   const handIndex = state.player.hand.findIndex((card) => card.uid === state.selected.uid);
@@ -1343,7 +1394,7 @@ async function handlePlayerSlot(index) {
     return;
   }
   if (card.type === "spell") {
-    playSpell(state.player, state.ai, handIndex);
+    await playSpell(state.player, state.ai, handIndex);
     return;
   }
   if (card.type === "trap") {
@@ -1404,12 +1455,12 @@ function activatePendingTrapChoice(index) {
   return true;
 }
 
-function handlePlayerTrapSlot(index) {
+async function handlePlayerTrapSlot(index) {
   if (selectPendingTrapChoice(index)) return;
   const existing = state.player.traps[index];
   if (state.pendingTarget) {
     if (isPendingTrapTargetSlot("player", index)) {
-      resolvePendingSpellTarget("player", index, "traps");
+      await resolvePendingSpellTarget("player", index, "traps");
       return;
     }
     cue(targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect));
@@ -1459,10 +1510,10 @@ function handlePlayerTrapSlot(index) {
   resolvePlayerActionWindow("陷阱盖放完成");
 }
 
-function handleAiTrapSlot(index) {
+async function handleAiTrapSlot(index) {
   const card = state.ai.traps[index];
   if (state.pendingTarget) {
-    resolvePendingSpellTarget("ai", index, "traps");
+    await resolvePendingSpellTarget("ai", index, "traps");
     return;
   }
   if (card) {
@@ -1478,7 +1529,7 @@ async function handleAiSlot(index) {
   if (!state.ai.field[index]) return;
   notePlayerIntent();
   if (state.pendingTarget) {
-    resolvePendingSpellTarget("ai", index);
+    await resolvePendingSpellTarget("ai", index);
     return;
   }
   if (!canUseBattleActions()) {
@@ -1536,7 +1587,7 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
   }
   playSound("summon");
   animateAvatar(owner.owner, "cast");
-  addLog(`${owner.owner === "player" ? "你" : "AI"} 召唤了 ${card.name}。`, cardLogMeta(card, { actor: owner.owner, type: "summon" }));
+  const summonLog = addLog(`${owner.owner === "player" ? "你" : "AI"} 召唤了 ${card.name}。`, cardLogMeta(card, { actor: owner.owner, type: "summon" }));
   speak(`${owner.owner === "player" ? "你召唤" : "对手召唤"}，${card.name}。`);
   if (card.stars >= 5) {
     showAce(card, owner.owner);
@@ -1551,15 +1602,25 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
     cue("召唤事件缺失，已中断后续响应结算。");
     return true;
   }
+  const summonContext = {
+    summonedPlayerId: owner.owner,
+    summonedCardId: runtimeCardId(card)
+  };
+  const hasRivalSummonResponse = trapCandidates(rival, "summon", {
+    summoned: card,
+    targetEffectId: summonedEvent.id,
+    engineResponse: true,
+    ...summonContext
+  }).length > 0;
+  if (owner.owner === "ai" && !hasRivalSummonResponse) {
+    await waitForAiReveal({ ...summonLog, revealKind: "summon" });
+  }
   if (!openTrapResponseWindow(rival.owner, {
     timing: "summon",
     resumeTiming: "mainOpen",
     prompt: "summon",
     triggerEventId: summonedEvent.id,
-    context: {
-      summonedPlayerId: owner.owner,
-      summonedCardId: runtimeCardId(card)
-    }
+    context: summonContext
   })) return true;
   await triggerTrap(rival, owner, "summon", {
     summoned: card,
@@ -1567,6 +1628,9 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
     engineResponse: true
   });
   if (state.gameOver) return true;
+  if (owner.owner === "ai" && hasRivalSummonResponse) {
+    await waitForAiReveal({ ...summonLog, revealKind: "summon" });
+  }
   if (card.onSummon) {
     if (canDispatchSummonEffectFromUiState(card)) {
       resolveEngineSpellFeedback(owner, rival, card, summonEvents);
@@ -1610,7 +1674,7 @@ function reportMissingEngineEffect(card, kind) {
 
 const spellEffects = spellDefinitions;
 
-function playSpell(owner, rival, handIndex, targetInfo = null) {
+async function playSpell(owner, rival, handIndex, targetInfo = null) {
   const selectedCard = owner.hand[handIndex];
   if (!selectedCard) {
     if (owner.owner === "player") resumePlayerIdleCountdownAfterPassiveIntent();
@@ -1659,9 +1723,12 @@ function playSpell(owner, rival, handIndex, targetInfo = null) {
   animateAvatar(owner.owner, "cast");
   playCenterCardEffect(card, spellCaption(card));
   playEpicAction("\u9b54\u6cd5", "draw");
-  addLog(`${owner.owner === "player" ? "\u4f60" : "AI"} \u53d1\u52a8\u9b54\u6cd5\u5361 ${card.name}\u3002`, cardLogMeta(card, { actor: owner.owner, type: "spell" }));
+  const spellLog = addLog(`${owner.owner === "player" ? "\u4f60" : "AI"} \u53d1\u52a8\u9b54\u6cd5\u5361 ${card.name}\u3002`, cardLogMeta(card, { actor: owner.owner, type: "spell" }));
   speak(`${owner.owner === "player" ? "\u4f60\u53d1\u52a8" : "\u5bf9\u624b\u53d1\u52a8"}\u9b54\u6cd5\u5361\uff0c${card.name}\u3002`);
   playDuelistLine(owner.owner, lineFor(owner.owner, "spell", card), false, "spell");
+  if (owner.owner === "ai") {
+    await waitForAiReveal({ ...spellLog, revealKind: "spell" });
+  }
   result = resolveEngineSpellFeedback(owner, rival, card, engineEvents, targetInfo);
   playSpellEffect(owner, rival, card, result.effectTarget || null, result.targetOwner || targetInfo?.owner || owner.owner);
   resolveElementCombos(owner, rival, "spell");
@@ -1899,9 +1966,10 @@ function announceTrapActivation(owner, trap, chainIndex) {
   animateAvatar(owner.owner, "cast");
   playCenterCardEffect(trap, chainIndex > 1 ? `陷阱连锁 ${chainIndex}` : "陷阱连锁发动");
   playEpicAction(chainLabel, "guard");
-  addLog(`${chainLabel}：${owner.owner === "player" ? "你的" : "AI 的"}陷阱卡 ${trap.name} 触发。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
+  const trapLog = addLog(`${chainLabel}：${owner.owner === "player" ? "你的" : "AI 的"}陷阱卡 ${trap.name} 触发。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
   speak(`陷阱发动，${trap.name}。`);
   playDuelistLine(owner.owner, lineFor(owner.owner, "trap", trap), false, "trap");
+  return trapLog;
 }
 
 function redirectTrapContext(owner, trap, context = {}) {
@@ -1928,8 +1996,8 @@ function queueTrapChainLink(owner, rival, eventName, context, trapIndex, chainIn
       ...trapContext,
       targetEffectId: trapContext.targetEffectId || `${trap.uid || trap.id}:${eventName}`
     });
-    announceTrapActivation(owner, trap, chainIndex);
-    return { owner, rival, eventName, context: { ...trapContext }, trap, trapIndex, trapSource, chainIndex, events };
+    const revealEntry = announceTrapActivation(owner, trap, chainIndex);
+    return { owner, rival, eventName, context: { ...trapContext }, trap, trapIndex, trapSource, chainIndex, events, revealEntry };
   } catch (error) {
     cue(error.message || "陷阱卡加入连锁失败。");
     state.ruleCheckIssue = error.message || "Trap chain queue failed.";
@@ -2015,6 +2083,9 @@ async function resolveEngineTrapChain(owner, rival, eventName, context, trapInde
   let originalOutcome = { cancelled: false, shielded: false, consumesAttack: false };
   for (const link of links.slice().reverse()) {
     await sleep(320);
+    if (link.owner.owner === "ai") {
+      await waitForAiReveal({ ...link.revealEntry, revealKind: "trap" });
+    }
     const outcome = resolveTrapCard(
       link.owner,
       link.rival,
@@ -2417,9 +2488,20 @@ function playBattleDamageFeedback(events, duelist) {
   return total;
 }
 
-function resolveAfterAttackBattleFeedback(owner, attacker, events) {
+async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
   const attackerId = runtimeCardId(attacker);
   if (!attackerId) return;
+  const hasPublicEffect = attacker.afterAttack && events.some((event) => event.sourceCardId === attackerId);
+  if (owner.owner === "ai" && hasPublicEffect) {
+    await waitForAiReveal({
+      actor: "ai",
+      public: true,
+      cardId: attacker.id,
+      type: "effect",
+      revealKind: "monster-effect",
+      message: `${attacker.name} 的效果触发。`
+    });
+  }
   if (events.some((event) =>
     event.type === "ABILITY_SPENT" &&
     event.playerId === owner.owner &&
@@ -2702,7 +2784,10 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   }
 
   playAttackResetFeedback(owner, attacker, battleEvents);
-  resolveAfterAttackBattleFeedback(owner, attacker, battleEvents);
+  const afterAttackFeedback = resolveAfterAttackBattleFeedback(owner, attacker, battleEvents);
+  if (owner.owner === "ai") {
+    await afterAttackFeedback;
+  }
   checkGameOver();
   return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
 }
@@ -3162,7 +3247,7 @@ async function aiPlaySpells() {
     aiStyle: state.aiStyle
   });
   while (action && !state.gameOver) {
-    const acted = playSpell(state.ai, state.player, action.handIndex);
+    const acted = await playSpell(state.ai, state.player, action.handIndex);
     if (!acted) return;
     await sleep(1650);
     action = chooseAiSpellAction({
@@ -3338,6 +3423,7 @@ function addLog(input, metadata = {}) {
   addTimeline(logEntryMessage(entry));
   renderLog();
   renderTimeline();
+  return entry;
 }
 
 function addTimeline(text) {
@@ -3626,6 +3712,7 @@ function render(animationKey = "") {
   renderLog();
   renderTimeline();
   renderBattlePreview();
+  renderAiReveal();
 }
 
 function renderBattlePreview() {
@@ -4056,6 +4143,10 @@ els.modeBtn.addEventListener("click", toggleSelectedMode);
 els.detailBtn.addEventListener("click", openFocusedCardDetail);
 els.aiPanel.addEventListener("click", handleAiPanelAttack);
 els.zoomClose.addEventListener("click", closeCardDetail);
+els.aiRevealDetail.addEventListener("click", () => {
+  if (pendingAiReveal?.cardId) openCardDetail(pendingAiReveal.cardId);
+});
+els.aiRevealContinue.addEventListener("click", confirmAiRevealContinue);
 els.chainYes.addEventListener("click", confirmTrapChoice);
 els.chainNo.addEventListener("click", () => answerChain(false));
 els.restartBtn.addEventListener("click", prepareGame);

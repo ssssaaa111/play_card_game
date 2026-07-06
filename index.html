@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20260706-pre-duel-preview" />
+  <link rel="stylesheet" href="styles.css?v=20260706-ai-card-reveal" />
 </head>
 <body>
   <div id="app">
@@ -272,6 +272,21 @@
       <button class="btn primary" id="guideClose">开始决斗</button>
     </div>
   </div>
+  <div class="modal ai-reveal-modal" id="aiRevealModal">
+    <div class="modal-box ai-reveal">
+      <span class="ai-reveal-kicker">AI 亮牌确认</span>
+      <h2 id="aiRevealTitle">AI 公开了卡牌</h2>
+      <div class="ai-reveal-meta">
+        <span>类型</span>
+        <strong id="aiRevealType"></strong>
+      </div>
+      <p class="ai-reveal-summary" id="aiRevealSummary"></p>
+      <div class="ai-reveal-actions">
+        <button class="btn ghost" id="aiRevealDetail" type="button">查看详情</button>
+        <button class="btn primary" id="aiRevealContinue" type="button">继续</button>
+      </div>
+    </div>
+  </div>
   <div class="modal" id="cardModal">
     <div class="modal-box card-zoom">
       <h2 id="zoomName">卡牌详情</h2>
@@ -301,6 +316,6 @@
     </div>
   </div>
 
-  <script type="module" src="src/app.js?v=20260706-pre-duel-preview"></script>
+  <script type="module" src="src/app.js?v=20260706-ai-card-reveal-confirm"></script>
 </body>
 </html>
