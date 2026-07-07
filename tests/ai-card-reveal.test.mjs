@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createBattleLogEntry } from "../src/battle-log.js";
-import { buildAiCardReveal } from "../src/ai-card-reveal.js";
+import { aiRevealProgressText, buildAiCardReveal, withAiRevealQueuePosition } from "../src/ai-card-reveal.js";
 import { cardDefinitionById, cardDetailViewModel } from "../src/card-detail.js";
 import { scenarioSetups } from "../src/data.js";
 import { getCardEffectDefinition } from "../src/game-engine.js";
@@ -56,6 +56,25 @@ test("AI reveal card details resolve from the unified card definition", () => {
   assert.equal(reveal.card, definition);
   assert.equal(detail.card, definition);
   assert.equal(detail.effectText, definition.text);
+});
+
+test("AI reveal queue progress only appears for multiple public cards", () => {
+  const reveal = buildAiCardReveal({
+    actor: "ai",
+    public: true,
+    cardId: "chain-nullifier",
+    revealKind: "trap"
+  });
+
+  assert.equal(aiRevealProgressText({ index: 1, total: 1 }), "");
+  assert.equal(aiRevealProgressText({ index: 2, total: 3 }), "第 2 / 3 张公开卡");
+
+  const positioned = withAiRevealQueuePosition(reveal, { index: 1, total: 2 });
+  assert.equal(positioned.cardId, "chain-nullifier");
+  assert.equal(positioned.queueIndex, 1);
+  assert.equal(positioned.queueTotal, 2);
+  assert.equal(positioned.progressText, "第 1 / 2 张公开卡");
+  assert.equal(positioned.card, cardDefinitionById("chain-nullifier"));
 });
 
 test("AI reveal does not alter card effects or existing victory route text", () => {

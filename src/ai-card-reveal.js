@@ -31,3 +31,22 @@ export function buildAiCardReveal(input = {}) {
     card,
   };
 }
+
+export function aiRevealProgressText({ index = 1, total = 1 } = {}) {
+  const current = Number(index) || 1;
+  const count = Number(total) || 1;
+  if (count <= 1) return "";
+  return `第 ${current} / ${count} 张公开卡`;
+}
+
+export function withAiRevealQueuePosition(reveal, position = {}) {
+  if (!reveal) return null;
+  const index = Number(position.index) || 1;
+  const total = Number(position.total) || 1;
+  return {
+    ...reveal,
+    queueIndex: index,
+    queueTotal: total,
+    progressText: aiRevealProgressText({ index, total })
+  };
+}

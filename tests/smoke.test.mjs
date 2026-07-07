@@ -73,6 +73,7 @@ test("index keeps critical app mount points wired", () => {
   assert.match(html, /id="preDuelPreview"/);
   assert.match(html, /id="preDuelDeckList"/);
   assert.match(html, /id="aiRevealModal"/);
+  assert.match(html, /id="aiRevealProgress"/);
   assert.match(html, /id="aiRevealContinue"/);
   assert.match(html, /id="modalReviewLog"/);
 });
@@ -581,10 +582,13 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /scenarioBrief: document\.querySelector\("#scenarioBrief"\)/);
   assert.match(app, /preDuelDeckList: document\.querySelector\("#preDuelDeckList"\)/);
   assert.match(app, /aiRevealModal: document\.querySelector\("#aiRevealModal"\)/);
+  assert.match(app, /aiRevealProgress: document\.querySelector\("#aiRevealProgress"\)/);
   assert.match(app, /function renderScenarioBrief/);
   assert.match(app, /function renderPreDuelPreview/);
+  assert.match(app, /pendingAiRevealQueue = \[\]/);
+  assert.match(app, /withAiRevealQueuePosition\(/);
   assert.match(app, /function waitForAiReveal/);
-  assert.match(app, /Boolean\(BROWSER_SMOKE\) && BROWSER_SMOKE !== "ai-card-reveal-confirm"/);
+  assert.match(app, /\["ai-card-reveal-confirm", "ai-card-reveal-queue"\]\.includes\(BROWSER_SMOKE\)/);
   assert.match(app, /buildAiCardReveal\(/);
   assert.match(app, /buildPreDuelPreview\(\{/);
   assert.match(app, /openCardDetail\(entry\.id\)/);
@@ -633,6 +637,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
   assert.match(smoke, /"pause-detail": runPauseDetailSmoke/);
   assert.match(smoke, /"ai-card-reveal-confirm": runAiCardRevealConfirmSmoke/);
+  assert.match(smoke, /"ai-card-reveal-queue": runAiCardRevealQueueSmoke/);
   assert.match(smoke, /"pre-duel-deck-preview": runPreDuelDeckPreviewSmoke/);
   assert.match(smoke, /"equipment-spell": runEquipmentSpellSmoke/);
   assert.match(smoke, /"game-over-event": runGameOverEventSmoke/);
@@ -711,6 +716,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "card-detail-viewer"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-log-card-detail"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-confirm"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-queue"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);

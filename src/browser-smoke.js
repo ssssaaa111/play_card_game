@@ -119,6 +119,7 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         visible: Boolean(els.aiRevealModal?.classList.contains("show")),
         cardId: els.aiRevealModal?.dataset.cardId || "",
         title: els.aiRevealTitle?.textContent || "",
+        progress: els.aiRevealProgress?.textContent || "",
         type: els.aiRevealType?.textContent || "",
         summary: els.aiRevealSummary?.textContent || ""
       },
@@ -2686,6 +2687,55 @@ async function runAiCardRevealConfirmSmoke(ctx) {
   setSmokeStatus("passed", "ai-card-reveal-confirm");
 }
 
+async function runAiCardRevealQueueSmoke(ctx) {
+  setSmokeStatus("running", "ai-card-reveal-queue");
+  await startSmokeDuel(ctx, "direct");
+  if (typeof ctx.showAiRevealForSmoke !== "function") {
+    throw new Error("ai-card-reveal-queue: reveal test hook should exist");
+  }
+  const first = cloneCardById("chain-nullifier");
+  const second = cloneCardById("mirror-snare");
+  if (!first || !second) throw new Error("ai-card-reveal-queue: card definitions should exist");
+
+  const firstReveal = ctx.showAiRevealForSmoke({
+    actor: "ai",
+    public: true,
+    cardId: first.id,
+    revealKind: "trap",
+    type: "trap"
+  });
+  const secondReveal = ctx.showAiRevealForSmoke({
+    actor: "ai",
+    public: true,
+    cardId: second.id,
+    revealKind: "trap",
+    type: "trap"
+  });
+
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, first.id) && (ctx.els.aiRevealProgress?.textContent || "").includes("1 / 2"),
+    "ai-card-reveal-queue: first queued reveal shows progress",
+    6000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, "ai-card-reveal-queue: continue first reveal");
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, second.id) && (ctx.els.aiRevealProgress?.textContent || "").includes("2 / 2"),
+    "ai-card-reveal-queue: second queued reveal shows progress",
+    6000
+  );
+  clickSmokeElement(ctx.els.aiRevealDetail, "ai-card-reveal-queue: inspect second reveal");
+  await assertCardDetailModal(ctx, second, "ai-card-reveal-queue");
+  clickSmokeElement(ctx.els.zoomClose, "ai-card-reveal-queue: close second detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "ai-card-reveal-queue: detail closes");
+  clickSmokeElement(ctx.els.aiRevealContinue, "ai-card-reveal-queue: continue second reveal");
+  await Promise.all([firstReveal, secondReveal]);
+  await waitForSmoke(() => !ctx.els.aiRevealModal.classList.contains("show"), "ai-card-reveal-queue: reveal queue closes");
+  if (!ctx.state.started || ctx.state.gameOver) {
+    throw new Error(`ai-card-reveal-queue: duel should continue after queued reveals. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "ai-card-reveal-queue");
+}
+
 async function runPreDuelDeckPreviewSmoke(ctx) {
   setSmokeStatus("running", "pre-duel-deck-preview");
   selectScenario(ctx.els, "protagonistComebackChallenge");
@@ -2894,7 +2944,7 @@ async function runPostDuelLogReviewSmoke(ctx) {
   setSmokeStatus("passed", "post-duel-log-review");
 }
 
-export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActions, render = null }) {
+export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActions, render = null, showAiRevealForSmoke = null }) {
   if (!smoke) return;
   const smokeRuns = {
     "skip-lock": runSkipLockSmoke,
@@ -2943,6 +2993,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "card-detail-viewer": runCardDetailViewerSmoke,
     "battle-log-card-detail": runBattleLogCardDetailSmoke,
     "ai-card-reveal-confirm": runAiCardRevealConfirmSmoke,
+    "ai-card-reveal-queue": runAiCardRevealQueueSmoke,
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "game-over-event": runGameOverEventSmoke,
@@ -2954,7 +3005,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     return;
   }
   window.setTimeout(() => {
-    run({ state, els, currentPlayerActions, render }).catch((error) => {
+    run({ state, els, currentPlayerActions, render, showAiRevealForSmoke }).catch((error) => {
       setSmokeStatus("failed", error.message);
       console.error(error);
     });

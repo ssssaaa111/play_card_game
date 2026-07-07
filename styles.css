@@ -1849,6 +1849,17 @@ h1 {
   font-weight: 900;
 }
 
+.ai-reveal-progress {
+  display: inline-flex;
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  border: 1px solid rgba(246, 189, 96, 0.32);
+  color: #f6d98a;
+  background: rgba(246, 189, 96, 0.08);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .ai-reveal-meta {
   display: flex;
   align-items: center;

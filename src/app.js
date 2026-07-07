@@ -17,7 +17,7 @@ import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import { buildPreDuelPreview } from './pre-duel-preview.js';
-import { buildAiCardReveal } from './ai-card-reveal.js';
+import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
 import {
   buildEngineStateFromUiState,
   canDispatchSummonEffectFromUiState,
@@ -148,6 +148,9 @@ let pendingTrapChoiceResolver = null;
 let scenarioHintsVisible = false;
 let pendingAiReveal = null;
 let pendingAiRevealResolver = null;
+let pendingAiRevealQueue = [];
+let pendingAiRevealIndex = 0;
+let pendingAiRevealTotal = 0;
 
 const els = {
   phaseText: document.querySelector("#phaseText"),
@@ -239,6 +242,7 @@ const els = {
   guideClose: document.querySelector("#guideClose"),
   aiRevealModal: document.querySelector("#aiRevealModal"),
   aiRevealTitle: document.querySelector("#aiRevealTitle"),
+  aiRevealProgress: document.querySelector("#aiRevealProgress"),
   aiRevealType: document.querySelector("#aiRevealType"),
   aiRevealSummary: document.querySelector("#aiRevealSummary"),
   aiRevealDetail: document.querySelector("#aiRevealDetail"),
@@ -491,11 +495,45 @@ function renderAiReveal() {
   if (!els.aiRevealModal) return;
   const reveal = pendingAiReveal;
   els.aiRevealModal.classList.toggle("show", Boolean(reveal));
-  if (!reveal) return;
+  if (!reveal) {
+    if (els.aiRevealProgress) {
+      els.aiRevealProgress.textContent = "";
+      els.aiRevealProgress.hidden = true;
+    }
+    return;
+  }
   els.aiRevealModal.dataset.cardId = reveal.cardId;
   if (els.aiRevealTitle) els.aiRevealTitle.textContent = reveal.title;
+  if (els.aiRevealProgress) {
+    els.aiRevealProgress.textContent = reveal.progressText || "";
+    els.aiRevealProgress.hidden = !reveal.progressText;
+  }
   if (els.aiRevealType) els.aiRevealType.textContent = reveal.type;
   if (els.aiRevealSummary) els.aiRevealSummary.textContent = reveal.summary;
+}
+
+function renderNextAiReveal() {
+  if (pendingAiReveal || !pendingAiRevealQueue.length) return;
+  const next = pendingAiRevealQueue.shift();
+  pendingAiRevealIndex += 1;
+  pendingAiReveal = withAiRevealQueuePosition(next.reveal, {
+    index: pendingAiRevealIndex,
+    total: pendingAiRevealTotal
+  });
+  pendingAiRevealResolver = next.resolve;
+  renderAiReveal();
+  if (shouldAutoContinueAiReveal()) {
+    window.setTimeout(confirmAiRevealContinue, 70);
+  }
+}
+
+function refreshAiRevealQueueProgress() {
+  if (!pendingAiReveal) return;
+  pendingAiReveal = withAiRevealQueuePosition(pendingAiReveal, {
+    index: pendingAiRevealIndex,
+    total: pendingAiRevealTotal
+  });
+  renderAiReveal();
 }
 
 function clearAiReveal(resolveValue = false) {
@@ -504,6 +542,18 @@ function clearAiReveal(resolveValue = false) {
   const resolver = pendingAiRevealResolver;
   pendingAiRevealResolver = null;
   if (resolver) resolver(resolveValue);
+  if (!resolveValue) {
+    pendingAiRevealQueue.splice(0).forEach((entry) => entry.resolve(false));
+    pendingAiRevealIndex = 0;
+    pendingAiRevealTotal = 0;
+    return;
+  }
+  if (pendingAiRevealQueue.length) {
+    renderNextAiReveal();
+    return;
+  }
+  pendingAiRevealIndex = 0;
+  pendingAiRevealTotal = 0;
 }
 
 function confirmAiRevealContinue() {
@@ -511,19 +561,22 @@ function confirmAiRevealContinue() {
 }
 
 function shouldAutoContinueAiReveal() {
-  return Boolean(BROWSER_SMOKE) && BROWSER_SMOKE !== "ai-card-reveal-confirm";
+  return Boolean(BROWSER_SMOKE) && !["ai-card-reveal-confirm", "ai-card-reveal-queue"].includes(BROWSER_SMOKE);
 }
 
 function waitForAiReveal(input) {
   const reveal = buildAiCardReveal(input);
   if (!reveal || state.gameOver) return Promise.resolve(false);
-  pendingAiReveal = reveal;
-  renderAiReveal();
-  if (shouldAutoContinueAiReveal()) {
-    window.setTimeout(confirmAiRevealContinue, 70);
-  }
   return new Promise((resolve) => {
-    pendingAiRevealResolver = resolve;
+    if (!pendingAiReveal && pendingAiRevealQueue.length === 0) {
+      pendingAiRevealIndex = 0;
+      pendingAiRevealTotal = 1;
+    } else {
+      pendingAiRevealTotal += 1;
+      refreshAiRevealQueueProgress();
+    }
+    pendingAiRevealQueue.push({ reveal, resolve });
+    renderNextAiReveal();
   });
 }
 
@@ -4200,5 +4253,6 @@ scheduleBrowserSmoke({
   state,
   els,
   currentPlayerActions,
-  render
+  render,
+  showAiRevealForSmoke: waitForAiReveal
 });
