@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { characterProfiles, scenarioSetups } from "../src/data.js";
 import { cardDefinitionById, cardDetailViewModel } from "../src/card-detail.js";
-import { buildPreDuelPreview, previewDeckIdsForScenario } from "../src/pre-duel-preview.js";
+import { buildPreDuelPreview, compactPreviewCards, previewDeckIdsForScenario } from "../src/pre-duel-preview.js";
 
 const challengeId = "protagonistComebackChallenge";
 const challenge = scenarioSetups[challengeId];
@@ -65,6 +65,35 @@ test("pre-duel card details come from the unified card definition", () => {
   assert.equal(detail.name, definition.name);
   assert.equal(detail.effectText, definition.text);
   assert.equal(entry.summary, definition.summary || detail.rule || definition.text);
+});
+
+test("pre-duel display cards merge duplicates without changing raw preview order", () => {
+  const scenario = {
+    ...challenge,
+    playerHand: ["dawn-edge", "dawn-edge"],
+    playerField: [],
+    playerTraps: [],
+    playerGrave: ["spark-runner"],
+    playerDeck: ["battle-trance", "dawn-edge", "battle-trance"]
+  };
+  const preview = buildPreDuelPreview({
+    scenarioId: "duplicatePreview",
+    scenario,
+    playerPreset: "protagonistComeback"
+  });
+
+  assert.deepEqual(
+    preview.deckCards.map((entry) => entry.id),
+    ["dawn-edge", "dawn-edge", "spark-runner", "battle-trance", "dawn-edge", "battle-trance"],
+    "raw preview should keep the scenario initialization order"
+  );
+  assert.deepEqual(
+    preview.displayDeckCards.map((entry) => [entry.id, entry.count]),
+    [["dawn-edge", 3], ["spark-runner", 1], ["battle-trance", 2]],
+    "display preview should merge duplicate card ids"
+  );
+  assert.equal(preview.displayDeckCards[0].zoneSummary, "起手 / 卡组");
+  assert.deepEqual(compactPreviewCards(preview.deckCards).map((entry) => entry.id), preview.displayDeckCards.map((entry) => entry.id));
 });
 
 test("pre-duel preview does not change initial order or victory route data", () => {

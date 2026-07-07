@@ -109,9 +109,12 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         visible: Boolean(els.preDuelPreview && !els.preDuelPreview.hidden),
         lp: els.preDuelLp?.textContent || "",
         skill: els.preDuelSkillName?.textContent || "",
+        deckCount: els.preDuelDeckCount?.textContent || "",
+        deckExpanded: Boolean(els.preDuelDeckList && !els.preDuelDeckList.hidden),
         deckCards: Array.from(els.preDuelDeckList?.querySelectorAll(".pre-duel-card") || []).map((item) => ({
           id: item.dataset.cardId || "",
           zone: item.dataset.zone || "",
+          count: item.dataset.count || "",
           text: item.textContent || ""
         }))
       },
@@ -2761,6 +2764,11 @@ async function runPreDuelDeckPreviewSmoke(ctx) {
   if (!routeText.includes("醒星回召选择天穹逆星者")) {
     throw new Error("pre-duel-deck-preview: recommended line should be rendered");
   }
+  if (!ctx.els.preDuelDeckList?.hidden) {
+    throw new Error("pre-duel-deck-preview: deck list should start collapsed");
+  }
+  clickSmokeElement(ctx.els.preDuelDeckToggle, "pre-duel-deck-preview: expand deck preview");
+  await waitForSmoke(() => !ctx.els.preDuelDeckList.hidden, "pre-duel-deck-preview: deck list expands");
   const previewCard = preDuelDeckCard(ctx.els, "dawn-edge");
   const deckCard = preDuelDeckCard(ctx.els, "battle-trance");
   if (!previewCard || !deckCard) {
@@ -2794,6 +2802,55 @@ async function runPreDuelDeckPreviewSmoke(ctx) {
     throw new Error("pre-duel-deck-preview: duel hand should render after start");
   }
   setSmokeStatus("passed", "pre-duel-deck-preview");
+}
+
+async function runPreDuelDeckScrollPreviewSmoke(ctx) {
+  setSmokeStatus("running", "pre-duel-deck-scroll-preview");
+  selectScenario(ctx.els, "normal");
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") &&
+      !ctx.els.setupPanel?.hidden &&
+      !ctx.state.started,
+    "pre-duel-deck-scroll-preview: setup screen visible",
+    6000
+  );
+  if (!ctx.els.preDuelDeckCount?.textContent.includes("种 /")) {
+    throw new Error(`pre-duel-deck-scroll-preview: duplicate count summary missing: ${ctx.els.preDuelDeckCount?.textContent || ""}`);
+  }
+  if (!ctx.els.preDuelDeckList?.hidden) {
+    throw new Error("pre-duel-deck-scroll-preview: deck list should start collapsed");
+  }
+  clickSmokeElement(ctx.els.preDuelDeckToggle, "pre-duel-deck-scroll-preview: expand deck preview");
+  await waitForSmoke(() => !ctx.els.preDuelDeckList.hidden, "pre-duel-deck-scroll-preview: deck list expands");
+  const cards = Array.from(ctx.els.preDuelDeckList.querySelectorAll(".pre-duel-card"));
+  const ids = cards.map((item) => item.dataset.cardId || "");
+  if (ids.length !== new Set(ids).size) {
+    throw new Error(`pre-duel-deck-scroll-preview: duplicate card rows remain: ${ids.join(",")}`);
+  }
+  const duplicateCard = preDuelDeckCard(ctx.els, "ember-drake");
+  if (!duplicateCard || duplicateCard.dataset.count !== "2" || !duplicateCard.textContent.includes("x2")) {
+    throw new Error("pre-duel-deck-scroll-preview: duplicate card should render once with x2 count");
+  }
+  const list = ctx.els.preDuelDeckList;
+  if (!(list.scrollWidth > list.clientWidth)) {
+    throw new Error("pre-duel-deck-scroll-preview: deck list should be horizontally scrollable");
+  }
+  const beforeScroll = list.scrollLeft;
+  list.scrollLeft = list.scrollWidth;
+  await waitForSmoke(() => list.scrollLeft > beforeScroll, "pre-duel-deck-scroll-preview: list scrolls horizontally");
+  const card = cloneCardById("ember-drake");
+  if (!card) throw new Error("pre-duel-deck-scroll-preview: ember-drake definition should exist");
+  clickSmokeElement(duplicateCard, "pre-duel-deck-scroll-preview: open duplicate card detail");
+  await assertCardDetailModal(ctx, card, "pre-duel-deck-scroll-preview");
+  clickSmokeElement(ctx.els.zoomClose, "pre-duel-deck-scroll-preview: close card detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "pre-duel-deck-scroll-preview: modal closes");
+  clickSmokeElement(ctx.els.modalRestart, "pre-duel-deck-scroll-preview: start duel");
+  await waitForSmoke(
+    () => ctx.state.started && ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.pendingOpeningDraw,
+    "pre-duel-deck-scroll-preview: duel starts after preview",
+    9000
+  );
+  setSmokeStatus("passed", "pre-duel-deck-scroll-preview");
 }
 
 async function runEquipmentSpellSmoke(ctx) {
@@ -2995,6 +3052,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-card-reveal-confirm": runAiCardRevealConfirmSmoke,
     "ai-card-reveal-queue": runAiCardRevealQueueSmoke,
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
+    "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "game-over-event": runGameOverEventSmoke,
     "post-duel-log-review": runPostDuelLogReviewSmoke

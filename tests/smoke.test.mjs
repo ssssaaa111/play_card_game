@@ -72,6 +72,7 @@ test("index keeps critical app mount points wired", () => {
   assert.match(html, /id="endTurnBtn"/);
   assert.match(html, /id="preDuelPreview"/);
   assert.match(html, /id="preDuelDeckList"/);
+  assert.match(html, /id="preDuelDeckToggle"/);
   assert.match(html, /id="aiRevealModal"/);
   assert.match(html, /id="aiRevealProgress"/);
   assert.match(html, /id="aiRevealContinue"/);
@@ -581,6 +582,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /graveTargets: document\.querySelector\("#graveTargets"\)/);
   assert.match(app, /scenarioBrief: document\.querySelector\("#scenarioBrief"\)/);
   assert.match(app, /preDuelDeckList: document\.querySelector\("#preDuelDeckList"\)/);
+  assert.match(app, /preDuelDeckToggle: document\.querySelector\("#preDuelDeckToggle"\)/);
+  assert.match(app, /preDuelDeckExpanded = !preDuelDeckExpanded/);
   assert.match(app, /aiRevealModal: document\.querySelector\("#aiRevealModal"\)/);
   assert.match(app, /aiRevealProgress: document\.querySelector\("#aiRevealProgress"\)/);
   assert.match(app, /function renderScenarioBrief/);
@@ -639,6 +642,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-card-reveal-confirm": runAiCardRevealConfirmSmoke/);
   assert.match(smoke, /"ai-card-reveal-queue": runAiCardRevealQueueSmoke/);
   assert.match(smoke, /"pre-duel-deck-preview": runPreDuelDeckPreviewSmoke/);
+  assert.match(smoke, /"pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke/);
   assert.match(smoke, /"equipment-spell": runEquipmentSpellSmoke/);
   assert.match(smoke, /"game-over-event": runGameOverEventSmoke/);
   assert.match(smoke, /"post-duel-log-review": runPostDuelLogReviewSmoke/);
@@ -718,6 +722,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-confirm"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-queue"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-scroll-preview"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);
   assert.match(smoke, /logCardLink\(ctx\.els, "chain-nullifier"\)/);

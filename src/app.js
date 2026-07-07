@@ -151,6 +151,7 @@ let pendingAiRevealResolver = null;
 let pendingAiRevealQueue = [];
 let pendingAiRevealIndex = 0;
 let pendingAiRevealTotal = 0;
+let preDuelDeckExpanded = false;
 
 const els = {
   phaseText: document.querySelector("#phaseText"),
@@ -237,6 +238,7 @@ const els = {
   preDuelRecommended: document.querySelector("#preDuelRecommended"),
   preDuelRecommendedList: document.querySelector("#preDuelRecommendedList"),
   preDuelDeckCount: document.querySelector("#preDuelDeckCount"),
+  preDuelDeckToggle: document.querySelector("#preDuelDeckToggle"),
   preDuelDeckList: document.querySelector("#preDuelDeckList"),
   guideModal: document.querySelector("#guideModal"),
   guideClose: document.querySelector("#guideClose"),
@@ -431,12 +433,16 @@ function renderPreDuelDeckCard(entry) {
   button.className = "pre-duel-card";
   button.dataset.cardId = entry.id;
   button.dataset.zone = entry.zone;
+  button.dataset.count = String(entry.count || 1);
   button.title = `查看 ${entry.name} 详情`;
 
   const title = document.createElement("span");
   title.className = "pre-duel-card-title";
-  appendTextNode(title, "pre-duel-zone", entry.zoneLabel);
+  appendTextNode(title, "pre-duel-zone", entry.zoneSummary || entry.zoneLabel);
   appendTextNode(title, "pre-duel-card-name", entry.name);
+  if ((entry.count || 1) > 1) {
+    appendTextNode(title, "pre-duel-count", `x${entry.count}`);
+  }
   button.appendChild(title);
 
   const meta = document.createElement("span");
@@ -481,11 +487,19 @@ function renderPreDuelPreview(scenario = {}) {
   renderTextList(els.preDuelRecommendedList, preview.recommendedLine);
 
   if (els.preDuelDeckCount) {
-    els.preDuelDeckCount.textContent = `${preview.deckCards.length} 张`;
+    const displayCount = preview.displayDeckCards?.length || preview.deckCards.length;
+    els.preDuelDeckCount.textContent = displayCount === preview.deckCards.length
+      ? `${preview.deckCards.length} 张`
+      : `${displayCount} 种 / ${preview.deckCards.length} 张`;
+  }
+  if (els.preDuelDeckToggle) {
+    els.preDuelDeckToggle.textContent = preDuelDeckExpanded ? "收起牌组" : "查看牌组";
+    els.preDuelDeckToggle.setAttribute("aria-expanded", String(preDuelDeckExpanded));
   }
   if (els.preDuelDeckList) {
     els.preDuelDeckList.innerHTML = "";
-    preview.deckCards.forEach((entry) => {
+    els.preDuelDeckList.hidden = !preDuelDeckExpanded;
+    (preview.displayDeckCards || preview.deckCards).forEach((entry) => {
       els.preDuelDeckList.appendChild(renderPreDuelDeckCard(entry));
     });
   }
@@ -701,6 +715,7 @@ function prepareGame() {
   closeTrapChoicePrompt();
   clearAiReveal(false);
   scenarioHintsVisible = true;
+  preDuelDeckExpanded = false;
   applySetupChoices();
   syncSetupControls();
   Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
@@ -4213,6 +4228,12 @@ if (els.scenarioHintToggle) {
     render();
   });
 }
+if (els.preDuelDeckToggle) {
+  els.preDuelDeckToggle.addEventListener("click", () => {
+    preDuelDeckExpanded = !preDuelDeckExpanded;
+    render();
+  });
+}
 els.modalRestart.addEventListener("click", () => {
   if (state.gameOver) {
     prepareGame();
@@ -4230,6 +4251,7 @@ if (els.modalReviewLog) {
   select.addEventListener("change", () => {
     if (select === els.scenarioSelect) {
       scenarioHintsVisible = true;
+      preDuelDeckExpanded = false;
     }
     applySetupChoices();
     render();

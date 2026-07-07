@@ -99,6 +99,29 @@ function scenarioZoneCards(scenario, zone, key) {
     .filter(Boolean);
 }
 
+export function compactPreviewCards(cards = []) {
+  const byId = new Map();
+  cards.forEach((card) => {
+    if (!card?.id) return;
+    const existing = byId.get(card.id);
+    if (!existing) {
+      byId.set(card.id, {
+        ...card,
+        count: 1,
+        zones: [card.zone],
+        zoneLabels: [card.zoneLabel],
+        zoneSummary: card.zoneLabel
+      });
+      return;
+    }
+    existing.count += 1;
+    if (!existing.zones.includes(card.zone)) existing.zones.push(card.zone);
+    if (!existing.zoneLabels.includes(card.zoneLabel)) existing.zoneLabels.push(card.zoneLabel);
+    existing.zoneSummary = existing.zoneLabels.join(" / ");
+  });
+  return [...byId.values()];
+}
+
 export function buildPreDuelPreview({
   scenarioId = "normal",
   scenario = scenarioSetups[scenarioId] || {},
@@ -132,5 +155,6 @@ export function buildPreDuelPreview({
       text: playerProfile?.text || "",
     },
     deckCards,
+    displayDeckCards: compactPreviewCards(deckCards),
   };
 }

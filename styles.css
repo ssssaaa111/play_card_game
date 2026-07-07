@@ -2228,6 +2228,7 @@ h1 {
 .pre-duel-stat,
 .pre-duel-route,
 .pre-duel-deck {
+  min-width: 0;
   border: 1px solid rgba(84, 210, 210, 0.22);
   background: rgba(11, 16, 28, 0.58);
   padding: 10px;
@@ -2273,26 +2274,40 @@ h1 {
 }
 
 .pre-duel-deck-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   margin-bottom: 8px;
 }
 
+.pre-duel-deck-toggle {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
 .pre-duel-deck-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
   gap: 8px;
-  max-height: 300px;
-  overflow: auto;
-  padding-right: 2px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 10px;
+  scroll-snap-type: x proximity;
+  scrollbar-color: rgba(84, 210, 210, 0.55) rgba(255, 255, 255, 0.08);
+}
+
+.pre-duel-deck-list[hidden] {
+  display: none;
 }
 
 .pre-duel-card {
   display: grid;
   gap: 4px;
-  width: 100%;
+  flex: 0 0 236px;
+  width: 236px;
   min-height: 82px;
   border: 1px solid rgba(255, 255, 255, 0.13);
   background: rgba(255, 255, 255, 0.055);
@@ -2301,6 +2316,7 @@ h1 {
   font: inherit;
   text-align: left;
   cursor: pointer;
+  scroll-snap-align: start;
 }
 
 .pre-duel-card:hover,
@@ -2327,6 +2343,7 @@ h1 {
 }
 
 .pre-duel-card-name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   color: #fff;
@@ -2334,6 +2351,15 @@ h1 {
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pre-duel-count {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border: 1px solid rgba(246, 189, 96, 0.35);
+  color: #f6d98a;
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .pre-duel-card-meta {
@@ -3833,9 +3859,21 @@ h1 {
     grid-template-columns: 1fr;
   }
 
-  .pre-duel-deck-list {
-    grid-template-columns: 1fr;
-    max-height: 250px;
+  .pre-duel-deck-head {
+    grid-template-columns: 1fr auto;
+  }
+
+  .pre-duel-deck-head span {
+    justify-self: start;
+  }
+
+  .pre-duel-deck-toggle {
+    grid-column: 1 / -1;
+  }
+
+  .pre-duel-card {
+    flex-basis: min(236px, 82vw);
+    width: min(236px, 82vw);
   }
 
   .ai-reveal-actions {
