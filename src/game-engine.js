@@ -220,6 +220,13 @@ export const defaultCardEffects = Object.freeze({
     { op: "gainShield", player: "self", amount: 600 },
     { op: "drawCards", player: "self", count: 1 }
   ]),
+  splitToken: oneShot(
+    [{ op: "createToken", player: "self", templateId: "spark-fragment-token", count: 2 }],
+    {
+      target: { player: "self", zone: "monsterZone", cardType: "monster" },
+      requirements: [{ type: "minEmptyMonsterZone", player: "self", count: 2 }]
+    }
+  ),
   equipBlade: continuous([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }
   ], { target: { player: "self", zone: "monsterZone" } }),
@@ -428,6 +435,67 @@ export class EffectContext {
       fromZone: found.zone
     });
     return found.cardId;
+  }
+
+  createTokens(playerId, templateId, options = {}) {
+    const player = requirePlayer(this.#state, playerId);
+    const count = Math.max(1, Number(options.count) || 1);
+    const emptySlots = Math.max(0, MONSTER_ZONE_SIZE - player.monsterZone.length);
+    if (emptySlots < count) {
+      throw new GameRuleError(`${playerId}.monsterZone requires at least ${count} empty monster zone slots`);
+    }
+    return Array.from({ length: count }, () => this.createToken(playerId, templateId, options));
+  }
+
+  createToken(playerId, templateId, options = {}) {
+    requirePlayer(this.#state, playerId);
+    if (!templateId) {
+      throw new GameRuleError("createToken requires a templateId");
+    }
+    const template = tokenTemplateForState(this.#state, templateId);
+    if (!template) {
+      throw new GameRuleError(`Token template ${templateId} is not available`);
+    }
+    if (template.type !== "monster") {
+      throw new GameRuleError(`Token template ${templateId} is not a monster`);
+    }
+
+    const cardId = nextGeneratedCardId(this.#state, templateId);
+    const card = {
+      ...clone(template),
+      id: cardId,
+      templateId,
+      ownerId: playerId,
+      token: true,
+      generated: true,
+      used: false,
+      changedMode: false,
+      mode: options.mode || template.mode || "attack",
+      tempAtk: 0,
+      tempDef: 0,
+      battleWear: 0
+    };
+
+    this.#emit("CARD_CREATED", {
+      playerId,
+      cardId,
+      templateId,
+      card,
+      token: true,
+      sourceCardId: options.sourceCardId || null,
+      to: { playerId, zone: "monsterZone", index: options.index ?? null }
+    });
+    this.#emit("MONSTER_SUMMONED", {
+      playerId,
+      cardId,
+      sourceCardId: options.sourceCardId || cardId,
+      mode: card.mode,
+      used: false,
+      changedMode: false,
+      summonType: "token",
+      fromZone: "created"
+    });
+    return cardId;
   }
 
   #releaseContinuousEffectsForMove(cardId, from, to) {
@@ -2118,6 +2186,9 @@ export function applyGameEvent(state, event, options = {}) {
     case "CARD_MOVED":
       applyCardMoved(state, event);
       break;
+    case "CARD_CREATED":
+      applyCardCreated(state, event);
+      break;
     case "CARDS_DRAWN":
       applyCardsDrawn(state, event);
       break;
@@ -2281,6 +2352,37 @@ function applyCardMoved(state, event) {
   if (limit && destinationZone.length >= limit) {
     throw new GameRuleError(`${event.to.zone} is full`);
   }
+
+  if (Number.isInteger(event.to.index) && event.to.index >= 0 && event.to.index <= destinationZone.length) {
+    destinationZone.splice(event.to.index, 0, event.cardId);
+  } else {
+    destinationZone.push(event.cardId);
+  }
+}
+
+function applyCardCreated(state, event) {
+  requirePlayer(state, event.playerId);
+  if (state.cards[event.cardId]) {
+    throw new GameRuleError(`Card ${event.cardId} already exists`);
+  }
+  if (!event.to?.playerId || !event.to?.zone) {
+    throw new GameRuleError("CARD_CREATED requires a destination playerId and zone");
+  }
+
+  const destinationPlayer = requirePlayer(state, event.to.playerId);
+  const destinationZone = requireZone(destinationPlayer, event.to.zone);
+  const limit = ZONE_LIMITS[event.to.zone];
+  assertZoneIndexWithinLimit(event.to.zone, event.to.index);
+  if (limit && destinationZone.length >= limit) {
+    throw new GameRuleError(`${event.to.zone} is full`);
+  }
+
+  state.cards[event.cardId] = {
+    ...(event.card || {}),
+    id: event.cardId,
+    templateId: event.templateId || event.card?.templateId || event.cardId,
+    ownerId: event.playerId
+  };
 
   if (Number.isInteger(event.to.index) && event.to.index >= 0 && event.to.index <= destinationZone.length) {
     destinationZone.splice(event.to.index, 0, event.cardId);
@@ -2782,6 +2884,15 @@ function validateEffectRequirements(definition, state, action, card) {
       }
       continue;
     }
+    if (requirement.type === "minEmptyMonsterZone") {
+      const playerId = resolvePlayerRef(requirement.player, action);
+      const count = Math.max(0, Number(requirement.count) || 0);
+      const actual = Math.max(0, MONSTER_ZONE_SIZE - requirePlayer(state, playerId).monsterZone.length);
+      if (actual < count) {
+        throw new GameRuleError(`Effect ${card.effect || card.id} requires at least ${count} empty monster zone slots`);
+      }
+      continue;
+    }
     if (requirement.type === "maxLp") {
       const playerId = resolvePlayerRef(requirement.player, action);
       const amount = Math.max(0, Number(requirement.amount) || 0);
@@ -2901,6 +3012,21 @@ function findCardByTemplateInZones(state, playerId, templateId, zones = []) {
   return null;
 }
 
+function tokenTemplateForState(state, templateId) {
+  const definitions = state.cardDefinitions || state.cardTemplates || {};
+  return definitions[templateId] || null;
+}
+
+function nextGeneratedCardId(state, templateId) {
+  let suffix = Math.max(1, Number(state.nextEventId) || 1);
+  let cardId = `${templateId}:token:${suffix}`;
+  while (state.cards[cardId]) {
+    suffix += 1;
+    cardId = `${templateId}:token:${suffix}`;
+  }
+  return cardId;
+}
+
 function cardMatchesTargetDefinition(state, cardId, targetDefinition = {}) {
   if (!targetDefinition.cardType) return true;
   return requireCard(state, cardId).type === targetDefinition.cardType;
@@ -2985,6 +3111,13 @@ function runEffectOperation(operation, ctx, action, card, options = {}) {
     case "specialSummonFromDeckOrHand":
       return ctx.specialSummonFromDeckOrHand(resolvePlayerRef(operation.player, action), resolveValue(operation.templateId, action, card), {
         ...source,
+        index: operation.index,
+        mode: operation.mode
+      });
+    case "createToken":
+      return ctx.createTokens(resolvePlayerRef(operation.player, action), resolveValue(operation.templateId, action, card), {
+        ...source,
+        count: operation.count,
         index: operation.index,
         mode: operation.mode
       });

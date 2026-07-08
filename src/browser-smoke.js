@@ -807,6 +807,54 @@ async function runFusionSummonSmoke(ctx) {
   setSmokeStatus("passed", "fusion-summon");
 }
 
+async function runSplitTokenSmoke(ctx) {
+  setSmokeStatus("running", "split-token");
+  await startSmokeDuel(ctx, "splitToken");
+  const tokenDetail = cloneCardById("spark-fragment-token");
+  if (!tokenDetail) throw new Error("split-token: token definition should exist");
+  if (ctx.state.player.field[0]?.id !== "spark-runner") {
+    throw new Error("split-token: source monster should start on player field");
+  }
+  clickSmokeElement(handCard(ctx.els, "spark-split"), "split-token: select split spell");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "splitToken" && ctx.state.pendingTarget?.mode === "ownMonster",
+    "split-token: target selection opens"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "split-token: choose source monster");
+  await waitForSmoke(
+    () => ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length === 2 &&
+      ctx.state.player.grave.some((card) => card?.id === "spark-split") &&
+      !ctx.state.pendingTarget,
+    "split-token: two token monsters created",
+    9000
+  );
+  if (countGameEvents(ctx.state, "CARD_CREATED") < 2) {
+    throw new Error("split-token: CARD_CREATED events missing");
+  }
+  if ((ctx.state.gameEvents || []).filter((event) => event.type === "MONSTER_SUMMONED" && event.summonType === "token").length < 2) {
+    throw new Error("split-token: token MONSTER_SUMMONED events missing");
+  }
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("星火衍生体"))) {
+    throw new Error("split-token: public log should mention created token");
+  }
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-fragment-token"), "split-token: select generated token");
+  await waitForSmoke(() => !ctx.els.detailBtn.disabled, "split-token: detail action enabled for token");
+  clickSmokeElement(ctx.els.detailBtn, "split-token: open generated token detail");
+  await assertCardDetailModal(ctx, tokenDetail, "split-token-field");
+  clickSmokeElement(ctx.els.zoomClose, "split-token: close generated token detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "split-token: token detail closes");
+  const tokenLogLink = logCardLink(ctx.els, "spark-fragment-token");
+  if (!tokenLogLink) throw new Error("split-token: token log link should be clickable");
+  clickSmokeElement(tokenLogLink, "split-token: open token detail from log");
+  await assertCardDetailModal(ctx, tokenDetail, "split-token-log");
+  clickSmokeElement(ctx.els.zoomClose, "split-token: close log token detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "split-token: log detail closes");
+  if (!ctx.state.started || ctx.state.gameOver) {
+    throw new Error(`split-token: duel should continue after token detail. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "split-token");
+}
+
 async function runSummonFireBuffSmoke(ctx) {
   setSmokeStatus("running", "summon-fire-buff");
   await startSmokeDuel(ctx, "summonFireBuff");
@@ -3202,6 +3250,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "tribute-summon": runTributeSummonSmoke,
     "tribute-summon-double": runTributeSummonDoubleSmoke,
     "fusion-summon": runFusionSummonSmoke,
+    "split-token": runSplitTokenSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,

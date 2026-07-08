@@ -42,6 +42,10 @@ export const spellDefinitions = {
   fusionSummon: {
     caption: "融合召唤：选择指定素材登场"
   },
+  splitToken: {
+    caption: "星火分裂，生成衍生物",
+    target: "ownMonster"
+  },
   aceCrackdown: {
     caption: "压制王牌核心",
     target: "enemyMonster",
@@ -224,6 +228,13 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       }
       return { ok: true };
     }
+    case "splitToken": {
+      if (fieldCards(owner).length === 0) return { ok: false, reason: "场上没有怪兽，不能发动星火分裂。" };
+      const emptySlots = (owner.field || []).filter((slot) => !slot).length;
+      return emptySlots >= 2
+        ? { ok: true }
+        : { ok: false, reason: "需要至少 2 个空怪兽区，才能生成星火衍生体。" };
+    }
     case "aceCrackdown":
       return fieldCards(rival).length > 0
         ? { ok: true }
@@ -334,6 +345,8 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       return fieldCards(owner).length > 0 ? (aiStyle === "control" ? 58 : 54) : 0;
     case "aceEvolution":
       return hasMaterialCards(owner) && hasCardInHandOrDeck(owner, ACE_EVOLUTION_ACE) ? 92 : 0;
+    case "splitToken":
+      return 0;
     case "aceCrackdown":
       return fieldCards(rival).length > 0 ? 86 : 0;
     case "lunarDominion":

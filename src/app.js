@@ -2339,8 +2339,9 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
         result.effectTarget = found.card;
         result.targetOwner = found.owner;
         const isFusion = event.summonType === "fusion";
-        addLog(`${found.card.name} 因 ${card.name} ${isFusion ? "融合登场" : "特殊登场"}。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
-        playEpicAction(isFusion ? "融合召唤" : "王牌进化", "summon");
+        const isToken = event.summonType === "token";
+        addLog(`${found.card.name} 因 ${card.name} ${isFusion ? "融合登场" : isToken ? "作为衍生物生成" : "特殊登场"}。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
+        playEpicAction(isFusion ? "融合召唤" : isToken ? "衍生物" : "王牌进化", "summon");
         if (found.card.stars >= 5) showAce(found.card, found.owner);
       }
     }

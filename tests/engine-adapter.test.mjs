@@ -1315,6 +1315,32 @@ test("dispatches engine-backed draw spells and applies card movement events to U
   assert.equal(state.gameEvents.length, events.length);
 });
 
+test("dispatches split token spell through engine-created card events", () => {
+  const split = uiSpell("split-spell", "splitToken", "spark-split");
+  const runner = uiMonster("runner-1", "spark-runner");
+  const state = appState();
+  state.player.hand = [split];
+  state.player.field[0] = runner;
+
+  assert.equal(canDispatchSpellFromUiState(split), true);
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: runner });
+  const tokens = state.player.field.filter((card) => card?.id === "spark-fragment-token");
+
+  assert.deepEqual(state.player.hand, []);
+  assert.deepEqual(state.player.grave, [split]);
+  assert.equal(tokens.length, 2);
+  tokens.forEach((token) => {
+    assert.equal(token.templateId, "spark-fragment-token");
+    assert.match(token.uid, /^spark-fragment-token:token:/);
+    assert.equal(token.engineId, token.uid);
+    assert.equal(token.ownerId, "player");
+    assert.equal(token.token, true);
+    assert.equal(token.atk, 500);
+  });
+  assert.equal(events.filter((event) => event.type === "CARD_CREATED").length, 2);
+  assert.equal(events.filter((event) => event.type === "MONSTER_SUMMONED" && event.summonType === "token").length, 2);
+});
+
 test("dispatches engine-backed healing and stat spells without direct UI mutation", () => {
   const renewal = uiSpell("spell-heal", "heal700", "renewal");
   const chant = uiSpell("spell-buff", "buff500", "war-chant");

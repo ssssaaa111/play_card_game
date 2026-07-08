@@ -1,4 +1,5 @@
 import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents, tributeCostForCard } from './game-engine.js';
+import { library } from './data.js';
 import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { trapDefinition } from './traps.js';
@@ -36,6 +37,8 @@ const uiTimingByActionWindow = {
   ai: TIMINGS.ai,
   gameOver: TIMINGS.gameOver
 };
+
+const cardDefinitions = Object.fromEntries(library.map((card) => [card.id, { ...card }]));
 
 function cardKey(card) {
   return card?.uid || card?.engineId || card?.id || null;
@@ -216,6 +219,7 @@ export function buildEngineStateFromUiState(uiState) {
   const phase = enginePhaseFromUiPhase(uiState.phase);
   return {
     cards,
+    cardDefinitions,
     players: {
       player: uiDuelistToEngine(uiState.player),
       ai: uiDuelistToEngine(uiState.ai)
@@ -295,6 +299,26 @@ function insertCardIntoUiState(uiState, card, to) {
   } else {
     zone.push(card);
   }
+}
+
+function uiCardFromCreatedEvent(event) {
+  const templateId = event.templateId || event.card?.templateId || event.cardId;
+  return {
+    ...(event.card || {}),
+    id: templateId,
+    templateId,
+    uid: event.cardId,
+    engineId: event.cardId,
+    ownerId: event.playerId,
+    token: Boolean(event.token ?? event.card?.token),
+    generated: Boolean(event.card?.generated ?? true),
+    used: Boolean(event.card?.used),
+    changedMode: Boolean(event.card?.changedMode),
+    mode: event.card?.mode || "attack",
+    tempAtk: Number(event.card?.tempAtk) || 0,
+    tempDef: Number(event.card?.tempDef) || 0,
+    battleWear: Math.max(0, Number(event.card?.battleWear) || 0)
+  };
 }
 
 function applyUiAbilityEvent(uiState, event, direction) {
@@ -385,6 +409,10 @@ export function applyUiGameEvents(uiState, events = []) {
         uiState.actionWindowReason = "";
         uiState.actionDeadline = 0;
       }
+    }
+    if (event.type === "CARD_CREATED") {
+      insertCardIntoUiState(uiState, uiCardFromCreatedEvent(event), event.to || { playerId: event.playerId, zone: "monsterZone" });
+      return;
     }
     if (event.type === "CARD_MOVED") {
       const card = removeCardFromUiState(uiState, event.cardId);
@@ -741,6 +769,7 @@ function localizeEngineRuleReason(message = "", actionLabel = "操作") {
   if (/not in .*spellTrapZone/.test(message)) return "目标不在合法魔陷区。";
   if (/not in .*grave/.test(message)) return "目标不在墓地。";
   if (/requires a monster target/.test(message)) return "目标必须是墓地中的怪兽。";
+  if (/requires at least .* empty monster zone/.test(message)) return "召唤区空位不足。";
   if (/requires at least .* cards in deck/.test(message)) return "卡组剩余数量不足。";
   if (/requires LP at most/.test(message)) return "生命值还没有降到发动条件。";
   if (/is not a monster/.test(message)) return "这张卡不是怪兽卡。";

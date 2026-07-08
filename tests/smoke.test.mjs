@@ -637,6 +637,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"tribute-summon": runTributeSummonSmoke/);
   assert.match(smoke, /"tribute-summon-double": runTributeSummonDoubleSmoke/);
   assert.match(smoke, /"fusion-summon": runFusionSummonSmoke/);
+  assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /fusionPreviewName/);
   assert.match(smoke, /fusionPreviewStats/);
   assert.match(smoke, /fusionPreviewMaterials/);
@@ -729,6 +730,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon-double"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-summon"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "split-token"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-challenge"\)/);

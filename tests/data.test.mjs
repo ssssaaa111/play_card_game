@@ -76,6 +76,20 @@ test("fusion cards declare known materials and result from unified card data", (
   });
 });
 
+test("split token cards declare generated token data from unified card definitions", () => {
+  const splitSpell = cardsById.get("spark-split");
+  const token = cardsById.get("spark-fragment-token");
+
+  assert.equal(splitSpell.type, "spell");
+  assert.equal(splitSpell.effect, "splitToken");
+  assert.equal(token.type, "monster");
+  assert.equal(token.token, true);
+  assert.equal(token.atk, 500);
+  assert.equal(token.def, 500);
+  assert.deepEqual(scenarioSetups.splitToken.playerHand, ["spark-split", "war-chant"]);
+  assert.deepEqual(scenarioSetups.splitToken.playerField, ["spark-runner"]);
+});
+
 test("player-facing card and scenario copy is localized", () => {
   const englishWord = /[A-Za-z]{3,}/;
 

@@ -188,6 +188,26 @@ test("validates ace evolution spell requirements", () => {
   }), { ok: true });
 });
 
+test("validates split token spell field and space requirements", () => {
+  assert.deepEqual(validateSpellCondition("splitToken", { owner: duelist() }), {
+    ok: false,
+    reason: "场上没有怪兽，不能发动星火分裂。"
+  });
+  assert.deepEqual(validateSpellCondition("splitToken", {
+    owner: duelist({ field: Array(FIELD_SIZE).fill(null).map((_, index) => monster({ id: `monster-${index}` })) })
+  }), {
+    ok: false,
+    reason: "需要至少 2 个空怪兽区，才能生成星火衍生体。"
+  });
+  assert.deepEqual(validateSpellCondition("splitToken", {
+    owner: duelist({ field: [monster(), null, null] })
+  }), { ok: true });
+  assert.equal(scoreSpellForAi("splitToken", {
+    owner: duelist({ field: [monster(), null, null] }),
+    rival: duelist({ owner: "player" })
+  }), 0);
+});
+
 test("validates direct attack spell requirements", () => {
   assert.deepEqual(validateSpellCondition("directStrike", { owner: duelist(), rival: duelist({ owner: "ai", field: [monster(), null, null] }) }), {
     ok: false,

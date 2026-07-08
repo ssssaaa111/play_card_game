@@ -63,3 +63,13 @@ test("describes fusion requirements in unified card details", () => {
   assert.match(view.summonRequirement, /2/);
   assert.match(view.rule, /融合召唤/);
 });
+
+test("describes generated token details from unified card definitions", () => {
+  const view = cardDetailViewModel("spark-fragment-token");
+
+  assert.equal(view.name, "星火衍生体");
+  assert.equal(view.type, "怪兽");
+  assert.equal(view.attack, 500);
+  assert.equal(view.defense, 500);
+  assert.match(view.effectText, /分裂效果生成/);
+});

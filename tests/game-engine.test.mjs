@@ -1687,6 +1687,104 @@ test("fusion summon rejects wrong materials without changing state", () => {
   assert.deepEqual(engine.getState().events, []);
 });
 
+test("split token spell creates generated monster cards from card definitions", () => {
+  const state = makeState({
+    cards: [
+      card("split-1", { templateId: "spark-split", effect: "splitToken" }),
+      card("runner-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 })
+    ],
+    player: {
+      hand: ["split-1"],
+      monsterZone: ["runner-1"]
+    }
+  });
+  state.cardDefinitions = {
+    "spark-fragment-token": {
+      id: "spark-fragment-token",
+      type: "monster",
+      name: "星火衍生体",
+      element: "wind",
+      stars: 1,
+      atk: 500,
+      def: 500,
+      token: true
+    }
+  };
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "split-1",
+    targetCardId: "runner-1"
+  });
+  const next = engine.getState();
+  const created = events.filter((event) => event.type === "CARD_CREATED");
+  const tokenSummons = events.filter((event) => event.type === "MONSTER_SUMMONED" && event.summonType === "token");
+
+  assert.equal(created.length, 2);
+  assert.equal(tokenSummons.length, 2);
+  assert.deepEqual(next.players[PLAYER].hand, []);
+  assert.deepEqual(next.players[PLAYER].grave, ["split-1"]);
+  assert.equal(next.players[PLAYER].monsterZone.length, 3);
+  created.forEach((event) => {
+    const token = next.cards[event.cardId];
+    assert.equal(token.templateId, "spark-fragment-token");
+    assert.equal(token.ownerId, PLAYER);
+    assert.equal(token.type, "monster");
+    assert.equal(token.atk, 500);
+    assert.equal(token.token, true);
+  });
+  assertValidGameState(next);
+});
+
+test("split token spell rejects missing token template or monster-zone space without changing state", () => {
+  const fullState = makeState({
+    cards: [
+      card("split-1", { templateId: "spark-split", effect: "splitToken" }),
+      card("runner-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 }),
+      card("ally-1", { templateId: "solar-knight", type: "monster" }),
+      card("ally-2", { templateId: "gale-mage", type: "monster" }),
+      card("ally-3", { templateId: "ember-drake", type: "monster" })
+    ],
+    player: {
+      hand: ["split-1"],
+      monsterZone: ["runner-1", "ally-1", "ally-2", "ally-3"]
+    }
+  });
+  fullState.cardDefinitions = {
+    "spark-fragment-token": { id: "spark-fragment-token", type: "monster", atk: 500, def: 500 }
+  };
+  const fullEngine = new GameEngine(fullState);
+
+  assert.throws(
+    () => fullEngine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "split-1", targetCardId: "runner-1" }),
+    /empty monster zone/
+  );
+  assert.deepEqual(fullEngine.getState().players[PLAYER].hand, ["split-1"]);
+  assert.equal(fullEngine.getState().players[PLAYER].monsterZone.length, 4);
+
+  const missingTemplateState = makeState({
+    cards: [
+      card("split-1", { templateId: "spark-split", effect: "splitToken" }),
+      card("runner-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 })
+    ],
+    player: {
+      hand: ["split-1"],
+      monsterZone: ["runner-1"]
+    }
+  });
+  const missingEngine = new GameEngine(missingTemplateState);
+
+  assert.throws(
+    () => missingEngine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "split-1", targetCardId: "runner-1" }),
+    /Token template spark-fragment-token is not available/
+  );
+  assert.deepEqual(missingEngine.getState().players[PLAYER].hand, ["split-1"]);
+  assert.deepEqual(missingEngine.getState().players[PLAYER].monsterZone, ["runner-1"]);
+});
+
 test("legal action projection includes fusion material ids", () => {
   const state = makeState({
     cards: [

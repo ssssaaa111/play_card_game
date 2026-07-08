@@ -33,7 +33,7 @@ export function fusionRequirementText(card, { compact = false } = {}) {
 
 export function inferRarity(card) {
   if (card.type === "monster" && card.stars >= 5) return "SR";
-  if (["elementEcho", "rallyAttack", "pierceLine", "graveReturn", "battleTrance", "directStrike", "fireWindCombo", "lightShadowCombo", "equipBlade", "equipAegis", "equipPrism", "equipOverclock", "destroySpellTrap", "aceEvolution", "fusionSummon", "aceCrackdown"].includes(card.effect)) return "R";
+  if (["elementEcho", "rallyAttack", "pierceLine", "graveReturn", "battleTrance", "directStrike", "fireWindCombo", "lightShadowCombo", "equipBlade", "equipAegis", "equipPrism", "equipOverclock", "destroySpellTrap", "aceEvolution", "fusionSummon", "splitToken", "aceCrackdown"].includes(card.effect)) return "R";
   if (["counterBoost", "weakenAttack", "directRebound", "aceGuard"].includes(card.trigger)) return "R";
   if (card.type === "trap") return "R";
   return "N";
@@ -43,7 +43,7 @@ export function inferArchetype(card) {
   if (card.element) return `${elementLabel(card.element)}属性`;
   if (["buff500", "soulResonance", "rallyAttack", "elementEcho", "battleTrance", "fireWindCombo", "lightShadowCombo", "aceEvolution", "fusionSummon"].includes(card.effect)) return "连携";
   if (["equipBlade", "equipAegis", "equipPrism", "equipOverclock"].includes(card.effect)) return "装备";
-  if (["draw2", "extraSummon", "graveReturn"].includes(card.effect)) return "资源";
+  if (["draw2", "extraSummon", "graveReturn", "splitToken"].includes(card.effect)) return "资源";
   if (["pierceLine", "directStrike", "destroySpellTrap", "aceCrackdown"].includes(card.effect) || ["weakenAttack", "directRebound"].includes(card.trigger)) return "破阵";
   if (["shield800", "heal700"].includes(card.effect) || ["directShield", "aceGuard"].includes(card.trigger)) return "守护";
   if (card.type === "trap") return "反制";
