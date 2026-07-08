@@ -224,6 +224,11 @@ const els = {
   choiceText: document.querySelector("#choiceText"),
   choiceConfirmBtn: document.querySelector("#choiceConfirmBtn"),
   choiceCancelBtn: document.querySelector("#choiceCancelBtn"),
+  fusionPreview: document.querySelector("#fusionPreview"),
+  fusionPreviewName: document.querySelector("#fusionPreviewName"),
+  fusionPreviewStats: document.querySelector("#fusionPreviewStats"),
+  fusionPreviewMaterials: document.querySelector("#fusionPreviewMaterials"),
+  fusionPreviewDetail: document.querySelector("#fusionPreviewDetail"),
   aceOverlay: document.querySelector("#aceOverlay"),
   aceName: document.querySelector("#aceName"),
   aceIcon: document.querySelector("#aceIcon"),
@@ -1502,6 +1507,57 @@ function fusionSelectionStatus(indexes = selectedFusionIndexes()) {
     requiredCount,
     remaining
   };
+}
+
+function fusionPreviewViewModel() {
+  const info = pendingFusionHandInfo();
+  if (!info) return null;
+  const result = cardDefinitionById(info.pending.resultId);
+  const status = fusionSelectionStatus();
+  const remaining = status.remaining.filter((entry) => entry.count > 0);
+  const selectedNames = selectedFusionIndexes()
+    .map((index) => state.player.field[index]?.name)
+    .filter(Boolean);
+  const resultType = result?.type === "monster" ? "怪兽" : result?.type === "trap" ? "陷阱" : "魔法";
+  const stats = result?.type === "monster"
+    ? `${resultType} / ATK ${result.atk} / DEF ${result.def}`
+    : resultType;
+  const remainingText = fusionMaterialNames(remaining);
+  return {
+    resultId: info.pending.resultId,
+    resultName: result?.name || info.pending.resultId,
+    stats,
+    materials: fusionMaterialNames(info.pending.materials),
+    progress: `${status.selectedCount}/${status.requiredCount}`,
+    selectedNames,
+    remainingText
+  };
+}
+
+function renderFusionPreview() {
+  if (!els.fusionPreview) return;
+  const view = fusionPreviewViewModel();
+  if (!state.pendingFusion || !view) {
+    els.fusionPreview.hidden = true;
+    if (els.fusionPreviewDetail) {
+      els.fusionPreviewDetail.disabled = true;
+      els.fusionPreviewDetail.dataset.cardId = "";
+    }
+    return;
+  }
+  els.fusionPreview.hidden = false;
+  els.fusionPreview.dataset.cardId = view.resultId;
+  if (els.fusionPreviewName) els.fusionPreviewName.textContent = view.resultName;
+  if (els.fusionPreviewStats) els.fusionPreviewStats.textContent = view.stats;
+  if (els.fusionPreviewMaterials) {
+    const selected = view.selectedNames.length ? ` / 已选：${view.selectedNames.join("、")}` : "";
+    const remaining = view.remainingText ? ` / 还需：${view.remainingText}` : " / 素材齐备";
+    els.fusionPreviewMaterials.textContent = `素材：${view.materials} / 进度 ${view.progress}${selected}${remaining}`;
+  }
+  if (els.fusionPreviewDetail) {
+    els.fusionPreviewDetail.disabled = false;
+    els.fusionPreviewDetail.dataset.cardId = view.resultId;
+  }
 }
 
 function isFusionMaterialCandidate(index) {
@@ -4165,7 +4221,9 @@ function render(animationKey = "") {
       els.choiceCancelBtn.textContent = cancelLabel;
       els.choiceCancelBtn.disabled = !canPlayerAct();
     }
+    els.choiceActions.classList.toggle("fusion-choice", Boolean(state.pendingFusion));
   }
+  renderFusionPreview();
   const selectedPlayerMonster = state.selected?.zone === "playerField" && Boolean(state.player.field[state.selected.index]);
   els.modeBtn.disabled = Boolean(state.pendingTarget) || Boolean(state.pendingFusion) || Boolean(state.pendingTribute) || !canPlayerAct() || state.phase !== PHASES.main || !selectedPlayerMonster;
   els.detailBtn.disabled = !state.focusedCard;
@@ -4681,6 +4739,12 @@ els.choiceConfirmBtn.addEventListener("click", () => {
 els.choiceCancelBtn.addEventListener("click", cancelSelectedHandAction);
 els.modeBtn.addEventListener("click", toggleSelectedMode);
 els.detailBtn.addEventListener("click", openFocusedCardDetail);
+if (els.fusionPreviewDetail) {
+  els.fusionPreviewDetail.addEventListener("click", () => {
+    const resultId = state.pendingFusion?.resultId || els.fusionPreviewDetail.dataset.cardId;
+    if (resultId) openCardDetail(resultId);
+  });
+}
 els.aiPanel.addEventListener("click", handleAiPanelAttack);
 els.zoomClose.addEventListener("click", closeCardDetail);
 els.aiRevealDetail.addEventListener("click", () => {

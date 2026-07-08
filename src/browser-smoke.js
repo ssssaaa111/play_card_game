@@ -726,6 +726,30 @@ async function runFusionSummonSmoke(ctx) {
     () => ctx.state.pendingFusion?.resultId === "flare-gale-archon" && ctx.els.choiceConfirmBtn.disabled,
     "fusion-summon: pending fusion material selection"
   );
+  if (!ctx.els.choiceActions?.classList.contains("fusion-choice")) {
+    throw new Error("fusion-summon: fusion material chooser should avoid covering the field");
+  }
+  const detailCard = cloneCardById("flare-gale-archon");
+  if (ctx.els.fusionPreview?.hidden) {
+    throw new Error("fusion-summon: fusion preview should be visible during material selection");
+  }
+  if (ctx.els.fusionPreview?.dataset.cardId !== "flare-gale-archon") {
+    throw new Error("fusion-summon: fusion preview should reference the fusion result");
+  }
+  if (!ctx.els.fusionPreviewName?.textContent.includes(detailCard.name)) {
+    throw new Error("fusion-summon: fusion preview should show result name");
+  }
+  if (!ctx.els.fusionPreviewStats?.textContent.includes("ATK 2400") || !ctx.els.fusionPreviewStats?.textContent.includes("DEF 1800")) {
+    throw new Error("fusion-summon: fusion preview should show result ATK and DEF");
+  }
+  const previewMaterials = ctx.els.fusionPreviewMaterials?.textContent || "";
+  if (!previewMaterials.includes(cloneCardById("ember-drake").name) || !previewMaterials.includes(cloneCardById("gale-mage").name)) {
+    throw new Error("fusion-summon: fusion preview should show required materials");
+  }
+  clickSmokeElement(ctx.els.fusionPreviewDetail, "fusion-summon: open fusion result detail from preview");
+  await assertCardDetailModal(ctx, detailCard, "fusion-summon-preview");
+  clickSmokeElement(ctx.els.zoomClose, "fusion-summon: close fusion preview detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "fusion-summon: preview detail closes");
   clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "fusion-summon: select first material");
   await waitForSmoke(
     () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
@@ -760,7 +784,6 @@ async function runFusionSummonSmoke(ctx) {
   if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("焰岚合星者"))) {
     throw new Error("fusion-summon: public log should mention the fusion result");
   }
-  const detailCard = cloneCardById("flare-gale-archon");
   const resultLink = logCardLink(ctx.els, "flare-gale-archon");
   if (!resultLink) throw new Error("fusion-summon: fusion result log link should be clickable");
   clickSmokeElement(resultLink, "fusion-summon: open fusion result detail from log");

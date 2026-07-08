@@ -2095,11 +2095,81 @@ h1 {
   display: none;
 }
 
+.choice-actions.fusion-choice {
+  top: auto;
+  bottom: 16px;
+  transform: translateX(-50%);
+}
+
 #choiceText {
   min-width: 0;
   color: #edf2f7;
   font-size: 13px;
   line-height: 1.35;
+}
+
+.fusion-preview {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(84, 210, 210, 0.32);
+  border-radius: 8px;
+  background: rgba(16, 24, 34, 0.82);
+}
+
+.fusion-preview[hidden] {
+  display: none;
+}
+
+.fusion-preview-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.fusion-preview-kicker {
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+#fusionPreviewName {
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#fusionPreviewStats,
+.fusion-preview-materials {
+  min-width: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.fusion-preview-materials {
+  grid-column: 1 / -1;
+}
+
+#fusionPreviewDetail {
+  align-self: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .fusion-preview {
+    grid-template-columns: 1fr;
+  }
+
+  #fusionPreviewDetail {
+    width: 100%;
+  }
 }
 
 .modal-box h2 {
