@@ -34,6 +34,7 @@ import {
   dispatchDeclareAttackFromUiState,
   dispatchDrawCardsFromUiState,
   dispatchEndTurnFromUiState,
+  dispatchFusionSummonFromUiState,
   dispatchOpenResponseWindowFromUiState,
   dispatchOpenActionWindowFromUiState,
   dispatchPassResponsePriorityFromUiState,
@@ -97,10 +98,19 @@ import {
 
 const BROWSER_PARAMS = new URLSearchParams(window.location.search);
 const BROWSER_TEST_MODE = BROWSER_PARAMS.has("test");
+const BROWSER_MANUAL_VALUE = BROWSER_TEST_MODE ? BROWSER_PARAMS.get("manual") || "" : "";
 const BROWSER_MANUAL_MODE = BROWSER_TEST_MODE && BROWSER_PARAMS.has("manual");
+const BROWSER_MANUAL_SCENARIO = scenarioIdFromParam(BROWSER_MANUAL_VALUE);
 const BROWSER_SMOKE = BROWSER_TEST_MODE ? BROWSER_PARAMS.get("smoke") || "" : "";
 const AUTO_END_DELAY_MS = 2800;
 const BROWSER_TEST_SLEEP_CAP_MS = 80;
+
+function scenarioIdFromParam(value) {
+  if (!value) return "";
+  if (scenarioSetups[value]) return value;
+  const camelValue = value.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+  return scenarioSetups[camelValue] ? camelValue : "";
+}
 
 const state = {
   player: createDuelist("player"),
@@ -111,6 +121,7 @@ const state = {
   selected: null,
   pendingTarget: null,
   pendingTribute: null,
+  pendingFusion: null,
   focusedCard: null,
   autoEnding: false,
   autoEndTimer: null,
@@ -129,7 +140,7 @@ const state = {
   roleId: "star",
   deckPreset: "balanced",
   aiStyle: "balanced",
-  scenarioId: "normal",
+  scenarioId: BROWSER_MANUAL_SCENARIO || "normal",
   stats: loadDuelStats(),
   statsRecorded: false,
   ...createAudioSettings({ testMode: BROWSER_TEST_MODE }),
@@ -666,6 +677,7 @@ function startGame() {
   state.selected = null;
   state.pendingTarget = null;
   state.pendingTribute = null;
+  state.pendingFusion = null;
   state.focusedCard = null;
   clearBattlePreview();
   state.autoEnding = false;
@@ -720,6 +732,9 @@ function prepareGame() {
   clearAiReveal(false);
   scenarioHintsVisible = true;
   preDuelDeckExpanded = false;
+  if (BROWSER_MANUAL_SCENARIO && state.scenarioId === BROWSER_MANUAL_SCENARIO) {
+    syncSetupControls();
+  }
   applySetupChoices();
   syncSetupControls();
   Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
@@ -729,6 +744,7 @@ function prepareGame() {
   state.selected = null;
   state.pendingTarget = null;
   state.pendingTribute = null;
+  state.pendingFusion = null;
   state.focusedCard = null;
   clearBattlePreview();
   state.autoEnding = false;
@@ -1225,6 +1241,10 @@ async function selectHandCard(uid) {
     state.pendingTribute = null;
     clearBattlePreview();
   }
+  if (state.pendingFusion && state.pendingFusion.handUid !== uid) {
+    state.pendingFusion = null;
+    clearBattlePreview();
+  }
   const handIndex = state.player.hand.findIndex((item) => item.uid === uid);
   const wasSelected = state.selected?.zone === "hand" && state.selected.uid === uid;
   const canUseNow = canUseHandCards(card);
@@ -1377,6 +1397,204 @@ async function confirmTributeSummon(fieldIndex = null) {
   return true;
 }
 
+function templateIdForCard(card) {
+  return card?.templateId || card?.id || "";
+}
+
+function fusionDefinition(card) {
+  if (card?.type !== "spell" || card.effect !== "fusionSummon") return null;
+  const resultId = card.fusion?.resultTemplateId || card.fusion?.result || card.fusion?.cardId || "";
+  const materials = (Array.isArray(card.fusion?.materials) ? card.fusion.materials : [])
+    .map((entry) => typeof entry === "string"
+      ? { templateId: entry, count: 1 }
+      : { templateId: entry?.templateId || entry?.id, count: Math.max(1, Number(entry?.count) || 1) })
+    .filter((entry) => entry.templateId);
+  if (!resultId || materials.length === 0) return null;
+  return { resultId, materials };
+}
+
+function fusionMaterialCount(materials = []) {
+  return materials.reduce((total, entry) => total + Math.max(1, Number(entry.count) || 1), 0);
+}
+
+function fusionMaterialNames(materials = []) {
+  return materials
+    .map((entry) => {
+      const definition = cardDefinitionById(entry.templateId);
+      const name = definition?.name || entry.templateId;
+      return entry.count > 1 ? `${name} ×${entry.count}` : name;
+    })
+    .join("、");
+}
+
+function fusionSummonReady(card) {
+  const fusion = fusionDefinition(card);
+  if (!fusion) return false;
+  const available = state.player.field.filter(Boolean).map(templateIdForCard);
+  const hasMaterials = fusion.materials.every((requirement) => {
+    for (let index = 0; index < requirement.count; index += 1) {
+      const found = available.indexOf(requirement.templateId);
+      if (found < 0) return false;
+      available.splice(found, 1);
+    }
+    return true;
+  });
+  if (!hasMaterials) return false;
+  return [...state.player.hand, ...state.player.deck].some((entry) => templateIdForCard(entry) === fusion.resultId);
+}
+
+function beginFusionSelection(handIndex, card) {
+  const fusion = fusionDefinition(card);
+  if (!fusion) return false;
+  if (!fusionSummonReady(card)) {
+    cue(`${card.name} 需要场上的 ${fusionMaterialNames(fusion.materials)}，并且手牌或卡组里要有可登场的融合怪兽。`);
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return true;
+  }
+  notePlayerIntent();
+  clearBattlePreview();
+  state.pendingFusion = {
+    handUid: card.uid,
+    handIndex,
+    cardName: card.name,
+    resultId: fusion.resultId,
+    materials: fusion.materials,
+    selectedIndexes: []
+  };
+  state.selected = { zone: "hand", uid: card.uid };
+  cue(`选择 ${fusionMaterialCount(fusion.materials)} 只融合素材：${fusionMaterialNames(fusion.materials)}。`);
+  render();
+  resetPlayerIdleCountdown();
+  return true;
+}
+
+function pendingFusionHandInfo() {
+  const pending = state.pendingFusion;
+  if (!pending) return null;
+  const index = state.player.hand.findIndex((card) => card.uid === pending.handUid);
+  if (index < 0) return null;
+  return { card: state.player.hand[index], index, pending };
+}
+
+function selectedFusionIndexes() {
+  return (state.pendingFusion?.selectedIndexes || []).filter((index) => Boolean(state.player.field[index]));
+}
+
+function fusionSelectionStatus(indexes = selectedFusionIndexes()) {
+  const info = pendingFusionHandInfo();
+  if (!info) return { complete: false, invalid: true, selectedCount: 0, requiredCount: 0, remaining: [] };
+  const remaining = info.pending.materials.map((entry) => ({ ...entry }));
+  let invalid = false;
+  indexes.forEach((index) => {
+    const card = state.player.field[index];
+    const match = card && remaining.find((entry) => entry.count > 0 && templateIdForCard(card) === entry.templateId);
+    if (!match) {
+      invalid = true;
+      return;
+    }
+    match.count -= 1;
+  });
+  const requiredCount = fusionMaterialCount(info.pending.materials);
+  return {
+    complete: !invalid && indexes.length === requiredCount && remaining.every((entry) => entry.count === 0),
+    invalid,
+    selectedCount: indexes.length,
+    requiredCount,
+    remaining
+  };
+}
+
+function isFusionMaterialCandidate(index) {
+  const info = pendingFusionHandInfo();
+  if (!info) return false;
+  const card = state.player.field[index];
+  if (!card) return false;
+  if (selectedFusionIndexes().includes(index)) return true;
+  return fusionSelectionStatus().remaining.some((entry) => entry.count > 0 && templateIdForCard(card) === entry.templateId);
+}
+
+function toggleFusionSelection(index) {
+  const info = pendingFusionHandInfo();
+  if (!info) {
+    state.pendingFusion = null;
+    render();
+    return false;
+  }
+  const card = state.player.field[index];
+  if (!card) {
+    cue(`请选择我方场上的融合素材：${fusionMaterialNames(info.pending.materials)}。`);
+    resetPlayerIdleCountdown();
+    return true;
+  }
+  const selected = selectedFusionIndexes();
+  const existing = selected.indexOf(index);
+  if (existing >= 0) {
+    selected.splice(existing, 1);
+  } else if (isFusionMaterialCandidate(index)) {
+    selected.push(index);
+  } else {
+    cue(`${card.name} 不是 ${info.card.name} 需要的融合素材。`);
+    resetPlayerIdleCountdown();
+    return true;
+  }
+  info.pending.selectedIndexes = selected;
+  state.selected = { zone: "hand", uid: info.card.uid };
+  showDetail(card);
+  const status = fusionSelectionStatus(selected);
+  cue(`${info.card.name} 融合素材：${status.selectedCount}/${status.requiredCount}`);
+  render();
+  resetPlayerIdleCountdown();
+  return true;
+}
+
+async function confirmFusionSummon(fieldIndex = null) {
+  const info = pendingFusionHandInfo();
+  if (!info) {
+    state.pendingFusion = null;
+    cue("融合召唤已失效。");
+    render();
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return false;
+  }
+  const materialIndexes = selectedFusionIndexes();
+  const status = fusionSelectionStatus(materialIndexes);
+  if (!status.complete) {
+    cue(`还需要选择融合素材：${fusionMaterialNames(status.remaining.filter((entry) => entry.count > 0)) || fusionMaterialNames(info.pending.materials)}。`);
+    resetPlayerIdleCountdown();
+    return false;
+  }
+  const summonIndex = Number.isInteger(fieldIndex) ? fieldIndex : materialIndexes[0];
+  const materialCards = materialIndexes.map((index) => state.player.field[index]).filter(Boolean);
+  let fusionEvents = [];
+  try {
+    fusionEvents = dispatchFusionSummonFromUiState(state, "player", "ai", info.index, { materialIndexes, fieldIndex: summonIndex });
+  } catch (error) {
+    cue(error.message || "融合召唤失败。");
+    console.error(error);
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return false;
+  }
+  const resultEvent = fusionEvents.find((event) => event.type === "MONSTER_SUMMONED" && event.summonType === "fusion");
+  const resultCard = findRuntimeCard(resultEvent?.cardId)?.card || cardDefinitionById(info.pending.resultId);
+  playSound(`spell-${info.card.effect}`);
+  animateAvatar("player", "cast");
+  playCenterCardEffect(info.card, spellCaption(info.card));
+  addLog(`你发动魔法卡 ${info.card.name}。`, cardLogMeta(info.card, { actor: "player", type: "spell" }));
+  addLog(`你将 ${materialCards.map((material) => `「${material.name}」`).join("、")} 作为融合素材，融合召唤了「${resultCard?.name || info.pending.resultId}」。`, cardLogMeta(info.card, {
+    actor: "player",
+    type: "fusion-summon",
+    relatedCardIds: relatedCardIds(resultCard, ...materialCards)
+  }));
+  resolveEngineSpellFeedback(state.player, state.ai, info.card, fusionEvents);
+  resolveElementCombos(state.player, state.ai, "spell");
+  state.pendingFusion = null;
+  state.selected = null;
+  checkGameOver();
+  render("summon-player-" + summonIndex);
+  if (!state.gameOver) resolvePlayerActionWindow("融合召唤完成");
+  return true;
+}
+
 async function queuePendingAttack(targetIndex) {
   const attackerIndex = state.selected?.zone === "playerField" ? state.selected.index : -1;
   const attacker = state.player.field[attackerIndex];
@@ -1466,9 +1684,11 @@ async function quickAttackOnlyTarget(attackerIndex) {
 }
 
 function handConfirmLabel(card) {
+  if (state.pendingFusion) return "确认融合召唤";
   if (state.pendingTribute) return "确认祭品召唤";
   if (!card) return "确认";
   if (card.type === "spell") {
+    if (fusionDefinition(card)) return "确认融合";
     return spellNeedsManualTarget(state.player, card) ? "确认选目标" : "确认发动";
   }
   if (card.type === "monster") return "确认召唤";
@@ -1479,6 +1699,10 @@ function handConfirmLabel(card) {
 async function confirmSelectedHandAction() {
   if (state.pendingTarget) {
     await resolvePendingSpellDefault();
+    return;
+  }
+  if (state.pendingFusion) {
+    await confirmFusionSummon();
     return;
   }
   if (state.pendingTribute) {
@@ -1503,6 +1727,10 @@ async function confirmSelectedHandAction() {
     return;
   }
   if (selected.card.type === "spell") {
+    if (fusionDefinition(selected.card)) {
+      beginFusionSelection(selected.index, selected.card);
+      return;
+    }
     await playSpell(state.player, state.ai, selected.index);
     return;
   }
@@ -1534,14 +1762,16 @@ async function confirmSelectedHandAction() {
 function cancelSelectedHandAction() {
   const hadPendingTarget = Boolean(state.pendingTarget);
   const hadPendingTribute = Boolean(state.pendingTribute);
+  const hadPendingFusion = Boolean(state.pendingFusion);
   const selected = selectedHandInfo();
-  if (!hadPendingTarget && !hadPendingTribute && !selected) {
+  if (!hadPendingTarget && !hadPendingTribute && !hadPendingFusion && !selected) {
     cue("当前没有选中的手牌。");
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
   clearPendingTarget();
   state.pendingTribute = null;
+  state.pendingFusion = null;
   state.selected = null;
   clearBattlePreview();
   playSound("click");
@@ -1561,6 +1791,11 @@ async function selectPlayerMonster(index) {
   if (state.pendingTribute) {
     notePlayerIntent();
     toggleTributeSelection(index);
+    return;
+  }
+  if (state.pendingFusion) {
+    notePlayerIntent();
+    toggleFusionSelection(index);
     return;
   }
   const wasSelected = state.selected?.zone === "playerField" && state.selected.index === index;
@@ -1591,6 +1826,11 @@ async function handlePlayerSlot(index) {
     toggleTributeSelection(index);
     return;
   }
+  if (state.pendingFusion) {
+    notePlayerIntent();
+    toggleFusionSelection(index);
+    return;
+  }
   if (!canPlayerAct() || !state.selected) return;
   notePlayerIntent();
   if (state.selected.zone !== "hand") {
@@ -1609,6 +1849,10 @@ async function handlePlayerSlot(index) {
     return;
   }
   if (card.type === "spell") {
+    if (fusionDefinition(card)) {
+      beginFusionSelection(handIndex, card);
+      return;
+    }
     await playSpell(state.player, state.ai, handIndex);
     return;
   }
@@ -2023,22 +2267,24 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
         .map((cardId) => findRuntimeCard(cardId)?.card?.name)
         .filter(Boolean)
         .join("、");
-      addLog(`${card.name} 将${names || "素材"}送入墓地，进化条件达成。`, cardLogMeta(card, {
+      const isFusion = event.purpose === "fusion";
+      addLog(`${card.name} 将${names || "素材"}送入墓地，${isFusion ? "融合条件达成" : "进化条件达成"}。`, cardLogMeta(card, {
         actor: owner.owner,
         type: "effect",
         relatedCardIds: (event.materialCardIds || [])
           .map((cardId) => findRuntimeCard(cardId)?.card?.id)
           .filter(Boolean)
       }));
-      playEpicAction("进化素材", "draw");
+      playEpicAction(isFusion ? "融合素材" : "进化素材", "draw");
     }
     if (event.type === "MONSTER_SUMMONED" && event.sourceCardId === runtimeCardId(card)) {
       const found = findRuntimeCard(event.cardId);
       if (found?.card) {
         result.effectTarget = found.card;
         result.targetOwner = found.owner;
-        addLog(`${found.card.name} 因 ${card.name} 特殊登场。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
-        playEpicAction("王牌进化", "summon");
+        const isFusion = event.summonType === "fusion";
+        addLog(`${found.card.name} 因 ${card.name} ${isFusion ? "融合登场" : "特殊登场"}。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
+        playEpicAction(isFusion ? "融合召唤" : "王牌进化", "summon");
         if (found.card.stars >= 5) showAce(found.card, found.owner);
       }
     }
@@ -3134,6 +3380,8 @@ function confirmTrapChoice() {
 function handOffToAiTurn() {
   state.selected = null;
   state.pendingTarget = null;
+  state.pendingTribute = null;
+  state.pendingFusion = null;
   clearBattlePreview();
   clearPlayerIdleTimers();
   beginTurn("ai");
@@ -3146,6 +3394,8 @@ function endPlayerTurn(reason = "manual") {
   cancelAutoEnd();
   state.selected = null;
   state.pendingTarget = null;
+  state.pendingTribute = null;
+  state.pendingFusion = null;
   clearBattlePreview();
   clearPlayerIdleTimers();
   try {
@@ -3246,6 +3496,8 @@ function manualEndPlayerTurn() {
   clearPlayerIdleTimers();
   state.selected = null;
   state.pendingTarget = null;
+  state.pendingTribute = null;
+  state.pendingFusion = null;
   clearBattlePreview();
   playSound("click");
   addLog("你主动结束回合，放弃后续操作。");
@@ -3301,6 +3553,8 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
   }
   state.selected = null;
   state.pendingTarget = null;
+  state.pendingTribute = null;
+  state.pendingFusion = null;
   clearPlayerIdleTimers();
   cue(`${reason}，回合即将结束。`);
   render();
@@ -3872,11 +4126,11 @@ function render(animationKey = "") {
   els.pauseBtn.disabled = !state.started || state.gameOver;
   els.pauseBtn.textContent = state.paused ? "继续" : "暂停";
   const canUseTurnControls = canUsePlayerTurnControls(state);
-  els.skipAttackBtn.disabled = !canUseTurnControls || Boolean(state.pendingTarget) || !actions.attack;
+  els.skipAttackBtn.disabled = !canUseTurnControls || Boolean(state.pendingTarget) || Boolean(state.pendingFusion) || Boolean(state.pendingTribute) || !actions.attack;
   els.skipAttackBtn.title = "放弃本回合剩余攻击机会";
   els.endTurnBtn.textContent = "结束回合";
   els.endTurnBtn.title = "结束你的回合";
-  els.endTurnBtn.disabled = !canUseTurnControls || Boolean(state.pendingTarget);
+  els.endTurnBtn.disabled = !canUseTurnControls || Boolean(state.pendingTarget) || Boolean(state.pendingFusion) || Boolean(state.pendingTribute);
   els.soundBtn.textContent = state.soundOn ? "音效 开" : "音效 关";
   els.soundBtn.classList.toggle("sound-off", !state.soundOn);
   els.voiceBtn.textContent = state.voiceOn ? "语音 开" : "语音 关";
@@ -3887,21 +4141,24 @@ function render(animationKey = "") {
     selectedHand &&
     selectedHandAction?.ok &&
     canUseHandCards(selectedHand.card) &&
-    (!state.pendingTribute || selectedTributeIndexes().length === state.pendingTribute.cost)
+    (!state.pendingTribute || selectedTributeIndexes().length === state.pendingTribute.cost) &&
+    (!state.pendingFusion || fusionSelectionStatus().complete)
   );
   els.handConfirmBtn.textContent = state.pendingTarget ? "确认默认目标" : handConfirmLabel(selectedHand?.card);
   els.handConfirmBtn.disabled = state.pendingTarget ? false : !selectedHandReady;
   els.handCancelBtn.textContent = state.pendingTarget ? "取消目标" : "取消选择";
-  els.handCancelBtn.disabled = !canPlayerAct() || (!state.pendingTarget && !state.pendingTribute && !selectedHandReady);
+  els.handCancelBtn.disabled = !canPlayerAct() || (!state.pendingTarget && !state.pendingTribute && !state.pendingFusion && !selectedHandReady);
   if (els.choiceActions) {
-    const showChoiceActions = canPlayerAct() && (Boolean(state.pendingTarget) || Boolean(state.pendingTribute) || selectedHandReady);
+    const showChoiceActions = canPlayerAct() && (Boolean(state.pendingTarget) || Boolean(state.pendingTribute) || Boolean(state.pendingFusion) || selectedHandReady);
     els.choiceActions.hidden = !showChoiceActions;
     if (showChoiceActions) {
       const confirmLabel = state.pendingTarget ? "确认默认目标" : handConfirmLabel(selectedHand?.card);
       const cancelLabel = state.pendingTarget ? "取消目标" : "取消选择";
       const text = state.pendingTarget
         ? `${targetPrompt} 再点这张手牌或确认，将默认选择合法目标。`
-        : `${selectedHand.card.name}：${selectedHandAction?.reason || "确认后发动。"}`;
+        : state.pendingFusion
+          ? `${state.pendingFusion.cardName}：选择融合素材 ${fusionSelectionStatus().selectedCount}/${fusionSelectionStatus().requiredCount}。`
+          : `${selectedHand.card.name}：${selectedHandAction?.reason || "确认后发动。"}`;
       els.choiceText.textContent = text;
       els.choiceConfirmBtn.textContent = confirmLabel;
       els.choiceConfirmBtn.disabled = state.pendingTarget ? false : !selectedHandReady;
@@ -3910,7 +4167,7 @@ function render(animationKey = "") {
     }
   }
   const selectedPlayerMonster = state.selected?.zone === "playerField" && Boolean(state.player.field[state.selected.index]);
-  els.modeBtn.disabled = Boolean(state.pendingTarget) || !canPlayerAct() || state.phase !== PHASES.main || !selectedPlayerMonster;
+  els.modeBtn.disabled = Boolean(state.pendingTarget) || Boolean(state.pendingFusion) || Boolean(state.pendingTribute) || !canPlayerAct() || state.phase !== PHASES.main || !selectedPlayerMonster;
   els.detailBtn.disabled = !state.focusedCard;
   if (els.setupPanel) {
     els.setupPanel.hidden = state.started || state.gameOver;
@@ -4016,11 +4273,15 @@ function renderField(root, duelist, owner, animationKey) {
     const attackTargetable = isAttackTargetSlot(owner, index);
     const tributeCandidate = owner === "player" && Boolean(state.pendingTribute) && Boolean(card);
     const tributeSelected = tributeCandidate && selectedTributeIndexes().includes(index);
+    const fusionCandidate = owner === "player" && Boolean(state.pendingFusion) && Boolean(card) && isFusionMaterialCandidate(index);
+    const fusionSelected = owner === "player" && Boolean(state.pendingFusion) && selectedFusionIndexes().includes(index);
+    const materialCandidate = tributeCandidate || fusionCandidate;
+    const materialSelected = tributeSelected || fusionSelected;
     const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable;
     slot.classList.toggle("targetable", targetable);
     slot.classList.toggle("attack-target", attackTargetable);
-    slot.classList.toggle("tribute-candidate", tributeCandidate);
-    slot.classList.toggle("tribute-selected", tributeSelected);
+    slot.classList.toggle("tribute-candidate", materialCandidate);
+    slot.classList.toggle("tribute-selected", materialSelected);
     slot.disabled = disabledEnemyEmpty;
     slot.setAttribute("aria-disabled", disabledEnemyEmpty ? "true" : "false");
     slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}召唤区 ${index + 1}`);
@@ -4040,8 +4301,8 @@ function renderField(root, duelist, owner, animationKey) {
       cardEl.classList.toggle("defense", card.mode === "defense");
       cardEl.classList.toggle("targetable", targetable);
       cardEl.classList.toggle("attack-target", attackTargetable);
-      cardEl.classList.toggle("tribute-candidate", tributeCandidate);
-      cardEl.classList.toggle("tribute-selected", tributeSelected);
+      cardEl.classList.toggle("tribute-candidate", materialCandidate);
+      cardEl.classList.toggle("tribute-selected", materialSelected);
       if (animationKey === `summon-${owner}-${index}`) cardEl.classList.add("summon-flash");
       if (animationKey === `hit-${owner}-${index}`) cardEl.classList.add("hit-flash");
       if (owner === "player") {
@@ -4140,6 +4401,24 @@ function handActionInfo(card, handIndex) {
         ? targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect)
         : ""
   });
+  if (card.type === "spell" && fusionDefinition(card)) {
+    const fusion = fusionDefinition(card);
+    if (!fusionSummonReady(card)) {
+      return {
+        ok: false,
+        label: "素材不足",
+        reason: `需要场上的 ${fusionMaterialNames(fusion.materials)}，并且手牌或卡组里要有融合怪兽。`
+      };
+    }
+    const status = state.pendingFusion?.handUid === card.uid ? fusionSelectionStatus() : null;
+    return {
+      ...action,
+      label: status ? `融合 ${status.selectedCount}/${status.requiredCount}` : "融合召唤",
+      reason: status
+        ? `选择 ${status.requiredCount} 只指定素材后确认融合召唤。`
+        : `确认后选择 ${fusionMaterialNames(fusion.materials)} 作为融合素材。`
+    };
+  }
   const cost = tributeCost(card);
   if (card.type === "monster" && cost > 0) {
     const available = state.player.field.filter(Boolean).length;

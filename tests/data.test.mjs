@@ -62,6 +62,20 @@ test("card library has unique ids and required fields", () => {
   });
 });
 
+test("fusion cards declare known materials and result from unified card data", () => {
+  const fusionSpell = cardsById.get("starforge-fusion");
+  const fusionResult = cardsById.get("flare-gale-archon");
+
+  assert.equal(fusionSpell.type, "spell");
+  assert.equal(fusionSpell.effect, "fusionSummon");
+  assert.equal(fusionSpell.fusion.result, "flare-gale-archon");
+  assert.deepEqual(fusionSpell.fusion.materials, ["ember-drake", "gale-mage"]);
+  assert.equal(fusionResult.type, "monster");
+  fusionSpell.fusion.materials.forEach((id) => {
+    assert.equal(cardsById.get(id)?.type, "monster", `fusion material should be a monster: ${id}`);
+  });
+});
+
 test("player-facing card and scenario copy is localized", () => {
   const englishWord = /[A-Za-z]{3,}/;
 
@@ -371,6 +385,13 @@ test("protagonist ace evolution pack has rule-backed cards decks and scenarios",
   assert.deepEqual(scenarioSetups.protagonistAceProtection.playerField, ["astral-forge-dragon"]);
   assert.ok(scenarioSetups.protagonistAceProtection.playerHand.includes("ace-vow-guard"));
   assert.ok(scenarioSetups.protagonistAceProtection.aiHand.includes("corebreak-edict"));
+});
+
+test("fusion summon scenario keeps materials on field and result in deck", () => {
+  assert.deepEqual(scenarioSetups.fusionSummon.playerField, ["ember-drake", "gale-mage"]);
+  assert.equal(scenarioSetups.fusionSummon.playerHand[0], "starforge-fusion");
+  assert.equal(scenarioSetups.fusionSummon.playerDeck[1], "flare-gale-archon");
+  assert.equal(cardsById.get("starforge-fusion").text.includes(cardsById.get("flare-gale-archon").name), true);
 });
 
 test("deck presets reference only known cards and have enough cards", () => {

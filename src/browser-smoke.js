@@ -90,6 +90,11 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         chainLength: machine.chain?.length || 0
       },
       selectedCard: selectedCardSnapshot(state),
+      pendingFusion: state.pendingFusion ? {
+        cardName: state.pendingFusion.cardName || "",
+        resultId: state.pendingFusion.resultId || "",
+        selectedIndexes: (state.pendingFusion.selectedIndexes || []).slice()
+      } : null,
       activePlayerMonsters: activeMonsterSnapshots(state),
       controls: {
         skipAttackButtonDisabled: Boolean(els.skipAttackBtn?.disabled),
@@ -704,6 +709,65 @@ async function runTributeSummonDoubleSmoke(ctx) {
     throw new Error("tribute-summon-double: public log should mention the tribute summoned monster");
   }
   setSmokeStatus("passed", "tribute-summon-double");
+}
+
+async function runFusionSummonSmoke(ctx) {
+  setSmokeStatus("running", "fusion-summon");
+  await startSmokeDuel(ctx, "fusionSummon");
+  if (ctx.state.player.field[0]?.id !== "ember-drake" || ctx.state.player.field[1]?.id !== "gale-mage") {
+    throw new Error("fusion-summon: fusion materials should start on player field");
+  }
+  if (!ctx.state.player.deck.some((card) => card?.id === "flare-gale-archon")) {
+    throw new Error("fusion-summon: fusion result should start in player deck");
+  }
+  clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-summon: select fusion spell");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-summon: enter material selection");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.resultId === "flare-gale-archon" && ctx.els.choiceConfirmBtn.disabled,
+    "fusion-summon: pending fusion material selection"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "fusion-summon: select first material");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
+      ctx.els.choiceConfirmBtn.disabled &&
+      fieldCard(ctx.els, "player", "ember-drake")?.classList.contains("tribute-selected"),
+    "fusion-summon: first material selected"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "gale-mage"), "fusion-summon: select second material");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 2 && !ctx.els.choiceConfirmBtn.disabled,
+    "fusion-summon: two materials selected"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-summon: confirm fusion summon");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "flare-gale-archon") &&
+      ctx.state.player.grave.some((card) => card?.id === "ember-drake") &&
+      ctx.state.player.grave.some((card) => card?.id === "gale-mage") &&
+      ctx.state.player.grave.some((card) => card?.id === "starforge-fusion") &&
+      !ctx.state.pendingFusion,
+    "fusion-summon: fusion result summoned and materials sent to grave",
+    9000
+  );
+  if (!ctx.state.gameEvents.some((event) => event.type === "MATERIALS_SENT" && event.purpose === "fusion")) {
+    throw new Error("fusion-summon: fusion MATERIALS_SENT event missing");
+  }
+  if (!ctx.state.gameEvents.some((event) => event.type === "MONSTER_SUMMONED" && event.summonType === "fusion")) {
+    throw new Error("fusion-summon: fusion MONSTER_SUMMONED event missing");
+  }
+  if (!ctx.state.gameEvents.some((event) => event.type === "FUSION_SUMMONED")) {
+    throw new Error("fusion-summon: FUSION_SUMMONED event missing");
+  }
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("焰岚合星者"))) {
+    throw new Error("fusion-summon: public log should mention the fusion result");
+  }
+  const detailCard = cloneCardById("flare-gale-archon");
+  const resultLink = logCardLink(ctx.els, "flare-gale-archon");
+  if (!resultLink) throw new Error("fusion-summon: fusion result log link should be clickable");
+  clickSmokeElement(resultLink, "fusion-summon: open fusion result detail from log");
+  await assertCardDetailModal(ctx, detailCard, "fusion-summon");
+  clickSmokeElement(ctx.els.zoomClose, "fusion-summon: close fusion detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "fusion-summon: detail closes");
+  setSmokeStatus("passed", "fusion-summon");
 }
 
 async function runSummonFireBuffSmoke(ctx) {
@@ -3100,6 +3164,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-trap-response": runSummonTrapResponseSmoke,
     "tribute-summon": runTributeSummonSmoke,
     "tribute-summon-double": runTributeSummonDoubleSmoke,
+    "fusion-summon": runFusionSummonSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,

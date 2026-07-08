@@ -1608,6 +1608,111 @@ test("tribute summon rejects missing or illegal tribute cards without changing s
   assert.deepEqual(engine.getState().players[PLAYER].grave, []);
 });
 
+test("fusion summon sends selected field materials to grave and summons result from deck", () => {
+  const state = makeState({
+    cards: [
+      card("fusion-1", {
+        templateId: "starforge-fusion",
+        effect: "fusionSummon",
+        fusion: { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] }
+      }),
+      card("ember-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900 }),
+      card("gale-1", { templateId: "gale-mage", type: "monster", atk: 1200, def: 1400 }),
+      card("archon-1", { templateId: "flare-gale-archon", type: "monster", atk: 2400, def: 1800 })
+    ],
+    player: {
+      hand: ["fusion-1"],
+      monsterZone: ["ember-1", "gale-1"],
+      deck: ["archon-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "fusion-1",
+    materialCardIds: ["ember-1", "gale-1"],
+    index: 0
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].hand, []);
+  assert.deepEqual(next.players[PLAYER].deck, []);
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["archon-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, ["fusion-1", "ember-1", "gale-1"]);
+  assert.ok(events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === "fusion-1"));
+  assert.ok(events.some((event) => event.type === "MATERIALS_SENT" && event.purpose === "fusion" && event.sourceCardId === "fusion-1"));
+  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === "archon-1" && event.summonType === "fusion"));
+  assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.cardId === "archon-1"));
+  assertValidGameState(next);
+});
+
+test("fusion summon rejects wrong materials without changing state", () => {
+  const state = makeState({
+    cards: [
+      card("fusion-1", {
+        templateId: "starforge-fusion",
+        effect: "fusionSummon",
+        fusion: { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] }
+      }),
+      card("ember-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900 }),
+      card("wrong-1", { templateId: "solar-knight", type: "monster", atk: 1700, def: 1200 }),
+      card("archon-1", { templateId: "flare-gale-archon", type: "monster", atk: 2400, def: 1800 })
+    ],
+    player: {
+      hand: ["fusion-1"],
+      monsterZone: ["ember-1", "wrong-1"],
+      deck: ["archon-1"]
+    }
+  });
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "ACTIVATE_CARD",
+      playerId: PLAYER,
+      rivalId: AI,
+      cardId: "fusion-1",
+      materialCardIds: ["ember-1", "wrong-1"],
+      index: 0
+    }),
+    /does not match required materials/
+  );
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["fusion-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].monsterZone, ["ember-1", "wrong-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].deck, ["archon-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, []);
+  assert.deepEqual(engine.getState().events, []);
+});
+
+test("legal action projection includes fusion material ids", () => {
+  const state = makeState({
+    cards: [
+      card("fusion-1", {
+        templateId: "starforge-fusion",
+        effect: "fusionSummon",
+        fusion: { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] }
+      }),
+      card("ember-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900 }),
+      card("gale-1", { templateId: "gale-mage", type: "monster", atk: 1200, def: 1400 }),
+      card("archon-1", { templateId: "flare-gale-archon", type: "monster", atk: 2400, def: 1800 })
+    ],
+    player: {
+      hand: ["fusion-1"],
+      monsterZone: ["ember-1", "gale-1"],
+      deck: ["archon-1"]
+    }
+  });
+
+  const legal = getLegalActions(state, PLAYER);
+
+  assert.equal(legal.actions.activateCard.length, 1);
+  assert.deepEqual(legal.actions.activateCard[0].materialCardIds, ["ember-1", "gale-1"]);
+  assert.equal(legal.actions.activateCard[0].index, 0);
+});
+
 test("non-tribute monsters cannot consume field monsters as tribute", () => {
   const state = makeState({
     cards: [

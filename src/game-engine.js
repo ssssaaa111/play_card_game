@@ -139,6 +139,7 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: { playerId: "$action.rivalId", zone: "monsterZone" }, stat: "tempDef", amount: -500 },
     { op: "gainShield", player: "self", amount: 300 }
   ], { requirements: [{ type: "requireFieldCards", player: "self", materials: ["ember-soul-initiate", "lumen-gearlet"] }] }),
+  fusionSummon: oneShot([]),
   aceCrackdown: oneShot([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -500 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -500 }
@@ -396,7 +397,8 @@ export class EffectContext {
       materialCardIds,
       materials: normalizeMaterialRequirements(materials),
       destination: "grave",
-      sourceCardId: options.sourceCardId || null
+      sourceCardId: options.sourceCardId || null,
+      purpose: options.purpose || null
     });
     return materialCardIds;
   }
@@ -422,7 +424,7 @@ export class EffectContext {
       mode: options.mode || found.card.mode || "attack",
       used: false,
       changedMode: false,
-      summonType: "special",
+      summonType: options.summonType || "special",
       fromZone: found.zone
     });
     return found.cardId;
@@ -749,6 +751,10 @@ export class GameEngine {
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };
     const definition = this.#effects[card.effect];
+    if (isFusionSummonSpell(card)) {
+      this.#activateFusionSpell(state, ctx, emit, preparedAction, card);
+      return;
+    }
     validateEffectRequirements(definition, state, preparedAction, card);
     validateEffectTarget(definition, state, preparedAction, card);
     emit("CARD_ACTIVATED", {
@@ -772,6 +778,51 @@ export class GameEngine {
     }
     ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "hand" }, { playerId: action.playerId, zone: "grave" });
     runEffect(this.#effects, card.effect, ctx, preparedAction, card);
+  }
+
+  #activateFusionSpell(state, ctx, emit, action, card) {
+    const fusion = fusionDefinitionForCard(card);
+    const materialCardIds = validateFusionMaterialCardIds(state, action.playerId, fusion, action);
+    const summonIndex = fusionSummonIndexForAction(state, action.playerId, materialCardIds, action.index);
+    validateFusionDestination(state, action.playerId, materialCardIds, summonIndex);
+    const found = findCardByTemplateInZones(state, action.playerId, fusion.resultTemplateId, ["hand", "deck"]);
+    if (!found) {
+      throw new GameRuleError(`No ${fusion.resultTemplateId} is available in hand or deck`);
+    }
+    if (found.card.type !== "monster") {
+      throw new GameRuleError(`Fusion result ${fusion.resultTemplateId} is not a monster`);
+    }
+
+    emit("CARD_ACTIVATED", {
+      playerId: action.playerId,
+      cardId: action.cardId,
+      cardType: card.type,
+      phase: state.turn.phase
+    });
+    ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "hand" }, { playerId: action.playerId, zone: "grave" });
+    materialCardIds.forEach((materialCardId) => {
+      ctx.moveCard(materialCardId, { playerId: action.playerId, zone: "monsterZone" }, { playerId: action.playerId, zone: "grave" });
+    });
+    emit("MATERIALS_SENT", {
+      playerId: action.playerId,
+      materialCardIds,
+      materials: fusion.materials,
+      destination: "grave",
+      sourceCardId: action.cardId,
+      purpose: "fusion"
+    });
+    const fusionCardId = ctx.specialSummonFromDeckOrHand(action.playerId, fusion.resultTemplateId, {
+      sourceCardId: action.cardId,
+      index: summonIndex,
+      summonType: "fusion"
+    });
+    emit("FUSION_SUMMONED", {
+      playerId: action.playerId,
+      cardId: fusionCardId,
+      sourceCardId: action.cardId,
+      materialCardIds,
+      resultTemplateId: fusion.resultTemplateId
+    });
   }
 
   #resolveElementCombos(state, ctx, emit, action) {
@@ -1799,6 +1850,9 @@ function activationCandidates(state, effects, playerId, rivalId, card) {
     rivalId,
     cardId: card.id
   };
+  if (isFusionSummonSpell(card)) {
+    return [fusionActivationCandidate(state, playerId, rivalId, card)];
+  }
   if (definition?.duration === EffectDuration.continuous) {
     base.index = requirePlayer(state, playerId).spellTrapZone.length;
   }
@@ -2155,6 +2209,7 @@ export function applyGameEvent(state, event, options = {}) {
     case "CARD_DESTROYED":
     case "CARD_TRIBUTED":
     case "MATERIALS_SENT":
+    case "FUSION_SUMMONED":
     case "EFFECT_NEGATED":
     case "EFFECT_SKIPPED":
     case "DRAW_FAILED":
@@ -3372,6 +3427,112 @@ function validateTributeSummonCost(state, playerId, card, action) {
   });
 
   return tributeCardIds;
+}
+
+function isFusionSummonSpell(card) {
+  return card?.type === "spell" && card.effect === "fusionSummon" && Boolean(card.fusion);
+}
+
+function fusionDefinitionForCard(card) {
+  const resultTemplateId = card?.fusion?.resultTemplateId || card?.fusion?.result || card?.fusion?.cardId;
+  const materials = normalizeMaterialRequirements(card?.fusion?.materials || []);
+  if (!resultTemplateId) {
+    throw new GameRuleError(`Fusion spell ${card?.id || "(unknown)"} requires a result template`);
+  }
+  if (materials.length === 0) {
+    throw new GameRuleError(`Fusion spell ${card?.id || "(unknown)"} requires materials`);
+  }
+  return { resultTemplateId, materials };
+}
+
+function fusionMaterialCount(materials = []) {
+  return normalizeMaterialRequirements(materials)
+    .reduce((total, entry) => total + Math.max(1, Number(entry.count) || 1), 0);
+}
+
+function defaultFusionMaterialCardIdsForAction(state, playerId, fusion) {
+  const available = requirePlayer(state, playerId).monsterZone.slice();
+  const selected = [];
+  for (const requirement of fusion.materials) {
+    for (let index = 0; index < requirement.count; index += 1) {
+      const foundIndex = available.findIndex((cardId) => cardMatchesTemplate(requireCard(state, cardId), requirement.templateId));
+      if (foundIndex < 0) return [];
+      const [cardId] = available.splice(foundIndex, 1);
+      selected.push(cardId);
+    }
+  }
+  return selected;
+}
+
+function validateFusionMaterialCardIds(state, playerId, fusion, action) {
+  const expectedCount = fusionMaterialCount(fusion.materials);
+  const materialCardIds = Array.isArray(action.materialCardIds)
+    ? action.materialCardIds.filter(Boolean)
+    : defaultFusionMaterialCardIdsForAction(state, playerId, fusion);
+
+  if (materialCardIds.length !== expectedCount) {
+    throw new GameRuleError(`Fusion spell ${action.cardId} requires exactly ${expectedCount} material card${expectedCount === 1 ? "" : "s"}`);
+  }
+  if (new Set(materialCardIds).size !== materialCardIds.length) {
+    throw new GameRuleError("Fusion materials must be unique");
+  }
+
+  const remaining = fusion.materials.map((entry) => ({ ...entry }));
+  materialCardIds.forEach((materialCardId) => {
+    const material = requireCardInZone(state, playerId, "monsterZone", materialCardId);
+    if (material.type !== "monster") {
+      throw new GameRuleError(`Fusion material ${materialCardId} is not a monster`);
+    }
+    const matched = remaining.find((entry) => entry.count > 0 && cardMatchesTemplate(material, entry.templateId));
+    if (!matched) {
+      throw new GameRuleError(`Fusion material ${materialCardId} does not match required materials`);
+    }
+    matched.count -= 1;
+  });
+
+  const missing = remaining.filter((entry) => entry.count > 0).map((entry) => entry.templateId);
+  if (missing.length > 0) {
+    throw new GameRuleError(`Fusion spell ${action.cardId} is missing materials ${missing.join(", ")}`);
+  }
+  return materialCardIds;
+}
+
+function fusionSummonIndexForAction(state, playerId, materialCardIds = [], index = null) {
+  if (Number.isInteger(index)) return index;
+  const player = requirePlayer(state, playerId);
+  const materialIndex = player.monsterZone.findIndex((cardId) => materialCardIds.includes(cardId));
+  if (materialIndex >= 0) return materialIndex;
+  const emptyIndex = player.monsterZone.findIndex((cardId) => !cardId);
+  if (emptyIndex >= 0) return emptyIndex;
+  return Math.min(player.monsterZone.length, MONSTER_ZONE_SIZE - 1);
+}
+
+function validateFusionDestination(state, playerId, materialCardIds = [], index = null) {
+  assertZoneIndexWithinLimit("monsterZone", index);
+  const player = requirePlayer(state, playerId);
+  const remaining = player.monsterZone.filter((cardId) => !materialCardIds.includes(cardId));
+  if (remaining.length >= MONSTER_ZONE_SIZE) {
+    throw new GameRuleError("monsterZone is full");
+  }
+  const occupant = player.monsterZone[index];
+  if (occupant && !materialCardIds.includes(occupant)) {
+    throw new GameRuleError("Fusion destination is occupied");
+  }
+}
+
+function fusionActivationCandidate(state, playerId, rivalId, card) {
+  const fusion = fusionDefinitionForCard(card);
+  const materialCardIds = defaultFusionMaterialCardIdsForAction(state, playerId, fusion);
+  return {
+    type: "ACTIVATE_CARD",
+    playerId,
+    rivalId,
+    cardId: card.id,
+    ...(materialCardIds.length ? {
+      materialCardIds,
+      index: fusionSummonIndexForAction(state, playerId, materialCardIds)
+    } : {})
+  };
 }
 
 function oneShot(operations, meta = {}) {

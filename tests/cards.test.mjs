@@ -7,6 +7,7 @@ import {
   cardTagText,
   cardTypeLabel,
   elementBadgeText,
+  fusionRequirementText,
   inferArchetype,
   inferRarity,
   spellTargetSummary,
@@ -58,4 +59,17 @@ test("builds tribute requirement display text from card definitions", () => {
   assert.match(tributeRequirementText(tributeMonster, { compact: true }), /2/);
   assert.match(cardRuleText(tributeMonster), /2/);
   assert.equal(tributeRequirementText({ type: "monster", stars: 4 }), "");
+});
+
+test("builds fusion requirement display text from card definitions", () => {
+  const fusionSpell = {
+    type: "spell",
+    effect: "fusionSummon",
+    fusion: { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] }
+  };
+
+  assert.match(fusionRequirementText(fusionSpell), /2/);
+  assert.match(fusionRequirementText(fusionSpell, { compact: true }), /2/);
+  assert.match(cardRuleText(fusionSpell), /2/);
+  assert.equal(fusionRequirementText({ type: "spell", effect: "draw2" }), "");
 });

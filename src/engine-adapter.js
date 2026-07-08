@@ -68,6 +68,63 @@ function tributeCardIdsFromUiState(duelist, card, options = {}) {
     .filter(Boolean);
 }
 
+function cardTemplateId(card) {
+  return card?.templateId || card?.id || "";
+}
+
+function normalizedFusionRequirements(card) {
+  return (Array.isArray(card?.fusion?.materials) ? card.fusion.materials : [])
+    .map((entry) => typeof entry === "string"
+      ? { templateId: entry, count: 1 }
+      : { templateId: entry?.templateId || entry?.id, count: Math.max(1, Number(entry?.count) || 1) })
+    .filter((entry) => entry.templateId);
+}
+
+function fusionResultTemplateId(card) {
+  return card?.fusion?.resultTemplateId || card?.fusion?.result || card?.fusion?.cardId || "";
+}
+
+function isFusionSpell(card) {
+  return card?.type === "spell" && card.effect === "fusionSummon" && Boolean(fusionResultTemplateId(card)) && normalizedFusionRequirements(card).length > 0;
+}
+
+function normalizedFusionIndexes(duelist, card, options = {}) {
+  if (Array.isArray(options.materialIndexes)) {
+    return options.materialIndexes
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < duelist.field.length)
+      .filter((index, offset, list) => list.indexOf(index) === offset);
+  }
+  const available = duelist.field
+    .map((slot, index) => ({ card: slot, index }))
+    .filter((entry) => entry.card);
+  const selected = [];
+  for (const requirement of normalizedFusionRequirements(card)) {
+    for (let count = 0; count < requirement.count; count += 1) {
+      const foundIndex = available.findIndex((entry) => cardTemplateId(entry.card) === requirement.templateId);
+      if (foundIndex < 0) return [];
+      const [entry] = available.splice(foundIndex, 1);
+      selected.push(entry.index);
+    }
+  }
+  return selected;
+}
+
+function fusionMaterialCardIdsFromUiState(duelist, card, options = {}) {
+  if (Array.isArray(options.materialCardIds)) {
+    return options.materialCardIds.filter(Boolean);
+  }
+  return normalizedFusionIndexes(duelist, card, options)
+    .map((index) => cardKey(duelist.field[index]))
+    .filter(Boolean);
+}
+
+function fusionSummonSlotIndex(duelist, materialIndexes = [], fieldIndex = null) {
+  if (Number.isInteger(fieldIndex)) return fieldIndex;
+  if (materialIndexes.length > 0) return materialIndexes[0];
+  const emptyIndex = duelist.field.findIndex((slot) => !slot);
+  return emptyIndex >= 0 ? emptyIndex : -1;
+}
+
 function collectCards(cards, ownerId, target) {
   cards.filter(Boolean).forEach((card) => {
     const id = cardKey(card);
@@ -474,6 +531,29 @@ export function explainActivateSpellFromUiState(uiState, playerId, rivalId, hand
   }
 
   return explainUiAction(buildEngineStateFromUiState(uiState), action, "发动这张卡");
+}
+
+export function explainFusionSummonFromUiState(uiState, playerId, rivalId, handIndex, options = {}) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.hand[handIndex];
+  if (!card) return { ok: false, reason: "No hand card at index", engineReason: "No hand card at index" };
+  if (!isFusionSpell(card)) {
+    return { ok: false, reason: "Selected card is not a fusion spell", engineReason: "Selected card is not a fusion spell" };
+  }
+
+  const materialIndexes = normalizedFusionIndexes(duelist, card, options);
+  const materialCardIds = fusionMaterialCardIdsFromUiState(duelist, card, options);
+  const index = fusionSummonSlotIndex(duelist, materialIndexes, options.fieldIndex);
+  if (index < 0) return { ok: false, reason: "No monster zone slot is available", engineReason: "No monster zone slot is available" };
+
+  return explainUiAction(buildEngineStateFromUiState(uiState), {
+    type: "ACTIVATE_CARD",
+    playerId,
+    rivalId,
+    cardId: cardKey(card),
+    materialCardIds,
+    index
+  }, "Fusion summon");
 }
 
 export function explainSummonMonsterFromUiState(uiState, playerId, handIndex, fieldIndex = null, options = {}) {
@@ -1120,5 +1200,28 @@ export function dispatchActivateSpellFromUiState(uiState, playerId, rivalId, han
   const targetCardId = targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo);
   if (targetCardId) action.targetCardId = targetCardId;
   const events = engine.dispatch(action);
+  return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchFusionSummonFromUiState(uiState, playerId, rivalId, handIndex, options = {}) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.hand[handIndex];
+  if (!card) throw new Error(`No hand card at index ${handIndex}`);
+  if (!isFusionSpell(card)) {
+    throw new Error(`Spell ${card.effect || "(none)"} is not a fusion spell`);
+  }
+
+  const materialIndexes = normalizedFusionIndexes(duelist, card, options);
+  const materialCardIds = fusionMaterialCardIdsFromUiState(duelist, card, options);
+  const index = fusionSummonSlotIndex(duelist, materialIndexes, options.fieldIndex);
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId,
+    rivalId,
+    cardId: cardKey(card),
+    materialCardIds,
+    index
+  });
   return applyUiGameEvents(uiState, events);
 }

@@ -54,3 +54,12 @@ test("describes tribute summon requirements in unified card details", () => {
   assert.match(cardZoomMeta(card), /2/);
   assert.match(view.summonRequirement, /2/);
 });
+
+test("describes fusion requirements in unified card details", () => {
+  const view = cardDetailViewModel("starforge-fusion");
+
+  assert.equal(view.name, "星魂融合");
+  assert.match(view.effectText, /焰岚合星者/);
+  assert.match(view.summonRequirement, /2/);
+  assert.match(view.rule, /融合召唤/);
+});

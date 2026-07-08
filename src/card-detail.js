@@ -1,5 +1,5 @@
 import { library } from './data.js';
-import { cardRuleText, cardTagText, cardTypeLabel, elementBadgeText, tributeRequirementText } from './cards.js';
+import { cardRuleText, cardTagText, cardTypeLabel, elementBadgeText, fusionRequirementText, tributeRequirementText } from './cards.js';
 import { cardStatusText } from './card-renderer.js';
 import { totalAtk, totalDef } from './rules.js';
 
@@ -23,6 +23,8 @@ export function cardRuleLine(card) {
   }
   if (card.type === "trap") return `触发：${cardRuleText(card)}`;
   const rule = cardRuleText(card);
+  const fusionRequirement = fusionRequirementText(card);
+  if (fusionRequirement) return `${fusionRequirement} / 规则：融合召唤`;
   return rule.startsWith("目标:") ? `规则：${rule.replace("目标:", "目标：")}` : "规则：无需指定目标";
 }
 
@@ -53,7 +55,7 @@ export function cardDetailViewModel(cardOrId) {
     type: cardTypeLabel(card),
     effectText: card.text || "没有效果文本。",
     summary: card.summary || "",
-    summonRequirement: tributeRequirementText(card),
+    summonRequirement: tributeRequirementText(card) || fusionRequirementText(card),
     tags: cardTagText(card),
     attribute: elementBadgeText(card),
     attack: isMonster ? totalAtk(card) : null,

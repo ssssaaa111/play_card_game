@@ -42,6 +42,35 @@ function duelist(overrides = {}) {
   };
 }
 
+test("validates fusion spell material and result requirements", () => {
+  const fusionSpell = spell({
+    id: "starforge-fusion",
+    effect: "fusionSummon",
+    fusion: { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] }
+  });
+  const ready = duelist({
+    hand: [fusionSpell],
+    field: [
+      monster({ id: "ember-drake", templateId: "ember-drake" }),
+      monster({ id: "gale-mage", templateId: "gale-mage", element: "wind" }),
+      null,
+      null,
+      null
+    ],
+    deck: [monster({ id: "flare-gale-archon", templateId: "flare-gale-archon" })]
+  });
+
+  assert.deepEqual(validateSpellCondition("fusionSummon", { owner: ready, handIndex: 0 }), { ok: true });
+  assert.equal(validateSpellCondition("fusionSummon", {
+    owner: duelist({ hand: [fusionSpell], field: [monster({ id: "ember-drake", templateId: "ember-drake" }), null, null, null, null] }),
+    handIndex: 0
+  }).ok, false);
+  assert.equal(validateSpellCondition("fusionSummon", {
+    owner: duelist({ hand: [fusionSpell], field: ready.field, deck: [] }),
+    handIndex: 0
+  }).ok, false);
+});
+
 test("validates basic spell resource requirements", () => {
   assert.deepEqual(validateSpellCondition("heal700", { owner: duelist() }), {
     ok: false,

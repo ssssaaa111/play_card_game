@@ -39,6 +39,9 @@ export const spellDefinitions = {
   aceEvolution: {
     caption: "素材升阶，王牌登场"
   },
+  fusionSummon: {
+    caption: "融合召唤：选择指定素材登场"
+  },
   aceCrackdown: {
     caption: "压制王牌核心",
     target: "enemyMonster",
@@ -134,6 +137,28 @@ function hasCardInHandOrDeck(owner, templateId) {
   return [...(owner?.hand || []), ...(owner?.deck || [])].some((card) => cardTemplateId(card) === templateId);
 }
 
+function fusionDefinitionFromCard(card) {
+  const resultTemplateId = card?.fusion?.resultTemplateId || card?.fusion?.result || card?.fusion?.cardId || "";
+  const materials = (Array.isArray(card?.fusion?.materials) ? card.fusion.materials : [])
+    .map((entry) => typeof entry === "string"
+      ? { templateId: entry, count: 1 }
+      : { templateId: entry?.templateId || entry?.id, count: Math.max(1, Number(entry?.count) || 1) })
+    .filter((entry) => entry.templateId);
+  return { resultTemplateId, materials };
+}
+
+function hasFusionMaterialCards(owner, materials = []) {
+  const available = fieldCards(owner).map(cardTemplateId);
+  return materials.every((requirement) => {
+    for (let index = 0; index < requirement.count; index += 1) {
+      const found = available.indexOf(requirement.templateId);
+      if (found < 0) return false;
+      available.splice(found, 1);
+    }
+    return true;
+  });
+}
+
 export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } = {}) {
   if (!spellDefinition(effect)) {
     return { ok: false, reason: "这个魔法效果还没有实现。" };
@@ -185,6 +210,20 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       return hasCardInHandOrDeck(owner, ACE_EVOLUTION_ACE)
         ? { ok: true }
         : { ok: false, reason: "手牌或卡组里没有可进化登场的王牌。" };
+    case "fusionSummon": {
+      const card = owner.hand?.[handIndex];
+      const fusion = fusionDefinitionFromCard(card);
+      if (!fusion.resultTemplateId || fusion.materials.length === 0) {
+        return { ok: false, reason: "这张融合魔法没有完整的素材或结果配置。" };
+      }
+      if (!hasFusionMaterialCards(owner, fusion.materials)) {
+        return { ok: false, reason: "场上缺少指定融合素材。" };
+      }
+      if (!hasCardInHandOrDeck(owner, fusion.resultTemplateId)) {
+        return { ok: false, reason: "手牌或卡组里没有可融合登场的怪兽。" };
+      }
+      return { ok: true };
+    }
     case "aceCrackdown":
       return fieldCards(rival).length > 0
         ? { ok: true }

@@ -217,8 +217,8 @@ test("app exposes manual turn control buttons", () => {
   assert.match(app, /els\.handCancelBtn\.addEventListener\("click", cancelSelectedHandAction\)/);
   assert.match(app, /els\.choiceConfirmBtn\.addEventListener\("click"/);
   assert.match(app, /els\.choiceCancelBtn\.addEventListener\("click", cancelSelectedHandAction\)/);
-  assert.match(app, /els\.skipAttackBtn\.disabled = !canUseTurnControls \|\| Boolean\(state\.pendingTarget\) \|\| !actions\.attack/);
-  assert.match(app, /els\.endTurnBtn\.disabled = !canUseTurnControls/);
+  assert.match(app, /els\.skipAttackBtn\.disabled = !canUseTurnControls \|\| Boolean\(state\.pendingTarget\) \|\| Boolean\(state\.pendingFusion\) \|\| Boolean\(state\.pendingTribute\) \|\| !actions\.attack/);
+  assert.match(app, /els\.endTurnBtn\.disabled = !canUseTurnControls \|\| Boolean\(state\.pendingTarget\) \|\| Boolean\(state\.pendingFusion\) \|\| Boolean\(state\.pendingTribute\)/);
   assert.match(app, /els\.skipAttackBtn\.addEventListener\("click", skipPlayerAttack\)/);
   assert.match(app, /els\.endTurnBtn\.addEventListener\("click", manualEndPlayerTurn\)/);
 });
@@ -257,7 +257,7 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /selectedHandAction\?\.ok/);
   assert.match(app, /canUseHandCards\(selectedHand\.card\)/);
   assert.match(app, /!state\.pendingTribute \|\| selectedTributeIndexes\(\)\.length === state\.pendingTribute\.cost/);
-  assert.match(app, /Boolean\(state\.pendingTarget\) \|\| Boolean\(state\.pendingTribute\) \|\| selectedHandReady/);
+  assert.match(app, /Boolean\(state\.pendingTarget\) \|\| Boolean\(state\.pendingTribute\) \|\| Boolean\(state\.pendingFusion\) \|\| selectedHandReady/);
   assert.match(app, /slot\.classList\.toggle\("attack-target", attackTargetable\)/);
   assert.match(app, /cardEl\.classList\.toggle\("attack-target", attackTargetable\)/);
   assert.match(app, /const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable/);
@@ -442,7 +442,12 @@ test("browser test mode disables sound and guide blocking", () => {
 
   assert.match(app, /const BROWSER_PARAMS = new URLSearchParams\(window\.location\.search\)/);
   assert.match(app, /const BROWSER_TEST_MODE = BROWSER_PARAMS\.has\("test"\)/);
+  assert.match(app, /const BROWSER_MANUAL_VALUE = BROWSER_TEST_MODE \? BROWSER_PARAMS\.get\("manual"\)/);
   assert.match(app, /const BROWSER_MANUAL_MODE = BROWSER_TEST_MODE && BROWSER_PARAMS\.has\("manual"\)/);
+  assert.match(app, /const BROWSER_MANUAL_SCENARIO = scenarioIdFromParam\(BROWSER_MANUAL_VALUE\)/);
+  assert.match(app, /function scenarioIdFromParam\(value\)/);
+  assert.match(app, /scenarioId: BROWSER_MANUAL_SCENARIO \|\| "normal"/);
+  assert.match(app, /if \(BROWSER_MANUAL_SCENARIO && state\.scenarioId === BROWSER_MANUAL_SCENARIO\) \{\s*syncSetupControls\(\);/);
   assert.match(app, /const BROWSER_SMOKE = BROWSER_TEST_MODE \? BROWSER_PARAMS\.get\("smoke"\)/);
   assert.match(app, /createAudioSettings\(\{ testMode: BROWSER_TEST_MODE \}\)/);
   assert.match(audio, /export function createAudioSettings/);
@@ -535,6 +540,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="summonShadowBurn">召唤暗伤<\/option>/);
   assert.match(html, /<option value="tributeSummon">祭品召唤测试<\/option>/);
   assert.match(html, /<option value="tributeSummonDouble">双祭品召唤测试<\/option>/);
+  assert.match(html, /<option value="fusionSummon">融合召唤测试<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
   assert.match(html, /<option value="protagonistComeback">星魂主角战役 01：逆境觉醒<\/option>/);
@@ -618,6 +624,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
   assert.match(smoke, /"tribute-summon": runTributeSummonSmoke/);
   assert.match(smoke, /"tribute-summon-double": runTributeSummonDoubleSmoke/);
+  assert.match(smoke, /"fusion-summon": runFusionSummonSmoke/);
   assert.match(smoke, /"five-zone-layout": runFiveZoneLayoutSmoke/);
   assert.match(smoke, /"basic-expansion": runBasicExpansionSmoke/);
   assert.match(smoke, /"protagonist-comeback-demo": runProtagonistComebackDemoSmoke/);
@@ -702,6 +709,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "summon-trap-response"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon-double"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "fusion-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-challenge"\)/);

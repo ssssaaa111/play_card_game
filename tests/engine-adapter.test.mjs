@@ -27,6 +27,7 @@ import {
   dispatchDeclareAttackFromUiState,
   dispatchDrawCardsFromUiState,
   dispatchEndTurnFromUiState,
+  dispatchFusionSummonFromUiState,
   dispatchMarkMonsterUsedFromUiState,
   dispatchOpenResponseWindowFromUiState,
   dispatchOpenActionWindowFromUiState,
@@ -41,7 +42,8 @@ import {
   dispatchStartTurnFromUiState,
   dispatchTrapResponseFromUiState,
   dispatchSetTrapFromUiState,
-  dispatchSummonMonsterFromUiState
+  dispatchSummonMonsterFromUiState,
+  explainFusionSummonFromUiState
 } from "../src/engine-adapter.js";
 import { ACTION_WINDOWS, PHASES } from "../src/turn-state.js";
 import { MAX_LP } from "../src/rules.js";
@@ -316,6 +318,46 @@ test("explains tribute summon legality from UI state", () => {
   const rejected = explainSummonMonsterFromUiState(state, "player", 0, 0, { tributeIndexes: [] });
   assert.equal(rejected.ok, false);
   assert.match(rejected.engineReason, /requires exactly 1 tribute/);
+});
+
+test("dispatches fusion summon through engine and fixed UI slots", () => {
+  const fusion = uiSpell("fusion-spell", "fusionSummon", "starforge-fusion");
+  fusion.fusion = { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] };
+  const ember = uiMonster("fusion-ember", "ember-drake");
+  const gale = uiMonster("fusion-gale", "gale-mage");
+  const archon = uiMonster("fusion-archon", "flare-gale-archon");
+  const state = appState();
+  state.player.hand = [fusion];
+  state.player.field[0] = ember;
+  state.player.field[1] = gale;
+  state.player.deck = [archon];
+
+  const events = dispatchFusionSummonFromUiState(state, "player", "ai", 0, { materialIndexes: [0, 1], fieldIndex: 0 });
+
+  assert.deepEqual(state.player.hand, []);
+  assert.equal(state.player.field[0], archon);
+  assert.equal(state.player.field[1], null);
+  assert.deepEqual(state.player.deck, []);
+  assert.deepEqual(state.player.grave, [fusion, ember, gale]);
+  assert.ok(events.some((event) => event.type === "MATERIALS_SENT" && event.purpose === "fusion"));
+  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === archon.uid && event.summonType === "fusion"));
+  assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.cardId === archon.uid));
+});
+
+test("explains fusion summon legality from UI state", () => {
+  const fusion = uiSpell("fusion-spell", "fusionSummon", "starforge-fusion");
+  fusion.fusion = { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] };
+  const state = appState();
+  state.player.hand = [fusion];
+  state.player.field[0] = uiMonster("fusion-ember", "ember-drake");
+  state.player.field[1] = uiMonster("fusion-gale", "gale-mage");
+  state.player.deck = [uiMonster("fusion-archon", "flare-gale-archon")];
+
+  assert.equal(explainFusionSummonFromUiState(state, "player", "ai", 0, { materialIndexes: [0, 1], fieldIndex: 0 }).ok, true);
+
+  const rejected = explainFusionSummonFromUiState(state, "player", "ai", 0, { materialIndexes: [0], fieldIndex: 0 });
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.engineReason, /requires exactly 2 material/);
 });
 
 test("dispatches turn draws and replays deck-out damage into UI state", () => {
