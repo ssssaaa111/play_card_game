@@ -683,6 +683,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /function trapCard/);
   assert.match(smoke, /function graveTargetCard/);
   assert.match(smoke, /function preDuelDeckCard/);
+  assert.match(smoke, /function clickSmokeElementCenter/);
+  assert.match(smoke, /document\.elementFromPoint\(x, y\)/);
   assert.match(smoke, /function aiRevealVisible/);
   assert.match(smoke, /scenarioBrief: \{/);
   assert.match(smoke, /preDuelPreview: \{/);

@@ -231,6 +231,20 @@ function clickSmokeElement(element, label) {
   element.click();
 }
 
+function clickSmokeElementCenter(element, label) {
+  if (!element) throw new Error(`找不到测试目标：${label}`);
+  element.scrollIntoView({ block: "start", inline: "center" });
+  const rect = element.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  const hit = document.elementFromPoint(x, y);
+  if (!hit || (hit !== element && !element.contains(hit))) {
+    const target = hit ? `${hit.tagName}.${hit.className || ""}` : "none";
+    throw new Error(`${label} center is covered by ${target}`);
+  }
+  hit.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
+}
+
 function doubleClickSmokeElement(element, label) {
   if (!element) throw new Error(`找不到测试目标：${label}`);
   element.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }));
@@ -750,14 +764,14 @@ async function runFusionSummonSmoke(ctx) {
   await assertCardDetailModal(ctx, detailCard, "fusion-summon-preview");
   clickSmokeElement(ctx.els.zoomClose, "fusion-summon: close fusion preview detail");
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "fusion-summon: preview detail closes");
-  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "fusion-summon: select first material");
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-summon: select first material");
   await waitForSmoke(
     () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
       ctx.els.choiceConfirmBtn.disabled &&
       fieldCard(ctx.els, "player", "ember-drake")?.classList.contains("tribute-selected"),
     "fusion-summon: first material selected"
   );
-  clickSmokeElement(fieldCard(ctx.els, "player", "gale-mage"), "fusion-summon: select second material");
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "gale-mage"), "fusion-summon: select second material");
   await waitForSmoke(
     () => ctx.state.pendingFusion?.selectedIndexes?.length === 2 && !ctx.els.choiceConfirmBtn.disabled,
     "fusion-summon: two materials selected"

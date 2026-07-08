@@ -3824,15 +3824,34 @@ h1 {
 
 @media (max-width: 1040px) {
   #app {
+    height: auto;
+    min-height: 100dvh;
     overflow-x: hidden;
+    grid-template-rows: auto auto auto;
   }
 
   .arena {
     grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .field {
     order: -2;
+    perspective: none;
+    transform-style: flat;
+  }
+
+  .field-monster-card {
+    transform: none;
+  }
+
+  .field-monster-card:hover {
+    transform: translateY(-4px);
+  }
+
+  .field-monster-card::after,
+  .field-monster-card .monster-projection {
+    display: none;
   }
 
   .side {
@@ -3858,7 +3877,7 @@ h1 {
 @media (max-width: 720px) {
   #app {
     padding: 8px;
-    grid-template-rows: auto minmax(0, 1fr) clamp(170px, 24vh, 205px);
+    grid-template-rows: auto auto auto;
   }
 
   .topbar {
