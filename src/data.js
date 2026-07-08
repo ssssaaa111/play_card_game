@@ -1,4 +1,5 @@
 export const library = [
+  { id: "solar-vanguard", type: "monster", name: "曜锋先锋", element: "light", stars: 5, atk: 2300, def: 1700, icon: "曜", text: "需要 1 只我方场上怪兽作为祭品才能通常召唤。第一版祭品召唤验证用高阶怪兽。", tributeCost: 1 },
   { id: "ember-drake", type: "monster", name: "赤焰幼龙", element: "fire", stars: 4, atk: 1500, def: 900, icon: "炎", text: "被召唤时，对对手造成 200 点伤害。", onSummon: "burn200" },
   { id: "solar-knight", type: "monster", name: "日冕骑士", element: "light", stars: 4, atk: 1700, def: 1200, icon: "光", text: "稳健的光属性战士，适合抢节奏。" },
   { id: "gale-mage", type: "monster", name: "疾风术士", element: "wind", stars: 3, atk: 1200, def: 1400, icon: "风", text: "召唤时抽 1 张卡。", onSummon: "draw1" },
@@ -78,6 +79,7 @@ export const library = [
 ];
 
 export const monsterAssets = {
+  "solar-vanguard": "assets/monster-light-knight.png",
   "ember-drake": "assets/monster-fire-dragon.png",
   "flare-titan": "assets/monster-fire-dragon.png",
   "flame-captain": "assets/monster-fire-dragon.png",
@@ -397,6 +399,20 @@ export const characterProfiles = {
 };
 
 export const scenarioSetups = {
+  tributeSummon: {
+    label: "祭品召唤测试",
+    difficulty: "demo",
+    text: "起手提供 1 只场上怪兽和 1 只需要祭品的高阶怪兽，用来验证祭品召唤流程。",
+    goal: "选择曜锋先锋，献祭场上的星火信使后完成祭品召唤。",
+    objectives: ["选择手牌中的曜锋先锋。", "选择场上的星火信使作为祭品。", "确认祭品召唤后继续决斗。"],
+    hints: ["祭品召唤不会改变旧的普通召唤次数规则。", "被献祭的怪兽会进入己方墓地。"],
+    playerHand: ["solar-vanguard", "war-chant"],
+    playerField: ["spark-runner"],
+    playerDeck: ["solar-knight"],
+    aiField: ["iron-guardian"],
+    aiHand: [],
+    aiDeck: []
+  },
   normal: {
     label: "正常决斗",
     text: "随机起手和常规流程。"

@@ -1499,6 +1499,109 @@ test("ember-drake summon moves the card through EffectContext and resolves on-su
   assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 200));
 });
 
+test("tribute summon moves selected field monsters to grave before summoning", () => {
+  const state = makeState({
+    cards: [
+      card("material-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 }),
+      card("vanguard-1", { templateId: "solar-vanguard", type: "monster", atk: 2300, def: 1700, tributeCost: 1 })
+    ],
+    player: {
+      monsterZone: ["material-1"],
+      hand: ["vanguard-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "vanguard-1",
+    index: 0,
+    tributeCardIds: ["material-1"]
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].hand, []);
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["vanguard-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, ["material-1"]);
+  assert.equal(next.players[PLAYER].normalSummonsUsed, 1);
+  assert.ok(events.some((event) => event.type === "CARD_TRIBUTED" && event.cardId === "material-1" && event.summonCardId === "vanguard-1"));
+  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === "vanguard-1"));
+  assertValidGameState(next);
+});
+
+test("tribute summon rejects missing or illegal tribute cards without changing state", () => {
+  const state = makeState({
+    cards: [
+      card("material-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 }),
+      card("vanguard-1", { templateId: "solar-vanguard", type: "monster", atk: 2300, def: 1700, tributeCost: 1 })
+    ],
+    player: {
+      monsterZone: ["material-1"],
+      hand: ["vanguard-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "vanguard-1", index: 1 }),
+    /requires exactly 1 tribute/
+  );
+  assert.throws(
+    () => engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "vanguard-1", index: 1, tributeCardIds: ["vanguard-1"] }),
+    /not in player\.monsterZone/
+  );
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["vanguard-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].monsterZone, ["material-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, []);
+});
+
+test("non-tribute monsters cannot consume field monsters as tribute", () => {
+  const state = makeState({
+    cards: [
+      card("material-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 }),
+      card("lancer-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 })
+    ],
+    player: {
+      monsterZone: ["material-1"],
+      hand: ["lancer-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "SUMMON_MONSTER",
+      playerId: PLAYER,
+      cardId: "lancer-1",
+      index: 1,
+      tributeCardIds: ["material-1"]
+    }),
+    /does not require tribute/
+  );
+  engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "lancer-1", index: 1 });
+  assert.deepEqual(engine.getState().players[PLAYER].monsterZone, ["material-1", "lancer-1"]);
+});
+
+test("existing high-star monsters remain summonable unless a tribute cost is defined", () => {
+  const state = makeState({
+    cards: [
+      card("titan-1", { templateId: "flare-titan", type: "monster", stars: 5, atk: 2200, def: 1500 })
+    ],
+    player: {
+      hand: ["titan-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "titan-1", index: 0 });
+
+  assert.deepEqual(engine.getState().players[PLAYER].monsterZone, ["titan-1"]);
+});
+
 test("basic draw and heal on-summon effects resolve through events", () => {
   const state = makeState({
     cards: [

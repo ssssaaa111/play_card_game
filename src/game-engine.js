@@ -884,6 +884,8 @@ export class GameEngine {
 
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };
+    const tributeCost = tributeCostForCard(card);
+    const tributeCardIds = validateTributeSummonCost(state, action.playerId, card, action);
     if (player.normalSummonsUsed < 1) {
       emit("NORMAL_SUMMON_USED", {
         playerId: action.playerId,
@@ -905,6 +907,15 @@ export class GameEngine {
       cardId: action.cardId,
       cardType: card.type,
       phase: state.turn.phase
+    });
+    tributeCardIds.forEach((tributeCardId) => {
+      ctx.moveCard(tributeCardId, { playerId: action.playerId, zone: "monsterZone" }, { playerId: action.playerId, zone: "grave" });
+      emit("CARD_TRIBUTED", {
+        playerId: action.playerId,
+        cardId: tributeCardId,
+        summonCardId: action.cardId,
+        tributeCost
+      });
     });
     ctx.summonMonster(action.playerId, action.cardId, { index: action.index });
     if (card.onSummon) {
@@ -1720,12 +1731,15 @@ export function getLegalActions(initialState, playerId = initialState?.turn?.pla
   player.hand.forEach((cardId) => {
     const card = requireCard(state, cardId);
     if (card.type === "monster") {
+      const tributeCardIds = defaultTributeCardIdsForAction(state, playerId, card);
+      const summonIndex = Math.min(player.monsterZone.length, MONSTER_ZONE_SIZE - 1);
       consider("summon", {
         type: "SUMMON_MONSTER",
         playerId,
         rivalId,
         cardId,
-        index: player.monsterZone.length
+        index: summonIndex,
+        ...(tributeCardIds.length ? { tributeCardIds } : {})
       });
     }
     if (card.type === "trap") {
@@ -2139,6 +2153,7 @@ export function applyGameEvent(state, event, options = {}) {
     case "CARD_ACTIVATED":
     case "TRAP_SET":
     case "CARD_DESTROYED":
+    case "CARD_TRIBUTED":
     case "MATERIALS_SENT":
     case "EFFECT_NEGATED":
     case "EFFECT_SKIPPED":
@@ -3314,6 +3329,48 @@ function engineTotalAtk(card) {
 
 function engineTotalDef(card) {
   return Math.max(0, (Number(card?.def) || 0) + (Number(card?.tempDef) || 0));
+}
+
+export function tributeCostForCard(card) {
+  return Math.max(0, Number(card?.tributeCost) || 0);
+}
+
+function defaultTributeCardIdsForAction(state, playerId, card) {
+  const cost = tributeCostForCard(card);
+  if (cost <= 0) return [];
+  const player = requirePlayer(state, playerId);
+  return player.monsterZone.slice(0, cost);
+}
+
+function validateTributeSummonCost(state, playerId, card, action) {
+  const cost = tributeCostForCard(card);
+  const tributeCardIds = Array.isArray(action.tributeCardIds)
+    ? action.tributeCardIds.filter(Boolean)
+    : [];
+
+  if (cost <= 0) {
+    if (tributeCardIds.length > 0) {
+      throw new GameRuleError(`Card ${card.id} does not require tribute cards`);
+    }
+    return [];
+  }
+
+  if (tributeCardIds.length !== cost) {
+    throw new GameRuleError(`Card ${card.id} requires exactly ${cost} tribute card${cost === 1 ? "" : "s"}`);
+  }
+
+  if (new Set(tributeCardIds).size !== tributeCardIds.length) {
+    throw new GameRuleError("Tribute cards must be unique");
+  }
+
+  tributeCardIds.forEach((tributeCardId) => {
+    const tribute = requireCardInZone(state, playerId, "monsterZone", tributeCardId);
+    if (tribute.type !== "monster") {
+      throw new GameRuleError(`Tribute card ${tributeCardId} is not a monster`);
+    }
+  });
+
+  return tributeCardIds;
 }
 
 function oneShot(operations, meta = {}) {

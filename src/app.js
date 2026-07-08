@@ -95,8 +95,10 @@ import {
   weakestMonster
 } from './rules.js';
 
-const BROWSER_TEST_MODE = new URLSearchParams(window.location.search).has("test");
-const BROWSER_SMOKE = BROWSER_TEST_MODE ? new URLSearchParams(window.location.search).get("smoke") || "" : "";
+const BROWSER_PARAMS = new URLSearchParams(window.location.search);
+const BROWSER_TEST_MODE = BROWSER_PARAMS.has("test");
+const BROWSER_MANUAL_MODE = BROWSER_TEST_MODE && BROWSER_PARAMS.has("manual");
+const BROWSER_SMOKE = BROWSER_TEST_MODE ? BROWSER_PARAMS.get("smoke") || "" : "";
 const AUTO_END_DELAY_MS = 2800;
 const BROWSER_TEST_SLEEP_CAP_MS = 80;
 
@@ -108,6 +110,7 @@ const state = {
   timing: TIMINGS.draw,
   selected: null,
   pendingTarget: null,
+  pendingTribute: null,
   focusedCard: null,
   autoEnding: false,
   autoEndTimer: null,
@@ -662,6 +665,7 @@ function startGame() {
   state.phase = "draw";
   state.selected = null;
   state.pendingTarget = null;
+  state.pendingTribute = null;
   state.focusedCard = null;
   clearBattlePreview();
   state.autoEnding = false;
@@ -724,6 +728,7 @@ function prepareGame() {
   state.phase = "ready";
   state.selected = null;
   state.pendingTarget = null;
+  state.pendingTribute = null;
   state.focusedCard = null;
   clearBattlePreview();
   state.autoEnding = false;
@@ -1216,6 +1221,10 @@ async function selectHandCard(uid) {
       addLog(`已取消 ${previousCardName} 的目标选择，改选 ${card.name}。`);
     }
   }
+  if (state.pendingTribute && state.pendingTribute.handUid !== uid) {
+    state.pendingTribute = null;
+    clearBattlePreview();
+  }
   const handIndex = state.player.hand.findIndex((item) => item.uid === uid);
   const wasSelected = state.selected?.zone === "hand" && state.selected.uid === uid;
   const canUseNow = canUseHandCards(card);
@@ -1252,6 +1261,120 @@ function selectedHandInfo() {
   const index = state.player.hand.findIndex((card) => card.uid === state.selected.uid);
   if (index < 0) return null;
   return { card: state.player.hand[index], index };
+}
+
+function tributeCost(card) {
+  return Math.max(0, Number(card?.tributeCost) || 0);
+}
+
+function tributeSummonReady(card) {
+  const cost = tributeCost(card);
+  if (cost <= 0) return true;
+  return state.player.field.filter(Boolean).length >= cost;
+}
+
+function beginTributeSelection(handIndex, card) {
+  const cost = tributeCost(card);
+  if (cost <= 0) return false;
+  if (!tributeSummonReady(card)) {
+    cue(`${card.name} 需要 ${cost} 只场上怪兽作为祭品。`);
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return true;
+  }
+  notePlayerIntent();
+  clearBattlePreview();
+  state.pendingTribute = {
+    handUid: card.uid,
+    handIndex,
+    cardName: card.name,
+    cost,
+    selectedIndexes: []
+  };
+  state.selected = { zone: "hand", uid: card.uid };
+  cue(`选择 ${cost} 只我方场上怪兽作为 ${card.name} 的祭品。`);
+  render();
+  resetPlayerIdleCountdown();
+  return true;
+}
+
+function pendingTributeHandInfo() {
+  const pending = state.pendingTribute;
+  if (!pending) return null;
+  const index = state.player.hand.findIndex((card) => card.uid === pending.handUid);
+  if (index < 0) return null;
+  return { card: state.player.hand[index], index, pending };
+}
+
+function selectedTributeIndexes() {
+  return (state.pendingTribute?.selectedIndexes || []).filter((index) => Boolean(state.player.field[index]));
+}
+
+function toggleTributeSelection(index) {
+  const info = pendingTributeHandInfo();
+  if (!info) {
+    state.pendingTribute = null;
+    render();
+    return false;
+  }
+  const card = state.player.field[index];
+  if (!card) {
+    cue(`请选择我方场上的怪兽作为 ${info.card.name} 的祭品。`);
+    resetPlayerIdleCountdown();
+    return true;
+  }
+  const selected = selectedTributeIndexes();
+  const existing = selected.indexOf(index);
+  if (existing >= 0) {
+    selected.splice(existing, 1);
+  } else if (selected.length < info.pending.cost) {
+    selected.push(index);
+  } else {
+    selected.shift();
+    selected.push(index);
+  }
+  info.pending.selectedIndexes = selected;
+  state.selected = { zone: "hand", uid: info.card.uid };
+  showDetail(card);
+  cue(`${info.card.name} 祭品：${selected.length}/${info.pending.cost}`);
+  render();
+  resetPlayerIdleCountdown();
+  return true;
+}
+
+async function confirmTributeSummon(fieldIndex = null) {
+  const info = pendingTributeHandInfo();
+  if (!info) {
+    state.pendingTribute = null;
+    cue("祭品召唤已失效。");
+    render();
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return false;
+  }
+  const tributeIndexes = selectedTributeIndexes();
+  if (tributeIndexes.length !== info.pending.cost) {
+    cue(`还需要选择 ${info.pending.cost} 只祭品。`);
+    resetPlayerIdleCountdown();
+    return false;
+  }
+  const summonIndex = Number.isInteger(fieldIndex)
+    ? fieldIndex
+    : tributeIndexes[0];
+  const targetOccupied = state.player.field[summonIndex] && !tributeIndexes.includes(summonIndex);
+  if (targetOccupied) {
+    cue("祭品召唤只能放到空召唤区，或放到即将作为祭品离场的格子。");
+    resetPlayerIdleCountdown();
+    return false;
+  }
+  const summoned = await summonMonster(state.player, state.ai, info.index, summonIndex, { tributeIndexes });
+  if (!summoned) {
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return false;
+  }
+  state.pendingTribute = null;
+  state.selected = null;
+  render("summon-player-" + summonIndex);
+  resolvePlayerActionWindow("祭品召唤完成");
+  return true;
 }
 
 async function queuePendingAttack(targetIndex) {
@@ -1343,6 +1466,7 @@ async function quickAttackOnlyTarget(attackerIndex) {
 }
 
 function handConfirmLabel(card) {
+  if (state.pendingTribute) return "确认祭品召唤";
   if (!card) return "确认";
   if (card.type === "spell") {
     return spellNeedsManualTarget(state.player, card) ? "确认选目标" : "确认发动";
@@ -1355,6 +1479,10 @@ function handConfirmLabel(card) {
 async function confirmSelectedHandAction() {
   if (state.pendingTarget) {
     await resolvePendingSpellDefault();
+    return;
+  }
+  if (state.pendingTribute) {
+    await confirmTributeSummon();
     return;
   }
   const selected = selectedHandInfo();
@@ -1379,6 +1507,10 @@ async function confirmSelectedHandAction() {
     return;
   }
   if (selected.card.type === "monster") {
+    if (tributeCost(selected.card) > 0) {
+      beginTributeSelection(selected.index, selected.card);
+      return;
+    }
     const empty = state.player.field.findIndex((slot) => !slot);
     if (empty < 0) {
       cue("召唤区已满。");
@@ -1401,13 +1533,15 @@ async function confirmSelectedHandAction() {
 
 function cancelSelectedHandAction() {
   const hadPendingTarget = Boolean(state.pendingTarget);
+  const hadPendingTribute = Boolean(state.pendingTribute);
   const selected = selectedHandInfo();
-  if (!hadPendingTarget && !selected) {
+  if (!hadPendingTarget && !hadPendingTribute && !selected) {
     cue("当前没有选中的手牌。");
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
   clearPendingTarget();
+  state.pendingTribute = null;
   state.selected = null;
   clearBattlePreview();
   playSound("click");
@@ -1422,6 +1556,11 @@ async function selectPlayerMonster(index) {
   if (!canPlayerAct()) {
     showDetail(card);
     render();
+    return;
+  }
+  if (state.pendingTribute) {
+    notePlayerIntent();
+    toggleTributeSelection(index);
     return;
   }
   const wasSelected = state.selected?.zone === "playerField" && state.selected.index === index;
@@ -1445,6 +1584,11 @@ async function selectPlayerMonster(index) {
 async function handlePlayerSlot(index) {
   if (state.pendingTarget) {
     await resolvePendingSpellTarget("player", index);
+    return;
+  }
+  if (state.pendingTribute) {
+    notePlayerIntent();
+    toggleTributeSelection(index);
     return;
   }
   if (!canPlayerAct() || !state.selected) return;
@@ -1476,6 +1620,10 @@ async function handlePlayerSlot(index) {
   if (state.player.normalSummonsUsed > 0 && state.player.extraSummon <= 0) {
     announce("本回合已经召唤过怪兽");
     resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
+  if (tributeCost(card) > 0) {
+    beginTributeSelection(handIndex, card);
     return;
   }
   if (state.player.field[index]) {
@@ -1645,12 +1793,15 @@ async function handleAiPanelAttack() {
   await queuePendingAttack(-1);
 }
 
-async function summonMonster(owner, rival, handIndex, fieldIndex) {
+async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) {
   const card = owner.hand[handIndex];
   if (!card) return false;
+  const tributeCards = Array.isArray(options.tributeIndexes)
+    ? options.tributeIndexes.map((index) => owner.field[index]).filter(Boolean)
+    : [];
   let summonEvents = [];
   try {
-    summonEvents = dispatchSummonMonsterFromUiState(state, owner.owner, handIndex, fieldIndex);
+    summonEvents = dispatchSummonMonsterFromUiState(state, owner.owner, handIndex, fieldIndex, options);
   } catch (error) {
     cue(error.message || "怪兽召唤失败。");
     console.error(error);
@@ -1660,6 +1811,13 @@ async function summonMonster(owner, rival, handIndex, fieldIndex) {
   animateAvatar(owner.owner, "cast");
   const summonLog = addLog(`${owner.owner === "player" ? "你" : "AI"} 召唤了 ${card.name}。`, cardLogMeta(card, { actor: owner.owner, type: "summon" }));
   speak(`${owner.owner === "player" ? "你召唤" : "对手召唤"}，${card.name}。`);
+  if (tributeCards.length) {
+    addLog(`${owner.owner === "player" ? "你" : "AI"} 将 ${tributeCards.map((tribute) => `「${tribute.name}」`).join("、")} 作为祭品召唤了「${card.name}」。`, cardLogMeta(card, {
+      actor: owner.owner,
+      type: "tribute-summon",
+      relatedCardIds: relatedCardIds(card, ...tributeCards)
+    }));
+  }
   if (card.stars >= 5) {
     showAce(card, owner.owner);
   } else {
@@ -3556,6 +3714,7 @@ function timerTextForActionWindow(left) {
 
 function resetPlayerIdleCountdown() {
   clearPlayerIdleTimers();
+  if (BROWSER_MANUAL_MODE) return;
   if (!shouldRunPlayerIdleCountdownForState(state)) return;
   const seconds = actionWindowTimeoutSeconds(state.actionWindow);
   if (seconds <= 0) return;
@@ -3724,13 +3883,18 @@ function render(animationKey = "") {
   els.voiceBtn.classList.toggle("sound-off", !state.voiceOn);
   const selectedHand = selectedHandInfo();
   const selectedHandAction = selectedHand ? handActionInfo(selectedHand.card, selectedHand.index) : null;
-  const selectedHandReady = Boolean(selectedHand && selectedHandAction?.ok && canUseHandCards(selectedHand.card));
+  const selectedHandReady = Boolean(
+    selectedHand &&
+    selectedHandAction?.ok &&
+    canUseHandCards(selectedHand.card) &&
+    (!state.pendingTribute || selectedTributeIndexes().length === state.pendingTribute.cost)
+  );
   els.handConfirmBtn.textContent = state.pendingTarget ? "确认默认目标" : handConfirmLabel(selectedHand?.card);
   els.handConfirmBtn.disabled = state.pendingTarget ? false : !selectedHandReady;
   els.handCancelBtn.textContent = state.pendingTarget ? "取消目标" : "取消选择";
-  els.handCancelBtn.disabled = !canPlayerAct() || (!state.pendingTarget && !selectedHandReady);
+  els.handCancelBtn.disabled = !canPlayerAct() || (!state.pendingTarget && !state.pendingTribute && !selectedHandReady);
   if (els.choiceActions) {
-    const showChoiceActions = canPlayerAct() && (Boolean(state.pendingTarget) || selectedHandReady);
+    const showChoiceActions = canPlayerAct() && (Boolean(state.pendingTarget) || Boolean(state.pendingTribute) || selectedHandReady);
     els.choiceActions.hidden = !showChoiceActions;
     if (showChoiceActions) {
       const confirmLabel = state.pendingTarget ? "确认默认目标" : handConfirmLabel(selectedHand?.card);
@@ -3850,9 +4014,13 @@ function renderField(root, duelist, owner, animationKey) {
     slot.dataset.testid = `${owner}-field-${index}`;
     const targetable = isPendingTargetSlot(owner, index);
     const attackTargetable = isAttackTargetSlot(owner, index);
+    const tributeCandidate = owner === "player" && Boolean(state.pendingTribute) && Boolean(card);
+    const tributeSelected = tributeCandidate && selectedTributeIndexes().includes(index);
     const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable;
     slot.classList.toggle("targetable", targetable);
     slot.classList.toggle("attack-target", attackTargetable);
+    slot.classList.toggle("tribute-candidate", tributeCandidate);
+    slot.classList.toggle("tribute-selected", tributeSelected);
     slot.disabled = disabledEnemyEmpty;
     slot.setAttribute("aria-disabled", disabledEnemyEmpty ? "true" : "false");
     slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}召唤区 ${index + 1}`);
@@ -3872,6 +4040,8 @@ function renderField(root, duelist, owner, animationKey) {
       cardEl.classList.toggle("defense", card.mode === "defense");
       cardEl.classList.toggle("targetable", targetable);
       cardEl.classList.toggle("attack-target", attackTargetable);
+      cardEl.classList.toggle("tribute-candidate", tributeCandidate);
+      cardEl.classList.toggle("tribute-selected", tributeSelected);
       if (animationKey === `summon-${owner}-${index}`) cardEl.classList.add("summon-flash");
       if (animationKey === `hit-${owner}-${index}`) cardEl.classList.add("hit-flash");
       if (owner === "player") {
@@ -3950,7 +4120,7 @@ function renderTraps(root, duelist, owner) {
 function handActionInfo(card, handIndex) {
   const selected = state.selected?.zone === "hand" && state.selected.uid === card.uid;
   const needsTarget = card.type === "spell" && spellNeedsManualTarget(state.player, card);
-  return describeHandAction(card, {
+  const action = describeHandAction(card, {
     started: state.started,
     canAct: canUseHandCards(card) || Boolean(state.pendingTarget),
     paused: state.paused,
@@ -3970,6 +4140,25 @@ function handActionInfo(card, handIndex) {
         ? targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect)
         : ""
   });
+  const cost = tributeCost(card);
+  if (card.type === "monster" && cost > 0) {
+    const available = state.player.field.filter(Boolean).length;
+    if (available < cost) {
+      return {
+        ok: false,
+        label: "祭品不足",
+        reason: `需要 ${cost} 只场上怪兽作为祭品。`
+      };
+    }
+    return {
+      ...action,
+      label: state.pendingTribute?.handUid === card.uid ? `祭品 ${selectedTributeIndexes().length}/${cost}` : "祭品召唤",
+      reason: state.pendingTribute?.handUid === card.uid
+        ? `选择 ${cost} 只我方场上怪兽后确认祭品召唤。`
+        : `确认后选择 ${cost} 只我方场上怪兽作为祭品。`
+    };
+  }
+  return action;
 }
 
 function renderHand(animationKey) {

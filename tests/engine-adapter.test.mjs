@@ -284,6 +284,40 @@ test("dispatches SUMMON_MONSTER and applies CARD_MOVED to a fixed UI monster slo
   assert.equal(state.gameEvents.length, events.length);
 });
 
+test("dispatches tribute summon through engine and fixed UI slots", () => {
+  const material = uiMonster("tribute-material", "spark-runner");
+  const vanguard = uiMonster("tribute-vanguard", "solar-vanguard");
+  vanguard.tributeCost = 1;
+  const state = appState();
+  state.player.field[0] = material;
+  state.player.hand = [vanguard];
+
+  const events = dispatchSummonMonsterFromUiState(state, "player", 0, 0, { tributeIndexes: [0] });
+
+  assert.deepEqual(state.player.hand, []);
+  assert.equal(state.player.field[0], vanguard);
+  assert.deepEqual(state.player.grave, [material]);
+  assert.equal(state.player.normalSummonsUsed, 1);
+  assert.ok(events.some((event) => event.type === "CARD_TRIBUTED" && event.cardId === material.uid && event.summonCardId === vanguard.uid));
+  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === vanguard.uid));
+});
+
+test("explains tribute summon legality from UI state", () => {
+  const material = uiMonster("tribute-material", "spark-runner");
+  const vanguard = uiMonster("tribute-vanguard", "solar-vanguard");
+  vanguard.tributeCost = 1;
+  const state = appState();
+  state.player.field[0] = material;
+  state.player.hand = [vanguard];
+
+  assert.equal(explainSummonMonsterFromUiState(state, "player", 0, 0, { tributeIndexes: [0] }).ok, true);
+
+  state.player.field[0] = null;
+  const rejected = explainSummonMonsterFromUiState(state, "player", 0, 0, { tributeIndexes: [] });
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.engineReason, /requires exactly 1 tribute/);
+});
+
 test("dispatches turn draws and replays deck-out damage into UI state", () => {
   const first = uiMonster("ui-draw-first", "star-lancer");
   const second = uiMonster("ui-draw-second", "iron-guardian");

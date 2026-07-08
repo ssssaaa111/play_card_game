@@ -253,8 +253,11 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /beginSpellTargetSelection\(handIndex, card\)/);
   assert.match(app, /已取消 \$\{previousCardName\} 的目标选择，改选 \$\{card\.name\}/);
   assert.match(app, /playSpell\(state\.player, state\.ai, selected\.index\)/);
-  assert.match(app, /const selectedHandReady = Boolean\(selectedHand && selectedHandAction\?\.ok && canUseHandCards\(selectedHand\.card\)\)/);
-  assert.match(app, /Boolean\(state\.pendingTarget\) \|\| selectedHandReady/);
+  assert.match(app, /const selectedHandReady = Boolean\(/);
+  assert.match(app, /selectedHandAction\?\.ok/);
+  assert.match(app, /canUseHandCards\(selectedHand\.card\)/);
+  assert.match(app, /!state\.pendingTribute \|\| selectedTributeIndexes\(\)\.length === state\.pendingTribute\.cost/);
+  assert.match(app, /Boolean\(state\.pendingTarget\) \|\| Boolean\(state\.pendingTribute\) \|\| selectedHandReady/);
   assert.match(app, /slot\.classList\.toggle\("attack-target", attackTargetable\)/);
   assert.match(app, /cardEl\.classList\.toggle\("attack-target", attackTargetable\)/);
   assert.match(app, /const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable/);
@@ -437,8 +440,10 @@ test("browser test mode disables sound and guide blocking", () => {
   const audio = readProjectFile("src/audio.js");
   const smoke = readProjectFile("src/browser-smoke.js");
 
-  assert.match(app, /const BROWSER_TEST_MODE = new URLSearchParams\(window\.location\.search\)\.has\("test"\)/);
-  assert.match(app, /const BROWSER_SMOKE = BROWSER_TEST_MODE \? new URLSearchParams\(window\.location\.search\)\.get\("smoke"\)/);
+  assert.match(app, /const BROWSER_PARAMS = new URLSearchParams\(window\.location\.search\)/);
+  assert.match(app, /const BROWSER_TEST_MODE = BROWSER_PARAMS\.has\("test"\)/);
+  assert.match(app, /const BROWSER_MANUAL_MODE = BROWSER_TEST_MODE && BROWSER_PARAMS\.has\("manual"\)/);
+  assert.match(app, /const BROWSER_SMOKE = BROWSER_TEST_MODE \? BROWSER_PARAMS\.get\("smoke"\)/);
   assert.match(app, /createAudioSettings\(\{ testMode: BROWSER_TEST_MODE \}\)/);
   assert.match(audio, /export function createAudioSettings/);
   assert.match(audio, /soundOn: !testMode/);
@@ -528,6 +533,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="summonFireBuff">召唤火强化<\/option>/);
   assert.match(html, /<option value="summonShield">召唤护盾<\/option>/);
   assert.match(html, /<option value="summonShadowBurn">召唤暗伤<\/option>/);
+  assert.match(html, /<option value="tributeSummon">祭品召唤测试<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
   assert.match(html, /<option value="protagonistComeback">星魂主角战役 01：逆境觉醒<\/option>/);
@@ -609,6 +615,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-shield": runSummonShieldSmoke/);
   assert.match(smoke, /"summon-shadow-burn": runSummonShadowBurnSmoke/);
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
+  assert.match(smoke, /"tribute-summon": runTributeSummonSmoke/);
   assert.match(smoke, /"five-zone-layout": runFiveZoneLayoutSmoke/);
   assert.match(smoke, /"basic-expansion": runBasicExpansionSmoke/);
   assert.match(smoke, /"protagonist-comeback-demo": runProtagonistComebackDemoSmoke/);
@@ -691,6 +698,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "summon-shield"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "summon-shadow-burn"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "summon-trap-response"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-challenge"\)/);

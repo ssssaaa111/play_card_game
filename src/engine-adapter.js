@@ -1,4 +1,4 @@
-import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents } from './game-engine.js';
+import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents, tributeCostForCard } from './game-engine.js';
 import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { trapDefinition } from './traps.js';
@@ -43,6 +43,29 @@ function cardKey(card) {
 
 function compactCardIds(cards = []) {
   return cards.filter(Boolean).map(cardKey).filter(Boolean);
+}
+
+function normalizedTributeIndexes(duelist, card, options = {}) {
+  if (Array.isArray(options.tributeIndexes)) {
+    return options.tributeIndexes
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < duelist.field.length)
+      .filter((index, offset, list) => list.indexOf(index) === offset);
+  }
+  const cost = tributeCostForCard(card);
+  if (cost <= 0) return [];
+  return duelist.field
+    .map((slot, index) => (slot ? index : -1))
+    .filter((index) => index >= 0)
+    .slice(0, cost);
+}
+
+function tributeCardIdsFromUiState(duelist, card, options = {}) {
+  if (Array.isArray(options.tributeCardIds)) {
+    return options.tributeCardIds.filter(Boolean);
+  }
+  return normalizedTributeIndexes(duelist, card, options)
+    .map((index) => cardKey(duelist.field[index]))
+    .filter(Boolean);
 }
 
 function collectCards(cards, ownerId, target) {
@@ -453,13 +476,34 @@ export function explainActivateSpellFromUiState(uiState, playerId, rivalId, hand
   return explainUiAction(buildEngineStateFromUiState(uiState), action, "发动这张卡");
 }
 
-export function explainSummonMonsterFromUiState(uiState, playerId, handIndex, fieldIndex = null) {
+export function explainSummonMonsterFromUiState(uiState, playerId, handIndex, fieldIndex = null, options = {}) {
   const duelist = uiDuelist(uiState, playerId);
   const card = duelist.hand[handIndex];
   if (!card) return { ok: false, reason: "没有选中手牌。", engineReason: "No hand card at index" };
   if (card.type !== "monster") return { ok: false, reason: "这张卡不是怪兽卡。", engineReason: "Selected card is not a monster" };
 
-  const index = Number.isInteger(fieldIndex) ? fieldIndex : duelist.field.findIndex((slot) => !slot);
+  const tributeIndexes = normalizedTributeIndexes(duelist, card, options);
+  const emptyIndex = duelist.field.findIndex((slot) => !slot);
+  const index = Number.isInteger(fieldIndex)
+    ? fieldIndex
+    : emptyIndex >= 0
+      ? emptyIndex
+      : tributeIndexes[0] ?? -1;
+  if (index >= 0 && duelist.field[index] && tributeIndexes.includes(index)) {
+    const engineState = buildEngineStateFromUiState(uiState);
+    const cardId = cardKey(card);
+    if (engineState.cards[cardId] && !canDispatchSummonEffectFromUiState(card)) {
+      engineState.cards[cardId] = { ...engineState.cards[cardId], onSummon: null };
+    }
+    const tributeCardIds = tributeCardIdsFromUiState(duelist, card, options);
+    return explainUiAction(engineState, {
+      type: "SUMMON_MONSTER",
+      playerId,
+      cardId,
+      index,
+      ...(tributeCardIds.length ? { tributeCardIds } : {})
+    }, "召唤这只怪兽");
+  }
   if (index < 0) return { ok: false, reason: "召唤区已满。", engineReason: "No monster zone slot is available" };
   if (duelist.field[index]) return { ok: false, reason: "这个召唤区已有怪兽。", engineReason: "Monster zone slot is occupied" };
 
@@ -469,11 +513,14 @@ export function explainSummonMonsterFromUiState(uiState, playerId, handIndex, fi
     engineState.cards[cardId] = { ...engineState.cards[cardId], onSummon: null };
   }
 
+  const tributeCardIds = tributeCardIdsFromUiState(duelist, card, options);
+
   return explainUiAction(engineState, {
     type: "SUMMON_MONSTER",
     playerId,
     cardId,
-    index
+    index,
+    ...(tributeCardIds.length ? { tributeCardIds } : {})
   }, "召唤这只怪兽");
 }
 
@@ -1032,7 +1079,7 @@ export function dispatchResolveTurnDrawFromUiState(uiState, playerId, options = 
   return applyUiGameEvents(uiState, events);
 }
 
-export function dispatchSummonMonsterFromUiState(uiState, playerId, handIndex, fieldIndex) {
+export function dispatchSummonMonsterFromUiState(uiState, playerId, handIndex, fieldIndex, options = {}) {
   const duelist = uiDuelist(uiState, playerId);
   const card = duelist.hand[handIndex];
   if (!card) throw new Error(`No hand card at index ${handIndex}`);
@@ -1044,11 +1091,13 @@ export function dispatchSummonMonsterFromUiState(uiState, playerId, handIndex, f
   }
 
   const engine = new GameEngine(engineState);
+  const tributeCardIds = tributeCardIdsFromUiState(duelist, card, options);
   const events = engine.dispatch({
     type: "SUMMON_MONSTER",
     playerId,
     cardId,
-    index: fieldIndex
+    index: fieldIndex,
+    ...(tributeCardIds.length ? { tributeCardIds } : {})
   });
   return applyUiGameEvents(uiState, events);
 }

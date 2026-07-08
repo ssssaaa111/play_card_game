@@ -131,6 +131,11 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         cardName: state.pendingTarget.cardName,
         effect: state.pendingTarget.effect
       } : null,
+      pendingTribute: state.pendingTribute ? {
+        cardName: state.pendingTribute.cardName,
+        cost: state.pendingTribute.cost,
+        selectedIndexes: state.pendingTribute.selectedIndexes.slice()
+      } : null,
       player: {
         lp: state.player.lp,
         shield: state.player.shield,
@@ -620,6 +625,44 @@ async function runSummonEffectsSmoke(ctx) {
   }
 
   setSmokeStatus("passed", "summon-effects");
+}
+
+async function runTributeSummonSmoke(ctx) {
+  setSmokeStatus("running", "tribute-summon");
+  await startSmokeDuel(ctx, "tributeSummon");
+  if (ctx.state.player.field[0]?.id !== "spark-runner") {
+    throw new Error("tribute-summon: material monster should start on player field");
+  }
+  clickSmokeElement(handCard(ctx.els, "solar-vanguard"), "tribute-summon: select high-level monster");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon: enter tribute selection");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.cardName && ctx.state.pendingTribute.cost === 1,
+    "tribute-summon: pending tribute selection"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-summon: select field tribute");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 1 &&
+      fieldCard(ctx.els, "player", "spark-runner")?.classList.contains("tribute-selected"),
+    "tribute-summon: tribute card selected"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon: confirm tribute summon");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "solar-vanguard" &&
+      ctx.state.player.grave.some((card) => card?.id === "spark-runner") &&
+      !ctx.state.pendingTribute,
+    "tribute-summon: vanguard summoned and material sent to grave",
+    9000
+  );
+  if (!countGameEvents(ctx.state, "CARD_TRIBUTED")) {
+    throw new Error("tribute-summon: CARD_TRIBUTED event missing");
+  }
+  if (!countGameEvents(ctx.state, "MONSTER_SUMMONED")) {
+    throw new Error("tribute-summon: MONSTER_SUMMONED event missing");
+  }
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("曜锋先锋"))) {
+    throw new Error("tribute-summon: public log should mention the tribute summoned monster");
+  }
+  setSmokeStatus("passed", "tribute-summon");
 }
 
 async function runSummonFireBuffSmoke(ctx) {
@@ -3014,6 +3057,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-shield": runSummonShieldSmoke,
     "summon-shadow-burn": runSummonShadowBurnSmoke,
     "summon-trap-response": runSummonTrapResponseSmoke,
+    "tribute-summon": runTributeSummonSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,

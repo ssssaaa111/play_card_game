@@ -916,6 +916,18 @@ h1 {
   cursor: crosshair;
 }
 
+.slot.tribute-candidate .card,
+.card.tribute-candidate {
+  border-color: rgba(244, 180, 75, 0.78);
+  box-shadow: 0 0 0 2px rgba(244, 180, 75, 0.2), 0 12px 26px rgba(0, 0, 0, 0.32);
+}
+
+.slot.tribute-selected .card,
+.card.tribute-selected {
+  border-color: rgba(255, 184, 74, 0.98);
+  box-shadow: 0 0 0 3px rgba(255, 184, 74, 0.45), 0 16px 34px rgba(0, 0, 0, 0.38);
+}
+
 .trap-slot.trap-response,
 .card.trap-response {
   border-color: rgba(183, 148, 244, 0.96);
