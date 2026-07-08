@@ -6,7 +6,8 @@ import {
   Timing,
   assertValidGameState,
   getCardEffectDefinition,
-  hasAbility
+  hasAbility,
+  tributeCostForCard
 } from "./game-engine.js";
 import { deckPresets, library } from "./data.js";
 import { MAX_LP, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from "./rules.js";
@@ -648,16 +649,39 @@ function battlePhaseActions(state, playerId, balanceStats = null) {
 function summonActions(state, playerId, balanceStats = null) {
   const player = state.players[playerId];
   if (!player) return [];
-  if (player.monsterZone.length >= MONSTER_ZONE_SIZE) {
-    return [];
-  }
   if (player.normalSummonsUsed >= 1 && !hasAbility(state, playerId, Ability.extraSummon)) {
     return [];
   }
   return player.hand
     .filter((cardId) => state.cards[cardId]?.type === "monster")
-    .map((cardId) => ({ type: "SUMMON_MONSTER", playerId, cardId, index: player.monsterZone.length }))
+    .map((cardId) => summonActionForCard(state, playerId, cardId))
+    .filter(Boolean)
     .filter((action) => canDispatch(state, action, balanceStats));
+}
+
+function summonActionForCard(state, playerId, cardId) {
+  const player = state.players[playerId];
+  const card = state.cards[cardId];
+  const tributeCost = tributeCostForCard(card);
+  if (tributeCost <= 0 && player.monsterZone.length >= MONSTER_ZONE_SIZE) {
+    return null;
+  }
+  if (tributeCost > 0 && player.monsterZone.length < tributeCost) {
+    return null;
+  }
+  const tributeCardIds = tributeCost > 0
+    ? player.monsterZone.slice(0, tributeCost)
+    : [];
+  const index = player.monsterZone.length < MONSTER_ZONE_SIZE
+    ? player.monsterZone.length
+    : Math.max(0, player.monsterZone.findIndex((fieldCardId) => tributeCardIds.includes(fieldCardId)));
+  return {
+    type: "SUMMON_MONSTER",
+    playerId,
+    cardId,
+    index,
+    ...(tributeCardIds.length ? { tributeCardIds } : {})
+  };
 }
 
 function spellActions(state, playerId, balanceStats = null) {

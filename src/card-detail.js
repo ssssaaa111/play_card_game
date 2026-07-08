@@ -1,5 +1,5 @@
 import { library } from './data.js';
-import { cardRuleText, cardTagText, cardTypeLabel, elementBadgeText } from './cards.js';
+import { cardRuleText, cardTagText, cardTypeLabel, elementBadgeText, tributeRequirementText } from './cards.js';
 import { cardStatusText } from './card-renderer.js';
 import { totalAtk, totalDef } from './rules.js';
 
@@ -17,7 +17,9 @@ export function resolveCardDetailSource(cardOrId) {
 
 export function cardRuleLine(card) {
   if (card.type === "monster") {
-    return cardStatusText(card) || (card.mode === "defense" ? "守备表示" : "攻击表示");
+    const status = cardStatusText(card) || (card.mode === "defense" ? "守备表示" : "攻击表示");
+    const requirement = tributeRequirementText(card);
+    return requirement ? `${requirement} / ${status}` : status;
   }
   if (card.type === "trap") return `触发：${cardRuleText(card)}`;
   const rule = cardRuleText(card);
@@ -51,6 +53,7 @@ export function cardDetailViewModel(cardOrId) {
     type: cardTypeLabel(card),
     effectText: card.text || "没有效果文本。",
     summary: card.summary || "",
+    summonRequirement: tributeRequirementText(card),
     tags: cardTagText(card),
     attribute: elementBadgeText(card),
     attack: isMonster ? totalAtk(card) : null,

@@ -2,6 +2,16 @@ import { elementLabel } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { trapSummaryText } from './traps.js';
 
+export function tributeCostForDisplay(card) {
+  return Math.max(0, Number(card?.tributeCost) || 0);
+}
+
+export function tributeRequirementText(card, { compact = false } = {}) {
+  const cost = tributeCostForDisplay(card);
+  if (cost <= 0) return "";
+  return compact ? `祭品 ${cost}` : `召唤需求：${cost} 只祭品`;
+}
+
 export function inferRarity(card) {
   if (card.type === "monster" && card.stars >= 5) return "SR";
   if (["elementEcho", "rallyAttack", "pierceLine", "graveReturn", "battleTrance", "directStrike", "fireWindCombo", "lightShadowCombo", "equipBlade", "equipAegis", "equipPrism", "equipOverclock", "destroySpellTrap", "aceEvolution", "aceCrackdown"].includes(card.effect)) return "R";
@@ -58,5 +68,6 @@ export function cardRuleText(card) {
     const target = spellTargetSummary(card.effect);
     return target ? `目标:${target}` : (card.rarity || inferRarity(card));
   }
+  if (card.type === "monster") return tributeRequirementText(card, { compact: true }) || (card.rarity || inferRarity(card));
   return card.rarity || inferRarity(card);
 }

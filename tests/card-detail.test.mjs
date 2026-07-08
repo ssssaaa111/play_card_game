@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { cardDetailText, cardRuleLine, cardZoomMeta } from "../src/card-detail.js";
+import { cardDetailText, cardDetailViewModel, cardRuleLine, cardZoomMeta } from "../src/card-detail.js";
 
 test("describes monster details with current status", () => {
   const card = {
@@ -33,4 +33,24 @@ test("describes spell and trap rule lines", () => {
   assert.equal(cardRuleLine(ordinarySpell), "规则：无需指定目标");
   assert.equal(cardRuleLine(trap), "触发：受到直接攻击时 / 直击伤害归零 / 消耗攻击");
   assert.match(cardZoomMeta(trap), /触发键：directShield/);
+});
+
+test("describes tribute summon requirements in unified card details", () => {
+  const card = {
+    id: "starfall-colossus",
+    type: "monster",
+    name: "坠星巨卫",
+    element: "light",
+    stars: 8,
+    atk: 3200,
+    def: 2600,
+    tributeCost: 2,
+    text: "需要 2 只我方场上怪兽作为祭品才能通常召唤。"
+  };
+  const view = cardDetailViewModel(card);
+
+  assert.match(cardRuleLine(card), /2/);
+  assert.match(cardDetailText(card), /2/);
+  assert.match(cardZoomMeta(card), /2/);
+  assert.match(view.summonRequirement, /2/);
 });

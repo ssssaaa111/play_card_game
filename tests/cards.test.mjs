@@ -9,7 +9,9 @@ import {
   elementBadgeText,
   inferArchetype,
   inferRarity,
-  spellTargetSummary
+  spellTargetSummary,
+  tributeCostForDisplay,
+  tributeRequirementText
 } from "../src/cards.js";
 
 test("infers rarity and archetype for major card categories", () => {
@@ -46,4 +48,14 @@ test("builds card display tags and rule summaries", () => {
   assert.equal(cardRuleText(targetedSpell), "目标:我方最高");
   assert.equal(cardRuleText(ordinarySpell), "N");
   assert.equal(cardRuleText(trap), "受到直接攻击时 / 直击伤害归零 / 消耗攻击");
+});
+
+test("builds tribute requirement display text from card definitions", () => {
+  const tributeMonster = { type: "monster", stars: 8, tributeCost: 2 };
+
+  assert.equal(tributeCostForDisplay(tributeMonster), 2);
+  assert.match(tributeRequirementText(tributeMonster), /2/);
+  assert.match(tributeRequirementText(tributeMonster, { compact: true }), /2/);
+  assert.match(cardRuleText(tributeMonster), /2/);
+  assert.equal(tributeRequirementText({ type: "monster", stars: 4 }), "");
 });

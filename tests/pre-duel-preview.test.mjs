@@ -67,6 +67,22 @@ test("pre-duel card details come from the unified card definition", () => {
   assert.equal(entry.summary, definition.summary || detail.rule || definition.text);
 });
 
+test("pre-duel preview exposes tribute requirements from unified card definitions", () => {
+  const preview = buildPreDuelPreview({
+    scenarioId: "tributeSummonDouble",
+    scenario: scenarioSetups.tributeSummonDouble,
+    playerPreset: "balanced"
+  });
+  const entry = preview.deckCards.find((card) => card.id === "starfall-colossus");
+  const definition = cardDefinitionById("starfall-colossus");
+  const detail = cardDetailViewModel("starfall-colossus");
+
+  assert.ok(entry, "preview should include the two-tribute monster");
+  assert.equal(detail.card, definition);
+  assert.equal(entry.summonRequirement, detail.summonRequirement);
+  assert.match(entry.summary, /2/);
+});
+
 test("pre-duel display cards merge duplicates without changing raw preview order", () => {
   const scenario = {
     ...challenge,

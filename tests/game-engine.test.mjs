@@ -1531,6 +1531,56 @@ test("tribute summon moves selected field monsters to grave before summoning", (
   assertValidGameState(next);
 });
 
+test("tribute summon supports exact two-material costs", () => {
+  const state = makeState({
+    cards: [
+      card("material-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 }),
+      card("material-2", { templateId: "lumen-gearlet", type: "monster", atk: 900, def: 900 }),
+      card("colossus-1", { templateId: "starfall-colossus", type: "monster", stars: 8, atk: 3200, def: 2600, tributeCost: 2 })
+    ],
+    player: {
+      monsterZone: ["material-1", "material-2"],
+      hand: ["colossus-1"]
+    }
+  });
+
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "colossus-1",
+    index: 0,
+    tributeCardIds: ["material-1", "material-2"]
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["colossus-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, ["material-1", "material-2"]);
+  assert.equal(events.filter((event) => event.type === "CARD_TRIBUTED").length, 2);
+  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === "colossus-1"));
+  assertValidGameState(next);
+});
+
+test("legal action projection includes tribute ids for high-cost summons", () => {
+  const state = makeState({
+    cards: [
+      card("material-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 }),
+      card("material-2", { templateId: "lumen-gearlet", type: "monster", atk: 900, def: 900 }),
+      card("colossus-1", { templateId: "starfall-colossus", type: "monster", stars: 8, atk: 3200, def: 2600, tributeCost: 2 })
+    ],
+    player: {
+      monsterZone: ["material-1", "material-2"],
+      hand: ["colossus-1"]
+    }
+  });
+
+  const legal = getLegalActions(state, PLAYER);
+
+  assert.equal(legal.actions.summon.length, 1);
+  assert.deepEqual(legal.actions.summon[0].tributeCardIds, ["material-1", "material-2"]);
+});
+
 test("tribute summon rejects missing or illegal tribute cards without changing state", () => {
   const state = makeState({
     cards: [

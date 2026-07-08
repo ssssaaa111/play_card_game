@@ -87,7 +87,8 @@ function previewCard(id, zone, index) {
     type: detail.type,
     attack: detail.attack,
     defense: detail.defense,
-    summary: card.summary || detail.rule || card.text || "",
+    summonRequirement: detail.summonRequirement || "",
+    summary: card.summary || detail.summonRequirement || detail.rule || card.text || "",
   };
 }
 

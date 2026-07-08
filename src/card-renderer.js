@@ -1,4 +1,4 @@
-import { cardBadgeText, cardRuleText, cardTypeLabel, elementBadgeText } from './cards.js';
+import { cardBadgeText, cardRuleText, cardTypeLabel, elementBadgeText, tributeRequirementText } from './cards.js';
 import { totalAtk, totalDef } from './rules.js';
 
 function escapeHtml(value = "") {
@@ -29,12 +29,13 @@ export function cardRenderModel(card, { asset = "", attacksLocked = false } = {}
   const modeLabel = card.mode === "defense" ? "守备" : "攻击";
   const elementText = elementBadgeText(card);
   const ruleText = cardRuleText(card);
+  const tributeText = tributeRequirementText(card, { compact: true });
   const statusText = cardStatusText(card, { attacksLocked });
   const monsterArt = card.type === "monster"
     ? `<span class="monster-icon">${escapeHtml(card.icon)}</span><div class="monster-projection ${escapeHtml(card.element || "")} ${card.mode === "defense" ? "defense" : ""}">${asset ? `<img class="monster-sprite" src="${escapeHtml(asset)}" alt="">` : `<div class="monster-head"></div><div class="monster-body"></div><div class="monster-limb left"></div><div class="monster-limb right"></div>`}</div>`
     : escapeHtml(card.icon);
   const stats = card.type === "monster"
-    ? [`攻击 ${totalAtk(card)}`, `${elementText || "无属性"} / ${modeLabel} 守备 ${totalDef(card)}`]
+    ? [`攻击 ${totalAtk(card)}`, `${tributeText ? `${tributeText} / ` : ""}${elementText || "无属性"} / ${modeLabel} 守备 ${totalDef(card)}`]
     : [typeLabel, ruleText];
 
   return {

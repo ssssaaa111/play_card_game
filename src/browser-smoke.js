@@ -665,6 +665,47 @@ async function runTributeSummonSmoke(ctx) {
   setSmokeStatus("passed", "tribute-summon");
 }
 
+async function runTributeSummonDoubleSmoke(ctx) {
+  setSmokeStatus("running", "tribute-summon-double");
+  await startSmokeDuel(ctx, "tributeSummonDouble");
+  if (ctx.state.player.field[0]?.id !== "spark-runner" || ctx.state.player.field[1]?.id !== "lumen-gearlet") {
+    throw new Error("tribute-summon-double: two material monsters should start on player field");
+  }
+  clickSmokeElement(handCard(ctx.els, "starfall-colossus"), "tribute-summon-double: select two-tribute monster");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon-double: enter tribute selection");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.cardName && ctx.state.pendingTribute.cost === 2,
+    "tribute-summon-double: pending tribute selection"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-summon-double: select first tribute");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 1 && ctx.els.choiceConfirmBtn.disabled,
+    "tribute-summon-double: first tribute selected but confirm still blocked"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "lumen-gearlet"), "tribute-summon-double: select second tribute");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 2 && !ctx.els.choiceConfirmBtn.disabled,
+    "tribute-summon-double: two tributes selected"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon-double: confirm tribute summon");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "starfall-colossus" &&
+      ctx.state.player.grave.some((card) => card?.id === "spark-runner") &&
+      ctx.state.player.grave.some((card) => card?.id === "lumen-gearlet") &&
+      !ctx.state.pendingTribute,
+    "tribute-summon-double: colossus summoned and both materials sent to grave",
+    9000
+  );
+  const tributeEvents = countGameEvents(ctx.state, "CARD_TRIBUTED");
+  if (tributeEvents < 2) {
+    throw new Error(`tribute-summon-double: expected two CARD_TRIBUTED events, got ${tributeEvents}`);
+  }
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("坠星巨卫"))) {
+    throw new Error("tribute-summon-double: public log should mention the tribute summoned monster");
+  }
+  setSmokeStatus("passed", "tribute-summon-double");
+}
+
 async function runSummonFireBuffSmoke(ctx) {
   setSmokeStatus("running", "summon-fire-buff");
   await startSmokeDuel(ctx, "summonFireBuff");
@@ -3058,6 +3099,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-shadow-burn": runSummonShadowBurnSmoke,
     "summon-trap-response": runSummonTrapResponseSmoke,
     "tribute-summon": runTributeSummonSmoke,
+    "tribute-summon-double": runTributeSummonDoubleSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,

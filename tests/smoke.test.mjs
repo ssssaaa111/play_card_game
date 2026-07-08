@@ -534,6 +534,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="summonShield">召唤护盾<\/option>/);
   assert.match(html, /<option value="summonShadowBurn">召唤暗伤<\/option>/);
   assert.match(html, /<option value="tributeSummon">祭品召唤测试<\/option>/);
+  assert.match(html, /<option value="tributeSummonDouble">双祭品召唤测试<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
   assert.match(html, /<option value="protagonistComeback">星魂主角战役 01：逆境觉醒<\/option>/);
@@ -616,6 +617,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-shadow-burn": runSummonShadowBurnSmoke/);
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
   assert.match(smoke, /"tribute-summon": runTributeSummonSmoke/);
+  assert.match(smoke, /"tribute-summon-double": runTributeSummonDoubleSmoke/);
   assert.match(smoke, /"five-zone-layout": runFiveZoneLayoutSmoke/);
   assert.match(smoke, /"basic-expansion": runBasicExpansionSmoke/);
   assert.match(smoke, /"protagonist-comeback-demo": runProtagonistComebackDemoSmoke/);
@@ -699,6 +701,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "summon-shadow-burn"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "summon-trap-response"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon-double"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-challenge"\)/);

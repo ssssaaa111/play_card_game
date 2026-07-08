@@ -46,6 +46,10 @@ test("card library has unique ids and required fields", () => {
       assert.equal(typeof card.atk, "number", `${card.id} needs numeric atk`);
       assert.equal(typeof card.def, "number", `${card.id} needs numeric def`);
       assert.equal(typeof card.stars, "number", `${card.id} needs numeric stars`);
+      if (card.tributeCost !== undefined) {
+        assert.equal(Number.isInteger(card.tributeCost), true, `${card.id} tributeCost should be an integer`);
+        assert.ok(card.tributeCost > 0, `${card.id} tributeCost should be positive`);
+      }
     }
 
     if (card.type === "spell") {

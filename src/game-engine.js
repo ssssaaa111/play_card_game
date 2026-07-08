@@ -3339,6 +3339,7 @@ function defaultTributeCardIdsForAction(state, playerId, card) {
   const cost = tributeCostForCard(card);
   if (cost <= 0) return [];
   const player = requirePlayer(state, playerId);
+  if (player.monsterZone.length < cost) return [];
   return player.monsterZone.slice(0, cost);
 }
 

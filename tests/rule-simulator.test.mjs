@@ -335,6 +335,44 @@ test("simulator avoids monster-zone-full summon projection noise", () => {
   assert.equal(report.diagnostics.actionRejected.byReason["monster zone is full"] || 0, 0);
 });
 
+test("simulator creates legal tribute summon candidates with material ids", () => {
+  const state = simulatorTestState({
+    playerCards: [
+      runtimeCard("material-1", "spark-runner", "player"),
+      runtimeCard("material-2", "lumen-gearlet", "player"),
+      runtimeCard("colossus", "starfall-colossus", "player")
+    ],
+    hand: ["colossus"],
+    monsterZone: ["material-1", "material-2"]
+  });
+
+  const entries = createSimulatorActionEntries(state, "player");
+  const summon = entries.find((entry) => entry.action.type === "SUMMON_MONSTER" && entry.action.cardId === "colossus");
+
+  assert.ok(summon, "simulator should offer a two-tribute summon candidate");
+  assert.deepEqual(summon.action.tributeCardIds, ["material-1", "material-2"]);
+  assert.doesNotThrow(() => new GameEngine(cloneState(state)).dispatch(summon.action));
+});
+
+test("simulator can tribute summon from a full monster zone", () => {
+  const field = Array.from({ length: FIELD_SIZE }, (_, index) => `field-${index}`);
+  const state = simulatorTestState({
+    playerCards: [
+      ...field.map((id) => runtimeCard(id, "solar-knight", "player")),
+      runtimeCard("colossus", "starfall-colossus", "player")
+    ],
+    hand: ["colossus"],
+    monsterZone: field
+  });
+
+  const entries = createSimulatorActionEntries(state, "player");
+  const summon = entries.find((entry) => entry.action.type === "SUMMON_MONSTER" && entry.action.cardId === "colossus");
+
+  assert.ok(summon, "full zones should still allow tribute summons that free material slots");
+  assert.deepEqual(summon.action.tributeCardIds, ["field-0", "field-1"]);
+  assert.doesNotThrow(() => new GameEngine(cloneState(state)).dispatch(summon.action));
+});
+
 test("simulator prioritizes field-condition summon when requirements are met", () => {
   const state = simulatorTestState({
     playerCards: [
