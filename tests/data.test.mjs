@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 
-import { aiProfiles, deckPresets, library, roleProfiles, scenarioSetups } from "../src/data.js";
+import { aiProfiles, deckPresets, library, monsterAssets, roleProfiles, scenarioSetups } from "../src/data.js";
 import { canDispatchSpellFromUiState, canDispatchSummonEffectFromUiState, canDispatchTrapFromUiState } from "../src/engine-adapter.js";
 import { getCardEffectDefinition } from "../src/game-engine.js";
 import { spellDefinitions } from "../src/spells.js";
@@ -229,6 +230,16 @@ test("monster triggered effects are backed by engine DSL metadata", () => {
       if (card.afterAttack) {
         assert.ok(getCardEffectDefinition(card.afterAttack), `${card.id} afterAttack must have engine DSL metadata: ${card.afterAttack}`);
       }
+    });
+});
+
+test("monster cards have existing art assets", () => {
+  library
+    .filter((card) => card.type === "monster")
+    .forEach((card) => {
+      const asset = monsterAssets[card.id];
+      assert.ok(asset, `${card.id} needs a monster art asset`);
+      assert.ok(existsSync(new URL(`../${asset}`, import.meta.url)), `${card.id} asset path should exist: ${asset}`);
     });
 });
 
