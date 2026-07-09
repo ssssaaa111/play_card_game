@@ -15,12 +15,16 @@ test("divine summon prototype is declared through unified card data", () => {
   assert.equal(divine.atk, 4000);
   assert.equal(divine.def, 4000);
   assert.equal(divine.archetype, "神格");
+  assert.deepEqual(divine.destructionProtection, { type: "divineGuard", uses: 1, refresh: "controllerTurn" });
+  assert.match(divine.text, /神格守护/);
   assert.match(cardDetailViewModel(divine).summonRequirement, /3/);
 });
 
 test("divine summon scenario uses scene initialization without changing old routes", () => {
   assert.deepEqual(scenarioSetups.divineSummon.playerHand, ["celestial-origin-dragon", "war-chant"]);
   assert.deepEqual(scenarioSetups.divineSummon.playerField, ["spark-runner", "lumen-gearlet", "ember-soul-initiate"]);
+  assert.deepEqual(scenarioSetups.divineGuard.playerField, ["celestial-origin-dragon"]);
+  assert.deepEqual(scenarioSetups.divineGuard.aiTraps, ["mirror-snare"]);
   assert.equal(scenarioSetups.protagonistTrioOmegaChallenge.playerHand[0], "trio-solar-snare");
   assert.deepEqual(scenarioSetups.splitToken.playerHand, ["spark-split", "war-chant"]);
 });

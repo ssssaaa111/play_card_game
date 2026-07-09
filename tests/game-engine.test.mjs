@@ -1624,6 +1624,110 @@ test("three-material divine summon rejects partial tribute selection without cha
   assert.deepEqual(engine.getState().players[PLAYER].grave, []);
 });
 
+test("divine guard prevents the first destruction while the monster stays on field", () => {
+  const state = makeState({
+    cards: [
+      card("divine-1", {
+        templateId: "celestial-origin-dragon",
+        type: "monster",
+        atk: 4000,
+        def: 4000,
+        destructionProtection: { type: "divineGuard", uses: 1, refresh: "controllerTurn" }
+      }),
+      card("mirror-1", { templateId: "mirror-snare", ownerId: AI, type: "trap", trigger: "attackDestroy" })
+    ],
+    player: { monsterZone: ["divine-1"] },
+    ai: { spellTrapZone: ["mirror-1"] },
+    turn: { phase: Phase.battle },
+    machine: { phase: Phase.battle, timing: Timing.battleOpen }
+  });
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: "mirror-1",
+    attackerCardId: "divine-1"
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["divine-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, []);
+  assert.deepEqual(next.players[AI].grave, ["mirror-1"]);
+  assert.equal(next.cards["divine-1"].destructionProtectionUsed, true);
+  assert.ok(events.some((event) => event.type === "CARD_DESTRUCTION_PREVENTED" && event.cardId === "divine-1" && event.sourceCardId === "mirror-1"));
+  assert.equal(events.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "divine-1"), false);
+  assertValidGameState(next);
+});
+
+test("divine guard does not prevent a second destruction before it resets", () => {
+  const state = makeState({
+    cards: [
+      card("divine-1", {
+        templateId: "celestial-origin-dragon",
+        type: "monster",
+        atk: 4000,
+        def: 4000,
+        destructionProtection: { type: "divineGuard", uses: 1, refresh: "controllerTurn" },
+        destructionProtectionUsed: true
+      }),
+      card("mirror-1", { templateId: "mirror-snare", ownerId: AI, type: "trap", trigger: "attackDestroy" })
+    ],
+    player: { monsterZone: ["divine-1"] },
+    ai: { spellTrapZone: ["mirror-1"] },
+    turn: { phase: Phase.battle },
+    machine: { phase: Phase.battle, timing: Timing.battleOpen }
+  });
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: "mirror-1",
+    attackerCardId: "divine-1"
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].monsterZone, []);
+  assert.deepEqual(next.players[PLAYER].grave, ["divine-1"]);
+  assert.ok(events.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "divine-1" && event.sourceCardId === "mirror-1"));
+  assert.equal(events.some((event) => event.type === "CARD_DESTRUCTION_PREVENTED"), false);
+  assertValidGameState(next);
+});
+
+test("divine guard resets at the controller turn start through monster reset events", () => {
+  const state = makeState({
+    cards: [
+      card("divine-1", {
+        templateId: "celestial-origin-dragon",
+        type: "monster",
+        atk: 4000,
+        def: 4000,
+        destructionProtection: { type: "divineGuard", uses: 1, refresh: "controllerTurn" },
+        destructionProtectionUsed: true
+      })
+    ],
+    player: { monsterZone: ["divine-1"] },
+    turn: { playerId: AI, phase: Phase.end },
+    machine: { phase: Phase.end, timing: Timing.end }
+  });
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({ type: "START_TURN", playerId: PLAYER });
+  const next = engine.getState();
+
+  assert.equal(next.cards["divine-1"].destructionProtectionUsed, false);
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_TURN_RESET" &&
+    event.cardId === "divine-1" &&
+    event.beforeDestructionProtectionUsed === true &&
+    event.afterDestructionProtectionUsed === false
+  ));
+  assertValidGameState(next);
+});
+
 test("legal action projection includes tribute ids for high-cost summons", () => {
   const state = makeState({
     cards: [

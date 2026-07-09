@@ -545,10 +545,23 @@ export class EffectContext {
   }
 
   destroyCard(cardId, options = {}) {
-    return resolveCardIdInput(this.#state, cardId).map((targetCardId) => {
+    return resolveCardIdInput(this.#state, cardId).flatMap((targetCardId) => {
       const card = requireCard(this.#state, targetCardId);
       const location = findCardLocations(this.#state, targetCardId)[0] || null;
       const ownerId = location?.playerId || card.ownerId;
+
+      if (shouldPreventDestruction(card, location, options)) {
+        this.#emit("CARD_DESTRUCTION_PREVENTED", {
+          cardId: targetCardId,
+          playerId: ownerId,
+          reason: options.reason || null,
+          sourceCardId: options.sourceCardId || null,
+          protection: destructionProtectionType(card),
+          beforeProtectionUsed: Boolean(card.destructionProtectionUsed),
+          afterProtectionUsed: true
+        });
+        return [];
+      }
 
       this.moveCard(targetCardId, location, { playerId: ownerId, zone: "grave" });
       this.#emit("CARD_DESTROYED", {
@@ -557,7 +570,7 @@ export class EffectContext {
         reason: options.reason || null,
         sourceCardId: options.sourceCardId || null
       });
-      return targetCardId;
+      return [targetCardId];
     });
   }
 
@@ -1369,12 +1382,18 @@ export class GameEngine {
     const player = requirePlayer(state, action.playerId);
     const monsterResets = player.monsterZone
       .map((cardId) => requireCard(state, cardId))
-      .filter((card) => card.used || card.changedMode)
-      .map((card) => ({
-        cardId: card.id,
-        beforeUsed: Boolean(card.used),
-        beforeChangedMode: Boolean(card.changedMode)
-      }));
+      .filter((card) => card.used || card.changedMode || card.destructionProtectionUsed)
+      .map((card) => {
+        const reset = {
+          cardId: card.id,
+          beforeUsed: Boolean(card.used),
+          beforeChangedMode: Boolean(card.changedMode)
+        };
+        if (card.destructionProtectionUsed) {
+          reset.beforeDestructionProtectionUsed = true;
+        }
+        return reset;
+      });
     const expiredAbilities = (state.abilities[action.playerId] || [])
       .filter((entry) => entry.duration === "turn")
       .map((entry) => clone(entry));
@@ -1387,12 +1406,16 @@ export class GameEngine {
       resetTurnFlags: true
     });
     monsterResets.forEach((reset) => {
-      emit("MONSTER_TURN_RESET", {
+      const resetEvent = {
         playerId: action.playerId,
         ...reset,
         afterUsed: false,
         afterChangedMode: false
-      });
+      };
+      if (reset.beforeDestructionProtectionUsed) {
+        resetEvent.afterDestructionProtectionUsed = false;
+      }
+      emit("MONSTER_TURN_RESET", resetEvent);
     });
     if (expiredAbilities.length > 0) {
       emit("TURN_ABILITIES_EXPIRED", {
@@ -2186,6 +2209,9 @@ export function applyGameEvent(state, event, options = {}) {
     case "CARD_MOVED":
       applyCardMoved(state, event);
       break;
+    case "CARD_DESTRUCTION_PREVENTED":
+      applyCardDestructionPrevented(state, event);
+      break;
     case "CARD_CREATED":
       applyCardCreated(state, event);
       break;
@@ -2360,6 +2386,14 @@ function applyCardMoved(state, event) {
   }
 }
 
+function applyCardDestructionPrevented(state, event) {
+  const card = requireCardInZone(state, event.playerId, "monsterZone", event.cardId);
+  if (!cardHasDestructionProtection(card)) {
+    throw new GameRuleError(`Card ${event.cardId} cannot prevent destruction`);
+  }
+  card.destructionProtectionUsed = event.afterProtectionUsed !== false;
+}
+
 function applyCardCreated(state, event) {
   requirePlayer(state, event.playerId);
   if (state.cards[event.cardId]) {
@@ -2480,6 +2514,9 @@ function applyMonsterTurnReset(state, event) {
   }
   card.used = Boolean(event.afterUsed);
   card.changedMode = Boolean(event.afterChangedMode);
+  if ("afterDestructionProtectionUsed" in event) {
+    card.destructionProtectionUsed = Boolean(event.afterDestructionProtectionUsed);
+  }
 }
 
 function applyBattleWearApplied(state, event) {
@@ -2971,6 +3008,24 @@ function normalizeMaterialRequirements(materials = []) {
 
 function cardMatchesTemplate(card, templateId) {
   return Boolean(card && templateId && (card.templateId === templateId || card.id === templateId));
+}
+
+function destructionProtectionType(card) {
+  const protection = card?.destructionProtection;
+  if (protection === true || card?.divineGuard) return "divineGuard";
+  if (typeof protection === "string") return protection;
+  return protection?.type || "";
+}
+
+function cardHasDestructionProtection(card) {
+  return Boolean(destructionProtectionType(card));
+}
+
+function shouldPreventDestruction(card, location, options = {}) {
+  if (options.ignoreProtection) return false;
+  if (location?.zone !== "monsterZone") return false;
+  if (!cardHasDestructionProtection(card)) return false;
+  return !card.destructionProtectionUsed;
 }
 
 function selectMaterialCardIds(state, playerId, materials = []) {

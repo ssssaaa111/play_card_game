@@ -19,6 +19,7 @@ export function cardStatusText(card, { attacksLocked = false } = {}) {
   if (card.tempDef > 0) parts.push(`守备+${card.tempDef}`);
   if (card.tempDef < 0) parts.push(`守备${card.tempDef}`);
   if (card.battleWear > 0) parts.push(`损耗-${card.battleWear}`);
+  if (card.destructionProtection) parts.push(card.destructionProtectionUsed ? "神格守护已用" : "神格守护");
   if (card.used) parts.push("已行动");
   return parts.slice(0, 2).join(" / ");
 }

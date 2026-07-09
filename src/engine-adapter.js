@@ -419,6 +419,11 @@ export function applyUiGameEvents(uiState, events = []) {
       insertCardIntoUiState(uiState, card, event.to);
       return;
     }
+    if (event.type === "CARD_DESTRUCTION_PREVENTED") {
+      const card = findUiCard(uiState, event.cardId);
+      if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
+      card.destructionProtectionUsed = event.afterProtectionUsed !== false;
+    }
     if (event.type === "MONSTER_SUMMONED") {
       const card = findUiCard(uiState, event.cardId);
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
@@ -451,6 +456,9 @@ export function applyUiGameEvents(uiState, events = []) {
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
       card.used = Boolean(event.afterUsed);
       card.changedMode = Boolean(event.afterChangedMode);
+      if ("afterDestructionProtectionUsed" in event) {
+        card.destructionProtectionUsed = Boolean(event.afterDestructionProtectionUsed);
+      }
     }
     if (event.type === "BATTLE_WEAR_APPLIED") {
       const card = findUiCard(uiState, event.cardId);

@@ -2427,6 +2427,25 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       result.targetOwner = destroyed?.owner || result.targetOwner;
       addLog(`${card.name} 破坏了 ${destroyedName}。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(destroyed?.card) }));
     }
+    if (event.type === "CARD_DESTRUCTION_PREVENTED") {
+      const protectedCard = findRuntimeCard(event.cardId);
+      const protectedName = protectedCard?.card?.name || "目标卡";
+      result.effectTarget = protectedCard?.card || result.effectTarget;
+      result.targetOwner = protectedCard?.owner || result.targetOwner;
+      addLog(`${protectedName} 的神格守护抵消了 ${card.name} 的破坏。`, {
+        actor: owner.owner,
+        type: "effect",
+        public: true,
+        cardId: protectedCard?.card?.id || card.id,
+        relatedCardIds: relatedCardIds(card)
+      });
+      playEpicAction("神格守护", "guard");
+      if (protectedCard?.card) {
+        const ownerPanel = panelElement(protectedCard.owner);
+        const protectedIndex = state[protectedCard.owner]?.field?.indexOf(protectedCard.card) ?? -1;
+        playGuardShield(fieldElement(protectedCard.owner, protectedIndex) || ownerPanel);
+      }
+    }
     if (event.type === "MONSTER_READIED") {
       const found = findRuntimeCard(event.cardId);
       if (!found) return;
@@ -2843,14 +2862,15 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
     playArrow(trapSource, attackerEl, "trap", trap.name);
     const destroyedEvent = trapEvents.find((event) => event.type === "CARD_DESTROYED");
+    const preventedEvent = trapEvents.find((event) => event.type === "CARD_DESTRUCTION_PREVENTED");
     const attacker = destroyedEvent ? findRuntimeCard(destroyedEvent.cardId)?.card : context.attacker;
-    if (attacker) {
+    if (destroyedEvent && attacker) {
       playMonsterBurst(attackerEl);
       shakeScreen();
       playEpicAction("反制", "guard");
       addLog(`${trap.name} 破坏了 ${attacker.name}。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(attacker) }));
     }
-    return { cancelled: true, consumesAttack: trapConsumesAttack(trap.trigger) };
+    return { cancelled: Boolean(destroyedEvent && !preventedEvent), consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
   if (trap.trigger === "counterBoost") {

@@ -788,6 +788,51 @@ async function runDivineSummonSmoke(ctx) {
   setSmokeStatus("passed", "divine-summon");
 }
 
+async function runDivineGuardSmoke(ctx) {
+  setSmokeStatus("running", "divine-guard");
+  await startSmokeDuel(ctx, "divineGuard");
+  const divineCard = cloneCardById("celestial-origin-dragon");
+  if (!divineCard) throw new Error("divine-guard: divine monster definition should exist");
+  const dragon = ctx.state.player.field[0];
+  if (dragon?.id !== "celestial-origin-dragon") {
+    throw new Error("divine-guard: celestial origin dragon should start on player field");
+  }
+  if (!ctx.state.ai.traps.some((card) => card?.id === "mirror-snare")) {
+    throw new Error("divine-guard: AI should start with mirror snare set");
+  }
+  const dragonUid = dragon.uid;
+  clickSmokeElement(fieldCard(ctx.els, "player", "celestial-origin-dragon"), "divine-guard: select dragon");
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "divine-guard: targetable guardian");
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "divine-guard: attack guardian through mirror snare");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.uid === dragonUid) &&
+      ctx.state.player.field.some((card) => card?.id === "celestial-origin-dragon" && card.destructionProtectionUsed) &&
+      ctx.state.ai.grave.some((card) => card?.id === "mirror-snare") &&
+      countGameEvents(ctx.state, "CARD_DESTRUCTION_PREVENTED") >= 1,
+    `divine-guard: divine guard should prevent mirror snare destruction. ${smokeDebug(ctx)}`,
+    14000
+  );
+  if (ctx.state.gameEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === dragonUid)) {
+    throw new Error("divine-guard: dragon should not be destroyed by the first destruction attempt");
+  }
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("神格守护"))) {
+    throw new Error("divine-guard: battle log should explain divine guard prevention");
+  }
+  await waitForSmoke(() => logCardLink(ctx.els, "celestial-origin-dragon"), "divine-guard: log should expose divine monster detail link", 6000);
+  const resultLink = logCardLink(ctx.els, "celestial-origin-dragon");
+  clickSmokeElement(resultLink, "divine-guard: open divine detail from log");
+  await assertCardDetailModal(ctx, divineCard, "divine-guard");
+  if (!ctx.els.cardModal.textContent.includes("神格守护")) {
+    throw new Error("divine-guard: detail should include divine guard effect text");
+  }
+  clickSmokeElement(ctx.els.zoomClose, "divine-guard: close divine detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "divine-guard: detail closes");
+  if (!ctx.currentPlayerActions().endTurn && !ctx.currentPlayerActions().attack && !ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap) {
+    throw new Error("divine-guard: duel should continue after guard resolves");
+  }
+  setSmokeStatus("passed", "divine-guard");
+}
+
 async function runFusionSummonSmoke(ctx) {
   setSmokeStatus("running", "fusion-summon");
   await startSmokeDuel(ctx, "fusionSummon");
@@ -2346,8 +2391,12 @@ async function runBattleTrapSmoke(ctx) {
   clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "星轨枪兵");
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "敌方怪兽攻击高亮");
   clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "攻击铁壁守卫");
-  await waitForSmoke(() => ctx.state.actionWindow === "resolution", "攻击期间关闭玩家行动窗口");
-  if (!ctx.els.endTurnBtn.disabled) {
+  await waitForSmoke(
+    () => ctx.state.actionWindow === "resolution" ||
+      (ctx.state.phase === "battle" && ctx.state.player.field[0]?.used),
+    "攻击进入结算或完成"
+  );
+  if (ctx.state.actionWindow === "resolution" && !ctx.els.endTurnBtn.disabled) {
     throw new Error("攻击结算期间不应允许结束回合");
   }
   await waitForSmoke(
@@ -3313,6 +3362,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "tribute-summon": runTributeSummonSmoke,
     "tribute-summon-double": runTributeSummonDoubleSmoke,
     "divine-summon": runDivineSummonSmoke,
+    "divine-guard": runDivineGuardSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "split-token": runSplitTokenSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,

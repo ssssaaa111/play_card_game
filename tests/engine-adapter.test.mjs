@@ -328,6 +328,30 @@ test("dispatches three-tribute divine summon through engine and fixed UI slots",
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === divine.uid));
 });
 
+test("replays divine guard destruction prevention into UI state", () => {
+  const divine = uiMonster("divine-card", "celestial-origin-dragon");
+  divine.destructionProtection = { type: "divineGuard", uses: 1, refresh: "controllerTurn" };
+  const mirror = uiTrap("mirror-card", "mirror-snare");
+  mirror.ownerId = "ai";
+  const state = appState();
+  state.player.field[0] = divine;
+  state.ai.traps[0] = mirror;
+  state.turn = "player";
+  state.phase = "battle";
+
+  const events = dispatchActivateTrapFromUiState(state, "ai", "player", 0, {
+    attacker: divine
+  });
+
+  assert.equal(state.player.field[0], divine);
+  assert.deepEqual(state.player.grave, []);
+  assert.equal(state.ai.traps[0], null);
+  assert.equal(state.ai.grave[0], mirror);
+  assert.equal(divine.destructionProtectionUsed, true);
+  assert.ok(events.some((event) => event.type === "CARD_DESTRUCTION_PREVENTED" && event.cardId === divine.uid));
+  assert.equal(events.some((event) => event.type === "CARD_DESTROYED" && event.cardId === divine.uid), false);
+});
+
 test("explains tribute summon legality from UI state", () => {
   const material = uiMonster("tribute-material", "spark-runner");
   const vanguard = uiMonster("tribute-vanguard", "solar-vanguard");
