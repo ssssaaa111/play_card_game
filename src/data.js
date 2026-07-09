@@ -1,6 +1,7 @@
 export const library = [
   { id: "solar-vanguard", type: "monster", name: "曜锋先锋", element: "light", stars: 5, atk: 2300, def: 1700, icon: "曜", text: "需要 1 只我方场上怪兽作为祭品才能通常召唤。第一版祭品召唤验证用高阶怪兽。", tributeCost: 1 },
   { id: "starfall-colossus", type: "monster", name: "坠星巨卫", element: "light", stars: 8, atk: 3200, def: 2600, icon: "坠", text: "需要 2 只我方场上怪兽作为祭品才能通常召唤。用于验证大型怪兽的双祭品流程。", tributeCost: 2 },
+  { id: "celestial-origin-dragon", type: "monster", name: "创星神龙", element: "light", stars: 10, atk: 4000, def: 4000, icon: "神", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。第一版神格怪兽，用高门槛验证神卡登场流程。", summary: "三祭品登场的神格怪兽。", tributeCost: 3, rarity: "UR", archetype: "神格" },
   { id: "ember-drake", type: "monster", name: "赤焰幼龙", element: "fire", stars: 4, atk: 1500, def: 900, icon: "炎", text: "被召唤时，对对手造成 200 点伤害。", onSummon: "burn200" },
   { id: "solar-knight", type: "monster", name: "日冕骑士", element: "light", stars: 4, atk: 1700, def: 1200, icon: "光", text: "稳健的光属性战士，适合抢节奏。" },
   { id: "gale-mage", type: "monster", name: "疾风术士", element: "wind", stars: 3, atk: 1200, def: 1400, icon: "风", text: "召唤时抽 1 张卡。", onSummon: "draw1" },
@@ -86,6 +87,7 @@ export const library = [
 export const monsterAssets = {
   "solar-vanguard": "assets/monster-light-knight.png",
   "starfall-colossus": "assets/monster-light-knight.png",
+  "celestial-origin-dragon": "assets/monster-light-knight.png",
   "ember-drake": "assets/monster-fire-dragon.png",
   "flare-gale-archon": "assets/monster-fire-dragon.png",
   "flare-titan": "assets/monster-fire-dragon.png",
@@ -430,6 +432,20 @@ export const scenarioSetups = {
     hints: ["双祭品召唤必须正好选择 2 只我方场上怪兽。", "被献祭的怪兽都会进入己方墓地。"],
     playerHand: ["starfall-colossus", "war-chant"],
     playerField: ["spark-runner", "lumen-gearlet"],
+    playerDeck: ["solar-knight"],
+    aiField: ["iron-guardian"],
+    aiHand: [],
+    aiDeck: []
+  },
+  divineSummon: {
+    label: "神格召唤测试",
+    difficulty: "demo",
+    text: "起手提供 3 只场上怪兽和 1 只需要三祭品的神格怪兽，用来验证神卡登场的第一版流程。",
+    goal: "选择创星神龙，献祭三只我方场上怪兽后完成神格召唤。",
+    objectives: ["选择手牌中的创星神龙。", "依次选择三只我方场上怪兽作为祭品。", "确认后让创星神龙登场，并检查日志与详情。"],
+    hints: ["神格怪第一版只验证三祭品召唤门槛，不附加新抗性或特殊胜利。", "被献祭的三只怪兽都会进入己方墓地，神格怪会占用其中一个离场后的召唤区。"],
+    playerHand: ["celestial-origin-dragon", "war-chant"],
+    playerField: ["spark-runner", "lumen-gearlet", "ember-soul-initiate"],
     playerDeck: ["solar-knight"],
     aiField: ["iron-guardian"],
     aiHand: [],

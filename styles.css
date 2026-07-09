@@ -2095,7 +2095,8 @@ h1 {
   display: none;
 }
 
-.choice-actions.fusion-choice {
+.choice-actions.fusion-choice,
+.choice-actions.material-choice {
   top: auto;
   bottom: 16px;
   transform: translateX(-50%);

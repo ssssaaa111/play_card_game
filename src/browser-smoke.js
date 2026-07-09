@@ -725,6 +725,69 @@ async function runTributeSummonDoubleSmoke(ctx) {
   setSmokeStatus("passed", "tribute-summon-double");
 }
 
+async function runDivineSummonSmoke(ctx) {
+  setSmokeStatus("running", "divine-summon");
+  await startSmokeDuel(ctx, "divineSummon");
+  if (ctx.state.player.field[0]?.id !== "spark-runner" ||
+    ctx.state.player.field[1]?.id !== "lumen-gearlet" ||
+    ctx.state.player.field[2]?.id !== "ember-soul-initiate") {
+    throw new Error("divine-summon: three tribute materials should start on player field");
+  }
+  const divineCard = cloneCardById("celestial-origin-dragon");
+  if (!divineCard) throw new Error("divine-summon: divine monster definition should exist");
+  clickSmokeElement(handCard(ctx.els, "celestial-origin-dragon"), "divine-summon: select divine monster");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "divine-summon: enter tribute selection");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.cardName && ctx.state.pendingTribute.cost === 3 && ctx.els.choiceConfirmBtn.disabled,
+    "divine-summon: pending three-tribute selection"
+  );
+  if (!ctx.els.choiceActions?.classList.contains("material-choice")) {
+    throw new Error("divine-summon: tribute chooser should avoid covering the field");
+  }
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "divine-summon: select first tribute");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 1 && ctx.els.choiceConfirmBtn.disabled,
+    "divine-summon: first tribute selected"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "lumen-gearlet"), "divine-summon: select second tribute");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 2 && ctx.els.choiceConfirmBtn.disabled,
+    "divine-summon: second tribute selected"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-soul-initiate"), "divine-summon: select third tribute");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 3 && !ctx.els.choiceConfirmBtn.disabled,
+    "divine-summon: three tributes selected"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "divine-summon: confirm divine summon");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "celestial-origin-dragon" &&
+      ctx.state.player.grave.some((card) => card?.id === "spark-runner") &&
+      ctx.state.player.grave.some((card) => card?.id === "lumen-gearlet") &&
+      ctx.state.player.grave.some((card) => card?.id === "ember-soul-initiate") &&
+      !ctx.state.pendingTribute,
+    "divine-summon: divine monster summoned and all materials sent to grave",
+    9000
+  );
+  const tributeEvents = countGameEvents(ctx.state, "CARD_TRIBUTED");
+  if (tributeEvents < 3) {
+    throw new Error(`divine-summon: expected three CARD_TRIBUTED events, got ${tributeEvents}`);
+  }
+  if (!ctx.state.gameEvents.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === ctx.state.player.field[0]?.uid)) {
+    throw new Error("divine-summon: MONSTER_SUMMONED event missing");
+  }
+  const resultLink = logCardLink(ctx.els, "celestial-origin-dragon");
+  if (!resultLink) throw new Error("divine-summon: public log should expose divine monster detail link");
+  clickSmokeElement(resultLink, "divine-summon: open divine monster detail from log");
+  await assertCardDetailModal(ctx, divineCard, "divine-summon");
+  if (!ctx.els.cardModal.textContent.includes("召唤需求：3 只祭品") || !ctx.els.cardModal.textContent.includes("攻击：4000")) {
+    throw new Error("divine-summon: detail should include three-tribute requirement and full stats");
+  }
+  clickSmokeElement(ctx.els.zoomClose, "divine-summon: close divine detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "divine-summon: detail closes");
+  setSmokeStatus("passed", "divine-summon");
+}
+
 async function runFusionSummonSmoke(ctx) {
   setSmokeStatus("running", "fusion-summon");
   await startSmokeDuel(ctx, "fusionSummon");
@@ -3249,6 +3312,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-trap-response": runSummonTrapResponseSmoke,
     "tribute-summon": runTributeSummonSmoke,
     "tribute-summon-double": runTributeSummonDoubleSmoke,
+    "divine-summon": runDivineSummonSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "split-token": runSplitTokenSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,

@@ -1562,6 +1562,68 @@ test("tribute summon supports exact two-material costs", () => {
   assertValidGameState(next);
 });
 
+test("tribute summon supports exact three-material divine costs", () => {
+  const state = makeState({
+    cards: [
+      card("material-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 }),
+      card("material-2", { templateId: "lumen-gearlet", type: "monster", atk: 900, def: 900 }),
+      card("material-3", { templateId: "ember-soul-initiate", type: "monster", atk: 700, def: 1000 }),
+      card("divine-1", { templateId: "celestial-origin-dragon", type: "monster", stars: 10, atk: 4000, def: 4000, tributeCost: 3 })
+    ],
+    player: {
+      hand: ["divine-1"],
+      monsterZone: ["material-1", "material-2", "material-3"]
+    }
+  });
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: PLAYER,
+    cardId: "divine-1",
+    index: 0,
+    tributeCardIds: ["material-1", "material-2", "material-3"]
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].hand, []);
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["divine-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, ["material-1", "material-2", "material-3"]);
+  assert.equal(events.filter((event) => event.type === "CARD_TRIBUTED").length, 3);
+  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === "divine-1"));
+  assertValidGameState(next);
+});
+
+test("three-material divine summon rejects partial tribute selection without changing state", () => {
+  const state = makeState({
+    cards: [
+      card("material-1", { templateId: "spark-runner", type: "monster", atk: 800, def: 1200 }),
+      card("material-2", { templateId: "lumen-gearlet", type: "monster", atk: 900, def: 900 }),
+      card("material-3", { templateId: "ember-soul-initiate", type: "monster", atk: 700, def: 1000 }),
+      card("divine-1", { templateId: "celestial-origin-dragon", type: "monster", stars: 10, atk: 4000, def: 4000, tributeCost: 3 })
+    ],
+    player: {
+      hand: ["divine-1"],
+      monsterZone: ["material-1", "material-2", "material-3"]
+    }
+  });
+  const engine = new GameEngine(state);
+
+  assert.throws(
+    () => engine.dispatch({
+      type: "SUMMON_MONSTER",
+      playerId: PLAYER,
+      cardId: "divine-1",
+      index: 0,
+      tributeCardIds: ["material-1", "material-2"]
+    }),
+    /requires exactly 3 tribute cards/
+  );
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["divine-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].monsterZone, ["material-1", "material-2", "material-3"]);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, []);
+});
+
 test("legal action projection includes tribute ids for high-cost summons", () => {
   const state = makeState({
     cards: [

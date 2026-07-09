@@ -540,6 +540,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="summonShadowBurn">召唤暗伤<\/option>/);
   assert.match(html, /<option value="tributeSummon">祭品召唤测试<\/option>/);
   assert.match(html, /<option value="tributeSummonDouble">双祭品召唤测试<\/option>/);
+  assert.match(html, /<option value="divineSummon">神格召唤测试<\/option>/);
   assert.match(html, /<option value="fusionSummon">融合召唤测试<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
@@ -612,6 +613,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /function renderFusionPreview/);
   assert.match(app, /renderFusionPreview\(\)/);
   assert.match(app, /classList\.toggle\("fusion-choice", Boolean\(state\.pendingFusion\)\)/);
+  assert.match(app, /classList\.toggle\("material-choice", Boolean\(state\.pendingFusion \|\| state\.pendingTribute\)\)/);
   assert.match(app, /els\.fusionPreviewDetail\.addEventListener\("click"/);
   assert.match(app, /pendingAiRevealQueue = \[\]/);
   assert.match(app, /withAiRevealQueuePosition\(/);
@@ -636,6 +638,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
   assert.match(smoke, /"tribute-summon": runTributeSummonSmoke/);
   assert.match(smoke, /"tribute-summon-double": runTributeSummonDoubleSmoke/);
+  assert.match(smoke, /"divine-summon": runDivineSummonSmoke/);
   assert.match(smoke, /"fusion-summon": runFusionSummonSmoke/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /fusionPreviewName/);
@@ -643,6 +646,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /fusionPreviewMaterials/);
   assert.match(smoke, /fusionPreviewDetail/);
   assert.match(smoke, /fusion-choice/);
+  assert.match(smoke, /material-choice/);
   assert.match(smoke, /"five-zone-layout": runFiveZoneLayoutSmoke/);
   assert.match(smoke, /"basic-expansion": runBasicExpansionSmoke/);
   assert.match(smoke, /"protagonist-comeback-demo": runProtagonistComebackDemoSmoke/);
@@ -729,6 +733,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "summon-trap-response"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon-double"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "divine-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "split-token"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);

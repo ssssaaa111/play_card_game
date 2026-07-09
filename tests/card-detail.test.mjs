@@ -55,6 +55,18 @@ test("describes tribute summon requirements in unified card details", () => {
   assert.match(view.summonRequirement, /2/);
 });
 
+test("describes divine three-tribute card details from unified card definitions", () => {
+  const view = cardDetailViewModel("celestial-origin-dragon");
+
+  assert.equal(view.name, "创星神龙");
+  assert.equal(view.type, "怪兽");
+  assert.equal(view.attack, 4000);
+  assert.equal(view.defense, 4000);
+  assert.match(view.effectText, /需要 3 只/);
+  assert.equal(view.summonRequirement, "召唤需求：3 只祭品");
+  assert.match(view.tags, /神格/);
+});
+
 test("describes fusion requirements in unified card details", () => {
   const view = cardDetailViewModel("starforge-fusion");
 

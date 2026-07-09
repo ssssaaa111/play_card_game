@@ -4223,6 +4223,7 @@ function render(animationKey = "") {
       els.choiceCancelBtn.disabled = !canPlayerAct();
     }
     els.choiceActions.classList.toggle("fusion-choice", Boolean(state.pendingFusion));
+    els.choiceActions.classList.toggle("material-choice", Boolean(state.pendingFusion || state.pendingTribute));
   }
   renderFusionPreview();
   const selectedPlayerMonster = state.selected?.zone === "playerField" && Boolean(state.player.field[state.selected.index]);

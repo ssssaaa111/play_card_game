@@ -304,6 +304,30 @@ test("dispatches tribute summon through engine and fixed UI slots", () => {
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === vanguard.uid));
 });
 
+test("dispatches three-tribute divine summon through engine and fixed UI slots", () => {
+  const materialA = uiMonster("divine-material-a", "spark-runner");
+  const materialB = uiMonster("divine-material-b", "lumen-gearlet");
+  const materialC = uiMonster("divine-material-c", "ember-soul-initiate");
+  const divine = uiMonster("divine-card", "celestial-origin-dragon");
+  divine.tributeCost = 3;
+  divine.atk = 4000;
+  divine.def = 4000;
+  const state = appState();
+  state.player.field[0] = materialA;
+  state.player.field[1] = materialB;
+  state.player.field[2] = materialC;
+  state.player.hand = [divine];
+
+  const events = dispatchSummonMonsterFromUiState(state, "player", 0, 0, { tributeIndexes: [0, 1, 2] });
+
+  assert.deepEqual(state.player.hand, []);
+  assert.equal(state.player.field[0], divine);
+  assert.equal(state.player.field.filter(Boolean).length, 1);
+  assert.deepEqual(state.player.grave, [materialA, materialB, materialC]);
+  assert.equal(events.filter((event) => event.type === "CARD_TRIBUTED").length, 3);
+  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === divine.uid));
+});
+
 test("explains tribute summon legality from UI state", () => {
   const material = uiMonster("tribute-material", "spark-runner");
   const vanguard = uiMonster("tribute-vanguard", "solar-vanguard");
