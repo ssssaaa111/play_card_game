@@ -13,7 +13,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
   if (!attacker) return null;
   const attack = totalAtk(attacker);
   if (!target) {
-    const shield = shieldPreview(attack, rival?.shield || 0);
+    const shield = shieldPreview(attack, rival?.shield || 0, attacker);
     return {
       kind: "direct",
       attack,
@@ -22,6 +22,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
       diff: attack,
       rawDamage: attack,
       finalDamage: shield.finalDamage,
+      shieldPierced: shield.shieldPierced,
       shieldBlocked: shield.blocked,
       destroysAttacker: false,
       destroysTarget: false,
@@ -34,7 +35,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
   if (diff > 0) {
     const piercesDefense = target.mode === "defense" && hasPiercingDamage(attacker);
     const rawDamage = piercesDefense || target.mode !== "defense" ? diff : 0;
-    const shield = shieldPreview(rawDamage, rival?.shield || 0);
+    const shield = shieldPreview(rawDamage, rival?.shield || 0, attacker);
     return {
       kind: piercesDefense ? "pierceDefense" : target.mode === "defense" ? "breakDefense" : "attackWin",
       attack,
@@ -43,6 +44,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
       diff,
       rawDamage,
       finalDamage: shield.finalDamage,
+      shieldPierced: shield.shieldPierced,
       shieldBlocked: shield.blocked,
       piercing: piercesDefense,
       destroysAttacker: false,
@@ -52,7 +54,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
   }
 
   if (diff < 0) {
-    const shield = shieldPreview(Math.abs(diff), owner?.shield || 0);
+    const shield = shieldPreview(Math.abs(diff), owner?.shield || 0, target);
     if (target.mode === "defense") {
       return {
         kind: "guardCounter",
@@ -62,6 +64,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
         diff,
         rawDamage: Math.abs(diff),
         finalDamage: shield.finalDamage,
+        shieldPierced: shield.shieldPierced,
         shieldBlocked: shield.blocked,
         destroysAttacker: false,
         destroysTarget: false,
@@ -76,6 +79,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
       diff,
       rawDamage: Math.abs(diff),
       finalDamage: shield.finalDamage,
+      shieldPierced: shield.shieldPierced,
       shieldBlocked: shield.blocked,
       destroysAttacker: true,
       destroysTarget: false,
@@ -92,6 +96,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
       diff,
       rawDamage: 0,
       finalDamage: 0,
+      shieldPierced: 0,
       shieldBlocked: 0,
       destroysAttacker: false,
       destroysTarget: false,
@@ -107,6 +112,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
     diff,
     rawDamage: 0,
     finalDamage: 0,
+    shieldPierced: 0,
     shieldBlocked: 0,
     destroysAttacker: true,
     destroysTarget: true,
@@ -116,30 +122,31 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
 
 export function battleLogText(attacker, target, outcome, dealt = outcome?.finalDamage) {
   if (!outcome) return "";
+  const shieldText = () => {
+    const pierced = outcome.shieldPierced > 0 ? `，神格威压消解护盾 ${outcome.shieldPierced}` : "";
+    const blocked = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
+    return `${pierced}${blocked}`;
+  };
   if (outcome.kind === "direct") {
-    return `${attacker.name} 直接攻击，攻击 ${outcome.attack}，造成 ${dealt} 点生命值伤害。`;
+    return `${attacker.name} 直接攻击，攻击 ${outcome.attack}${shieldText()}，造成 ${dealt} 点生命值伤害。`;
   }
   if (outcome.kind === "breakDefense") {
     return `${attacker.name} 攻击 ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，守备怪兽不造成生命值伤害。`;
   }
   if (outcome.kind === "pierceDefense") {
-    const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
-    return `${attacker.name} 攻击 ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，神格贯穿差值 ${outcome.diff}${shieldText}，造成 ${dealt} 点战斗伤害。`;
+    return `${attacker.name} 攻击 ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，神格贯穿差值 ${outcome.diff}${shieldText()}，造成 ${dealt} 点战斗伤害。`;
   }
   if (outcome.kind === "attackWin") {
-    const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
-    return `${attacker.name} 攻击 ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，差值 ${outcome.diff}${shieldText}，造成 ${dealt} 点战斗伤害。`;
+    return `${attacker.name} 攻击 ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，差值 ${outcome.diff}${shieldText()}，造成 ${dealt} 点战斗伤害。`;
   }
   if (outcome.kind === "guardCounter") {
-    const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
-    return `${attacker.name} 攻击 ${outcome.attack} 低于 ${target.name} ${outcome.targetStat}，守备反击差值 ${Math.abs(outcome.diff)}${shieldText}，攻击方承受 ${dealt} 点伤害，双方怪兽保留。`;
+    return `${attacker.name} 攻击 ${outcome.attack} 低于 ${target.name} ${outcome.targetStat}，守备反击差值 ${Math.abs(outcome.diff)}${shieldText()}，攻击方承受 ${dealt} 点伤害，双方怪兽保留。`;
   }
   if (outcome.kind === "guardHold") {
     return `${attacker.name} 攻击 ${outcome.attack} 与 ${target.name} ${outcome.targetStat} 相同，守备怪兽挡下攻击，双方怪兽保留。`;
   }
   if (outcome.kind === "countered") {
-    const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
-    return `${attacker.name} 攻击 ${outcome.attack} 低于 ${target.name} ${outcome.targetStat}，差值 ${Math.abs(outcome.diff)}${shieldText}，被反击破坏并承受 ${dealt} 点伤害。`;
+    return `${attacker.name} 攻击 ${outcome.attack} 低于 ${target.name} ${outcome.targetStat}，差值 ${Math.abs(outcome.diff)}${shieldText()}，被反击破坏并承受 ${dealt} 点伤害。`;
   }
   return `${attacker.name} 与 ${target.name} 数值相同，双方同归于尽。`;
 }

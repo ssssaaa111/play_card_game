@@ -480,8 +480,9 @@ export function applyUiGameEvents(uiState, events = []) {
     }
     if (event.type === "DAMAGE_DEALT") {
       const duelist = uiDuelist(uiState, event.playerId);
+      const pierced = Math.max(0, Number(event.shieldPierced) || 0);
       const blocked = Math.max(0, Number(event.blocked) || 0);
-      duelist.shield = Math.max(0, (Number(duelist.shield) || 0) - blocked);
+      duelist.shield = Math.max(0, (Number(duelist.shield) || 0) - pierced - blocked);
       duelist.lp = Math.max(0, duelist.lp - Math.max(0, Number(event.amount) || 0));
     }
     if (event.type === "GAME_OVER_DECLARED") {

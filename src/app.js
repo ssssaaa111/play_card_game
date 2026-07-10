@@ -2367,9 +2367,15 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
     }
     if (event.type === "DAMAGE_DEALT") {
       const target = event.playerId === owner.owner ? owner : rival;
+      const pierced = Math.max(0, Number(event.shieldPierced) || 0);
       const blocked = Math.max(0, Number(event.blocked) || 0);
       const dealt = Math.max(0, Number(event.amount) || 0);
       result.targetOwner = target.owner;
+      if (pierced > 0) {
+        playSound("guard");
+        playGuardShield(panelElement(target.owner));
+        addLog(`${target.owner === "player" ? "你的" : "AI 的"}护盾被神格威压消解了 ${pierced} 点。`);
+      }
       if (blocked > 0) {
         playSound("guard");
         playGuardShield(panelElement(target.owner));
@@ -3024,8 +3030,14 @@ function playBattleDamageFeedback(events, duelist) {
   events
     .filter((event) => event.type === "DAMAGE_DEALT" && event.playerId === duelist.owner)
     .forEach((event) => {
+      const pierced = Math.max(0, Number(event.shieldPierced) || 0);
       const blocked = Math.max(0, Number(event.blocked) || 0);
       const dealt = Math.max(0, Number(event.amount) || 0);
+      if (pierced > 0) {
+        playSound("guard");
+        playGuardShield(panelElement(duelist.owner));
+        addLog(`${duelist.owner === "player" ? "你的" : "AI 的"}护盾被神格威压消解了 ${pierced} 点。`);
+      }
       if (blocked > 0) {
         playSound("guard");
         playGuardShield(panelElement(duelist.owner));

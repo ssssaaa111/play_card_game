@@ -71,7 +71,8 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         playerId: event.playerId || null,
         cardId: event.cardId || event.attackerCardId || event.sourceCardId || null,
         targetCardId: event.targetCardId || null,
-        reason: event.reason || null
+        reason: event.reason || null,
+        shieldPierced: event.shieldPierced || 0
       })),
       machine: {
         phase: machine.phase,
@@ -873,6 +874,58 @@ async function runDivinePierceSmoke(ctx) {
     throw new Error("divine-pierce: duel should continue after piercing battle resolves");
   }
   setSmokeStatus("passed", "divine-pierce");
+}
+
+async function runDivinePressureSmoke(ctx) {
+  setSmokeStatus("running", "divine-pressure");
+  await startSmokeDuel(ctx, "divinePressure");
+  const divineCard = cloneCardById("celestial-origin-dragon");
+  if (!divineCard) throw new Error("divine-pressure: divine monster definition should exist");
+  const dragon = ctx.state.player.field[0];
+  if (dragon?.id !== "celestial-origin-dragon" || !dragon.shieldPierce) {
+    throw new Error("divine-pressure: celestial origin dragon should start with shield pierce");
+  }
+  if (ctx.state.ai.shield !== 800 || ctx.state.ai.field.some(Boolean)) {
+    throw new Error("divine-pressure: AI should start with 800 shield and no monsters");
+  }
+  const aiLpBefore = ctx.state.ai.lp;
+  clickSmokeElement(fieldCard(ctx.els, "player", "celestial-origin-dragon"), "divine-pressure: select dragon");
+  await waitForSmoke(() => ctx.els.aiPanel.classList.contains("direct-target"), "divine-pressure: AI panel direct target");
+  clickSmokeElement(ctx.els.aiPanel, "divine-pressure: direct attack AI");
+  await waitForSmoke(
+    () => ctx.state.ai.lp === aiLpBefore - 3700 &&
+      ctx.state.ai.shield === 0 &&
+      ctx.state.gameEvents.some((event) =>
+        event.type === "DAMAGE_DEALT" &&
+        event.playerId === "ai" &&
+        event.requested === 4000 &&
+        event.shieldPierced === 500 &&
+        event.blocked === 300 &&
+        event.amount === 3700
+      ) &&
+      ctx.state.gameEvents.some((event) =>
+        event.type === "BATTLE_RESOLVED" &&
+        event.outcome?.kind === "direct" &&
+        event.outcome?.shieldPierced === 500
+      ),
+    `divine-pressure: direct attack should pierce shield before damage. ${smokeDebug(ctx)}`,
+    12000
+  );
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("神格威压"))) {
+    throw new Error("divine-pressure: battle log should explain divine pressure");
+  }
+  await waitForSmoke(() => logCardLink(ctx.els, "celestial-origin-dragon"), "divine-pressure: log should expose divine monster detail link", 6000);
+  clickSmokeElement(logCardLink(ctx.els, "celestial-origin-dragon"), "divine-pressure: open divine detail from log");
+  await assertCardDetailModal(ctx, divineCard, "divine-pressure");
+  if (!ctx.els.cardModal.textContent.includes("神格威压")) {
+    throw new Error("divine-pressure: detail should include divine pressure effect text");
+  }
+  clickSmokeElement(ctx.els.zoomClose, "divine-pressure: close divine detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "divine-pressure: detail closes");
+  if (!ctx.currentPlayerActions().endTurn && !ctx.currentPlayerActions().attack && !ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap) {
+    throw new Error("divine-pressure: duel should continue after direct attack resolves");
+  }
+  setSmokeStatus("passed", "divine-pressure");
 }
 
 async function runFusionSummonSmoke(ctx) {
@@ -3406,6 +3459,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-summon": runDivineSummonSmoke,
     "divine-guard": runDivineGuardSmoke,
     "divine-pierce": runDivinePierceSmoke,
+    "divine-pressure": runDivinePressureSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "split-token": runSplitTokenSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,

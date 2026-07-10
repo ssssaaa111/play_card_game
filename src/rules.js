@@ -37,15 +37,31 @@ export function hasPiercingDamage(card) {
   return Boolean(card?.piercingDamage || card?.divinePierce);
 }
 
+export function shieldPierceAmount(card) {
+  const config = card?.shieldPierce || card?.divinePressure;
+  if (config === true) return 500;
+  if (typeof config === "number") return Math.max(0, config);
+  if (config && typeof config === "object") return Math.max(0, Number(config.amount) || 0);
+  return 0;
+}
+
+export function hasShieldPierce(card) {
+  return shieldPierceAmount(card) > 0;
+}
+
 export function battlePreviewText(attacker, target) {
   if (!attacker) return "还没有选择攻击怪兽。";
-  if (!target) return `${attacker.name} 直接攻击，预计造成 ${totalAtk(attacker)} 点伤害。`;
+  if (!target) {
+    const pressure = hasShieldPierce(attacker) ? `神格威压会先消解至多 ${shieldPierceAmount(attacker)} 点护盾。` : "";
+    return `${attacker.name} 直接攻击，预计造成 ${totalAtk(attacker)} 点伤害。${pressure}`;
+  }
   const attackerStat = `攻击 ${totalAtk(attacker)}`;
   const targetStat = target.mode === "defense" ? `守备 ${totalDef(target)}` : `攻击 ${totalAtk(target)}`;
   const diff = totalAtk(attacker) - battleValue(target);
   if (diff > 0) {
     if (target.mode === "defense" && hasPiercingDamage(attacker)) {
-      return `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破并贯穿造成 ${diff} 点伤害。`;
+      const pressure = hasShieldPierce(attacker) ? `神格威压会先消解至多 ${shieldPierceAmount(attacker)} 点护盾。` : "";
+      return `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破并贯穿造成 ${diff} 点伤害。${pressure}`;
     }
     return target.mode === "defense"
       ? `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破但不造成战斗伤害。`
@@ -61,16 +77,22 @@ export function battlePreviewText(attacker, target) {
     : `${attacker.name} 与 ${target.name} 数值相同，预计同归于尽。`;
 }
 
-export function shieldPreview(amount, shield = 0) {
+export function shieldPreview(amount, shield = 0, sourceCard = null) {
   if (amount <= 0) return { blocked: 0, finalDamage: 0, text: "不造成生命值伤害。" };
-  const blocked = Math.min(shield || 0, amount);
+  const shieldBefore = Math.max(0, Number(shield) || 0);
+  const shieldPierced = Math.min(shieldBefore, shieldPierceAmount(sourceCard));
+  const shieldAfterPierce = Math.max(0, shieldBefore - shieldPierced);
+  const blocked = Math.min(shieldAfterPierce, amount);
   const finalDamage = amount - blocked;
+  const pressureText = shieldPierced > 0 ? `神格威压先消解 ${shieldPierced} 点护盾，` : "";
   return {
+    shieldPierced,
     blocked,
+    shieldAfter: shieldAfterPierce - blocked,
     finalDamage,
     text: blocked > 0
-      ? `护盾预计吸收 ${blocked} 点，最终生命值伤害 ${finalDamage}。`
-      : `预计造成 ${finalDamage} 点生命值伤害。`
+      ? `${pressureText}护盾预计吸收 ${blocked} 点，最终生命值伤害 ${finalDamage}。`
+      : `${pressureText}预计造成 ${finalDamage} 点生命值伤害。`
   };
 }
 
@@ -81,7 +103,7 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
     { label: "攻击方", value: `${attacker.name} / 攻击 ${attack}` }
   ];
   if (!target) {
-    const shield = shieldPreview(attack, rival?.shield || 0);
+    const shield = shieldPreview(attack, rival?.shield || 0, attacker);
     rows.push(
       { label: "目标", value: "对方玩家 / 直接伤害" },
       { label: "结算", value: shield.text }
@@ -103,9 +125,12 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
   if (diff > 0) {
     const piercesDefense = target.mode === "defense" && hasPiercingDamage(attacker);
     const rawDamage = piercesDefense || target.mode !== "defense" ? diff : 0;
-    const shield = shieldPreview(rawDamage, rival?.shield || 0);
+    const shield = shieldPreview(rawDamage, rival?.shield || 0, attacker);
     if (shield.blocked > 0) {
       rows.push({ label: "护盾", value: `吸收 ${shield.blocked} / 实伤 ${shield.finalDamage}` });
+    }
+    if (shield.shieldPierced > 0) {
+      rows.push({ label: "威压", value: `消解护盾 ${shield.shieldPierced}` });
     }
     return {
       badge: piercesDefense ? "贯穿" : target.mode === "defense" ? "破防" : "优势",
@@ -119,9 +144,12 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
     };
   }
   if (diff < 0) {
-    const shield = shieldPreview(Math.abs(diff), owner?.shield || 0);
+    const shield = shieldPreview(Math.abs(diff), owner?.shield || 0, target);
     if (shield.blocked > 0) {
       rows.push({ label: "护盾", value: `吸收 ${shield.blocked} / 实伤 ${shield.finalDamage}` });
+    }
+    if (shield.shieldPierced > 0) {
+      rows.push({ label: "威压", value: `消解护盾 ${shield.shieldPierced}` });
     }
     if (target.mode === "defense") {
       return {

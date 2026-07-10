@@ -33,7 +33,7 @@ test("describes direct attacks with shield math", () => {
   assert.equal(outcome.rawDamage, 1800);
   assert.equal(outcome.shieldBlocked, 600);
   assert.equal(outcome.finalDamage, 1200);
-  assert.match(battleLogText(attacker, null, outcome, outcome.finalDamage), /攻击 1800，造成 1200/);
+  assert.match(battleLogText(attacker, null, outcome, outcome.finalDamage), /攻击 1800，护盾吸收 600，造成 1200/);
 });
 
 test("describes attack wins, guard breaks, counters, and clashes", () => {
@@ -65,6 +65,18 @@ test("describes divine piercing damage against defense monsters", () => {
   assert.equal(outcome.finalDamage, 1600);
   assert.equal(outcome.destroysTarget, true);
   assert.match(battleLogText(attacker, guard, outcome, outcome.finalDamage), /神格贯穿差值 1900，护盾吸收 300，造成 1600/);
+});
+
+test("describes divine pressure shield piercing on direct attacks", () => {
+  const attacker = monster({ name: "创星神龙", atk: 4000, shieldPierce: { type: "divinePressure", amount: 500 } });
+  const outcome = describeBattleOutcome(attacker, null, duelist(), duelist({ shield: 800 }));
+
+  assert.equal(outcome.kind, "direct");
+  assert.equal(outcome.rawDamage, 4000);
+  assert.equal(outcome.shieldPierced, 500);
+  assert.equal(outcome.shieldBlocked, 300);
+  assert.equal(outcome.finalDamage, 3700);
+  assert.match(battleLogText(attacker, null, outcome, outcome.finalDamage), /神格威压消解护盾 500，护盾吸收 300，造成 3700/);
 });
 
 test("keeps attackers alive when they fail to break defense mode monsters", () => {

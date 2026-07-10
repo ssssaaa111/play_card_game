@@ -2669,6 +2669,61 @@ test("battle resolution applies piercing damage only for configured defense brea
   assertValidGameState(next);
 });
 
+test("battle resolution applies divine pressure only from configured damage sources", () => {
+  const normalState = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 })
+    ],
+    player: { monsterZone: ["attacker-1"] },
+    ai: { monsterZone: [], shield: 800 },
+    turn: { phase: Phase.battle }
+  });
+  normalState.machine.phase = Phase.battle;
+  normalState.machine.timing = Timing.battleOpen;
+  const normalEngine = new GameEngine(normalState);
+  const normalEvents = normalEngine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1"
+  });
+
+  assert.equal(normalEngine.getState().players[AI].shield, 0);
+  assert.equal(normalEngine.getState().players[AI].lp, 3000);
+  assert.ok(normalEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.shieldPierced === 0 && event.blocked === 800 && event.amount === 1000));
+
+  const divineState = makeState({
+    cards: [
+      card("divine-1", {
+        templateId: "celestial-origin-dragon",
+        type: "monster",
+        atk: 4000,
+        def: 4000,
+        shieldPierce: { type: "divinePressure", amount: 500 }
+      })
+    ],
+    player: { monsterZone: ["divine-1"] },
+    ai: { monsterZone: [], shield: 800 },
+    turn: { phase: Phase.battle }
+  });
+  divineState.machine.phase = Phase.battle;
+  divineState.machine.timing = Timing.battleOpen;
+  const divineEngine = new GameEngine(divineState);
+  const divineEvents = divineEngine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "divine-1"
+  });
+  const next = divineEngine.getState();
+
+  assert.equal(next.players[AI].shield, 0);
+  assert.equal(next.players[AI].lp, 300);
+  assert.ok(divineEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 4000 && event.shieldPierced === 500 && event.blocked === 300 && event.amount === 3700));
+  assert.ok(divineEvents.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "direct" && event.outcome?.shieldPierced === 500));
+  assertValidGameState(next);
+});
+
 test("battle resolution against stronger defense keeps monsters and applies guarded counter wear", () => {
   const state = makeState({
     cards: [

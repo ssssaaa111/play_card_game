@@ -181,9 +181,19 @@ test("builds structured battle previews with shield math", () => {
   const target = monster({ name: "铁壁守卫", atk: 900 });
 
   assert.deepEqual(shieldPreview(900, 400), {
+    shieldPierced: 0,
     blocked: 400,
+    shieldAfter: 0,
     finalDamage: 500,
     text: "护盾预计吸收 400 点，最终生命值伤害 500。"
+  });
+
+  assert.deepEqual(shieldPreview(900, 800, { shieldPierce: { type: "divinePressure", amount: 500 } }), {
+    shieldPierced: 500,
+    blocked: 300,
+    shieldAfter: 0,
+    finalDamage: 600,
+    text: "神格威压先消解 500 点护盾，护盾预计吸收 300 点，最终生命值伤害 600。"
   });
 
   const preview = makeBattlePreview(attacker, target, duelist(), duelist({ shield: 400 }));
@@ -194,6 +204,14 @@ test("builds structured battle previews with shield math", () => {
   const directPreview = makeBattlePreview(attacker, null, duelist(), duelist({ shield: 2000 }));
   assert.equal(directPreview.badge, "直击");
   assert.match(directPreview.rows.at(-1).value, /最终生命值伤害 0/);
+
+  const divinePreview = makeBattlePreview(
+    monster({ name: "创星神龙", atk: 4000, shieldPierce: { type: "divinePressure", amount: 500 } }),
+    null,
+    duelist(),
+    duelist({ shield: 800 })
+  );
+  assert.equal(divinePreview.rows.at(-1).value, "神格威压先消解 500 点护盾，护盾预计吸收 300 点，最终生命值伤害 3700。");
 
   const guardPreview = makeBattlePreview(
     attacker,
