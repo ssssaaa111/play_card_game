@@ -1,7 +1,7 @@
 export const library = [
   { id: "solar-vanguard", type: "monster", name: "曜锋先锋", element: "light", stars: 5, atk: 2300, def: 1700, icon: "曜", text: "需要 1 只我方场上怪兽作为祭品才能通常召唤。第一版祭品召唤验证用高阶怪兽。", tributeCost: 1 },
   { id: "starfall-colossus", type: "monster", name: "坠星巨卫", element: "light", stars: 8, atk: 3200, def: 2600, icon: "坠", text: "需要 2 只我方场上怪兽作为祭品才能通常召唤。用于验证大型怪兽的双祭品流程。", tributeCost: 2 },
-  { id: "celestial-origin-dragon", type: "monster", name: "创星神龙", element: "light", stars: 10, atk: 4000, def: 4000, icon: "神", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。神格守护：每个己方回合首次将被战斗或效果破坏时，改为防止该次破坏。", summary: "三祭品登场，并拥有每己方回合一次的破坏防护。", tributeCost: 3, destructionProtection: { type: "divineGuard", uses: 1, refresh: "controllerTurn" }, rarity: "UR", archetype: "神格" },
+  { id: "celestial-origin-dragon", type: "monster", name: "创星神龙", element: "light", stars: 10, atk: 4000, def: 4000, icon: "神", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。神格守护：每个己方回合首次将被战斗或效果破坏时，改为防止该次破坏。神格贯穿：攻击守备怪兽并击破时，对对手造成攻击力超出守备力的战斗伤害。", summary: "三祭品登场，拥有每己方回合一次的破坏防护，并能贯穿守备怪兽。", tributeCost: 3, destructionProtection: { type: "divineGuard", uses: 1, refresh: "controllerTurn" }, piercingDamage: { type: "divinePierce" }, rarity: "UR", archetype: "神格" },
   { id: "ember-drake", type: "monster", name: "赤焰幼龙", element: "fire", stars: 4, atk: 1500, def: 900, icon: "炎", text: "被召唤时，对对手造成 200 点伤害。", onSummon: "burn200" },
   { id: "solar-knight", type: "monster", name: "日冕骑士", element: "light", stars: 4, atk: 1700, def: 1200, icon: "光", text: "稳健的光属性战士，适合抢节奏。" },
   { id: "gale-mage", type: "monster", name: "疾风术士", element: "wind", stars: 3, atk: 1200, def: 1400, icon: "风", text: "召唤时抽 1 张卡。", onSummon: "draw1" },
@@ -463,6 +463,20 @@ export const scenarioSetups = {
     playerDeck: ["solar-knight"],
     aiField: ["iron-guardian"],
     aiTraps: ["mirror-snare"],
+    aiHand: [],
+    aiDeck: []
+  },
+  divinePierce: {
+    label: "神格贯穿测试",
+    difficulty: "demo",
+    text: "创星神龙已经在场，AI 的铁壁守卫处于守备表示，用来验证神格贯穿会造成守备差值伤害。",
+    goal: "用创星神龙攻击守备表示的铁壁守卫，确认守备怪被击破且 AI 承受贯穿伤害。",
+    objectives: ["选择场上的创星神龙。", "攻击 AI 守备表示的铁壁守卫。", "确认战斗日志写出神格贯穿并造成差值伤害。"],
+    hints: ["普通怪兽击破守备怪兽不会造成生命值伤害。", "神格贯穿只在攻击守备怪兽且攻击力高于守备力时生效。"],
+    playerHand: ["war-chant"],
+    playerField: ["celestial-origin-dragon"],
+    playerDeck: ["solar-knight"],
+    aiField: [{ id: "iron-guardian", mode: "defense", changedMode: true }],
     aiHand: [],
     aiDeck: []
   },

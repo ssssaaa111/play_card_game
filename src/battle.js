@@ -1,4 +1,4 @@
-import { battleValue, shieldPreview, totalAtk, totalDef } from './rules.js';
+import { battleValue, hasPiercingDamage, shieldPreview, totalAtk, totalDef } from './rules.js';
 
 export function battleStatLabel(card) {
   if (!card) return "直接攻击";
@@ -32,10 +32,11 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
   const targetValue = battleValue(target);
   const diff = attack - targetValue;
   if (diff > 0) {
-    const rawDamage = target.mode === "defense" ? 0 : diff;
+    const piercesDefense = target.mode === "defense" && hasPiercingDamage(attacker);
+    const rawDamage = piercesDefense || target.mode !== "defense" ? diff : 0;
     const shield = shieldPreview(rawDamage, rival?.shield || 0);
     return {
-      kind: target.mode === "defense" ? "breakDefense" : "attackWin",
+      kind: piercesDefense ? "pierceDefense" : target.mode === "defense" ? "breakDefense" : "attackWin",
       attack,
       targetValue,
       targetStat: battleStatLabel(target),
@@ -43,6 +44,7 @@ export function describeBattleOutcome(attacker, target, owner = null, rival = nu
       rawDamage,
       finalDamage: shield.finalDamage,
       shieldBlocked: shield.blocked,
+      piercing: piercesDefense,
       destroysAttacker: false,
       destroysTarget: true,
       wear: 0
@@ -119,6 +121,10 @@ export function battleLogText(attacker, target, outcome, dealt = outcome?.finalD
   }
   if (outcome.kind === "breakDefense") {
     return `${attacker.name} 攻击 ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，守备怪兽不造成生命值伤害。`;
+  }
+  if (outcome.kind === "pierceDefense") {
+    const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";
+    return `${attacker.name} 攻击 ${outcome.attack} 击破 ${target.name} ${outcome.targetStat}，神格贯穿差值 ${outcome.diff}${shieldText}，造成 ${dealt} 点战斗伤害。`;
   }
   if (outcome.kind === "attackWin") {
     const shieldText = outcome.shieldBlocked > 0 ? `，护盾吸收 ${outcome.shieldBlocked}` : "";

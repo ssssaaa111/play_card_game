@@ -2609,6 +2609,66 @@ test("battle resolution destroys attack-position targets and applies battle dama
   assertValidGameState(next);
 });
 
+test("battle resolution applies piercing damage only for configured defense breakers", () => {
+  const normalState = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 2500, def: 1000 }),
+      card("guard-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" })
+    ],
+    player: { monsterZone: ["attacker-1"] },
+    ai: { monsterZone: ["guard-1"] },
+    turn: { phase: Phase.battle }
+  });
+  normalState.machine.phase = Phase.battle;
+  normalState.machine.timing = Timing.battleOpen;
+  const normalEngine = new GameEngine(normalState);
+  const normalEvents = normalEngine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "guard-1"
+  });
+
+  assert.equal(normalEngine.getState().players[AI].lp, 4000);
+  assert.equal(normalEvents.some((event) => event.type === "DAMAGE_DEALT"), false);
+  assert.ok(normalEvents.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "breakDefense"));
+
+  const pierceState = makeState({
+    cards: [
+      card("divine-1", {
+        templateId: "celestial-origin-dragon",
+        type: "monster",
+        atk: 4000,
+        def: 4000,
+        piercingDamage: { type: "divinePierce" }
+      }),
+      card("guard-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" })
+    ],
+    player: { monsterZone: ["divine-1"] },
+    ai: { monsterZone: ["guard-1"], shield: 400 },
+    turn: { phase: Phase.battle }
+  });
+  pierceState.machine.phase = Phase.battle;
+  pierceState.machine.timing = Timing.battleOpen;
+  const pierceEngine = new GameEngine(pierceState);
+  const pierceEvents = pierceEngine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "divine-1",
+    targetCardId: "guard-1"
+  });
+  const next = pierceEngine.getState();
+
+  assert.equal(next.players[AI].shield, 0);
+  assert.equal(next.players[AI].lp, 2500);
+  assert.deepEqual(next.players[AI].grave, ["guard-1"]);
+  assert.ok(pierceEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 1900 && event.blocked === 400 && event.amount === 1500));
+  assert.ok(pierceEvents.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "pierceDefense" && event.outcome?.piercing === true));
+  assertValidGameState(next);
+});
+
 test("battle resolution against stronger defense keeps monsters and applies guarded counter wear", () => {
   const state = makeState({
     cards: [

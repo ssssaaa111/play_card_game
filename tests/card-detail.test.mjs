@@ -64,6 +64,7 @@ test("describes divine three-tribute card details from unified card definitions"
   assert.equal(view.defense, 4000);
   assert.match(view.effectText, /需要 3 只/);
   assert.match(view.effectText, /神格守护/);
+  assert.match(view.effectText, /神格贯穿/);
   assert.equal(view.summonRequirement, "召唤需求：3 只祭品");
   assert.match(view.tags, /神格/);
 });

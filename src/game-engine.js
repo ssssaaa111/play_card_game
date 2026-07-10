@@ -3445,16 +3445,18 @@ function describeEngineBattleOutcome(state, playerId, rivalId, attacker, target)
   const targetValue = engineBattleValue(target);
   const diff = attack - targetValue;
   if (diff > 0) {
-    const rawDamage = target.mode === "defense" ? 0 : diff;
+    const piercesDefense = target.mode === "defense" && cardHasPiercingDamage(attacker);
+    const rawDamage = piercesDefense || target.mode !== "defense" ? diff : 0;
     const shield = engineShieldPreview(rawDamage, requirePlayer(state, rivalId).shield);
     return {
-      kind: target.mode === "defense" ? "breakDefense" : "attackWin",
+      kind: piercesDefense ? "pierceDefense" : target.mode === "defense" ? "breakDefense" : "attackWin",
       attack,
       targetValue,
       diff,
       rawDamage,
       finalDamage: shield.finalDamage,
       shieldBlocked: shield.blocked,
+      piercing: piercesDefense,
       damagePlayerId: rawDamage > 0 ? rivalId : null,
       destroysAttacker: false,
       destroysTarget: true,
@@ -3527,6 +3529,10 @@ function applyBattleWear(emit, card, amount, sourceCardId) {
     reason: "battle",
     sourceCardId
   });
+}
+
+function cardHasPiercingDamage(card) {
+  return Boolean(card?.piercingDamage || card?.divinePierce);
 }
 
 function resolveAfterAttackEffect(effects, state, ctx, playerId, rivalId, attackerCardId) {

@@ -33,6 +33,10 @@ export function battleValue(card) {
   return card.mode === "defense" ? totalDef(card) : totalAtk(card);
 }
 
+export function hasPiercingDamage(card) {
+  return Boolean(card?.piercingDamage || card?.divinePierce);
+}
+
 export function battlePreviewText(attacker, target) {
   if (!attacker) return "还没有选择攻击怪兽。";
   if (!target) return `${attacker.name} 直接攻击，预计造成 ${totalAtk(attacker)} 点伤害。`;
@@ -40,6 +44,9 @@ export function battlePreviewText(attacker, target) {
   const targetStat = target.mode === "defense" ? `守备 ${totalDef(target)}` : `攻击 ${totalAtk(target)}`;
   const diff = totalAtk(attacker) - battleValue(target);
   if (diff > 0) {
+    if (target.mode === "defense" && hasPiercingDamage(attacker)) {
+      return `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破并贯穿造成 ${diff} 点伤害。`;
+    }
     return target.mode === "defense"
       ? `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破但不造成战斗伤害。`
       : `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，预计造成 ${diff} 点伤害。`;
@@ -94,15 +101,19 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
     { label: "差值", value: diff > 0 ? `+${diff}` : `${diff}` }
   );
   if (diff > 0) {
-    const shield = shieldPreview(target.mode === "defense" ? 0 : diff, rival?.shield || 0);
+    const piercesDefense = target.mode === "defense" && hasPiercingDamage(attacker);
+    const rawDamage = piercesDefense || target.mode !== "defense" ? diff : 0;
+    const shield = shieldPreview(rawDamage, rival?.shield || 0);
     if (shield.blocked > 0) {
       rows.push({ label: "护盾", value: `吸收 ${shield.blocked} / 实伤 ${shield.finalDamage}` });
     }
     return {
-      badge: target.mode === "defense" ? "破防" : "优势",
+      badge: piercesDefense ? "贯穿" : target.mode === "defense" ? "破防" : "优势",
       tone: target.mode === "defense" ? "guard" : "",
       rows,
-      result: target.mode === "defense"
+      result: piercesDefense
+        ? `目标会被击破；神格贯穿会造成差值伤害。${shield.text}`
+        : target.mode === "defense"
         ? "目标会被击破；守备表示不造成生命值伤害。"
         : `目标会被击破；${shield.text}`
     };

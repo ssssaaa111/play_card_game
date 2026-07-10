@@ -833,6 +833,48 @@ async function runDivineGuardSmoke(ctx) {
   setSmokeStatus("passed", "divine-guard");
 }
 
+async function runDivinePierceSmoke(ctx) {
+  setSmokeStatus("running", "divine-pierce");
+  await startSmokeDuel(ctx, "divinePierce");
+  const divineCard = cloneCardById("celestial-origin-dragon");
+  if (!divineCard) throw new Error("divine-pierce: divine monster definition should exist");
+  const dragon = ctx.state.player.field[0];
+  const guard = ctx.state.ai.field[0];
+  if (dragon?.id !== "celestial-origin-dragon" || !dragon.piercingDamage) {
+    throw new Error("divine-pierce: celestial origin dragon should start with piercing damage");
+  }
+  if (guard?.id !== "iron-guardian" || guard.mode !== "defense") {
+    throw new Error("divine-pierce: iron guardian should start in defense mode");
+  }
+  const aiLpBefore = ctx.state.ai.lp;
+  clickSmokeElement(fieldCard(ctx.els, "player", "celestial-origin-dragon"), "divine-pierce: select dragon");
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "divine-pierce: targetable defense guardian");
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "divine-pierce: attack defense guardian");
+  await waitForSmoke(
+    () => ctx.state.ai.lp === aiLpBefore - 1900 &&
+      ctx.state.ai.grave.some((card) => card?.id === "iron-guardian") &&
+      ctx.state.gameEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 1900) &&
+      ctx.state.gameEvents.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "pierceDefense"),
+    `divine-pierce: divine piercing battle should deal defense difference. ${smokeDebug(ctx)}`,
+    12000
+  );
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("神格贯穿"))) {
+    throw new Error("divine-pierce: battle log should explain piercing damage");
+  }
+  await waitForSmoke(() => logCardLink(ctx.els, "celestial-origin-dragon"), "divine-pierce: log should expose divine monster detail link", 6000);
+  clickSmokeElement(logCardLink(ctx.els, "celestial-origin-dragon"), "divine-pierce: open divine detail from log");
+  await assertCardDetailModal(ctx, divineCard, "divine-pierce");
+  if (!ctx.els.cardModal.textContent.includes("神格贯穿")) {
+    throw new Error("divine-pierce: detail should include divine pierce effect text");
+  }
+  clickSmokeElement(ctx.els.zoomClose, "divine-pierce: close divine detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "divine-pierce: detail closes");
+  if (!ctx.currentPlayerActions().endTurn && !ctx.currentPlayerActions().attack && !ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap) {
+    throw new Error("divine-pierce: duel should continue after piercing battle resolves");
+  }
+  setSmokeStatus("passed", "divine-pierce");
+}
+
 async function runFusionSummonSmoke(ctx) {
   setSmokeStatus("running", "fusion-summon");
   await startSmokeDuel(ctx, "fusionSummon");
@@ -3363,6 +3405,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "tribute-summon-double": runTributeSummonDoubleSmoke,
     "divine-summon": runDivineSummonSmoke,
     "divine-guard": runDivineGuardSmoke,
+    "divine-pierce": runDivinePierceSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "split-token": runSplitTokenSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,

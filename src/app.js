@@ -3269,11 +3269,12 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     playImpactExplosion(toEl);
     if (outcome.diff > 0) {
       let dealt = 0;
-      if (target.mode !== "defense") {
+      if (target.mode !== "defense" || outcome.rawDamage > 0) {
         dealt = playBattleDamageFeedback(battleEvents, rival);
         animateAvatar(rival.owner, "hit");
         playMonsterMotion(rival.owner, resolvedTargetIndex, "hit");
-      } else {
+      }
+      if (target.mode === "defense") {
         playSound("guard");
         playMonsterMotion(rival.owner, resolvedTargetIndex, "guard");
         playMonsterCounterPhantom(target, toEl, fromEl);
@@ -3283,7 +3284,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       playMonsterBurst(toEl);
       playSound("attack-break");
       shakeScreen();
-      playEpicAction(target.mode === "defense" ? "破防" : "击破", "attack");
+      playEpicAction(outcome.kind === "pierceDefense" ? "神格贯穿" : target.mode === "defense" ? "破防" : "击破", "attack");
       playArrow(fromEl, toEl, "attack", "攻击");
       addLog(battleLogText(attacker, target, outcome, dealt), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
       speak(`${attacker.name} 击破目标。`);

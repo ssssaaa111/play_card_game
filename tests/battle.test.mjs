@@ -54,6 +54,19 @@ test("describes attack wins, guard breaks, counters, and clashes", () => {
   assert.match(battleLogText(attacker, guard, describeBattleOutcome(attacker, guard)), /守备怪兽不造成生命值伤害/);
 });
 
+test("describes divine piercing damage against defense monsters", () => {
+  const attacker = monster({ name: "创星神龙", atk: 4000, piercingDamage: { type: "divinePierce" } });
+  const guard = monster({ name: "铁壁守卫", mode: "defense", def: 2100 });
+  const outcome = describeBattleOutcome(attacker, guard, duelist(), duelist({ shield: 300 }));
+
+  assert.equal(outcome.kind, "pierceDefense");
+  assert.equal(outcome.rawDamage, 1900);
+  assert.equal(outcome.shieldBlocked, 300);
+  assert.equal(outcome.finalDamage, 1600);
+  assert.equal(outcome.destroysTarget, true);
+  assert.match(battleLogText(attacker, guard, outcome, outcome.finalDamage), /神格贯穿差值 1900，护盾吸收 300，造成 1600/);
+});
+
 test("keeps attackers alive when they fail to break defense mode monsters", () => {
   const attacker = monster({ name: "星轨枪兵", atk: 1800 });
   const highGuard = monster({ name: "铁壁守卫", mode: "defense", def: 2100 });
