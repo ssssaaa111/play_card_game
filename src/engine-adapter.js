@@ -1,6 +1,6 @@
 import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents, tributeCostForCard } from './game-engine.js';
 import { library } from './data.js';
-import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, totalAtk } from './rules.js';
+import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, canEffectTargetCard, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { trapDefinition } from './traps.js';
 import { ACTION_WINDOWS, PHASES, TIMINGS } from './turn-state.js';
@@ -791,15 +791,20 @@ function localizeEngineRuleReason(message = "", actionLabel = "操作") {
   if (/must attack a monster/.test(message)) return "对方场上还有怪兽，不能直接攻击玩家。";
   if (/skipped attacks/.test(message)) return "本回合已经跳过攻击，不能再攻击。";
   if (/not the strongest monster/.test(message)) return "这张卡只能选择规则指定的最高攻击力目标。";
+  if (/protected by target resistance/.test(message)) return "目标拥有神格目标抗性，不能成为对手效果的指定目标。";
+  if (/has no legal target/.test(message)) return "这张卡没有可指定的合法目标。";
   if (/requires at least|requires elements/.test(message)) return "场上属性或数量条件不足。";
   if (/requires no .*spellTrapZone/.test(message)) return "必须先清除指定压制卡。";
   if (/cannot be the source card/.test(message)) return "不能选择这张卡自己作为目标。";
   return `规则引擎判定不能${actionLabel}：${message}`;
 }
 
-function strongestMonsterId(uiState, playerId) {
+function strongestMonsterId(uiState, playerId, { sourceCard = null, sourceOwner = "" } = {}) {
   const duelist = uiDuelist(uiState, playerId);
-  const candidates = duelist.field.filter(Boolean);
+  const candidates = duelist.field.filter((card) => canEffectTargetCard(sourceCard, card, {
+    sourceOwner,
+    targetOwner: playerId
+  }));
   if (!candidates.length) return null;
   return cardKey(candidates.slice().sort((left, right) => totalAtk(right) - totalAtk(left))[0]);
 }
@@ -827,14 +832,15 @@ function targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo) {
   if (explicit) return explicit;
   const sourceCardId = cardKey(card);
   const definition = spellDefinition(card.effect);
-  if (card.effect === "buff500") return strongestMonsterId(uiState, playerId);
-  if (card.effect === "battleTrance") return strongestMonsterId(uiState, playerId);
-  if (card.effect === "rallyAttack") return strongestMonsterId(uiState, playerId);
-  if (card.effect === "pierceLine") return strongestMonsterId(uiState, rivalId);
+  const source = { sourceCard: card, sourceOwner: playerId };
+  if (card.effect === "buff500") return strongestMonsterId(uiState, playerId, source);
+  if (card.effect === "battleTrance") return strongestMonsterId(uiState, playerId, source);
+  if (card.effect === "rallyAttack") return strongestMonsterId(uiState, playerId, source);
+  if (card.effect === "pierceLine") return strongestMonsterId(uiState, rivalId, source);
   if (card.effect === "graveReturn") return firstGraveCardIdExcept(uiState, playerId, sourceCardId);
   if (card.effect === "graveRevive") return firstGraveMonsterCardId(uiState, playerId);
-  if (definition?.target === "ownMonster") return strongestMonsterId(uiState, playerId);
-  if (definition?.target === "enemyMonster") return strongestMonsterId(uiState, rivalId);
+  if (definition?.target === "ownMonster") return strongestMonsterId(uiState, playerId, source);
+  if (definition?.target === "enemyMonster") return strongestMonsterId(uiState, rivalId, source);
   if (definition?.target === "enemySpellTrap") return firstSpellTrapCardId(uiState, rivalId);
   return null;
 }

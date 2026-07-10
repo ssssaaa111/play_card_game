@@ -1,4 +1,4 @@
-import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from "./rules.js";
+import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, canEffectTargetCard } from "./rules.js";
 import { matchingElementCombos } from "./combos.js";
 
 export const Phase = Object.freeze({
@@ -3110,10 +3110,23 @@ function validateEffectTarget(definition, state, action, card) {
   if (!cardMatchesTargetDefinition(state, action.targetCardId, definition.target)) {
     throw new GameRuleError(`Target ${action.targetCardId} requires a ${definition.target.cardType} target`);
   }
+  if (!canEffectTargetCard(card, target, {
+    sourceOwner: card.ownerId || action.playerId,
+    targetOwner: target.ownerId || playerId
+  })) {
+    throw new GameRuleError(`Target ${action.targetCardId} is protected by target resistance`);
+  }
   if (definition.target.rule === "strongestAtk") {
     const candidates = cards
       .filter((cardId) => cardMatchesTargetDefinition(state, cardId, definition.target))
+      .filter((cardId) => canEffectTargetCard(card, requireCard(state, cardId), {
+        sourceOwner: card.ownerId || action.playerId,
+        targetOwner: requireCard(state, cardId).ownerId || playerId
+      }))
       .map((cardId) => requireCard(state, cardId));
+    if (!candidates.length) {
+      throw new GameRuleError(`Effect ${card.effect || card.onSummon || card.trigger || card.id} has no legal target`);
+    }
     const maxAtk = Math.max(...candidates.map(engineTotalAtk));
     if (engineTotalAtk(target) !== maxAtk) {
       throw new GameRuleError(`Target ${action.targetCardId} is not the strongest monster for this effect`);

@@ -8,6 +8,7 @@ import {
   SPELL_TRAP_ZONE_SIZE,
   battlePreviewText,
   battleValue,
+  canEffectTargetCard,
   canDirectAttack,
   elementLabel,
   fieldCards,
@@ -261,4 +262,35 @@ test("validates strongest-only spell target rules", () => {
   assert.deepEqual(validateSpellTargetRule(pending, owner, owner.field[2]), { ok: true });
   assert.equal(validateSpellTargetRule(pending, owner, owner.field[0]).ok, false);
   assert.match(validateSpellTargetRule(pending, owner, owner.field[0]).reason, /最高怪A、最高怪B/);
+});
+
+test("target resistance excludes opponent cards from strongest target rules", () => {
+  const source = { id: "pierce-line", type: "spell", name: "破阵星芒" };
+  const divine = monster({ name: "创星神龙", atk: 4000, targetResistance: { type: "divineTarget" } });
+  const colossus = monster({ name: "坠星巨卫", atk: 3200 });
+  const rival = duelist({
+    owner: "ai",
+    field: [divine, colossus, null, null, null]
+  });
+  const pending = {
+    cardName: "破阵星芒",
+    mode: "enemyMonster",
+    targetRule: "strongest",
+    sourceCard: source,
+    sourceOwner: "player"
+  };
+
+  assert.equal(canEffectTargetCard(source, divine, { sourceOwner: "player", targetOwner: "ai" }), false);
+  assert.deepEqual(validateSpellTargetRule(pending, rival, colossus), { ok: true });
+  assert.equal(validateSpellTargetRule(pending, rival, divine).ok, false);
+  assert.match(validateSpellTargetRule(pending, rival, divine).reason, /神格目标抗性/);
+});
+
+test("target resistance allows same-owner effects and explicit bypass", () => {
+  const source = { id: "war-chant", type: "spell", name: "战意高扬" };
+  const bypass = { id: "divine-break", type: "spell", name: "破神术", targetResistanceBypass: "divineTarget" };
+  const divine = monster({ name: "创星神龙", atk: 4000, targetResistance: { type: "divineTarget" } });
+
+  assert.equal(canEffectTargetCard(source, divine, { sourceOwner: "player", targetOwner: "player" }), true);
+  assert.equal(canEffectTargetCard(bypass, divine, { sourceOwner: "player", targetOwner: "ai" }), true);
 });

@@ -198,6 +198,29 @@ test("spell/trap removal card is backed by engine and UI metadata", () => {
   assert.deepEqual(engineDefinition.operations, [{ op: "destroyCard", cardId: "$action.targetCardId" }]);
 });
 
+test("celestial origin dragon exposes divine target resistance in unified card data", () => {
+  const card = cardsById.get("celestial-origin-dragon");
+
+  assert.equal(card.type, "monster");
+  assert.deepEqual(card.targetResistance, { type: "divineTarget" });
+  assert.match(card.text, /神格抗性/);
+  assert.match(card.summary, /免疫对手普通指定效果/);
+});
+
+test("divine resistance scenario keeps player setup deterministic", () => {
+  const scenario = scenarioSetups.divineResistance;
+
+  assert.equal(scenario.difficulty, "demo");
+  assert.deepEqual(scenario.playerHand, ["pierce-line", "war-chant"]);
+  assert.deepEqual(scenario.playerField, ["star-lancer"]);
+  assert.deepEqual(scenario.playerDeck, ["solar-knight"]);
+  assert.deepEqual(scenario.aiField, ["celestial-origin-dragon", "starfall-colossus"]);
+  assert.deepEqual(scenario.aiHand, []);
+  assert.deepEqual(scenario.aiDeck, []);
+  assert.ok(scenario.objectives.some((entry) => entry.includes("创星神龙")));
+  assert.ok(scenario.hints.some((entry) => entry.includes("指定目标")));
+});
+
 test("trap cards are backed by trap metadata", () => {
   const trapCards = library.filter((card) => card.type === "trap");
   const triggersFromCards = new Set(trapCards.map((card) => card.trigger));

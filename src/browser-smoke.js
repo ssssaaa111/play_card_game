@@ -928,6 +928,49 @@ async function runDivinePressureSmoke(ctx) {
   setSmokeStatus("passed", "divine-pressure");
 }
 
+async function runDivineResistanceSmoke(ctx) {
+  setSmokeStatus("running", "divine-resistance");
+  await startSmokeDuel(ctx, "divineResistance");
+  const dragon = ctx.state.ai.field.find((card) => card?.id === "celestial-origin-dragon");
+  const colossus = ctx.state.ai.field.find((card) => card?.id === "starfall-colossus");
+  const colossusDefinition = cloneCardById("starfall-colossus");
+  if (!dragon?.targetResistance) {
+    throw new Error("divine-resistance: celestial origin dragon should expose target resistance");
+  }
+  if (!colossus || !colossusDefinition) {
+    throw new Error("divine-resistance: colossus target should exist");
+  }
+  clickSmokeElement(handCard(ctx.els, "pierce-line"), "divine-resistance: select pierce-line");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "pierceLine" &&
+      fieldCard(ctx.els, "ai", "starfall-colossus")?.classList.contains("targetable"),
+    "divine-resistance: pierce-line should target next legal strongest monster",
+    6000
+  );
+  if (fieldCard(ctx.els, "ai", "celestial-origin-dragon")?.classList.contains("targetable")) {
+    throw new Error("divine-resistance: divine target resistance should prevent target highlight");
+  }
+  clickSmokeElement(fieldCard(ctx.els, "ai", "starfall-colossus"), "divine-resistance: click colossus target");
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.id === "starfall-colossus" && card.tempAtk === -400 && card.tempDef === -400) &&
+      ctx.state.ai.field.some((card) => card?.id === "celestial-origin-dragon" && (card.tempAtk || 0) === 0 && (card.tempDef || 0) === 0),
+    `divine-resistance: pierce-line should weaken colossus but not divine dragon. ${smokeDebug(ctx)}`,
+    8000
+  );
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("坠星巨卫") && logEntryMessage(entry).includes("破阵星芒"))) {
+    throw new Error("divine-resistance: battle log should name the legal target");
+  }
+  await waitForSmoke(() => logCardLink(ctx.els, "starfall-colossus"), "divine-resistance: target log card link", 6000);
+  clickSmokeElement(logCardLink(ctx.els, "starfall-colossus"), "divine-resistance: open target detail from log");
+  await assertCardDetailModal(ctx, colossusDefinition, "divine-resistance");
+  clickSmokeElement(ctx.els.zoomClose, "divine-resistance: close target detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "divine-resistance: detail closes");
+  if (!ctx.currentPlayerActions().endTurn && !ctx.currentPlayerActions().attack && !ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap) {
+    throw new Error(`divine-resistance: duel should continue after target resistance resolves. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "divine-resistance");
+}
+
 async function runFusionSummonSmoke(ctx) {
   setSmokeStatus("running", "fusion-summon");
   await startSmokeDuel(ctx, "fusionSummon");
@@ -3460,6 +3503,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-guard": runDivineGuardSmoke,
     "divine-pierce": runDivinePierceSmoke,
     "divine-pressure": runDivinePressureSmoke,
+    "divine-resistance": runDivineResistanceSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "split-token": runSplitTokenSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,

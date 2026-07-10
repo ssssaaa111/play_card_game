@@ -544,6 +544,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="divineGuard">神格守护测试<\/option>/);
   assert.match(html, /<option value="divinePierce">神格贯穿测试<\/option>/);
   assert.match(html, /<option value="divinePressure">神格威压测试<\/option>/);
+  assert.match(html, /<option value="divineResistance">神格抗性测试<\/option>/);
   assert.match(html, /<option value="fusionSummon">融合召唤测试<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
@@ -645,6 +646,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"divine-guard": runDivineGuardSmoke/);
   assert.match(smoke, /"divine-pierce": runDivinePierceSmoke/);
   assert.match(smoke, /"divine-pressure": runDivinePressureSmoke/);
+  assert.match(smoke, /"divine-resistance": runDivineResistanceSmoke/);
   assert.match(smoke, /"fusion-summon": runFusionSummonSmoke/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /fusionPreviewName/);
@@ -743,6 +745,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "divine-guard"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "divine-pierce"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "divine-pressure"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "divine-resistance"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "split-token"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);

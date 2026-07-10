@@ -1,7 +1,7 @@
 export const library = [
   { id: "solar-vanguard", type: "monster", name: "曜锋先锋", element: "light", stars: 5, atk: 2300, def: 1700, icon: "曜", text: "需要 1 只我方场上怪兽作为祭品才能通常召唤。第一版祭品召唤验证用高阶怪兽。", tributeCost: 1 },
   { id: "starfall-colossus", type: "monster", name: "坠星巨卫", element: "light", stars: 8, atk: 3200, def: 2600, icon: "坠", text: "需要 2 只我方场上怪兽作为祭品才能通常召唤。用于验证大型怪兽的双祭品流程。", tributeCost: 2 },
-  { id: "celestial-origin-dragon", type: "monster", name: "创星神龙", element: "light", stars: 10, atk: 4000, def: 4000, icon: "神", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。神格守护：每个己方回合首次将被战斗或效果破坏时，改为防止该次破坏。神格贯穿：攻击守备怪兽并击破时，对对手造成攻击力超出守备力的战斗伤害。神格威压：此卡造成战斗或效果伤害时，先消解对手最多 500 点护盾。", summary: "三祭品登场，拥有每己方回合一次的破坏防护，并能贯穿守备、压穿护盾。", tributeCost: 3, destructionProtection: { type: "divineGuard", uses: 1, refresh: "controllerTurn" }, piercingDamage: { type: "divinePierce" }, shieldPierce: { type: "divinePressure", amount: 500 }, rarity: "UR", archetype: "神格" },
+  { id: "celestial-origin-dragon", type: "monster", name: "创星神龙", element: "light", stars: 10, atk: 4000, def: 4000, icon: "神", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。神格守护：每个己方回合首次将被战斗或效果破坏时，改为防止该次破坏。神格贯穿：攻击守备怪兽并击破时，对对手造成攻击力超出守备力的战斗伤害。神格威压：此卡造成战斗或效果伤害时，先消解对手最多 500 点护盾。神格抗性：不能成为对手非破神效果的指定目标。", summary: "三祭品登场，拥有每己方回合一次的破坏防护，并能贯穿守备、压穿护盾，免疫对手普通指定效果。", tributeCost: 3, destructionProtection: { type: "divineGuard", uses: 1, refresh: "controllerTurn" }, piercingDamage: { type: "divinePierce" }, shieldPierce: { type: "divinePressure", amount: 500 }, targetResistance: { type: "divineTarget" }, rarity: "UR", archetype: "神格" },
   { id: "ember-drake", type: "monster", name: "赤焰幼龙", element: "fire", stars: 4, atk: 1500, def: 900, icon: "炎", text: "被召唤时，对对手造成 200 点伤害。", onSummon: "burn200" },
   { id: "solar-knight", type: "monster", name: "日冕骑士", element: "light", stars: 4, atk: 1700, def: 1200, icon: "光", text: "稳健的光属性战士，适合抢节奏。" },
   { id: "gale-mage", type: "monster", name: "疾风术士", element: "wind", stars: 3, atk: 1200, def: 1400, icon: "风", text: "召唤时抽 1 张卡。", onSummon: "draw1" },
@@ -492,6 +492,20 @@ export const scenarioSetups = {
     playerDeck: ["solar-knight"],
     aiShield: 800,
     aiField: [],
+    aiHand: [],
+    aiDeck: []
+  },
+  divineResistance: {
+    label: "神格抗性测试",
+    difficulty: "demo",
+    text: "AI 场上有创星神龙和坠星巨卫，用来验证对手效果不能指定神格怪兽。",
+    goal: "发动破阵星芒，确认创星神龙不会成为指定目标，效果改为命中下一只可被指定的最高攻击怪兽。",
+    objectives: ["查看 AI 场上的创星神龙详情。", "发动手牌中的破阵星芒。", "选择 AI 场上的坠星巨卫并确认创星神龙未被削弱。"],
+    hints: ["神格抗性只阻止对手的指定目标效果，不会阻止战斗、祭品或非指定全场效果。", "最高攻击力目标会在可被指定的怪兽中重新计算。"],
+    playerHand: ["pierce-line", "war-chant"],
+    playerField: ["star-lancer"],
+    playerDeck: ["solar-knight"],
+    aiField: ["celestial-origin-dragon", "starfall-colossus"],
     aiHand: [],
     aiDeck: []
   },

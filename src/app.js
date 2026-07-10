@@ -92,6 +92,7 @@ import {
   spellTargetPrompt,
   strongestMonster,
   totalAtk,
+  canEffectTargetCard,
   validateSpellTargetRule,
   weakestMonster
 } from './rules.js';
@@ -1049,7 +1050,9 @@ function beginSpellTargetSelection(handIndex, card) {
     effect: card.effect,
     mode,
     targetRule: spellEffects[card.effect]?.targetRule || "",
-    cardName: card.name
+    cardName: card.name,
+    sourceCard: card,
+    sourceOwner: "player"
   };
   state.selected = { zone: "hand", uid: card.uid };
   setActionWindow(ACTION_WINDOWS.targetSelect, { reason: `target:${card.uid}` });
@@ -1101,6 +1104,12 @@ function validateSpellTarget(pending, ownerName, index, zone = "field") {
   }
   if (pending.mode === "enemyMonster" && ownerName !== "ai") {
     return { ok: false, reason: "这个效果需要选择敌方怪兽。" };
+  }
+  if (!canEffectTargetCard(pending.sourceCard, target, {
+    sourceOwner: pending.sourceOwner || "player",
+    targetOwner: ownerName
+  })) {
+    return { ok: false, reason: `${target.name} 拥有神格目标抗性，不能成为对手效果的指定目标。` };
   }
   const rule = validateSpellTargetRule(pending, duelist, target);
   if (!rule.ok) return rule;

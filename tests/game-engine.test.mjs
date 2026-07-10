@@ -181,6 +181,68 @@ test("spell activation is legal in battle phase action windows", () => {
   assert.ok(events.some((event) => event.type === "CARD_ACTIVATED" && event.phase === Phase.battle));
 });
 
+test("target resistance blocks opponent targeting and recalculates strongest legal target", () => {
+  const state = makeState({
+    cards: [
+      card("pierce-1", { templateId: "pierce-line", effect: "pierceLine" }),
+      card("dragon-1", {
+        ownerId: AI,
+        templateId: "celestial-origin-dragon",
+        type: "monster",
+        atk: 4000,
+        def: 4000,
+        targetResistance: { type: "divineTarget" }
+      }),
+      card("colossus-1", { ownerId: AI, templateId: "starfall-colossus", type: "monster", atk: 3200, def: 2600 })
+    ],
+    player: {
+      hand: ["pierce-1"]
+    },
+    ai: {
+      monsterZone: ["dragon-1", "colossus-1"]
+    }
+  });
+
+  const illegal = new GameEngine(state);
+  assert.throws(
+    () => illegal.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "pierce-1", targetCardId: "dragon-1" }),
+    /protected by target resistance/
+  );
+
+  const legal = new GameEngine(state);
+  const events = legal.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "pierce-1", targetCardId: "colossus-1" });
+  const next = legal.getState();
+
+  assert.equal(next.cards["dragon-1"].tempAtk || 0, 0);
+  assert.equal(next.cards["dragon-1"].tempDef || 0, 0);
+  assert.equal(next.cards["colossus-1"].tempAtk, -400);
+  assert.equal(next.cards["colossus-1"].tempDef, -400);
+  assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === "colossus-1").length, 2);
+});
+
+test("target resistance does not block same-owner target effects", () => {
+  const state = makeState({
+    cards: [
+      card("chant-1", { templateId: "war-chant", effect: "buff500" }),
+      card("dragon-1", {
+        templateId: "celestial-origin-dragon",
+        type: "monster",
+        atk: 4000,
+        def: 4000,
+        targetResistance: { type: "divineTarget" }
+      })
+    ],
+    player: {
+      hand: ["chant-1"],
+      monsterZone: ["dragon-1"]
+    }
+  });
+  const engine = new GameEngine(state);
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "chant-1", targetCardId: "dragon-1" });
+
+  assert.equal(engine.getState().cards["dragon-1"].tempAtk, 500);
+});
+
 test("dispatch records commands before derived events", () => {
   const state = makeState({
     cards: [

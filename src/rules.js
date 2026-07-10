@@ -49,6 +49,35 @@ export function hasShieldPierce(card) {
   return shieldPierceAmount(card) > 0;
 }
 
+export function targetResistanceType(card) {
+  const config = card?.targetResistance || card?.divineTargetResistance || card?.targetImmunity;
+  if (config === true) return "targetResistance";
+  if (typeof config === "string") return config;
+  if (config && typeof config === "object") return config.type || "targetResistance";
+  return "";
+}
+
+export function hasTargetResistance(card) {
+  return Boolean(targetResistanceType(card));
+}
+
+export function bypassesTargetResistance(sourceCard, targetCard) {
+  if (!hasTargetResistance(targetCard)) return true;
+  const resistance = targetResistanceType(targetCard);
+  const bypass = sourceCard?.targetResistanceBypass || sourceCard?.divineBreak || sourceCard?.targetBypass;
+  if (bypass === true) return true;
+  if (typeof bypass === "string") return bypass === resistance;
+  if (Array.isArray(bypass)) return bypass.includes(resistance);
+  return false;
+}
+
+export function canEffectTargetCard(sourceCard, targetCard, { sourceOwner = "", targetOwner = "" } = {}) {
+  if (!targetCard) return false;
+  if (!hasTargetResistance(targetCard)) return true;
+  if (sourceOwner && targetOwner && sourceOwner === targetOwner) return true;
+  return bypassesTargetResistance(sourceCard, targetCard);
+}
+
 export function battlePreviewText(attacker, target) {
   if (!attacker) return "还没有选择攻击怪兽。";
   if (!target) {
@@ -231,8 +260,20 @@ export function spellTargetPrompt(mode, cardName = "这张卡", targetRule = "")
 }
 
 export function validateSpellTargetRule(pending, duelist, target) {
+  if (!canEffectTargetCard(pending?.sourceCard, target, {
+    sourceOwner: pending?.sourceOwner || "player",
+    targetOwner: duelist?.owner || ""
+  })) {
+    return { ok: false, reason: `${target.name} 拥有神格目标抗性，不能成为对手效果的指定目标。` };
+  }
   if (pending?.targetRule === "strongest") {
-    const monsters = fieldCards(duelist);
+    const monsters = fieldCards(duelist).filter((card) => canEffectTargetCard(pending?.sourceCard, card, {
+      sourceOwner: pending?.sourceOwner || "player",
+      targetOwner: duelist?.owner || ""
+    }));
+    if (!monsters.length) {
+      return { ok: false, reason: `${pending.cardName} 没有可指定的合法目标。` };
+    }
     const maxAtk = Math.max(...monsters.map(totalAtk));
     if (totalAtk(target) !== maxAtk) {
       const scope = pending.mode === "enemyMonster" ? "敌方" : "我方";
