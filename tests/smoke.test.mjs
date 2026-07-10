@@ -1029,7 +1029,8 @@ test("hand action prompts have visible layout room", () => {
   const css = readProjectFile("styles.css");
 
   assert.match(css, /overflow-y: auto;/);
-  assert.match(css, /\.hand \.card\s*\{[\s\S]*grid-template-rows: auto minmax\(42px, 0\.7fr\) minmax\(32px, auto\) auto auto;/);
+  assert.match(css, /\.hand \.card\s*\{[\s\S]*grid-template-rows: auto minmax\(54px, 0\.8fr\) minmax\(28px, auto\) 24px 20px;/);
+  assert.match(css, /\.card\.monster:not\(\.field-monster-card\) \.monster-projection\s*\{[\s\S]*display: block;[\s\S]*height: calc\(100% \+ 12px\);/);
   assert.match(css, /\.action-reason\s*\{[\s\S]*-webkit-line-clamp: 1;/);
   assert.match(css, /\.detail-actions\s*\{[\s\S]*position: relative;[\s\S]*z-index: 9;/);
   assert.doesNotMatch(css, /\.card-detail-trigger/);
