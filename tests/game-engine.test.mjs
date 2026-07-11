@@ -243,6 +243,51 @@ test("target resistance does not block same-owner target effects", () => {
   assert.equal(engine.getState().cards["dragon-1"].tempAtk, 500);
 });
 
+test("divine break source bypasses matching target resistance without weakening normal targeting rules", () => {
+  const state = makeState({
+    cards: [
+      card("breaker-1", {
+        templateId: "godbreaker-spear",
+        effect: "pierceLine",
+        targetResistanceBypass: "divineTarget"
+      }),
+      card("dragon-1", {
+        ownerId: AI,
+        templateId: "celestial-origin-dragon",
+        type: "monster",
+        atk: 4000,
+        def: 4000,
+        targetResistance: { type: "divineTarget" }
+      }),
+      card("colossus-1", {
+        ownerId: AI,
+        templateId: "starfall-colossus",
+        type: "monster",
+        atk: 3200,
+        def: 2600
+      })
+    ],
+    player: { hand: ["breaker-1"] },
+    ai: { monsterZone: ["dragon-1", "colossus-1"] }
+  });
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "breaker-1",
+    targetCardId: "dragon-1"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.cards["dragon-1"].tempAtk, -400);
+  assert.equal(next.cards["dragon-1"].tempDef, -400);
+  assert.equal(next.cards["colossus-1"].tempAtk || 0, 0);
+  assert.equal(next.cards["colossus-1"].tempDef || 0, 0);
+  assert.equal(next.players[AI].lp, MAX_LP - 200);
+  assert.ok(events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === "breaker-1"));
+});
+
 test("dispatch records commands before derived events", () => {
   const state = makeState({
     cards: [

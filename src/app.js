@@ -4203,6 +4203,10 @@ function render(animationKey = "") {
   const scenario = scenarioSetups[state.scenarioId] || scenarioSetups.normal;
   const targetPrompt = state.pendingTarget ? targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect) : "";
   const actions = currentPlayerActions();
+  const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
+  document.body.dataset.duelTurn = state.paused ? "paused" : activeTurn;
+  els.playerPanel.classList.toggle("active-turn", activeTurn === "player" && !state.paused);
+  els.aiPanel.classList.toggle("active-turn", activeTurn === "ai" && !state.paused);
   els.phaseText.textContent = phaseLabel(state);
   els.turnText.textContent = turnLabel(state);
   els.duelHint.textContent = duelHintText({

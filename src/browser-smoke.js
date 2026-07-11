@@ -971,6 +971,53 @@ async function runDivineResistanceSmoke(ctx) {
   setSmokeStatus("passed", "divine-resistance");
 }
 
+async function runDivineBreakSmoke(ctx) {
+  setSmokeStatus("running", "divine-break");
+  await startSmokeDuel(ctx, "divineBreak");
+  const breaker = ctx.state.player.hand.find((card) => card?.id === "godbreaker-spear");
+  const breakerDefinition = cloneCardById("godbreaker-spear");
+  const dragon = ctx.state.ai.field.find((card) => card?.id === "celestial-origin-dragon");
+  if (breaker?.targetResistanceBypass !== "divineTarget" || !breakerDefinition) {
+    throw new Error("divine-break: godbreaker spear should expose matching resistance bypass");
+  }
+  if (!dragon?.targetResistance) {
+    throw new Error("divine-break: celestial origin dragon should expose target resistance");
+  }
+  clickSmokeElement(handCard(ctx.els, "godbreaker-spear"), "divine-break: select godbreaker spear");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "pierceLine" &&
+      fieldCard(ctx.els, "ai", "celestial-origin-dragon")?.classList.contains("targetable"),
+    "divine-break: divine dragon should become a legal target",
+    6000
+  );
+  if (fieldCard(ctx.els, "ai", "starfall-colossus")?.classList.contains("targetable")) {
+    throw new Error("divine-break: lower attack monster should not replace the legal strongest target");
+  }
+  clickSmokeElement(fieldCard(ctx.els, "ai", "celestial-origin-dragon"), "divine-break: target divine dragon");
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.id === "celestial-origin-dragon" && card.tempAtk === -400 && card.tempDef === -400) &&
+      ctx.state.ai.field.some((card) => card?.id === "starfall-colossus" && (card.tempAtk || 0) === 0 && (card.tempDef || 0) === 0) &&
+      ctx.state.ai.lp === 3800,
+    `divine-break: bypass should weaken divine dragon and preserve other targets. ${smokeDebug(ctx)}`,
+    8000
+  );
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("创星神龙") && logEntryMessage(entry).includes("破神星矛"))) {
+    throw new Error("divine-break: public log should name the source and divine target");
+  }
+  await waitForSmoke(() => logCardLink(ctx.els, "godbreaker-spear"), "divine-break: source log card link", 6000);
+  clickSmokeElement(logCardLink(ctx.els, "godbreaker-spear"), "divine-break: open source detail from log");
+  await assertCardDetailModal(ctx, breakerDefinition, "divine-break");
+  if (!ctx.els.cardModal.textContent.includes("无视神格目标抗性")) {
+    throw new Error("divine-break: unified detail should explain the resistance bypass");
+  }
+  clickSmokeElement(ctx.els.zoomClose, "divine-break: close source detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "divine-break: detail closes");
+  if (!ctx.currentPlayerActions().endTurn && !ctx.currentPlayerActions().attack && !ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap) {
+    throw new Error(`divine-break: duel should continue after bypass resolves. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "divine-break");
+}
+
 async function runFusionSummonSmoke(ctx) {
   setSmokeStatus("running", "fusion-summon");
   await startSmokeDuel(ctx, "fusionSummon");
@@ -3504,6 +3551,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-pierce": runDivinePierceSmoke,
     "divine-pressure": runDivinePressureSmoke,
     "divine-resistance": runDivineResistanceSmoke,
+    "divine-break": runDivineBreakSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "split-token": runSplitTokenSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,

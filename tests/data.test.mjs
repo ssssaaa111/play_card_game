@@ -221,6 +221,20 @@ test("divine resistance scenario keeps player setup deterministic", () => {
   assert.ok(scenario.hints.some((entry) => entry.includes("指定目标")));
 });
 
+test("divine break card and scenario expose a narrow resistance bypass", () => {
+  const card = cardsById.get("godbreaker-spear");
+  const scenario = scenarioSetups.divineBreak;
+
+  assert.equal(card.effect, "pierceLine");
+  assert.equal(card.targetResistanceBypass, "divineTarget");
+  assert.match(card.text, /无视神格目标抗性/);
+  assert.match(card.summary, /越过神格目标抗性/);
+  assert.equal(scenario.difficulty, "demo");
+  assert.deepEqual(scenario.playerHand, ["godbreaker-spear", "pierce-line"]);
+  assert.deepEqual(scenario.playerField, ["star-lancer"]);
+  assert.deepEqual(scenario.aiField, ["celestial-origin-dragon", "starfall-colossus"]);
+});
+
 test("trap cards are backed by trap metadata", () => {
   const trapCards = library.filter((card) => card.type === "trap");
   const triggersFromCards = new Set(trapCards.map((card) => card.trigger));

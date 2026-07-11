@@ -545,6 +545,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="divinePierce">神格贯穿测试<\/option>/);
   assert.match(html, /<option value="divinePressure">神格威压测试<\/option>/);
   assert.match(html, /<option value="divineResistance">神格抗性测试<\/option>/);
+  assert.match(html, /<option value="divineBreak">破神对策测试<\/option>/);
   assert.match(html, /<option value="fusionSummon">融合召唤测试<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
@@ -647,6 +648,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"divine-pierce": runDivinePierceSmoke/);
   assert.match(smoke, /"divine-pressure": runDivinePressureSmoke/);
   assert.match(smoke, /"divine-resistance": runDivineResistanceSmoke/);
+  assert.match(smoke, /"divine-break": runDivineBreakSmoke/);
   assert.match(smoke, /"fusion-summon": runFusionSummonSmoke/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /fusionPreviewName/);
@@ -746,6 +748,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "divine-pierce"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "divine-pressure"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "divine-resistance"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "divine-break"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "split-token"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
@@ -798,6 +801,21 @@ test("skipped attack lock is visible on field cards", () => {
   assert.match(css, /\.slot\.attack-target/);
   assert.match(css, /\.slot\.empty:disabled/);
   assert.doesNotMatch(css, /pending-attack/);
+});
+
+test("duel UI exposes turn ownership and side-specific field feedback", () => {
+  const app = readProjectFile("src/app.js");
+  const css = readProjectFile("styles.css");
+
+  assert.match(app, /document\.body\.dataset\.duelTurn = state\.paused \? "paused" : activeTurn/);
+  assert.match(app, /els\.playerPanel\.classList\.toggle\("active-turn", activeTurn === "player" && !state\.paused\)/);
+  assert.match(app, /els\.aiPanel\.classList\.toggle\("active-turn", activeTurn === "ai" && !state\.paused\)/);
+  assert.match(css, /body\[data-duel-turn="player"\] \.phase/);
+  assert.match(css, /body\[data-duel-turn="ai"\] #aiField \.slot/);
+  assert.match(css, /#playerField,[\s\S]*--zone-accent: 84, 210, 210/);
+  assert.match(css, /#aiField,[\s\S]*--zone-accent: 239, 71, 111/);
+  assert.match(css, /\.slot:has\(\.card\.selected\)/);
+  assert.match(css, /\.slot:focus-visible/);
 });
 
 test("app uses extracted card details", () => {
