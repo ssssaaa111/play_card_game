@@ -1261,8 +1261,9 @@ async function selectHandCard(uid) {
     clearBattlePreview();
   }
   if (state.pendingFusion && state.pendingFusion.handUid !== uid) {
-    state.pendingFusion = null;
-    clearBattlePreview();
+    notePlayerIntent();
+    toggleFusionHandSelection(uid);
+    return;
   }
   const handIndex = state.player.hand.findIndex((item) => item.uid === uid);
   const wasSelected = state.selected?.zone === "hand" && state.selected.uid === uid;
@@ -1449,7 +1450,10 @@ function fusionMaterialNames(materials = []) {
 function fusionSummonReady(card) {
   const fusion = fusionDefinition(card);
   if (!fusion) return false;
-  const available = state.player.field.filter(Boolean).map(templateIdForCard);
+  const available = [
+    ...state.player.field.filter(Boolean),
+    ...state.player.hand.filter((entry) => entry.uid !== card.uid)
+  ].map(templateIdForCard);
   const hasMaterials = fusion.materials.every((requirement) => {
     for (let index = 0; index < requirement.count; index += 1) {
       const found = available.indexOf(requirement.templateId);
@@ -1466,7 +1470,7 @@ function beginFusionSelection(handIndex, card) {
   const fusion = fusionDefinition(card);
   if (!fusion) return false;
   if (!fusionSummonReady(card)) {
-    cue(`${card.name} 需要场上的 ${fusionMaterialNames(fusion.materials)}，并且手牌或卡组里要有可登场的融合怪兽。`);
+    cue(`${card.name} 需要手牌或场上的 ${fusionMaterialNames(fusion.materials)}，并且手牌或卡组里要有可登场的融合怪兽。`);
     resumePlayerIdleCountdownAfterPassiveIntent();
     return true;
   }
@@ -1478,7 +1482,8 @@ function beginFusionSelection(handIndex, card) {
     cardName: card.name,
     resultId: fusion.resultId,
     materials: fusion.materials,
-    selectedIndexes: []
+    selectedIndexes: [],
+    selectedHandUids: []
   };
   state.selected = { zone: "hand", uid: card.uid };
   cue(`选择 ${fusionMaterialCount(fusion.materials)} 只融合素材：${fusionMaterialNames(fusion.materials)}。`);
@@ -1499,13 +1504,29 @@ function selectedFusionIndexes() {
   return (state.pendingFusion?.selectedIndexes || []).filter((index) => Boolean(state.player.field[index]));
 }
 
-function fusionSelectionStatus(indexes = selectedFusionIndexes()) {
+function selectedFusionHandUids() {
+  const sourceUid = state.pendingFusion?.handUid;
+  return (state.pendingFusion?.selectedHandUids || [])
+    .filter((uid) => uid !== sourceUid && state.player.hand.some((card) => card.uid === uid));
+}
+
+function selectedFusionMaterials() {
+  return [
+    ...selectedFusionIndexes().map((index) => ({ zone: "field", index, card: state.player.field[index] })),
+    ...selectedFusionHandUids().map((uid) => ({
+      zone: "hand",
+      uid,
+      card: state.player.hand.find((entry) => entry.uid === uid)
+    }))
+  ].filter((entry) => entry.card);
+}
+
+function fusionSelectionStatus(materials = selectedFusionMaterials()) {
   const info = pendingFusionHandInfo();
   if (!info) return { complete: false, invalid: true, selectedCount: 0, requiredCount: 0, remaining: [] };
   const remaining = info.pending.materials.map((entry) => ({ ...entry }));
   let invalid = false;
-  indexes.forEach((index) => {
-    const card = state.player.field[index];
+  materials.forEach(({ card }) => {
     const match = card && remaining.find((entry) => entry.count > 0 && templateIdForCard(card) === entry.templateId);
     if (!match) {
       invalid = true;
@@ -1515,9 +1536,9 @@ function fusionSelectionStatus(indexes = selectedFusionIndexes()) {
   });
   const requiredCount = fusionMaterialCount(info.pending.materials);
   return {
-    complete: !invalid && indexes.length === requiredCount && remaining.every((entry) => entry.count === 0),
+    complete: !invalid && materials.length === requiredCount && remaining.every((entry) => entry.count === 0),
     invalid,
-    selectedCount: indexes.length,
+    selectedCount: materials.length,
     requiredCount,
     remaining
   };
@@ -1529,9 +1550,8 @@ function fusionPreviewViewModel() {
   const result = cardDefinitionById(info.pending.resultId);
   const status = fusionSelectionStatus();
   const remaining = status.remaining.filter((entry) => entry.count > 0);
-  const selectedNames = selectedFusionIndexes()
-    .map((index) => state.player.field[index]?.name)
-    .filter(Boolean);
+  const selectedNames = selectedFusionMaterials()
+    .map(({ zone, card }) => `${card.name}（${zone === "hand" ? "手牌" : "场上"}）`);
   const resultType = result?.type === "monster" ? "怪兽" : result?.type === "trap" ? "陷阱" : "魔法";
   const stats = result?.type === "monster"
     ? `${resultType} / ATK ${result.atk} / DEF ${result.def}`
@@ -1583,6 +1603,15 @@ function isFusionMaterialCandidate(index) {
   return fusionSelectionStatus().remaining.some((entry) => entry.count > 0 && templateIdForCard(card) === entry.templateId);
 }
 
+function isFusionHandMaterialCandidate(uid) {
+  const info = pendingFusionHandInfo();
+  if (!info || uid === info.card.uid) return false;
+  const card = state.player.hand.find((entry) => entry.uid === uid);
+  if (!card || card.type !== "monster") return false;
+  if (selectedFusionHandUids().includes(uid)) return true;
+  return fusionSelectionStatus().remaining.some((entry) => entry.count > 0 && templateIdForCard(card) === entry.templateId);
+}
+
 function toggleFusionSelection(index) {
   const info = pendingFusionHandInfo();
   if (!info) {
@@ -1610,7 +1639,37 @@ function toggleFusionSelection(index) {
   info.pending.selectedIndexes = selected;
   state.selected = { zone: "hand", uid: info.card.uid };
   showDetail(card);
-  const status = fusionSelectionStatus(selected);
+  const status = fusionSelectionStatus();
+  cue(`${info.card.name} 融合素材：${status.selectedCount}/${status.requiredCount}`);
+  render();
+  resetPlayerIdleCountdown();
+  return true;
+}
+
+function toggleFusionHandSelection(uid) {
+  const info = pendingFusionHandInfo();
+  if (!info) {
+    state.pendingFusion = null;
+    render();
+    return false;
+  }
+  const card = state.player.hand.find((entry) => entry.uid === uid);
+  if (!card || uid === info.card.uid) return false;
+  const selected = selectedFusionHandUids();
+  const existing = selected.indexOf(uid);
+  if (existing >= 0) {
+    selected.splice(existing, 1);
+  } else if (isFusionHandMaterialCandidate(uid)) {
+    selected.push(uid);
+  } else {
+    cue(`${card.name} 不是 ${info.card.name} 需要的融合素材。`);
+    resetPlayerIdleCountdown();
+    return true;
+  }
+  info.pending.selectedHandUids = selected;
+  state.selected = { zone: "hand", uid: info.card.uid };
+  showDetail(card);
+  const status = fusionSelectionStatus();
   cue(`${info.card.name} 融合素材：${status.selectedCount}/${status.requiredCount}`);
   render();
   resetPlayerIdleCountdown();
@@ -1627,17 +1686,25 @@ async function confirmFusionSummon(fieldIndex = null) {
     return false;
   }
   const materialIndexes = selectedFusionIndexes();
-  const status = fusionSelectionStatus(materialIndexes);
+  const materialHandUids = selectedFusionHandUids();
+  const materials = selectedFusionMaterials();
+  const status = fusionSelectionStatus(materials);
   if (!status.complete) {
     cue(`还需要选择融合素材：${fusionMaterialNames(status.remaining.filter((entry) => entry.count > 0)) || fusionMaterialNames(info.pending.materials)}。`);
     resetPlayerIdleCountdown();
     return false;
   }
-  const summonIndex = Number.isInteger(fieldIndex) ? fieldIndex : materialIndexes[0];
-  const materialCards = materialIndexes.map((index) => state.player.field[index]).filter(Boolean);
+  const summonIndex = Number.isInteger(fieldIndex)
+    ? fieldIndex
+    : materialIndexes[0] ?? state.player.field.findIndex((slot) => !slot);
+  const materialCards = materials.map((entry) => entry.card);
+  const materialCardIds = [
+    ...materialIndexes.map((index) => state.player.field[index]?.uid).filter(Boolean),
+    ...materialHandUids
+  ];
   let fusionEvents = [];
   try {
-    fusionEvents = dispatchFusionSummonFromUiState(state, "player", "ai", info.index, { materialIndexes, fieldIndex: summonIndex });
+    fusionEvents = dispatchFusionSummonFromUiState(state, "player", "ai", info.index, { materialIndexes, materialCardIds, fieldIndex: summonIndex });
   } catch (error) {
     cue(error.message || "融合召唤失败。");
     console.error(error);
@@ -4517,7 +4584,7 @@ function handActionInfo(card, handIndex) {
       return {
         ok: false,
         label: "素材不足",
-        reason: `需要场上的 ${fusionMaterialNames(fusion.materials)}，并且手牌或卡组里要有融合怪兽。`
+        reason: `需要手牌或场上的 ${fusionMaterialNames(fusion.materials)}，并且手牌或卡组里要有融合怪兽。`
       };
     }
     const status = state.pendingFusion?.handUid === card.uid ? fusionSelectionStatus() : null;
@@ -4556,17 +4623,25 @@ function renderHand(animationKey) {
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
     cardEl.dataset.zone = "hand";
     const action = handActionInfo(card, index);
+    const fusionMaterialCandidate = Boolean(state.pendingFusion) && isFusionHandMaterialCandidate(card.uid);
+    const fusionMaterialSelected = Boolean(state.pendingFusion) && selectedFusionHandUids().includes(card.uid);
     cardEl.classList.toggle("selected", state.selected?.zone === "hand" && state.selected.uid === card.uid);
+    cardEl.classList.toggle("tribute-candidate", fusionMaterialCandidate);
+    cardEl.classList.toggle("tribute-selected", fusionMaterialSelected);
     cardEl.classList.toggle("action-ready", action.ok);
     cardEl.classList.toggle("action-blocked", !action.ok && state.started && canPlayerAct());
     cardEl.title = `${card.name}：${action.reason}`;
     const actionTag = document.createElement("span");
     actionTag.className = "action-tag";
-    actionTag.textContent = action.label;
+    actionTag.textContent = fusionMaterialSelected ? "融合素材 ✓" : fusionMaterialCandidate ? "融合素材" : action.label;
     cardEl.appendChild(actionTag);
     const actionReason = document.createElement("span");
     actionReason.className = "action-reason";
-    actionReason.textContent = action.reason;
+    actionReason.textContent = fusionMaterialSelected
+      ? "已选择为手牌融合素材，再次点击可取消。"
+      : fusionMaterialCandidate
+        ? "点击选择为手牌融合素材。"
+        : action.reason;
     cardEl.appendChild(actionReason);
     if (animationKey === "draw-player" && card === state.player.hand[state.player.hand.length - 1]) {
       cardEl.classList.add("draw-flash");

@@ -886,7 +886,8 @@ export class GameEngine {
     });
     ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "hand" }, { playerId: action.playerId, zone: "grave" });
     materialCardIds.forEach((materialCardId) => {
-      ctx.moveCard(materialCardId, { playerId: action.playerId, zone: "monsterZone" }, { playerId: action.playerId, zone: "grave" });
+      const materialZone = fusionMaterialZone(state, action.playerId, materialCardId);
+      ctx.moveCard(materialCardId, { playerId: action.playerId, zone: materialZone }, { playerId: action.playerId, zone: "grave" });
     });
     emit("MATERIALS_SENT", {
       playerId: action.playerId,
@@ -3684,8 +3685,12 @@ function fusionMaterialCount(materials = []) {
     .reduce((total, entry) => total + Math.max(1, Number(entry.count) || 1), 0);
 }
 
-function defaultFusionMaterialCardIdsForAction(state, playerId, fusion) {
-  const available = requirePlayer(state, playerId).monsterZone.slice();
+function defaultFusionMaterialCardIdsForAction(state, playerId, fusion, sourceCardId = "") {
+  const player = requirePlayer(state, playerId);
+  const available = [
+    ...player.monsterZone,
+    ...player.hand.filter((cardId) => cardId !== sourceCardId)
+  ];
   const selected = [];
   for (const requirement of fusion.materials) {
     for (let index = 0; index < requirement.count; index += 1) {
@@ -3702,7 +3707,7 @@ function validateFusionMaterialCardIds(state, playerId, fusion, action) {
   const expectedCount = fusionMaterialCount(fusion.materials);
   const materialCardIds = Array.isArray(action.materialCardIds)
     ? action.materialCardIds.filter(Boolean)
-    : defaultFusionMaterialCardIdsForAction(state, playerId, fusion);
+    : defaultFusionMaterialCardIdsForAction(state, playerId, fusion, action.cardId);
 
   if (materialCardIds.length !== expectedCount) {
     throw new GameRuleError(`Fusion spell ${action.cardId} requires exactly ${expectedCount} material card${expectedCount === 1 ? "" : "s"}`);
@@ -3713,7 +3718,11 @@ function validateFusionMaterialCardIds(state, playerId, fusion, action) {
 
   const remaining = fusion.materials.map((entry) => ({ ...entry }));
   materialCardIds.forEach((materialCardId) => {
-    const material = requireCardInZone(state, playerId, "monsterZone", materialCardId);
+    if (materialCardId === action.cardId) {
+      throw new GameRuleError("Fusion spell cannot be used as its own material");
+    }
+    const materialZone = fusionMaterialZone(state, playerId, materialCardId);
+    const material = requireCardInZone(state, playerId, materialZone, materialCardId);
     if (material.type !== "monster") {
       throw new GameRuleError(`Fusion material ${materialCardId} is not a monster`);
     }
@@ -3729,6 +3738,13 @@ function validateFusionMaterialCardIds(state, playerId, fusion, action) {
     throw new GameRuleError(`Fusion spell ${action.cardId} is missing materials ${missing.join(", ")}`);
   }
   return materialCardIds;
+}
+
+function fusionMaterialZone(state, playerId, cardId) {
+  const player = requirePlayer(state, playerId);
+  if (player.monsterZone.includes(cardId)) return "monsterZone";
+  if (player.hand.includes(cardId)) return "hand";
+  throw new GameRuleError(`Fusion material ${cardId} is not in ${playerId}.hand or ${playerId}.monsterZone`);
 }
 
 function fusionSummonIndexForAction(state, playerId, materialCardIds = [], index = null) {
@@ -3756,7 +3772,7 @@ function validateFusionDestination(state, playerId, materialCardIds = [], index 
 
 function fusionActivationCandidate(state, playerId, rivalId, card) {
   const fusion = fusionDefinitionForCard(card);
-  const materialCardIds = defaultFusionMaterialCardIdsForAction(state, playerId, fusion);
+  const materialCardIds = defaultFusionMaterialCardIdsForAction(state, playerId, fusion, card.id);
   return {
     type: "ACTIVATE_CARD",
     playerId,

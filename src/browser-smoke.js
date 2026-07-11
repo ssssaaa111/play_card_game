@@ -1100,6 +1100,72 @@ async function runFusionSummonSmoke(ctx) {
   setSmokeStatus("passed", "fusion-summon");
 }
 
+async function runFusionMixedMaterialsSmoke(ctx) {
+  setSmokeStatus("running", "fusion-mixed-materials");
+  await startSmokeDuel(ctx, "fusionMixedMaterials");
+  const resultDefinition = cloneCardById("flare-gale-archon");
+  if (ctx.state.player.field[0]?.id !== "ember-drake") {
+    throw new Error("fusion-mixed-materials: ember material should start on field");
+  }
+  if (!ctx.state.player.hand.some((card) => card?.id === "gale-mage")) {
+    throw new Error("fusion-mixed-materials: gale material should start in hand");
+  }
+  if (!ctx.state.player.deck.some((card) => card?.id === "flare-gale-archon")) {
+    throw new Error("fusion-mixed-materials: fusion result should start in deck");
+  }
+  clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-mixed-materials: select fusion spell");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-mixed-materials: enter material selection");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.resultId === "flare-gale-archon" &&
+      handCard(ctx.els, "gale-mage")?.classList.contains("tribute-candidate"),
+    "fusion-mixed-materials: hand material should be selectable",
+    6000
+  );
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-mixed-materials: select field material");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
+      ctx.state.pendingFusion?.selectedHandUids?.length === 0,
+    "fusion-mixed-materials: field material selected"
+  );
+  clickSmokeElement(handCard(ctx.els, "gale-mage"), "fusion-mixed-materials: select hand material");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
+      ctx.state.pendingFusion?.selectedHandUids?.length === 1 &&
+      handCard(ctx.els, "gale-mage")?.classList.contains("tribute-selected") &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "fusion-mixed-materials: mixed materials selected"
+  );
+  const previewText = ctx.els.fusionPreviewMaterials?.textContent || "";
+  if (!previewText.includes("赤焰幼龙（场上）") || !previewText.includes("疾风术士（手牌）")) {
+    throw new Error("fusion-mixed-materials: preview should identify material zones");
+  }
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-mixed-materials: confirm fusion summon");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "flare-gale-archon") &&
+      ctx.state.player.grave.some((card) => card?.id === "ember-drake") &&
+      ctx.state.player.grave.some((card) => card?.id === "gale-mage") &&
+      ctx.state.player.grave.some((card) => card?.id === "starforge-fusion") &&
+      !ctx.state.pendingFusion,
+    `fusion-mixed-materials: mixed fusion should resolve. ${smokeDebug(ctx)}`,
+    9000
+  );
+  if (!ctx.state.gameEvents.some((event) => event.type === "CARD_MOVED" && event.cardId?.includes("gale-mage") && event.from?.zone === "hand" && event.to?.zone === "grave")) {
+    throw new Error("fusion-mixed-materials: hand material movement event missing");
+  }
+  if (ctx.state.player.normalSummonsUsed !== 0) {
+    throw new Error("fusion-mixed-materials: fusion should not consume the normal summon");
+  }
+  await waitForSmoke(() => logCardLink(ctx.els, "flare-gale-archon"), "fusion-mixed-materials: result log link", 6000);
+  clickSmokeElement(logCardLink(ctx.els, "flare-gale-archon"), "fusion-mixed-materials: open result detail from log");
+  await assertCardDetailModal(ctx, resultDefinition, "fusion-mixed-materials");
+  clickSmokeElement(ctx.els.zoomClose, "fusion-mixed-materials: close result detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "fusion-mixed-materials: detail closes");
+  if (!ctx.currentPlayerActions().endTurn && !ctx.currentPlayerActions().attack && !ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap) {
+    throw new Error(`fusion-mixed-materials: duel should continue after fusion. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "fusion-mixed-materials");
+}
+
 async function runSplitTokenSmoke(ctx) {
   setSmokeStatus("running", "split-token");
   await startSmokeDuel(ctx, "splitToken");
@@ -3553,6 +3619,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-resistance": runDivineResistanceSmoke,
     "divine-break": runDivineBreakSmoke,
     "fusion-summon": runFusionSummonSmoke,
+    "fusion-mixed-materials": runFusionMixedMaterialsSmoke,
     "split-token": runSplitTokenSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,

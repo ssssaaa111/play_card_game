@@ -116,6 +116,22 @@ function fusionMaterialCardIdsFromUiState(duelist, card, options = {}) {
   if (Array.isArray(options.materialCardIds)) {
     return options.materialCardIds.filter(Boolean);
   }
+  if (!Array.isArray(options.materialIndexes)) {
+    const available = [
+      ...duelist.field.filter(Boolean),
+      ...duelist.hand.filter((entry) => entry && cardKey(entry) !== cardKey(card))
+    ];
+    const selected = [];
+    for (const requirement of normalizedFusionRequirements(card)) {
+      for (let count = 0; count < requirement.count; count += 1) {
+        const foundIndex = available.findIndex((entry) => cardTemplateId(entry) === requirement.templateId);
+        if (foundIndex < 0) return [];
+        const [entry] = available.splice(foundIndex, 1);
+        selected.push(cardKey(entry));
+      }
+    }
+    return selected;
+  }
   return normalizedFusionIndexes(duelist, card, options)
     .map((index) => cardKey(duelist.field[index]))
     .filter(Boolean);
@@ -580,7 +596,10 @@ export function explainFusionSummonFromUiState(uiState, playerId, rivalId, handI
 
   const materialIndexes = normalizedFusionIndexes(duelist, card, options);
   const materialCardIds = fusionMaterialCardIdsFromUiState(duelist, card, options);
-  const index = fusionSummonSlotIndex(duelist, materialIndexes, options.fieldIndex);
+  const selectedFieldIndexes = duelist.field
+    .map((entry, index) => materialCardIds.includes(cardKey(entry)) ? index : -1)
+    .filter((index) => index >= 0);
+  const index = fusionSummonSlotIndex(duelist, selectedFieldIndexes.length ? selectedFieldIndexes : materialIndexes, options.fieldIndex);
   if (index < 0) return { ok: false, reason: "No monster zone slot is available", engineReason: "No monster zone slot is available" };
 
   return explainUiAction(buildEngineStateFromUiState(uiState), {
@@ -1257,7 +1276,10 @@ export function dispatchFusionSummonFromUiState(uiState, playerId, rivalId, hand
 
   const materialIndexes = normalizedFusionIndexes(duelist, card, options);
   const materialCardIds = fusionMaterialCardIdsFromUiState(duelist, card, options);
-  const index = fusionSummonSlotIndex(duelist, materialIndexes, options.fieldIndex);
+  const selectedFieldIndexes = duelist.field
+    .map((entry, index) => materialCardIds.includes(cardKey(entry)) ? index : -1)
+    .filter((index) => index >= 0);
+  const index = fusionSummonSlotIndex(duelist, selectedFieldIndexes.length ? selectedFieldIndexes : materialIndexes, options.fieldIndex);
   const engine = new GameEngine(buildEngineStateFromUiState(uiState));
   const events = engine.dispatch({
     type: "ACTIVATE_CARD",

@@ -1922,6 +1922,45 @@ test("fusion summon sends selected field materials to grave and summons result f
   assertValidGameState(next);
 });
 
+test("fusion summon accepts a deterministic mix of hand and field materials", () => {
+  const state = makeState({
+    cards: [
+      card("fusion-1", {
+        templateId: "starforge-fusion",
+        effect: "fusionSummon",
+        fusion: { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] }
+      }),
+      card("ember-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900 }),
+      card("gale-1", { templateId: "gale-mage", type: "monster", atk: 1200, def: 1400 }),
+      card("archon-1", { templateId: "flare-gale-archon", type: "monster", atk: 2400, def: 1800 })
+    ],
+    player: {
+      hand: ["fusion-1", "gale-1"],
+      monsterZone: ["ember-1"],
+      deck: ["archon-1"]
+    }
+  });
+  const engine = new GameEngine(state);
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "fusion-1",
+    materialCardIds: ["ember-1", "gale-1"],
+    index: 0
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].hand, []);
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["archon-1"]);
+  assert.deepEqual(next.players[PLAYER].deck, []);
+  assert.deepEqual(next.players[PLAYER].grave, ["fusion-1", "ember-1", "gale-1"]);
+  assert.equal(next.players[PLAYER].normalSummonsUsed, 0);
+  assert.ok(events.some((event) => event.type === "CARD_MOVED" && event.cardId === "gale-1" && event.from?.zone === "hand" && event.to?.zone === "grave"));
+  assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.materialCardIds.includes("gale-1")));
+  assertValidGameState(next);
+});
+
 test("fusion summon rejects wrong materials without changing state", () => {
   const state = makeState({
     cards: [
@@ -2073,6 +2112,32 @@ test("legal action projection includes fusion material ids", () => {
     player: {
       hand: ["fusion-1"],
       monsterZone: ["ember-1", "gale-1"],
+      deck: ["archon-1"]
+    }
+  });
+
+  const legal = getLegalActions(state, PLAYER);
+
+  assert.equal(legal.actions.activateCard.length, 1);
+  assert.deepEqual(legal.actions.activateCard[0].materialCardIds, ["ember-1", "gale-1"]);
+  assert.equal(legal.actions.activateCard[0].index, 0);
+});
+
+test("legal action projection discovers fusion materials across hand and field", () => {
+  const state = makeState({
+    cards: [
+      card("fusion-1", {
+        templateId: "starforge-fusion",
+        effect: "fusionSummon",
+        fusion: { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] }
+      }),
+      card("ember-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900 }),
+      card("gale-1", { templateId: "gale-mage", type: "monster", atk: 1200, def: 1400 }),
+      card("archon-1", { templateId: "flare-gale-archon", type: "monster", atk: 2400, def: 1800 })
+    ],
+    player: {
+      hand: ["fusion-1", "gale-1"],
+      monsterZone: ["ember-1"],
       deck: ["archon-1"]
     }
   });

@@ -151,8 +151,11 @@ function fusionDefinitionFromCard(card) {
   return { resultTemplateId, materials };
 }
 
-function hasFusionMaterialCards(owner, materials = []) {
-  const available = fieldCards(owner).map(cardTemplateId);
+function hasFusionMaterialCards(owner, materials = [], sourceCard = null) {
+  const available = [
+    ...fieldCards(owner),
+    ...(owner?.hand || []).filter((card) => card !== sourceCard && (!sourceCard?.uid || card?.uid !== sourceCard.uid))
+  ].map(cardTemplateId);
   return materials.every((requirement) => {
     for (let index = 0; index < requirement.count; index += 1) {
       const found = available.indexOf(requirement.templateId);
@@ -220,8 +223,8 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       if (!fusion.resultTemplateId || fusion.materials.length === 0) {
         return { ok: false, reason: "这张融合魔法没有完整的素材或结果配置。" };
       }
-      if (!hasFusionMaterialCards(owner, fusion.materials)) {
-        return { ok: false, reason: "场上缺少指定融合素材。" };
+      if (!hasFusionMaterialCards(owner, fusion.materials, card)) {
+        return { ok: false, reason: "手牌或场上缺少指定融合素材。" };
       }
       if (!hasCardInHandOrDeck(owner, fusion.resultTemplateId)) {
         return { ok: false, reason: "手牌或卡组里没有可融合登场的怪兽。" };

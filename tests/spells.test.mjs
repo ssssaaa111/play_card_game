@@ -61,6 +61,14 @@ test("validates fusion spell material and result requirements", () => {
   });
 
   assert.deepEqual(validateSpellCondition("fusionSummon", { owner: ready, handIndex: 0 }), { ok: true });
+  assert.deepEqual(validateSpellCondition("fusionSummon", {
+    owner: duelist({
+      hand: [fusionSpell, monster({ id: "gale-mage", templateId: "gale-mage", element: "wind" })],
+      field: [monster({ id: "ember-drake", templateId: "ember-drake" }), null, null, null, null],
+      deck: [monster({ id: "flare-gale-archon", templateId: "flare-gale-archon" })]
+    }),
+    handIndex: 0
+  }), { ok: true });
   assert.equal(validateSpellCondition("fusionSummon", {
     owner: duelist({ hand: [fusionSpell], field: [monster({ id: "ember-drake", templateId: "ember-drake" }), null, null, null, null] }),
     handIndex: 0

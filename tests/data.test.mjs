@@ -456,6 +456,18 @@ test("fusion summon scenario keeps materials on field and result in deck", () =>
   assert.equal(cardsById.get("starforge-fusion").text.includes(cardsById.get("flare-gale-archon").name), true);
 });
 
+test("mixed fusion scenario keeps one material in hand without changing the recipe", () => {
+  const scenario = scenarioSetups.fusionMixedMaterials;
+  const fusion = cardsById.get("starforge-fusion");
+
+  assert.deepEqual(fusion.fusion.materials, ["ember-drake", "gale-mage"]);
+  assert.match(fusion.text, /手牌或场上/);
+  assert.deepEqual(scenario.playerHand, ["starforge-fusion", "gale-mage", "war-chant"]);
+  assert.deepEqual(scenario.playerField, ["ember-drake"]);
+  assert.equal(scenario.playerDeck[1], "flare-gale-archon");
+  assert.ok(scenario.hints.some((entry) => entry.includes("手牌或我方场上")));
+});
+
 test("deck presets reference only known cards and have enough cards", () => {
   Object.entries(deckPresets).forEach(([key, preset]) => {
     assert.ok(preset.label, `${key} needs label`);

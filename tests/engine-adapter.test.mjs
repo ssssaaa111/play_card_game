@@ -392,6 +392,32 @@ test("dispatches fusion summon through engine and fixed UI slots", () => {
   assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.cardId === archon.uid));
 });
 
+test("dispatches fusion summon with one hand material and one field material", () => {
+  const fusion = uiSpell("fusion-spell", "fusionSummon", "starforge-fusion");
+  fusion.fusion = { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] };
+  const ember = uiMonster("fusion-ember", "ember-drake");
+  const gale = uiMonster("fusion-gale", "gale-mage");
+  const archon = uiMonster("fusion-archon", "flare-gale-archon");
+  const state = appState();
+  state.player.hand = [fusion, gale];
+  state.player.field[0] = ember;
+  state.player.deck = [archon];
+
+  const events = dispatchFusionSummonFromUiState(state, "player", "ai", 0, {
+    materialIndexes: [0],
+    materialCardIds: [ember.uid, gale.uid],
+    fieldIndex: 0
+  });
+
+  assert.deepEqual(state.player.hand, []);
+  assert.equal(state.player.field[0], archon);
+  assert.deepEqual(state.player.deck, []);
+  assert.deepEqual(state.player.grave, [fusion, ember, gale]);
+  assert.equal(state.player.normalSummonsUsed, 0);
+  assert.ok(events.some((event) => event.type === "CARD_MOVED" && event.cardId === gale.uid && event.from?.zone === "hand"));
+  assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.materialCardIds.includes(gale.uid)));
+});
+
 test("explains fusion summon legality from UI state", () => {
   const fusion = uiSpell("fusion-spell", "fusionSummon", "starforge-fusion");
   fusion.fusion = { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] };
