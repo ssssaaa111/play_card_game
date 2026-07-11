@@ -1,4 +1,5 @@
 import { MAX_LP, battleValue, fieldCards, fieldElements, totalAtk } from './rules.js';
+import { fusionOptionsForCard } from './fusion.js';
 
 export const spellDefinitions = {
   burn500: {
@@ -141,16 +142,6 @@ function hasCardInHandOrDeck(owner, templateId) {
   return [...(owner?.hand || []), ...(owner?.deck || [])].some((card) => cardTemplateId(card) === templateId);
 }
 
-function fusionDefinitionFromCard(card) {
-  const resultTemplateId = card?.fusion?.resultTemplateId || card?.fusion?.result || card?.fusion?.cardId || "";
-  const materials = (Array.isArray(card?.fusion?.materials) ? card.fusion.materials : [])
-    .map((entry) => typeof entry === "string"
-      ? { templateId: entry, count: 1 }
-      : { templateId: entry?.templateId || entry?.id, count: Math.max(1, Number(entry?.count) || 1) })
-    .filter((entry) => entry.templateId);
-  return { resultTemplateId, materials };
-}
-
 function hasFusionMaterialCards(owner, materials = [], sourceCard = null) {
   const available = [
     ...fieldCards(owner),
@@ -219,17 +210,19 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
         : { ok: false, reason: "手牌或卡组里没有可进化登场的王牌。" };
     case "fusionSummon": {
       const card = owner.hand?.[handIndex];
-      const fusion = fusionDefinitionFromCard(card);
-      if (!fusion.resultTemplateId || fusion.materials.length === 0) {
+      const fusionOptions = fusionOptionsForCard(card);
+      if (fusionOptions.length === 0) {
         return { ok: false, reason: "这张融合魔法没有完整的素材或结果配置。" };
       }
-      if (!hasFusionMaterialCards(owner, fusion.materials, card)) {
+      const readyOption = fusionOptions.find((fusion) =>
+        hasFusionMaterialCards(owner, fusion.materials, card) &&
+        hasCardInHandOrDeck(owner, fusion.resultTemplateId)
+      );
+      if (readyOption) return { ok: true };
+      if (!fusionOptions.some((fusion) => hasFusionMaterialCards(owner, fusion.materials, card))) {
         return { ok: false, reason: "手牌或场上缺少指定融合素材。" };
       }
-      if (!hasCardInHandOrDeck(owner, fusion.resultTemplateId)) {
-        return { ok: false, reason: "手牌或卡组里没有可融合登场的怪兽。" };
-      }
-      return { ok: true };
+      return { ok: false, reason: "手牌或卡组里没有可融合登场的怪兽。" };
     }
     case "splitToken": {
       if (fieldCards(owner).length === 0) return { ok: false, reason: "场上没有怪兽，不能发动星火分裂。" };

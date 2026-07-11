@@ -66,12 +66,16 @@ test("card library has unique ids and required fields", () => {
 test("fusion cards declare known materials and result from unified card data", () => {
   const fusionSpell = cardsById.get("starforge-fusion");
   const fusionResult = cardsById.get("flare-gale-archon");
+  const defensiveResult = cardsById.get("tempest-aegis-archon");
 
   assert.equal(fusionSpell.type, "spell");
   assert.equal(fusionSpell.effect, "fusionSummon");
   assert.equal(fusionSpell.fusion.result, "flare-gale-archon");
   assert.deepEqual(fusionSpell.fusion.materials, ["ember-drake", "gale-mage"]);
+  assert.deepEqual(fusionSpell.fusion.options.map((option) => option.result), ["flare-gale-archon", "tempest-aegis-archon"]);
   assert.equal(fusionResult.type, "monster");
+  assert.equal(defensiveResult.type, "monster");
+  assert.equal(defensiveResult.onSummon, "shield400");
   fusionSpell.fusion.materials.forEach((id) => {
     assert.equal(cardsById.get(id)?.type, "monster", `fusion material should be a monster: ${id}`);
   });
@@ -466,6 +470,16 @@ test("mixed fusion scenario keeps one material in hand without changing the reci
   assert.deepEqual(scenario.playerField, ["ember-drake"]);
   assert.equal(scenario.playerDeck[1], "flare-gale-archon");
   assert.ok(scenario.hints.some((entry) => entry.includes("手牌或我方场上")));
+});
+
+test("fusion result choice scenario preserves the opening order and exposes both results", () => {
+  const scenario = scenarioSetups.fusionResultChoice;
+
+  assert.deepEqual(scenario.playerHand, ["starforge-fusion", "gale-mage", "war-chant"]);
+  assert.deepEqual(scenario.playerField, ["ember-drake"]);
+  assert.deepEqual(scenario.playerDeck, ["solar-knight", "flare-gale-archon", "tempest-aegis-archon"]);
+  assert.ok(scenario.objectives.some((entry) => entry.includes("岚耀守星者")));
+  assert.ok(scenario.recommendedLine.some((entry) => entry.includes("岚耀守星者")));
 });
 
 test("deck presets reference only known cards and have enough cards", () => {

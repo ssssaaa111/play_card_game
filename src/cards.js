@@ -1,6 +1,7 @@
 import { elementLabel } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { trapSummaryText } from './traps.js';
+import { fusionOptionsForCard } from './fusion.js';
 
 export function tributeCostForDisplay(card) {
   return Math.max(0, Number(card?.tributeCost) || 0);
@@ -13,22 +14,21 @@ export function tributeRequirementText(card, { compact = false } = {}) {
 }
 
 export function fusionDefinitionForDisplay(card) {
-  if (card?.type !== "spell" || card.effect !== "fusionSummon") return null;
-  const result = card.fusion?.resultTemplateId || card.fusion?.result || card.fusion?.cardId || "";
-  const materials = (Array.isArray(card.fusion?.materials) ? card.fusion.materials : [])
-    .map((entry) => typeof entry === "string"
-      ? { templateId: entry, count: 1 }
-      : { templateId: entry?.templateId || entry?.id, count: Math.max(1, Number(entry?.count) || 1) })
-    .filter((entry) => entry.templateId);
-  if (!result || materials.length === 0) return null;
-  return { result, materials };
+  const options = fusionOptionsForCard(card);
+  if (options.length === 0) return null;
+  return {
+    result: options[0].resultTemplateId,
+    materials: options[0].materials,
+    options
+  };
 }
 
 export function fusionRequirementText(card, { compact = false } = {}) {
   const fusion = fusionDefinitionForDisplay(card);
   if (!fusion) return "";
   const total = fusion.materials.reduce((sum, entry) => sum + entry.count, 0);
-  return compact ? `融合 ${total}` : `融合需求：${total} 只指定素材`;
+  const resultText = fusion.options.length > 1 ? ` / ${fusion.options.length} 种结果` : "";
+  return compact ? `融合 ${total}${resultText}` : `融合需求：${total} 只指定素材${resultText}`;
 }
 
 export function inferRarity(card) {

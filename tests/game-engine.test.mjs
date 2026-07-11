@@ -1961,6 +1961,56 @@ test("fusion summon accepts a deterministic mix of hand and field materials", ()
   assertValidGameState(next);
 });
 
+test("multi-result fusion requires an explicit result and resolves the selected recipe", () => {
+  const fusion = {
+    options: [
+      { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] },
+      { result: "tempest-aegis-archon", materials: ["ember-drake", "gale-mage"] }
+    ]
+  };
+  const state = makeState({
+    cards: [
+      card("fusion-1", { templateId: "starforge-fusion", effect: "fusionSummon", fusion }),
+      card("ember-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900 }),
+      card("gale-1", { templateId: "gale-mage", type: "monster", atk: 1200, def: 1400 }),
+      card("attack-archon", { templateId: "flare-gale-archon", type: "monster", atk: 2400, def: 1800 }),
+      card("guard-archon", { templateId: "tempest-aegis-archon", type: "monster", atk: 2000, def: 2600, onSummon: "shield400" })
+    ],
+    player: {
+      hand: ["fusion-1", "gale-1"],
+      monsterZone: ["ember-1"],
+      deck: ["attack-archon", "guard-archon"]
+    }
+  });
+  const engine = new GameEngine(state);
+  const action = {
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "fusion-1",
+    materialCardIds: ["ember-1", "gale-1"],
+    index: 0
+  };
+
+  const legalResults = getLegalActions(state, PLAYER).actions.activateCard
+    .filter((candidate) => candidate.cardId === "fusion-1")
+    .map((candidate) => candidate.fusionResultTemplateId)
+    .sort();
+  assert.deepEqual(legalResults, ["flare-gale-archon", "tempest-aegis-archon"]);
+  assert.throws(() => engine.dispatch(action), /explicit fusion result selection/);
+  assert.deepEqual(engine.getState().players[PLAYER].hand, ["fusion-1", "gale-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].monsterZone, ["ember-1"]);
+
+  const events = engine.dispatch({ ...action, fusionResultTemplateId: "tempest-aegis-archon" });
+  const next = engine.getState();
+  assert.deepEqual(next.players[PLAYER].monsterZone, ["guard-archon"]);
+  assert.deepEqual(next.players[PLAYER].deck, ["attack-archon"]);
+  assert.equal(next.players[PLAYER].shield, 400);
+  assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.resultTemplateId === "tempest-aegis-archon"));
+  assert.ok(events.some((event) => event.type === "SHIELD_GAINED" && event.amount === 400));
+  assertValidGameState(next);
+});
+
 test("fusion summon rejects wrong materials without changing state", () => {
   const state = makeState({
     cards: [

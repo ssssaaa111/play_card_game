@@ -1,5 +1,6 @@
 import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, canEffectTargetCard } from "./rules.js";
 import { matchingElementCombos } from "./combos.js";
+import { fusionOptionForResult, fusionOptionsForCard } from "./fusion.js";
 
 export const Phase = Object.freeze({
   setup: "setup",
@@ -866,7 +867,7 @@ export class GameEngine {
   }
 
   #activateFusionSpell(state, ctx, emit, action, card) {
-    const fusion = fusionDefinitionForCard(card);
+    const fusion = fusionDefinitionForAction(card, action);
     const materialCardIds = validateFusionMaterialCardIds(state, action.playerId, fusion, action);
     const summonIndex = fusionSummonIndexForAction(state, action.playerId, materialCardIds, action.index);
     validateFusionDestination(state, action.playerId, materialCardIds, summonIndex);
@@ -909,6 +910,20 @@ export class GameEngine {
       materialCardIds,
       resultTemplateId: fusion.resultTemplateId
     });
+    if (found.card.onSummon) {
+      const summonAction = { ...action, cardId: fusionCardId, sourceCardId: action.cardId };
+      const skipReason = effectRequirementFailure(this.#effects[found.card.onSummon], state, summonAction, found.card);
+      if (skipReason) {
+        emit("EFFECT_SKIPPED", {
+          playerId: action.playerId,
+          cardId: fusionCardId,
+          effectId: found.card.onSummon,
+          reason: skipReason
+        });
+      } else {
+        runEffect(this.#effects, found.card.onSummon, ctx, summonAction, found.card);
+      }
+    }
   }
 
   #resolveElementCombos(state, ctx, emit, action) {
@@ -1947,7 +1962,8 @@ function activationCandidates(state, effects, playerId, rivalId, card) {
     cardId: card.id
   };
   if (isFusionSummonSpell(card)) {
-    return [fusionActivationCandidate(state, playerId, rivalId, card)];
+    return fusionOptionsForCard(card)
+      .map((fusion) => fusionActivationCandidate(state, playerId, rivalId, card, fusion));
   }
   if (definition?.duration === EffectDuration.continuous) {
     base.index = requirePlayer(state, playerId).spellTrapZone.length;
@@ -3669,15 +3685,25 @@ function isFusionSummonSpell(card) {
 }
 
 function fusionDefinitionForCard(card) {
-  const resultTemplateId = card?.fusion?.resultTemplateId || card?.fusion?.result || card?.fusion?.cardId;
-  const materials = normalizeMaterialRequirements(card?.fusion?.materials || []);
-  if (!resultTemplateId) {
-    throw new GameRuleError(`Fusion spell ${card?.id || "(unknown)"} requires a result template`);
+  const options = fusionOptionsForCard(card);
+  if (options.length === 0) {
+    throw new GameRuleError(`Fusion spell ${card?.id || "(unknown)"} requires at least one complete result recipe`);
   }
-  if (materials.length === 0) {
-    throw new GameRuleError(`Fusion spell ${card?.id || "(unknown)"} requires materials`);
+  return options[0];
+}
+
+function fusionDefinitionForAction(card, action = {}) {
+  const options = fusionOptionsForCard(card);
+  if (options.length === 0) return fusionDefinitionForCard(card);
+  const requestedResult = action.fusionResultTemplateId || action.resultTemplateId || "";
+  if (!requestedResult && options.length > 1) {
+    throw new GameRuleError(`Fusion spell ${card?.id || "(unknown)"} requires an explicit fusion result selection`);
   }
-  return { resultTemplateId, materials };
+  const fusion = requestedResult ? fusionOptionForResult(card, requestedResult) : options[0];
+  if (!fusion) {
+    throw new GameRuleError(`Fusion result ${requestedResult} is not available for spell ${card?.id || "(unknown)"}`);
+  }
+  return fusion;
 }
 
 function fusionMaterialCount(materials = []) {
@@ -3770,14 +3796,14 @@ function validateFusionDestination(state, playerId, materialCardIds = [], index 
   }
 }
 
-function fusionActivationCandidate(state, playerId, rivalId, card) {
-  const fusion = fusionDefinitionForCard(card);
+function fusionActivationCandidate(state, playerId, rivalId, card, fusion = fusionDefinitionForCard(card)) {
   const materialCardIds = defaultFusionMaterialCardIdsForAction(state, playerId, fusion, card.id);
   return {
     type: "ACTIVATE_CARD",
     playerId,
     rivalId,
     cardId: card.id,
+    fusionResultTemplateId: fusion.resultTemplateId,
     ...(materialCardIds.length ? {
       materialCardIds,
       index: fusionSummonIndexForAction(state, playerId, materialCardIds)

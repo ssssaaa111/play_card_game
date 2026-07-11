@@ -18,6 +18,7 @@ import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import { buildPreDuelPreview } from './pre-duel-preview.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
+import { fusionOptionsForCard } from './fusion.js';
 import {
   buildEngineStateFromUiState,
   canDispatchSummonEffectFromUiState,
@@ -51,6 +52,7 @@ import {
   dispatchTrapResponseFromUiState,
   explainActivateSpellFromUiState,
   explainDeclareAttackFromUiState,
+  explainFusionSummonFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
   projectBattleFromUiState
@@ -233,6 +235,7 @@ const els = {
   fusionPreview: document.querySelector("#fusionPreview"),
   fusionPreviewName: document.querySelector("#fusionPreviewName"),
   fusionPreviewStats: document.querySelector("#fusionPreviewStats"),
+  fusionResultChoices: document.querySelector("#fusionResultChoices"),
   fusionPreviewMaterials: document.querySelector("#fusionPreviewMaterials"),
   fusionPreviewDetail: document.querySelector("#fusionPreviewDetail"),
   aceOverlay: document.querySelector("#aceOverlay"),
@@ -1421,16 +1424,15 @@ function templateIdForCard(card) {
   return card?.templateId || card?.id || "";
 }
 
-function fusionDefinition(card) {
-  if (card?.type !== "spell" || card.effect !== "fusionSummon") return null;
-  const resultId = card.fusion?.resultTemplateId || card.fusion?.result || card.fusion?.cardId || "";
-  const materials = (Array.isArray(card.fusion?.materials) ? card.fusion.materials : [])
-    .map((entry) => typeof entry === "string"
-      ? { templateId: entry, count: 1 }
-      : { templateId: entry?.templateId || entry?.id, count: Math.max(1, Number(entry?.count) || 1) })
-    .filter((entry) => entry.templateId);
-  if (!resultId || materials.length === 0) return null;
-  return { resultId, materials };
+function fusionDefinitions(card) {
+  return fusionOptionsForCard(card)
+    .map((option) => ({ resultId: option.resultTemplateId, materials: option.materials }));
+}
+
+function fusionDefinition(card, resultId = "") {
+  const options = fusionDefinitions(card);
+  if (options.length === 0) return null;
+  return options.find((option) => option.resultId === resultId) || options[0];
 }
 
 function fusionMaterialCount(materials = []) {
@@ -1447,9 +1449,7 @@ function fusionMaterialNames(materials = []) {
     .join("、");
 }
 
-function fusionSummonReady(card) {
-  const fusion = fusionDefinition(card);
-  if (!fusion) return false;
+function fusionOptionReady(card, fusion) {
   const available = [
     ...state.player.field.filter(Boolean),
     ...state.player.hand.filter((entry) => entry.uid !== card.uid)
@@ -1462,12 +1462,17 @@ function fusionSummonReady(card) {
     }
     return true;
   });
-  if (!hasMaterials) return false;
-  return [...state.player.hand, ...state.player.deck].some((entry) => templateIdForCard(entry) === fusion.resultId);
+  return hasMaterials && [...state.player.hand, ...state.player.deck]
+    .some((entry) => templateIdForCard(entry) === fusion.resultId);
+}
+
+function fusionSummonReady(card) {
+  return fusionDefinitions(card).some((fusion) => fusionOptionReady(card, fusion));
 }
 
 function beginFusionSelection(handIndex, card) {
-  const fusion = fusionDefinition(card);
+  const options = fusionDefinitions(card).filter((fusion) => fusionOptionReady(card, fusion));
+  const fusion = options[0];
   if (!fusion) return false;
   if (!fusionSummonReady(card)) {
     cue(`${card.name} 需要手牌或场上的 ${fusionMaterialNames(fusion.materials)}，并且手牌或卡组里要有可登场的融合怪兽。`);
@@ -1480,13 +1485,16 @@ function beginFusionSelection(handIndex, card) {
     handUid: card.uid,
     handIndex,
     cardName: card.name,
-    resultId: fusion.resultId,
-    materials: fusion.materials,
+    resultOptions: options,
+    resultId: options.length === 1 ? fusion.resultId : "",
+    materials: options.length === 1 ? fusion.materials : [],
     selectedIndexes: [],
     selectedHandUids: []
   };
   state.selected = { zone: "hand", uid: card.uid };
-  cue(`选择 ${fusionMaterialCount(fusion.materials)} 只融合素材：${fusionMaterialNames(fusion.materials)}。`);
+  cue(options.length > 1
+    ? `先为 ${card.name} 选择融合结果。`
+    : `选择 ${fusionMaterialCount(fusion.materials)} 只融合素材：${fusionMaterialNames(fusion.materials)}。`);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1524,6 +1532,9 @@ function selectedFusionMaterials() {
 function fusionSelectionStatus(materials = selectedFusionMaterials()) {
   const info = pendingFusionHandInfo();
   if (!info) return { complete: false, invalid: true, selectedCount: 0, requiredCount: 0, remaining: [] };
+  if (!info.pending.resultId) {
+    return { complete: false, invalid: false, needsResult: true, selectedCount: 0, requiredCount: 0, remaining: [] };
+  }
   const remaining = info.pending.materials.map((entry) => ({ ...entry }));
   let invalid = false;
   materials.forEach(({ card }) => {
@@ -1544,9 +1555,38 @@ function fusionSelectionStatus(materials = selectedFusionMaterials()) {
   };
 }
 
+function selectFusionResult(resultId) {
+  const info = pendingFusionHandInfo();
+  const option = info?.pending.resultOptions?.find((entry) => entry.resultId === resultId);
+  if (!info || !option) return false;
+  info.pending.resultId = option.resultId;
+  info.pending.materials = option.materials.map((entry) => ({ ...entry }));
+  info.pending.selectedIndexes = [];
+  info.pending.selectedHandUids = [];
+  state.selected = { zone: "hand", uid: info.card.uid };
+  const result = cardDefinitionById(option.resultId);
+  cue(`已选择融合结果「${result?.name || option.resultId}」，请选择指定素材。`);
+  render();
+  resetPlayerIdleCountdown();
+  return true;
+}
+
 function fusionPreviewViewModel() {
   const info = pendingFusionHandInfo();
   if (!info) return null;
+  const resultOptions = info.pending.resultOptions || [];
+  if (!info.pending.resultId) {
+    return {
+      resultId: "",
+      resultName: "请选择融合结果",
+      stats: `可选 ${resultOptions.length} 种融合形态`,
+      materials: "",
+      progress: "0/0",
+      selectedNames: [],
+      remainingText: "",
+      resultOptions
+    };
+  }
   const result = cardDefinitionById(info.pending.resultId);
   const status = fusionSelectionStatus();
   const remaining = status.remaining.filter((entry) => entry.count > 0);
@@ -1564,7 +1604,8 @@ function fusionPreviewViewModel() {
     materials: fusionMaterialNames(info.pending.materials),
     progress: `${status.selectedCount}/${status.requiredCount}`,
     selectedNames,
-    remainingText
+    remainingText,
+    resultOptions
   };
 }
 
@@ -1577,19 +1618,40 @@ function renderFusionPreview() {
       els.fusionPreviewDetail.disabled = true;
       els.fusionPreviewDetail.dataset.cardId = "";
     }
+    if (els.fusionResultChoices) els.fusionResultChoices.replaceChildren();
     return;
   }
   els.fusionPreview.hidden = false;
   els.fusionPreview.dataset.cardId = view.resultId;
   if (els.fusionPreviewName) els.fusionPreviewName.textContent = view.resultName;
   if (els.fusionPreviewStats) els.fusionPreviewStats.textContent = view.stats;
+  if (els.fusionResultChoices) {
+    const buttons = view.resultOptions.map((option) => {
+      const definition = cardDefinitionById(option.resultId);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "fusion-result-option";
+      button.dataset.cardId = option.resultId;
+      button.classList.toggle("selected", option.resultId === view.resultId);
+      button.setAttribute("aria-pressed", String(option.resultId === view.resultId));
+      button.innerHTML = `<strong>${definition?.name || option.resultId}</strong><span>ATK ${definition?.atk ?? "-"} / DEF ${definition?.def ?? "-"}</span>`;
+      button.addEventListener("click", () => selectFusionResult(option.resultId));
+      return button;
+    });
+    els.fusionResultChoices.replaceChildren(...buttons);
+    els.fusionResultChoices.hidden = buttons.length <= 1;
+  }
   if (els.fusionPreviewMaterials) {
-    const selected = view.selectedNames.length ? ` / 已选：${view.selectedNames.join("、")}` : "";
-    const remaining = view.remainingText ? ` / 还需：${view.remainingText}` : " / 素材齐备";
-    els.fusionPreviewMaterials.textContent = `素材：${view.materials} / 进度 ${view.progress}${selected}${remaining}`;
+    if (!view.resultId) {
+      els.fusionPreviewMaterials.textContent = "先选择一种融合形态，再选择对应素材。";
+    } else {
+      const selected = view.selectedNames.length ? ` / 已选：${view.selectedNames.join("、")}` : "";
+      const remaining = view.remainingText ? ` / 还需：${view.remainingText}` : " / 素材齐备";
+      els.fusionPreviewMaterials.textContent = `素材：${view.materials} / 进度 ${view.progress}${selected}${remaining}`;
+    }
   }
   if (els.fusionPreviewDetail) {
-    els.fusionPreviewDetail.disabled = false;
+    els.fusionPreviewDetail.disabled = !view.resultId;
     els.fusionPreviewDetail.dataset.cardId = view.resultId;
   }
 }
@@ -1689,6 +1751,11 @@ async function confirmFusionSummon(fieldIndex = null) {
   const materialHandUids = selectedFusionHandUids();
   const materials = selectedFusionMaterials();
   const status = fusionSelectionStatus(materials);
+  if (!info.pending.resultId) {
+    cue("请先选择要融合召唤的怪兽。");
+    resetPlayerIdleCountdown();
+    return false;
+  }
   if (!status.complete) {
     cue(`还需要选择融合素材：${fusionMaterialNames(status.remaining.filter((entry) => entry.count > 0)) || fusionMaterialNames(info.pending.materials)}。`);
     resetPlayerIdleCountdown();
@@ -1704,7 +1771,12 @@ async function confirmFusionSummon(fieldIndex = null) {
   ];
   let fusionEvents = [];
   try {
-    fusionEvents = dispatchFusionSummonFromUiState(state, "player", "ai", info.index, { materialIndexes, materialCardIds, fieldIndex: summonIndex });
+    fusionEvents = dispatchFusionSummonFromUiState(state, "player", "ai", info.index, {
+      fusionResultTemplateId: info.pending.resultId,
+      materialIndexes,
+      materialCardIds,
+      fieldIndex: summonIndex
+    });
   } catch (error) {
     cue(error.message || "融合召唤失败。");
     console.error(error);
@@ -2572,6 +2644,18 @@ function validateSpell(owner, rival, card, handIndex) {
   if (!effect) return { ok: false, reason: "这个魔法效果还没有实现。" };
   const condition = validateSpellCondition(card.effect, { owner, rival, card, handIndex });
   if (!condition.ok) return condition;
+  const fusionOptions = fusionDefinitions(card);
+  if (fusionOptions.length > 0) {
+    const checks = fusionOptions.map((option) => explainFusionSummonFromUiState(
+      state,
+      owner.owner,
+      rival.owner,
+      handIndex,
+      { fusionResultTemplateId: option.resultId }
+    ));
+    const legalOption = checks.find((entry) => entry.ok);
+    return legalOption ? condition : { ok: false, reason: checks[0]?.reason || condition.reason };
+  }
   const engineLegality = explainActivateSpellFromUiState(state, owner.owner, rival.owner, handIndex);
   if (!engineLegality.ok) return { ok: false, reason: engineLegality.reason };
   return condition;
@@ -4331,7 +4415,9 @@ function render(animationKey = "") {
       const text = state.pendingTarget
         ? `${targetPrompt} 再点这张手牌或确认，将默认选择合法目标。`
         : state.pendingFusion
-          ? `${state.pendingFusion.cardName}：选择融合素材 ${fusionSelectionStatus().selectedCount}/${fusionSelectionStatus().requiredCount}。`
+          ? fusionSelectionStatus().needsResult
+            ? `${state.pendingFusion.cardName}：先选择融合结果。`
+            : `${state.pendingFusion.cardName}：选择融合素材 ${fusionSelectionStatus().selectedCount}/${fusionSelectionStatus().requiredCount}。`
           : `${selectedHand.card.name}：${selectedHandAction?.reason || "确认后发动。"}`;
       els.choiceText.textContent = text;
       els.choiceConfirmBtn.textContent = confirmLabel;
@@ -4590,9 +4676,11 @@ function handActionInfo(card, handIndex) {
     const status = state.pendingFusion?.handUid === card.uid ? fusionSelectionStatus() : null;
     return {
       ...action,
-      label: status ? `融合 ${status.selectedCount}/${status.requiredCount}` : "融合召唤",
+      label: status?.needsResult ? "选择融合结果" : status ? `融合 ${status.selectedCount}/${status.requiredCount}` : "融合召唤",
       reason: status
-        ? `选择 ${status.requiredCount} 只指定素材后确认融合召唤。`
+        ? status.needsResult
+          ? "先选择一种融合形态，再选择该配方的指定素材。"
+          : `选择 ${status.requiredCount} 只指定素材后确认融合召唤。`
         : `确认后选择 ${fusionMaterialNames(fusion.materials)} 作为融合素材。`
     };
   }

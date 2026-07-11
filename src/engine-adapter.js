@@ -4,6 +4,7 @@ import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, canEffectT
 import { spellDefinition } from './spells.js';
 import { trapDefinition } from './traps.js';
 import { ACTION_WINDOWS, PHASES, TIMINGS } from './turn-state.js';
+import { fusionOptionForResult, fusionOptionsForCard } from './fusion.js';
 
 const ownerIds = ["player", "ai"];
 const ONE_SHOT_EFFECT = "oneShot";
@@ -75,20 +76,14 @@ function cardTemplateId(card) {
   return card?.templateId || card?.id || "";
 }
 
-function normalizedFusionRequirements(card) {
-  return (Array.isArray(card?.fusion?.materials) ? card.fusion.materials : [])
-    .map((entry) => typeof entry === "string"
-      ? { templateId: entry, count: 1 }
-      : { templateId: entry?.templateId || entry?.id, count: Math.max(1, Number(entry?.count) || 1) })
-    .filter((entry) => entry.templateId);
-}
-
-function fusionResultTemplateId(card) {
-  return card?.fusion?.resultTemplateId || card?.fusion?.result || card?.fusion?.cardId || "";
-}
-
 function isFusionSpell(card) {
-  return card?.type === "spell" && card.effect === "fusionSummon" && Boolean(fusionResultTemplateId(card)) && normalizedFusionRequirements(card).length > 0;
+  return fusionOptionsForCard(card).length > 0;
+}
+
+function selectedFusionOption(card, options = {}) {
+  const choices = fusionOptionsForCard(card);
+  const requested = options.fusionResultTemplateId || options.resultTemplateId || "";
+  return requested ? fusionOptionForResult(card, requested) : choices.length === 1 ? choices[0] : null;
 }
 
 function normalizedFusionIndexes(duelist, card, options = {}) {
@@ -97,11 +92,13 @@ function normalizedFusionIndexes(duelist, card, options = {}) {
       .filter((index) => Number.isInteger(index) && index >= 0 && index < duelist.field.length)
       .filter((index, offset, list) => list.indexOf(index) === offset);
   }
+  const fusion = selectedFusionOption(card, options);
+  if (!fusion) return [];
   const available = duelist.field
     .map((slot, index) => ({ card: slot, index }))
     .filter((entry) => entry.card);
   const selected = [];
-  for (const requirement of normalizedFusionRequirements(card)) {
+  for (const requirement of fusion.materials) {
     for (let count = 0; count < requirement.count; count += 1) {
       const foundIndex = available.findIndex((entry) => cardTemplateId(entry.card) === requirement.templateId);
       if (foundIndex < 0) return [];
@@ -117,12 +114,14 @@ function fusionMaterialCardIdsFromUiState(duelist, card, options = {}) {
     return options.materialCardIds.filter(Boolean);
   }
   if (!Array.isArray(options.materialIndexes)) {
+    const fusion = selectedFusionOption(card, options);
+    if (!fusion) return [];
     const available = [
       ...duelist.field.filter(Boolean),
       ...duelist.hand.filter((entry) => entry && cardKey(entry) !== cardKey(card))
     ];
     const selected = [];
-    for (const requirement of normalizedFusionRequirements(card)) {
+    for (const requirement of fusion.materials) {
       for (let count = 0; count < requirement.count; count += 1) {
         const foundIndex = available.findIndex((entry) => cardTemplateId(entry) === requirement.templateId);
         if (foundIndex < 0) return [];
@@ -593,6 +592,10 @@ export function explainFusionSummonFromUiState(uiState, playerId, rivalId, handI
   if (!isFusionSpell(card)) {
     return { ok: false, reason: "Selected card is not a fusion spell", engineReason: "Selected card is not a fusion spell" };
   }
+  const fusion = selectedFusionOption(card, options);
+  if (!fusion) {
+    return { ok: false, reason: "Select a fusion result", engineReason: "Fusion spell requires an explicit fusion result selection" };
+  }
 
   const materialIndexes = normalizedFusionIndexes(duelist, card, options);
   const materialCardIds = fusionMaterialCardIdsFromUiState(duelist, card, options);
@@ -607,6 +610,7 @@ export function explainFusionSummonFromUiState(uiState, playerId, rivalId, handI
     playerId,
     rivalId,
     cardId: cardKey(card),
+    fusionResultTemplateId: fusion.resultTemplateId,
     materialCardIds,
     index
   }, "Fusion summon");
@@ -1273,6 +1277,8 @@ export function dispatchFusionSummonFromUiState(uiState, playerId, rivalId, hand
   if (!isFusionSpell(card)) {
     throw new Error(`Spell ${card.effect || "(none)"} is not a fusion spell`);
   }
+  const fusion = selectedFusionOption(card, options);
+  if (!fusion) throw new Error("Fusion spell requires an explicit fusion result selection");
 
   const materialIndexes = normalizedFusionIndexes(duelist, card, options);
   const materialCardIds = fusionMaterialCardIdsFromUiState(duelist, card, options);
@@ -1286,6 +1292,7 @@ export function dispatchFusionSummonFromUiState(uiState, playerId, rivalId, hand
     playerId,
     rivalId,
     cardId: cardKey(card),
+    fusionResultTemplateId: fusion.resultTemplateId,
     materialCardIds,
     index
   });

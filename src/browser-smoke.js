@@ -1166,6 +1166,80 @@ async function runFusionMixedMaterialsSmoke(ctx) {
   setSmokeStatus("passed", "fusion-mixed-materials");
 }
 
+async function runFusionResultChoiceSmoke(ctx) {
+  setSmokeStatus("running", "fusion-result-choice");
+  await startSmokeDuel(ctx, "fusionResultChoice");
+  const resultDefinition = cloneCardById("tempest-aegis-archon");
+  if (!resultDefinition) throw new Error("fusion-result-choice: defensive result definition should exist");
+  if (!ctx.state.player.deck.some((card) => card?.id === "flare-gale-archon") ||
+      !ctx.state.player.deck.some((card) => card?.id === "tempest-aegis-archon")) {
+    throw new Error("fusion-result-choice: both fusion results should start in deck");
+  }
+
+  clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-result-choice: select fusion spell");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-result-choice: enter result selection");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion && !ctx.state.pendingFusion.resultId &&
+      ctx.els.fusionResultChoices?.querySelectorAll(".fusion-result-option").length === 2,
+    "fusion-result-choice: two explicit result options",
+    6000
+  );
+  if (!ctx.els.choiceConfirmBtn.disabled) {
+    throw new Error("fusion-result-choice: summon confirmation must stay disabled before choosing a result");
+  }
+
+  const defensiveChoice = ctx.els.fusionResultChoices.querySelector('[data-card-id="tempest-aegis-archon"]');
+  clickSmokeElement(defensiveChoice, "fusion-result-choice: choose defensive result");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.resultId === "tempest-aegis-archon" &&
+      ctx.els.fusionResultChoices?.querySelector('[data-card-id="tempest-aegis-archon"]')?.classList.contains("selected") &&
+      handCard(ctx.els, "gale-mage")?.classList.contains("tribute-candidate"),
+    "fusion-result-choice: defensive result selected",
+    6000
+  );
+  if (!ctx.els.fusionPreviewName?.textContent.includes(resultDefinition.name) ||
+      !ctx.els.fusionPreviewStats?.textContent.includes("ATK 2000") ||
+      !ctx.els.fusionPreviewStats?.textContent.includes("DEF 2600")) {
+    throw new Error("fusion-result-choice: preview should show selected result name and stats");
+  }
+  clickSmokeElement(ctx.els.fusionPreviewDetail, "fusion-result-choice: open selected result detail");
+  await assertCardDetailModal(ctx, resultDefinition, "fusion-result-choice-preview");
+  clickSmokeElement(ctx.els.zoomClose, "fusion-result-choice: close selected result detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "fusion-result-choice: preview detail closes");
+
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-result-choice: select field material");
+  clickSmokeElement(handCard(ctx.els, "gale-mage"), "fusion-result-choice: select hand material");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
+      ctx.state.pendingFusion?.selectedHandUids?.length === 1 &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "fusion-result-choice: mixed materials selected",
+    6000
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-result-choice: confirm defensive fusion");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "tempest-aegis-archon") &&
+      ctx.state.player.deck.some((card) => card?.id === "flare-gale-archon") &&
+      !ctx.state.player.deck.some((card) => card?.id === "tempest-aegis-archon") &&
+      ctx.state.player.shield === 400 &&
+      !ctx.state.pendingFusion,
+    `fusion-result-choice: selected result should resolve with its summon effect. ${smokeDebug(ctx)}`,
+    9000
+  );
+  if (!ctx.state.gameEvents.some((event) => event.type === "FUSION_SUMMONED" && event.resultTemplateId === "tempest-aegis-archon")) {
+    throw new Error("fusion-result-choice: selected FUSION_SUMMONED event missing");
+  }
+  await waitForSmoke(() => logCardLink(ctx.els, "tempest-aegis-archon"), "fusion-result-choice: result log link", 6000);
+  clickSmokeElement(logCardLink(ctx.els, "tempest-aegis-archon"), "fusion-result-choice: open selected result from log");
+  await assertCardDetailModal(ctx, resultDefinition, "fusion-result-choice-log");
+  clickSmokeElement(ctx.els.zoomClose, "fusion-result-choice: close log detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "fusion-result-choice: log detail closes");
+  if (!ctx.currentPlayerActions().endTurn && !ctx.currentPlayerActions().attack && !ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap) {
+    throw new Error(`fusion-result-choice: duel should continue after result selection. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "fusion-result-choice");
+}
+
 async function runSplitTokenSmoke(ctx) {
   setSmokeStatus("running", "split-token");
   await startSmokeDuel(ctx, "splitToken");
@@ -3620,6 +3694,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-break": runDivineBreakSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "fusion-mixed-materials": runFusionMixedMaterialsSmoke,
+    "fusion-result-choice": runFusionResultChoiceSmoke,
     "split-token": runSplitTokenSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,

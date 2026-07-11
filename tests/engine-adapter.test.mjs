@@ -418,6 +418,43 @@ test("dispatches fusion summon with one hand material and one field material", (
   assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.materialCardIds.includes(gale.uid)));
 });
 
+test("dispatches the explicitly selected result for a multi-result fusion", () => {
+  const fusion = uiSpell("fusion-spell", "fusionSummon", "starforge-fusion");
+  fusion.fusion = {
+    options: [
+      { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] },
+      { result: "tempest-aegis-archon", materials: ["ember-drake", "gale-mage"] }
+    ]
+  };
+  const ember = uiMonster("fusion-ember", "ember-drake");
+  const gale = uiMonster("fusion-gale", "gale-mage");
+  const attackArchon = uiMonster("fusion-attack", "flare-gale-archon");
+  const guardArchon = uiMonster("fusion-guard", "tempest-aegis-archon");
+  guardArchon.onSummon = "shield400";
+  const state = appState();
+  state.player.hand = [fusion, gale];
+  state.player.field[0] = ember;
+  state.player.deck = [attackArchon, guardArchon];
+
+  const missingChoice = explainFusionSummonFromUiState(state, "player", "ai", 0, {
+    materialCardIds: [ember.uid, gale.uid],
+    fieldIndex: 0
+  });
+  assert.equal(missingChoice.ok, false);
+  assert.match(missingChoice.engineReason, /explicit fusion result selection/);
+
+  const events = dispatchFusionSummonFromUiState(state, "player", "ai", 0, {
+    fusionResultTemplateId: "tempest-aegis-archon",
+    materialCardIds: [ember.uid, gale.uid],
+    fieldIndex: 0
+  });
+
+  assert.equal(state.player.field[0], guardArchon);
+  assert.deepEqual(state.player.deck, [attackArchon]);
+  assert.equal(state.player.shield, 400);
+  assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.resultTemplateId === "tempest-aegis-archon"));
+});
+
 test("explains fusion summon legality from UI state", () => {
   const fusion = uiSpell("fusion-spell", "fusionSummon", "starforge-fusion");
   fusion.fusion = { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] };

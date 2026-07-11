@@ -547,6 +547,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="divineResistance">神格抗性测试<\/option>/);
   assert.match(html, /<option value="divineBreak">破神对策测试<\/option>/);
   assert.match(html, /<option value="fusionSummon">融合召唤测试<\/option>/);
+  assert.match(html, /<option value="fusionResultChoice">融合形态选择测试<\/option>/);
   assert.match(html, /<option value="fusionMixedMaterials">混合素材融合测试<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
@@ -570,6 +571,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /id="fusionPreview"/);
   assert.match(html, /id="fusionPreviewName"/);
   assert.match(html, /id="fusionPreviewStats"/);
+  assert.match(html, /id="fusionResultChoices"/);
   assert.match(html, /id="fusionPreviewMaterials"/);
   assert.match(html, /id="fusionPreviewDetail"/);
   assert.match(html, /<option value="phantomRedirect">幻影换位回归<\/option>/);
@@ -612,6 +614,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /aiRevealModal: document\.querySelector\("#aiRevealModal"\)/);
   assert.match(app, /aiRevealProgress: document\.querySelector\("#aiRevealProgress"\)/);
   assert.match(app, /fusionPreview: document\.querySelector\("#fusionPreview"\)/);
+  assert.match(app, /fusionResultChoices: document\.querySelector\("#fusionResultChoices"\)/);
   assert.match(app, /fusionPreviewDetail: document\.querySelector\("#fusionPreviewDetail"\)/);
   assert.match(app, /function renderScenarioBrief/);
   assert.match(app, /function renderPreDuelPreview/);
@@ -652,6 +655,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"divine-break": runDivineBreakSmoke/);
   assert.match(smoke, /"fusion-summon": runFusionSummonSmoke/);
   assert.match(smoke, /"fusion-mixed-materials": runFusionMixedMaterialsSmoke/);
+  assert.match(smoke, /"fusion-result-choice": runFusionResultChoiceSmoke/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /fusionPreviewName/);
   assert.match(smoke, /fusionPreviewStats/);
@@ -753,6 +757,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "divine-break"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-mixed-materials"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "fusion-result-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "split-token"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-demo"\)/);

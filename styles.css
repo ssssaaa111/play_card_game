@@ -2535,6 +2535,60 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   line-height: 1.35;
 }
 
+.fusion-result-choices {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.fusion-result-choices[hidden] {
+  display: none;
+}
+
+.fusion-result-option {
+  min-width: 0;
+  min-height: 54px;
+  display: grid;
+  gap: 3px;
+  align-content: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 6px;
+  color: #e2e8f0;
+  background: rgba(8, 14, 22, 0.88);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fusion-result-option:hover,
+.fusion-result-option:focus-visible {
+  border-color: rgba(84, 210, 210, 0.8);
+  outline: none;
+}
+
+.fusion-result-option.selected {
+  border-color: var(--gold);
+  box-shadow: inset 3px 0 0 var(--gold);
+  color: #fff7d6;
+}
+
+.fusion-result-option strong,
+.fusion-result-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fusion-result-option strong {
+  font-size: 13px;
+}
+
+.fusion-result-option span {
+  color: #aebdce;
+  font-size: 11px;
+}
+
 .fusion-preview-materials {
   grid-column: 1 / -1;
 }
