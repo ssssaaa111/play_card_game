@@ -18,6 +18,7 @@ import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import { buildPreDuelPreview } from './pre-duel-preview.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
+import { buildChainStackEntries } from './chain-view.js';
 import { fusionOptionsForCard } from './fusion.js';
 import {
   buildEngineStateFromUiState,
@@ -285,6 +286,7 @@ const els = {
   zoomClose: document.querySelector("#zoomClose"),
   chainModal: document.querySelector("#chainModal"),
   chainText: document.querySelector("#chainText"),
+  chainStack: document.querySelector("#chainStack"),
   chainChoices: document.querySelector("#chainChoices"),
   chainStatus: document.querySelector("#chainStatus"),
   chainYes: document.querySelector("#chainYes"),
@@ -2951,16 +2953,68 @@ function renderTrapChoiceOptions(choice = state.pendingTrapChoice) {
   });
 }
 
+function renderChainStack(choice = state.pendingTrapChoice) {
+  if (!els.chainStack) return;
+  const selectedCard = choice?.eventName === "chain"
+    ? state.player.traps[choice.selectedIndex]
+    : null;
+  const entries = buildChainStackEntries({
+    chain: currentEngineMachine()?.chain || [],
+    findCard: findRuntimeCard,
+    pendingCard: selectedCard,
+    pendingOwner: "player"
+  });
+  els.chainStack.replaceChildren();
+  els.chainStack.hidden = entries.length === 0;
+  entries.forEach((entry) => {
+    const row = document.createElement("div");
+    row.className = "chain-stack-entry";
+    row.classList.toggle("pending", entry.pending);
+
+    const index = document.createElement("span");
+    index.className = "chain-stack-index";
+    index.textContent = `CL${entry.chainIndex}`;
+
+    const owner = document.createElement("span");
+    owner.className = "chain-stack-owner";
+    owner.textContent = entry.ownerLabel;
+
+    const name = document.createElement(entry.cardId ? "button" : "span");
+    name.className = "chain-stack-card";
+    name.textContent = entry.name;
+    if (entry.cardId) {
+      name.type = "button";
+      name.dataset.cardId = entry.cardId;
+      name.title = `查看 ${entry.name} 详情`;
+      name.addEventListener("click", () => openCardDetail(entry.cardId));
+    }
+
+    const status = document.createElement("span");
+    status.className = "chain-stack-state";
+    status.textContent = entry.pending ? "待发动" : "等待结算";
+    row.appendChild(index);
+    row.appendChild(owner);
+    row.appendChild(name);
+    row.appendChild(status);
+    els.chainStack.appendChild(row);
+  });
+}
+
 function clearTrapChoiceOptions() {
   if (!els.chainChoices) return;
   els.chainChoices.replaceChildren();
   els.chainChoices.hidden = true;
+  if (els.chainStack) {
+    els.chainStack.replaceChildren();
+    els.chainStack.hidden = true;
+  }
 }
 
 function updateTrapChoicePrompt() {
   if (!state.pendingTrapChoice) return;
   els.chainText.textContent = pendingTrapChoiceDetailsText();
   renderTrapChoiceOptions();
+  renderChainStack();
   const selectedCard = state.player.traps[state.pendingTrapChoice.selectedIndex];
   if (els.chainStatus) {
     els.chainStatus.textContent = selectedCard

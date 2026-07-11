@@ -3169,6 +3169,70 @@ async function runAiCounterChainSmoke(ctx) {
   setSmokeStatus("passed", "ai-counter-chain");
 }
 
+async function runPlayerCounterChainSmoke(ctx) {
+  setSmokeStatus("running", "player-counter-chain");
+  await startSmokeDuel(ctx, "playerCounterChain");
+  const nullifierDefinition = cloneCardById("chain-nullifier");
+  if (!nullifierDefinition) throw new Error("player-counter-chain: nullifier definition should exist");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "star-lancer");
+  const defender = ctx.state.ai.field.find((card) => card?.id === "gale-mage");
+  if (!attacker || !defender || !ctx.state.player.traps.some((card) => card?.id === "chain-nullifier") ||
+      !ctx.state.ai.traps.some((card) => card?.id === "mirror-snare")) {
+    throw new Error(`player-counter-chain: deterministic opening is missing. ${smokeDebug(ctx)}`);
+  }
+  const aiLpBefore = ctx.state.ai.lp;
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "player-counter-chain: select attacker");
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "gale-mage")?.classList.contains("attack-target"),
+    "player-counter-chain: defender becomes targetable"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "gale-mage"), "player-counter-chain: declare attack");
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") &&
+      ctx.els.chainText.textContent.includes("镜光反制") &&
+      ctx.els.chainText.textContent.includes("断链裁决"),
+    `player-counter-chain: counter response opens. ${smokeDebug(ctx)}`,
+    12000
+  );
+
+  const stackText = ctx.els.chainStack?.textContent || "";
+  const stackEntries = ctx.els.chainStack?.querySelectorAll(".chain-stack-entry") || [];
+  if (stackEntries.length !== 2 || !stackText.includes("CL1") || !stackText.includes("AI") ||
+      !stackText.includes("镜光反制") || !stackText.includes("CL2") || !stackText.includes("你") ||
+      !stackText.includes("断链裁决") || !stackText.includes("待发动")) {
+    throw new Error(`player-counter-chain: visible chain order is incomplete: ${stackText}`);
+  }
+  const detailButton = ctx.els.chainStack.querySelector('[data-card-id="chain-nullifier"]');
+  clickSmokeElement(detailButton, "player-counter-chain: inspect pending nullifier");
+  await assertCardDetailModal(ctx, nullifierDefinition, "player-counter-chain");
+  clickSmokeElement(ctx.els.zoomClose, "player-counter-chain: close nullifier detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "player-counter-chain: detail closes");
+
+  clickSmokeElement(ctx.els.chainYes, "player-counter-chain: add nullifier as chain two");
+  await waitForSmoke(
+    () => !ctx.els.chainModal.classList.contains("show") &&
+      ctx.state.player.grave.some((card) => card?.id === "chain-nullifier") &&
+      ctx.state.ai.grave.some((card) => card?.id === "mirror-snare") &&
+      ctx.state.player.field.some((card) => card?.uid === attacker.uid) &&
+      ctx.state.ai.grave.some((card) => card?.uid === defender.uid) &&
+      ctx.state.ai.lp === aiLpBefore - 600,
+    `player-counter-chain: nullifier protects the attack and battle resolves. ${smokeDebug(ctx)}`,
+    18000
+  );
+  if (countGameEvents(ctx.state, "CHAIN_LINK_ADDED") !== 2 ||
+      countGameEvents(ctx.state, "CHAIN_LINK_COMMITTED") !== 2 ||
+      countGameEvents(ctx.state, "EFFECT_NEGATED") !== 1 ||
+      countGameEvents(ctx.state, "EFFECT_SKIPPED") !== 1 ||
+      countGameEvents(ctx.state, "CHAIN_RESOLVED") !== 1) {
+    throw new Error("player-counter-chain: two-link event chain is incomplete");
+  }
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("镜光反制") && logEntryMessage(entry).includes("无效"))) {
+    throw new Error("player-counter-chain: battle log should explain the negated AI trap");
+  }
+  setSmokeStatus("passed", "player-counter-chain");
+}
+
 async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("running", "mode-auto-end");
   await startSmokeDuel(ctx, "combo");
@@ -3725,6 +3789,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "chain-attack-reentry": runChainAttackReentrySmoke,
     "chain-weaken-resolution": runChainWeakenResolutionSmoke,
     "ai-counter-chain": runAiCounterChainSmoke,
+    "player-counter-chain": runPlayerCounterChainSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,

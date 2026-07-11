@@ -2329,10 +2329,83 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   font-size: 0.76rem;
 }
 
+.chain-stack {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 9px;
+  border: 1px solid rgba(183, 148, 244, 0.3);
+  background: rgba(7, 12, 22, 0.72);
+}
+
+.chain-stack[hidden] {
+  display: none;
+}
+
+.chain-stack-entry {
+  display: grid;
+  grid-template-columns: 42px 28px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-height: 34px;
+  padding: 5px 7px;
+  border-left: 2px solid rgba(84, 210, 210, 0.58);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.chain-stack-entry.pending {
+  border-left-color: var(--gold);
+  background: rgba(246, 189, 96, 0.08);
+}
+
+.chain-stack-index,
+.chain-stack-owner,
+.chain-stack-state {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.chain-stack-index {
+  color: #8ee7e7;
+}
+
+.chain-stack-owner,
+.chain-stack-state {
+  color: var(--muted);
+}
+
+.chain-stack-card {
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  color: #f8fafc;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.chain-stack-card {
+  cursor: pointer;
+}
+
+button.chain-stack-card:hover,
+button.chain-stack-card:focus-visible {
+  color: var(--gold);
+  outline: none;
+}
+
 .chain-choices {
   display: grid;
   gap: 10px;
   margin-top: 14px;
+}
+
+#cardModal.show {
+  z-index: 10;
 }
 
 .chain-choices[hidden] {

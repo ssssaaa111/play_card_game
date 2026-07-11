@@ -549,6 +549,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="fusionSummon">融合召唤测试<\/option>/);
   assert.match(html, /<option value="fusionResultChoice">融合形态选择测试<\/option>/);
   assert.match(html, /<option value="fusionMixedMaterials">混合素材融合测试<\/option>/);
+  assert.match(html, /<option value="playerCounterChain">玩家反制连锁<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
   assert.match(html, /<option value="protagonistComeback">星魂主角战役 01：逆境觉醒<\/option>/);
@@ -574,6 +575,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /id="fusionResultChoices"/);
   assert.match(html, /id="fusionPreviewMaterials"/);
   assert.match(html, /id="fusionPreviewDetail"/);
+  assert.match(html, /id="chainStack"/);
   assert.match(html, /<option value="phantomRedirect">幻影换位回归<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
@@ -616,6 +618,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /fusionPreview: document\.querySelector\("#fusionPreview"\)/);
   assert.match(app, /fusionResultChoices: document\.querySelector\("#fusionResultChoices"\)/);
   assert.match(app, /fusionPreviewDetail: document\.querySelector\("#fusionPreviewDetail"\)/);
+  assert.match(app, /chainStack: document\.querySelector\("#chainStack"\)/);
+  assert.match(app, /from '\.\/chain-view\.js'/);
   assert.match(app, /function renderScenarioBrief/);
   assert.match(app, /function renderPreDuelPreview/);
   assert.match(app, /function fusionPreviewViewModel/);
@@ -656,6 +660,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"fusion-summon": runFusionSummonSmoke/);
   assert.match(smoke, /"fusion-mixed-materials": runFusionMixedMaterialsSmoke/);
   assert.match(smoke, /"fusion-result-choice": runFusionResultChoiceSmoke/);
+  assert.match(smoke, /"player-counter-chain": runPlayerCounterChainSmoke/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /fusionPreviewName/);
   assert.match(smoke, /fusionPreviewStats/);
@@ -781,6 +786,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "game-over-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "player-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
@@ -1104,7 +1110,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

@@ -608,6 +608,23 @@ export const scenarioSetups = {
     aiHand: [],
     aiDeck: []
   },
+  playerCounterChain: {
+    label: "玩家反制连锁",
+    difficulty: "demo",
+    text: "AI 预置镜光反制；玩家攻击后可用断链裁决追加连锁 2，保护攻击怪兽并继续战斗。",
+    goal: "用星轨枪兵攻击疾风术士，在 AI 发动镜光反制后连锁断链裁决，使攻击继续结算。",
+    objectives: ["选择星轨枪兵攻击疾风术士。", "在连锁响应窗确认 CL1 与 CL2 的顺序。", "发动断链裁决，无效镜光反制并完成攻击。"],
+    hints: ["连锁按后进先出结算：CL2 会先于 CL1 处理。", "断链裁决只无效前一张陷阱的效果，不会取消原本的攻击。"],
+    recommendedLine: ["AI 发动镜光反制后，点击断链裁决确认详情，再发动它作为连锁 2。"],
+    playerHand: [],
+    playerField: ["star-lancer"],
+    playerTraps: ["chain-nullifier"],
+    playerDeck: ["solar-knight"],
+    aiField: ["gale-mage"],
+    aiTraps: ["mirror-snare"],
+    aiHand: [],
+    aiDeck: []
+  },
   combo: {
     label: "组合魔法",
     text: "我方场上预置火+风，手牌含炎岚合击，用来验证属性组合发动条件。",

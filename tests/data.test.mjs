@@ -482,6 +482,17 @@ test("fusion result choice scenario preserves the opening order and exposes both
   assert.ok(scenario.recommendedLine.some((entry) => entry.includes("岚耀守星者")));
 });
 
+test("player counter chain scenario exposes a deterministic two-link response", () => {
+  const scenario = scenarioSetups.playerCounterChain;
+
+  assert.deepEqual(scenario.playerField, ["star-lancer"]);
+  assert.deepEqual(scenario.playerTraps, ["chain-nullifier"]);
+  assert.deepEqual(scenario.aiField, ["gale-mage"]);
+  assert.deepEqual(scenario.aiTraps, ["mirror-snare"]);
+  assert.ok(scenario.objectives.some((entry) => entry.includes("CL1")));
+  assert.ok(scenario.hints.some((entry) => entry.includes("后进先出")));
+});
+
 test("deck presets reference only known cards and have enough cards", () => {
   Object.entries(deckPresets).forEach(([key, preset]) => {
     assert.ok(preset.label, `${key} needs label`);
