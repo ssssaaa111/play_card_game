@@ -1554,21 +1554,21 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .card.spell .art,
 .card.trap .art {
   background-repeat: no-repeat;
-  background-size: 100% 100%, 200% auto;
+  background-size: 100% 100%, var(--card-art-size, 200% auto);
 }
 
 .card.spell .art {
   background-image:
     linear-gradient(180deg, rgba(8, 12, 18, 0.02), rgba(8, 12, 18, 0.3)),
-    url("assets/card-art-spell-trap-atlas.png");
-  background-position: center, left center;
+    var(--card-art-image, url("assets/card-art-spell-trap-atlas.png"));
+  background-position: center, var(--card-art-position, left center);
 }
 
 .card.trap .art {
   background-image:
     linear-gradient(180deg, rgba(16, 7, 12, 0.02), rgba(16, 7, 12, 0.32)),
-    url("assets/card-art-spell-trap-atlas.png");
-  background-position: center, right center;
+    var(--card-art-image, url("assets/card-art-spell-trap-atlas.png"));
+  background-position: center, var(--card-art-position, right center);
 }
 
 .card-art-symbol {

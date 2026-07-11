@@ -1,4 +1,5 @@
 import { cardBadgeText, cardRuleText, cardTypeLabel, elementBadgeText, tributeRequirementText } from './cards.js';
+import { applyCardArt } from './card-art.js';
 import { totalAtk, totalDef } from './rules.js';
 
 function escapeHtml(value = "") {
@@ -58,6 +59,7 @@ export function createCardElement(doc, card, options = {}) {
   el.dataset.cardId = card.id || "";
   el.dataset.cardName = card.name || "";
   el.dataset.cardType = card.type || "";
+  if (card.type === "spell" || card.type === "trap") applyCardArt(el, card.id);
   el.innerHTML = `
     <div class="card-head">
       <div class="card-name">${escapeHtml(model.name)}</div>
