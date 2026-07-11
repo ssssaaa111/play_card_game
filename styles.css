@@ -1260,8 +1260,14 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 }
 
 .field-monster-card {
+  width: min(100%, 150px);
+  height: 100%;
   overflow: visible;
-  max-height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
+  grid-template-rows: auto minmax(42px, 1fr) auto;
+  gap: 4px;
+  padding: 6px;
   transform: rotateX(8deg) translateZ(8px);
   border-color: rgba(246, 189, 96, 0.34);
   box-shadow: 0 18px 30px rgba(0, 0, 0, 0.5), 0 0 28px rgba(84, 210, 210, 0.12);
@@ -1402,11 +1408,49 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 }
 
 .field-monster-card .art {
-  min-height: clamp(62px, 9.5vh, 102px);
+  min-height: 42px;
+  overflow: hidden;
+  isolation: isolate;
   background:
     radial-gradient(ellipse at 50% 92%, rgba(246, 189, 96, 0.18), transparent 55%),
     radial-gradient(circle at 50% 34%, rgba(84, 210, 210, 0.18), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.015));
+}
+
+.field-monster-card .card-head,
+.field-monster-card .stats {
+  position: relative;
+  z-index: 4;
+}
+
+.field-monster-card .card-head {
+  min-height: 22px;
+}
+
+.field-monster-card .card-name {
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.field-monster-card .badge {
+  min-width: 25px;
+  height: 18px;
+  font-size: 10px;
+}
+
+.field-monster-card .element-badge,
+.field-monster-card .card-text {
+  display: none;
+}
+
+.field-monster-card .stats {
+  gap: 3px;
+  font-size: 10px;
+}
+
+.field-monster-card .stat {
+  min-height: 20px;
+  padding: 2px 3px;
 }
 
 .field-monster-card .monster-icon {
@@ -1419,6 +1463,9 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .field-monster-card .monster-projection {
   display: block;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
   animation: monsterIdle 1850ms ease-in-out infinite;
 }
 

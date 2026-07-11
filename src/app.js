@@ -104,7 +104,12 @@ const BROWSER_MANUAL_MODE = BROWSER_TEST_MODE && BROWSER_PARAMS.has("manual");
 const BROWSER_MANUAL_SCENARIO = scenarioIdFromParam(BROWSER_MANUAL_VALUE);
 const BROWSER_SMOKE = BROWSER_TEST_MODE ? BROWSER_PARAMS.get("smoke") || "" : "";
 const AUTO_END_DELAY_MS = 2800;
-const BROWSER_TEST_SLEEP_CAP_MS = 80;
+const ATTACK_TIMING_MS = Object.freeze({
+  preview: 360,
+  ace: 360,
+  declaration: 520,
+  impact: 620
+});
 
 function scenarioIdFromParam(value) {
   if (!value) return "";
@@ -1689,7 +1694,7 @@ async function queuePendingAttack(targetIndex) {
   render();
   let resolved = false;
   try {
-    if (!BROWSER_TEST_MODE) await sleep(360);
+    await sleep(ATTACK_TIMING_MS.preview);
     resolved = await attack(state.player, state.ai, attackerIndex, targetIndex);
   } finally {
     if (!state.gameOver && state.actionWindow === ACTION_WINDOWS.resolution) {
@@ -3214,13 +3219,13 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     playSound("ace");
     playAceStrike(attacker, owner.owner, target);
     playEpicAction("王牌攻势", "attack", 1300);
-    if (!BROWSER_TEST_MODE) await sleep(360);
+    await sleep(ATTACK_TIMING_MS.ace);
   }
   playSound("attack-charge");
   playAttackCloseup(attacker, target, owner.owner, rival.owner);
   playEpicAction("攻击宣言", "attack", 1260);
   playDuelistLine(owner.owner, lineFor(owner.owner, "attack", attacker), false, "attack");
-  if (!BROWSER_TEST_MODE) await sleep(520);
+  await sleep(ATTACK_TIMING_MS.declaration);
   playSound("attack");
   animateAvatar(owner.owner, "attack");
   playMonsterMotion(owner.owner, attackerIndex, "attack");
@@ -3232,7 +3237,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   playSlashBurst(fromEl, toEl);
   playEpicAction("冲击", "attack", 900);
   playAttackCutIn(attacker, target, owner.owner, rival.owner);
-  if (!BROWSER_TEST_MODE) await sleep(620);
+  await sleep(ATTACK_TIMING_MS.impact);
 
   const outcome = target ? describeBattleOutcome(attacker, target, owner, rival) : null;
   let battleEvents = [];
@@ -4023,8 +4028,7 @@ function announce(text) {
 }
 
 function sleep(ms) {
-  const delay = BROWSER_TEST_MODE ? Math.min(ms, BROWSER_TEST_SLEEP_CAP_MS) : ms;
-  return new Promise((resolve) => window.setTimeout(resolve, delay)).then(waitWhilePaused);
+  return new Promise((resolve) => window.setTimeout(resolve, ms)).then(waitWhilePaused);
 }
 
 function waitWhilePaused() {

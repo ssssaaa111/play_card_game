@@ -547,6 +547,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="divineResistance">神格抗性测试<\/option>/);
   assert.match(html, /<option value="divineBreak">破神对策测试<\/option>/);
   assert.match(html, /<option value="fusionSummon">融合召唤测试<\/option>/);
+  assert.match(html, /<option value="fusionMixedMaterials">混合素材融合测试<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
   assert.match(html, /<option value="protagonistComeback">星魂主角战役 01：逆境觉醒<\/option>/);
@@ -650,6 +651,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"divine-resistance": runDivineResistanceSmoke/);
   assert.match(smoke, /"divine-break": runDivineBreakSmoke/);
   assert.match(smoke, /"fusion-summon": runFusionSummonSmoke/);
+  assert.match(smoke, /"fusion-mixed-materials": runFusionMixedMaterialsSmoke/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /fusionPreviewName/);
   assert.match(smoke, /fusionPreviewStats/);
@@ -750,6 +752,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "divine-resistance"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "divine-break"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-summon"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "fusion-mixed-materials"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "split-token"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "basic-expansion"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-demo"\)/);
@@ -816,6 +819,24 @@ test("duel UI exposes turn ownership and side-specific field feedback", () => {
   assert.match(css, /#aiField,[\s\S]*--zone-accent: 239, 71, 111/);
   assert.match(css, /\.slot:has\(\.card\.selected\)/);
   assert.match(css, /\.slot:focus-visible/);
+});
+
+test("browser test attacks preserve production timing and field portraits stay visible", () => {
+  const app = readProjectFile("src/app.js");
+  const css = readProjectFile("styles.css");
+
+  assert.match(app, /const ATTACK_TIMING_MS = Object\.freeze\(\{/);
+  assert.match(app, /await sleep\(ATTACK_TIMING_MS\.preview\)/);
+  assert.match(app, /await sleep\(ATTACK_TIMING_MS\.declaration\)/);
+  assert.match(app, /await sleep\(ATTACK_TIMING_MS\.impact\)/);
+  assert.match(app, /window\.setTimeout\(resolve, ms\)/);
+  assert.doesNotMatch(app, /BROWSER_TEST_SLEEP_CAP_MS/);
+  assert.doesNotMatch(app, /!BROWSER_TEST_MODE\) await sleep/);
+  assert.match(css, /\.field-monster-card\s*\{[\s\S]*height: 100%;[\s\S]*grid-template-rows: auto minmax\(42px, 1fr\) auto;/);
+  assert.match(css, /\.field-monster-card \.art\s*\{[\s\S]*overflow: hidden;[\s\S]*isolation: isolate;/);
+  assert.match(css, /\.field-monster-card \.monster-projection\s*\{[\s\S]*width: 100%;[\s\S]*height: 100%;/);
+  assert.match(css, /\.field-monster-card \.card-text\s*\{[\s\S]*display: none;/);
+  assert.match(css, /\.field-monster-card \.card-head,[\s\S]*z-index: 4;/);
 });
 
 test("app uses extracted card details", () => {
