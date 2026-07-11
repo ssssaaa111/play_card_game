@@ -839,6 +839,21 @@ test("browser test attacks preserve production timing and field portraits stay v
   assert.match(css, /\.field-monster-card \.card-head,[\s\S]*z-index: 4;/);
 });
 
+test("card faces prioritize full monster art and illustrated spell trap identities", () => {
+  const renderer = readProjectFile("src/card-renderer.js");
+  const css = readProjectFile("styles.css");
+
+  assert.match(renderer, /monster-element-chip/);
+  assert.match(renderer, /`ATK \$\{totalAtk\(card\)\}`/);
+  assert.match(renderer, /`DEF \$\{totalDef\(card\)\}/);
+  assert.match(css, /\.field-monster-card\s*\{[\s\S]*transform: none;/);
+  assert.match(css, /\.field-monster-card \.monster-projection\s*\{[\s\S]*animation: none;/);
+  assert.match(css, /\.card\.spell \.art[\s\S]*card-art-spell-trap-atlas\.png/);
+  assert.match(css, /\.card\.trap \.art[\s\S]*card-art-spell-trap-atlas\.png/);
+  assert.match(css, /background-size: 100% 100%, 200% auto;/);
+  assert.match(css, /\.card-art-symbol/);
+});
+
 test("app uses extracted card details", () => {
   const app = readProjectFile("src/app.js");
 
@@ -1082,7 +1097,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

@@ -1268,13 +1268,13 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   grid-template-rows: auto minmax(42px, 1fr) auto;
   gap: 4px;
   padding: 6px;
-  transform: rotateX(8deg) translateZ(8px);
+  transform: none;
   border-color: rgba(246, 189, 96, 0.34);
   box-shadow: 0 18px 30px rgba(0, 0, 0, 0.5), 0 0 28px rgba(84, 210, 210, 0.12);
 }
 
 .field-monster-card:hover {
-  transform: rotateX(4deg) translateY(-6px) translateZ(22px);
+  transform: translateY(-2px);
 }
 
 .field-monster-card::after {
@@ -1453,12 +1453,10 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   padding: 2px 3px;
 }
 
-.field-monster-card .monster-icon {
+.field-monster-card .monster-element-chip {
   position: absolute;
-  left: 8px;
-  top: 6px;
-  color: rgba(255, 255, 255, 0.24);
-  font-size: 20px;
+  left: 5px;
+  top: 5px;
 }
 
 .field-monster-card .monster-projection {
@@ -1466,7 +1464,17 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   bottom: 0;
   width: 100%;
   height: 100%;
-  animation: monsterIdle 1850ms ease-in-out infinite;
+  transform: translateX(-50%);
+  animation: none;
+}
+
+.field-monster-card .monster-projection.defense {
+  transform: translateX(-50%) scale(0.92);
+}
+
+.field-monster-card .monster-sprite {
+  object-position: center;
+  transform: none;
 }
 
 .card.monster:not(.field-monster-card) .monster-projection {
@@ -1484,14 +1492,44 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   opacity: 0.8;
 }
 
-.card.monster:not(.field-monster-card) .monster-icon {
+.card.monster:not(.field-monster-card) .monster-element-chip {
   position: absolute;
   left: 6px;
   top: 5px;
+}
+
+.monster-element-chip {
   z-index: 4;
-  color: rgba(255, 255, 255, 0.38);
-  font-size: 16px;
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+  background: rgba(8, 10, 16, 0.82);
+  color: rgba(237, 242, 247, 0.82);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.2;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.72);
+  white-space: nowrap;
+}
+
+.monster-element-chip.fire {
+  border-color: rgba(239, 71, 111, 0.52);
+  color: #ffd0b6;
+}
+
+.monster-element-chip.light {
+  border-color: rgba(246, 189, 96, 0.56);
+  color: #ffe6a7;
+}
+
+.monster-element-chip.wind {
+  border-color: rgba(84, 210, 210, 0.56);
+  color: #bdffe7;
+}
+
+.monster-element-chip.shadow {
+  border-color: rgba(183, 148, 244, 0.58);
+  color: #dec8ff;
 }
 
 .monster-projection.defense {
@@ -1511,6 +1549,53 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   z-index: 2;
   transform: translateZ(28px);
   filter: saturate(1.12) contrast(1.08) brightness(0.98);
+}
+
+.card.spell .art,
+.card.trap .art {
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 200% auto;
+}
+
+.card.spell .art {
+  background-image:
+    linear-gradient(180deg, rgba(8, 12, 18, 0.02), rgba(8, 12, 18, 0.3)),
+    url("assets/card-art-spell-trap-atlas.png");
+  background-position: center, left center;
+}
+
+.card.trap .art {
+  background-image:
+    linear-gradient(180deg, rgba(16, 7, 12, 0.02), rgba(16, 7, 12, 0.32)),
+    url("assets/card-art-spell-trap-atlas.png");
+  background-position: center, right center;
+}
+
+.card-art-symbol {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  z-index: 2;
+  min-width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 3px;
+  background: rgba(8, 10, 16, 0.82);
+  color: rgba(237, 242, 247, 0.74);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.card.monster .stat:first-child {
+  border-color: rgba(239, 71, 111, 0.2);
+  color: #ffd0b6;
+}
+
+.card.monster .stat:last-child {
+  border-color: rgba(84, 210, 210, 0.2);
+  color: #bdffe7;
 }
 
 .monster-projection::before {

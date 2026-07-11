@@ -23,8 +23,10 @@ test("builds monster card render models with live battle stats", () => {
   assert.equal(model.badge, "★4");
   assert.equal(model.elementText, "火属性");
   assert.equal(model.statusText, "强化+300 / 损耗-200");
-  assert.deepEqual(model.stats, ["攻击 1800", "火属性 / 攻击 守备 900"]);
+  assert.deepEqual(model.stats, ["ATK 1800", "DEF 900"]);
   assert.match(model.artHtml, /monster-fire-dragon\.png/);
+  assert.match(model.artHtml, /monster-element-chip fire">火属性/);
+  assert.doesNotMatch(model.artHtml, />炎</);
 });
 
 test("builds spell and trap render models with rule summaries", () => {
@@ -34,6 +36,8 @@ test("builds spell and trap render models with rule summaries", () => {
 
   assert.deepEqual(spell.stats, ["魔法", "目标:我方最高"]);
   assert.deepEqual(trap.stats, ["陷阱", "受到直接攻击时 / 直击伤害归零 / 消耗攻击"]);
+  assert.match(spell.artHtml, /card-art-symbol/);
+  assert.match(trap.artHtml, /card-art-symbol/);
   assert.equal(locked.statusText, "攻击已跳过");
 });
 
