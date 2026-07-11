@@ -1929,6 +1929,19 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   font-size: 32px;
 }
 
+.hand .card.spell .art,
+.hand .card.trap .art {
+  background-size: 100% 100%, var(--card-art-hand-size, var(--card-art-size, 200% auto));
+}
+
+.hand .card.spell .art {
+  background-position: center, var(--card-art-hand-position, var(--card-art-position, left center));
+}
+
+.hand .card.trap .art {
+  background-position: center, var(--card-art-hand-position, var(--card-art-position, right center));
+}
+
 .hand .card .card-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;

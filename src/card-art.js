@@ -1,13 +1,19 @@
+const HAND_ART_ASPECT_RATIO = 8 / 3;
+
 const atlas = (asset, ids, columns, rows) => Object.fromEntries(ids.map((id, index) => {
   const column = index % columns;
   const row = Math.floor(index / columns);
   const x = columns === 1 ? 50 : (column / (columns - 1)) * 100;
   const y = rows === 1 ? 50 : (row / (rows - 1)) * 100;
+  const handY = ((0.5 - (row + 0.5) * HAND_ART_ASPECT_RATIO)
+    / (1 - rows * HAND_ART_ASPECT_RATIO)) * 100;
 
   return [id, {
     asset,
     size: `${columns * 100}% ${rows * 100}%`,
-    position: `${x}% ${y}%`
+    position: `${x}% ${y}%`,
+    handSize: `${columns * 100}% auto`,
+    handPosition: `${x}% ${handY}%`
   }];
 }));
 
@@ -79,5 +85,7 @@ export function applyCardArt(element, cardId) {
   element.style.setProperty("--card-art-image", `url("${art.asset}")`);
   element.style.setProperty("--card-art-size", art.size);
   element.style.setProperty("--card-art-position", art.position);
+  element.style.setProperty("--card-art-hand-size", art.handSize);
+  element.style.setProperty("--card-art-hand-position", art.handPosition);
   return true;
 }

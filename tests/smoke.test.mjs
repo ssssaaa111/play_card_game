@@ -856,6 +856,8 @@ test("card faces prioritize full monster art and illustrated spell trap identiti
   assert.match(css, /\.card\.spell \.art[\s\S]*card-art-spell-trap-atlas\.png/);
   assert.match(css, /\.card\.trap \.art[\s\S]*card-art-spell-trap-atlas\.png/);
   assert.match(css, /background-size: 100% 100%, var\(--card-art-size, 200% auto\);/);
+  assert.match(css, /\.hand \.card\.spell \.art,[\s\S]*--card-art-hand-size/);
+  assert.match(css, /--card-art-hand-position/);
   assert.match(css, /\.card-art-symbol/);
 });
 

@@ -15,6 +15,8 @@ test("every spell and trap has a unique artwork slot", () => {
     const art = cardArtById[card.id];
     assert.ok(art, `${card.id} should have artwork`);
     assert.ok(existsSync(join(rootPath, art.asset)), `${art.asset} should exist`);
+    assert.match(art.handSize, /^\d+% auto$/);
+    assert.match(art.handPosition, /^\d+(?:\.\d+)?% \d+(?:\.\d+)?%$/);
     return `${art.asset}|${art.position}`;
   });
 
@@ -27,4 +29,10 @@ test("artwork mapping only contains spell and trap cards", () => {
     .map((card) => card.id));
 
   assert.deepEqual(Object.keys(cardArtById).sort(), [...spellTrapIds].sort());
+});
+
+test("hand artwork keeps square atlas cells proportional", () => {
+  assert.equal(cardArtById["burst-rune"].handSize, "400% auto");
+  assert.equal(cardArtById["trio-final-counter"].handSize, "200% auto");
+  assert.notEqual(cardArtById["burst-rune"].handPosition, cardArtById["star-breach"].handPosition);
 });
