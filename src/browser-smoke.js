@@ -3307,6 +3307,62 @@ async function runTripleCounterChainSmoke(ctx) {
   setSmokeStatus("passed", "triple-counter-chain");
 }
 
+async function runChainResolutionReviewSmoke(ctx) {
+  setSmokeStatus("running", "chain-resolution-review");
+  await startSmokeDuel(ctx, "tripleCounterChain");
+  const nullifierDefinition = cloneCardById("chain-nullifier");
+  if (!nullifierDefinition) throw new Error("chain-resolution-review: nullifier definition should exist");
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") &&
+      ctx.els.chainText.textContent.includes("反击阵列") &&
+      !ctx.els.chainYes.disabled,
+    `chain-resolution-review: first response opens. ${smokeDebug(ctx)}`,
+    16000
+  );
+  clickSmokeElement(ctx.els.chainYes, "chain-resolution-review: activate chain one");
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") &&
+      ctx.els.chainStack?.querySelectorAll(".chain-stack-entry").length === 3 &&
+      !ctx.els.chainYes.disabled,
+    `chain-resolution-review: third response opens. ${smokeDebug(ctx)}`,
+    12000
+  );
+  clickSmokeElement(ctx.els.chainYes, "chain-resolution-review: activate chain three");
+
+  await waitForSmoke(
+    () => !ctx.els.chainHistoryToggle?.hidden && countGameEvents(ctx.state, "CHAIN_RESOLVED") === 1,
+    `chain-resolution-review: completed chain becomes reviewable. ${smokeDebug(ctx)}`,
+    20000
+  );
+  clickSmokeElementCenter(ctx.els.chainHistoryToggle, "chain-resolution-review: expand history");
+  await waitForSmoke(
+    () => !ctx.els.chainHistoryList.hidden &&
+      ctx.els.chainHistoryList.querySelectorAll(".chain-history-link").length === 3,
+    "chain-resolution-review: history expands"
+  );
+
+  const historyText = ctx.els.chainHistoryList.textContent || "";
+  const historyRows = [...ctx.els.chainHistoryList.querySelectorAll(".chain-history-link")];
+  if (!historyText.includes("结算 CL3 → CL2 → CL1") ||
+      !historyRows[0]?.textContent.includes("CL1") || !historyRows[0]?.textContent.includes("已生效") ||
+      !historyRows[1]?.textContent.includes("CL2") || !historyRows[1]?.textContent.includes("被无效") ||
+      !historyRows[2]?.textContent.includes("CL3") || !historyRows[2]?.textContent.includes("已生效")) {
+    throw new Error(`chain-resolution-review: result history is incomplete: ${historyText}`);
+  }
+
+  const cardLink = ctx.els.chainHistoryList.querySelector('.chain-history-card[data-card-id="chain-nullifier"]');
+  clickSmokeElementCenter(cardLink, "chain-resolution-review: inspect public history card");
+  await assertCardDetailModal(ctx, nullifierDefinition, "chain-resolution-review");
+  clickSmokeElement(ctx.els.zoomClose, "chain-resolution-review: close history detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "chain-resolution-review: detail closes");
+  if (!ctx.state.started || ctx.state.gameOver) {
+    throw new Error(`chain-resolution-review: reviewing history should not interrupt the duel. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", "chain-resolution-review");
+}
+
 async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("running", "mode-auto-end");
   await startSmokeDuel(ctx, "combo");
@@ -3865,6 +3921,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-counter-chain": runAiCounterChainSmoke,
     "player-counter-chain": runPlayerCounterChainSmoke,
     "triple-counter-chain": runTripleCounterChainSmoke,
+    "chain-resolution-review": runChainResolutionReviewSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,

@@ -699,9 +699,10 @@ body[data-duel-turn="ai"] .phase span {
 .timeline {
   min-height: 86px;
   max-height: 20vh;
-  overflow: hidden;
+  position: relative;
+  overflow: visible;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 8px;
   padding: 10px;
   border: 1px solid rgba(246, 189, 96, 0.22);
@@ -709,6 +710,134 @@ body[data-duel-turn="ai"] .phase span {
   background:
     linear-gradient(180deg, rgba(246, 189, 96, 0.06), transparent 34%),
     rgba(0, 0, 0, 0.24);
+}
+
+.chain-history-toggle {
+  width: 100%;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid rgba(183, 148, 244, 0.34);
+  border-radius: 4px;
+  background: rgba(183, 148, 244, 0.08);
+  color: #e8dcff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.chain-history-toggle[hidden],
+.chain-history-list[hidden] {
+  display: none;
+}
+
+.chain-history-toggle:hover,
+.chain-history-toggle:focus-visible,
+.chain-history-toggle[aria-expanded="true"] {
+  border-color: rgba(183, 148, 244, 0.68);
+  background: rgba(183, 148, 244, 0.16);
+  outline: none;
+}
+
+.chain-history-count {
+  min-width: 20px;
+  min-height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff0b8;
+}
+
+.chain-history-list {
+  position: absolute;
+  z-index: 8;
+  left: 8px;
+  right: 8px;
+  bottom: 42px;
+  min-height: 0;
+  max-height: 190px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(183, 148, 244, 0.5);
+  border-radius: 4px;
+  background: rgba(12, 15, 22, 0.98);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.48);
+}
+
+.chain-history-entry {
+  display: grid;
+  gap: 5px;
+  padding: 7px 0;
+  border-top: 1px solid rgba(183, 148, 244, 0.22);
+  border-bottom: 1px solid rgba(183, 148, 244, 0.14);
+}
+
+.chain-history-heading,
+.chain-history-link {
+  min-width: 0;
+  display: grid;
+  align-items: center;
+  gap: 6px;
+}
+
+.chain-history-heading {
+  grid-template-columns: 1fr auto;
+  color: #cdb7ef;
+  font-size: 10px;
+}
+
+.chain-history-link {
+  grid-template-columns: 32px 24px minmax(0, 1fr) auto;
+  font-size: 11px;
+}
+
+.chain-history-index,
+.chain-history-owner {
+  color: #9fb0c4;
+  font-weight: 900;
+}
+
+.chain-history-card {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: #fff0b8;
+  font: inherit;
+  font-weight: 900;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.chain-history-card {
+  cursor: pointer;
+}
+
+button.chain-history-card:hover,
+button.chain-history-card:focus-visible {
+  color: #ffffff;
+  text-decoration: underline;
+  outline: none;
+}
+
+.chain-history-status {
+  color: #9ff0c9;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.chain-history-status.negated {
+  color: #ffb3c0;
 }
 
 .side:not(.enemy) .timeline {

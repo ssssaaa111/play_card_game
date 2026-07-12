@@ -19,6 +19,7 @@ import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js'
 import { buildPreDuelPreview } from './pre-duel-preview.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
 import { buildChainStackEntries, chainResolutionOrderText } from './chain-view.js';
+import { buildChainHistory } from './chain-history.js';
 import { fusionOptionsForCard } from './fusion.js';
 import {
   buildEngineStateFromUiState,
@@ -175,6 +176,7 @@ let pendingAiRevealQueue = [];
 let pendingAiRevealIndex = 0;
 let pendingAiRevealTotal = 0;
 let preDuelDeckExpanded = false;
+let chainHistoryExpanded = false;
 
 const els = {
   phaseText: document.querySelector("#phaseText"),
@@ -219,6 +221,9 @@ const els = {
   timeline: document.querySelector("#timeline"),
   timelineCount: document.querySelector("#timelineCount"),
   timelineAudit: document.querySelector("#timelineAudit"),
+  chainHistoryToggle: document.querySelector("#chainHistoryToggle"),
+  chainHistoryCount: document.querySelector("#chainHistoryCount"),
+  chainHistoryList: document.querySelector("#chainHistoryList"),
   detailName: document.querySelector("#detailName"),
   detailText: document.querySelector("#detailText"),
   battlePreview: document.querySelector("#battlePreview"),
@@ -716,6 +721,7 @@ function startGame() {
   state.timeline = [];
   state.timelineStep = 0;
   state.gameEvents = [];
+  chainHistoryExpanded = false;
   els.modal.classList.remove("show", "setup-modal");
   els.modalRestart.textContent = "再来一局";
   if (els.modalReviewLog) els.modalReviewLog.hidden = true;
@@ -748,6 +754,7 @@ function prepareGame() {
   clearAiReveal(false);
   scenarioHintsVisible = true;
   preDuelDeckExpanded = false;
+  chainHistoryExpanded = false;
   if (BROWSER_MANUAL_SCENARIO && state.scenarioId === BROWSER_MANUAL_SCENARIO) {
     syncSetupControls();
   }
@@ -4899,6 +4906,66 @@ function auditIssueLabel(issue) {
   return labels[issue?.code] || issue?.code || "未知疑点";
 }
 
+function renderChainHistory() {
+  if (!els.chainHistoryToggle || !els.chainHistoryList) return;
+  const histories = buildChainHistory(state.gameEvents, { findCard: findRuntimeCard });
+  const hasHistory = histories.length > 0;
+  els.chainHistoryToggle.hidden = !hasHistory;
+  els.chainHistoryToggle.setAttribute("aria-expanded", String(hasHistory && chainHistoryExpanded));
+  if (els.chainHistoryCount) els.chainHistoryCount.textContent = `${histories.length}`;
+  els.chainHistoryList.hidden = !hasHistory || !chainHistoryExpanded;
+  els.chainHistoryList.replaceChildren();
+  if (!hasHistory || !chainHistoryExpanded) return;
+
+  histories.forEach((history) => {
+    const entry = document.createElement("section");
+    entry.className = "chain-history-entry";
+
+    const heading = document.createElement("div");
+    heading.className = "chain-history-heading";
+    const title = document.createElement("strong");
+    title.textContent = `${history.linkCount} 段连锁`;
+    const order = document.createElement("span");
+    order.textContent = `结算 ${history.resolutionOrder}`;
+    heading.appendChild(title);
+    heading.appendChild(order);
+    entry.appendChild(heading);
+
+    history.links.forEach((link) => {
+      const row = document.createElement("div");
+      row.className = "chain-history-link";
+      row.dataset.chainIndex = `${link.chainIndex}`;
+
+      const index = document.createElement("span");
+      index.className = "chain-history-index";
+      index.textContent = `CL${link.chainIndex}`;
+      const owner = document.createElement("span");
+      owner.className = "chain-history-owner";
+      owner.textContent = link.ownerLabel;
+      const card = document.createElement(link.cardId ? "button" : "span");
+      card.className = "chain-history-card";
+      card.textContent = link.name;
+      if (link.cardId) {
+        card.type = "button";
+        card.dataset.cardId = link.cardId;
+        card.title = `查看 ${link.name} 详情`;
+        card.addEventListener("click", () => openCardDetail(link.cardId));
+      }
+      const status = document.createElement("span");
+      status.className = `chain-history-status ${link.status}`;
+      status.textContent = link.negatedByChainIndex
+        ? `${link.statusLabel} · CL${link.negatedByChainIndex}`
+        : link.statusLabel;
+      row.appendChild(index);
+      row.appendChild(owner);
+      row.appendChild(card);
+      row.appendChild(status);
+      entry.appendChild(row);
+    });
+    els.chainHistoryList.appendChild(entry);
+  });
+}
+
 function renderTimeline() {
   if (!els.timeline) return;
   els.timeline.innerHTML = "";
@@ -4919,6 +4986,7 @@ function renderTimeline() {
       ? "日志审计未发现异常。"
       : audit.issues.map((issue) => `${issue.severity.toUpperCase()} ${issue.code}: ${issue.message}`).join("\n");
   }
+  renderChainHistory();
   state.timeline.forEach((entry) => {
     const item = document.createElement("div");
     item.className = `timeline-item ${entry.kind}`;
@@ -5029,6 +5097,13 @@ els.aiRevealContinue.addEventListener("click", confirmAiRevealContinue);
 els.chainYes.addEventListener("click", confirmTrapChoice);
 els.chainNo.addEventListener("click", () => answerChain(false));
 els.restartBtn.addEventListener("click", prepareGame);
+if (els.chainHistoryToggle) {
+  els.chainHistoryToggle.addEventListener("click", () => {
+    chainHistoryExpanded = !chainHistoryExpanded;
+    renderChainHistory();
+    resetPlayerIdleCountdown();
+  });
+}
 if (els.scenarioHintToggle) {
   els.scenarioHintToggle.addEventListener("click", () => {
     scenarioHintsVisible = !scenarioHintsVisible;

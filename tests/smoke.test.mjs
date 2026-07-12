@@ -663,6 +663,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"fusion-result-choice": runFusionResultChoiceSmoke/);
   assert.match(smoke, /"player-counter-chain": runPlayerCounterChainSmoke/);
   assert.match(smoke, /"triple-counter-chain": runTripleCounterChainSmoke/);
+  assert.match(smoke, /"chain-resolution-review": runChainResolutionReviewSmoke/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /fusionPreviewName/);
   assert.match(smoke, /fusionPreviewStats/);
@@ -790,6 +791,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "player-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
