@@ -12,7 +12,13 @@ test("hand action states use distinct card-type accents", () => {
 });
 
 test("selected hand cards override ready and blocked treatments", () => {
-  assert.match(css, /\.hand \.card\.action-ready\.selected\s*\{[\s\S]*border-color: rgba\(246, 189, 96, 0\.98\);/);
+  assert.match(css, /\.hand \.card\.action-blocked\.selected:hover\s*\{[\s\S]*border-color: rgba\(246, 189, 96, 0\.98\);/);
   assert.match(css, /\.hand \.card\.selected \.action-tag,[\s\S]*color: #fff0b8;/);
-  assert.match(css, /\.hand \.card\.action-ready\.selected[\s\S]*filter: none;/);
+  assert.match(css, /\.hand \.card\.action-blocked\.selected:hover[\s\S]*filter: none;/);
+});
+
+test("blocked hand cards dim artwork without hiding the failure reason", () => {
+  assert.match(css, /\.hand \.card\.action-blocked \.art\s*\{[\s\S]*filter: saturate\(0\.5\) brightness\(0\.62\);/);
+  assert.match(css, /\.hand \.card\.action-blocked \.action-reason\s*\{[\s\S]*color: rgba\(226, 232, 240, 0\.72\);/);
+  assert.match(css, /\.hand \.card\.action-blocked\.selected \.art\s*\{[\s\S]*filter: none;/);
 });
