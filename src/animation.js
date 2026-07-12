@@ -1,3 +1,13 @@
+export function lifeDeltaAnchor(rect = {}) {
+  const left = Number.isFinite(rect.left) ? rect.left : 0;
+  const top = Number.isFinite(rect.top) ? rect.top : 0;
+  const height = Number.isFinite(rect.height) ? rect.height : 0;
+  return {
+    x: left + 12,
+    y: top + height * 0.18
+  };
+}
+
 export function createAnimationController({
   document: doc = globalThis.document,
   window: win = globalThis.window,
@@ -155,11 +165,12 @@ export function createAnimationController({
     const target = panelElement(owner);
     if (!target) return;
     const rect = target.getBoundingClientRect();
+    const anchor = lifeDeltaAnchor(rect);
     const el = doc.createElement("div");
     el.className = `life-delta ${amount < 0 ? "damage" : "heal"}`;
     el.textContent = amount < 0 ? `${amount}` : `+${amount}`;
-    el.style.setProperty("--x", `${rect.left + rect.width * 0.58}px`);
-    el.style.setProperty("--y", `${rect.top + rect.height * 0.18}px`);
+    el.style.setProperty("--x", `${anchor.x}px`);
+    el.style.setProperty("--y", `${anchor.y}px`);
     els.effectLayer.appendChild(el);
     win.setTimeout(() => el.remove(), 1180);
   }
