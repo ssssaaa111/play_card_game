@@ -493,6 +493,17 @@ test("player counter chain scenario exposes a deterministic two-link response", 
   assert.ok(scenario.hints.some((entry) => entry.includes("后进先出")));
 });
 
+test("triple counter chain scenario exposes three deterministic links", () => {
+  const scenario = scenarioSetups.tripleCounterChain;
+
+  assert.deepEqual(scenario.playerField, ["gale-mage"]);
+  assert.deepEqual(scenario.playerTraps, ["counter-array", "chain-nullifier"]);
+  assert.deepEqual(scenario.aiField, ["star-lancer"]);
+  assert.deepEqual(scenario.aiTraps, ["chain-nullifier"]);
+  assert.ok(scenario.objectives.some((entry) => entry.includes("CL3")));
+  assert.ok(scenario.hints.some((entry) => entry.includes("CL3 → CL2 → CL1")));
+});
+
 test("deck presets reference only known cards and have enough cards", () => {
   Object.entries(deckPresets).forEach(([key, preset]) => {
     assert.ok(preset.label, `${key} needs label`);

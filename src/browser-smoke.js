@@ -3233,6 +3233,80 @@ async function runPlayerCounterChainSmoke(ctx) {
   setSmokeStatus("passed", "player-counter-chain");
 }
 
+async function runTripleCounterChainSmoke(ctx) {
+  setSmokeStatus("running", "triple-counter-chain");
+  await startSmokeDuel(ctx, "tripleCounterChain");
+  const nullifierDefinition = cloneCardById("chain-nullifier");
+  const defender = ctx.state.player.field.find((card) => card?.id === "gale-mage");
+  const attacker = ctx.state.ai.field.find((card) => card?.id === "star-lancer");
+  if (!nullifierDefinition || !defender || !attacker ||
+      !ctx.state.player.traps.some((card) => card?.id === "counter-array") ||
+      !ctx.state.player.traps.some((card) => card?.id === "chain-nullifier") ||
+      !ctx.state.ai.traps.some((card) => card?.id === "chain-nullifier")) {
+    throw new Error(`triple-counter-chain: deterministic opening is missing. ${smokeDebug(ctx)}`);
+  }
+  const playerLpBefore = ctx.state.player.lp;
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") &&
+      ctx.els.chainText.textContent.includes("反击阵列") &&
+      !ctx.els.chainYes.disabled,
+    `triple-counter-chain: first response opens. ${smokeDebug(ctx)}`,
+    16000
+  );
+  clickSmokeElement(ctx.els.chainYes, "triple-counter-chain: activate chain one");
+
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") &&
+      ctx.els.chainStack?.querySelectorAll(".chain-stack-entry").length === 3 &&
+      ctx.els.chainStack?.textContent.includes("结算顺序：CL3 → CL2 → CL1") &&
+      !ctx.els.chainYes.disabled,
+    `triple-counter-chain: third response opens. ${smokeDebug(ctx)}`,
+    12000
+  );
+  const stackRows = [...ctx.els.chainStack.querySelectorAll(".chain-stack-entry")]
+    .map((entry) => entry.textContent.replace(/\s+/g, " ").trim());
+  if (!stackRows[0]?.includes("CL1") || !stackRows[0]?.includes("你") || !stackRows[0]?.includes("反击阵列") ||
+      !stackRows[1]?.includes("CL2") || !stackRows[1]?.includes("AI") || !stackRows[1]?.includes("断链裁决") ||
+      !stackRows[2]?.includes("CL3") || !stackRows[2]?.includes("你") || !stackRows[2]?.includes("断链裁决") ||
+      !stackRows[2]?.includes("待发动")) {
+    throw new Error(`triple-counter-chain: visible chain stack is incorrect: ${stackRows.join(" / ")}`);
+  }
+
+  const pendingDetail = ctx.els.chainStack.querySelector('.chain-stack-entry.pending [data-card-id="chain-nullifier"]');
+  clickSmokeElement(pendingDetail, "triple-counter-chain: inspect chain three");
+  await assertCardDetailModal(ctx, nullifierDefinition, "triple-counter-chain");
+  clickSmokeElement(ctx.els.zoomClose, "triple-counter-chain: close chain three detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "triple-counter-chain: detail closes");
+
+  clickSmokeElement(ctx.els.chainYes, "triple-counter-chain: activate chain three");
+  await waitForSmoke(
+    () => !ctx.els.chainModal.classList.contains("show") &&
+      ctx.state.player.grave.some((card) => card?.id === "counter-array") &&
+      ctx.state.player.grave.some((card) => card?.id === "chain-nullifier") &&
+      ctx.state.ai.grave.some((card) => card?.id === "chain-nullifier") &&
+      ctx.state.player.field.some((card) => card?.uid === defender.uid && card.tempAtk === 400) &&
+      ctx.state.ai.field.some((card) => card?.uid === attacker.uid && card.used) &&
+      ctx.state.player.lp === playerLpBefore,
+    `triple-counter-chain: chain three restores chain one and cancels the attack. ${smokeDebug(ctx)}`,
+    20000
+  );
+  if (countGameEvents(ctx.state, "CHAIN_LINK_ADDED") !== 3 ||
+      countGameEvents(ctx.state, "CHAIN_LINK_COMMITTED") !== 3 ||
+      countGameEvents(ctx.state, "EFFECT_NEGATED") !== 1 ||
+      countGameEvents(ctx.state, "EFFECT_SKIPPED") !== 1 ||
+      countGameEvents(ctx.state, "CHAIN_RESOLVED") !== 1 ||
+      countGameEvents(ctx.state, "ATTACK_CANCELED") !== 1) {
+    throw new Error("triple-counter-chain: event chain should contain three links and one restored defense resolution");
+  }
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("断链裁决") && logEntryMessage(entry).includes("连锁无效")) ||
+      !ctx.state.log.some((entry) => logEntryMessage(entry).includes("反击阵列") && logEntryMessage(entry).includes("取消了攻击"))) {
+    throw new Error("triple-counter-chain: battle log should explain the counter-counter outcome");
+  }
+  setSmokeStatus("passed", "triple-counter-chain");
+}
+
 async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("running", "mode-auto-end");
   await startSmokeDuel(ctx, "combo");
@@ -3790,6 +3864,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "chain-weaken-resolution": runChainWeakenResolutionSmoke,
     "ai-counter-chain": runAiCounterChainSmoke,
     "player-counter-chain": runPlayerCounterChainSmoke,
+    "triple-counter-chain": runTripleCounterChainSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,

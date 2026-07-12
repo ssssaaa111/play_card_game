@@ -45,3 +45,11 @@ export function buildChainStackEntries({
 
   return entries;
 }
+
+export function chainResolutionOrderText(entries = []) {
+  return entries
+    .slice()
+    .reverse()
+    .map((entry) => `CL${entry.chainIndex}`)
+    .join(" → ");
+}

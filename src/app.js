@@ -18,7 +18,7 @@ import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import { buildPreDuelPreview } from './pre-duel-preview.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
-import { buildChainStackEntries } from './chain-view.js';
+import { buildChainStackEntries, chainResolutionOrderText } from './chain-view.js';
 import { fusionOptionsForCard } from './fusion.js';
 import {
   buildEngineStateFromUiState,
@@ -2998,6 +2998,12 @@ function renderChainStack(choice = state.pendingTrapChoice) {
     row.appendChild(status);
     els.chainStack.appendChild(row);
   });
+  if (entries.length > 1) {
+    const order = document.createElement("div");
+    order.className = "chain-resolution-order";
+    order.textContent = `结算顺序：${chainResolutionOrderText(entries)}`;
+    els.chainStack.appendChild(order);
+  }
 }
 
 function clearTrapChoiceOptions() {

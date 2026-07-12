@@ -550,6 +550,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /<option value="fusionResultChoice">融合形态选择测试<\/option>/);
   assert.match(html, /<option value="fusionMixedMaterials">混合素材融合测试<\/option>/);
   assert.match(html, /<option value="playerCounterChain">玩家反制连锁<\/option>/);
+  assert.match(html, /<option value="tripleCounterChain">三段反制连锁<\/option>/);
   assert.match(html, /<option value="equipment">装备魔法<\/option>/);
   assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
   assert.match(html, /<option value="protagonistComeback">星魂主角战役 01：逆境觉醒<\/option>/);
@@ -661,6 +662,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"fusion-mixed-materials": runFusionMixedMaterialsSmoke/);
   assert.match(smoke, /"fusion-result-choice": runFusionResultChoiceSmoke/);
   assert.match(smoke, /"player-counter-chain": runPlayerCounterChainSmoke/);
+  assert.match(smoke, /"triple-counter-chain": runTripleCounterChainSmoke/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /fusionPreviewName/);
   assert.match(smoke, /fusionPreviewStats/);
@@ -787,6 +789,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "player-counter-chain"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);

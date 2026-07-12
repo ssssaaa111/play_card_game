@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildChainStackEntries } from "../src/chain-view.js";
+import { buildChainStackEntries, chainResolutionOrderText } from "../src/chain-view.js";
 
 test("builds a public chain stack in engine link order", () => {
   const cards = new Map([
@@ -39,4 +39,15 @@ test("appends the selected response as a pending chain link", () => {
     name: "断链裁决",
     pending: true
   });
+});
+
+test("describes chain resolution in last-in-first-out order", () => {
+  const entries = [
+    { chainIndex: 1 },
+    { chainIndex: 2 },
+    { chainIndex: 3, pending: true }
+  ];
+
+  assert.equal(chainResolutionOrderText(entries), "CL3 → CL2 → CL1");
+  assert.deepEqual(entries.map((entry) => entry.chainIndex), [1, 2, 3]);
 });

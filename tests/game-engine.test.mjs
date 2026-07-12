@@ -4648,6 +4648,78 @@ test("a chain negate trap skips the targeted earlier link during reverse resolut
   assert.ok(!resolveEvents.some((event) => event.type === "DAMAGE_DEALT"));
 });
 
+test("a third chain link can negate the counter and restore the first effect", () => {
+  const state = makeState({
+    cards: [
+      card("player-flare", { type: "trap", trigger: "summonBurn" }),
+      card("ai-nullifier", { ownerId: AI, type: "trap", trigger: "chainNegate" }),
+      card("player-nullifier", { type: "trap", trigger: "chainNegate" })
+    ],
+    player: { spellTrapZone: ["player-flare", "player-nullifier"] },
+    ai: { spellTrapZone: ["ai-nullifier"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.attackDeclaration;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.attackDeclaration,
+    resumeTiming: Timing.battleOpen,
+    triggerEventId: "attack-100"
+  };
+  const engine = new GameEngine(state);
+
+  engine.dispatch({ type: "ADD_CHAIN_LINK", playerId: PLAYER, cardId: "player-flare", effectId: "summonBurn" });
+  engine.dispatch({ type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "player-flare" });
+  engine.dispatch({ type: "PASS_RESPONSE_PRIORITY", playerId: PLAYER, nextPlayerId: AI });
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: AI,
+    cardId: "ai-nullifier",
+    effectId: "chainNegate",
+    targetEffectId: "player-flare"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: "ai-nullifier",
+    targetEffectId: "player-flare"
+  });
+  engine.dispatch({ type: "PASS_RESPONSE_PRIORITY", playerId: AI, nextPlayerId: PLAYER });
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "player-nullifier",
+    effectId: "chainNegate",
+    targetEffectId: "ai-nullifier"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "player-nullifier",
+    targetEffectId: "ai-nullifier"
+  });
+  engine.dispatch({ type: "PASS_RESPONSE_PRIORITY", playerId: PLAYER, nextPlayerId: AI });
+
+  const resolveEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: AI });
+
+  assert.equal(engine.getState().players[AI].lp, 3600);
+  assert.ok(resolveEvents.some((event) =>
+    event.type === "EFFECT_NEGATED" && event.targetEffectId === "ai-nullifier" && event.sourceCardId === "player-nullifier"
+  ));
+  assert.ok(resolveEvents.some((event) =>
+    event.type === "EFFECT_SKIPPED" && event.cardId === "ai-nullifier" && event.reason === "negated"
+  ));
+  assert.ok(!resolveEvents.some((event) => event.type === "EFFECT_SKIPPED" && event.cardId === "player-flare"));
+  assert.deepEqual(
+    resolveEvents.filter((event) => event.type === "CHAIN_LINK_RESOLVED").map((event) => event.cardId),
+    ["player-nullifier", "ai-nullifier", "player-flare"]
+  );
+});
+
 test("only the designated responder can add a trap chain link", () => {
   const state = makeState({
     cards: [card("void-1", { templateId: "void-lock", type: "trap", trigger: "attackNegate" })],

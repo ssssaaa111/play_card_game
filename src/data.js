@@ -625,6 +625,23 @@ export const scenarioSetups = {
     aiHand: [],
     aiDeck: []
   },
+  tripleCounterChain: {
+    label: "三段反制连锁",
+    difficulty: "demo",
+    text: "玩家防御陷阱、AI 反制陷阱和玩家二次反制依次组成三段连锁，用来验证双方连续响应。",
+    goal: "结束回合，在 AI 攻击时发动反击阵列；AI 追加断链裁决后，再发动己方断链裁决作为 CL3。",
+    objectives: ["结束回合并在 AI 攻击时发动反击阵列。", "确认 AI 的断链裁决成为 CL2。", "发动己方断链裁决作为 CL3，让反击阵列最终结算。"],
+    hints: ["CL3 先无效 CL2，因此 CL1 不再被无效。", "响应窗会显示结算顺序：CL3 → CL2 → CL1。"],
+    recommendedLine: ["先发动反击阵列；第二次响应出现时检查三段连锁，再发动己方断链裁决。"],
+    playerHand: [],
+    playerField: ["gale-mage"],
+    playerTraps: ["counter-array", "chain-nullifier"],
+    playerDeck: ["solar-knight"],
+    aiField: ["star-lancer"],
+    aiTraps: ["chain-nullifier"],
+    aiHand: [],
+    aiDeck: []
+  },
   combo: {
     label: "组合魔法",
     text: "我方场上预置火+风，手牌含炎岚合击，用来验证属性组合发动条件。",
