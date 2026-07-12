@@ -653,6 +653,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"tribute-summon": runTributeSummonSmoke/);
   assert.match(smoke, /"tribute-summon-double": runTributeSummonDoubleSmoke/);
   assert.match(smoke, /"divine-summon": runDivineSummonSmoke/);
+  assert.match(smoke, /"trio-tribute-summon": runTrioTributeSummonSmoke/);
   assert.match(smoke, /"divine-guard": runDivineGuardSmoke/);
   assert.match(smoke, /"divine-pierce": runDivinePierceSmoke/);
   assert.match(smoke, /"divine-pressure": runDivinePressureSmoke/);
@@ -758,6 +759,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-summon-double"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "divine-summon"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "trio-tribute-summon"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "divine-guard"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "divine-pierce"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "divine-pressure"\)/);

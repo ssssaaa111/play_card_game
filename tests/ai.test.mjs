@@ -197,6 +197,39 @@ test("scripted pressure AI prioritizes trio pressure bodies over raw generic att
   assert.equal(action.card.id, "trio-moon-warden");
 });
 
+test("AI summon planner skips high-level monsters when tribute material is insufficient", () => {
+  const action = chooseAiSummonAction({
+    hand: [
+      monster({ id: "trio-sun-judicator", name: "sun", atk: 3000, stars: 7, tributeCost: 3 }),
+      monster({ id: "star-lancer", name: "lancer", atk: 1800, stars: 4 })
+    ],
+    field: [monster({ id: "material-1" }), null, null, null, null],
+    aiStyle: "scriptedPressure"
+  });
+
+  assert.equal(action.card.id, "star-lancer");
+  assert.equal(action.tributeCost, 0);
+  assert.equal(action.fieldIndex, 1);
+});
+
+test("AI summon planner can choose a three-tribute god and reuse a full tribute slot", () => {
+  const action = chooseAiSummonAction({
+    hand: [monster({ id: "trio-sun-judicator", name: "sun", atk: 3000, stars: 7, tributeCost: 3 })],
+    field: [
+      monster({ id: "material-1" }),
+      monster({ id: "material-2" }),
+      monster({ id: "material-3" }),
+      monster({ id: "material-4" }),
+      monster({ id: "material-5" })
+    ],
+    aiStyle: "scriptedPressure"
+  });
+
+  assert.equal(action.card.id, "trio-sun-judicator");
+  assert.equal(action.tributeCost, 3);
+  assert.equal(action.fieldIndex, 0);
+});
+
 test("AI defense switch policy is explicit", () => {
   assert.equal(shouldSwitchSummonedMonsterToDefense({
     monster: monster({ atk: 800, def: 1800 }),

@@ -789,6 +789,56 @@ async function runDivineSummonSmoke(ctx) {
   setSmokeStatus("passed", "divine-summon");
 }
 
+async function runTrioTributeSummonSmoke(ctx) {
+  setSmokeStatus("running", "trio-tribute-summon");
+  await startSmokeDuel(ctx, "trioTributeSummon");
+  const trioCard = cloneCardById("trio-sun-judicator");
+  if (!trioCard || trioCard.tributeCost !== 3) {
+    throw new Error("trio-tribute-summon: trio god should declare a three-tribute cost");
+  }
+  const materialIds = ["spark-runner", "lumen-gearlet", "ember-soul-initiate"];
+  if (materialIds.some((cardId) => !fieldCard(ctx.els, "player", cardId))) {
+    throw new Error("trio-tribute-summon: three tribute materials should start on the player field");
+  }
+
+  clickSmokeElement(handCard(ctx.els, "trio-sun-judicator"), "trio-tribute-summon: select trio god");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "trio-tribute-summon: enter tribute selection");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.cost === 3 && ctx.els.choiceConfirmBtn.disabled,
+    "trio-tribute-summon: pending three-tribute selection"
+  );
+  for (const [index, cardId] of materialIds.entries()) {
+    clickSmokeElement(fieldCard(ctx.els, "player", cardId), `trio-tribute-summon: select tribute ${index + 1}`);
+    await waitForSmoke(
+      () => ctx.state.pendingTribute?.selectedIndexes?.length === index + 1,
+      `trio-tribute-summon: tribute ${index + 1} selected`
+    );
+  }
+  if (ctx.els.choiceConfirmBtn.disabled) {
+    throw new Error("trio-tribute-summon: confirm should enable after exactly three tributes");
+  }
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "trio-tribute-summon: confirm summon");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "trio-sun-judicator") &&
+      materialIds.every((cardId) => ctx.state.player.grave.some((card) => card?.id === cardId)) &&
+      !ctx.state.pendingTribute,
+    `trio-tribute-summon: trio god summoned through three tributes. ${smokeDebug(ctx)}`,
+    10000
+  );
+  if (countGameEvents(ctx.state, "CARD_TRIBUTED") !== 3) {
+    throw new Error("trio-tribute-summon: exactly three CARD_TRIBUTED events should be emitted");
+  }
+  await waitForSmoke(() => logCardLink(ctx.els, "trio-sun-judicator"), "trio-tribute-summon: public summon log link");
+  clickSmokeElementCenter(logCardLink(ctx.els, "trio-sun-judicator"), "trio-tribute-summon: inspect summoned god");
+  await assertCardDetailModal(ctx, trioCard, "trio-tribute-summon");
+  if (!ctx.els.cardModal.textContent.includes("召唤需求：3 只祭品")) {
+    throw new Error("trio-tribute-summon: unified detail should show the three-tribute requirement");
+  }
+  clickSmokeElement(ctx.els.zoomClose, "trio-tribute-summon: close detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "trio-tribute-summon: detail closes");
+  setSmokeStatus("passed", "trio-tribute-summon");
+}
+
 async function runDivineGuardSmoke(ctx) {
   setSmokeStatus("running", "divine-guard");
   await startSmokeDuel(ctx, "divineGuard");
@@ -2036,7 +2086,8 @@ function eventReferencesTemplate(event, templateId) {
     event?.cardId,
     event?.sourceCardId,
     event?.attackerCardId,
-    event?.targetCardId
+    event?.targetCardId,
+    event?.summonCardId
   ].some((value) => String(value || "").startsWith(`${templateId}-`) || value === templateId);
 }
 
@@ -2467,6 +2518,14 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     `full duel: prepared trap should trade for the sun ace. ${smokeDebug(ctx)}`,
     12000
   );
+  const aiSunTributes = (ctx.state.gameEvents || []).filter((event) =>
+    event.type === "CARD_TRIBUTED" &&
+    event.playerId === "ai" &&
+    eventReferencesTemplate(event, "trio-sun-judicator")
+  );
+  if (aiSunTributes.length !== 3) {
+    throw new Error(`trio-omega-full-duel: AI sun god should consume exactly three public tributes. ${smokeDebug(ctx)}`);
+  }
 
   await waitForSmoke(
     () => ctx.state.turn === "player" &&
@@ -2773,15 +2832,20 @@ async function runAceAttackSmoke(ctx) {
   await startSmokeDuel(ctx, "ace");
   clickSmokeElement(handCard(ctx.els, "flare-titan"), "熔核巨像手牌");
   await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "熔核巨像中央确认可用");
-  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认召唤熔核巨像");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "进入熔核巨像祭品选择");
+  await waitForSmoke(() => ctx.state.pendingTribute?.cost === 1, "熔核巨像等待一只祭品");
+  clickSmokeElement(fieldCard(ctx.els, "player", "nova-squire"), "选择新星侍从作为祭品");
+  await waitForSmoke(() => !ctx.els.choiceConfirmBtn.disabled, "熔核巨像祭品选择完成");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认祭品召唤熔核巨像");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "flare-titan") &&
+      ctx.state.player.grave.some((card) => card?.id === "nova-squire") &&
       ctx.els.aceOverlay.classList.contains("show") &&
       fieldCard(ctx.els, "player", "flare-titan"),
     "王牌召唤动画与场上怪兽"
   );
-  if (countGameEvents(ctx.state, "MONSTER_SUMMONED") < 1 || countGameEvents(ctx.state, "CARD_MOVED") < 1) {
-    throw new Error("Monster summon must be recorded through engine events");
+  if (countGameEvents(ctx.state, "MONSTER_SUMMONED") < 1 || countGameEvents(ctx.state, "CARD_TRIBUTED") !== 1) {
+    throw new Error("Flare titan tribute summon must be recorded through engine events");
   }
   clickSmokeElement(fieldCard(ctx.els, "player", "flare-titan"), "选择熔核巨像");
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "王牌攻击目标高亮");
@@ -3881,6 +3945,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "tribute-summon": runTributeSummonSmoke,
     "tribute-summon-double": runTributeSummonDoubleSmoke,
     "divine-summon": runDivineSummonSmoke,
+    "trio-tribute-summon": runTrioTributeSummonSmoke,
     "divine-guard": runDivineGuardSmoke,
     "divine-pierce": runDivinePierceSmoke,
     "divine-pressure": runDivinePressureSmoke,

@@ -134,11 +134,19 @@ export function scoreAiMonster(card, aiStyle = "balanced") {
 }
 
 export function chooseAiSummonAction({ hand = [], field = [], aiStyle = "balanced" } = {}) {
-  const fieldIndex = field.findIndex((slot) => !slot);
-  if (fieldIndex < 0) return null;
+  const emptyFieldIndex = field.findIndex((slot) => !slot);
+  const occupiedIndexes = field
+    .map((slot, index) => (slot ? index : -1))
+    .filter((index) => index >= 0);
   const candidates = hand
-    .map((card, index) => ({ card, index, score: scoreAiMonster(card, aiStyle) }))
+    .map((card, index) => {
+      const tributeCost = Math.max(0, Number(card?.tributeCost) || 0);
+      const fieldIndex = emptyFieldIndex >= 0 ? emptyFieldIndex : tributeCost > 0 ? occupiedIndexes[0] ?? -1 : -1;
+      return { card, index, tributeCost, fieldIndex, score: scoreAiMonster(card, aiStyle) };
+    })
     .filter((entry) => entry.card?.type === "monster")
+    .filter((entry) => entry.tributeCost <= occupiedIndexes.length)
+    .filter((entry) => entry.fieldIndex >= 0)
     .sort((a, b) => b.score - a.score || a.index - b.index);
   const pick = candidates[0];
   if (!pick) return null;
@@ -146,7 +154,8 @@ export function chooseAiSummonAction({ hand = [], field = [], aiStyle = "balance
     type: "summon",
     card: pick.card,
     handIndex: pick.index,
-    fieldIndex,
+    fieldIndex: pick.fieldIndex,
+    tributeCost: pick.tributeCost,
     score: pick.score
   };
 }
