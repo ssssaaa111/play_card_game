@@ -7,6 +7,24 @@ function cardIds(list = []) {
   return list.map((card) => card?.id || null);
 }
 
+function assertUniqueRuntimeCards(state, label) {
+  const seen = new Map();
+  for (const owner of ["player", "ai"]) {
+    const duelist = state[owner];
+    for (const zone of ["deck", "hand", "field", "traps", "grave"]) {
+      for (const card of duelist?.[zone] || []) {
+        if (!card) continue;
+        const cardId = card.uid || card.engineId;
+        if (!cardId) throw new Error(`${label}: ${owner}.${zone} contains a card without a runtime id`);
+        if (seen.has(cardId)) {
+          throw new Error(`${label}: ${cardId} exists in both ${seen.get(cardId)} and ${owner}.${zone}`);
+        }
+        seen.set(cardId, `${owner}.${zone}`);
+      }
+    }
+  }
+}
+
 function listText(root) {
   return Array.from(root?.querySelectorAll("li") || []).map((item) => item.textContent || "");
 }
@@ -699,6 +717,139 @@ async function runTributeSummonSmoke(ctx) {
     throw new Error("tribute-summon: public log should mention the tribute summoned monster");
   }
   setSmokeStatus("passed", "tribute-summon");
+}
+
+async function runSummonPositionBasicSmoke(ctx) {
+  setSmokeStatus("running", "summon-position-basic");
+  await startSmokeDuel(ctx, "summonEffects");
+  const card = handCard(ctx.els, "ember-drake");
+  if (!card) throw new Error("summon-position-basic: summon card should be in hand");
+  clickSmokeElement(card, "summon-position-basic: select monster");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 3), "summon-position-basic: choose fourth monster slot");
+  await waitForSmoke(
+    () => ctx.state.player.field[3]?.id === "ember-drake" &&
+      ctx.state.gameEvents.some((event) => event.type === "CARD_MOVED" && event.cardId === ctx.state.player.field[3]?.uid && event.to?.index === 3),
+    "summon-position-basic: monster reaches the selected fixed slot",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "summon-position-basic");
+  setSmokeStatus("passed", "summon-position-basic");
+}
+
+async function runTributeSummonBasicSmoke(ctx) {
+  setSmokeStatus("running", "tribute-summon-basic");
+  await startSmokeDuel(ctx, "tributeSummon");
+  clickSmokeElement(handCard(ctx.els, "solar-vanguard"), "tribute-summon-basic: select monster");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon-basic: enter tribute selection");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 1 && !ctx.els.choiceConfirmBtn.disabled,
+    "tribute-summon-basic: one material selected"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon-basic: confirm summon");
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "solar-vanguard" &&
+      ctx.state.player.grave.some((card) => card?.id === "spark-runner") &&
+      ctx.state.gameEvents.some((event) => event.type === "CARD_TRIBUTED"),
+    "tribute-summon-basic: material leaves and summoned monster enters",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "tribute-summon-basic");
+  setSmokeStatus("passed", "tribute-summon-basic");
+}
+
+async function runFusionSummonBasicSmoke(ctx) {
+  setSmokeStatus("running", "fusion-summon-basic");
+  await startSmokeDuel(ctx, "fusionSummon");
+  clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-summon-basic: select fusion spell");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-summon-basic: enter material selection");
+  await waitForSmoke(() => Boolean(ctx.state.pendingFusion), "fusion-summon-basic: fusion selection opens");
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-summon-basic: select ember material");
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "gale-mage"), "fusion-summon-basic: select gale material");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 2 && !ctx.els.choiceConfirmBtn.disabled,
+    "fusion-summon-basic: exact materials selected"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-summon-basic: confirm fusion");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "flare-gale-archon") &&
+      ctx.state.player.grave.some((card) => card?.id === "ember-drake") &&
+      ctx.state.player.grave.some((card) => card?.id === "gale-mage") &&
+      ctx.state.gameEvents.some((event) => event.type === "FUSION_SUMMONED"),
+    "fusion-summon-basic: materials leave and result enters",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "fusion-summon-basic");
+  setSmokeStatus("passed", "fusion-summon-basic");
+}
+
+async function runTokenSplitBasicSmoke(ctx) {
+  setSmokeStatus("running", "token-split-basic");
+  await startSmokeDuel(ctx, "splitToken");
+  clickSmokeElement(handCard(ctx.els, "spark-split"), "token-split-basic: select split spell");
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "splitToken", "token-split-basic: source selection opens");
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "token-split-basic: select source monster");
+  await waitForSmoke(
+    () => ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length === 2 &&
+      ctx.state.gameEvents.filter((event) => event.type === "CARD_CREATED" && event.originCardId).length === 2 &&
+      auditLogEntries(ctx.state.timeline).ok,
+    "token-split-basic: exactly two linked tokens are created",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "token-split-basic");
+  setSmokeStatus("passed", "token-split-basic");
+}
+
+async function runGraveyardSummonBasicSmoke(ctx) {
+  setSmokeStatus("running", "graveyard-summon-basic");
+  await startSmokeDuel(ctx, "protagonistComeback");
+  const graveCard = ctx.state.player.grave.find((card) => card?.id === "astral-comet-ace");
+  if (!graveCard) throw new Error("graveyard-summon-basic: grave target should exist");
+  clickSmokeElement(handCard(ctx.els, "starwake-recall"), "graveyard-summon-basic: select revive spell");
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    "graveyard-summon-basic: revive confirmation is available"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "graveyard-summon-basic: confirm revive");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.uid === graveCard.uid) &&
+      !ctx.state.player.grave.some((card) => card?.uid === graveCard.uid) &&
+      ctx.state.gameEvents.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === graveCard.uid && event.fromZone === "grave"),
+    "graveyard-summon-basic: exact grave card moves to the field",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "graveyard-summon-basic");
+  setSmokeStatus("passed", "graveyard-summon-basic");
+}
+
+async function runMechanicsRegressionBasicSmoke(ctx) {
+  setSmokeStatus("running", "mechanics-regression-basic");
+  await startSmokeDuel(ctx, "splitToken");
+  if (ctx.state.player.field[0]?.id !== "spark-runner") {
+    throw new Error("mechanics-regression-basic: occupied fixture slot should contain spark-runner");
+  }
+  const summonEventsBefore = countGameEvents(ctx.state, "MONSTER_SUMMONED");
+  clickSmokeElement(handCard(ctx.els, "solar-knight"), "mechanics-regression-basic: select monster");
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), "mechanics-regression-basic: reject occupied slot");
+  if (!ctx.state.player.hand.some((card) => card?.id === "solar-knight") ||
+      ctx.state.player.field[0]?.id !== "spark-runner" ||
+      ctx.state.player.normalSummonsUsed !== 0 ||
+      countGameEvents(ctx.state, "MONSTER_SUMMONED") !== summonEventsBefore) {
+    throw new Error("mechanics-regression-basic: occupied slot caused a partial update");
+  }
+  clickSmokeElement(fieldSlot(ctx.els, "player", 2), "mechanics-regression-basic: choose legal slot");
+  await waitForSmoke(
+    () => ctx.state.player.field[2]?.id === "solar-knight" && !ctx.state.player.hand.some((card) => card?.id === "solar-knight"),
+    "mechanics-regression-basic: legal retry succeeds",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "mechanics-regression-basic");
+  const detail = cloneCardById("solar-knight");
+  await waitForSmoke(() => logCardLink(ctx.els, "solar-knight"), "mechanics-regression-basic: public log link", 6000);
+  clickSmokeElement(logCardLink(ctx.els, "solar-knight"), "mechanics-regression-basic: open log detail");
+  await assertCardDetailModal(ctx, detail, "mechanics-regression-basic-log");
+  clickSmokeElement(ctx.els.zoomClose, "mechanics-regression-basic: close log detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "mechanics-regression-basic: detail closes");
+  setSmokeStatus("passed", "mechanics-regression-basic");
 }
 
 async function runTributeSummonDoubleSmoke(ctx) {
@@ -3948,7 +4099,9 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-shield": runSummonShieldSmoke,
     "summon-shadow-burn": runSummonShadowBurnSmoke,
     "summon-trap-response": runSummonTrapResponseSmoke,
+    "summon-position-basic": runSummonPositionBasicSmoke,
     "tribute-summon": runTributeSummonSmoke,
+    "tribute-summon-basic": runTributeSummonBasicSmoke,
     "tribute-summon-double": runTributeSummonDoubleSmoke,
     "divine-summon": runDivineSummonSmoke,
     "trio-tribute-summon": runTrioTributeSummonSmoke,
@@ -3958,9 +4111,13 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-resistance": runDivineResistanceSmoke,
     "divine-break": runDivineBreakSmoke,
     "fusion-summon": runFusionSummonSmoke,
+    "fusion-summon-basic": runFusionSummonBasicSmoke,
     "fusion-mixed-materials": runFusionMixedMaterialsSmoke,
     "fusion-result-choice": runFusionResultChoiceSmoke,
     "split-token": runSplitTokenSmoke,
+    "token-split-basic": runTokenSplitBasicSmoke,
+    "graveyard-summon-basic": runGraveyardSummonBasicSmoke,
+    "mechanics-regression-basic": runMechanicsRegressionBasicSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,

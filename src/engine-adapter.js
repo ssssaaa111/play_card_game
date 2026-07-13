@@ -152,7 +152,7 @@ function collectCards(cards, ownerId, target) {
       ...card,
       id,
       templateId,
-      ownerId: card.ownerId || ownerId
+      ownerId
     };
   });
 }
@@ -168,6 +168,10 @@ function uiDuelistToEngine(duelist) {
     spellTrapZone: compactCardIds(duelist.traps),
     grave: compactCardIds(duelist.grave),
     banished: [],
+    zoneSlots: {
+      monsterZone: Array.from({ length: MONSTER_ZONE_SIZE }, (_, index) => cardKey(duelist.field[index]) || null),
+      spellTrapZone: Array.from({ length: SPELL_TRAP_ZONE_SIZE }, (_, index) => cardKey(duelist.traps[index]) || null)
+    },
     attacksSkipped: Boolean(duelist.attacksSkipped),
     comboThisTurn: Boolean(duelist.comboThisTurn),
     comboFlags: { ...(duelist.comboFlags || {}) },
@@ -235,6 +239,7 @@ export function buildEngineStateFromUiState(uiState) {
   return {
     cards,
     cardDefinitions,
+    cardDefinitionsComplete: Boolean(uiState.cardDefinitionsComplete),
     players: {
       player: uiDuelistToEngine(uiState.player),
       ai: uiDuelistToEngine(uiState.ai)
@@ -326,6 +331,7 @@ function uiCardFromCreatedEvent(event) {
     engineId: event.cardId,
     ownerId: event.playerId,
     token: Boolean(event.token ?? event.card?.token),
+    isToken: Boolean(event.card?.isToken ?? event.token ?? event.card?.token),
     generated: Boolean(event.card?.generated ?? true),
     used: Boolean(event.card?.used),
     changedMode: Boolean(event.card?.changedMode),
@@ -427,6 +433,10 @@ export function applyUiGameEvents(uiState, events = []) {
     }
     if (event.type === "CARD_CREATED") {
       insertCardIntoUiState(uiState, uiCardFromCreatedEvent(event), event.to || { playerId: event.playerId, zone: "monsterZone" });
+      return;
+    }
+    if (event.type === "TOKEN_REMOVED") {
+      removeCardFromUiState(uiState, event.cardId);
       return;
     }
     if (event.type === "CARD_MOVED") {

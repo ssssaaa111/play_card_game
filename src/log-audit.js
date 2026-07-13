@@ -63,7 +63,7 @@ function pushIssue(issues, code, message, entry, severity = "warning") {
 }
 
 function isRepeatableActionLog(text = "") {
-  return /召唤了|盖放了|抽了 \d+ 张卡/.test(text);
+  return /召唤了|盖放了|抽了 \d+ 张卡|作为衍生物生成/.test(text);
 }
 
 function auditDuplicateNeighbors(entries, issues) {

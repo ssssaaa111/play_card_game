@@ -650,7 +650,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"summon-shield": runSummonShieldSmoke/);
   assert.match(smoke, /"summon-shadow-burn": runSummonShadowBurnSmoke/);
   assert.match(smoke, /"summon-trap-response": runSummonTrapResponseSmoke/);
+  assert.match(smoke, /"summon-position-basic": runSummonPositionBasicSmoke/);
   assert.match(smoke, /"tribute-summon": runTributeSummonSmoke/);
+  assert.match(smoke, /"tribute-summon-basic": runTributeSummonBasicSmoke/);
   assert.match(smoke, /"tribute-summon-double": runTributeSummonDoubleSmoke/);
   assert.match(smoke, /"divine-summon": runDivineSummonSmoke/);
   assert.match(smoke, /"trio-tribute-summon": runTrioTributeSummonSmoke/);
@@ -660,12 +662,16 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"divine-resistance": runDivineResistanceSmoke/);
   assert.match(smoke, /"divine-break": runDivineBreakSmoke/);
   assert.match(smoke, /"fusion-summon": runFusionSummonSmoke/);
+  assert.match(smoke, /"fusion-summon-basic": runFusionSummonBasicSmoke/);
   assert.match(smoke, /"fusion-mixed-materials": runFusionMixedMaterialsSmoke/);
   assert.match(smoke, /"fusion-result-choice": runFusionResultChoiceSmoke/);
   assert.match(smoke, /"player-counter-chain": runPlayerCounterChainSmoke/);
   assert.match(smoke, /"triple-counter-chain": runTripleCounterChainSmoke/);
   assert.match(smoke, /"chain-resolution-review": runChainResolutionReviewSmoke/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
+  assert.match(smoke, /"token-split-basic": runTokenSplitBasicSmoke/);
+  assert.match(smoke, /"graveyard-summon-basic": runGraveyardSummonBasicSmoke/);
+  assert.match(smoke, /"mechanics-regression-basic": runMechanicsRegressionBasicSmoke/);
   assert.match(smoke, /fusionPreviewName/);
   assert.match(smoke, /fusionPreviewStats/);
   assert.match(smoke, /fusionPreviewMaterials/);

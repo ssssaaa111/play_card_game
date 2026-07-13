@@ -57,6 +57,7 @@ const ZONE_LIMITS = Object.freeze({
   monsterZone: MONSTER_ZONE_SIZE,
   spellTrapZone: SPELL_TRAP_ZONE_SIZE
 });
+const FIXED_ZONE_KEYS = Object.freeze(Object.keys(ZONE_LIMITS));
 
 const PHASE_ORDER = Object.freeze([Phase.setup, Phase.draw, Phase.main, Phase.battle, Phase.end]);
 const TIMINGS = new Set(Object.values(Timing));
@@ -381,31 +382,78 @@ export class EffectContext {
 
     const destinationPlayer = requirePlayer(this.#state, to.playerId);
     const destinationZone = requireZone(destinationPlayer, to.zone);
+    const source = from || currentLocations[0] || null;
+    if (isTokenCard(requireCard(this.#state, cardId)) && source?.zone === "monsterZone" && to.zone !== "monsterZone") {
+      this.#releaseContinuousEffectsForMove(cardId, source, { playerId: to.playerId, zone: "removed", index: null });
+      this.#emit("TOKEN_REMOVED", {
+        cardId,
+        playerId: source.playerId,
+        from: source,
+        reason: "move",
+        sourceCardId: null
+      });
+      return;
+    }
     const limit = ZONE_LIMITS[to.zone];
     assertZoneIndexWithinLimit(to.zone, to.index);
+    const destinationIndex = limit
+      ? resolveFixedDestinationIndex(this.#state, to.playerId, to.zone, to.index, cardId)
+      : to.index ?? null;
     const destinationLengthAfterMove = destinationZone.filter((existingCardId) => existingCardId !== cardId).length;
-    if (limit && destinationLengthAfterMove >= limit) {
+    if (limit && destinationLengthAfterMove >= limit && !destinationZone.includes(cardId)) {
       throw new GameRuleError(`${to.zone} is full`);
     }
 
-    const source = from || currentLocations[0] || null;
-    this.#releaseContinuousEffectsForMove(cardId, source, to);
+    const destination = { playerId: to.playerId, zone: to.zone, index: destinationIndex };
+    this.#releaseContinuousEffectsForMove(cardId, source, destination);
     this.#emit("CARD_MOVED", {
       cardId,
       from: source,
-      to: { playerId: to.playerId, zone: to.zone, index: to.index ?? null }
+      to: destination
     });
+  }
+
+  sendCardToGrave(cardId, from, options = {}) {
+    const card = requireCard(this.#state, cardId);
+    if (!isTokenCard(card)) {
+      this.moveCard(cardId, from, { playerId: options.playerId || card.ownerId || from?.playerId, zone: "grave" });
+      return "grave";
+    }
+
+    const locations = findCardLocations(this.#state, cardId);
+    if (from && !locations.some((location) => sameLocation(location, from))) {
+      throw new GameRuleError(`Card ${cardId} is not in ${from.playerId}.${from.zone}`);
+    }
+    const source = from || locations[0] || null;
+    if (!source) {
+      throw new GameRuleError(`Token ${cardId} is not in a game zone`);
+    }
+    this.#releaseContinuousEffectsForMove(cardId, source, { playerId: source.playerId, zone: "removed", index: null });
+    this.#emit("TOKEN_REMOVED", {
+      cardId,
+      playerId: source.playerId,
+      from: source,
+      reason: options.reason || "leave-field",
+      sourceCardId: options.sourceCardId || null
+    });
+    return "removed";
   }
 
   sendMaterialsToGrave(playerId, materials = [], options = {}) {
     requirePlayer(this.#state, playerId);
     const materialCardIds = selectMaterialCardIds(this.#state, playerId, materials);
+    const tokenCardIds = materialCardIds.filter((cardId) => isTokenCard(requireCard(this.#state, cardId)));
     for (const materialCardId of materialCardIds) {
-      this.moveCard(materialCardId, { playerId, zone: "monsterZone" }, { playerId, zone: "grave" });
+      this.sendCardToGrave(materialCardId, { playerId, zone: "monsterZone" }, {
+        playerId,
+        sourceCardId: options.sourceCardId || null,
+        reason: options.purpose || "material"
+      });
     }
     this.#emit("MATERIALS_SENT", {
       playerId,
       materialCardIds,
+      tokenCardIds,
       materials: normalizeMaterialRequirements(materials),
       destination: "grave",
       sourceCardId: options.sourceCardId || null,
@@ -493,12 +541,14 @@ export class EffectContext {
     }
 
     const cardId = nextGeneratedCardId(this.#state, templateId);
+    const index = resolveFixedDestinationIndex(this.#state, playerId, "monsterZone", options.index, null);
     const card = {
       ...clone(template),
       id: cardId,
       templateId,
       ownerId: playerId,
       token: true,
+      isToken: true,
       generated: true,
       used: false,
       changedMode: false,
@@ -514,13 +564,15 @@ export class EffectContext {
       templateId,
       card,
       token: true,
+      originCardId: options.originCardId || null,
       sourceCardId: options.sourceCardId || null,
-      to: { playerId, zone: "monsterZone", index: options.index ?? null }
+      to: { playerId, zone: "monsterZone", index }
     });
     this.#emit("MONSTER_SUMMONED", {
       playerId,
       cardId,
       sourceCardId: options.sourceCardId || cardId,
+      originCardId: options.originCardId || null,
       mode: card.mode,
       used: false,
       changedMode: false,
@@ -595,7 +647,11 @@ export class EffectContext {
         return [];
       }
 
-      this.moveCard(targetCardId, location, { playerId: ownerId, zone: "grave" });
+      this.sendCardToGrave(targetCardId, location, {
+        playerId: ownerId,
+        reason: options.reason || "destroyed",
+        sourceCardId: options.sourceCardId || null
+      });
       this.#emit("CARD_DESTROYED", {
         cardId: targetCardId,
         playerId: ownerId,
@@ -898,6 +954,9 @@ export class GameEngine {
   }
 
   #activateFusionSpell(state, ctx, emit, action, card) {
+    if (action.zone && action.zone !== "monsterZone") {
+      throw new GameRuleError("Fusion monsters can only be summoned to monsterZone");
+    }
     const fusion = fusionDefinitionForAction(card, action);
     const materialCardIds = validateFusionMaterialCardIds(state, action.playerId, fusion, action);
     const summonIndex = fusionSummonIndexForAction(state, action.playerId, materialCardIds, action.index);
@@ -919,11 +978,16 @@ export class GameEngine {
     ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "hand" }, { playerId: action.playerId, zone: "grave" });
     materialCardIds.forEach((materialCardId) => {
       const materialZone = fusionMaterialZone(state, action.playerId, materialCardId);
-      ctx.moveCard(materialCardId, { playerId: action.playerId, zone: materialZone }, { playerId: action.playerId, zone: "grave" });
+      ctx.sendCardToGrave(materialCardId, { playerId: action.playerId, zone: materialZone }, {
+        playerId: action.playerId,
+        sourceCardId: action.cardId,
+        reason: "fusion-material"
+      });
     });
     emit("MATERIALS_SENT", {
       playerId: action.playerId,
       materialCardIds,
+      tokenCardIds: materialCardIds.filter((materialCardId) => !state.cards[materialCardId]),
       materials: fusion.materials,
       destination: "grave",
       sourceCardId: action.cardId,
@@ -1061,6 +1125,9 @@ export class GameEngine {
     requirePhase(state, [Phase.main], action.type);
     const player = requirePlayer(state, action.playerId);
     const card = requireCardInZone(state, action.playerId, "hand", action.cardId);
+    if (action.zone && action.zone !== "monsterZone") {
+      throw new GameRuleError("Monsters can only be summoned to monsterZone");
+    }
     if (card.type !== "monster") {
       throw new GameRuleError(`Card ${action.cardId} is not a monster`);
     }
@@ -1069,6 +1136,7 @@ export class GameEngine {
     const preparedAction = { ...action, rivalId };
     const tributeCost = tributeCostForCard(card);
     const tributeCardIds = validateTributeSummonCost(state, action.playerId, card, action);
+    validateMonsterSummonDestination(state, action.playerId, action.index, tributeCardIds);
     if (player.normalSummonsUsed < 1) {
       emit("NORMAL_SUMMON_USED", {
         playerId: action.playerId,
@@ -1092,12 +1160,18 @@ export class GameEngine {
       phase: state.turn.phase
     });
     tributeCardIds.forEach((tributeCardId) => {
-      ctx.moveCard(tributeCardId, { playerId: action.playerId, zone: "monsterZone" }, { playerId: action.playerId, zone: "grave" });
+      const token = isTokenCard(requireCard(state, tributeCardId));
+      ctx.sendCardToGrave(tributeCardId, { playerId: action.playerId, zone: "monsterZone" }, {
+        playerId: action.playerId,
+        sourceCardId: action.cardId,
+        reason: "tribute"
+      });
       emit("CARD_TRIBUTED", {
         playerId: action.playerId,
         cardId: tributeCardId,
         summonCardId: action.cardId,
-        tributeCost
+        tributeCost,
+        destination: token ? "removed" : "grave"
       });
     });
     ctx.summonMonster(action.playerId, action.cardId, { index: action.index });
@@ -2102,6 +2176,15 @@ export function assertValidGameState(state) {
   if (state.machine.responseWindow && !RESPONSE_WINDOWS.has(state.machine.responseWindow.type)) {
     throw new GameStateValidationError(`Unknown response window ${state.machine.responseWindow.type}`);
   }
+  if (state.machine.responseWindow && !state.players[state.machine.responseWindow.playerId]) {
+    throw new GameStateValidationError("Response window player must exist");
+  }
+  if (state.machine.responseWindow && state.machine.autoEnd) {
+    throw new GameStateValidationError("Response window cannot coexist with auto-end");
+  }
+  if (state.machine.responseWindow && state.machine.actionWindow && state.machine.actionWindow.window !== ActionWindow.response) {
+    throw new GameStateValidationError("Response window requires a response action window");
+  }
   if (state.machine.chain.length > 0) {
     const chainWindow = state.machine.actionWindow?.window;
     if (!state.machine.responseWindow && ![ActionWindow.response, ActionWindow.resolution].includes(chainWindow)) {
@@ -2225,13 +2308,63 @@ export function assertValidGameState(state) {
       }
 
       for (const cardId of cards) {
-        if (!state.cards[cardId]) {
+        if (typeof cardId !== "string" || !cardId) {
+          throw new GameStateValidationError(`${player.id}.${zone} contains an invalid card id`);
+        }
+        const card = state.cards[cardId];
+        if (!card || typeof card !== "object") {
           throw new GameStateValidationError(`${player.id}.${zone} contains missing card ${cardId}`);
         }
         if (seenCards.has(cardId)) {
           throw new GameStateValidationError(`Card ${cardId} exists in multiple zones`);
         }
+        if (card.ownerId && card.ownerId !== player.id) {
+          throw new GameStateValidationError(`Card ${cardId} is in ${player.id}.${zone} but belongs to ${card.ownerId}`);
+        }
+        if (zone === "monsterZone" && card.type !== "monster") {
+          throw new GameStateValidationError(`${player.id}.monsterZone contains non-monster card ${cardId}`);
+        }
+        if (zone === "spellTrapZone" && !["spell", "trap"].includes(card.type)) {
+          throw new GameStateValidationError(`${player.id}.spellTrapZone contains invalid card ${cardId}`);
+        }
+        if (isTokenCard(card) && zone !== "monsterZone") {
+          throw new GameStateValidationError(`Token ${cardId} cannot exist in ${player.id}.${zone}`);
+        }
+        if (state.cardDefinitionsComplete === true) {
+          const templateId = card.templateId || card.id;
+          const definition = state.cardDefinitions?.[templateId];
+          if (!definition) {
+            throw new GameStateValidationError(`Card ${cardId} references missing definition ${templateId}`);
+          }
+          if (definition.token === true && !isTokenCard(card)) {
+            throw new GameStateValidationError(`Token ${cardId} requires an explicit token marker`);
+          }
+        }
         seenCards.set(cardId, { playerId: player.id, zone });
+      }
+    }
+
+    if (player.zoneSlots !== undefined) {
+      if (!player.zoneSlots || typeof player.zoneSlots !== "object") {
+        throw new GameStateValidationError(`${player.id}.zoneSlots must be an object`);
+      }
+      for (const zone of FIXED_ZONE_KEYS) {
+        const slots = player.zoneSlots[zone];
+        const limit = ZONE_LIMITS[zone];
+        if (!Array.isArray(slots) || slots.length !== limit) {
+          throw new GameStateValidationError(`${player.id}.zoneSlots.${zone} must contain exactly ${limit} slots`);
+        }
+        if (slots.some((cardId) => cardId !== null && (typeof cardId !== "string" || !cardId))) {
+          throw new GameStateValidationError(`${player.id}.zoneSlots.${zone} contains an invalid slot value`);
+        }
+        const occupied = slots.filter(Boolean);
+        if (new Set(occupied).size !== occupied.length) {
+          throw new GameStateValidationError(`${player.id}.zoneSlots.${zone} contains a duplicate card`);
+        }
+        const compact = player[zone];
+        if (occupied.length !== compact.length || occupied.some((cardId) => !compact.includes(cardId))) {
+          throw new GameStateValidationError(`${player.id}.zoneSlots.${zone} does not match ${player.id}.${zone}`);
+        }
       }
     }
 
@@ -2256,10 +2389,16 @@ export function applyGameEvent(state, event, options = {}) {
   if (!event?.type) {
     throw new GameRuleError("GameEvent requires a type");
   }
+  for (const player of Object.values(state.players || {})) {
+    ensurePlayerZoneSlots(player);
+  }
 
   switch (event.type) {
     case "CARD_MOVED":
       applyCardMoved(state, event);
+      break;
+    case "TOKEN_REMOVED":
+      applyTokenRemoved(state, event);
       break;
     case "CARD_DESTRUCTION_PREVENTED":
       applyCardDestructionPrevented(state, event);
@@ -2410,7 +2549,7 @@ export function applyGameEvent(state, event, options = {}) {
 }
 
 function applyCardMoved(state, event) {
-  requireCard(state, event.cardId);
+  const card = requireCard(state, event.cardId);
   const locations = findCardLocations(state, event.cardId);
   if (event.from && !locations.some((location) => sameLocation(location, event.from))) {
     throw new GameRuleError(`Card ${event.cardId} is not in ${event.from.playerId}.${event.from.zone}`);
@@ -2418,24 +2557,52 @@ function applyCardMoved(state, event) {
   if (!event.to?.playerId || !event.to?.zone) {
     throw new GameRuleError("CARD_MOVED requires a destination playerId and zone");
   }
-
-  for (const location of locations) {
-    removeFromZone(requirePlayer(state, location.playerId)[location.zone], event.cardId);
+  if (isTokenCard(card) && event.to.zone !== "monsterZone") {
+    throw new GameRuleError(`Token ${event.cardId} must leave play through TOKEN_REMOVED`);
   }
 
   const destinationPlayer = requirePlayer(state, event.to.playerId);
   const destinationZone = requireZone(destinationPlayer, event.to.zone);
   const limit = ZONE_LIMITS[event.to.zone];
   assertZoneIndexWithinLimit(event.to.zone, event.to.index);
-  if (limit && destinationZone.length >= limit) {
+  const destinationIndex = limit
+    ? resolveFixedDestinationIndex(state, event.to.playerId, event.to.zone, event.to.index, event.cardId)
+    : event.to.index ?? null;
+  if (limit && destinationZone.length >= limit && !destinationZone.includes(event.cardId)) {
     throw new GameRuleError(`${event.to.zone} is full`);
   }
 
-  if (Number.isInteger(event.to.index) && event.to.index >= 0 && event.to.index <= destinationZone.length) {
-    destinationZone.splice(event.to.index, 0, event.cardId);
+  for (const location of locations) {
+    const sourcePlayer = requirePlayer(state, location.playerId);
+    removeFromZone(sourcePlayer[location.zone], event.cardId);
+    removeFromFixedZoneSlots(sourcePlayer, location.zone, event.cardId);
+  }
+
+  if (limit) {
+    placeInFixedZoneSlots(destinationPlayer, event.to.zone, event.cardId, destinationIndex);
+    syncCompactFixedZone(destinationPlayer, event.to.zone);
+  } else if (Number.isInteger(destinationIndex) && destinationIndex >= 0 && destinationIndex <= destinationZone.length) {
+    destinationZone.splice(destinationIndex, 0, event.cardId);
   } else {
     destinationZone.push(event.cardId);
   }
+}
+
+function applyTokenRemoved(state, event) {
+  const card = requireCard(state, event.cardId);
+  if (!isTokenCard(card)) {
+    throw new GameRuleError(`Card ${event.cardId} is not a token`);
+  }
+  const locations = findCardLocations(state, event.cardId);
+  if (event.from && !locations.some((location) => sameLocation(location, event.from))) {
+    throw new GameRuleError(`Card ${event.cardId} is not in ${event.from.playerId}.${event.from.zone}`);
+  }
+  for (const location of locations) {
+    const player = requirePlayer(state, location.playerId);
+    removeFromZone(player[location.zone], event.cardId);
+    removeFromFixedZoneSlots(player, location.zone, event.cardId);
+  }
+  delete state.cards[event.cardId];
 }
 
 function applyCardDestructionPrevented(state, event) {
@@ -2459,6 +2626,9 @@ function applyCardCreated(state, event) {
   const destinationZone = requireZone(destinationPlayer, event.to.zone);
   const limit = ZONE_LIMITS[event.to.zone];
   assertZoneIndexWithinLimit(event.to.zone, event.to.index);
+  const destinationIndex = limit
+    ? resolveFixedDestinationIndex(state, event.to.playerId, event.to.zone, event.to.index, null)
+    : event.to.index ?? null;
   if (limit && destinationZone.length >= limit) {
     throw new GameRuleError(`${event.to.zone} is full`);
   }
@@ -2470,8 +2640,11 @@ function applyCardCreated(state, event) {
     ownerId: event.playerId
   };
 
-  if (Number.isInteger(event.to.index) && event.to.index >= 0 && event.to.index <= destinationZone.length) {
-    destinationZone.splice(event.to.index, 0, event.cardId);
+  if (limit) {
+    placeInFixedZoneSlots(destinationPlayer, event.to.zone, event.cardId, destinationIndex);
+    syncCompactFixedZone(destinationPlayer, event.to.zone);
+  } else if (Number.isInteger(destinationIndex) && destinationIndex >= 0 && destinationIndex <= destinationZone.length) {
+    destinationZone.splice(destinationIndex, 0, event.cardId);
   } else {
     destinationZone.push(event.cardId);
   }
@@ -3250,7 +3423,8 @@ function runEffectOperation(operation, ctx, action, card, options = {}) {
         ...source,
         count: operation.count,
         index: operation.index,
-        mode: operation.mode
+        mode: operation.mode,
+        originCardId: action.targetCardId || null
       });
     case "destroyCard":
       return ctx.destroyCard(resolveValue(operation.cardId, action, card), source);
@@ -3721,6 +3895,25 @@ function validateTributeSummonCost(state, playerId, card, action) {
   return tributeCardIds;
 }
 
+function validateMonsterSummonDestination(state, playerId, index = null, leavingCardIds = []) {
+  assertZoneIndexWithinLimit("monsterZone", index);
+  const player = requirePlayer(state, playerId);
+  const slots = fixedZoneSlots(player, "monsterZone");
+  const leaving = new Set(leavingCardIds);
+  if (Number.isInteger(index)) {
+    const occupant = slots[index];
+    if (occupant && !leaving.has(occupant)) {
+      throw new GameRuleError(`${playerId}.monsterZone slot ${index} is occupied`);
+    }
+    return index;
+  }
+  const availableIndex = slots.findIndex((cardId) => !cardId || leaving.has(cardId));
+  if (availableIndex < 0) {
+    throw new GameRuleError("monsterZone is full");
+  }
+  return availableIndex;
+}
+
 function isFusionSummonSpell(card) {
   return card?.type === "spell" && card.effect === "fusionSummon" && Boolean(card.fusion);
 }
@@ -3817,23 +4010,20 @@ function fusionMaterialZone(state, playerId, cardId) {
 function fusionSummonIndexForAction(state, playerId, materialCardIds = [], index = null) {
   if (Number.isInteger(index)) return index;
   const player = requirePlayer(state, playerId);
-  const materialIndex = player.monsterZone.findIndex((cardId) => materialCardIds.includes(cardId));
+  const slots = fixedZoneSlots(player, "monsterZone");
+  const materialIndex = slots.findIndex((cardId) => materialCardIds.includes(cardId));
   if (materialIndex >= 0) return materialIndex;
-  const emptyIndex = player.monsterZone.findIndex((cardId) => !cardId);
+  const emptyIndex = slots.findIndex((cardId) => !cardId);
   if (emptyIndex >= 0) return emptyIndex;
-  return Math.min(player.monsterZone.length, MONSTER_ZONE_SIZE - 1);
+  return MONSTER_ZONE_SIZE - 1;
 }
 
 function validateFusionDestination(state, playerId, materialCardIds = [], index = null) {
-  assertZoneIndexWithinLimit("monsterZone", index);
+  validateMonsterSummonDestination(state, playerId, index, materialCardIds);
   const player = requirePlayer(state, playerId);
   const remaining = player.monsterZone.filter((cardId) => !materialCardIds.includes(cardId));
   if (remaining.length >= MONSTER_ZONE_SIZE) {
     throw new GameRuleError("monsterZone is full");
-  }
-  const occupant = player.monsterZone[index];
-  if (occupant && !materialCardIds.includes(occupant)) {
-    throw new GameRuleError("Fusion destination is occupied");
   }
 }
 
@@ -3901,6 +4091,12 @@ function normalizeState(state) {
     phase: state.turn.phase
   };
   state.abilities = state.abilities && typeof state.abilities === "object" ? state.abilities : {};
+  for (const card of Object.values(state.cards || {})) {
+    if (isTokenCard(card)) {
+      card.token = true;
+      card.isToken = true;
+    }
+  }
   for (const playerId of Object.keys(state.players || {})) {
     state.abilities[playerId] = Array.isArray(state.abilities[playerId]) ? state.abilities[playerId] : [];
     state.players[playerId].attacksSkipped = Boolean(state.players[playerId].attacksSkipped);
@@ -3914,6 +4110,7 @@ function normalizeState(state) {
         : null;
     }
     state.players[playerId].normalSummonsUsed = Math.max(0, Number(state.players[playerId].normalSummonsUsed) || 0);
+    ensurePlayerZoneSlots(state.players[playerId]);
   }
   return state;
 }
@@ -4015,6 +4212,88 @@ function requireZone(player, zone) {
     throw new GameRuleError(`Unknown zone ${zone}`);
   }
   return player[zone];
+}
+
+function isTokenCard(card) {
+  return Boolean(card?.isToken === true || card?.token === true);
+}
+
+function ensurePlayerZoneSlots(player) {
+  player.zoneSlots = player.zoneSlots && typeof player.zoneSlots === "object"
+    ? player.zoneSlots
+    : {};
+  for (const zone of FIXED_ZONE_KEYS) {
+    const limit = ZONE_LIMITS[zone];
+    const existing = player.zoneSlots[zone];
+    if (Array.isArray(existing)) {
+      if (existing.length === limit) {
+        for (let index = 0; index < existing.length; index += 1) {
+          if (existing[index] === undefined) existing[index] = null;
+        }
+      } else {
+        player.zoneSlots[zone] = Array.from({ length: limit }, (_, index) => existing[index] ?? null);
+      }
+      continue;
+    }
+    player.zoneSlots[zone] = Array.from({ length: limit }, (_, index) => player[zone]?.[index] ?? null);
+  }
+  return player.zoneSlots;
+}
+
+function fixedZoneSlots(player, zone) {
+  if (!ZONE_LIMITS[zone]) return null;
+  return ensurePlayerZoneSlots(player)[zone];
+}
+
+function resolveFixedDestinationIndex(state, playerId, zone, requestedIndex = null, movingCardId = null) {
+  const player = requirePlayer(state, playerId);
+  const slots = fixedZoneSlots(player, zone);
+  if (!slots) return requestedIndex ?? null;
+  assertZoneIndexWithinLimit(zone, requestedIndex);
+
+  if (Number.isInteger(requestedIndex)) {
+    const occupant = slots[requestedIndex];
+    if (occupant && occupant !== movingCardId) {
+      throw new GameRuleError(`${playerId}.${zone} slot ${requestedIndex} is occupied`);
+    }
+    return requestedIndex;
+  }
+
+  if (movingCardId) {
+    const currentIndex = slots.indexOf(movingCardId);
+    if (currentIndex >= 0) return currentIndex;
+  }
+  const emptyIndex = slots.findIndex((cardId) => !cardId);
+  if (emptyIndex < 0) {
+    throw new GameRuleError(`${zone} is full`);
+  }
+  return emptyIndex;
+}
+
+function removeFromFixedZoneSlots(player, zone, cardId) {
+  const slots = ZONE_LIMITS[zone] ? fixedZoneSlots(player, zone) : null;
+  if (!slots) return;
+  for (let index = 0; index < slots.length; index += 1) {
+    if (slots[index] === cardId) slots[index] = null;
+  }
+}
+
+function placeInFixedZoneSlots(player, zone, cardId, index) {
+  const slots = fixedZoneSlots(player, zone);
+  if (!slots || !Number.isInteger(index)) {
+    throw new GameRuleError(`${zone} requires a fixed destination index`);
+  }
+  if (slots[index] && slots[index] !== cardId) {
+    throw new GameRuleError(`${player.id}.${zone} slot ${index} is occupied`);
+  }
+  removeFromFixedZoneSlots(player, zone, cardId);
+  slots[index] = cardId;
+}
+
+function syncCompactFixedZone(player, zone) {
+  const cards = requireZone(player, zone);
+  const slots = fixedZoneSlots(player, zone);
+  cards.splice(0, cards.length, ...slots.filter(Boolean));
 }
 
 function assertZoneIndexWithinLimit(zone, index) {

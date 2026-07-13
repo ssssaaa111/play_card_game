@@ -33,7 +33,9 @@ test("allows repeatable gameplay actions with identical logs", () => {
     { step: 1, text: "AI 召唤了 星轨枪兵。" },
     { step: 2, text: "AI 召唤了 星轨枪兵。" },
     { step: 3, text: "AI 抽了 1 张卡。" },
-    { step: 4, text: "AI 抽了 1 张卡。" }
+    { step: 4, text: "AI 抽了 1 张卡。" },
+    { step: 5, text: "星火衍生体 因 星火分裂 作为衍生物生成。" },
+    { step: 6, text: "星火衍生体 因 星火分裂 作为衍生物生成。" }
   ]);
 
   assert.equal(audit.ok, true);
