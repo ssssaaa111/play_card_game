@@ -37,3 +37,41 @@ test("field monsters expose a compact fixed-height state rail", () => {
   assert.match(css, /\.field-monster-card\.attack-ready/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field-monster-card \.stats\s*\{[\s\S]*grid-template-columns: 1fr;/);
 });
+
+test("short desktop layouts reserve enough height for both field rows", () => {
+  const css = read("styles.css");
+
+  assert.match(css, /#app\s*\{[\s\S]*grid-template-rows: auto minmax\(360px, 1fr\) clamp\(190px, 26vh, 224px\);/);
+  assert.match(css, /\.field\s*\{[\s\S]*grid-template-rows: minmax\(104px, 1fr\)[\s\S]*transform-style: flat;/);
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*grid-template-rows: auto minmax\(360px, 1fr\) 190px;/);
+});
+
+test("field support cards stay inside their compact spell trap rows", () => {
+  const css = read("styles.css");
+
+  assert.match(css, /\.trap-slot\s*\{[\s\S]*overflow: hidden;/);
+  assert.match(css, /\.trap-slot \.card\s*\{[\s\S]*height: 100%;[\s\S]*aspect-ratio: auto;[\s\S]*overflow: hidden;/);
+});
+
+test("short desktop status columns keep the player life panel on screen", () => {
+  const css = read("styles.css");
+
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*\.side\s*\{[\s\S]*align-content: start;/);
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*\.side:not\(\.enemy\)\s*\{[\s\S]*grid-template-rows: auto auto 60px minmax\(72px, 1fr\);/);
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*\.profile-stats\s*\{[\s\S]*white-space: nowrap;/);
+});
+
+test("mobile duel commands use fixed columns without label wrapping", () => {
+  const css = read("styles.css");
+
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.actions\s*\{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.btn\s*\{[\s\S]*white-space: nowrap;/);
+});
+
+test("mobile field tracks preserve both monster stats and horizontal support names", () => {
+  const css = read("styles.css");
+
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field\s*\{[\s\S]*grid-template-rows: 170px 84px auto 84px 170px;/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field-monster-card\s*\{[\s\S]*grid-template-rows: 18px minmax\(42px, 1fr\) 15px 36px;/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.trap-slot \.card\.field-support-card \.card-name\s*\{[\s\S]*white-space: nowrap;/);
+});
