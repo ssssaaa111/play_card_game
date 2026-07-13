@@ -816,7 +816,9 @@ test("skipped attack lock is visible on field cards", () => {
   const css = readProjectFile("styles.css");
 
   assert.match(app, /const attacksLocked = owner === "player" && state\.player\.attacksSkipped/);
-  assert.match(app, /renderCardElement\(document, card, \{ asset: monsterAsset\(card\), attacksLocked \}\)/);
+  assert.match(app, /const attackReady = card\.type === "monster"/);
+  assert.match(app, /showStateRail: card\.type === "monster"/);
+  assert.match(app, /cardEl\.classList\.toggle\("attack-ready", attackReady\)/);
   assert.match(app, /cardEl\.classList\.toggle\("attack-locked", attacksLocked\)/);
   assert.match(css, /\.card\.attack-locked/);
   assert.match(css, /\.slot\.attack-target/);
@@ -850,7 +852,7 @@ test("browser test attacks preserve production timing and field portraits stay v
   assert.match(app, /window\.setTimeout\(resolve, ms\)/);
   assert.doesNotMatch(app, /BROWSER_TEST_SLEEP_CAP_MS/);
   assert.doesNotMatch(app, /!BROWSER_TEST_MODE\) await sleep/);
-  assert.match(css, /\.field-monster-card\s*\{[\s\S]*height: 100%;[\s\S]*grid-template-rows: auto minmax\(42px, 1fr\) auto;/);
+  assert.match(css, /\.field-monster-card\s*\{[\s\S]*height: 100%;[\s\S]*grid-template-rows: auto minmax\(42px, 1fr\) 18px auto;/);
   assert.match(css, /\.field-monster-card \.art\s*\{[\s\S]*overflow: hidden;[\s\S]*isolation: isolate;/);
   assert.match(css, /\.field-monster-card \.monster-projection\s*\{[\s\S]*width: 100%;[\s\S]*height: 100%;/);
   assert.match(css, /\.field-monster-card \.card-text\s*\{[\s\S]*display: none;/);

@@ -45,10 +45,11 @@
                 <span id="aiName">影刃 AI</span>
                 <span class="life-caption">LP</span>
               </div>
-              <div class="life-bar">
+              <div class="life-bar" id="aiLifeBar">
                 <div class="life-fill" id="aiLife"></div>
                 <span class="life-value" id="aiLp">4000 / 4000</span>
               </div>
+              <div class="vital-status" id="aiVitalStatus" aria-live="polite"></div>
               <div class="skill-line" id="aiSkill"></div>
             </div>
           </div>
@@ -92,10 +93,11 @@
                 <span id="playerName">你</span>
                 <span class="life-caption">LP</span>
               </div>
-              <div class="life-bar">
+              <div class="life-bar" id="playerLifeBar">
                 <div class="life-fill" id="playerLife"></div>
                 <span class="life-value" id="playerLp">4000 / 4000</span>
               </div>
+              <div class="vital-status" id="playerVitalStatus" aria-live="polite"></div>
               <div class="skill-line" id="playerSkill"></div>
               <div class="profile-stats" id="profileStats"></div>
             </div>

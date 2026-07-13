@@ -595,8 +595,86 @@ body[data-duel-turn="ai"] .phase span {
   background: linear-gradient(90deg, var(--red), var(--gold));
 }
 
+.life-bar[data-tone="warning"] {
+  border-color: rgba(246, 189, 96, 0.52);
+}
+
+.life-bar[data-tone="warning"] .life-fill {
+  background: linear-gradient(90deg, #d7a43f, var(--gold));
+}
+
+.life-bar[data-tone="critical"] {
+  border-color: rgba(239, 71, 111, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(239, 71, 111, 0.16), 0 0 14px rgba(239, 71, 111, 0.14);
+}
+
+.life-bar[data-tone="critical"] .life-fill,
+.enemy .life-bar[data-tone="critical"] .life-fill {
+  background: linear-gradient(90deg, #8d263f, var(--red));
+}
+
+.player-card[data-life-tone="critical"] {
+  box-shadow: inset 3px 0 0 rgba(239, 71, 111, 0.72), inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.vital-status {
+  min-height: 18px;
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.vital-chip {
+  flex: 0 0 auto;
+  min-height: 17px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  background: rgba(5, 8, 13, 0.72);
+  color: rgba(222, 231, 241, 0.7);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.vital-chip.turn {
+  border-color: rgba(84, 210, 210, 0.5);
+  color: #bffafa;
+}
+
+.enemy .vital-chip.turn {
+  border-color: rgba(239, 71, 111, 0.52);
+  color: #ffc2ce;
+}
+
+.vital-chip.shield {
+  border-color: rgba(84, 210, 210, 0.38);
+  color: #b8e9ff;
+}
+
+.vital-chip.resource {
+  border-color: rgba(183, 148, 244, 0.42);
+  color: #e2d5ff;
+}
+
+.vital-chip.warning {
+  border-color: rgba(246, 189, 96, 0.48);
+  color: #ffe3a0;
+}
+
+.vital-chip.critical {
+  border-color: rgba(239, 71, 111, 0.62);
+  background: rgba(76, 18, 32, 0.72);
+  color: #ffbdca;
+}
+
 .skill-line {
-  margin-top: 8px;
+  margin-top: 6px;
   padding: 8px 9px;
   border: 1px solid rgba(246, 189, 96, 0.26);
   border-radius: 4px;
@@ -1468,7 +1546,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   overflow: visible;
   max-height: none;
   aspect-ratio: auto;
-  grid-template-rows: auto minmax(42px, 1fr) auto;
+  grid-template-rows: auto minmax(42px, 1fr) 18px auto;
   gap: 4px;
   padding: 6px;
   transform: none;
@@ -1478,6 +1556,31 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .field-monster-card:hover {
   transform: translateY(-2px);
+}
+
+.field-monster-card.attack-ready {
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.82);
+  box-shadow:
+    inset 0 -3px 0 rgba(var(--zone-accent, 84, 210, 210), 0.7),
+    0 0 0 1px rgba(var(--zone-accent, 84, 210, 210), 0.18),
+    0 16px 30px rgba(0, 0, 0, 0.46);
+}
+
+.field-monster-card.used {
+  filter: saturate(0.52) brightness(0.76);
+}
+
+.field-monster-card.enhanced {
+  box-shadow: inset 3px 0 0 rgba(84, 210, 210, 0.68), 0 16px 30px rgba(0, 0, 0, 0.46);
+}
+
+.field-monster-card.weakened {
+  box-shadow: inset 3px 0 0 rgba(239, 71, 111, 0.72), 0 16px 30px rgba(0, 0, 0, 0.46);
+}
+
+.field-monster-card.protected {
+  outline: 1px solid rgba(246, 189, 96, 0.42);
+  outline-offset: -4px;
 }
 
 .field-monster-card::after {
@@ -1594,6 +1697,67 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   line-height: 1.15;
   text-align: center;
   pointer-events: none;
+}
+
+.card-state-rail {
+  position: relative;
+  z-index: 5;
+  min-width: 0;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.card-state-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  background: rgba(6, 9, 14, 0.86);
+  color: rgba(222, 231, 241, 0.7);
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-state-chip.ready {
+  border-color: rgba(84, 210, 210, 0.52);
+  color: #bffafa;
+}
+
+.card-state-chip.spent,
+.card-state-chip.locked {
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(222, 231, 241, 0.52);
+}
+
+.card-state-chip.defense {
+  border-color: rgba(116, 174, 232, 0.48);
+  color: #c6e4ff;
+}
+
+.card-state-chip.buff {
+  border-color: rgba(84, 210, 210, 0.5);
+  color: #aef0dc;
+}
+
+.card-state-chip.debuff {
+  border-color: rgba(239, 71, 111, 0.52);
+  color: #ffb5c3;
+}
+
+.card-state-chip.guard {
+  border-color: rgba(246, 189, 96, 0.5);
+  color: #ffe3a0;
 }
 
 .monster-projection {
@@ -4755,6 +4919,18 @@ button.chain-stack-card:focus-visible {
 
   .field-monster-card .art {
     min-height: 56px;
+  }
+
+  .field-monster-card .stats {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    font-size: 8px;
+  }
+
+  .field-monster-card .stat {
+    min-height: 16px;
+    padding: 1px 2px;
+    white-space: nowrap;
   }
 
   .card-text {

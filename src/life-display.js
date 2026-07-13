@@ -5,12 +5,15 @@ export function buildLifeDisplay(value, maximum = 4000) {
     : 0;
   const current = Math.round(safeValue);
   const max = Math.round(safeMaximum);
+  const percent = (safeValue / safeMaximum) * 100;
+  const tone = percent <= 25 ? "critical" : percent <= 50 ? "warning" : "stable";
 
   return {
     current,
     max,
     text: `${current} / ${max}`,
     ariaLabel: `生命值 ${current} / ${max}`,
-    percent: (safeValue / safeMaximum) * 100
+    percent,
+    tone
   };
 }

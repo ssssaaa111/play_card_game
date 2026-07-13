@@ -195,6 +195,10 @@ const els = {
   restartBtn: document.querySelector("#restartBtn"),
   playerLp: document.querySelector("#playerLp"),
   aiLp: document.querySelector("#aiLp"),
+  playerLifeBar: document.querySelector("#playerLifeBar"),
+  aiLifeBar: document.querySelector("#aiLifeBar"),
+  playerVitalStatus: document.querySelector("#playerVitalStatus"),
+  aiVitalStatus: document.querySelector("#aiVitalStatus"),
   playerName: document.querySelector("#playerName"),
   aiName: document.querySelector("#aiName"),
   playerSkill: document.querySelector("#playerSkill"),
@@ -4417,12 +4421,34 @@ function renderCharacterPanel(duelist, profile, nameEl, skillEl) {
     nameEl.textContent = duelist.owner === "player" ? `${profile.name}（你）` : profile.name;
   }
   if (skillEl) {
-    const status = [
-      duelist.shield > 0 ? `护盾 ${duelist.shield}` : "",
-      duelist.extraSummon > 0 ? `额外召唤 ${duelist.extraSummon}` : ""
-    ].filter(Boolean).join(" / ");
-    skillEl.innerHTML = `<strong>${profile.skill}</strong>：${profile.text}${status ? ` ${status}` : ""}`;
+    skillEl.innerHTML = `<strong>${profile.skill}</strong>：${profile.text}`;
   }
+}
+
+function renderVitalStatus(duelist, root, lifeDisplay, activeTurn) {
+  if (!root) return;
+  const turnLabel = state.paused
+    ? "已暂停"
+    : activeTurn === duelist.owner
+      ? (duelist.owner === "player" ? "你的回合" : "对手行动")
+      : "待机";
+  const items = [
+    { label: turnLabel, tone: state.paused ? "idle" : activeTurn === duelist.owner ? "turn" : "idle" },
+    duelist.shield > 0 ? { label: `护盾 ${duelist.shield}`, tone: "shield" } : null,
+    duelist.extraSummon > 0 ? { label: `额外召唤 ${duelist.extraSummon}`, tone: "resource" } : null,
+    lifeDisplay.tone === "critical"
+      ? { label: "生命危急", tone: "critical" }
+      : lifeDisplay.tone === "warning"
+        ? { label: "生命警戒", tone: "warning" }
+        : null
+  ].filter(Boolean);
+
+  root.replaceChildren(...items.map((item) => {
+    const chip = document.createElement("span");
+    chip.className = `vital-chip ${item.tone}`;
+    chip.textContent = item.label;
+    return chip;
+  }));
 }
 
 function render(animationKey = "") {
@@ -4521,6 +4547,12 @@ function render(animationKey = "") {
   els.aiLp.setAttribute("aria-label", aiLife.ariaLabel);
   els.playerLife.style.width = `${playerLife.percent}%`;
   els.aiLife.style.width = `${aiLife.percent}%`;
+  els.playerLifeBar.dataset.tone = playerLife.tone;
+  els.aiLifeBar.dataset.tone = aiLife.tone;
+  els.playerPanel.dataset.lifeTone = playerLife.tone;
+  els.aiPanel.dataset.lifeTone = aiLife.tone;
+  renderVitalStatus(state.player, els.playerVitalStatus, playerLife, activeTurn);
+  renderVitalStatus(state.ai, els.aiVitalStatus, aiLife, activeTurn);
   els.playerDeckCount.textContent = state.player.deck.length;
   els.aiDeckCount.textContent = state.ai.deck.length;
   els.playerGraveCount.textContent = state.player.grave.length;
@@ -4630,13 +4662,31 @@ function renderField(root, duelist, owner, animationKey) {
     }
     if (card) {
       const attacksLocked = owner === "player" && state.player.attacksSkipped && card.type === "monster" && !card.used && card.mode !== "defense";
-      const cardEl = renderCardElement(document, card, { asset: monsterAsset(card), attacksLocked });
+      const attackReady = card.type === "monster"
+        && state.started
+        && !state.paused
+        && !state.gameOver
+        && state.turn === owner
+        && state.phase === PHASES.battle
+        && card.mode !== "defense"
+        && !card.used
+        && !attacksLocked;
+      const cardEl = renderCardElement(document, card, {
+        asset: monsterAsset(card),
+        attacksLocked,
+        attackReady,
+        showStateRail: card.type === "monster"
+      });
       cardEl.dataset.zone = `${owner}-field`;
       if (card.type === "monster") cardEl.classList.add("field-monster-card");
       cardEl.classList.toggle("selected", state.selected?.zone === "playerField" && state.selected.index === index && owner === "player");
       cardEl.classList.toggle("used", card.used);
+      cardEl.classList.toggle("attack-ready", attackReady);
       cardEl.classList.toggle("attack-locked", attacksLocked);
       cardEl.classList.toggle("defense", card.mode === "defense");
+      cardEl.classList.toggle("enhanced", card.tempAtk > 0 || card.tempDef > 0);
+      cardEl.classList.toggle("weakened", card.tempAtk < 0 || card.tempDef < 0 || card.battleWear > 0);
+      cardEl.classList.toggle("protected", Boolean(card.destructionProtection && !card.destructionProtectionUsed));
       cardEl.classList.toggle("targetable", targetable);
       cardEl.classList.toggle("attack-target", attackTargetable);
       cardEl.classList.toggle("tribute-candidate", materialCandidate);

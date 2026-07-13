@@ -9,7 +9,8 @@ test("life display keeps the exact current and maximum values visible", () => {
     max: 4000,
     text: "3850 / 4000",
     ariaLabel: "生命值 3850 / 4000",
-    percent: 96.25
+    percent: 96.25,
+    tone: "stable"
   });
 });
 
@@ -17,4 +18,10 @@ test("life display clamps invalid or out-of-range values", () => {
   assert.equal(buildLifeDisplay(Number.NaN, 4000).text, "0 / 4000");
   assert.equal(buildLifeDisplay(-200, 4000).percent, 0);
   assert.equal(buildLifeDisplay(4200, 4000).percent, 100);
+});
+
+test("life display exposes stable warning and critical HUD tones", () => {
+  assert.equal(buildLifeDisplay(3000, 4000).tone, "stable");
+  assert.equal(buildLifeDisplay(2000, 4000).tone, "warning");
+  assert.equal(buildLifeDisplay(1000, 4000).tone, "critical");
 });
