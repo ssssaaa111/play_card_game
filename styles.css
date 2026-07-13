@@ -1211,7 +1211,7 @@ button.chain-history-card:focus-visible {
 }
 
 .trap-slot.empty::after {
-  content: "陷阱区";
+  content: "魔陷区";
 }
 
 .trap-slot .card {
@@ -1221,7 +1221,7 @@ button.chain-history-card:focus-visible {
   padding: 4px;
 }
 
-.trap-slot .card.player-trap {
+.trap-slot .card.field-support-card {
   width: min(100%, 92px);
   height: 100%;
   max-height: 86px;
@@ -1229,52 +1229,113 @@ button.chain-history-card:focus-visible {
   aspect-ratio: auto;
   grid-template-rows: auto 1fr;
   overflow: hidden;
-  border-color: rgba(183, 148, 244, 0.46);
+  border-color: rgba(var(--support-rgb, 183, 148, 244), 0.46);
   background:
-    linear-gradient(180deg, rgba(183, 148, 244, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(var(--support-rgb, 183, 148, 244), 0.08), transparent 42%),
     linear-gradient(160deg, #291d34, #10131b 68%);
-  box-shadow: inset 0 -3px 0 rgba(183, 148, 244, 0.42), 0 8px 18px rgba(0, 0, 0, 0.32);
+  box-shadow: inset 0 -3px 0 rgba(var(--support-rgb, 183, 148, 244), 0.42), 0 8px 18px rgba(0, 0, 0, 0.32);
 }
 
-.trap-slot .card.player-trap .card-text,
-.trap-slot .card.player-trap .stats {
+.trap-slot .card.field-support-card .card-text,
+.trap-slot .card.field-support-card .stats {
   display: none;
 }
 
-.trap-slot .card.player-trap .art {
+.trap-slot .card.field-support-card .art {
   min-height: 34px;
   font-size: 22px;
+  filter: saturate(0.88) brightness(0.82);
+}
+
+.trap-slot .card.player-trap .art {
   filter: saturate(0.82) brightness(0.78);
 }
 
-.trap-slot .card.player-trap .card-name {
+.trap-slot .card.field-support-card .card-name {
   font-size: 11px;
   text-align: center;
 }
 
-.trap-slot:has(.card.player-trap) {
-  border-color: rgba(183, 148, 244, 0.38);
+.trap-slot:has(.card.field-support-card) {
+  border-color: rgba(var(--support-rgb, 183, 148, 244), 0.38);
   background:
-    radial-gradient(ellipse at 50% 100%, rgba(183, 148, 244, 0.13), transparent 62%),
+    radial-gradient(ellipse at 50% 100%, rgba(var(--support-rgb, 183, 148, 244), 0.13), transparent 62%),
     rgba(8, 10, 16, 0.58);
 }
 
-.trap-slot .card.player-trap:hover {
+.trap-slot .card.field-support-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(183, 148, 244, 0.68);
-  box-shadow: inset 0 -3px 0 rgba(183, 148, 244, 0.56), 0 10px 20px rgba(0, 0, 0, 0.36);
+  border-color: rgba(var(--support-rgb, 183, 148, 244), 0.68);
+  box-shadow: inset 0 -3px 0 rgba(var(--support-rgb, 183, 148, 244), 0.56), 0 10px 20px rgba(0, 0, 0, 0.36);
 }
 
-.trap-slot.trap-response .card.player-trap {
+.trap-slot.support-armed {
+  --support-rgb: 183, 148, 244;
+}
+
+.trap-slot.support-active {
+  --support-rgb: 84, 210, 210;
+}
+
+.trap-slot.support-response {
+  --support-rgb: 183, 148, 244;
+}
+
+.trap-slot.support-selected,
+.trap-slot.support-targeting {
+  --support-rgb: 246, 189, 96;
+}
+
+.trap-slot .card.player-spell {
+  background:
+    linear-gradient(180deg, rgba(84, 210, 210, 0.1), transparent 42%),
+    linear-gradient(160deg, #172c32, #10131b 68%);
+}
+
+.support-state-chip {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  z-index: 4;
+  min-width: 38px;
+  height: 17px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 5px;
+  border: 1px solid rgba(var(--support-rgb, 183, 148, 244), 0.44);
+  border-radius: 2px;
+  background: rgba(6, 8, 13, 0.88);
+  color: rgba(237, 242, 247, 0.78);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.support-state-chip.active {
+  color: #baf7f1;
+}
+
+.support-state-chip.response {
+  color: #e3d5ff;
+}
+
+.support-state-chip.selected,
+.support-state-chip.targeting {
+  color: var(--gold);
+}
+
+.trap-slot.trap-response .card.field-support-card {
   border-color: rgba(183, 148, 244, 0.98);
   box-shadow: inset 0 -3px 0 rgba(183, 148, 244, 0.92), 0 0 26px rgba(183, 148, 244, 0.38);
 }
 
-.trap-slot.trap-response .card.player-trap .art {
+.trap-slot.trap-response .card.field-support-card .art {
   filter: saturate(1.08) brightness(1.04);
 }
 
-.trap-slot.trap-response-selected .card.player-trap {
+.trap-slot.trap-response-selected .card.field-support-card {
   border-color: rgba(246, 189, 96, 0.98);
   box-shadow: inset 0 -3px 0 rgba(246, 189, 96, 0.94), 0 0 30px rgba(246, 189, 96, 0.4);
 }
@@ -1344,8 +1405,8 @@ body[data-duel-turn="player"] #playerTraps .trap-slot {
   border-color: rgba(84, 210, 210, 0.34);
 }
 
-body[data-duel-turn="player"] #playerTraps .trap-slot:has(.card.player-trap) {
-  border-color: rgba(183, 148, 244, 0.44);
+body[data-duel-turn="player"] #playerTraps .trap-slot:has(.card.field-support-card) {
+  border-color: rgba(var(--support-rgb, 183, 148, 244), 0.44);
 }
 
 body[data-duel-turn="player"] #playerTraps .trap-slot.trap-response {
@@ -1402,7 +1463,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 }
 
 .slot.targetable::after,
-.trap-slot.targetable::after {
+.trap-slot.targetable:not(:has(.card.field-support-card))::after {
   content: "选择目标";
   position: absolute;
   left: 8px;
@@ -1434,29 +1495,6 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   font-weight: 900;
   text-align: center;
   pointer-events: none;
-}
-
-.trap-slot.trap-response::after {
-  content: "可发动";
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
-  z-index: 5;
-  padding: 4px 6px;
-  border: 1px solid rgba(183, 148, 244, 0.42);
-  background: rgba(8, 10, 16, 0.82);
-  color: #e3d5ff;
-  font-size: 11px;
-  font-weight: 900;
-  text-align: center;
-  pointer-events: none;
-}
-
-.trap-slot.trap-response-selected::after {
-  content: "已选择";
-  border-color: rgba(246, 189, 96, 0.44);
-  color: var(--gold);
 }
 
 .card.used {

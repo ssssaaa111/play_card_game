@@ -71,6 +71,7 @@ import {
 } from './response-state.js';
 import { buildScenarioState } from './scenario-state.js';
 import { buildLifeDisplay } from './life-display.js';
+import { buildSupportCardDisplay } from './support-card-display.js';
 import {
   ACTION_WINDOWS,
   PHASES,
@@ -4723,10 +4724,24 @@ function renderTraps(root, duelist, owner) {
     const trapChoiceReady = owner === "player" && Boolean(state.pendingTrapChoice?.trapIndexes?.includes(index));
     const trapChoiceSelected = trapChoiceReady && state.pendingTrapChoice?.selectedIndex === index;
     const targetable = isPendingTrapTargetSlot(owner, index);
+    const supportDisplay = card && owner === "player"
+      ? buildSupportCardDisplay(card, {
+        responseReady: trapChoiceReady,
+        responseSelected: trapChoiceSelected,
+        targetable
+      })
+      : null;
     slot.classList.toggle("trap-response", trapChoiceReady);
     slot.classList.toggle("trap-response-selected", trapChoiceSelected);
     slot.classList.toggle("targetable", targetable);
-    slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}陷阱区 ${index + 1}`);
+    if (supportDisplay) {
+      slot.classList.add(`support-${supportDisplay.key}`);
+      slot.dataset.supportState = supportDisplay.key;
+    }
+    const zoneLabel = `${owner === "player" ? "我方" : "敌方"}魔陷区 ${index + 1}`;
+    slot.setAttribute("aria-label", supportDisplay
+      ? `${zoneLabel}，${card.name}，${supportDisplay.description}`
+      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`);
     if (owner === "player") {
       slot.addEventListener("click", () => handlePlayerTrapSlot(index));
     } else {
@@ -4734,12 +4749,21 @@ function renderTraps(root, duelist, owner) {
     }
     if (card) {
       const cardEl = owner === "player" ? renderCardElement(document, card, { asset: monsterAsset(card) }) : document.createElement("article");
-      cardEl.className = owner === "player" ? `${cardEl.className} player-trap` : "card back";
+      const supportTypeClass = card.type === "spell" ? "player-spell" : "player-trap";
+      cardEl.className = owner === "player" ? `${cardEl.className} field-support-card ${supportTypeClass}` : "card back";
       cardEl.dataset.zone = `${owner}-trap`;
-      if (card) {
-        cardEl.dataset.cardId = owner === "player" ? card.id || "" : "hidden";
-        cardEl.dataset.cardName = owner === "player" ? card.name || "" : "盖放的陷阱";
-        cardEl.dataset.cardType = "trap";
+      cardEl.dataset.cardId = owner === "player" ? card.id || "" : "hidden";
+      cardEl.dataset.cardName = owner === "player" ? card.name || "" : "盖放的卡牌";
+      cardEl.dataset.cardType = owner === "player" ? card.type || "trap" : "hidden";
+      if (supportDisplay) {
+        cardEl.classList.add(`support-${supportDisplay.key}`);
+        cardEl.dataset.supportState = supportDisplay.key;
+        cardEl.setAttribute("aria-label", `${card.name}，${supportDisplay.typeLabel}，${supportDisplay.description}`);
+        const stateChip = document.createElement("span");
+        stateChip.className = `support-state-chip ${supportDisplay.key}`;
+        stateChip.textContent = supportDisplay.label;
+        stateChip.setAttribute("aria-hidden", "true");
+        cardEl.appendChild(stateChip);
       }
       cardEl.classList.toggle("trap-response", trapChoiceReady);
       cardEl.classList.toggle("trap-response-selected", trapChoiceSelected);
