@@ -12,6 +12,7 @@ import {
 import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createBattleLogEntry, logEntryMessage, publicLogCardIds } from './battle-log.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
+import { applyCardArt } from './card-art.js';
 import { cardDefinitionById, cardDetailText, cardDetailViewModel } from './card-detail.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
@@ -72,6 +73,7 @@ import {
 import { buildScenarioState } from './scenario-state.js';
 import { buildLifeDisplay } from './life-display.js';
 import { buildSupportCardDisplay } from './support-card-display.js';
+import { buildTrapChoiceDisplay } from './trap-choice-display.js';
 import {
   ACTION_WINDOWS,
   PHASES,
@@ -2938,29 +2940,52 @@ function renderTrapChoiceOptions(choice = state.pendingTrapChoice) {
   choice.trapIndexes.forEach((trapIndex) => {
     const card = state.player.traps[trapIndex];
     if (!card) return;
+    const selected = choice.selectedIndex === trapIndex;
+    const display = buildTrapChoiceDisplay(card, { selected });
     const button = document.createElement("button");
     button.type = "button";
     button.className = "trap-choice-card";
     button.dataset.trapChoiceIndex = String(trapIndex);
     button.dataset.cardId = card.id;
-    button.classList.toggle("selected", choice.selectedIndex === trapIndex);
+    button.dataset.choiceState = display.state;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+    button.setAttribute("aria-label", display.ariaLabel);
+    button.title = "单击选择，双击直接发动";
 
-    const icon = document.createElement("span");
-    icon.className = "trap-choice-icon";
-    icon.textContent = card.icon || "陷";
+    const art = document.createElement("span");
+    art.className = `trap-choice-art ${card.type || "trap"}`;
+    art.setAttribute("aria-hidden", "true");
+    const hasArt = applyCardArt(art, card.id);
+    if (!hasArt) art.textContent = card.icon || "陷";
+
+    const type = document.createElement("span");
+    type.className = "trap-choice-type";
+    type.textContent = display.typeLabel;
+    art.appendChild(type);
 
     const body = document.createElement("span");
     body.className = "trap-choice-body";
 
+    const heading = document.createElement("span");
+    heading.className = "trap-choice-title";
+
     const name = document.createElement("strong");
-    name.textContent = card.name;
+    name.textContent = display.name;
+
+    const status = document.createElement("span");
+    status.className = `trap-choice-state ${display.state}`;
+    status.textContent = display.stateLabel;
 
     const text = document.createElement("span");
-    text.textContent = card.text || "满足当前事件，可以发动。";
+    text.className = "trap-choice-effect";
+    text.textContent = display.effectText;
 
-    body.appendChild(name);
+    heading.appendChild(name);
+    heading.appendChild(status);
+    body.appendChild(heading);
     body.appendChild(text);
-    button.appendChild(icon);
+    button.appendChild(art);
     button.appendChild(body);
     button.addEventListener("click", () => selectPendingTrapChoice(trapIndex));
     button.addEventListener("dblclick", (event) => {
