@@ -70,6 +70,7 @@ import {
   selectTrapResponse
 } from './response-state.js';
 import { buildScenarioState } from './scenario-state.js';
+import { buildLifeDisplay } from './life-display.js';
 import {
   ACTION_WINDOWS,
   PHASES,
@@ -4512,10 +4513,14 @@ function render(animationKey = "") {
     els.setupStats.textContent = `${statsLine()} / 当前配置：${characterProfiles.player.name}、${setupLabel(deckPresets, state.deckPreset)}、${aiLabel} / ${scenario.label}${scenario.goal ? ` / 目标：${scenario.goal}` : ""}`;
   }
 
-  els.playerLp.textContent = state.player.lp;
-  els.aiLp.textContent = state.ai.lp;
-  els.playerLife.style.width = `${(state.player.lp / MAX_LP) * 100}%`;
-  els.aiLife.style.width = `${(state.ai.lp / MAX_LP) * 100}%`;
+  const playerLife = buildLifeDisplay(state.player.lp, MAX_LP);
+  const aiLife = buildLifeDisplay(state.ai.lp, MAX_LP);
+  els.playerLp.textContent = playerLife.text;
+  els.playerLp.setAttribute("aria-label", playerLife.ariaLabel);
+  els.aiLp.textContent = aiLife.text;
+  els.aiLp.setAttribute("aria-label", aiLife.ariaLabel);
+  els.playerLife.style.width = `${playerLife.percent}%`;
+  els.aiLife.style.width = `${aiLife.percent}%`;
   els.playerDeckCount.textContent = state.player.deck.length;
   els.aiDeckCount.textContent = state.ai.deck.length;
   els.playerGraveCount.textContent = state.player.grave.length;

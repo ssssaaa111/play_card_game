@@ -542,16 +542,17 @@ body[data-duel-turn="ai"] .phase span {
   line-height: 1.25;
 }
 
-.lp {
-  color: var(--green);
-  font-size: 26px;
+.life-caption {
+  flex: 0 0 auto;
+  color: rgba(237, 242, 247, 0.48);
+  font-size: 10px;
   line-height: 1;
   font-weight: 900;
-  text-shadow: 0 0 14px rgba(102, 209, 158, 0.18);
 }
 
 .life-bar {
-  height: 11px;
+  position: relative;
+  height: 22px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 4px;
@@ -560,10 +561,34 @@ body[data-duel-turn="ai"] .phase span {
 }
 
 .life-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, var(--green), var(--cyan));
   transition: width 260ms ease;
+}
+
+.life-value {
+  position: absolute;
+  inset: 0 7px 0 auto;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 9ch;
+  color: #f2fff9;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.96), 0 0 10px rgba(0, 0, 0, 0.72);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.enemy .life-value {
+  color: #fff2df;
 }
 
 .enemy .life-fill {
@@ -4704,10 +4729,6 @@ button.chain-stack-card:focus-visible {
 
   .player-card {
     padding: 10px;
-  }
-
-  .lp {
-    font-size: 24px;
   }
 
   .zone-row {
