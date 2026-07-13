@@ -3009,14 +3009,36 @@ function renderChainStack(choice = state.pendingTrapChoice) {
   });
   els.chainStack.replaceChildren();
   els.chainStack.hidden = entries.length === 0;
+  if (entries.length > 0) {
+    const heading = document.createElement("div");
+    heading.className = "chain-stack-head";
+    const title = document.createElement("strong");
+    title.textContent = "当前连锁";
+    const rule = document.createElement("span");
+    rule.textContent = "后进先出";
+    heading.appendChild(title);
+    heading.appendChild(rule);
+    els.chainStack.appendChild(heading);
+  }
   entries.forEach((entry) => {
     const row = document.createElement("div");
     row.className = "chain-stack-entry";
     row.classList.toggle("pending", entry.pending);
+    row.dataset.owner = entry.owner || "unknown";
+    row.dataset.chainState = entry.pending ? "pending" : "queued";
+    row.setAttribute("aria-label", `CL${entry.chainIndex}，${entry.ownerLabel}，${entry.name}，${entry.pending ? "待发动" : "等待结算"}`);
 
     const index = document.createElement("span");
     index.className = "chain-stack-index";
     index.textContent = `CL${entry.chainIndex}`;
+
+    const art = document.createElement("span");
+    art.className = "chain-stack-art";
+    art.setAttribute("aria-hidden", "true");
+    if (!entry.cardId || !applyCardArt(art, entry.cardId)) art.textContent = `CL${entry.chainIndex}`;
+
+    const main = document.createElement("span");
+    main.className = "chain-stack-main";
 
     const owner = document.createElement("span");
     owner.className = "chain-stack-owner";
@@ -3035,16 +3057,34 @@ function renderChainStack(choice = state.pendingTrapChoice) {
     const status = document.createElement("span");
     status.className = "chain-stack-state";
     status.textContent = entry.pending ? "待发动" : "等待结算";
+    main.appendChild(owner);
+    main.appendChild(name);
     row.appendChild(index);
-    row.appendChild(owner);
-    row.appendChild(name);
+    row.appendChild(art);
+    row.appendChild(main);
     row.appendChild(status);
     els.chainStack.appendChild(row);
   });
   if (entries.length > 1) {
     const order = document.createElement("div");
     order.className = "chain-resolution-order";
-    order.textContent = `结算顺序：${chainResolutionOrderText(entries)}`;
+    const label = document.createElement("span");
+    label.className = "chain-resolution-label";
+    label.textContent = "结算顺序：";
+    order.appendChild(label);
+    entries.slice().reverse().forEach((entry, index) => {
+      const step = document.createElement("span");
+      step.className = `chain-resolution-step ${entry.pending ? "pending" : ""}`;
+      step.textContent = `CL${entry.chainIndex}`;
+      order.appendChild(step);
+      if (index < entries.length - 1) {
+        const arrow = document.createElement("span");
+        arrow.className = "chain-resolution-arrow";
+        arrow.textContent = " → ";
+        order.appendChild(arrow);
+      }
+    });
+    order.setAttribute("aria-label", `结算顺序：${chainResolutionOrderText(entries)}`);
     els.chainStack.appendChild(order);
   }
 }
@@ -5034,20 +5074,36 @@ function renderChainHistory() {
     heading.className = "chain-history-heading";
     const title = document.createElement("strong");
     title.textContent = `${history.linkCount} 段连锁`;
-    const order = document.createElement("span");
-    order.textContent = `结算 ${history.resolutionOrder}`;
+    const orders = document.createElement("span");
+    orders.className = "chain-history-orders";
+    const activationOrder = document.createElement("span");
+    activationOrder.textContent = `发动 ${history.activationOrder}`;
+    const resolutionOrder = document.createElement("span");
+    resolutionOrder.textContent = `结算 ${history.resolutionOrder}`;
+    orders.appendChild(activationOrder);
+    orders.appendChild(resolutionOrder);
     heading.appendChild(title);
-    heading.appendChild(order);
+    heading.appendChild(orders);
     entry.appendChild(heading);
 
     history.links.forEach((link) => {
       const row = document.createElement("div");
       row.className = "chain-history-link";
       row.dataset.chainIndex = `${link.chainIndex}`;
+      row.dataset.owner = link.owner || "unknown";
+
+      const art = document.createElement("span");
+      art.className = "chain-history-art";
+      art.setAttribute("aria-hidden", "true");
+      if (!link.cardId || !applyCardArt(art, link.cardId)) art.textContent = link.name.slice(0, 1);
 
       const index = document.createElement("span");
       index.className = "chain-history-index";
       index.textContent = `CL${link.chainIndex}`;
+      art.appendChild(index);
+
+      const main = document.createElement("span");
+      main.className = "chain-history-main";
       const owner = document.createElement("span");
       owner.className = "chain-history-owner";
       owner.textContent = link.ownerLabel;
@@ -5065,9 +5121,10 @@ function renderChainHistory() {
       status.textContent = link.negatedByChainIndex
         ? `${link.statusLabel} · CL${link.negatedByChainIndex}`
         : link.statusLabel;
-      row.appendChild(index);
-      row.appendChild(owner);
-      row.appendChild(card);
+      main.appendChild(owner);
+      main.appendChild(card);
+      row.appendChild(art);
+      row.appendChild(main);
       row.appendChild(status);
       entry.appendChild(row);
     });
