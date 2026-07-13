@@ -84,7 +84,7 @@ import {
   shouldRunPlayerIdleCountdownForState,
   turnStartPatch
 } from './turn-state.js';
-import { describeHandAction, duelHintText, phaseLabel, turnLabel } from './view-model.js';
+import { defaultTributeSelection, describeHandAction, duelHintText, phaseLabel, turnLabel } from './view-model.js';
 import {
   MAX_LP,
   MONSTER_ZONE_SIZE,
@@ -1335,15 +1335,18 @@ function beginTributeSelection(handIndex, card) {
   }
   notePlayerIntent();
   clearBattlePreview();
+  const selectedIndexes = defaultTributeSelection(state.player.field, cost);
   state.pendingTribute = {
     handUid: card.uid,
     handIndex,
     cardName: card.name,
     cost,
-    selectedIndexes: []
+    selectedIndexes
   };
   state.selected = { zone: "hand", uid: card.uid };
-  cue(`选择 ${cost} 只我方场上怪兽作为 ${card.name} 的祭品。`);
+  cue(selectedIndexes.length === cost
+    ? `场上正好有 ${cost} 只怪兽，已全部选为 ${card.name} 的祭品；确认后召唤。`
+    : `选择 ${cost} 只我方场上怪兽作为 ${card.name} 的祭品。`);
   render();
   resetPlayerIdleCountdown();
   return true;

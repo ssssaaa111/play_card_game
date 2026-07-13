@@ -600,7 +600,7 @@ test("conditional on-summon effect skip still applies the summon to UI state", (
   const events = dispatchSummonMonsterFromUiState(state, "player", 0, 0);
 
   assert.equal(state.player.field[0], captain);
-  assert.equal(captain.tempAtk, undefined);
+  assert.equal(captain.tempAtk, 0);
   assert.ok(events.some((event) => event.type === "EFFECT_SKIPPED" && event.effectId === "fireBuff"));
 });
 
@@ -1745,6 +1745,38 @@ test("dispatches engine-backed grave-return by moving a grave card to deck top b
     event.playerId === "player" &&
     event.cardIds.includes(fallen.uid) &&
     event.sourceCardId === reclaim.uid
+  ));
+});
+
+test("grave revival applies the engine summon reset to UI card state", () => {
+  const recall = uiSpell("spell-revive", "graveRevive", "trio-ember-recall");
+  const pawn = uiMonster("fallen-pawn", "trio-ember-pawn");
+  pawn.mode = "defense";
+  pawn.used = true;
+  pawn.changedMode = true;
+  pawn.tempAtk = 900;
+  pawn.tempDef = -400;
+  pawn.battleWear = 200;
+  pawn.destructionProtectionUsed = true;
+  const state = appState();
+  state.player.hand = [recall];
+  state.player.grave = [pawn];
+
+  const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: pawn, owner: "player" });
+
+  assert.equal(state.player.field[0], pawn);
+  assert.deepEqual(state.player.grave, [recall]);
+  assert.equal(pawn.mode, "attack");
+  assert.equal(pawn.used, false);
+  assert.equal(pawn.changedMode, false);
+  assert.equal(pawn.tempAtk, 0);
+  assert.equal(pawn.tempDef, 0);
+  assert.equal(pawn.battleWear, 0);
+  assert.equal(pawn.destructionProtectionUsed, false);
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.cardId === pawn.uid &&
+    event.fromZone === "grave"
   ));
 });
 

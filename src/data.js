@@ -972,7 +972,15 @@ export const scenarioSetups = {
     playerHand: ["trio-solar-snare", "trio-moonbreaker-ray", "trio-ember-recall", "trio-final-counter"],
     playerDeck: ["trio-chain-veil", "last-spark"],
     playerField: [{ id: "trio-decoy-ward", mode: "defense", changedMode: true }],
-    playerGrave: ["trio-ember-pawn"],
+    playerGrave: [{
+      id: "trio-ember-pawn",
+      mode: "defense",
+      used: true,
+      changedMode: true,
+      tempAtk: 700,
+      tempDef: -300,
+      battleWear: 200
+    }],
     aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
     aiTraps: ["trio-moon-dominion"],
     aiHand: [],

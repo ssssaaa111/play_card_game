@@ -302,6 +302,15 @@ function handCard(els, cardId) {
   return els.hand.querySelector(`[data-zone="hand"][data-card-id="${cardId}"]`);
 }
 
+function assertHandCardReady(els, cardId, label) {
+  const card = handCard(els, cardId);
+  if (!card) throw new Error(`${label}: hand card ${cardId} is missing`);
+  if (!card.classList.contains("action-ready") || card.classList.contains("action-blocked")) {
+    throw new Error(`${label}: ${cardId} should be visibly highlighted as action-ready`);
+  }
+  return card;
+}
+
 function preDuelDeckCard(els, cardId) {
   return els.preDuelDeckList?.querySelector(`.pre-duel-card[data-card-id="${cardId}"]`);
 }
@@ -656,14 +665,21 @@ async function runTributeSummonSmoke(ctx) {
   clickSmokeElement(handCard(ctx.els, "solar-vanguard"), "tribute-summon: select high-level monster");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon: enter tribute selection");
   await waitForSmoke(
-    () => ctx.state.pendingTribute?.cardName && ctx.state.pendingTribute.cost === 1,
-    "tribute-summon: pending tribute selection"
+    () => ctx.state.pendingTribute?.cardName &&
+      ctx.state.pendingTribute.cost === 1 &&
+      ctx.state.pendingTribute.selectedIndexes?.length === 1 &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "tribute-summon: only available tribute is selected by default"
   );
-  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-summon: select field tribute");
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-summon: manually unselect default tribute");
   await waitForSmoke(
-    () => ctx.state.pendingTribute?.selectedIndexes?.length === 1 &&
-      fieldCard(ctx.els, "player", "spark-runner")?.classList.contains("tribute-selected"),
-    "tribute-summon: tribute card selected"
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 0 && ctx.els.choiceConfirmBtn.disabled,
+    "tribute-summon: default tribute can still be edited"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-summon: reselect field tribute");
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 1 && !ctx.els.choiceConfirmBtn.disabled,
+    "tribute-summon: tribute card reselected"
   );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon: confirm tribute summon");
   await waitForSmoke(
@@ -694,18 +710,11 @@ async function runTributeSummonDoubleSmoke(ctx) {
   clickSmokeElement(handCard(ctx.els, "starfall-colossus"), "tribute-summon-double: select two-tribute monster");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon-double: enter tribute selection");
   await waitForSmoke(
-    () => ctx.state.pendingTribute?.cardName && ctx.state.pendingTribute.cost === 2,
-    "tribute-summon-double: pending tribute selection"
-  );
-  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-summon-double: select first tribute");
-  await waitForSmoke(
-    () => ctx.state.pendingTribute?.selectedIndexes?.length === 1 && ctx.els.choiceConfirmBtn.disabled,
-    "tribute-summon-double: first tribute selected but confirm still blocked"
-  );
-  clickSmokeElement(fieldCard(ctx.els, "player", "lumen-gearlet"), "tribute-summon-double: select second tribute");
-  await waitForSmoke(
-    () => ctx.state.pendingTribute?.selectedIndexes?.length === 2 && !ctx.els.choiceConfirmBtn.disabled,
-    "tribute-summon-double: two tributes selected"
+    () => ctx.state.pendingTribute?.cardName &&
+      ctx.state.pendingTribute.cost === 2 &&
+      ctx.state.pendingTribute.selectedIndexes?.length === 2 &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "tribute-summon-double: both required tributes selected by default"
   );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-summon-double: confirm tribute summon");
   await waitForSmoke(
@@ -739,27 +748,15 @@ async function runDivineSummonSmoke(ctx) {
   clickSmokeElement(handCard(ctx.els, "celestial-origin-dragon"), "divine-summon: select divine monster");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "divine-summon: enter tribute selection");
   await waitForSmoke(
-    () => ctx.state.pendingTribute?.cardName && ctx.state.pendingTribute.cost === 3 && ctx.els.choiceConfirmBtn.disabled,
-    "divine-summon: pending three-tribute selection"
+    () => ctx.state.pendingTribute?.cardName &&
+      ctx.state.pendingTribute.cost === 3 &&
+      ctx.state.pendingTribute.selectedIndexes?.length === 3 &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "divine-summon: all three required tributes selected by default"
   );
   if (!ctx.els.choiceActions?.classList.contains("material-choice")) {
     throw new Error("divine-summon: tribute chooser should avoid covering the field");
   }
-  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "divine-summon: select first tribute");
-  await waitForSmoke(
-    () => ctx.state.pendingTribute?.selectedIndexes?.length === 1 && ctx.els.choiceConfirmBtn.disabled,
-    "divine-summon: first tribute selected"
-  );
-  clickSmokeElement(fieldCard(ctx.els, "player", "lumen-gearlet"), "divine-summon: select second tribute");
-  await waitForSmoke(
-    () => ctx.state.pendingTribute?.selectedIndexes?.length === 2 && ctx.els.choiceConfirmBtn.disabled,
-    "divine-summon: second tribute selected"
-  );
-  clickSmokeElement(fieldCard(ctx.els, "player", "ember-soul-initiate"), "divine-summon: select third tribute");
-  await waitForSmoke(
-    () => ctx.state.pendingTribute?.selectedIndexes?.length === 3 && !ctx.els.choiceConfirmBtn.disabled,
-    "divine-summon: three tributes selected"
-  );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "divine-summon: confirm divine summon");
   await waitForSmoke(
     () => ctx.state.player.field[0]?.id === "celestial-origin-dragon" &&
@@ -804,19 +801,12 @@ async function runTrioTributeSummonSmoke(ctx) {
   clickSmokeElement(handCard(ctx.els, "trio-sun-judicator"), "trio-tribute-summon: select trio god");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "trio-tribute-summon: enter tribute selection");
   await waitForSmoke(
-    () => ctx.state.pendingTribute?.cost === 3 && ctx.els.choiceConfirmBtn.disabled,
-    "trio-tribute-summon: pending three-tribute selection"
+    () => ctx.state.pendingTribute?.cost === 3 &&
+      ctx.state.pendingTribute.selectedIndexes?.length === 3 &&
+      !ctx.els.choiceConfirmBtn.disabled &&
+      materialIds.every((cardId) => fieldCard(ctx.els, "player", cardId)?.classList.contains("tribute-selected")),
+    "trio-tribute-summon: exact three tributes selected by default"
   );
-  for (const [index, cardId] of materialIds.entries()) {
-    clickSmokeElement(fieldCard(ctx.els, "player", cardId), `trio-tribute-summon: select tribute ${index + 1}`);
-    await waitForSmoke(
-      () => ctx.state.pendingTribute?.selectedIndexes?.length === index + 1,
-      `trio-tribute-summon: tribute ${index + 1} selected`
-    );
-  }
-  if (ctx.els.choiceConfirmBtn.disabled) {
-    throw new Error("trio-tribute-summon: confirm should enable after exactly three tributes");
-  }
   clickSmokeElement(ctx.els.choiceConfirmBtn, "trio-tribute-summon: confirm summon");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "trio-sun-judicator") &&
@@ -2172,7 +2162,7 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
     32000
   );
 
-  clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}：选择碎月解幕`);
+  clickSmokeElement(assertHandCardReady(ctx.els, "trio-moonbreaker-ray", `${smokeName}：碎月解幕高亮`), `${smokeName}：选择碎月解幕`);
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}：碎月解幕目标选择`);
   clickSmokeElement(ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}：破坏月曜帷幕`);
   await waitForSmoke(
@@ -2182,17 +2172,25 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
     9000
   );
 
-  clickSmokeElement(handCard(ctx.els, "trio-ember-recall"), `${smokeName}：选择余烁归轨`);
+  clickSmokeElement(assertHandCardReady(ctx.els, "trio-ember-recall", `${smokeName}：余烁归轨高亮`), `${smokeName}：选择余烁归轨`);
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", `${smokeName}：余烁归轨墓地目标`);
   clickSmokeElement(graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}：回召余烁小卫`);
   await waitForSmoke(
-    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn") &&
+    () => ctx.state.player.field.some((card) =>
+      card?.id === "trio-ember-pawn" &&
+      card.mode === "attack" &&
+      !card.used &&
+      !card.changedMode &&
+      (card.tempAtk || 0) === 0 &&
+      (card.tempDef || 0) === 0 &&
+      (card.battleWear || 0) === 0
+    ) &&
       !ctx.state.player.grave.some((card) => card?.id === "trio-ember-pawn"),
-    `${smokeName}：余烁小卫回场`,
+    `${smokeName}：余烁小卫以重置后的攻击表示回场`,
     9000
   );
 
-  clickSmokeElement(handCard(ctx.els, "trio-final-counter"), `${smokeName}：选择三曜终断`);
+  clickSmokeElement(assertHandCardReady(ctx.els, "trio-final-counter", `${smokeName}：三曜终断高亮`), `${smokeName}：选择三曜终断`);
   await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}：三曜终断确认`);
   clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}：发动三曜终断`);
   await waitForSmoke(
@@ -2279,7 +2277,7 @@ async function runTrioOmegaChallengeSmoke(ctx) {
     throw new Error(`trio-omega-challenge: correct path must cross the rival turn. ${trioOmegaFailureSnapshot(ctx)}`);
   }
 
-  clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), "challenge: select moonbreaker");
+  clickSmokeElement(assertHandCardReady(ctx.els, "trio-moonbreaker-ray", "challenge: moonbreaker highlight"), "challenge: select moonbreaker");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", "challenge: moonbreaker target selection");
   clickSmokeElement(ctx.els.aiTraps.querySelector(".trap-slot.targetable"), "challenge: destroy moon dominion");
   await waitForSmoke(
@@ -2290,11 +2288,19 @@ async function runTrioOmegaChallengeSmoke(ctx) {
   );
 
   const recallCard = ctx.state.player.hand.find((card) => card?.id === "trio-ember-recall");
-  clickSmokeElement(handCard(ctx.els, "trio-ember-recall"), "challenge: select ember recall");
+  clickSmokeElement(assertHandCardReady(ctx.els, "trio-ember-recall", "challenge: ember recall highlight"), "challenge: select ember recall");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", "challenge: grave target selection");
   clickSmokeElement(graveTargetCard(ctx.els, "trio-ember-pawn"), "challenge: revive ember pawn");
   await waitForSmoke(
-    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn") &&
+    () => ctx.state.player.field.some((card) =>
+      card?.id === "trio-ember-pawn" &&
+      card.mode === "attack" &&
+      !card.used &&
+      !card.changedMode &&
+      (card.tempAtk || 0) === 0 &&
+      (card.tempDef || 0) === 0 &&
+      (card.battleWear || 0) === 0
+    ) &&
       !ctx.state.player.grave.some((card) => card?.id === "trio-ember-pawn"),
     `challenge: ember pawn revived after setup. ${trioOmegaFailureSnapshot(ctx)}`,
     9000
@@ -2311,7 +2317,7 @@ async function runTrioOmegaChallengeSmoke(ctx) {
     throw new Error(`trio-omega-challenge: setup trap must happen before grave recovery. ${trioOmegaFailureSnapshot(ctx)}`);
   }
 
-  clickSmokeElement(handCard(ctx.els, "trio-final-counter"), "challenge: select final counter");
+  clickSmokeElement(assertHandCardReady(ctx.els, "trio-final-counter", "challenge: final counter highlight"), "challenge: select final counter");
   await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "challenge: final counter confirm");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "challenge: activate final counter");
   await waitForSmoke(

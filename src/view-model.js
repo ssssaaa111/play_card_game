@@ -71,9 +71,15 @@ export function describeHandAction(card, {
     return { ok: true, label: "切换", reason: "点击会取消当前目标选择，并改选这张卡。" };
   }
   if (card.type === "monster") {
-    if (!hasMonsterZone) return { ok: false, label: "场已满", reason: "我方召唤区已满。" };
     if (summonedThisTurn && extraSummon <= 0) return { ok: false, label: "已召唤", reason: "本回合已经通常召唤过。" };
-    if (!monsterValidation.ok) return { ok: false, label: "不可召唤", reason: monsterValidation.reason };
+    if (!monsterValidation.ok) {
+      const fieldFull = !hasMonsterZone && /召唤区已满|monster zone.*full/i.test(monsterValidation.reason || "");
+      return {
+        ok: false,
+        label: fieldFull ? "场已满" : "不可召唤",
+        reason: fieldFull ? "我方召唤区已满。" : monsterValidation.reason
+      };
+    }
     return { ok: true, label: "可召唤", reason: "选中后点击我方空召唤区。" };
   }
   if (card.type === "trap") {
@@ -97,4 +103,13 @@ export function describeHandAction(card, {
     };
   }
   return { ok: false, label: "不可用", reason: "这张卡当前不能操作。" };
+}
+
+export function defaultTributeSelection(field = [], cost = 0) {
+  const required = Math.max(0, Number(cost) || 0);
+  if (required <= 0) return [];
+  const occupiedIndexes = field
+    .map((card, index) => (card ? index : -1))
+    .filter((index) => index >= 0);
+  return occupiedIndexes.length === required ? occupiedIndexes : [];
 }

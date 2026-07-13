@@ -113,10 +113,9 @@ export const defaultCardEffects = Object.freeze({
     { target: { player: "self", zone: "monsterZone", rule: "strongestAtk" } }
   ),
   graveRevive: oneShot([{
-    op: "moveCard",
-    cardId: "$action.targetCardId",
-    from: { playerId: "$action.playerId", zone: "grave" },
-    to: { playerId: "$action.playerId", zone: "monsterZone" }
+    op: "specialSummonFromGrave",
+    player: "self",
+    cardId: "$action.targetCardId"
   }], { target: { player: "self", zone: "grave", cardType: "monster" } }),
   dawnEdge: oneShot(
     [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 900 }],
@@ -433,13 +432,41 @@ export class EffectContext {
       playerId,
       cardId: found.cardId,
       sourceCardId: options.sourceCardId || found.cardId,
-      mode: options.mode || found.card.mode || "attack",
+      mode: options.mode || "attack",
       used: false,
       changedMode: false,
+      tempAtk: 0,
+      tempDef: 0,
+      battleWear: 0,
+      destructionProtectionUsed: false,
       summonType: options.summonType || "special",
       fromZone: found.zone
     });
     return found.cardId;
+  }
+
+  specialSummonFromGrave(playerId, cardId, options = {}) {
+    const card = requireCardInZone(this.#state, playerId, "grave", cardId);
+    if (card.type !== "monster") {
+      throw new GameRuleError(`Card ${cardId} is not a monster`);
+    }
+
+    this.moveCard(cardId, { playerId, zone: "grave" }, { playerId, zone: "monsterZone", index: options.index });
+    this.#emit("MONSTER_SUMMONED", {
+      playerId,
+      cardId,
+      sourceCardId: options.sourceCardId || cardId,
+      mode: options.mode || "attack",
+      used: false,
+      changedMode: false,
+      tempAtk: 0,
+      tempDef: 0,
+      battleWear: 0,
+      destructionProtectionUsed: false,
+      summonType: options.summonType || "special",
+      fromZone: "grave"
+    });
+    return cardId;
   }
 
   createTokens(playerId, templateId, options = {}) {
@@ -590,9 +617,13 @@ export class EffectContext {
       playerId,
       cardId,
       sourceCardId: options.sourceCardId || cardId,
-      mode: options.mode || card.mode || "attack",
+      mode: options.mode || "attack",
       used: false,
-      changedMode: false
+      changedMode: false,
+      tempAtk: 0,
+      tempDef: 0,
+      battleWear: 0,
+      destructionProtectionUsed: false
     });
   }
 
@@ -2505,9 +2536,13 @@ function applyGameOverDeclared(state, event) {
 
 function applyMonsterSummoned(state, event) {
   const card = requireCard(state, event.cardId);
-  card.mode = event.mode || card.mode || "attack";
+  card.mode = event.mode || "attack";
   card.used = Boolean(event.used);
   card.changedMode = Boolean(event.changedMode);
+  card.tempAtk = Number(event.tempAtk) || 0;
+  card.tempDef = Number(event.tempDef) || 0;
+  card.battleWear = Math.max(0, Number(event.battleWear) || 0);
+  card.destructionProtectionUsed = Boolean(event.destructionProtectionUsed);
 }
 
 function applyMonsterReadied(state, event) {
@@ -3196,6 +3231,12 @@ function runEffectOperation(operation, ctx, action, card, options = {}) {
       return ctx.gainShield(resolvePlayerRef(operation.player, action), operation.amount, source);
     case "moveCard":
       return ctx.moveCard(resolveValue(operation.cardId, action, card), resolveValue(operation.from, action, card), resolveValue(operation.to, action, card));
+    case "specialSummonFromGrave":
+      return ctx.specialSummonFromGrave(
+        resolvePlayerRef(operation.player, action),
+        resolveValue(operation.cardId, action, card),
+        { ...source, index: operation.index, mode: operation.mode }
+      );
     case "sendMaterialsToGrave":
       return ctx.sendMaterialsToGrave(resolvePlayerRef(operation.player, action), resolveValue(operation.materials || [], action, card), source);
     case "specialSummonFromDeckOrHand":

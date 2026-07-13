@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { describeHandAction, duelHintText, phaseLabel, turnLabel } from "../src/view-model.js";
+import { defaultTributeSelection, describeHandAction, duelHintText, phaseLabel, turnLabel } from "../src/view-model.js";
 
 test("builds phase and turn labels from state", () => {
   assert.equal(phaseLabel({ started: false }), "准备决斗");
@@ -87,4 +87,35 @@ test("describes pending target selection", () => {
     label: "切换",
     reason: "点击会取消当前目标选择，并改选这张卡。"
   });
+});
+
+test("keeps a legal tribute summon ready on a full field", () => {
+  const action = describeHandAction({ type: "monster", uid: "divine-1" }, {
+    started: true,
+    canAct: true,
+    hasMonsterZone: false,
+    hasTrapZone: true,
+    monsterValidation: { ok: true }
+  });
+
+  assert.equal(action.ok, true);
+  assert.equal(action.label, "可召唤");
+
+  const blocked = describeHandAction({ type: "monster", uid: "normal-1" }, {
+    started: true,
+    canAct: true,
+    hasMonsterZone: false,
+    hasTrapZone: true,
+    monsterValidation: { ok: false, reason: "monster zone is full" }
+  });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.label, "场已满");
+});
+
+test("auto-selects tributes only when every field monster is required", () => {
+  const field = [{ uid: "one" }, null, { uid: "two" }, null, { uid: "three" }];
+
+  assert.deepEqual(defaultTributeSelection(field, 3), [0, 2, 4]);
+  assert.deepEqual(defaultTributeSelection(field, 2), []);
+  assert.deepEqual(defaultTributeSelection(field, 0), []);
 });

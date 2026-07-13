@@ -917,7 +917,9 @@ test("app delegates scenario setup to extracted state builder", () => {
   assert.doesNotMatch(app, /function cloneCard/);
 
   assert.match(scenarioState, /buildScenarioDeck\(preset, scenarioReservedIds\(scenario, owner\)\)/);
-  assert.match(scenarioState, /loadCardList\(scenario\[`[^\n]+Hand`\]\)/);
+  assert.match(scenarioState, /scenarioList\(scenario\[`[^\n]+Hand`\]\)/);
+  assert.match(scenarioState, /scenarioList\(scenario\[`[^\n]+Grave`\]\)/);
+  assert.match(scenarioState, /function scenarioCard\(entry\)/);
   assert.match(scenarioState, /scenarioZone\(scenario\[`[^\n]+Field`\], MONSTER_ZONE_SIZE\)/);
   assert.match(scenarioState, /scenarioZone\(scenario\[`[^\n]+Traps`\], SPELL_TRAP_ZONE_SIZE\)/);
 });

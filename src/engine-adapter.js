@@ -442,9 +442,13 @@ export function applyUiGameEvents(uiState, events = []) {
     if (event.type === "MONSTER_SUMMONED") {
       const card = findUiCard(uiState, event.cardId);
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
-      card.mode = event.mode || card.mode || "attack";
+      card.mode = event.mode || "attack";
       card.used = Boolean(event.used);
       card.changedMode = Boolean(event.changedMode);
+      card.tempAtk = Number(event.tempAtk) || 0;
+      card.tempDef = Number(event.tempDef) || 0;
+      card.battleWear = Math.max(0, Number(event.battleWear) || 0);
+      card.destructionProtectionUsed = Boolean(event.destructionProtectionUsed);
     }
     if (event.type === "NORMAL_SUMMON_USED") {
       const duelist = uiDuelist(uiState, event.playerId);

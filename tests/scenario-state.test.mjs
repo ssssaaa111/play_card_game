@@ -217,6 +217,22 @@ test("protagonist comeback scenarios can preload lp graveyard and valid engine s
   assertValidGameState(buildEngineStateFromUiState(challengeUiState));
 });
 
+test("scenario graveyard entries preserve configured historical monster state", () => {
+  const setup = buildScenarioState(scenarioSetups.protagonistTrioOmega, {
+    playerPreset: "protagonistTrioOmega",
+    aiPreset: "trioOmegaRival"
+  });
+  const pawn = setup.player.grave.find((card) => card?.id === "trio-ember-pawn");
+
+  assert.ok(pawn);
+  assert.equal(pawn.mode, "defense");
+  assert.equal(pawn.used, true);
+  assert.equal(pawn.changedMode, true);
+  assert.equal(pawn.tempAtk, 700);
+  assert.equal(pawn.tempDef, -300);
+  assert.equal(pawn.battleWear, 200);
+});
+
 test("protagonist ace evolution scenarios expose material and protection fixtures", () => {
   const evolution = buildScenarioState(scenarioSetups.protagonistAceEvolution, {
     playerPreset: "protagonistAceEvolution",

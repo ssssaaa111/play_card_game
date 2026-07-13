@@ -6,6 +6,26 @@ function scenarioEntryId(entry) {
   return typeof entry === "string" ? entry : entry?.id;
 }
 
+function scenarioCard(entry) {
+  const card = cloneCardById(scenarioEntryId(entry));
+  if (!card) return null;
+  card.used = false;
+  card.changedMode = false;
+  if (entry && typeof entry === "object") {
+    if (entry.mode === "attack" || entry.mode === "defense") card.mode = entry.mode;
+    if (typeof entry.used === "boolean") card.used = entry.used;
+    if (typeof entry.changedMode === "boolean") card.changedMode = entry.changedMode;
+    if (Number.isFinite(Number(entry.tempAtk))) card.tempAtk = Number(entry.tempAtk);
+    if (Number.isFinite(Number(entry.tempDef))) card.tempDef = Number(entry.tempDef);
+    if (Number.isFinite(Number(entry.battleWear))) card.battleWear = Math.max(0, Number(entry.battleWear));
+  }
+  return card;
+}
+
+function scenarioList(entries = []) {
+  return entries.map(scenarioCard).filter(Boolean);
+}
+
 export function scenarioReservedIds(scenario = {}, owner = "player") {
   const prefix = owner === "ai" ? "ai" : "player";
   return [
@@ -19,18 +39,8 @@ export function scenarioReservedIds(scenario = {}, owner = "player") {
 function scenarioZone(entries = [], size) {
   const zone = Array(size).fill(null);
   entries.slice(0, size).forEach((entry, index) => {
-    const card = cloneCardById(scenarioEntryId(entry));
+    const card = scenarioCard(entry);
     if (!card) return;
-    card.used = false;
-    card.changedMode = false;
-    if (entry && typeof entry === "object") {
-      if (entry.mode === "attack" || entry.mode === "defense") card.mode = entry.mode;
-      if (typeof entry.used === "boolean") card.used = entry.used;
-      if (typeof entry.changedMode === "boolean") card.changedMode = entry.changedMode;
-      if (Number.isFinite(Number(entry.tempAtk))) card.tempAtk = Number(entry.tempAtk);
-      if (Number.isFinite(Number(entry.tempDef))) card.tempDef = Number(entry.tempDef);
-      if (Number.isFinite(Number(entry.battleWear))) card.battleWear = Math.max(0, Number(entry.battleWear));
-    }
     zone[index] = card;
   });
   return zone;
@@ -46,11 +56,11 @@ function scenarioDeck(scenario, owner, preset) {
 function scenarioDuelistState(scenario, owner, preset) {
   const prefix = owner === "ai" ? "ai" : "player";
   const state = {
-    hand: loadCardList(scenario[`${owner}Hand`]),
+    hand: scenarioList(scenario[`${owner}Hand`]),
     deck: scenarioDeck(scenario, owner, preset),
     field: scenarioZone(scenario[`${owner}Field`], MONSTER_ZONE_SIZE),
     traps: scenarioZone(scenario[`${owner}Traps`], SPELL_TRAP_ZONE_SIZE),
-    grave: loadCardList(scenario[`${owner}Grave`])
+    grave: scenarioList(scenario[`${owner}Grave`])
   };
   const lp = Number(scenario[`${prefix}Lp`]);
   if (Number.isFinite(lp)) state.lp = Math.max(0, lp);

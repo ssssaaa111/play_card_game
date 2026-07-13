@@ -395,10 +395,9 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   ]);
   assert.deepEqual(graveRevive.target, { player: "self", zone: "grave", cardType: "monster" });
   assert.deepEqual(graveRevive.operations, [{
-    op: "moveCard",
-    cardId: "$action.targetCardId",
-    from: { playerId: "$action.playerId", zone: "grave" },
-    to: { playerId: "$action.playerId", zone: "monsterZone" }
+    op: "specialSummonFromGrave",
+    player: "self",
+    cardId: "$action.targetCardId"
   }]);
   assert.deepEqual(dawnEdge.operations, [
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 900 }
@@ -1081,7 +1080,19 @@ test("starwake recall revives only legal graveyard monster targets", () => {
   const state = makeState({
     cards: [
       card("recall-1", { templateId: "starwake-recall", effect: "graveRevive" }),
-      card("fallen-ace", { templateId: "astral-comet-ace", type: "monster", atk: 2300, def: 1800 }),
+      card("fallen-ace", {
+        templateId: "astral-comet-ace",
+        type: "monster",
+        atk: 2300,
+        def: 1800,
+        mode: "defense",
+        used: true,
+        changedMode: true,
+        tempAtk: 700,
+        tempDef: -200,
+        battleWear: 150,
+        destructionProtectionUsed: true
+      }),
       card("spent-spell", { templateId: "last-spark", effect: "comebackDraw" })
     ],
     player: {
@@ -1115,13 +1126,58 @@ test("starwake recall revives only legal graveyard monster targets", () => {
 
   assert.deepEqual(next.players[PLAYER].monsterZone, ["fallen-ace"]);
   assert.deepEqual(next.players[PLAYER].grave, ["spent-spell", "recall-1"]);
+  assert.equal(next.cards["fallen-ace"].mode, "attack");
+  assert.equal(next.cards["fallen-ace"].used, false);
+  assert.equal(next.cards["fallen-ace"].changedMode, false);
+  assert.equal(next.cards["fallen-ace"].tempAtk, 0);
+  assert.equal(next.cards["fallen-ace"].tempDef, 0);
+  assert.equal(next.cards["fallen-ace"].battleWear, 0);
+  assert.equal(next.cards["fallen-ace"].destructionProtectionUsed, false);
   assert.ok(events.some((event) =>
     event.type === "CARD_MOVED" &&
     event.cardId === "fallen-ace" &&
     event.from.zone === "grave" &&
     event.to.zone === "monsterZone"
   ));
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.cardId === "fallen-ace" &&
+    event.summonType === "special" &&
+    event.fromZone === "grave" &&
+    event.mode === "attack"
+  ));
   assertValidGameState(next);
+});
+
+test("normal summon clears stale field state carried through other zones", () => {
+  const state = makeState({
+    cards: [card("recycled-1", {
+      templateId: "spark-runner",
+      type: "monster",
+      atk: 800,
+      def: 1200,
+      mode: "defense",
+      used: true,
+      changedMode: true,
+      tempAtk: 500,
+      tempDef: -300,
+      battleWear: 200,
+      destructionProtectionUsed: true
+    })],
+    player: { hand: ["recycled-1"] }
+  });
+
+  const engine = new GameEngine(state);
+  engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "recycled-1", index: 0 });
+  const summoned = engine.getState().cards["recycled-1"];
+
+  assert.equal(summoned.mode, "attack");
+  assert.equal(summoned.used, false);
+  assert.equal(summoned.changedMode, false);
+  assert.equal(summoned.tempAtk, 0);
+  assert.equal(summoned.tempDef, 0);
+  assert.equal(summoned.battleWear, 0);
+  assert.equal(summoned.destructionProtectionUsed, false);
 });
 
 test("dawn edge and last stand surge apply protagonist attack boosts through stat events", () => {
@@ -2364,7 +2420,7 @@ test("conditional on-summon effects can be skipped without rejecting the summon"
   const next = engine.getState();
 
   assert.deepEqual(next.players[PLAYER].monsterZone, ["captain-1", "alchemist-1"]);
-  assert.equal(next.cards["captain-1"].tempAtk, undefined);
+  assert.equal(next.cards["captain-1"].tempAtk, 0);
   assert.equal(next.players[AI].lp, 4000);
   assert.ok(buffEvents.some((event) => event.type === "EFFECT_SKIPPED" && event.effectId === "fireBuff"));
   assert.ok(burnEvents.some((event) => event.type === "EFFECT_SKIPPED" && event.effectId === "shadowBurn"));

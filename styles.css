@@ -2190,6 +2190,16 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   --hand-action-accent: 84, 210, 210;
 }
 
+.hand .card.spell.action-ready:not(.selected) {
+  border-color: rgba(var(--hand-action-accent), 1);
+  outline: 2px solid rgba(var(--hand-action-accent), 0.5);
+  outline-offset: 1px;
+  box-shadow:
+    0 0 0 4px rgba(var(--hand-action-accent), 0.12),
+    0 0 20px rgba(var(--hand-action-accent), 0.38),
+    0 12px 24px rgba(0, 0, 0, 0.34);
+}
+
 .hand .card.trap.action-ready {
   --hand-action-accent: 183, 148, 244;
 }
@@ -2206,6 +2216,12 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   color: rgb(var(--hand-action-accent));
   border-color: rgba(var(--hand-action-accent), 0.46);
   background: rgba(8, 15, 22, 0.88);
+}
+
+.hand .card.spell.action-ready:not(.selected) .action-tag {
+  color: #bffafa;
+  border-color: rgba(var(--hand-action-accent), 0.78);
+  box-shadow: inset 0 0 0 1px rgba(var(--hand-action-accent), 0.18);
 }
 
 .hand .card.action-ready .action-reason {
