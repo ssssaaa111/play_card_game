@@ -75,3 +75,19 @@ test("mobile field tracks preserve both monster stats and horizontal support nam
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field-monster-card\s*\{[\s\S]*grid-template-rows: 18px minmax\(42px, 1fr\) 15px 36px;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.trap-slot \.card\.field-support-card \.card-name\s*\{[\s\S]*white-space: nowrap;/);
 });
+
+test("attack selection exposes intent and exact target comparisons", () => {
+  const app = read("src/app.js");
+  const rules = read("src/rules.js");
+  const css = read("styles.css");
+
+  assert.match(rules, /export function makeAttackIntentPreview/);
+  assert.match(app, /state\.battlePreview \|\| selectedAttackPreview\(\)/);
+  assert.match(app, /showSelectedAttackTargetPreview\(index\)/);
+  assert.match(app, /slot\.addEventListener\("pointerenter"/);
+  assert.match(app, /slot\.addEventListener\("focus"/);
+  assert.match(app, /showSelectedAttackTargetPreview\(-1\)/);
+  assert.match(css, /\.battle-preview-versus\s*\{/);
+  assert.match(css, /\.battle-preview-diff\.positive/);
+  assert.match(css, /\.battle-preview\.intent/);
+});

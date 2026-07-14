@@ -96,6 +96,7 @@ import {
   battleValue,
   fieldCards,
   fieldElements,
+  makeAttackIntentPreview,
   makeBattlePreview,
   spellTargetPrompt,
   strongestMonster,
@@ -372,6 +373,23 @@ function showBattlePreview(attacker, target, owner = null, rival = null) {
 
 function clearBattlePreview() {
   state.battlePreview = null;
+}
+
+function selectedAttackPreview() {
+  if (!canPlayerAct() || state.selected?.zone !== "playerField") return null;
+  const attackerIndex = state.selected.index;
+  const attacker = state.player.field[attackerIndex];
+  if (!attacker) return null;
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex });
+  if (!projection.inAttackIntentWindow || !projection.attackActions.length) return null;
+  if (projection.attackActions.length === 1) {
+    const targetIndex = projection.attackActions[0].targetIndex;
+    return makeBattlePreview(attacker, targetIndex >= 0 ? state.ai.field[targetIndex] : null, state.player, state.ai);
+  }
+  return makeAttackIntentPreview(attacker, {
+    targetCount: projection.targetIndexes.length,
+    canDirectAttack: projection.canDirectAttack
+  });
 }
 
 function loadDuelStats() {
@@ -4633,6 +4651,8 @@ function render(animationKey = "") {
   const directTargetReady = canPlayerTargetAiPanel();
   els.aiPanel.classList.toggle("direct-target", directTargetReady);
   els.aiPanel.setAttribute("aria-label", directTargetReady ? "直接攻击 AI 玩家" : "AI 玩家状态");
+  els.aiPanel.setAttribute("role", directTargetReady ? "button" : "region");
+  els.aiPanel.tabIndex = directTargetReady ? 0 : -1;
 
   renderField(els.playerField, state.player, "player", animationKey);
   renderField(els.aiField, state.ai, "ai", animationKey);
@@ -4649,23 +4669,55 @@ function render(animationKey = "") {
 function renderBattlePreview() {
   const root = els.battlePreview;
   if (!root) return;
-  const preview = state.battlePreview;
+  const preview = state.battlePreview || selectedAttackPreview();
   root.innerHTML = "";
   root.className = `battle-preview${preview ? "" : " empty"}${preview?.tone ? ` ${preview.tone}` : ""}`;
+  root.dataset.previewMode = preview?.mode || "empty";
   if (!preview) return;
 
   const title = document.createElement("div");
   title.className = "battle-preview-title";
   const titleText = document.createElement("span");
-  titleText.textContent = "攻击结算预览";
+  titleText.textContent = preview.mode === "intent" ? "攻击目标预览" : "攻击结算预览";
   const badge = document.createElement("strong");
   badge.textContent = preview.badge;
   title.appendChild(titleText);
   title.appendChild(badge);
 
+  if (preview.compare) {
+    const versus = document.createElement("div");
+    versus.className = "battle-preview-versus";
+    const attacker = document.createElement("div");
+    attacker.className = "battle-preview-side attacker";
+    const attackerLabel = document.createElement("span");
+    attackerLabel.textContent = preview.compare.attackerLabel;
+    const attackerValue = document.createElement("strong");
+    attackerValue.textContent = preview.compare.attackerValue;
+    attacker.appendChild(attackerLabel);
+    attacker.appendChild(attackerValue);
+    const diff = document.createElement("div");
+    diff.className = `battle-preview-diff ${preview.compare.diff > 0 ? "positive" : preview.compare.diff < 0 ? "negative" : "even"}`;
+    diff.textContent = preview.compare.diff > 0 ? `+${preview.compare.diff}` : `${preview.compare.diff}`;
+    const target = document.createElement("div");
+    target.className = "battle-preview-side target";
+    const targetLabel = document.createElement("span");
+    targetLabel.textContent = preview.compare.targetLabel;
+    const targetValue = document.createElement("strong");
+    targetValue.textContent = preview.compare.targetValue;
+    target.appendChild(targetLabel);
+    target.appendChild(targetValue);
+    versus.appendChild(attacker);
+    versus.appendChild(diff);
+    versus.appendChild(target);
+    root.appendChild(title);
+    root.appendChild(versus);
+  } else {
+    root.appendChild(title);
+  }
+
   const grid = document.createElement("div");
   grid.className = "battle-preview-grid";
-  preview.rows.forEach((row) => {
+  preview.rows.filter((row) => !preview.compare || !["攻击方", "目标", "差值"].includes(row.label)).forEach((row) => {
     const item = document.createElement("div");
     item.className = "battle-preview-row";
     const label = document.createElement("span");
@@ -4680,8 +4732,7 @@ function renderBattlePreview() {
   const result = document.createElement("div");
   result.className = "battle-preview-result";
   result.textContent = preview.result;
-  root.appendChild(title);
-  root.appendChild(grid);
+  if (grid.childElementCount) root.appendChild(grid);
   root.appendChild(result);
 }
 
@@ -4696,6 +4747,23 @@ function canPlayerTargetAiPanel() {
   if (state.pendingTarget || !canPlayerAct() || state.selected?.zone !== "playerField") return false;
   const projection = projectBattleFromUiState(state, "player", { attackerIndex: state.selected.index });
   return projection.inAttackIntentWindow && projection.canDirectAttack;
+}
+
+function showSelectedAttackTargetPreview(targetIndex) {
+  if (state.selected?.zone !== "playerField" || !canPlayerAct()) return;
+  const attackerIndex = state.selected.index;
+  const attacker = state.player.field[attackerIndex];
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex });
+  if (!attacker || !projection.attackActions.some((action) => action.targetIndex === targetIndex)) return;
+  const target = targetIndex >= 0 ? state.ai.field[targetIndex] : null;
+  showBattlePreview(attacker, target, state.player, state.ai);
+  renderBattlePreview();
+}
+
+function restoreSelectedAttackPreview() {
+  if (!canUseAttackIntentWindow()) return;
+  clearBattlePreview();
+  renderBattlePreview();
 }
 
 function renderField(root, duelist, owner, animationKey) {
@@ -4727,6 +4795,12 @@ function renderField(root, duelist, owner, animationKey) {
       slot.addEventListener("click", () => handlePlayerSlot(index));
     } else {
       slot.addEventListener("click", () => handleAiSlot(index));
+    }
+    if (attackTargetable) {
+      slot.addEventListener("pointerenter", () => showSelectedAttackTargetPreview(index));
+      slot.addEventListener("pointerleave", restoreSelectedAttackPreview);
+      slot.addEventListener("focus", () => showSelectedAttackTargetPreview(index));
+      slot.addEventListener("blur", restoreSelectedAttackPreview);
     }
     if (card) {
       const attacksLocked = owner === "player" && state.player.attacksSkipped && card.type === "monster" && !card.used && card.mode !== "defense";
@@ -5255,6 +5329,15 @@ if (els.fusionPreviewDetail) {
   });
 }
 els.aiPanel.addEventListener("click", handleAiPanelAttack);
+els.aiPanel.addEventListener("pointerenter", () => showSelectedAttackTargetPreview(-1));
+els.aiPanel.addEventListener("pointerleave", restoreSelectedAttackPreview);
+els.aiPanel.addEventListener("focus", () => showSelectedAttackTargetPreview(-1));
+els.aiPanel.addEventListener("blur", restoreSelectedAttackPreview);
+els.aiPanel.addEventListener("keydown", (event) => {
+  if (!canPlayerTargetAiPanel() || !["Enter", " "].includes(event.key)) return;
+  event.preventDefault();
+  handleAiPanelAttack();
+});
 els.zoomClose.addEventListener("click", closeCardDetail);
 els.aiRevealDetail.addEventListener("click", () => {
   if (pendingAiReveal?.cardId) openCardDetail(pendingAiReveal.cardId);

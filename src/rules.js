@@ -125,6 +125,28 @@ export function shieldPreview(amount, shield = 0, sourceCard = null) {
   };
 }
 
+export function makeAttackIntentPreview(attacker, { targetCount = 0, canDirectAttack = false } = {}) {
+  if (!attacker) return null;
+  const targetSummary = [
+    targetCount > 0 ? `${targetCount} 个怪兽` : "",
+    canDirectAttack ? "对方玩家" : ""
+  ].filter(Boolean).join(" / ") || "暂无合法目标";
+  return {
+    mode: "intent",
+    badge: "攻击就绪",
+    tone: "intent",
+    rows: [
+      { label: "攻击方", value: `${attacker.name} / 攻击 ${totalAtk(attacker)}` },
+      { label: "合法目标", value: targetSummary }
+    ],
+    result: targetCount > 0
+      ? "锁定高亮目标后显示准确结算。"
+      : canDirectAttack
+        ? "对方场上没有可阻挡的怪兽，可以直接攻击玩家。"
+        : "当前没有可执行的攻击目标。"
+  };
+}
+
 export function makeBattlePreview(attacker, target, owner = null, rival = null) {
   if (!attacker) return null;
   const attack = totalAtk(attacker);
@@ -138,6 +160,7 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
       { label: "结算", value: shield.text }
     );
     return {
+      mode: "direct",
       badge: "直击",
       tone: "",
       rows,
@@ -147,6 +170,13 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
   const targetMode = target.mode === "defense" ? "守备" : "攻击";
   const targetValue = battleValue(target);
   const diff = attack - targetValue;
+  const compare = {
+    attackerLabel: "我方 ATK",
+    attackerValue: attack,
+    targetLabel: `目标 ${targetMode}`,
+    targetValue,
+    diff
+  };
   rows.push(
     { label: "目标", value: `${target.name} / ${targetMode} ${targetValue}` },
     { label: "差值", value: diff > 0 ? `+${diff}` : `${diff}` }
@@ -163,7 +193,9 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
     }
     return {
       badge: piercesDefense ? "贯穿" : target.mode === "defense" ? "破防" : "优势",
-      tone: target.mode === "defense" ? "guard" : "",
+      mode: "target",
+      compare,
+      tone: target.mode === "defense" ? "guard" : "advantage",
       rows,
       result: piercesDefense
         ? `目标会被击破；神格贯穿会造成差值伤害。${shield.text}`
@@ -183,6 +215,8 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
     if (target.mode === "defense") {
       return {
         badge: "守备反击",
+        mode: "target",
+        compare,
         tone: "guard",
         rows,
         result: `攻击方承受守备力差值伤害；${shield.text}双方怪兽保留，目标会产生战斗损耗。`
@@ -190,6 +224,8 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
     }
     return {
       badge: "受反击",
+      mode: "target",
+      compare,
       tone: "danger",
       rows,
       result: `攻击方会被破坏；${shield.text}目标会产生战斗损耗。`
@@ -198,6 +234,8 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
   if (target.mode === "defense") {
     return {
       badge: "防御",
+      mode: "target",
+      compare,
       tone: "guard",
       rows,
       result: "守备怪兽挡下攻击，双方怪兽保留。"
@@ -205,6 +243,8 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
   }
   return {
     badge: "相杀",
+    mode: "target",
+    compare,
     tone: "danger",
     rows,
     result: "双方数值相同，预计同归于尽。"

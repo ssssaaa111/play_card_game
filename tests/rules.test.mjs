@@ -14,6 +14,7 @@ import {
   fieldCards,
   fieldElements,
   legalAttackTargets,
+  makeAttackIntentPreview,
   makeBattlePreview,
   shieldPreview,
   spellTargetPrompt,
@@ -199,11 +200,21 @@ test("builds structured battle previews with shield math", () => {
 
   const preview = makeBattlePreview(attacker, target, duelist(), duelist({ shield: 400 }));
   assert.equal(preview.badge, "优势");
+  assert.equal(preview.mode, "target");
+  assert.equal(preview.tone, "advantage");
+  assert.deepEqual(preview.compare, {
+    attackerLabel: "我方 ATK",
+    attackerValue: 1800,
+    targetLabel: "目标 攻击",
+    targetValue: 900,
+    diff: 900
+  });
   assert.equal(preview.rows.at(-1).value, "吸收 400 / 实伤 500");
   assert.match(preview.result, /最终生命值伤害 500/);
 
   const directPreview = makeBattlePreview(attacker, null, duelist(), duelist({ shield: 2000 }));
   assert.equal(directPreview.badge, "直击");
+  assert.equal(directPreview.mode, "direct");
   assert.match(directPreview.rows.at(-1).value, /最终生命值伤害 0/);
 
   const divinePreview = makeBattlePreview(
@@ -227,6 +238,20 @@ test("builds structured battle previews with shield math", () => {
   const guardHoldPreview = makeBattlePreview(attacker, monster({ name: "同防守卫", mode: "defense", def: 1800 }), duelist(), duelist());
   assert.equal(guardHoldPreview.badge, "防御");
   assert.match(guardHoldPreview.result, /挡下攻击/);
+});
+
+test("builds attack intent previews before a target is chosen", () => {
+  const preview = makeAttackIntentPreview(monster({ name: "星轨枪兵", atk: 1800 }), {
+    targetCount: 2,
+    canDirectAttack: true
+  });
+
+  assert.equal(preview.mode, "intent");
+  assert.equal(preview.badge, "攻击就绪");
+  assert.equal(preview.tone, "intent");
+  assert.equal(preview.rows[0].value, "星轨枪兵 / 攻击 1800");
+  assert.equal(preview.rows[1].value, "2 个怪兽 / 对方玩家");
+  assert.match(preview.result, /准确结算/);
 });
 
 test("builds spell target prompts from target mode and rule", () => {

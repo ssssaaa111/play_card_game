@@ -2654,6 +2654,10 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   display: none;
 }
 
+.detail-card:has(.battle-preview:not(.empty)) > #detailText {
+  display: none;
+}
+
 .battle-preview-title {
   display: flex;
   align-items: center;
@@ -2667,6 +2671,69 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .battle-preview-title strong {
   color: var(--cyan);
   font-size: 11px;
+}
+
+.battle-preview-versus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+  gap: 6px;
+  align-items: stretch;
+  margin-top: 8px;
+}
+
+.battle-preview-side {
+  display: grid;
+  place-content: center;
+  min-width: 0;
+  min-height: 58px;
+  padding: 7px 6px;
+  border: 1px solid rgba(237, 242, 247, 0.14);
+  background: rgba(4, 8, 14, 0.46);
+  text-align: center;
+}
+
+.battle-preview-side span {
+  overflow: hidden;
+  color: rgba(237, 242, 247, 0.56);
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-preview-side strong {
+  margin-top: 2px;
+  color: #f7df9c;
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.battle-preview-side.target strong {
+  color: #b8dfe2;
+}
+
+.battle-preview-diff {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  border-inline: 1px solid rgba(237, 242, 247, 0.1);
+  color: rgba(237, 242, 247, 0.62);
+  font-family: "Rajdhani", "Segoe UI", sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.battle-preview-diff.positive {
+  color: #7fe0ab;
+}
+
+.battle-preview-diff.negative {
+  color: #ff7f9c;
+}
+
+.battle-preview-diff.even {
+  color: #f7df9c;
 }
 
 .battle-preview-grid {
@@ -2711,6 +2778,18 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .battle-preview.guard .battle-preview-title strong {
   color: #8ee6b8;
+}
+
+.battle-preview.advantage {
+  border-color: rgba(127, 224, 171, 0.46);
+}
+
+.battle-preview.advantage .battle-preview-title strong {
+  color: #7fe0ab;
+}
+
+.battle-preview.intent {
+  border-color: rgba(84, 210, 210, 0.42);
 }
 
 .summon-flash {
@@ -5158,6 +5237,38 @@ button.chain-stack-card:focus-visible {
   .side:not(.enemy) .timeline {
     min-height: 0;
     padding: 7px;
+  }
+
+  .battle-preview {
+    margin-top: 6px;
+    padding: 7px;
+  }
+
+  .battle-preview-versus {
+    grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+    margin-top: 6px;
+  }
+
+  .battle-preview-side {
+    min-height: 44px;
+    padding-block: 5px;
+  }
+
+  .battle-preview-side strong {
+    font-size: 20px;
+  }
+
+  .battle-preview-grid {
+    margin-top: 5px;
+  }
+
+  .battle-preview-result {
+    display: -webkit-box;
+    margin-top: 5px;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 11px;
   }
 
   .hand-panel {
