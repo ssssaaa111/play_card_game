@@ -62,6 +62,14 @@
           <div class="detail-card">
             <h2 id="detailName">选择一张卡</h2>
             <p id="detailText">点击手牌可以查看效果。选择怪兽后点自己的空召唤区召唤，选择场上怪兽后点敌方怪兽攻击；可直击时点敌方角色发动直接攻击。</p>
+            <div class="detail-inspector" id="detailInspector" hidden>
+              <div class="detail-summary" id="detailSummary"></div>
+              <div class="detail-effect-block">
+                <span class="detail-section-label">完整效果</span>
+                <p class="detail-effect" id="detailEffect"></p>
+              </div>
+              <dl class="detail-meta" id="detailMeta"></dl>
+            </div>
             <div class="detail-actions">
               <button class="btn small-action primary" id="handConfirmBtn" type="button" hidden>确认</button>
               <button class="btn small-action" id="handCancelBtn" type="button" hidden>取消</button>

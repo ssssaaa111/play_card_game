@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { cardDetailText, cardDetailViewModel, cardRuleLine, cardZoomMeta } from "../src/card-detail.js";
+import { cardDetailText, cardDetailViewModel, cardInspectorViewModel, cardRuleLine, cardZoomMeta } from "../src/card-detail.js";
 
 test("describes monster details with current status", () => {
   const card = {
@@ -33,6 +33,46 @@ test("describes spell and trap rule lines", () => {
   assert.equal(cardRuleLine(ordinarySpell), "规则：无需指定目标");
   assert.equal(cardRuleLine(trap), "触发：受到直接攻击时 / 直击伤害归零 / 消耗攻击");
   assert.match(cardZoomMeta(trap), /触发键：directShield/);
+});
+
+test("keeps complete effect text in details when hand cards use summaries", () => {
+  const view = cardDetailViewModel("seer-call");
+
+  assert.equal(view.name, "预见之召");
+  assert.equal(view.effectText, "抽 2 张卡。");
+  assert.match(cardDetailText(view.card), /抽 2 张卡/);
+});
+
+test("builds a tactical inspector without replacing complete support-card text", () => {
+  const view = cardInspectorViewModel("seer-call");
+
+  assert.equal(view.tacticalSummary, "抽牌 ×2");
+  assert.equal(view.effectText, "抽 2 张卡。");
+  assert.deepEqual(view.rows.map((row) => row.label), ["类型", "规则", "分类"]);
+  assert.equal(view.rows[0].value, "魔法");
+  assert.equal(view.rows[1].value, "无需指定目标");
+  assert.match(view.rows[2].value, /稀有度 N · 流派 资源/);
+});
+
+test("uses live monster values and status in the selected-card inspector", () => {
+  const definition = cardDetailViewModel("ember-drake").card;
+  const view = cardInspectorViewModel({ ...definition, tempAtk: 300, used: true, mode: "attack" });
+
+  assert.match(view.rows.find((row) => row.label === "战力").value, /ATK 1800 \/ DEF 900/);
+  assert.match(view.rows.find((row) => row.label === "状态").value, /强化\+300/);
+});
+
+test("keeps concealed cards redacted in inspector and zoom details", () => {
+  const card = { type: "trap", name: "盖放的陷阱", text: "这张卡还没有被公开。", concealed: true };
+  const view = cardInspectorViewModel(card);
+
+  assert.equal(view.tacticalSummary, "未知效果");
+  assert.deepEqual(view.rows, [
+    { label: "类型", value: "盖放卡" },
+    { label: "状态", value: "未公开" }
+  ]);
+  assert.equal(cardDetailViewModel(card).card, card);
+  assert.equal(cardZoomMeta(card), "类型：盖放卡 / 状态：未公开");
 });
 
 test("describes tribute summon requirements in unified card details", () => {

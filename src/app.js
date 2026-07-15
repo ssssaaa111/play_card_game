@@ -11,9 +11,11 @@ import {
 } from './ai.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createBattleLogEntry, logEntryMessage, publicLogCardIds } from './battle-log.js';
+import { renderBattlePreviewElement } from './battle-preview-renderer.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { applyCardArt } from './card-art.js';
-import { cardDefinitionById, cardDetailText, cardDetailViewModel } from './card-detail.js';
+import { cardDefinitionById, cardDetailViewModel, cardInspectorViewModel } from './card-detail.js';
+import { bindCardInspector, renderCardInspector } from './card-inspector-renderer.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
@@ -234,8 +236,6 @@ const els = {
   chainHistoryToggle: document.querySelector("#chainHistoryToggle"),
   chainHistoryCount: document.querySelector("#chainHistoryCount"),
   chainHistoryList: document.querySelector("#chainHistoryList"),
-  detailName: document.querySelector("#detailName"),
-  detailText: document.querySelector("#detailText"),
   battlePreview: document.querySelector("#battlePreview"),
   handConfirmBtn: document.querySelector("#handConfirmBtn"),
   handCancelBtn: document.querySelector("#handCancelBtn"),
@@ -307,6 +307,8 @@ const els = {
   chainYes: document.querySelector("#chainYes"),
   chainNo: document.querySelector("#chainNo")
 };
+
+const cardInspectorElements = bindCardInspector(document);
 
 const audioController = createAudioController({
   getSettings: () => ({
@@ -2230,16 +2232,21 @@ async function handleAiTrapSlot(index) {
   if (card) {
     state.selected = null;
     clearBattlePreview();
-    showDetail({ ...card, name: "盖放的陷阱", text: "这张卡还没有被触发。" });
+    showDetail({ type: "trap", name: "盖放的陷阱", icon: "?", text: "这张卡还没有被公开。", concealed: true });
     render();
   }
 }
 
 async function handleAiSlot(index) {
-  if (!canPlayerAct()) return;
-  if (!state.ai.field[index]) return;
+  const card = state.ai.field[index];
+  if (!card) return;
+  if (!canPlayerAct()) {
+    showDetail(card);
+    return;
+  }
   notePlayerIntent();
   if (state.pendingTarget) {
+    showDetail(card);
     await resolvePendingSpellTarget("ai", index);
     return;
   }
@@ -2253,6 +2260,7 @@ async function handleAiSlot(index) {
     }
   }
   if (!state.selected || state.selected.zone !== "playerField") {
+    showDetail(card);
     announce("先选择你场上的怪兽");
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
@@ -4256,9 +4264,10 @@ function checkGameOver() {
 }
 
 function showDetail(card) {
+  const view = cardInspectorViewModel(card);
+  if (!view) return;
   state.focusedCard = card;
-  els.detailName.textContent = card.name;
-  els.detailText.textContent = cardDetailText(card);
+  renderCardInspector(document, cardInspectorElements, view);
 }
 
 function openCardDetail(cardOrId) {
@@ -4667,73 +4676,8 @@ function render(animationKey = "") {
 }
 
 function renderBattlePreview() {
-  const root = els.battlePreview;
-  if (!root) return;
   const preview = state.battlePreview || selectedAttackPreview();
-  root.innerHTML = "";
-  root.className = `battle-preview${preview ? "" : " empty"}${preview?.tone ? ` ${preview.tone}` : ""}`;
-  root.dataset.previewMode = preview?.mode || "empty";
-  if (!preview) return;
-
-  const title = document.createElement("div");
-  title.className = "battle-preview-title";
-  const titleText = document.createElement("span");
-  titleText.textContent = preview.mode === "intent" ? "攻击目标预览" : "攻击结算预览";
-  const badge = document.createElement("strong");
-  badge.textContent = preview.badge;
-  title.appendChild(titleText);
-  title.appendChild(badge);
-
-  if (preview.compare) {
-    const versus = document.createElement("div");
-    versus.className = "battle-preview-versus";
-    const attacker = document.createElement("div");
-    attacker.className = "battle-preview-side attacker";
-    const attackerLabel = document.createElement("span");
-    attackerLabel.textContent = preview.compare.attackerLabel;
-    const attackerValue = document.createElement("strong");
-    attackerValue.textContent = preview.compare.attackerValue;
-    attacker.appendChild(attackerLabel);
-    attacker.appendChild(attackerValue);
-    const diff = document.createElement("div");
-    diff.className = `battle-preview-diff ${preview.compare.diff > 0 ? "positive" : preview.compare.diff < 0 ? "negative" : "even"}`;
-    diff.textContent = preview.compare.diff > 0 ? `+${preview.compare.diff}` : `${preview.compare.diff}`;
-    const target = document.createElement("div");
-    target.className = "battle-preview-side target";
-    const targetLabel = document.createElement("span");
-    targetLabel.textContent = preview.compare.targetLabel;
-    const targetValue = document.createElement("strong");
-    targetValue.textContent = preview.compare.targetValue;
-    target.appendChild(targetLabel);
-    target.appendChild(targetValue);
-    versus.appendChild(attacker);
-    versus.appendChild(diff);
-    versus.appendChild(target);
-    root.appendChild(title);
-    root.appendChild(versus);
-  } else {
-    root.appendChild(title);
-  }
-
-  const grid = document.createElement("div");
-  grid.className = "battle-preview-grid";
-  preview.rows.filter((row) => !preview.compare || !["攻击方", "目标", "差值"].includes(row.label)).forEach((row) => {
-    const item = document.createElement("div");
-    item.className = "battle-preview-row";
-    const label = document.createElement("span");
-    label.textContent = row.label;
-    const value = document.createElement("strong");
-    value.textContent = row.value;
-    item.appendChild(label);
-    item.appendChild(value);
-    grid.appendChild(item);
-  });
-
-  const result = document.createElement("div");
-  result.className = "battle-preview-result";
-  result.textContent = preview.result;
-  if (grid.childElementCount) root.appendChild(grid);
-  root.appendChild(result);
+  renderBattlePreviewElement(document, els.battlePreview, preview);
 }
 
 function isAttackTargetSlot(ownerName, index) {
@@ -4844,7 +4788,6 @@ function renderField(root, duelist, owner, animationKey) {
         cardEl.addEventListener("click", (event) => {
           event.stopPropagation();
           handleAiSlot(index);
-          showDetail(card);
         });
       }
       slot.appendChild(cardEl);
@@ -4998,7 +4941,7 @@ function handActionInfo(card, handIndex) {
 function renderHand(animationKey) {
   els.hand.innerHTML = "";
   state.player.hand.forEach((card, index) => {
-    const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
+    const cardEl = renderCardElement(document, card, { asset: monsterAsset(card), handSummary: true });
     cardEl.dataset.zone = "hand";
     const action = handActionInfo(card, index);
     const fusionMaterialCandidate = Boolean(state.pendingFusion) && isFusionHandMaterialCandidate(card.uid);
@@ -5020,6 +4963,9 @@ function renderHand(animationKey) {
       : fusionMaterialCandidate
         ? "点击选择为手牌融合素材。"
         : action.reason;
+    const showActionReason = fusionMaterialSelected || fusionMaterialCandidate || state.selected?.uid === card.uid || !action.ok;
+    actionReason.hidden = !showActionReason;
+    cardEl.classList.toggle("compact-action-state", !showActionReason);
     cardEl.appendChild(actionReason);
     if (animationKey === "draw-player" && card === state.player.hand[state.player.hand.length - 1]) {
       cardEl.classList.add("draw-flash");

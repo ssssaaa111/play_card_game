@@ -30,9 +30,12 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/app.js");
   checkModuleSyntax("src/audio.js");
   checkModuleSyntax("src/battle.js");
+  checkModuleSyntax("src/battle-preview-renderer.js");
   checkModuleSyntax("src/browser-smoke.js");
   checkModuleSyntax("src/card-detail.js");
+  checkModuleSyntax("src/card-inspector-renderer.js");
   checkModuleSyntax("src/card-renderer.js");
+  checkModuleSyntax("src/card-state-display.js");
   checkModuleSyntax("src/cards.js");
   checkModuleSyntax("src/combos.js");
   checkModuleSyntax("src/data.js");
@@ -886,7 +889,7 @@ test("app uses extracted card details", () => {
   const app = readProjectFile("src/app.js");
 
   assert.match(app, /from '\.\/card-detail\.js'/);
-  assert.match(app, /cardDetailText\(card\)/);
+  assert.match(app, /cardInspectorViewModel\(card\)/);
   assert.match(app, /cardDetailViewModel\(cardOrId\)/);
   assert.match(app, /state\.log\.slice\(0, 5\)/);
   assert.match(app, /appendLogEntryContent\(line, entry\)/);
@@ -1088,7 +1091,8 @@ test("setup modal keeps the start action reachable", () => {
 
   assert.match(app, /const setupModalOpen = els\.modal\?\.classList\.contains\("show"\) && !state\.started && !state\.gameOver/);
   assert.match(app, /els\.startBtn\.disabled = setupModalOpen \|\| \(state\.started && !state\.gameOver\)/);
-  assert.match(css, /\.modal \{[\s\S]*overflow: auto;/);
+  assert.match(css, /\.modal \{[\s\S]*z-index: 20;[\s\S]*overflow: auto;/);
+  assert.match(css, /#cardModal\.show \{[\s\S]*z-index: 22;/);
   assert.match(css, /\.modal-box \{[\s\S]*max-height: calc\(100vh - 36px\);[\s\S]*overflow: auto;/);
   assert.match(css, /\.modal-actions \{[\s\S]*position: sticky;[\s\S]*width: 100%;/);
   assert.match(css, /#modalRestart \{[\s\S]*width: 100%;[\s\S]*min-height: 44px;/);

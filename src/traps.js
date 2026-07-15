@@ -2,6 +2,7 @@ import { totalAtk, totalDef } from './rules.js';
 
 export const trapDefinitions = {
   attackDestroy: {
+    handSummary: "对手攻击时 · 破坏攻击怪兽",
     event: "attack",
     caption: "破坏攻击怪兽",
     triggerText: "对手攻击时",
@@ -9,6 +10,7 @@ export const trapDefinitions = {
     consumesAttack: false
   },
   counterBoost: {
+    handSummary: "取消攻击 · 最低 ATK +400",
     event: "attack",
     caption: "取消攻击并强化防线",
     triggerText: "对手攻击时",
@@ -16,6 +18,7 @@ export const trapDefinitions = {
     consumesAttack: true
   },
   attackShift: {
+    handSummary: "取消攻击 · 护盾 +400",
     event: "attack",
     caption: "取消攻击并获得护盾",
     triggerText: "对手攻击时",
@@ -23,6 +26,7 @@ export const trapDefinitions = {
     consumesAttack: true
   },
   attackNegate: {
+    handSummary: "无效攻击 · 消耗攻击机会",
     event: "attack",
     caption: "无效本次攻击",
     triggerText: "对手攻击时",
@@ -30,6 +34,7 @@ export const trapDefinitions = {
     consumesAttack: true
   },
   aceGuard: {
+    handSummary: "无效攻击 · 最高 ATK +900",
     event: "attack",
     caption: "无效攻击并强化王牌",
     triggerText: "对手攻击时",
@@ -37,6 +42,7 @@ export const trapDefinitions = {
     consumesAttack: true
   },
   redirectAttack: {
+    handSummary: "攻击改向另一只最高 DEF 怪兽",
     event: "attack",
     caption: "改为攻击另一只怪兽",
     triggerText: "对手攻击时",
@@ -44,6 +50,7 @@ export const trapDefinitions = {
     consumesAttack: false
   },
   weakenAttack: {
+    handSummary: "攻击继续 · 敌方 ATK/DEF -500",
     event: "attack",
     caption: "削弱攻击怪兽",
     triggerText: "对手攻击时",
@@ -51,6 +58,7 @@ export const trapDefinitions = {
     consumesAttack: false
   },
   soulParry: {
+    handSummary: "攻击继续 · 敌方 ATK -300 · 护盾 +300",
     event: "attack",
     caption: "削弱攻击怪兽并获得护盾",
     triggerText: "对手攻击时",
@@ -58,6 +66,7 @@ export const trapDefinitions = {
     consumesAttack: false
   },
   directShield: {
+    handSummary: "直击伤害归零 · 抽牌 ×1",
     event: "direct",
     caption: "直击伤害归零",
     triggerText: "受到直接攻击时",
@@ -65,6 +74,7 @@ export const trapDefinitions = {
     consumesAttack: true
   },
   directRebound: {
+    handSummary: "直击归零 · 反弹 500",
     event: "direct",
     caption: "直击反弹",
     triggerText: "受到直接攻击时",
@@ -72,6 +82,7 @@ export const trapDefinitions = {
     consumesAttack: true
   },
   summonBurn: {
+    handSummary: "对手召唤时 · LP -400",
     event: "summon",
     caption: "召唤惩罚",
     triggerText: "对手召唤时",
@@ -79,6 +90,7 @@ export const trapDefinitions = {
     consumesAttack: false
   },
   chainNegate: {
+    handSummary: "连锁 · 无效对手陷阱",
     event: "chain",
     caption: "无效该陷阱效果",
     triggerText: "对手发动陷阱时",

@@ -25,10 +25,12 @@ test("combat HUD keeps life tone and turn resources in dedicated status rails", 
 
 test("field monsters expose a compact fixed-height state rail", () => {
   const renderer = read("src/card-renderer.js");
+  const stateDisplay = read("src/card-state-display.js");
   const app = read("src/app.js");
   const css = read("styles.css");
 
-  assert.match(renderer, /export function cardStateChips/);
+  assert.match(stateDisplay, /export function cardStateChips/);
+  assert.match(renderer, /from '\.\/card-state-display\.js'/);
   assert.match(renderer, /class="card-state-rail"/);
   assert.match(app, /cardEl\.classList\.toggle\("enhanced"/);
   assert.match(app, /cardEl\.classList\.toggle\("weakened"/);
@@ -78,11 +80,14 @@ test("mobile field tracks preserve both monster stats and horizontal support nam
 
 test("attack selection exposes intent and exact target comparisons", () => {
   const app = read("src/app.js");
+  const renderer = read("src/battle-preview-renderer.js");
   const rules = read("src/rules.js");
   const css = read("styles.css");
 
   assert.match(rules, /export function makeAttackIntentPreview/);
   assert.match(app, /state\.battlePreview \|\| selectedAttackPreview\(\)/);
+  assert.match(app, /renderBattlePreviewElement\(document, els\.battlePreview, preview\)/);
+  assert.match(renderer, /battle-preview-versus/);
   assert.match(app, /showSelectedAttackTargetPreview\(index\)/);
   assert.match(app, /slot\.addEventListener\("pointerenter"/);
   assert.match(app, /slot\.addEventListener\("focus"/);
@@ -90,4 +95,11 @@ test("attack selection exposes intent and exact target comparisons", () => {
   assert.match(css, /\.battle-preview-versus\s*\{/);
   assert.match(css, /\.battle-preview-diff\.positive/);
   assert.match(css, /\.battle-preview\.intent/);
+});
+
+test("clicking an attack target does not replace the selected attacker details", () => {
+  const app = read("src/app.js");
+
+  assert.doesNotMatch(app, /handleAiSlot\(index\);\s*showDetail\(card\);/);
+  assert.match(app, /if \(!state\.selected \|\| state\.selected\.zone !== "playerField"\) \{\s*showDetail\(card\);/);
 });

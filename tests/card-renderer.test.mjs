@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { cardRenderModel, cardStateChips, cardStatusText } from "../src/card-renderer.js";
+import { cardRenderModel } from "../src/card-renderer.js";
+import { cardHandSummary } from "../src/cards.js";
+import { library } from "../src/data.js";
 
 test("builds monster card render models with live battle stats", () => {
   const model = cardRenderModel({
@@ -41,6 +43,24 @@ test("builds spell and trap render models with rule summaries", () => {
   assert.equal(locked.statusText, "攻击已跳过");
 });
 
+test("builds concise tactical summaries for hand cards", () => {
+  const seer = { type: "spell", name: "预见之召", icon: "抽", text: "抽 2 张卡。", effect: "draw2" };
+  const guard = { type: "trap", name: "守护刻印", icon: "护", text: "直击伤害归零并抽牌。", trigger: "directShield" };
+
+  assert.equal(cardHandSummary(seer), "抽牌 ×2");
+  assert.equal(cardHandSummary(guard), "直击伤害归零 · 抽牌 ×1");
+  assert.equal(cardRenderModel(seer, { handSummary: true }).text, "抽牌 ×2");
+  assert.equal(cardRenderModel(seer, { handSummary: true }).textMode, "hand-summary");
+  assert.equal(cardRenderModel(seer).text, "抽 2 张卡。");
+  assert.equal(cardRenderModel(seer).textMode, "full");
+
+  const supportCards = library.filter((card) => card.type === "spell" || card.type === "trap");
+  assert.ok(supportCards.length > 0);
+  supportCards.forEach((card) => {
+    assert.ok(cardHandSummary(card), `${card.name} should expose a hand summary`);
+  });
+});
+
 test("renders tribute requirements on high-level monster cards", () => {
   const model = cardRenderModel({
     type: "monster",
@@ -56,30 +76,4 @@ test("renders tribute requirements on high-level monster cards", () => {
 
   assert.match(model.ruleText, /2/);
   assert.match(model.stats[1], /2/);
-});
-
-test("summarizes monster status chips", () => {
-  assert.equal(cardStatusText({ type: "spell" }), "");
-  assert.equal(cardStatusText({ type: "monster", tempAtk: -400, battleWear: 0, used: false }), "弱化-400");
-  assert.equal(cardStatusText({ type: "monster", tempAtk: 0, battleWear: 300, used: true }), "损耗-300 / 已行动");
-  assert.equal(cardStatusText({ type: "monster", tempAtk: 0, battleWear: 0, used: false, mode: "attack" }, { attacksLocked: true }), "攻击已跳过");
-  assert.equal(cardStatusText({ type: "monster", tempAtk: 300, battleWear: 0, used: false, mode: "attack" }, { attacksLocked: true }), "攻击已跳过 / 强化+300");
-});
-
-test("builds compact field state chips in a stable priority order", () => {
-  assert.deepEqual(
-    cardStateChips({ type: "monster", mode: "attack", used: false, tempAtk: 300, battleWear: 200 }, { attackReady: true }),
-    [
-      { label: "可攻击", tone: "ready" },
-      { label: "攻 +300", tone: "buff" },
-      { label: "损 -200", tone: "debuff" }
-    ]
-  );
-  assert.deepEqual(
-    cardStateChips({ type: "monster", mode: "defense", used: false, destructionProtection: true }),
-    [
-      { label: "守备", tone: "defense" },
-      { label: "守护", tone: "guard" }
-    ]
-  );
 });

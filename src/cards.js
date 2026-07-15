@@ -1,6 +1,6 @@
 import { elementLabel } from './rules.js';
 import { spellDefinition } from './spells.js';
-import { trapSummaryText } from './traps.js';
+import { trapDefinition, trapSummaryText } from './traps.js';
 import { fusionOptionsForCard } from './fusion.js';
 
 export function tributeCostForDisplay(card) {
@@ -70,6 +70,18 @@ export function cardTypeLabel(card) {
   if (card.type === "monster") return "怪兽";
   if (card.type === "trap") return "陷阱";
   return "魔法";
+}
+
+export function cardHandSummary(card) {
+  if (!card) return "";
+  if (card.handSummary) return card.handSummary;
+  if (card.type === "spell") {
+    return spellDefinition(card.effect)?.handSummary || card.summary || card.text || "";
+  }
+  if (card.type === "trap") {
+    return trapDefinition(card.trigger)?.handSummary || card.summary || card.text || "";
+  }
+  return card.summary || card.text || "";
 }
 
 export function spellTargetSummary(effect) {

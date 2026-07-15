@@ -3,115 +3,145 @@ import { fusionOptionsForCard } from './fusion.js';
 
 export const spellDefinitions = {
   burn500: {
+    handSummary: "对方 LP -500",
     caption: "爆裂伤害"
   },
   heal700: {
+    handSummary: "回复 700 LP",
     caption: "生命回复"
   },
   draw2: {
+    handSummary: "抽牌 ×2",
     caption: "预见未来，抽两张卡"
   },
   comebackDraw: {
+    handSummary: "抽牌 ×2 · 卡组需 2 张",
     caption: "余烬续抽，补足反击资源"
   },
   graveRevive: {
+    handSummary: "墓地怪兽特殊召唤",
     caption: "醒星回召，墓地怪兽回场",
     target: "ownGraveMonster"
   },
   dawnEdge: {
+    handSummary: "我方怪兽 ATK +900",
     caption: "破晓锋印，攻击爆发",
     target: "ownMonster"
   },
   lastStandSurge: {
+    handSummary: "LP≤1500 · ATK +700",
     caption: "临界誓辉，低生命强化",
     target: "ownMonster",
     targetRule: "strongest"
   },
   buff500: {
+    handSummary: "最高 ATK 怪兽 +500",
     caption: "攻击力提升",
     target: "ownMonster",
     targetRule: "strongest"
   },
   soulResonance: {
+    handSummary: "最高怪兽 ATK/DEF +200",
     caption: "星魂共鸣强化",
     target: "ownMonster",
     targetRule: "strongest"
   },
   aceEvolution: {
+    handSummary: "送墓 2 素材 · 特殊召唤王牌",
     caption: "素材升阶，王牌登场"
   },
   fusionSummon: {
+    handSummary: "2 指定素材 · 选择融合形态",
     caption: "融合召唤：选择指定素材登场"
   },
   splitToken: {
+    handSummary: "生成衍生物 ×2",
     caption: "星火分裂，生成衍生物",
     target: "ownMonster"
   },
   aceCrackdown: {
+    handSummary: "最高敌怪 ATK/DEF -500",
     caption: "压制王牌核心",
     target: "enemyMonster",
     targetRule: "strongest"
   },
   lunarDominion: {
+    handSummary: "持续压制 · ATK/DEF -900",
     caption: "月曜帷幕，持续压低目标",
     target: "enemyMonster"
   },
   trioFinalCounter: {
+    handSummary: "LP≤1600 · 强化最低攻并重置攻击",
     caption: "终局三曜反击"
   },
   shield800: {
+    handSummary: "护盾 +800",
     caption: "展开护盾"
   },
   extraSummon: {
+    handSummary: "通常召唤次数 +1",
     caption: "额外召唤机会"
   },
   elementEcho: {
+    handSummary: "全体 ATK +200 · 抽牌 ×1",
     caption: "元素共鸣，全场强化"
   },
   rallyAttack: {
+    handSummary: "最高 ATK +300 · 攻击重置 ×1",
     caption: "重置攻势",
     target: "ownMonster",
     targetRule: "strongest"
   },
   pierceLine: {
+    handSummary: "最高敌怪 ATK/DEF -400 · LP -200",
     caption: "破阵削弱",
     target: "enemyMonster",
     targetRule: "strongest"
   },
   graveReturn: {
+    handSummary: "墓地回卡组顶 · 抽牌 ×1",
     caption: "墓地回收，抽一张卡"
   },
   battleTrance: {
+    handSummary: "最高 ATK +200 · 攻击重置 ×1",
     caption: "战斗狂热，获得再攻",
     target: "ownMonster",
     targetRule: "strongest"
   },
   directStrike: {
+    handSummary: "直接攻击许可 ×1",
     caption: "打开直击路径"
   },
   fireWindCombo: {
+    handSummary: "LP -400 · 全体 ATK +200",
     caption: "火与风的组合技"
   },
   lightShadowCombo: {
+    handSummary: "护盾 +600 · 抽牌 ×1",
     caption: "光暗交错，展开星界"
   },
   equipBlade: {
+    handSummary: "装备 · ATK +300",
     caption: "装备：攻击提升",
     target: "ownMonster"
   },
   equipAegis: {
+    handSummary: "装备 · DEF +500",
     caption: "装备：守备强化",
     target: "ownMonster"
   },
   equipPrism: {
+    handSummary: "装备 · ATK/DEF +200",
     caption: "装备：攻守共鸣",
     target: "ownMonster"
   },
   equipOverclock: {
+    handSummary: "装备 · ATK +600 / DEF -300",
     caption: "装备：超载攻击",
     target: "ownMonster"
   },
   destroySpellTrap: {
+    handSummary: "破坏敌方魔陷 ×1",
     caption: "破坏对手魔陷",
     target: "enemySpellTrap"
   }
