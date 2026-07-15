@@ -35,3 +35,18 @@ test("app delegates battle preview DOM work without leaking state into the rende
   assert.doesNotMatch(renderer, /from '\.\/rules\.js'/);
   assert.doesNotMatch(renderer, /\bstate\./);
 });
+
+test("background music stays independent from rules and effect audio", () => {
+  const app = source("../src/app.js");
+  const audio = source("../src/audio.js");
+  const music = source("../src/music.js");
+
+  assert.match(app, /from '\.\/music\.js'/);
+  assert.match(app, /createMusicController\(\{/);
+  assert.match(app, /onVoiceActivity: setMusicVoiceActive/);
+  assert.match(audio, /onVoiceActivity/);
+  assert.doesNotMatch(music, /from '\.\/audio\.js'/);
+  assert.doesNotMatch(music, /engine-adapter|game-engine|rules\.js/);
+  assert.doesNotMatch(music, /\bstate\./);
+  assert.doesNotMatch(app, /function scheduleTone\(/);
+});

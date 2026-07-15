@@ -6,7 +6,7 @@ export function createAudioSettings({ testMode = false } = {}) {
   };
 }
 
-export function createAudioController({ getSettings, setSettings, announce }) {
+export function createAudioController({ getSettings, setSettings, announce, onVoiceActivity }) {
   const audio = {
     ctx: null,
     master: null,
@@ -60,9 +60,26 @@ export function createAudioController({ getSettings, setSettings, announce }) {
   let voicePlaying = false;
   let finishActiveVoice = null;
   let voiceToken = 0;
+  let voiceActivityToken = 0;
   let activeVoicePriority = 0;
   let activeVoiceKey = "";
   const voiceBufferCache = new Map();
+
+  function beginVoiceActivity() {
+    voiceActivityToken += 1;
+    onVoiceActivity?.(true);
+    return voiceActivityToken;
+  }
+
+  function endVoiceActivity(token) {
+    if (token !== voiceActivityToken) return;
+    onVoiceActivity?.(false);
+  }
+
+  function clearVoiceActivity() {
+    voiceActivityToken += 1;
+    onVoiceActivity?.(false);
+  }
 
   if ("speechSynthesis" in window) {
     cachedVoices = window.speechSynthesis.getVoices();
@@ -416,6 +433,7 @@ export function createAudioController({ getSettings, setSettings, announce }) {
 
   function stopVoiceAudio() {
     voiceToken += 1;
+    clearVoiceActivity();
     voiceQueue = [];
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -541,12 +559,14 @@ export function createAudioController({ getSettings, setSettings, announce }) {
     activeVoicePriority = job.priority;
     activeVoiceKey = job.key;
     const runToken = voiceToken;
+    const activityToken = beginVoiceActivity();
     try {
       await playProcessedVoice(job);
     } catch (error) {
       await delay(120);
     } finally {
       if (runToken === voiceToken) {
+        endVoiceActivity(activityToken);
         voicePlaying = false;
         activeVoicePriority = 0;
         activeVoiceKey = "";
@@ -678,13 +698,17 @@ export function createAudioController({ getSettings, setSettings, announce }) {
     if (!settings.voiceOn) return false;
     if (!settings.voiceReady && !force) return false;
     if (!("speechSynthesis" in window)) return false;
+    clearVoiceActivity();
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    const activityToken = beginVoiceActivity();
     utterance.lang = "zh-CN";
     utterance.voice = preferredVoice(owner);
     utterance.rate = owner === "ai" ? 0.96 : 1.02;
     utterance.pitch = owner === "ai" ? 0.88 : 1.05;
     utterance.volume = 0.96;
+    utterance.onend = () => endVoiceActivity(activityToken);
+    utterance.onerror = () => endVoiceActivity(activityToken);
     window.speechSynthesis.speak(utterance);
     return true;
   }

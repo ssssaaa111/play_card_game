@@ -42,6 +42,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/deck.js");
   checkModuleSyntax("src/engine-adapter.js");
   checkModuleSyntax("src/log-audit.js");
+  checkModuleSyntax("src/music.js");
   checkModuleSyntax("src/pre-duel-preview.js");
   checkModuleSyntax("src/response-state.js");
   checkModuleSyntax("src/rules.js");
@@ -112,6 +113,22 @@ test("app delegates audio and voice playback to the audio module", () => {
   assert.doesNotMatch(audio, /\bgetState\b/);
   assert.doesNotMatch(audio, /dispatch[A-Z]/);
   assert.doesNotMatch(audio, /engine-adapter|game-engine/);
+});
+
+test("app delegates adaptive background music to the music module", () => {
+  const app = readProjectFile("src/app.js");
+  const music = readProjectFile("src/music.js");
+  const html = readProjectFile("index.html");
+
+  assert.match(app, /from '\.\/music\.js'/);
+  assert.match(app, /createMusicSettings\(\{ testMode: BROWSER_TEST_MODE \}\)/);
+  assert.match(app, /createMusicController\(\{/);
+  assert.match(app, /musicStatus/);
+  assert.match(music, /export function createMusicController/);
+  assert.match(music, /mode === "critical"/);
+  assert.match(html, /id="musicBtn"/);
+  assert.match(html, /id="musicVolume"/);
+  assert.doesNotMatch(music, /\bstate\./);
 });
 
 test("app delegates DOM animation effects to the animation module", () => {
@@ -1131,7 +1148,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

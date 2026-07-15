@@ -1,5 +1,6 @@
 import { createAudioController, createAudioSettings } from './audio.js';
 import { createAnimationController } from './animation.js';
+import { createMusicController, createMusicSettings, musicModeForDuel } from './music.js';
 import { monsterAssets, roleProfiles, aiProfiles, deckPresets, characterProfiles, scenarioSetups } from './data.js';
 import { actionsForPhase, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import {
@@ -162,6 +163,7 @@ const state = {
   stats: loadDuelStats(),
   statsRecorded: false,
   ...createAudioSettings({ testMode: BROWSER_TEST_MODE }),
+  ...createMusicSettings({ testMode: BROWSER_TEST_MODE }),
   gameOver: false,
   gameOverWinner: null,
   gameOverLosers: [],
@@ -198,6 +200,8 @@ const els = {
   skipAttackBtn: document.querySelector("#skipAttackBtn"),
   endTurnBtn: document.querySelector("#endTurnBtn"),
   soundBtn: document.querySelector("#soundBtn"),
+  musicBtn: document.querySelector("#musicBtn"),
+  musicVolume: document.querySelector("#musicVolume"),
   voiceBtn: document.querySelector("#voiceBtn"),
   restartBtn: document.querySelector("#restartBtn"),
   playerLp: document.querySelector("#playerLp"),
@@ -310,6 +314,26 @@ const els = {
 
 const cardInspectorElements = bindCardInspector(document);
 
+const musicController = createMusicController({
+  getSettings: () => ({
+    musicOn: state.musicOn,
+    musicVolume: state.musicVolume
+  }),
+  setSettings: (musicSettings) => Object.assign(state, musicSettings)
+});
+
+const {
+  pause: pauseMusic,
+  play: playMusic,
+  setMode: setMusicMode,
+  setVoiceActive: setMusicVoiceActive,
+  setVolume: setMusicVolume,
+  status: musicStatus,
+  stop: stopMusic,
+  toggleMusic: toggleBackgroundMusic,
+  unlock: unlockMusic
+} = musicController;
+
 const audioController = createAudioController({
   getSettings: () => ({
     soundOn: state.soundOn,
@@ -317,7 +341,8 @@ const audioController = createAudioController({
     voiceReady: state.voiceReady
   }),
   setSettings: (audioSettings) => Object.assign(state, audioSettings),
-  announce
+  announce,
+  onVoiceActivity: setMusicVoiceActive
 });
 
 const {
@@ -713,8 +738,19 @@ function applyScenarioSetup() {
   return scenario;
 }
 
+function currentMusicMode() {
+  return musicModeForDuel({
+    started: state.started,
+    paused: state.paused,
+    gameOver: state.gameOver,
+    playerLp: state.player.lp,
+    aiLp: state.ai.lp
+  });
+}
+
 function startGame() {
   stopAll();
+  stopMusic({ fadeMs: 80 });
   closeTrapChoicePrompt();
   clearAiReveal(false);
   applySetupChoices();
@@ -768,6 +804,7 @@ function startGame() {
   addLog("决斗开始。你先攻，抽卡后展开第一波攻势。");
   addLog(`基础扩展已启用：${characterProfiles.player.skill} / ${setupLabel(deckPresets, state.deckPreset)} / ${characterProfiles.ai.name}。`);
   addLog("教学目标：召唤怪兽、发动魔法或盖陷阱，然后完成一次攻击。");
+  playMusic(currentMusicMode());
   playVoice("player", "start", "决斗开始。轮到你，先抽卡。", true);
   render();
   if (!hasSeenGuide()) {
@@ -779,6 +816,7 @@ function startGame() {
 
 function prepareGame() {
   stopAll();
+  stopMusic({ fadeMs: 220 });
   closeTrapChoicePrompt();
   clearAiReveal(false);
   scenarioHintsVisible = true;
@@ -3938,9 +3976,11 @@ function togglePause() {
   if (state.paused) {
     clearPlayerIdleTimers();
     stopAll();
+    pauseMusic({ fadeMs: 180 });
     addLog("决斗已暂停。");
   } else {
     addLog("决斗继续。");
+    playMusic(currentMusicMode());
     resumeWaiters();
     const resumeStep = pauseResumeStep(state);
     if (resumeStep === "playerDraw") {
@@ -4248,6 +4288,7 @@ function checkGameOver() {
   if (state.gameOver || state.player.lp <= 0 || state.ai.lp <= 0) {
     state.gameOver = true;
     state.gameOverAnnounced = true;
+    stopMusic({ fadeMs: 900 });
     const win = state.gameOverWinner ? state.gameOverWinner === "player" : state.ai.lp <= 0 && state.player.lp > 0;
     recordGameResult(win);
     playSound(win ? "win" : "lose");
@@ -4551,7 +4592,10 @@ function render(animationKey = "") {
   const targetPrompt = state.pendingTarget ? targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect) : "";
   const actions = currentPlayerActions();
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
+  const musicMode = currentMusicMode();
+  setMusicMode(musicMode);
   document.body.dataset.duelTurn = state.paused ? "paused" : activeTurn;
+  document.body.dataset.musicMode = musicMode;
   els.playerPanel.classList.toggle("active-turn", activeTurn === "player" && !state.paused);
   els.aiPanel.classList.toggle("active-turn", activeTurn === "ai" && !state.paused);
   els.phaseText.textContent = phaseLabel(state);
@@ -4583,6 +4627,15 @@ function render(animationKey = "") {
   els.endTurnBtn.disabled = !canUseTurnControls || Boolean(state.pendingTarget) || Boolean(state.pendingFusion) || Boolean(state.pendingTribute);
   els.soundBtn.textContent = state.soundOn ? "音效 开" : "音效 关";
   els.soundBtn.classList.toggle("sound-off", !state.soundOn);
+  els.musicBtn.textContent = state.musicOn ? (musicMode === "critical" ? "音乐 紧张" : "音乐 开") : "音乐 关";
+  els.musicBtn.classList.toggle("sound-off", !state.musicOn);
+  els.musicBtn.classList.toggle("music-critical", state.musicOn && musicMode === "critical");
+  els.musicBtn.dataset.mode = musicMode;
+  els.musicBtn.dataset.playing = String(musicStatus().playing);
+  els.musicBtn.setAttribute("aria-pressed", String(state.musicOn));
+  els.musicVolume.value = String(Math.round(state.musicVolume * 100));
+  els.musicVolume.disabled = !state.musicOn;
+  els.musicVolume.style.setProperty("--music-volume", `${Math.round(state.musicVolume * 100)}%`);
   els.voiceBtn.textContent = state.voiceOn ? "语音 开" : "语音 关";
   els.voiceBtn.classList.toggle("sound-off", !state.voiceOn);
   const selectedHand = selectedHandInfo();
@@ -5190,6 +5243,19 @@ function toggleSound() {
   render();
 }
 
+function toggleMusic() {
+  const enabled = toggleBackgroundMusic();
+  if (enabled && state.started && !state.paused && !state.gameOver) {
+    playMusic(currentMusicMode());
+  }
+  render();
+}
+
+function changeMusicVolume(event) {
+  setMusicVolume(Number(event.currentTarget.value) / 100);
+  event.currentTarget.style.setProperty("--music-volume", `${event.currentTarget.value}%`);
+}
+
 function toggleVoice() {
   toggleAudioVoice({ owner: "player", key: "start", text: "语音提示已开启。", force: true });
   render();
@@ -5245,6 +5311,7 @@ function markGuideSeen() {
 
 document.addEventListener("pointerdown", () => {
   unlockAudio();
+  unlockMusic();
   if (state.started && !state.paused && state.pendingOpeningDraw && state.turn === "player" && state.phase === PHASES.draw && !state.gameOver) {
     window.setTimeout(autoPlayerDraw, 250);
   }
@@ -5257,6 +5324,8 @@ els.pauseBtn.addEventListener("click", togglePause);
 els.skipAttackBtn.addEventListener("click", skipPlayerAttack);
 els.endTurnBtn.addEventListener("click", manualEndPlayerTurn);
 els.soundBtn.addEventListener("click", toggleSound);
+els.musicBtn.addEventListener("click", toggleMusic);
+els.musicVolume.addEventListener("input", changeMusicVolume);
 els.voiceBtn.addEventListener("click", toggleVoice);
 els.handConfirmBtn.addEventListener("click", () => {
   confirmSelectedHandAction();
@@ -5337,6 +5406,7 @@ if (els.modalReviewLog) {
 
 if (BROWSER_TEST_MODE) {
   window.__starDuelTest = Object.freeze({
+    musicStatus,
     snapshot: createTestSnapshot({
       testMode: BROWSER_TEST_MODE,
       state,
@@ -5345,6 +5415,14 @@ if (BROWSER_TEST_MODE) {
     })
   });
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pauseMusic({ fadeMs: 120 });
+  } else if (state.started && !state.paused && !state.gameOver && state.musicOn) {
+    playMusic(currentMusicMode());
+  }
+});
 
 prepareGame();
 scheduleBrowserSmoke({

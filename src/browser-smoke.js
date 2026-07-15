@@ -79,6 +79,8 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       actionDeadline: state.actionDeadline,
       scenarioId: state.scenarioId,
       soundOn: state.soundOn,
+      musicOn: state.musicOn,
+      musicVolume: state.musicVolume,
       voiceOn: state.voiceOn,
       latestLog: logEntryMessage(state.log[0]),
       gameEventCount: state.gameEvents?.length || 0,
