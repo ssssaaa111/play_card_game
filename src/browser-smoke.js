@@ -2665,16 +2665,29 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
       ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.ai.traps.some((card) => card?.id === "mirror-snare") &&
       ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden" && card.used) &&
+      ctx.state.ai.field.some((card) => card?.id === "trio-star-herald" && card.used) &&
       ctx.state.player.field.some((card) => card?.id === "spark-runner" && (card.tempAtk || 0) < 0),
-    `full duel: rival should establish moon pressure, protect it, and attack with sun. ${smokeDebug(ctx)}`,
+    `full duel: rival should establish all three gods, protect moon pressure, and attack with sun. ${smokeDebug(ctx)}`,
     32000
   );
+  await waitForSmoke(
+    () => logCardLink(ctx.els, "trio-moon-warden") && logCardLink(ctx.els, "trio-star-herald"),
+    `full duel: trio convergence log should expose public card detail links. ${smokeDebug(ctx)}`,
+    9000
+  );
+  clickSmokeElement(logCardLink(ctx.els, "trio-star-herald"), "full duel: inspect converged star god from public log");
+  await assertCardDetailModal(ctx, cloneCardById("trio-star-herald"), "full duel: convergence log detail");
+  clickSmokeElement(ctx.els.zoomClose, "full duel: close convergence card detail");
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "full duel: convergence card detail closes");
   clickSmokeElement(ctx.els.chainYes, "full duel: activate prepared solar snare");
   await waitForSmoke(
     () => ctx.state.ai.grave.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") &&
+      ctx.state.ai.field.some((card) => card?.id === "trio-star-herald") &&
       ctx.state.player.grave.some((card) => card?.id === "trio-solar-snare") &&
       ctx.state.player.field.some((card) => card?.id === "spark-runner"),
-    `full duel: prepared trap should trade for the sun ace. ${smokeDebug(ctx)}`,
+    `full duel: prepared trap should trade for sun without erasing the remaining gods. ${smokeDebug(ctx)}`,
     12000
   );
   const aiSunTributes = (ctx.state.gameEvents || []).filter((event) =>
@@ -2719,16 +2732,19 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
 
   const events = ctx.state.gameEvents || [];
   const snareSetIndex = events.findIndex((event) => event.type === "TRAP_SET" && eventReferencesTemplate(event, "trio-solar-snare"));
+  const convergenceIndex = events.findIndex((event) => event.type === "TRIO_CONVERGENCE_RESOLVED");
   const sunDestroyedIndex = events.findIndex((event) => event.type === "CARD_DESTROYED" && eventReferencesTemplate(event, "trio-sun-judicator"));
   const moonClearedIndex = events.findIndex((event) => event.type === "CONTINUOUS_EFFECT_RELEASED" && event.effectId === "lunarDominion");
   const pawnSummonedIndex = events.findIndex((event) => event.type === "MONSTER_SUMMONED" && eventReferencesTemplate(event, "trio-ember-pawn"));
-  if (snareSetIndex < 0 || sunDestroyedIndex < 0 || moonClearedIndex < 0 || pawnSummonedIndex < 0 ||
-      !(snareSetIndex < sunDestroyedIndex && sunDestroyedIndex < moonClearedIndex && moonClearedIndex < pawnSummonedIndex)) {
+  if (snareSetIndex < 0 || convergenceIndex < 0 || sunDestroyedIndex < 0 || moonClearedIndex < 0 || pawnSummonedIndex < 0 ||
+      !(snareSetIndex < convergenceIndex && convergenceIndex < sunDestroyedIndex && sunDestroyedIndex < moonClearedIndex && moonClearedIndex < pawnSummonedIndex)) {
     throw new Error(`trio-omega-full-duel: setup, defense exchange, pressure clear, and low-star follow-up must happen in order. ${smokeDebug(ctx)}`);
   }
   const strongestPlayerAtk = Math.max(...ctx.state.player.field.filter(Boolean).map((card) => (card.atk || 0) + (card.tempAtk || 0)));
   if (ctx.state.gameOver ||
       ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") ||
+      !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") ||
+      !ctx.state.ai.field.some((card) => card?.id === "trio-star-herald") ||
       ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") ||
       strongestPlayerAtk >= 3000 ||
       events.some((event) => event.type === "CARD_ACTIVATED" && eventReferencesTemplate(event, "trio-final-counter"))) {

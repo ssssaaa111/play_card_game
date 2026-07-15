@@ -493,6 +493,30 @@ export class EffectContext {
     return found.cardId;
   }
 
+  specialSummonFromHand(playerId, cardId, options = {}) {
+    const card = requireCardInZone(this.#state, playerId, "hand", cardId);
+    if (card.type !== "monster") {
+      throw new GameRuleError(`Card ${cardId} is not a monster`);
+    }
+
+    this.moveCard(cardId, { playerId, zone: "hand" }, { playerId, zone: "monsterZone", index: options.index });
+    this.#emit("MONSTER_SUMMONED", {
+      playerId,
+      cardId,
+      sourceCardId: options.sourceCardId || cardId,
+      mode: options.mode || "attack",
+      used: Boolean(options.used),
+      changedMode: false,
+      tempAtk: 0,
+      tempDef: 0,
+      battleWear: 0,
+      destructionProtectionUsed: false,
+      summonType: options.summonType || "special",
+      fromZone: "hand"
+    });
+    return cardId;
+  }
+
   specialSummonFromGrave(playerId, cardId, options = {}) {
     const card = requireCardInZone(this.#state, playerId, "grave", cardId);
     if (card.type !== "monster") {
@@ -1175,6 +1199,7 @@ export class GameEngine {
       });
     });
     ctx.summonMonster(action.playerId, action.cardId, { index: action.index });
+    this.#resolveTrioConvergence(state, ctx, emit, action, card, tributeCardIds);
     if (card.onSummon) {
       const skipReason = effectRequirementFailure(this.#effects[card.onSummon], state, preparedAction, card);
       if (skipReason) {
@@ -1188,6 +1213,34 @@ export class GameEngine {
       }
       runEffect(this.#effects, card.onSummon, ctx, preparedAction, card);
     }
+  }
+
+  #resolveTrioConvergence(state, ctx, emit, action, card, tributeCardIds) {
+    const group = card.trioConvergence;
+    if (!group || tributeCardIds.length !== tributeCostForCard(card) || tributeCardIds.length !== 3) return;
+
+    const player = requirePlayer(state, action.playerId);
+    const seenTemplates = new Set([card.templateId || card.id]);
+    const candidates = player.hand.filter((cardId) => {
+      const candidate = requireCard(state, cardId);
+      const templateId = candidate.templateId || candidate.id;
+      if (candidate.type !== "monster" || candidate.trioConvergence !== group || seenTemplates.has(templateId)) return false;
+      seenTemplates.add(templateId);
+      return true;
+    });
+    if (!candidates.length) return;
+
+    const summonedCardIds = candidates.map((cardId) => ctx.specialSummonFromHand(action.playerId, cardId, {
+      sourceCardId: action.cardId,
+      summonType: "trioConvergence",
+      used: true
+    }));
+    emit("TRIO_CONVERGENCE_RESOLVED", {
+      playerId: action.playerId,
+      sourceCardId: action.cardId,
+      summonedCardIds,
+      group
+    });
   }
 
   #setTrap(state, ctx, emit, action) {
@@ -2498,6 +2551,7 @@ export function applyGameEvent(state, event, options = {}) {
     case "CARD_TRIBUTED":
     case "MATERIALS_SENT":
     case "FUSION_SUMMONED":
+    case "TRIO_CONVERGENCE_RESOLVED":
     case "EFFECT_NEGATED":
     case "EFFECT_SKIPPED":
     case "DRAW_FAILED":

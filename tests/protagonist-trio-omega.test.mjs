@@ -120,6 +120,11 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
 
   assert.equal(cardByTemplate("trio-sun-judicator").afterAttack, "sunflareSunder");
   assert.equal(cardByTemplate("trio-star-herald").afterAttack, "starDoomCharge");
+  assert.ok([
+    "trio-sun-judicator",
+    "trio-moon-warden",
+    "trio-star-herald"
+  ].every((id) => cardByTemplate(id).trioConvergence === "trioOmega"));
   assert.equal(cardByTemplate("trio-moon-dominion").effect, "lunarDominion");
   assert.equal(cardByTemplate("trio-solar-snare").trigger, "attackDestroy");
   assert.equal(cardByTemplate("trio-moonbreaker-ray").effect, "destroySpellTrap");
@@ -244,6 +249,41 @@ test("trio omega full duel does not deck-out in the first two AI draw steps", ()
   assert.equal(state.players[AI].lp, 4000);
   assert.equal(state.players[AI].deck.length, 33);
   assert.equal(state.events.some((event) => event.type === "DRAW_FAILED" && event.playerId === AI), false);
+  assertValidGameState(state);
+});
+
+test("first legal trio tribute summon establishes all three gods through summon events", () => {
+  const engine = engineWithTurn(buildEngineStateFromUiState(fullScenarioUiState({ opening: true })), AI, Phase.main);
+  const before = engine.getState();
+  const sunId = findCardId(before, AI, "hand", "trio-sun-judicator");
+  const tributeCardIds = before.players[AI].monsterZone.filter(Boolean);
+
+  const events = engine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: sunId,
+    tributeCardIds,
+    index: 0
+  });
+  const state = engine.getState();
+  const fieldTemplates = state.players[AI].monsterZone
+    .filter(Boolean)
+    .map((cardId) => state.cards[cardId].templateId);
+  const summonEvents = events.filter((event) => event.type === "MONSTER_SUMMONED");
+
+  assert.deepEqual(new Set(fieldTemplates), new Set([
+    "trio-sun-judicator",
+    "trio-moon-warden",
+    "trio-star-herald"
+  ]));
+  assert.equal(state.players[AI].hand.some((cardId) => state.cards[cardId].templateId === "trio-moon-warden"), false);
+  assert.equal(state.players[AI].hand.some((cardId) => state.cards[cardId].templateId === "trio-star-herald"), false);
+  assert.equal(summonEvents.length, 3);
+  assert.equal(summonEvents.filter((event) => event.summonType === "trioConvergence").length, 2);
+  assert.ok(summonEvents.filter((event) => event.summonType === "trioConvergence").every((event) => event.sourceCardId === sunId));
+  assert.ok(summonEvents.filter((event) => event.summonType === "trioConvergence").every((event) => event.used === true));
+  assert.equal(events.filter((event) => event.type === "CARD_TRIBUTED").length, 3);
   assertValidGameState(state);
 });
 

@@ -228,6 +228,40 @@ test("AI summon planner can choose a three-tribute god and reuse a full tribute 
   assert.equal(action.card.id, "trio-sun-judicator");
   assert.equal(action.tributeCost, 3);
   assert.equal(action.fieldIndex, 0);
+  assert.deepEqual(action.tributeIndexes, [0, 1, 2]);
+});
+
+test("scripted pressure AI never tributes an established trio god for a generic monster", () => {
+  const action = chooseAiSummonAction({
+    hand: [monster({ id: "void-siege-breaker", name: "breaker", atk: 2600, stars: 5, tributeCost: 1 })],
+    field: [
+      monster({ id: "trio-sun-judicator", name: "sun", atk: 3000, stars: 7, archetype: "三曜神格" }),
+      null,
+      null,
+      null,
+      null
+    ],
+    aiStyle: "scriptedPressure"
+  });
+
+  assert.equal(action, null);
+});
+
+test("scripted pressure AI selects ordinary bodies before trio gods as tribute", () => {
+  const action = chooseAiSummonAction({
+    hand: [monster({ id: "void-siege-breaker", name: "breaker", atk: 2600, stars: 5, tributeCost: 1 })],
+    field: [
+      monster({ id: "trio-moon-warden", name: "moon", atk: 2100, stars: 6, archetype: "三曜神格" }),
+      monster({ id: "material-1", name: "material", atk: 1000, stars: 3 }),
+      null,
+      null,
+      null
+    ],
+    aiStyle: "scriptedPressure"
+  });
+
+  assert.deepEqual(action.tributeIndexes, [1]);
+  assert.equal(action.fieldIndex, 2);
 });
 
 test("AI defense switch policy is explicit", () => {
