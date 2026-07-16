@@ -2690,6 +2690,23 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     `full duel: prepared trap should trade for sun without erasing the remaining gods. ${smokeDebug(ctx)}`,
     12000
   );
+  await waitForSmoke(
+    () => (ctx.state.log || []).some((entry) => logEntryMessage(entry) === "日冕诱锁 破坏了 曜冕裁决者。"),
+    `full duel: solar snare destruction should reach the public log. ${smokeDebug(ctx)}`,
+    9000
+  );
+  const remainingTrio = ctx.state.ai.field.filter((card) =>
+    card?.id === "trio-moon-warden" || card?.id === "trio-star-herald"
+  );
+  const remainingTrioAttack = remainingTrio.reduce((total, card) => total + (card.atk || 0) + (card.tempAtk || 0), 0);
+  const sunDestructionLogs = (ctx.state.log || []).filter((entry) =>
+    logEntryMessage(entry) === "日冕诱锁 破坏了 曜冕裁决者。"
+  );
+  const pressureAudit = auditLogEntries(ctx.state.timeline);
+  if (remainingTrio.length !== 2 || remainingTrioAttack !== 4500 || sunDestructionLogs.length !== 1 ||
+      pressureAudit.issues.some((issue) => issue.code === "duplicate-log")) {
+    throw new Error(`trio-omega-full-duel: first counter should leave exactly two gods / 4500 ATK pressure and one destruction log. ${smokeDebug(ctx)}`);
+  }
   const aiSunTributes = (ctx.state.gameEvents || []).filter((event) =>
     event.type === "CARD_TRIBUTED" &&
     event.playerId === "ai" &&

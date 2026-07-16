@@ -3258,7 +3258,6 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
       playMonsterBurst(attackerEl);
       shakeScreen();
       playEpicAction("反制", "guard");
-      addLog(`${trap.name} 破坏了 ${attacker.name}。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(attacker) }));
     }
     return { cancelled: Boolean(destroyedEvent && !preventedEvent), consumesAttack: trapConsumesAttack(trap.trigger) };
   }

@@ -852,6 +852,17 @@ test("skipped attack lock is visible on field cards", () => {
   assert.doesNotMatch(css, /pending-attack/);
 });
 
+test("attack-destroy trap outcome is logged once by shared engine feedback", () => {
+  const app = readProjectFile("src/app.js");
+  const branchStart = app.indexOf('if (trap.trigger === "attackDestroy")');
+  const branchEnd = app.indexOf('if (trap.trigger === "counterBoost")', branchStart);
+  const attackDestroyBranch = app.slice(branchStart, branchEnd);
+
+  assert.ok(branchStart >= 0 && branchEnd > branchStart);
+  assert.match(app, /event\.type === "CARD_DESTROYED"/);
+  assert.doesNotMatch(attackDestroyBranch, /addLog\(`\$\{trap\.name\} 破坏了/);
+});
+
 test("duel UI exposes turn ownership and side-specific field feedback", () => {
   const app = readProjectFile("src/app.js");
   const css = readProjectFile("styles.css");
