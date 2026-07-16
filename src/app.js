@@ -2356,6 +2356,18 @@ async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) 
       relatedCardIds: relatedCardIds(card, ...tributeCards)
     }));
   }
+  const convergenceCards = summonEvents
+    .filter((event) => event.type === "MONSTER_SUMMONED" && event.summonType === "trioConvergence")
+    .map((event) => findRuntimeCard(event.cardId)?.card)
+    .filter(Boolean);
+  if (convergenceCards.length) {
+    addLog(`「${card.name}」引发三曜共降：${convergenceCards.map((entry) => `「${entry.name}」`).join("、")}从手牌特殊召唤。`, cardLogMeta(card, {
+      actor: owner.owner,
+      type: "trio-convergence",
+      relatedCardIds: relatedCardIds(card, ...convergenceCards)
+    }));
+    playEpicAction("三曜共降", "summon");
+  }
   if (card.stars >= 5) {
     showAce(card, owner.owner);
   } else {
@@ -4213,7 +4225,9 @@ async function aiSummon() {
     aiStyle: state.aiStyle
   });
   if (!action) return false;
-  const didSummon = await summonMonster(state.ai, state.player, action.handIndex, action.fieldIndex);
+  const didSummon = await summonMonster(state.ai, state.player, action.handIndex, action.fieldIndex, {
+    tributeIndexes: action.tributeIndexes
+  });
   if (!didSummon) return false;
   const summoned = state.ai.field[action.fieldIndex];
   if (shouldSwitchSummonedMonsterToDefense({

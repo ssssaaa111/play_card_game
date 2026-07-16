@@ -8,6 +8,12 @@ const scriptedPressureMonsterPriority = {
   "void-siege-breaker": 260
 };
 
+const trioPressureMonsterIds = new Set([
+  "trio-sun-judicator",
+  "trio-moon-warden",
+  "trio-star-herald"
+]);
+
 const scriptedPressureTrapPriority = {
   "mirror-snare": 120,
   "chain-nullifier": 100,
@@ -16,6 +22,10 @@ const scriptedPressureTrapPriority = {
 
 function templateId(card) {
   return card?.id || card?.templateId || "";
+}
+
+function isTrioPressureMonster(card) {
+  return trioPressureMonsterIds.has(templateId(card));
 }
 
 function attackTargetEntry(target, targetIndex, attackerAtk) {
@@ -141,11 +151,23 @@ export function chooseAiSummonAction({ hand = [], field = [], aiStyle = "balance
   const candidates = hand
     .map((card, index) => {
       const tributeCost = Math.max(0, Number(card?.tributeCost) || 0);
-      const fieldIndex = emptyFieldIndex >= 0 ? emptyFieldIndex : tributeCost > 0 ? occupiedIndexes[0] ?? -1 : -1;
-      return { card, index, tributeCost, fieldIndex, score: scoreAiMonster(card, aiStyle) };
+      const tributeCandidates = occupiedIndexes
+        .map((fieldIndex) => ({
+          fieldIndex,
+          card: field[fieldIndex],
+          protected: aiStyle === "scriptedPressure" && isTrioPressureMonster(field[fieldIndex]),
+          score: scoreAiMonster(field[fieldIndex], aiStyle)
+        }))
+        .sort((a, b) => Number(a.protected) - Number(b.protected) || a.score - b.score || a.fieldIndex - b.fieldIndex);
+      const selectedTributes = tributeCandidates.slice(0, tributeCost);
+      const wouldSpendTrio = selectedTributes.some((entry) => entry.protected);
+      const tributeIndexes = selectedTributes.map((entry) => entry.fieldIndex);
+      const fieldIndex = emptyFieldIndex >= 0 ? emptyFieldIndex : tributeCost > 0 ? tributeIndexes[0] ?? -1 : -1;
+      return { card, index, tributeCost, tributeIndexes, wouldSpendTrio, fieldIndex, score: scoreAiMonster(card, aiStyle) };
     })
     .filter((entry) => entry.card?.type === "monster")
     .filter((entry) => entry.tributeCost <= occupiedIndexes.length)
+    .filter((entry) => !entry.wouldSpendTrio)
     .filter((entry) => entry.fieldIndex >= 0)
     .sort((a, b) => b.score - a.score || a.index - b.index);
   const pick = candidates[0];
@@ -156,6 +178,7 @@ export function chooseAiSummonAction({ hand = [], field = [], aiStyle = "balance
     handIndex: pick.index,
     fieldIndex: pick.fieldIndex,
     tributeCost: pick.tributeCost,
+    tributeIndexes: pick.tributeIndexes,
     score: pick.score
   };
 }
