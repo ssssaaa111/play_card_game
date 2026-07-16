@@ -1597,18 +1597,35 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   box-shadow: 0 0 0 3px rgba(255, 184, 74, 0.45), 0 16px 34px rgba(0, 0, 0, 0.38);
 }
 
-.slot.tribute-unavailable {
+.slot.fusion-candidate .card,
+.card.fusion-candidate {
+  border-color: rgba(84, 210, 210, 0.86);
+  box-shadow: 0 0 0 2px rgba(84, 210, 210, 0.22), 0 12px 26px rgba(0, 0, 0, 0.32);
+}
+
+.slot.fusion-selected .card,
+.card.fusion-selected {
+  border-color: rgba(132, 236, 225, 0.98);
+  box-shadow: 0 0 0 3px rgba(84, 210, 210, 0.42), 0 16px 34px rgba(0, 0, 0, 0.38);
+}
+
+.slot.tribute-unavailable,
+.slot.fusion-unavailable {
   border-color: rgba(239, 71, 111, 0.32);
   cursor: not-allowed;
 }
 
 .slot.tribute-unavailable .card,
-.card.tribute-unavailable {
+.card.tribute-unavailable,
+.slot.fusion-unavailable .card,
+.card.fusion-unavailable {
   filter: saturate(0.55) brightness(0.72);
 }
 
 .slot.tribute-candidate::after,
-.slot.tribute-unavailable::after {
+.slot.tribute-unavailable::after,
+.slot.fusion-candidate::after,
+.slot.fusion-unavailable::after {
   position: absolute;
   left: 8px;
   right: 8px;
@@ -1634,7 +1651,18 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   background: rgba(255, 211, 128, 0.98);
 }
 
-.slot.tribute-unavailable::after {
+.slot.fusion-candidate::after {
+  content: "可选融合素材";
+  background: rgba(84, 210, 210, 0.94);
+}
+
+.slot.fusion-selected::after {
+  content: "已选融合素材";
+  background: rgba(132, 236, 225, 0.98);
+}
+
+.slot.tribute-unavailable::after,
+.slot.fusion-unavailable::after {
   content: "不可选";
   color: #ffd9e2;
   background: rgba(96, 28, 47, 0.88);
@@ -3747,6 +3775,13 @@ button.chain-stack-card:focus-visible {
 }
 
 @media (max-width: 560px) {
+  .choice-actions.fusion-choice {
+    top: 12px;
+    bottom: auto;
+    max-height: calc(48vh - 12px);
+    overflow-y: auto;
+  }
+
   .fusion-preview {
     grid-template-columns: 1fr;
   }

@@ -2,12 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildFusionSelectionDisplay,
   buildTributeSelectionDisplay,
   defaultTributeSelection,
   describeHandAction,
+  describeFusionMaterialTarget,
   describeTributeTarget,
   duelHintText,
   phaseLabel,
+  fusionSummonFailureMessage,
   tributeSummonFailureMessage,
   turnLabel
 } from "../src/view-model.js";
@@ -205,5 +208,114 @@ test("prefixes tribute dispatch failures without hiding the engine reason", () =
   assert.equal(
     tributeSummonFailureMessage("unexpected rule failure"),
     "祭品召唤失败：unexpected rule failure"
+  );
+});
+
+test("describes fusion target, selected materials, and the missing recipe entry", () => {
+  const requirements = [
+    { templateId: "ember-drake", name: "赤焰幼龙", count: 1 },
+    { templateId: "gale-mage", name: "疾风术士", count: 1 }
+  ];
+  const display = buildFusionSelectionDisplay({
+    sourceName: "星魂融合",
+    resultName: "焰岚合星者",
+    requirements,
+    selectedMaterials: [
+      { templateId: "ember-drake", name: "赤焰幼龙", zone: "field" }
+    ]
+  });
+
+  assert.deepEqual(display, {
+    sourceName: "星魂融合",
+    resultName: "焰岚合星者",
+    selectedCount: 1,
+    requiredCount: 2,
+    selectedNames: ["赤焰幼龙（场上）"],
+    remaining: [{ templateId: "gale-mage", name: "疾风术士", count: 1 }],
+    complete: false,
+    titleText: "融合召唤「焰岚合星者」",
+    requirementText: "需要素材：赤焰幼龙、疾风术士。",
+    selectionText: "已选择 1 / 2：赤焰幼龙（场上）",
+    remainingText: "还缺素材：疾风术士。",
+    text: "融合召唤「焰岚合星者」\n需要素材：赤焰幼龙、疾风术士。\n已选择 1 / 2：赤焰幼龙（场上）\n还缺素材：疾风术士。"
+  });
+
+  const complete = buildFusionSelectionDisplay({
+    sourceName: "星魂融合",
+    resultName: "焰岚合星者",
+    requirements,
+    selectedMaterials: [
+      { templateId: "gale-mage", name: "疾风术士", zone: "hand" },
+      { templateId: "ember-drake", name: "赤焰幼龙", zone: "field" }
+    ]
+  });
+  assert.equal(complete.complete, true);
+  assert.equal(complete.selectionText, "已选择 2 / 2：赤焰幼龙（场上）、疾风术士（手牌）");
+  assert.equal(complete.remainingText, "素材齐备，确认后完成融合召唤。");
+});
+
+test("prompts for a fusion result before showing a material recipe", () => {
+  const display = buildFusionSelectionDisplay({ sourceName: "星魂融合", needsResult: true });
+  assert.equal(display.titleText, "发动「星魂融合」");
+  assert.equal(display.requirementText, "请选择要融合召唤的怪兽。");
+  assert.equal(display.text, "发动「星魂融合」\n请选择要融合召唤的怪兽。");
+  assert.equal(display.complete, false);
+});
+
+test("explains valid and invalid fusion material targets", () => {
+  const requirements = [
+    { templateId: "ember-drake", count: 1 },
+    { templateId: "gale-mage", count: 1 }
+  ];
+  const ember = { uid: "ember-1", id: "ember-drake", name: "赤焰幼龙", type: "monster" };
+
+  assert.deepEqual(describeFusionMaterialTarget({
+    owner: "player",
+    card: ember,
+    requirements,
+    remaining: requirements
+  }), {
+    ok: true,
+    label: "可选融合素材",
+    reason: "可选择「赤焰幼龙」作为融合素材。"
+  });
+  assert.deepEqual(describeFusionMaterialTarget({
+    owner: "player",
+    card: ember,
+    selected: true,
+    requirements,
+    remaining: [{ templateId: "gale-mage", count: 1 }]
+  }), {
+    ok: true,
+    label: "已选融合素材",
+    reason: "「赤焰幼龙」已被选择，再次点击可取消。"
+  });
+  assert.equal(describeFusionMaterialTarget({ owner: "player", card: null, requirements }).reason, "不能选择该素材：该格为空。");
+  assert.equal(describeFusionMaterialTarget({ owner: "ai", card: ember, requirements }).reason, "不能选择该素材：不是己方怪兽。");
+  assert.equal(describeFusionMaterialTarget({
+    owner: "player",
+    card: { uid: "spell-1", id: "war-chant", name: "战意高扬", type: "spell" },
+    requirements
+  }).reason, "不能选择该素材：不是怪兽。");
+  assert.equal(describeFusionMaterialTarget({
+    owner: "player",
+    card: { uid: "knight-1", id: "solar-knight", name: "日冕骑士", type: "monster" },
+    requirements,
+    remaining: requirements
+  }).reason, "不能选择该素材：不满足融合条件。");
+});
+
+test("prefixes fusion dispatch failures with localized reasons", () => {
+  assert.equal(
+    fusionSummonFailureMessage("Fusion spell fusion-1 requires exactly 2 material cards"),
+    "融合失败：需要正好选择 2 只融合素材。"
+  );
+  assert.equal(
+    fusionSummonFailureMessage("Fusion material knight-1 does not match required materials"),
+    "融合失败：所选素材不满足融合条件。"
+  );
+  assert.equal(
+    fusionSummonFailureMessage("unexpected fusion failure"),
+    "融合失败：unexpected fusion failure"
   );
 });

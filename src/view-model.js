@@ -175,3 +175,145 @@ export function tributeSummonFailureMessage(reason = "") {
   }
   return detail.startsWith("祭品召唤失败：") ? detail : `祭品召唤失败：${detail}`;
 }
+
+function fusionRequirementLabel(entry) {
+  const name = entry?.name || entry?.templateId || "未知素材";
+  const count = Math.max(1, Number(entry?.count) || 1);
+  return count > 1 ? `${name} ×${count}` : name;
+}
+
+function fusionMaterialTemplateId(card) {
+  return card?.templateId || card?.id || "";
+}
+
+export function buildFusionSelectionDisplay({
+  sourceName = "融合魔法",
+  resultName = "",
+  requirements = [],
+  selectedMaterials = [],
+  needsResult = false
+} = {}) {
+  if (needsResult || !resultName) {
+    const titleText = `发动「${sourceName}」`;
+    const requirementText = "请选择要融合召唤的怪兽。";
+    return {
+      sourceName,
+      resultName: "",
+      selectedCount: 0,
+      requiredCount: 0,
+      selectedNames: [],
+      remaining: [],
+      complete: false,
+      titleText,
+      requirementText,
+      selectionText: "",
+      remainingText: "",
+      text: `${titleText}\n${requirementText}`
+    };
+  }
+
+  const normalizedRequirements = (Array.isArray(requirements) ? requirements : []).map((entry) => ({
+    templateId: entry?.templateId || entry?.id || "",
+    name: entry?.name || entry?.templateId || entry?.id || "未知素材",
+    count: Math.max(1, Number(entry?.count) || 1)
+  })).filter((entry) => entry.templateId);
+  const availableSelections = (Array.isArray(selectedMaterials) ? selectedMaterials : []).map((entry, index) => ({
+    ...entry,
+    templateId: entry?.templateId || fusionMaterialTemplateId(entry?.card),
+    name: entry?.name || entry?.card?.name || entry?.templateId || "未知素材",
+    selectionIndex: index
+  }));
+  const usedSelections = new Set();
+  const selectedNames = [];
+  const remaining = [];
+
+  normalizedRequirements.forEach((requirement) => {
+    let matched = 0;
+    availableSelections.forEach((selection) => {
+      if (matched >= requirement.count || usedSelections.has(selection.selectionIndex)) return;
+      if (selection.templateId !== requirement.templateId) return;
+      usedSelections.add(selection.selectionIndex);
+      matched += 1;
+      const zoneLabel = selection.zone === "hand" ? "手牌" : "场上";
+      selectedNames.push(`${selection.name}（${zoneLabel}）`);
+    });
+    if (matched < requirement.count) {
+      remaining.push({ ...requirement, count: requirement.count - matched });
+    }
+  });
+
+  const selectedCount = selectedNames.length;
+  const requiredCount = normalizedRequirements.reduce((total, entry) => total + entry.count, 0);
+  const complete = selectedCount === requiredCount && remaining.length === 0 && usedSelections.size === availableSelections.length;
+  const titleText = `融合召唤「${resultName}」`;
+  const requirementText = `需要素材：${normalizedRequirements.map(fusionRequirementLabel).join("、")}。`;
+  const selectionText = `已选择 ${selectedCount} / ${requiredCount}：${selectedNames.length ? selectedNames.join("、") : "无"}`;
+  const remainingText = complete
+    ? "素材齐备，确认后完成融合召唤。"
+    : `还缺素材：${remaining.map(fusionRequirementLabel).join("、")}。`;
+  return {
+    sourceName,
+    resultName,
+    selectedCount,
+    requiredCount,
+    selectedNames,
+    remaining,
+    complete,
+    titleText,
+    requirementText,
+    selectionText,
+    remainingText,
+    text: [titleText, requirementText, selectionText, remainingText].join("\n")
+  };
+}
+
+export function describeFusionMaterialTarget({
+  owner = "player",
+  card = null,
+  sourceUid = "",
+  selected = false,
+  requirements = [],
+  remaining = requirements
+} = {}) {
+  if (owner !== "player") {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：不是己方怪兽。" };
+  }
+  if (!card) {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：该格为空。" };
+  }
+  if (sourceUid && card.uid === sourceUid) {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：融合魔法本身不能作为素材。" };
+  }
+  if (card.type !== "monster") {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：不是怪兽。" };
+  }
+  if (selected) {
+    return { ok: true, label: "已选融合素材", reason: `「${card.name}」已被选择，再次点击可取消。` };
+  }
+  const templateId = fusionMaterialTemplateId(card);
+  const required = (Array.isArray(requirements) ? requirements : []).some((entry) => entry?.templateId === templateId);
+  if (!required) {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：不满足融合条件。" };
+  }
+  const stillNeeded = (Array.isArray(remaining) ? remaining : []).some((entry) => entry?.templateId === templateId && Math.max(0, Number(entry?.count) || 0) > 0);
+  if (!stillNeeded) {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：该种素材数量已经满足。" };
+  }
+  return { ok: true, label: "可选融合素材", reason: `可选择「${card.name}」作为融合素材。` };
+}
+
+export function fusionSummonFailureMessage(reason = "") {
+  const detail = String(reason || "规则校验未通过。");
+  const exactCount = detail.match(/requires exactly (\d+) material cards?/i);
+  if (exactCount) return `融合失败：需要正好选择 ${exactCount[1]} 只融合素材。`;
+  if (/Fusion materials must be unique/i.test(detail)) return "融合失败：不能重复使用同一张素材。";
+  if (/Fusion spell cannot be used as its own material/i.test(detail)) return "融合失败：融合魔法本身不能作为素材。";
+  if (/does not match required materials|is missing materials/i.test(detail)) return "融合失败：所选素材不满足融合条件。";
+  if (/Fusion result .* is not a monster/i.test(detail)) return "融合失败：融合结果必须是怪兽。";
+  if (/Fusion material .* is not a monster/i.test(detail)) return "融合失败：融合素材必须是怪兽。";
+  if (/Fusion material .* is not in .*hand or .*monsterZone/i.test(detail)) return "融合失败：所选素材已不在己方手牌或场上。";
+  if (/No .* is available in hand or deck/i.test(detail)) return "融合失败：融合怪兽已不在手牌或卡组。";
+  if (/monsterZone slot \d+ is occupied/i.test(detail)) return "融合失败：目标怪兽区已被占用。";
+  if (/monsterZone is full/i.test(detail)) return "融合失败：我方怪兽区已满。";
+  return detail.startsWith("融合失败：") ? detail : `融合失败：${detail}`;
+}

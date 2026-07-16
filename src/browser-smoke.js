@@ -848,6 +848,91 @@ async function runFusionSummonBasicSmoke(ctx) {
   setSmokeStatus("passed", "fusion-summon-basic");
 }
 
+async function runFusionReadabilityBasicSmoke(ctx) {
+  setSmokeStatus("running", "fusion-readability-basic");
+  await startSmokeDuel(ctx, "fusionMixedMaterials");
+  clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-readability-basic: select fusion spell");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-readability-basic: enter material selection");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("融合召唤「焰岚合星者」") &&
+      ctx.els.choiceText.textContent.includes("需要素材：赤焰幼龙、疾风术士") &&
+      ctx.els.choiceText.textContent.includes("已选择 0 / 2：无") &&
+      ctx.els.choiceText.textContent.includes("还缺素材：赤焰幼龙、疾风术士"),
+    "fusion-readability-basic: result and full recipe are visible"
+  );
+  if (window.innerWidth <= 560) {
+    const choiceRect = ctx.els.choiceActions.getBoundingClientRect();
+    const handMaterialRect = handCard(ctx.els, "gale-mage").getBoundingClientRect();
+    const coversHandMaterial = choiceRect.left < handMaterialRect.right &&
+      choiceRect.right > handMaterialRect.left &&
+      choiceRect.top < handMaterialRect.bottom &&
+      choiceRect.bottom > handMaterialRect.top;
+    if (coversHandMaterial) {
+      throw new Error("fusion-readability-basic: fusion prompt should not cover the hand material on narrow screens");
+    }
+  }
+  const emberSlot = fieldSlot(ctx.els, "player", 0);
+  if (!emberSlot?.classList.contains("fusion-candidate") || emberSlot.dataset.materialReason !== "可选择「赤焰幼龙」作为融合素材。") {
+    throw new Error("fusion-readability-basic: field material should expose a fusion-specific candidate reason");
+  }
+
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-readability-basic: select field material");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("已选择 1 / 2：赤焰幼龙（场上）") &&
+      ctx.els.choiceText.textContent.includes("还缺素材：疾风术士") &&
+      ctx.els.choiceConfirmBtn.disabled,
+    "fusion-readability-basic: selected field material and missing hand material are visible"
+  );
+
+  const selectionBeforeInvalidClicks = {
+    indexes: ctx.state.pendingFusion.selectedIndexes.slice(),
+    handUids: ctx.state.pendingFusion.selectedHandUids.slice()
+  };
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), "fusion-readability-basic: click empty own slot");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该素材：该格为空。",
+    "fusion-readability-basic: empty slot explains why it is invalid"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "fusion-readability-basic: click enemy monster");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该素材：不是己方怪兽。",
+    "fusion-readability-basic: enemy monster explains why it is invalid"
+  );
+  clickSmokeElement(handCard(ctx.els, "war-chant"), "fusion-readability-basic: click non-monster hand card");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该素材：不是怪兽。",
+    "fusion-readability-basic: non-monster hand card explains why it is invalid"
+  );
+  if (ctx.state.pendingFusion.selectedIndexes.join(",") !== selectionBeforeInvalidClicks.indexes.join(",") ||
+      ctx.state.pendingFusion.selectedHandUids.join(",") !== selectionBeforeInvalidClicks.handUids.join(",")) {
+    throw new Error("fusion-readability-basic: invalid clicks changed the selected materials");
+  }
+
+  clickSmokeElement(handCard(ctx.els, "gale-mage"), "fusion-readability-basic: select legal hand material");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("已选择 2 / 2：赤焰幼龙（场上）、疾风术士（手牌）") &&
+      ctx.els.choiceText.textContent.includes("素材齐备，确认后完成融合召唤") &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "fusion-readability-basic: completed mixed selection is explicit"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-readability-basic: confirm fusion summon");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "flare-gale-archon") &&
+      ctx.state.player.grave.some((card) => card?.id === "ember-drake") &&
+      ctx.state.player.grave.some((card) => card?.id === "gale-mage") &&
+      !ctx.state.pendingFusion,
+    "fusion-readability-basic: legal fusion completes",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "fusion-readability-basic");
+
+  const result = ctx.state.player.field.find((card) => card?.id === "flare-gale-archon");
+  await waitForSmoke(() => logCardLink(ctx.els, "flare-gale-archon"), "fusion-readability-basic: public result log link");
+  clickSmokeElement(logCardLink(ctx.els, "flare-gale-archon"), "fusion-readability-basic: open result detail from log");
+  await assertCardDetailModal(ctx, result, "fusion-readability-basic");
+  setSmokeStatus("passed", "fusion-readability-basic");
+}
+
 async function runTokenSplitBasicSmoke(ctx) {
   setSmokeStatus("running", "token-split-basic");
   await startSmokeDuel(ctx, "splitToken");
@@ -4212,6 +4297,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-break": runDivineBreakSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "fusion-summon-basic": runFusionSummonBasicSmoke,
+    "fusion-readability-basic": runFusionReadabilityBasicSmoke,
     "fusion-mixed-materials": runFusionMixedMaterialsSmoke,
     "fusion-result-choice": runFusionResultChoiceSmoke,
     "split-token": runSplitTokenSmoke,

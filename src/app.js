@@ -92,12 +92,15 @@ import {
   turnStartPatch
 } from './turn-state.js';
 import {
+  buildFusionSelectionDisplay,
   buildTributeSelectionDisplay,
   defaultTributeSelection,
   describeHandAction,
+  describeFusionMaterialTarget,
   describeTributeTarget,
   duelHintText,
   phaseLabel,
+  fusionSummonFailureMessage,
   tributeSummonFailureMessage,
   turnLabel
 } from './view-model.js';
@@ -1594,9 +1597,7 @@ function beginFusionSelection(handIndex, card) {
     selectedHandUids: []
   };
   state.selected = { zone: "hand", uid: card.uid };
-  cue(options.length > 1
-    ? `先为 ${card.name} 选择融合结果。`
-    : `选择 ${fusionMaterialCount(fusion.materials)} 只融合素材：${fusionMaterialNames(fusion.materials)}。`);
+  cue(currentFusionSelectionDisplay().text);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1657,6 +1658,44 @@ function fusionSelectionStatus(materials = selectedFusionMaterials()) {
   };
 }
 
+function namedFusionRequirements(materials = state.pendingFusion?.materials || []) {
+  return materials.map((entry) => ({
+    ...entry,
+    name: cardDefinitionById(entry.templateId)?.name || entry.templateId
+  }));
+}
+
+function currentFusionSelectionDisplay() {
+  const info = pendingFusionHandInfo();
+  if (!info) return null;
+  const result = info.pending.resultId ? cardDefinitionById(info.pending.resultId) : null;
+  return buildFusionSelectionDisplay({
+    sourceName: info.card.name,
+    resultName: result?.name || info.pending.resultId || "",
+    requirements: namedFusionRequirements(info.pending.materials),
+    selectedMaterials: selectedFusionMaterials().map(({ zone, card }) => ({
+      templateId: templateIdForCard(card),
+      name: card.name,
+      zone
+    })),
+    needsResult: !info.pending.resultId
+  });
+}
+
+function currentFusionMaterialTarget(owner, card, selected = false) {
+  const info = pendingFusionHandInfo();
+  if (!info || !info.pending.resultId) return null;
+  const status = fusionSelectionStatus();
+  return describeFusionMaterialTarget({
+    owner,
+    card,
+    sourceUid: info.pending.handUid,
+    selected,
+    requirements: info.pending.materials,
+    remaining: status.remaining
+  });
+}
+
 function selectFusionResult(resultId) {
   const info = pendingFusionHandInfo();
   const option = info?.pending.resultOptions?.find((entry) => entry.resultId === resultId);
@@ -1666,8 +1705,7 @@ function selectFusionResult(resultId) {
   info.pending.selectedIndexes = [];
   info.pending.selectedHandUids = [];
   state.selected = { zone: "hand", uid: info.card.uid };
-  const result = cardDefinitionById(option.resultId);
-  cue(`已选择融合结果「${result?.name || option.resultId}」，请选择指定素材。`);
+  cue(currentFusionSelectionDisplay().text);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1763,8 +1801,7 @@ function isFusionMaterialCandidate(index) {
   if (!info) return false;
   const card = state.player.field[index];
   if (!card) return false;
-  if (selectedFusionIndexes().includes(index)) return true;
-  return fusionSelectionStatus().remaining.some((entry) => entry.count > 0 && templateIdForCard(card) === entry.templateId);
+  return Boolean(currentFusionMaterialTarget("player", card, selectedFusionIndexes().includes(index))?.ok);
 }
 
 function isFusionHandMaterialCandidate(uid) {
@@ -1772,8 +1809,7 @@ function isFusionHandMaterialCandidate(uid) {
   if (!info || uid === info.card.uid) return false;
   const card = state.player.hand.find((entry) => entry.uid === uid);
   if (!card || card.type !== "monster") return false;
-  if (selectedFusionHandUids().includes(uid)) return true;
-  return fusionSelectionStatus().remaining.some((entry) => entry.count > 0 && templateIdForCard(card) === entry.templateId);
+  return Boolean(currentFusionMaterialTarget("player", card, selectedFusionHandUids().includes(uid))?.ok);
 }
 
 function toggleFusionSelection(index) {
@@ -1784,8 +1820,13 @@ function toggleFusionSelection(index) {
     return false;
   }
   const card = state.player.field[index];
+  if (!info.pending.resultId) {
+    cue(currentFusionSelectionDisplay().requirementText);
+    resetPlayerIdleCountdown();
+    return true;
+  }
   if (!card) {
-    cue(`请选择我方场上的融合素材：${fusionMaterialNames(info.pending.materials)}。`);
+    cue(describeFusionMaterialTarget({ owner: "player", card }).reason);
     resetPlayerIdleCountdown();
     return true;
   }
@@ -1796,15 +1837,14 @@ function toggleFusionSelection(index) {
   } else if (isFusionMaterialCandidate(index)) {
     selected.push(index);
   } else {
-    cue(`${card.name} 不是 ${info.card.name} 需要的融合素材。`);
+    cue(currentFusionMaterialTarget("player", card, false).reason);
     resetPlayerIdleCountdown();
     return true;
   }
   info.pending.selectedIndexes = selected;
   state.selected = { zone: "hand", uid: info.card.uid };
   showDetail(card);
-  const status = fusionSelectionStatus();
-  cue(`${info.card.name} 融合素材：${status.selectedCount}/${status.requiredCount}`);
+  cue(currentFusionSelectionDisplay().text);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1819,6 +1859,11 @@ function toggleFusionHandSelection(uid) {
   }
   const card = state.player.hand.find((entry) => entry.uid === uid);
   if (!card || uid === info.card.uid) return false;
+  if (!info.pending.resultId) {
+    cue(currentFusionSelectionDisplay().requirementText);
+    resetPlayerIdleCountdown();
+    return true;
+  }
   const selected = selectedFusionHandUids();
   const existing = selected.indexOf(uid);
   if (existing >= 0) {
@@ -1826,15 +1871,14 @@ function toggleFusionHandSelection(uid) {
   } else if (isFusionHandMaterialCandidate(uid)) {
     selected.push(uid);
   } else {
-    cue(`${card.name} 不是 ${info.card.name} 需要的融合素材。`);
+    cue(currentFusionMaterialTarget("player", card, false).reason);
     resetPlayerIdleCountdown();
     return true;
   }
   info.pending.selectedHandUids = selected;
   state.selected = { zone: "hand", uid: info.card.uid };
   showDetail(card);
-  const status = fusionSelectionStatus();
-  cue(`${info.card.name} 融合素材：${status.selectedCount}/${status.requiredCount}`);
+  cue(currentFusionSelectionDisplay().text);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1859,7 +1903,7 @@ async function confirmFusionSummon(fieldIndex = null) {
     return false;
   }
   if (!status.complete) {
-    cue(`还需要选择融合素材：${fusionMaterialNames(status.remaining.filter((entry) => entry.count > 0)) || fusionMaterialNames(info.pending.materials)}。`);
+    cue(currentFusionSelectionDisplay().remainingText);
     resetPlayerIdleCountdown();
     return false;
   }
@@ -1880,7 +1924,7 @@ async function confirmFusionSummon(fieldIndex = null) {
       fieldIndex: summonIndex
     });
   } catch (error) {
-    cue(error.message || "融合召唤失败。");
+    cue(fusionSummonFailureMessage(error.message));
     console.error(error);
     resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
@@ -2303,6 +2347,13 @@ async function handleAiSlot(index) {
   if (state.pendingTribute && canPlayerAct()) {
     notePlayerIntent();
     cue(describeTributeTarget({ owner: "ai", card }).reason);
+    resetPlayerIdleCountdown();
+    return;
+  }
+  if (state.pendingFusion && canPlayerAct()) {
+    notePlayerIntent();
+    const target = currentFusionMaterialTarget("ai", card, false);
+    cue(target?.reason || currentFusionSelectionDisplay().requirementText);
     resetPlayerIdleCountdown();
     return;
   }
@@ -4706,9 +4757,7 @@ function render(animationKey = "") {
         : state.pendingTribute
           ? currentTributeSelectionDisplay().text
           : state.pendingFusion
-          ? fusionSelectionStatus().needsResult
-            ? `${state.pendingFusion.cardName}：先选择融合结果。`
-            : `${state.pendingFusion.cardName}：选择融合素材 ${fusionSelectionStatus().selectedCount}/${fusionSelectionStatus().requiredCount}。`
+            ? currentFusionSelectionDisplay().text
           : `${selectedHand.card.name}：${selectedHandAction?.reason || "确认后发动。"}`;
       els.choiceText.textContent = text;
       els.choiceConfirmBtn.textContent = confirmLabel;
@@ -4826,24 +4875,33 @@ function renderField(root, duelist, owner, animationKey) {
       : null;
     const tributeCandidate = Boolean(tributeTarget?.ok);
     const tributeUnavailable = Boolean(tributeTarget && !tributeTarget.ok);
-    const fusionCandidate = owner === "player" && Boolean(state.pendingFusion) && Boolean(card) && isFusionMaterialCandidate(index);
     const fusionSelected = owner === "player" && Boolean(state.pendingFusion) && selectedFusionIndexes().includes(index);
+    const fusionTarget = state.pendingFusion?.resultId
+      ? currentFusionMaterialTarget(owner, card, fusionSelected)
+      : null;
+    const fusionCandidate = Boolean(fusionTarget?.ok);
+    const fusionUnavailable = Boolean(fusionTarget && !fusionTarget.ok);
+    const materialTarget = tributeTarget || fusionTarget;
     const materialCandidate = tributeCandidate || fusionCandidate;
     const materialSelected = tributeSelected || fusionSelected;
-    const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable && !state.pendingTribute;
+    const materialSelectionActive = Boolean(state.pendingTribute || state.pendingFusion?.resultId);
+    const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable && !materialSelectionActive;
     slot.classList.toggle("targetable", targetable);
     slot.classList.toggle("attack-target", attackTargetable);
     slot.classList.toggle("tribute-candidate", materialCandidate);
     slot.classList.toggle("tribute-selected", materialSelected);
     slot.classList.toggle("tribute-unavailable", tributeUnavailable);
-    if (tributeTarget) {
-      slot.dataset.tributeState = tributeTarget.ok ? (tributeSelected ? "selected" : "candidate") : "unavailable";
-      slot.dataset.tributeReason = tributeTarget.reason;
-      slot.title = tributeTarget.reason;
+    slot.classList.toggle("fusion-candidate", fusionCandidate);
+    slot.classList.toggle("fusion-selected", fusionSelected);
+    slot.classList.toggle("fusion-unavailable", fusionUnavailable);
+    if (materialTarget) {
+      slot.dataset.materialState = materialTarget.ok ? (materialSelected ? "selected" : "candidate") : "unavailable";
+      slot.dataset.materialReason = materialTarget.reason;
+      slot.title = materialTarget.reason;
     }
     slot.disabled = disabledEnemyEmpty;
     slot.setAttribute("aria-disabled", disabledEnemyEmpty ? "true" : "false");
-    slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}召唤区 ${index + 1}${tributeTarget ? `，${tributeTarget.reason}` : ""}`);
+    slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}召唤区 ${index + 1}${materialTarget ? `，${materialTarget.reason}` : ""}`);
     if (owner === "player") {
       slot.addEventListener("click", () => handlePlayerSlot(index));
     } else {
@@ -4887,6 +4945,9 @@ function renderField(root, duelist, owner, animationKey) {
       cardEl.classList.toggle("tribute-candidate", materialCandidate);
       cardEl.classList.toggle("tribute-selected", materialSelected);
       cardEl.classList.toggle("tribute-unavailable", tributeUnavailable);
+      cardEl.classList.toggle("fusion-candidate", fusionCandidate);
+      cardEl.classList.toggle("fusion-selected", fusionSelected);
+      cardEl.classList.toggle("fusion-unavailable", fusionUnavailable);
       if (animationKey === `summon-${owner}-${index}`) cardEl.classList.add("summon-flash");
       if (animationKey === `hit-${owner}-${index}`) cardEl.classList.add("hit-flash");
       if (owner === "player") {
@@ -5017,13 +5078,12 @@ function handActionInfo(card, handIndex) {
       };
     }
     const status = state.pendingFusion?.handUid === card.uid ? fusionSelectionStatus() : null;
+    const display = status ? currentFusionSelectionDisplay() : null;
     return {
       ...action,
       label: status?.needsResult ? "选择融合结果" : status ? `融合 ${status.selectedCount}/${status.requiredCount}` : "融合召唤",
-      reason: status
-        ? status.needsResult
-          ? "先选择一种融合形态，再选择该配方的指定素材。"
-          : `选择 ${status.requiredCount} 只指定素材后确认融合召唤。`
+      reason: display
+        ? display.text
         : `确认后选择 ${fusionMaterialNames(fusion.materials)} 作为融合素材。`
     };
   }
@@ -5054,17 +5114,30 @@ function renderHand(animationKey) {
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card), handSummary: true });
     cardEl.dataset.zone = "hand";
     const action = handActionInfo(card, index);
-    const fusionMaterialCandidate = Boolean(state.pendingFusion) && isFusionHandMaterialCandidate(card.uid);
     const fusionMaterialSelected = Boolean(state.pendingFusion) && selectedFusionHandUids().includes(card.uid);
+    const fusionMaterialTarget = state.pendingFusion?.resultId && card.uid !== state.pendingFusion.handUid
+      ? currentFusionMaterialTarget("player", card, fusionMaterialSelected)
+      : null;
+    const fusionMaterialCandidate = Boolean(fusionMaterialTarget?.ok);
+    const fusionMaterialUnavailable = Boolean(fusionMaterialTarget && !fusionMaterialTarget.ok);
     cardEl.classList.toggle("selected", state.selected?.zone === "hand" && state.selected.uid === card.uid);
     cardEl.classList.toggle("tribute-candidate", fusionMaterialCandidate);
     cardEl.classList.toggle("tribute-selected", fusionMaterialSelected);
-    cardEl.classList.toggle("action-ready", action.ok);
-    cardEl.classList.toggle("action-blocked", !action.ok && state.started && canPlayerAct());
-    cardEl.title = `${card.name}：${action.reason}`;
+    cardEl.classList.toggle("fusion-candidate", fusionMaterialCandidate);
+    cardEl.classList.toggle("fusion-selected", fusionMaterialSelected);
+    cardEl.classList.toggle("fusion-unavailable", fusionMaterialUnavailable);
+    cardEl.classList.toggle("action-ready", action.ok && !fusionMaterialUnavailable);
+    cardEl.classList.toggle("action-blocked", (!action.ok || fusionMaterialUnavailable) && state.started && canPlayerAct());
+    cardEl.title = `${card.name}：${fusionMaterialTarget?.reason || action.reason}`;
     const actionTag = document.createElement("span");
     actionTag.className = "action-tag";
-    actionTag.textContent = fusionMaterialSelected ? "融合素材 ✓" : fusionMaterialCandidate ? "融合素材" : action.label;
+    actionTag.textContent = fusionMaterialSelected
+      ? "融合素材 ✓"
+      : fusionMaterialCandidate
+        ? "融合素材"
+        : fusionMaterialUnavailable
+          ? "不可选素材"
+          : action.label;
     cardEl.appendChild(actionTag);
     const actionReason = document.createElement("span");
     actionReason.className = "action-reason";
@@ -5072,8 +5145,10 @@ function renderHand(animationKey) {
       ? "已选择为手牌融合素材，再次点击可取消。"
       : fusionMaterialCandidate
         ? "点击选择为手牌融合素材。"
-        : action.reason;
-    const showActionReason = fusionMaterialSelected || fusionMaterialCandidate || state.selected?.uid === card.uid || !action.ok;
+        : fusionMaterialUnavailable
+          ? fusionMaterialTarget.reason
+          : action.reason;
+    const showActionReason = fusionMaterialSelected || fusionMaterialCandidate || fusionMaterialUnavailable || state.selected?.uid === card.uid || !action.ok;
     actionReason.hidden = !showActionReason;
     cardEl.classList.toggle("compact-action-state", !showActionReason);
     cardEl.appendChild(actionReason);

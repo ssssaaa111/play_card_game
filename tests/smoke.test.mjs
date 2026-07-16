@@ -538,6 +538,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke/);
   assert.match(smoke, /"protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke/);
   assert.match(smoke, /"tribute-readability-basic": runTributeReadabilityBasicSmoke/);
+  assert.match(smoke, /"fusion-readability-basic": runFusionReadabilityBasicSmoke/);
   assert.match(smoke, /"trio-omega-demo": runTrioOmegaDemoSmoke/);
   assert.match(smoke, /"trio-omega-challenge": runTrioOmegaChallengeSmoke/);
   assert.match(smoke, /"trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke/);
@@ -546,6 +547,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-evolution-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-protection-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-readability-basic"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "fusion-readability-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-challenge"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
@@ -1158,6 +1160,14 @@ test("hand action prompts have visible layout room", () => {
   assert.match(css, /\.action-reason\s*\{[\s\S]*-webkit-line-clamp: 1;/);
   assert.match(css, /\.detail-actions\s*\{[\s\S]*position: relative;[\s\S]*z-index: 9;/);
   assert.doesNotMatch(css, /\.card-detail-trigger/);
+});
+
+test("narrow fusion prompts stay clear of clickable hand materials", () => {
+  const css = readProjectFile("styles.css");
+  const smoke = readProjectFile("src/browser-smoke.js");
+
+  assert.match(css, /@media \(max-width: 560px\) \{[\s\S]*?\.choice-actions\.fusion-choice \{[\s\S]*?top: 12px;[\s\S]*?bottom: auto;[\s\S]*?max-height: calc\(48vh - 12px\);[\s\S]*?overflow-y: auto;/);
+  assert.match(smoke, /fusion prompt should not cover the hand material on narrow screens/);
 });
 
 test("required static files exist at documented paths", () => {
