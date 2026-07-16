@@ -1,7 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { defaultTributeSelection, describeHandAction, duelHintText, phaseLabel, turnLabel } from "../src/view-model.js";
+import {
+  buildTributeSelectionDisplay,
+  defaultTributeSelection,
+  describeHandAction,
+  describeTributeTarget,
+  duelHintText,
+  phaseLabel,
+  tributeSummonFailureMessage,
+  turnLabel
+} from "../src/view-model.js";
 
 test("builds phase and turn labels from state", () => {
   assert.equal(phaseLabel({ started: false }), "准备决斗");
@@ -118,4 +127,83 @@ test("auto-selects tributes only when every field monster is required", () => {
   assert.deepEqual(defaultTributeSelection(field, 3), [0, 2, 4]);
   assert.deepEqual(defaultTributeSelection(field, 2), []);
   assert.deepEqual(defaultTributeSelection(field, 0), []);
+});
+
+test("describes tribute progress with the summon card, selected names, and remaining count", () => {
+  const field = [
+    { uid: "spark", name: "星火信使" },
+    null,
+    { uid: "gearlet", name: "微光机巧卫" },
+    null,
+    null
+  ];
+
+  assert.deepEqual(buildTributeSelectionDisplay({
+    cardName: "坠星巨卫",
+    cost: 2,
+    field,
+    selectedIndexes: [0]
+  }), {
+    cardName: "坠星巨卫",
+    cost: 2,
+    selectedCount: 1,
+    selectedNames: ["星火信使"],
+    remainingCount: 1,
+    complete: false,
+    requirementText: "召唤「坠星巨卫」需要解放 2 只怪兽。",
+    selectionText: "已选择 1 / 2：星火信使",
+    instructionText: "还差 1 只解放素材。请选择第 2 只解放素材。",
+    text: "召唤「坠星巨卫」需要解放 2 只怪兽。\n已选择 1 / 2：星火信使\n还差 1 只解放素材。请选择第 2 只解放素材。"
+  });
+
+  const complete = buildTributeSelectionDisplay({
+    cardName: "坠星巨卫",
+    cost: 2,
+    field,
+    selectedIndexes: [2, 0]
+  });
+  assert.equal(complete.complete, true);
+  assert.equal(complete.remainingCount, 0);
+  assert.equal(complete.selectionText, "已选择 2 / 2：星火信使、微光机巧卫");
+  assert.equal(complete.instructionText, "解放素材已齐，确认后完成祭品召唤。");
+});
+
+test("explains which tribute targets are selectable and why others are blocked", () => {
+  const monster = { uid: "spark", name: "星火信使", type: "monster" };
+
+  assert.deepEqual(describeTributeTarget({ owner: "player", card: monster, selected: false }), {
+    ok: true,
+    label: "可选解放素材",
+    reason: "可选择「星火信使」作为解放素材。"
+  });
+  assert.deepEqual(describeTributeTarget({ owner: "player", card: monster, selected: true }), {
+    ok: true,
+    label: "已选解放素材",
+    reason: "「星火信使」已被选择，再次点击可取消。"
+  });
+  assert.deepEqual(describeTributeTarget({ owner: "player", card: null }), {
+    ok: false,
+    label: "不可选",
+    reason: "不能选择该目标：该格为空。"
+  });
+  assert.deepEqual(describeTributeTarget({ owner: "ai", card: monster }), {
+    ok: false,
+    label: "不可选",
+    reason: "不能选择该目标：不是己方怪兽。"
+  });
+});
+
+test("prefixes tribute dispatch failures without hiding the engine reason", () => {
+  assert.equal(
+    tributeSummonFailureMessage("player.monsterZone slot 1 is occupied"),
+    "祭品召唤失败：目标怪兽区已被占用。"
+  );
+  assert.equal(
+    tributeSummonFailureMessage("Card colossus requires exactly 2 tribute cards"),
+    "祭品召唤失败：需要正好解放 2 只己方怪兽。"
+  );
+  assert.equal(
+    tributeSummonFailureMessage("unexpected rule failure"),
+    "祭品召唤失败：unexpected rule failure"
+  );
 });

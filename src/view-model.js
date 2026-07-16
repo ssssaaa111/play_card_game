@@ -113,3 +113,65 @@ export function defaultTributeSelection(field = [], cost = 0) {
     .filter((index) => index >= 0);
   return occupiedIndexes.length === required ? occupiedIndexes : [];
 }
+
+export function buildTributeSelectionDisplay({
+  cardName = "这只怪兽",
+  cost = 0,
+  field = [],
+  selectedIndexes = []
+} = {}) {
+  const required = Math.max(0, Number(cost) || 0);
+  const validIndexes = Array.from(new Set(Array.isArray(selectedIndexes) ? selectedIndexes : []))
+    .filter((index) => Number.isInteger(index) && Boolean(field[index]) && field[index]?.type !== "spell" && field[index]?.type !== "trap")
+    .sort((left, right) => left - right)
+    .slice(0, required);
+  const selectedNames = validIndexes.map((index) => field[index]?.name || `怪兽区 ${index + 1}`);
+  const selectedCount = selectedNames.length;
+  const remainingCount = Math.max(0, required - selectedCount);
+  const complete = required > 0 && remainingCount === 0;
+  const requirementText = `召唤「${cardName}」需要解放 ${required} 只怪兽。`;
+  const selectionText = `已选择 ${selectedCount} / ${required}：${selectedNames.length ? selectedNames.join("、") : "无"}`;
+  const instructionText = complete
+    ? "解放素材已齐，确认后完成祭品召唤。"
+    : `还差 ${remainingCount} 只解放素材。请选择第 ${selectedCount + 1} 只解放素材。`;
+  return {
+    cardName,
+    cost: required,
+    selectedCount,
+    selectedNames,
+    remainingCount,
+    complete,
+    requirementText,
+    selectionText,
+    instructionText,
+    text: [requirementText, selectionText, instructionText].join("\n")
+  };
+}
+
+export function describeTributeTarget({ owner = "player", card = null, selected = false } = {}) {
+  if (owner !== "player") {
+    return { ok: false, label: "不可选", reason: "不能选择该目标：不是己方怪兽。" };
+  }
+  if (!card) {
+    return { ok: false, label: "不可选", reason: "不能选择该目标：该格为空。" };
+  }
+  if (card.type && card.type !== "monster") {
+    return { ok: false, label: "不可选", reason: "不能选择该目标：该卡不是怪兽。" };
+  }
+  return selected
+    ? { ok: true, label: "已选解放素材", reason: `「${card.name}」已被选择，再次点击可取消。` }
+    : { ok: true, label: "可选解放素材", reason: `可选择「${card.name}」作为解放素材。` };
+}
+
+export function tributeSummonFailureMessage(reason = "") {
+  const detail = String(reason || "规则校验未通过。");
+  const exactCost = detail.match(/requires exactly (\d+) tribute cards?/i);
+  if (exactCost) return `祭品召唤失败：需要正好解放 ${exactCost[1]} 只己方怪兽。`;
+  if (/monsterZone slot \d+ is occupied/i.test(detail)) {
+    return "祭品召唤失败：目标怪兽区已被占用。";
+  }
+  if (/monsterZone is full/i.test(detail)) {
+    return "祭品召唤失败：我方怪兽区已满。";
+  }
+  return detail.startsWith("祭品召唤失败：") ? detail : `祭品召唤失败：${detail}`;
+}

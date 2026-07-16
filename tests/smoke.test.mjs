@@ -537,6 +537,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /trioOmegaRivalFull: \{/);
   assert.match(smoke, /"protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke/);
   assert.match(smoke, /"protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke/);
+  assert.match(smoke, /"tribute-readability-basic": runTributeReadabilityBasicSmoke/);
   assert.match(smoke, /"trio-omega-demo": runTrioOmegaDemoSmoke/);
   assert.match(smoke, /"trio-omega-challenge": runTrioOmegaChallengeSmoke/);
   assert.match(smoke, /"trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke/);
@@ -544,6 +545,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"trio-omega-full-duel": runTrioOmegaFullDuelSmoke/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-evolution-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-protection-demo"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "tribute-readability-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-challenge"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);

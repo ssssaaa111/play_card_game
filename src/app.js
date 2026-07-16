@@ -91,7 +91,16 @@ import {
   shouldRunPlayerIdleCountdownForState,
   turnStartPatch
 } from './turn-state.js';
-import { defaultTributeSelection, describeHandAction, duelHintText, phaseLabel, turnLabel } from './view-model.js';
+import {
+  buildTributeSelectionDisplay,
+  defaultTributeSelection,
+  describeHandAction,
+  describeTributeTarget,
+  duelHintText,
+  phaseLabel,
+  tributeSummonFailureMessage,
+  turnLabel
+} from './view-model.js';
 import {
   MAX_LP,
   MONSTER_ZONE_SIZE,
@@ -1411,9 +1420,12 @@ function beginTributeSelection(handIndex, card) {
     selectedIndexes
   };
   state.selected = { zone: "hand", uid: card.uid };
-  cue(selectedIndexes.length === cost
-    ? `场上正好有 ${cost} 只怪兽，已全部选为 ${card.name} 的祭品；确认后召唤。`
-    : `选择 ${cost} 只我方场上怪兽作为 ${card.name} 的祭品。`);
+  cue(buildTributeSelectionDisplay({
+    cardName: card.name,
+    cost,
+    field: state.player.field,
+    selectedIndexes
+  }).text);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1431,6 +1443,16 @@ function selectedTributeIndexes() {
   return (state.pendingTribute?.selectedIndexes || []).filter((index) => Boolean(state.player.field[index]));
 }
 
+function currentTributeSelectionDisplay() {
+  if (!state.pendingTribute) return null;
+  return buildTributeSelectionDisplay({
+    cardName: state.pendingTribute.cardName,
+    cost: state.pendingTribute.cost,
+    field: state.player.field,
+    selectedIndexes: selectedTributeIndexes()
+  });
+}
+
 function toggleTributeSelection(index) {
   const info = pendingTributeHandInfo();
   if (!info) {
@@ -1440,7 +1462,7 @@ function toggleTributeSelection(index) {
   }
   const card = state.player.field[index];
   if (!card) {
-    cue(`请选择我方场上的怪兽作为 ${info.card.name} 的祭品。`);
+    cue(describeTributeTarget({ owner: "player", card }).reason);
     resetPlayerIdleCountdown();
     return true;
   }
@@ -1457,7 +1479,8 @@ function toggleTributeSelection(index) {
   info.pending.selectedIndexes = selected;
   state.selected = { zone: "hand", uid: info.card.uid };
   showDetail(card);
-  cue(`${info.card.name} 祭品：${selected.length}/${info.pending.cost}`);
+  const display = currentTributeSelectionDisplay();
+  cue(`${display.selectionText} ${display.instructionText}`);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1474,7 +1497,7 @@ async function confirmTributeSummon(fieldIndex = null) {
   }
   const tributeIndexes = selectedTributeIndexes();
   if (tributeIndexes.length !== info.pending.cost) {
-    cue(`还需要选择 ${info.pending.cost} 只祭品。`);
+    cue(currentTributeSelectionDisplay().instructionText);
     resetPlayerIdleCountdown();
     return false;
   }
@@ -2277,6 +2300,12 @@ async function handleAiTrapSlot(index) {
 
 async function handleAiSlot(index) {
   const card = state.ai.field[index];
+  if (state.pendingTribute && canPlayerAct()) {
+    notePlayerIntent();
+    cue(describeTributeTarget({ owner: "ai", card }).reason);
+    resetPlayerIdleCountdown();
+    return;
+  }
   if (!card) return;
   if (!canPlayerAct()) {
     showDetail(card);
@@ -2341,7 +2370,9 @@ async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) 
   try {
     summonEvents = dispatchSummonMonsterFromUiState(state, owner.owner, handIndex, fieldIndex, options);
   } catch (error) {
-    cue(error.message || "怪兽召唤失败。");
+    cue(tributeCost(card) > 0
+      ? tributeSummonFailureMessage(error.message)
+      : error.message || "怪兽召唤失败。");
     console.error(error);
     return false;
   }
@@ -4672,7 +4703,9 @@ function render(animationKey = "") {
       const cancelLabel = state.pendingTarget ? "取消目标" : "取消选择";
       const text = state.pendingTarget
         ? `${targetPrompt} 再点这张手牌或确认，将默认选择合法目标。`
-        : state.pendingFusion
+        : state.pendingTribute
+          ? currentTributeSelectionDisplay().text
+          : state.pendingFusion
           ? fusionSelectionStatus().needsResult
             ? `${state.pendingFusion.cardName}：先选择融合结果。`
             : `${state.pendingFusion.cardName}：选择融合素材 ${fusionSelectionStatus().selectedCount}/${fusionSelectionStatus().requiredCount}。`
@@ -4787,20 +4820,30 @@ function renderField(root, duelist, owner, animationKey) {
     slot.dataset.testid = `${owner}-field-${index}`;
     const targetable = isPendingTargetSlot(owner, index);
     const attackTargetable = isAttackTargetSlot(owner, index);
-    const tributeCandidate = owner === "player" && Boolean(state.pendingTribute) && Boolean(card);
-    const tributeSelected = tributeCandidate && selectedTributeIndexes().includes(index);
+    const tributeSelected = owner === "player" && Boolean(state.pendingTribute) && selectedTributeIndexes().includes(index);
+    const tributeTarget = state.pendingTribute
+      ? describeTributeTarget({ owner, card, selected: tributeSelected })
+      : null;
+    const tributeCandidate = Boolean(tributeTarget?.ok);
+    const tributeUnavailable = Boolean(tributeTarget && !tributeTarget.ok);
     const fusionCandidate = owner === "player" && Boolean(state.pendingFusion) && Boolean(card) && isFusionMaterialCandidate(index);
     const fusionSelected = owner === "player" && Boolean(state.pendingFusion) && selectedFusionIndexes().includes(index);
     const materialCandidate = tributeCandidate || fusionCandidate;
     const materialSelected = tributeSelected || fusionSelected;
-    const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable;
+    const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable && !state.pendingTribute;
     slot.classList.toggle("targetable", targetable);
     slot.classList.toggle("attack-target", attackTargetable);
     slot.classList.toggle("tribute-candidate", materialCandidate);
     slot.classList.toggle("tribute-selected", materialSelected);
+    slot.classList.toggle("tribute-unavailable", tributeUnavailable);
+    if (tributeTarget) {
+      slot.dataset.tributeState = tributeTarget.ok ? (tributeSelected ? "selected" : "candidate") : "unavailable";
+      slot.dataset.tributeReason = tributeTarget.reason;
+      slot.title = tributeTarget.reason;
+    }
     slot.disabled = disabledEnemyEmpty;
     slot.setAttribute("aria-disabled", disabledEnemyEmpty ? "true" : "false");
-    slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}召唤区 ${index + 1}`);
+    slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}召唤区 ${index + 1}${tributeTarget ? `，${tributeTarget.reason}` : ""}`);
     if (owner === "player") {
       slot.addEventListener("click", () => handlePlayerSlot(index));
     } else {
@@ -4843,6 +4886,7 @@ function renderField(root, duelist, owner, animationKey) {
       cardEl.classList.toggle("attack-target", attackTargetable);
       cardEl.classList.toggle("tribute-candidate", materialCandidate);
       cardEl.classList.toggle("tribute-selected", materialSelected);
+      cardEl.classList.toggle("tribute-unavailable", tributeUnavailable);
       if (animationKey === `summon-${owner}-${index}`) cardEl.classList.add("summon-flash");
       if (animationKey === `hit-${owner}-${index}`) cardEl.classList.add("hit-flash");
       if (owner === "player") {
@@ -4997,7 +5041,7 @@ function handActionInfo(card, handIndex) {
       ...action,
       label: state.pendingTribute?.handUid === card.uid ? `祭品 ${selectedTributeIndexes().length}/${cost}` : "祭品召唤",
       reason: state.pendingTribute?.handUid === card.uid
-        ? `选择 ${cost} 只我方场上怪兽后确认祭品召唤。`
+        ? currentTributeSelectionDisplay().text
         : `确认后选择 ${cost} 只我方场上怪兽作为祭品。`
     };
   }

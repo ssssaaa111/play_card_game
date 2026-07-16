@@ -759,6 +759,70 @@ async function runTributeSummonBasicSmoke(ctx) {
   setSmokeStatus("passed", "tribute-summon-basic");
 }
 
+async function runTributeReadabilityBasicSmoke(ctx) {
+  setSmokeStatus("running", "tribute-readability-basic");
+  await startSmokeDuel(ctx, "tributeSummonDouble");
+  clickSmokeElement(handCard(ctx.els, "starfall-colossus"), "tribute-readability-basic: select monster");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-readability-basic: enter tribute selection");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("需要解放 2 只怪兽") &&
+      ctx.els.choiceText.textContent.includes("已选择 2 / 2") &&
+      ctx.els.choiceText.textContent.includes("星火信使") &&
+      ctx.els.choiceText.textContent.includes("微光机巧卫"),
+    "tribute-readability-basic: requirement and auto-selected materials are visible"
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-readability-basic: unselect first material");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("已选择 1 / 2：微光机巧卫") &&
+      ctx.els.choiceText.textContent.includes("还差 1 只解放素材") &&
+      ctx.els.choiceText.textContent.includes("请选择第 2 只解放素材"),
+    "tribute-readability-basic: selected name and remaining material are visible"
+  );
+
+  const selectedBeforeInvalidClicks = ctx.state.pendingTribute.selectedIndexes.slice();
+  clickSmokeElement(fieldSlot(ctx.els, "player", 2), "tribute-readability-basic: click empty own slot");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：该格为空。",
+    "tribute-readability-basic: empty slot explains why it is invalid"
+  );
+  if (ctx.state.pendingTribute.selectedIndexes.join(",") !== selectedBeforeInvalidClicks.join(",")) {
+    throw new Error("tribute-readability-basic: empty slot changed tribute selection");
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "tribute-readability-basic: click enemy monster");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：不是己方怪兽。",
+    "tribute-readability-basic: enemy monster explains why it is invalid"
+  );
+  if (ctx.state.pendingTribute.selectedIndexes.join(",") !== selectedBeforeInvalidClicks.join(",")) {
+    throw new Error("tribute-readability-basic: enemy monster changed tribute selection");
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-readability-basic: restore first material");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("已选择 2 / 2：星火信使、微光机巧卫") &&
+      ctx.els.choiceText.textContent.includes("解放素材已齐"),
+    "tribute-readability-basic: completed selection is explicit"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-readability-basic: confirm summon");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "starfall-colossus") &&
+      ctx.state.player.grave.some((card) => card?.id === "spark-runner") &&
+      ctx.state.player.grave.some((card) => card?.id === "lumen-gearlet") &&
+      !ctx.state.pendingTribute,
+    "tribute-readability-basic: legal tribute summon completes",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "tribute-readability-basic");
+
+  const summoned = ctx.state.player.field.find((card) => card?.id === "starfall-colossus");
+  await waitForSmoke(() => logCardLink(ctx.els, "starfall-colossus"), "tribute-readability-basic: public log card link");
+  clickSmokeElement(logCardLink(ctx.els, "starfall-colossus"), "tribute-readability-basic: open log card detail");
+  await assertCardDetailModal(ctx, summoned, "tribute-readability-basic");
+  setSmokeStatus("passed", "tribute-readability-basic");
+}
+
 async function runFusionSummonBasicSmoke(ctx) {
   setSmokeStatus("running", "fusion-summon-basic");
   await startSmokeDuel(ctx, "fusionSummon");
@@ -4137,6 +4201,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-position-basic": runSummonPositionBasicSmoke,
     "tribute-summon": runTributeSummonSmoke,
     "tribute-summon-basic": runTributeSummonBasicSmoke,
+    "tribute-readability-basic": runTributeReadabilityBasicSmoke,
     "tribute-summon-double": runTributeSummonDoubleSmoke,
     "divine-summon": runDivineSummonSmoke,
     "trio-tribute-summon": runTrioTributeSummonSmoke,
