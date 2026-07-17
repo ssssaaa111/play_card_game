@@ -1609,8 +1609,15 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   box-shadow: 0 0 0 3px rgba(84, 210, 210, 0.42), 0 16px 34px rgba(0, 0, 0, 0.38);
 }
 
+.slot.split-candidate .card,
+.card.split-candidate {
+  border-color: rgba(128, 226, 145, 0.9);
+  box-shadow: 0 0 0 2px rgba(128, 226, 145, 0.24), 0 12px 26px rgba(0, 0, 0, 0.32);
+}
+
 .slot.tribute-unavailable,
-.slot.fusion-unavailable {
+.slot.fusion-unavailable,
+.slot.split-unavailable {
   border-color: rgba(239, 71, 111, 0.32);
   cursor: not-allowed;
 }
@@ -1618,14 +1625,18 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .slot.tribute-unavailable .card,
 .card.tribute-unavailable,
 .slot.fusion-unavailable .card,
-.card.fusion-unavailable {
+.card.fusion-unavailable,
+.slot.split-unavailable .card,
+.card.split-unavailable {
   filter: saturate(0.55) brightness(0.72);
 }
 
 .slot.tribute-candidate::after,
 .slot.tribute-unavailable::after,
 .slot.fusion-candidate::after,
-.slot.fusion-unavailable::after {
+.slot.fusion-unavailable::after,
+.slot.split-candidate::after,
+.slot.split-unavailable::after {
   position: absolute;
   left: 8px;
   right: 8px;
@@ -1661,8 +1672,14 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   background: rgba(132, 236, 225, 0.98);
 }
 
+.slot.split-candidate::after {
+  content: "可选分裂来源";
+  background: rgba(128, 226, 145, 0.96);
+}
+
 .slot.tribute-unavailable::after,
-.slot.fusion-unavailable::after {
+.slot.fusion-unavailable::after,
+.slot.split-unavailable::after {
   content: "不可选";
   color: #ffd9e2;
   background: rgba(96, 28, 47, 0.88);
@@ -1697,6 +1714,13 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   font-weight: 900;
   text-align: center;
   pointer-events: none;
+}
+
+.slot.targetable.split-candidate::after {
+  content: "可选分裂来源";
+  border-color: rgba(128, 226, 145, 0.48);
+  background: rgba(12, 44, 29, 0.9);
+  color: #bdf6c9;
 }
 
 .slot.attack-target::after {
@@ -3652,7 +3676,8 @@ button.chain-stack-card:focus-visible {
 }
 
 .choice-actions.fusion-choice,
-.choice-actions.material-choice {
+.choice-actions.material-choice,
+.choice-actions.split-choice {
   top: auto;
   bottom: 16px;
   transform: translateX(-50%);

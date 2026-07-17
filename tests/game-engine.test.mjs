@@ -2175,13 +2175,13 @@ test("split token spell rejects missing token template or monster-zone space wit
     "spark-fragment-token": { id: "spark-fragment-token", type: "monster", atk: 500, def: 500 }
   };
   const fullEngine = new GameEngine(fullState);
+  const fullBefore = fullEngine.getState();
 
   assert.throws(
     () => fullEngine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "split-1", targetCardId: "runner-1" }),
     /empty monster zone/
   );
-  assert.deepEqual(fullEngine.getState().players[PLAYER].hand, ["split-1"]);
-  assert.equal(fullEngine.getState().players[PLAYER].monsterZone.length, 4);
+  assert.deepEqual(fullEngine.getState(), fullBefore);
 
   const missingTemplateState = makeState({
     cards: [

@@ -93,14 +93,17 @@ import {
 } from './turn-state.js';
 import {
   buildFusionSelectionDisplay,
+  buildSplitTokenDisplay,
   buildTributeSelectionDisplay,
   defaultTributeSelection,
   describeHandAction,
   describeFusionMaterialTarget,
+  describeSplitTokenTarget,
   describeTributeTarget,
   duelHintText,
   phaseLabel,
   fusionSummonFailureMessage,
+  splitTokenFailureMessage,
   tributeSummonFailureMessage,
   turnLabel
 } from './view-model.js';
@@ -1126,7 +1129,19 @@ function spellNeedsManualTarget(owner, card) {
   return owner.owner === "player" && Boolean(spellTargetMode(card));
 }
 
+function currentSplitTokenDisplay(sourceMonster = null) {
+  const token = cardDefinitionById("spark-fragment-token");
+  return buildSplitTokenDisplay({
+    sourceName: state.pendingTarget?.cardName || "星火分裂",
+    tokenName: token?.name || "星火衍生体",
+    count: 2,
+    field: state.player.field,
+    sourceMonster
+  });
+}
+
 function targetPromptFor(mode, cardName = "这张卡", effectName = "") {
+  if (effectName === "splitToken") return currentSplitTokenDisplay().text;
   return spellTargetPrompt(mode, cardName, spellEffects[effectName]?.targetRule || "");
 }
 
@@ -1171,6 +1186,14 @@ function beginSpellTargetSelection(handIndex, card) {
 function validateSpellTarget(pending, ownerName, index, zone = "field") {
   if (!pending) return { ok: false, reason: "当前没有需要选择目标的效果。" };
   const duelist = ownerName === "player" ? state.player : state.ai;
+
+  if (pending.effect === "splitToken") {
+    const splitTarget = describeSplitTokenTarget({
+      owner: ownerName,
+      card: zone === "field" ? duelist.field[index] : null
+    });
+    if (!splitTarget.ok) return splitTarget;
+  }
 
   if (pending.mode === "enemySpellTrap") {
     if (zone !== "traps" || ownerName !== "ai") {
@@ -2357,6 +2380,11 @@ async function handleAiSlot(index) {
     resetPlayerIdleCountdown();
     return;
   }
+  if (state.pendingTarget?.effect === "splitToken" && canPlayerAct()) {
+    notePlayerIntent();
+    await resolvePendingSpellTarget("ai", index);
+    return;
+  }
   if (!card) return;
   if (!canPlayerAct()) {
     showDetail(card);
@@ -2562,7 +2590,7 @@ async function playSpell(owner, rival, handIndex, targetInfo = null) {
   }
   const validation = validateSpell(owner, rival, card, handIndex);
   if (!validation.ok) {
-    if (owner.owner === "player") cue(validation.reason);
+    if (owner.owner === "player") cue(card.effect === "splitToken" ? splitTokenFailureMessage(validation.reason) : validation.reason);
     if (owner.owner === "player") resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
   }
@@ -2575,7 +2603,9 @@ async function playSpell(owner, rival, handIndex, targetInfo = null) {
   try {
     engineEvents = dispatchActivateSpellFromUiState(state, owner.owner, rival.owner, handIndex, targetInfo);
   } catch (error) {
-    if (owner.owner === "player") cue(error.message || "\u9b54\u6cd5\u5361\u53d1\u52a8\u5931\u8d25\u3002");
+    if (owner.owner === "player") {
+      cue(card.effect === "splitToken" ? splitTokenFailureMessage(error.message) : (error.message || "\u9b54\u6cd5\u5361\u53d1\u52a8\u5931\u8d25\u3002"));
+    }
     console.error(error);
     if (owner.owner === "player") resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
@@ -2635,6 +2665,11 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
   };
   let totalDamageDealt = 0;
   let statModifiedCount = 0;
+  const tokenSummonEvents = events.filter((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.summonType === "token" &&
+    event.sourceCardId === runtimeCardId(card)
+  );
   events.forEach((event) => {
     if (event.type === "CARD_MOVED" && event.from?.zone === "grave" && event.to?.zone === "monsterZone") {
       const found = findRuntimeCard(event.cardId);
@@ -2673,6 +2708,23 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
         result.targetOwner = found.owner;
         const isFusion = event.summonType === "fusion";
         const isToken = event.summonType === "token";
+        if (isToken) {
+          if (event !== tokenSummonEvents[0]) return;
+          const tokenCards = tokenSummonEvents
+            .map((tokenEvent) => findRuntimeCard(tokenEvent.cardId)?.card)
+            .filter(Boolean);
+          const sourceMonster = origin?.card || targetInfo?.card || null;
+          const tokenName = tokenCards[0]?.name || "衍生物";
+          const tokenCount = tokenCards.length || tokenSummonEvents.length;
+          addLog(`「${sourceMonster?.name || "己方怪兽"}」通过「${card.name}」生成了 ${tokenCount} 只「${tokenName}」。`, cardLogMeta(card, {
+            actor: owner.owner,
+            type: "effect",
+            relatedCardIds: relatedCardIds(sourceMonster, ...tokenCards)
+          }));
+          cue(`${currentSplitTokenDisplay(sourceMonster).sourceText} 已生成 ${tokenCount} 只「${tokenName}」。token 离场后会消失。`);
+          playEpicAction("衍生物", "summon");
+          return;
+        }
         addLog(`${found.card.name} 因 ${card.name} ${isFusion ? "融合登场" : isToken ? "作为衍生物生成" : "特殊登场"}。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card, origin?.card) }));
         playEpicAction(isFusion ? "融合召唤" : isToken ? "衍生物" : "王牌进化", "summon");
         if (found.card.stars >= 5) showAce(found.card, found.owner);
@@ -4767,6 +4819,7 @@ function render(animationKey = "") {
     }
     els.choiceActions.classList.toggle("fusion-choice", Boolean(state.pendingFusion));
     els.choiceActions.classList.toggle("material-choice", Boolean(state.pendingFusion || state.pendingTribute));
+    els.choiceActions.classList.toggle("split-choice", state.pendingTarget?.effect === "splitToken");
   }
   renderFusionPreview();
   const selectedPlayerMonster = state.selected?.zone === "playerField" && Boolean(state.player.field[state.selected.index]);
@@ -4881,11 +4934,18 @@ function renderField(root, duelist, owner, animationKey) {
       : null;
     const fusionCandidate = Boolean(fusionTarget?.ok);
     const fusionUnavailable = Boolean(fusionTarget && !fusionTarget.ok);
+    const splitTarget = state.pendingTarget?.effect === "splitToken"
+      ? describeSplitTokenTarget({ owner, card })
+      : null;
+    const splitCandidate = Boolean(splitTarget?.ok);
+    const splitUnavailable = Boolean(splitTarget && !splitTarget.ok);
     const materialTarget = tributeTarget || fusionTarget;
     const materialCandidate = tributeCandidate || fusionCandidate;
     const materialSelected = tributeSelected || fusionSelected;
     const materialSelectionActive = Boolean(state.pendingTribute || state.pendingFusion?.resultId);
-    const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable && !materialSelectionActive;
+    const splitSelectionActive = state.pendingTarget?.effect === "splitToken";
+    const interactionTarget = materialTarget || splitTarget;
+    const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable && !materialSelectionActive && !splitSelectionActive;
     slot.classList.toggle("targetable", targetable);
     slot.classList.toggle("attack-target", attackTargetable);
     slot.classList.toggle("tribute-candidate", materialCandidate);
@@ -4894,14 +4954,21 @@ function renderField(root, duelist, owner, animationKey) {
     slot.classList.toggle("fusion-candidate", fusionCandidate);
     slot.classList.toggle("fusion-selected", fusionSelected);
     slot.classList.toggle("fusion-unavailable", fusionUnavailable);
+    slot.classList.toggle("split-candidate", splitCandidate);
+    slot.classList.toggle("split-unavailable", splitUnavailable);
     if (materialTarget) {
       slot.dataset.materialState = materialTarget.ok ? (materialSelected ? "selected" : "candidate") : "unavailable";
       slot.dataset.materialReason = materialTarget.reason;
       slot.title = materialTarget.reason;
     }
+    if (splitTarget) {
+      slot.dataset.targetState = splitTarget.ok ? "candidate" : "unavailable";
+      slot.dataset.targetReason = splitTarget.reason;
+      slot.title = splitTarget.reason;
+    }
     slot.disabled = disabledEnemyEmpty;
     slot.setAttribute("aria-disabled", disabledEnemyEmpty ? "true" : "false");
-    slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}召唤区 ${index + 1}${materialTarget ? `，${materialTarget.reason}` : ""}`);
+    slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}召唤区 ${index + 1}${interactionTarget ? `，${interactionTarget.reason}` : ""}`);
     if (owner === "player") {
       slot.addEventListener("click", () => handlePlayerSlot(index));
     } else {
@@ -4948,6 +5015,8 @@ function renderField(root, duelist, owner, animationKey) {
       cardEl.classList.toggle("fusion-candidate", fusionCandidate);
       cardEl.classList.toggle("fusion-selected", fusionSelected);
       cardEl.classList.toggle("fusion-unavailable", fusionUnavailable);
+      cardEl.classList.toggle("split-candidate", splitCandidate);
+      cardEl.classList.toggle("split-unavailable", splitUnavailable);
       if (animationKey === `summon-${owner}-${index}`) cardEl.classList.add("summon-flash");
       if (animationKey === `hit-${owner}-${index}`) cardEl.classList.add("hit-flash");
       if (owner === "player") {

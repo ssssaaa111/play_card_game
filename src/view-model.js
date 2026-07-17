@@ -317,3 +317,65 @@ export function fusionSummonFailureMessage(reason = "") {
   if (/monsterZone is full/i.test(detail)) return "融合失败：我方怪兽区已满。";
   return detail.startsWith("融合失败：") ? detail : `融合失败：${detail}`;
 }
+
+export function buildSplitTokenDisplay({
+  sourceName = "分裂效果",
+  tokenName = "衍生物",
+  count = 2,
+  field = [],
+  sourceMonster = null
+} = {}) {
+  const tokenCount = Math.max(1, Number(count) || 1);
+  const slots = Array.isArray(field) ? field : [];
+  const emptySlots = slots.filter((slot) => !slot).length;
+  const hasEnoughSpace = emptySlots >= tokenCount;
+  const missingSlots = Math.max(0, tokenCount - emptySlots);
+  const titleText = `发动「${sourceName}」`;
+  const sourceText = sourceMonster
+    ? `分裂来源：「${sourceMonster.name || "己方怪兽"}」。`
+    : "请选择分裂来源：己方场上的怪兽。";
+  const generationText = `将生成 ${tokenCount} 只「${tokenName}」。`;
+  const spaceText = `需要 ${tokenCount} 个空怪兽格。当前空位：${emptySlots}。${hasEnoughSpace ? "空位充足。" : `空位不足，还差 ${missingSlots} 个。`}`;
+  const ruleText = "token 离场后会消失，不进入墓地、手牌或卡组。";
+  return {
+    sourceName,
+    tokenName,
+    count: tokenCount,
+    emptySlots,
+    hasEnoughSpace,
+    titleText,
+    sourceText,
+    generationText,
+    spaceText,
+    ruleText,
+    text: [titleText, sourceText, generationText, spaceText, ruleText].join("\n")
+  };
+}
+
+export function describeSplitTokenTarget({ owner = "player", card = null } = {}) {
+  if (owner !== "player") {
+    return { ok: false, label: "不可选", reason: "不能选择该来源：不是己方怪兽。" };
+  }
+  if (!card) {
+    return { ok: false, label: "不可选", reason: "不能选择该来源：该格为空。" };
+  }
+  if (card.type !== "monster") {
+    return { ok: false, label: "不可选", reason: "不能选择该来源：不是怪兽。" };
+  }
+  return { ok: true, label: "可选分裂来源", reason: `可选择「${card.name}」作为分裂来源。` };
+}
+
+export function splitTokenFailureMessage(reason = "") {
+  const detail = String(reason || "规则校验未通过。");
+  const emptySlots = detail.match(/requires at least (\d+) empty monster zone slots/i);
+  if (emptySlots) return `分裂失败：需要至少 ${emptySlots[1]} 个空怪兽格。`;
+  if (/requires action\.targetCardId/i.test(detail)) {
+    return "分裂失败：请选择己方场上的怪兽作为分裂来源。";
+  }
+  if (/Target .* is not in .*\.monsterZone/i.test(detail)) {
+    return "分裂失败：所选来源不是己方场上的怪兽。";
+  }
+  if (/requires a monster target/i.test(detail)) return "分裂失败：分裂来源必须是怪兽。";
+  if (/Token template .* is not available/i.test(detail)) return "分裂失败：衍生物定义不可用。";
+  return detail.startsWith("分裂失败：") ? detail : `分裂失败：${detail}`;
+}

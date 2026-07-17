@@ -950,6 +950,67 @@ async function runTokenSplitBasicSmoke(ctx) {
   setSmokeStatus("passed", "token-split-basic");
 }
 
+async function runTokenReadabilityBasicSmoke(ctx) {
+  setSmokeStatus("running", "token-readability-basic");
+  await startSmokeDuel(ctx, "splitToken");
+  clickSmokeElement(handCard(ctx.els, "spark-split"), "token-readability-basic: select split spell");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "splitToken" &&
+      ctx.els.choiceText?.textContent.includes("发动「星火分裂」") &&
+      ctx.els.choiceText.textContent.includes("请选择分裂来源：己方场上的怪兽") &&
+      ctx.els.choiceText.textContent.includes("将生成 2 只「星火衍生体」") &&
+      ctx.els.choiceText.textContent.includes("需要 2 个空怪兽格。当前空位：4。空位充足") &&
+      ctx.els.choiceText.textContent.includes("token 离场后会消失，不进入墓地、手牌或卡组"),
+    "token-readability-basic: source, count, space, and lifecycle are visible"
+  );
+
+  const sourceSlot = fieldSlot(ctx.els, "player", 0);
+  if (!sourceSlot?.classList.contains("split-candidate") ||
+      sourceSlot.dataset.targetReason !== "可选择「星火信使」作为分裂来源。") {
+    throw new Error("token-readability-basic: source monster should expose a split-specific candidate reason");
+  }
+  const beforeInvalid = {
+    pendingUid: ctx.state.pendingTarget.handUid,
+    tokenCount: ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length,
+    handCount: ctx.state.player.hand.length
+  };
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), "token-readability-basic: click empty own slot");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该来源：该格为空。",
+    "token-readability-basic: empty slot explains why it is invalid"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "token-readability-basic: click enemy monster");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该来源：不是己方怪兽。",
+    "token-readability-basic: enemy monster explains why it is invalid"
+  );
+  if (ctx.state.pendingTarget?.handUid !== beforeInvalid.pendingUid ||
+      ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length !== beforeInvalid.tokenCount ||
+      ctx.state.player.hand.length !== beforeInvalid.handCount) {
+    throw new Error("token-readability-basic: invalid source clicks changed duel state");
+  }
+
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "spark-runner"), "token-readability-basic: choose legal split source");
+  await waitForSmoke(
+    () => ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length === 2 &&
+      !ctx.state.pendingTarget &&
+      ctx.state.log.some((entry) =>
+        logEntryMessage(entry).includes("「星火信使」通过「星火分裂」生成了 2 只「星火衍生体」") &&
+        entry.relatedCardIds?.includes("spark-runner") &&
+        entry.relatedCardIds?.includes("spark-fragment-token")
+      ),
+    "token-readability-basic: legal split completes with a linked aggregate log",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "token-readability-basic");
+
+  const token = ctx.state.player.field.find((card) => card?.id === "spark-fragment-token");
+  await waitForSmoke(() => logCardLink(ctx.els, "spark-fragment-token"), "token-readability-basic: public token log link");
+  clickSmokeElement(logCardLink(ctx.els, "spark-fragment-token"), "token-readability-basic: open token detail from log");
+  await assertCardDetailModal(ctx, token, "token-readability-basic");
+  setSmokeStatus("passed", "token-readability-basic");
+}
+
 async function runGraveyardSummonBasicSmoke(ctx) {
   setSmokeStatus("running", "graveyard-summon-basic");
   await startSmokeDuel(ctx, "protagonistComeback");
@@ -4302,6 +4363,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "fusion-result-choice": runFusionResultChoiceSmoke,
     "split-token": runSplitTokenSmoke,
     "token-split-basic": runTokenSplitBasicSmoke,
+    "token-readability-basic": runTokenReadabilityBasicSmoke,
     "graveyard-summon-basic": runGraveyardSummonBasicSmoke,
     "mechanics-regression-basic": runMechanicsRegressionBasicSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,

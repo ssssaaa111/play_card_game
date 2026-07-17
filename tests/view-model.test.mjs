@@ -3,14 +3,17 @@ import assert from "node:assert/strict";
 
 import {
   buildFusionSelectionDisplay,
+  buildSplitTokenDisplay,
   buildTributeSelectionDisplay,
   defaultTributeSelection,
   describeHandAction,
   describeFusionMaterialTarget,
+  describeSplitTokenTarget,
   describeTributeTarget,
   duelHintText,
   phaseLabel,
   fusionSummonFailureMessage,
+  splitTokenFailureMessage,
   tributeSummonFailureMessage,
   turnLabel
 } from "../src/view-model.js";
@@ -317,5 +320,82 @@ test("prefixes fusion dispatch failures with localized reasons", () => {
   assert.equal(
     fusionSummonFailureMessage("unexpected fusion failure"),
     "融合失败：unexpected fusion failure"
+  );
+});
+
+test("describes split source, token count, empty slots, and token lifecycle", () => {
+  const field = [
+    { uid: "spark-1", name: "星火信使", type: "monster" },
+    null,
+    null,
+    null,
+    null
+  ];
+  const display = buildSplitTokenDisplay({
+    sourceName: "星火分裂",
+    tokenName: "星火衍生体",
+    count: 2,
+    field
+  });
+
+  assert.deepEqual(display, {
+    sourceName: "星火分裂",
+    tokenName: "星火衍生体",
+    count: 2,
+    emptySlots: 4,
+    hasEnoughSpace: true,
+    titleText: "发动「星火分裂」",
+    sourceText: "请选择分裂来源：己方场上的怪兽。",
+    generationText: "将生成 2 只「星火衍生体」。",
+    spaceText: "需要 2 个空怪兽格。当前空位：4。空位充足。",
+    ruleText: "token 离场后会消失，不进入墓地、手牌或卡组。",
+    text: "发动「星火分裂」\n请选择分裂来源：己方场上的怪兽。\n将生成 2 只「星火衍生体」。\n需要 2 个空怪兽格。当前空位：4。空位充足。\ntoken 离场后会消失，不进入墓地、手牌或卡组。"
+  });
+
+  const selected = buildSplitTokenDisplay({
+    sourceName: "星火分裂",
+    tokenName: "星火衍生体",
+    count: 2,
+    field,
+    sourceMonster: field[0]
+  });
+  assert.equal(selected.sourceText, "分裂来源：「星火信使」。");
+
+  const blocked = buildSplitTokenDisplay({
+    count: 2,
+    field: [field[0], field[0], field[0], field[0], null]
+  });
+  assert.equal(blocked.hasEnoughSpace, false);
+  assert.equal(blocked.spaceText, "需要 2 个空怪兽格。当前空位：1。空位不足，还差 1 个。");
+});
+
+test("explains valid and invalid split token sources", () => {
+  const monster = { uid: "spark-1", name: "星火信使", type: "monster" };
+
+  assert.deepEqual(describeSplitTokenTarget({ owner: "player", card: monster }), {
+    ok: true,
+    label: "可选分裂来源",
+    reason: "可选择「星火信使」作为分裂来源。"
+  });
+  assert.equal(describeSplitTokenTarget({ owner: "player", card: null }).reason, "不能选择该来源：该格为空。");
+  assert.equal(describeSplitTokenTarget({ owner: "ai", card: monster }).reason, "不能选择该来源：不是己方怪兽。");
+  assert.equal(describeSplitTokenTarget({
+    owner: "player",
+    card: { uid: "spell-1", name: "星火分裂", type: "spell" }
+  }).reason, "不能选择该来源：不是怪兽。");
+});
+
+test("prefixes split token failures with localized reasons", () => {
+  assert.equal(
+    splitTokenFailureMessage("Effect splitToken requires at least 2 empty monster zone slots"),
+    "分裂失败：需要至少 2 个空怪兽格。"
+  );
+  assert.equal(
+    splitTokenFailureMessage("Effect splitToken requires action.targetCardId"),
+    "分裂失败：请选择己方场上的怪兽作为分裂来源。"
+  );
+  assert.equal(
+    splitTokenFailureMessage("unexpected token failure"),
+    "分裂失败：unexpected token failure"
   );
 });
