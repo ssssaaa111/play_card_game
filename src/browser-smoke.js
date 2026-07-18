@@ -2641,6 +2641,9 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
       ctx.state.player.hand.some((card) => card?.id === "trio-ember-pawn")) {
     throw new Error(`trio-omega-full-duel: first turn draw should not expose the whole answer. ${smokeDebug(ctx)}`);
   }
+  if (!ctx.els.duelHint.textContent.includes("展开阶段")) {
+    throw new Error(`trio-omega-full-duel: opening guidance should prioritize setup. ${ctx.els.duelHint.textContent}`);
+  }
 
   clickSmokeElement(handCard(ctx.els, "spark-runner"), "full duel: summon spark-runner");
   clickSmokeElement(fieldSlot(ctx.els, "player", 0), "full duel: player monster slot 1");
@@ -2650,6 +2653,9 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     `full duel: spark-runner should draw a low-star resource. ${smokeDebug(ctx)}`,
     9000
   );
+  if (ctx.state.log.some((entry) => entry.includes("星火信使 因 星火信使 特殊登场"))) {
+    throw new Error("trio-omega-full-duel: normal summon should not be described as self-triggered special summon.");
+  }
 
   clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), "full duel: select solar snare");
   clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "full duel: set solar snare");
@@ -2658,6 +2664,9 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     `full duel: solar snare set before rival pressure. ${smokeDebug(ctx)}`,
     9000
   );
+  if (!ctx.els.duelHint.textContent.includes("防御准备完成")) {
+    throw new Error(`trio-omega-full-duel: prepared defense guidance is missing. ${ctx.els.duelHint.textContent}`);
+  }
 
   await finishPlayerTurn(ctx);
   await waitForSmoke(
@@ -2698,7 +2707,6 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
   if (aiSunTributes.length !== 3) {
     throw new Error(`trio-omega-full-duel: AI sun god should consume exactly three public tributes. ${smokeDebug(ctx)}`);
   }
-
   await waitForSmoke(
     () => ctx.state.turn === "player" &&
       ctx.state.phase === "main" &&
@@ -2707,8 +2715,18 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     `full duel: player should cross the rival turn and draw later resources. ${smokeDebug(ctx)}`,
     34000
   );
+  const sunDestroyLogs = ctx.state.log.filter((entry) =>
+    entry.includes("日冕诱锁 破坏了 曜冕裁决者")
+  );
+  if (sunDestroyLogs.length !== 1) {
+    throw new Error(`trio-omega-full-duel: solar snare destruction should be logged once, got ${sunDestroyLogs.length}.`);
+  }
   if (!(ctx.state.gameEvents || []).some((event) => event.type === "TURN_STARTED" && event.playerId === "ai")) {
     throw new Error(`trio-omega-full-duel: route must cross a rival turn. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.els.duelHint.textContent.includes("反击窗口") ||
+      !ctx.els.duelHint.textContent.includes("碎月解幕")) {
+    throw new Error(`trio-omega-full-duel: moonbreaker guidance is missing. ${ctx.els.duelHint.textContent}`);
   }
 
   clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), "full duel: select moonbreaker");
@@ -2721,6 +2739,13 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     `full duel: moon pressure should clear and release the modifier. ${smokeDebug(ctx)}`,
     9000
   );
+  if (!ctx.state.log.some((entry) => entry.includes("攻击力恢复 900")) ||
+      !ctx.state.log.some((entry) => entry.includes("持续修正已解除"))) {
+    throw new Error(`trio-omega-full-duel: continuous release feedback should describe restoration. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.els.duelHint.textContent.includes("召唤并保留余烁小卫")) {
+    throw new Error(`trio-omega-full-duel: low-star follow-up guidance is missing. ${ctx.els.duelHint.textContent}`);
+  }
 
   clickSmokeElement(handCard(ctx.els, "trio-ember-pawn"), "full duel: summon preserved low-star pawn");
   clickSmokeElement(fieldSlot(ctx.els, "player", 1), "full duel: player monster slot 2");

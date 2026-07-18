@@ -38,6 +38,11 @@ import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
 import { renderHandCards } from './hand-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
+import {
+  isContinuousReleaseStat,
+  shouldLogGenericDestroyedEvent,
+  statChangeText
+} from './effect-feedback.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
 import { buildChainStackEntries, chainResolutionOrderText } from './chain-view.js';
 import { fusionOptionsForCard } from './fusion.js';
@@ -91,6 +96,7 @@ import {
   selectTrapResponse
 } from './response-state.js';
 import { buildScenarioState } from './scenario-state.js';
+import { scenarioTacticalGoal } from './scenario-guidance.js';
 import {
   definitionLabel,
   formatDuelStats,
@@ -2392,17 +2398,6 @@ function findRuntimeCard(cardId) {
   return null;
 }
 
-function statLabel(stat) {
-  if (stat === "def" || stat === "tempDef") return "防御力";
-  return "攻击力";
-}
-
-function statChangeText(event) {
-  const amount = Number(event.amount) || 0;
-  const direction = amount >= 0 ? "提升" : "下降";
-  return `${statLabel(event.stat)}${direction} ${Math.abs(amount)}`;
-}
-
 function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = null) {
   const result = {
     effectTarget: targetInfo?.card || null,
@@ -2440,7 +2435,11 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       }));
       playEpicAction(isFusion ? "融合素材" : "进化素材", "draw");
     }
-    if (event.type === "MONSTER_SUMMONED" && event.sourceCardId === runtimeCardId(card)) {
+    if (
+      event.type === "MONSTER_SUMMONED"
+      && event.sourceCardId === runtimeCardId(card)
+      && !["normal", "tribute"].includes(event.summonType)
+    ) {
       const found = findRuntimeCard(event.cardId);
       if (found?.card) {
         const origin = event.originCardId ? findRuntimeCard(event.originCardId) : null;
@@ -2505,7 +2504,9 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       result.effectTarget = found.card;
       result.targetOwner = found.owner;
       statModifiedCount += 1;
-      addLog(`${found.card.name} 因 ${card.name} ${statChangeText(event)}。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
+      addLog(`${found.card.name} 因 ${card.name} ${statChangeText(event, {
+        continuousReleased: isContinuousReleaseStat(events, event)
+      })}。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
     }
     if (event.type === "CONTINUOUS_EFFECT_REGISTERED") {
       const found = findRuntimeCard(event.targetCardId);
@@ -2520,7 +2521,7 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       const source = findRuntimeCard(event.sourceCardId);
       const target = findRuntimeCard(event.targetCardId);
       const sourceName = source?.card?.name || "持续卡";
-      const targetText = target?.card?.name ? `，${target.card.name} 失去持续加成` : "";
+      const targetText = target?.card?.name ? `，${target.card.name} 的持续修正已解除` : "";
       if (target?.card) {
         result.effectTarget = target.card;
         result.targetOwner = target.owner;
@@ -2534,7 +2535,11 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       });
       playEpicAction("持续失效", "draw");
     }
-    if (event.type === "CARD_DESTROYED" && event.cardId !== runtimeCardId(card)) {
+    if (
+      event.type === "CARD_DESTROYED"
+      && event.cardId !== runtimeCardId(card)
+      && shouldLogGenericDestroyedEvent(card)
+    ) {
       const destroyed = findRuntimeCard(event.cardId);
       const destroyedName = destroyed?.card?.name || "目标卡";
       result.effectTarget = destroyed?.card || result.effectTarget;
@@ -4427,7 +4432,7 @@ function render(animationKey = "") {
     paused: state.paused,
     pendingPrompt: targetPrompt,
     scenarioId: state.scenarioId,
-    scenarioGoal: scenario.goal,
+    scenarioGoal: scenarioTacticalGoal(state) || scenario.goal,
     turn: state.turn,
     autoEnding: state.autoEnding,
     canAttack: actions.attack,

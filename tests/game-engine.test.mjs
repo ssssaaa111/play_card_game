@@ -1168,7 +1168,7 @@ test("normal summon clears stale field state carried through other zones", () =>
   });
 
   const engine = new GameEngine(state);
-  engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "recycled-1", index: 0 });
+  const events = engine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "recycled-1", index: 0 });
   const summoned = engine.getState().cards["recycled-1"];
 
   assert.equal(summoned.mode, "attack");
@@ -1178,6 +1178,11 @@ test("normal summon clears stale field state carried through other zones", () =>
   assert.equal(summoned.tempDef, 0);
   assert.equal(summoned.battleWear, 0);
   assert.equal(summoned.destructionProtectionUsed, false);
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_SUMMONED"
+    && event.cardId === "recycled-1"
+    && event.summonType === "normal"
+  ));
 });
 
 test("dawn edge and last stand surge apply protagonist attack boosts through stat events", () => {
@@ -1690,7 +1695,11 @@ test("tribute summon moves selected field monsters to grave before summoning", (
   assert.deepEqual(next.players[PLAYER].grave, ["material-1"]);
   assert.equal(next.players[PLAYER].normalSummonsUsed, 1);
   assert.ok(events.some((event) => event.type === "CARD_TRIBUTED" && event.cardId === "material-1" && event.summonCardId === "vanguard-1"));
-  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === "vanguard-1"));
+  assert.ok(events.some((event) =>
+    event.type === "MONSTER_SUMMONED"
+    && event.cardId === "vanguard-1"
+    && event.summonType === "tribute"
+  ));
   assertValidGameState(next);
 });
 

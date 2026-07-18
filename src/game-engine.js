@@ -697,6 +697,7 @@ export class EffectContext {
       playerId,
       cardId,
       sourceCardId: options.sourceCardId || cardId,
+      summonType: options.summonType || "special",
       mode: options.mode || "attack",
       used: false,
       changedMode: false,
@@ -1198,7 +1199,10 @@ export class GameEngine {
         destination: token ? "removed" : "grave"
       });
     });
-    ctx.summonMonster(action.playerId, action.cardId, { index: action.index });
+    ctx.summonMonster(action.playerId, action.cardId, {
+      index: action.index,
+      summonType: tributeCardIds.length ? "tribute" : "normal"
+    });
     this.#resolveTrioConvergence(state, ctx, emit, action, card, tributeCardIds);
     if (card.onSummon) {
       const skipReason = effectRequirementFailure(this.#effects[card.onSummon], state, preparedAction, card);

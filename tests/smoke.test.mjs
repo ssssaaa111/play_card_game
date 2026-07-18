@@ -764,6 +764,10 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /Blade Sigil continuous effect registered/);
   assert.match(smoke, /再次点击解印射线仍等待手动选目标/);
+  assert.match(smoke, /solar snare destruction should be logged once/);
+  assert.match(smoke, /continuous release feedback should describe restoration/);
+  assert.match(smoke, /low-star follow-up guidance is missing/);
+  assert.match(smoke, /normal summon should not be described as self-triggered special summon/);
   assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
   assert.match(smoke, /targetChangedEvents/);
   assert.match(smoke, /幻影换位重定向后仍未按新目标结算/);
