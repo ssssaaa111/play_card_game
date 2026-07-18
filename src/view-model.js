@@ -104,12 +104,3 @@ export function describeHandAction(card, {
   }
   return { ok: false, label: "不可用", reason: "这张卡当前不能操作。" };
 }
-
-export function defaultTributeSelection(field = [], cost = 0) {
-  const required = Math.max(0, Number(cost) || 0);
-  if (required <= 0) return [];
-  const occupiedIndexes = field
-    .map((card, index) => (card ? index : -1))
-    .filter((index) => index >= 0);
-  return occupiedIndexes.length === required ? occupiedIndexes : [];
-}

@@ -109,6 +109,14 @@ import {
   targetSelectionPrompt,
   validateTargetSelection
 } from './target-selection.js';
+import {
+  prepareTributeSelection,
+  selectedTributeIndexes as collectSelectedTributeIndexes,
+  toggleTributeIndex,
+  tributeCost,
+  tributeSelectionAction,
+  validateTributeSummonSelection
+} from './tribute-selection.js';
 import { buildScenarioState } from './scenario-state.js';
 import { scenarioTacticalGoal } from './scenario-guidance.js';
 import {
@@ -134,7 +142,7 @@ import {
   shouldRunPlayerIdleCountdownForState,
   turnStartPatch
 } from './turn-state.js';
-import { defaultTributeSelection, describeHandAction, duelHintText, phaseLabel, turnLabel } from './view-model.js';
+import { describeHandAction, duelHintText, phaseLabel, turnLabel } from './view-model.js';
 import {
   MAX_LP,
   MONSTER_ZONE_SIZE,
@@ -1185,122 +1193,89 @@ function selectedHandInfo() {
   return { card: state.player.hand[index], index };
 }
 
-function tributeCost(card) {
-  return Math.max(0, Number(card?.tributeCost) || 0);
-}
-
-function tributeSummonReady(card) {
-  const cost = tributeCost(card);
-  if (cost <= 0) return true;
-  return state.player.field.filter(Boolean).length >= cost;
-}
-
 function beginTributeSelection(handIndex, card) {
-  const cost = tributeCost(card);
-  if (cost <= 0) return false;
-  if (!tributeSummonReady(card)) {
-    cue(`${card.name} 需要 ${cost} 只场上怪兽作为祭品。`);
+  const prepared = prepareTributeSelection(card, handIndex, state.player.field);
+  if (!prepared.handled) return false;
+  if (!prepared.ok) {
+    cue(prepared.reason);
     resumePlayerIdleCountdownAfterPassiveIntent();
     return true;
   }
   notePlayerIntent();
   clearBattlePreview();
-  const selectedIndexes = defaultTributeSelection(state.player.field, cost);
   beginPendingSelection(
     state,
     "tribute",
-    {
-      handUid: card.uid,
-      handIndex,
-      cardName: card.name,
-      cost,
-      selectedIndexes
-    },
+    prepared.pending,
     { zone: "hand", uid: card.uid }
   );
-  cue(selectedIndexes.length === cost
-    ? `场上正好有 ${cost} 只怪兽，已全部选为 ${card.name} 的祭品；确认后召唤。`
-    : `选择 ${cost} 只我方场上怪兽作为 ${card.name} 的祭品。`);
+  cue(prepared.prompt);
   render();
   resetPlayerIdleCountdown();
   return true;
 }
 
-function pendingTributeHandInfo() {
-  const pending = state.pendingTribute;
-  if (!pending) return null;
-  const index = state.player.hand.findIndex((card) => card.uid === pending.handUid);
-  if (index < 0) return null;
-  return { card: state.player.hand[index], index, pending };
-}
-
 function selectedTributeIndexes() {
-  return (state.pendingTribute?.selectedIndexes || []).filter((index) => Boolean(state.player.field[index]));
+  return collectSelectedTributeIndexes(state.pendingTribute, state.player.field);
 }
 
 function toggleTributeSelection(index) {
-  const info = pendingTributeHandInfo();
-  if (!info) {
-    clearPendingSelection(state, "tribute");
-    render();
-    return false;
-  }
-  const card = state.player.field[index];
-  if (!card) {
-    cue(`请选择我方场上的怪兽作为 ${info.card.name} 的祭品。`);
+  const selection = toggleTributeIndex(
+    state.pendingTribute,
+    state.player.hand,
+    state.player.field,
+    index
+  );
+  if (!selection.ok) {
+    if (selection.expired) {
+      clearPendingSelection(state, "tribute");
+      render();
+      return false;
+    }
+    cue(selection.reason);
     resetPlayerIdleCountdown();
     return true;
   }
-  const selected = selectedTributeIndexes();
-  const existing = selected.indexOf(index);
-  if (existing >= 0) {
-    selected.splice(existing, 1);
-  } else if (selected.length < info.pending.cost) {
-    selected.push(index);
-  } else {
-    selected.shift();
-    selected.push(index);
-  }
-  info.pending.selectedIndexes = selected;
-  state.selected = { zone: "hand", uid: info.card.uid };
-  showDetail(card);
-  cue(`${info.card.name} 祭品：${selected.length}/${info.pending.cost}`);
+  state.pendingTribute.selectedIndexes = selection.selectedIndexes;
+  state.selected = { zone: "hand", uid: selection.handCard.uid };
+  showDetail(selection.card);
+  cue(selection.prompt);
   render();
   resetPlayerIdleCountdown();
   return true;
 }
 
 async function confirmTributeSummon(fieldIndex = null) {
-  const info = pendingTributeHandInfo();
-  if (!info) {
-    clearPendingSelection(state, "tribute");
-    cue("祭品召唤已失效。");
-    render();
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return false;
-  }
-  const tributeIndexes = selectedTributeIndexes();
-  if (tributeIndexes.length !== info.pending.cost) {
-    cue(`还需要选择 ${info.pending.cost} 只祭品。`);
+  const selection = validateTributeSummonSelection(
+    state.pendingTribute,
+    { hand: state.player.hand, field: state.player.field },
+    fieldIndex
+  );
+  if (!selection.ok) {
+    if (selection.expired) {
+      clearPendingSelection(state, "tribute");
+      cue(selection.reason);
+      render();
+      resumePlayerIdleCountdownAfterPassiveIntent();
+      return false;
+    }
+    cue(selection.reason);
     resetPlayerIdleCountdown();
     return false;
   }
-  const summonIndex = Number.isInteger(fieldIndex)
-    ? fieldIndex
-    : tributeIndexes[0];
-  const targetOccupied = state.player.field[summonIndex] && !tributeIndexes.includes(summonIndex);
-  if (targetOccupied) {
-    cue("祭品召唤只能放到空召唤区，或放到即将作为祭品离场的格子。");
-    resetPlayerIdleCountdown();
-    return false;
-  }
-  const summoned = await summonMonster(state.player, state.ai, info.index, summonIndex, { tributeIndexes });
+  const summoned = await summonMonster(
+    state.player,
+    state.ai,
+    selection.handIndex,
+    selection.summonIndex,
+    { tributeIndexes: selection.tributeIndexes }
+  );
   if (!summoned) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
   }
   clearTransientSelection(state);
-  render("summon-player-" + summonIndex);
+  render("summon-player-" + selection.summonIndex);
   resolvePlayerActionWindow("祭品召唤完成");
   return true;
 }
@@ -4296,23 +4271,9 @@ function handActionInfo(card, handIndex) {
         : `确认后选择 ${fusionMaterialNames(fusion.materials)} 作为融合素材。`
     };
   }
-  const cost = tributeCost(card);
-  if (card.type === "monster" && cost > 0) {
-    const available = state.player.field.filter(Boolean).length;
-    if (available < cost) {
-      return {
-        ok: false,
-        label: "祭品不足",
-        reason: `需要 ${cost} 只场上怪兽作为祭品。`
-      };
-    }
-    return {
-      ...action,
-      label: state.pendingTribute?.handUid === card.uid ? `祭品 ${selectedTributeIndexes().length}/${cost}` : "祭品召唤",
-      reason: state.pendingTribute?.handUid === card.uid
-        ? `选择 ${cost} 只我方场上怪兽后确认祭品召唤。`
-        : `确认后选择 ${cost} 只我方场上怪兽作为祭品。`
-    };
+  const tributeAction = tributeSelectionAction(card, state.pendingTribute, state.player.field, action);
+  if (tributeAction) {
+    return tributeAction;
   }
   return action;
 }

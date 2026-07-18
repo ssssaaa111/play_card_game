@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { defaultTributeSelection, describeHandAction, duelHintText, phaseLabel, turnLabel } from "../src/view-model.js";
+import { describeHandAction, duelHintText, phaseLabel, turnLabel } from "../src/view-model.js";
 
 test("builds phase and turn labels from state", () => {
   assert.equal(phaseLabel({ started: false }), "准备决斗");
@@ -110,12 +110,4 @@ test("keeps a legal tribute summon ready on a full field", () => {
   });
   assert.equal(blocked.ok, false);
   assert.equal(blocked.label, "场已满");
-});
-
-test("auto-selects tributes only when every field monster is required", () => {
-  const field = [{ uid: "one" }, null, { uid: "two" }, null, { uid: "three" }];
-
-  assert.deepEqual(defaultTributeSelection(field, 3), [0, 2, 4]);
-  assert.deepEqual(defaultTributeSelection(field, 2), []);
-  assert.deepEqual(defaultTributeSelection(field, 0), []);
 });

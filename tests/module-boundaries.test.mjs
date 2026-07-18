@@ -89,6 +89,22 @@ test("app delegates target selection rules to the target selection module", () =
   assert.match(targetSelection, /validateSpellTargetRule\(pending, duelist, target\)/);
 });
 
+test("app delegates tribute selection rules to the tribute selection module", () => {
+  const app = source("../src/app.js");
+  const tributeSelection = source("../src/tribute-selection.js");
+
+  assert.match(app, /prepareTributeSelection\(card, handIndex, state\.player\.field\)/);
+  assert.match(app, /toggleTributeIndex\(/);
+  assert.match(app, /validateTributeSummonSelection\(/);
+  assert.match(app, /tributeSelectionAction\(card, state\.pendingTribute, state\.player\.field, action\)/);
+  assert.doesNotMatch(app, /function tributeSummonReady/);
+  assert.doesNotMatch(app, /function pendingTributeHandInfo/);
+  assert.doesNotMatch(app, /selected\.shift\(\)/);
+  assert.match(tributeSelection, /export function prepareTributeSelection/);
+  assert.match(tributeSelection, /export function toggleTributeIndex/);
+  assert.match(tributeSelection, /export function validateTributeSummonSelection/);
+});
+
 test("background music stays independent from rules and effect audio", () => {
   const app = source("../src/app.js");
   const audio = source("../src/audio.js");

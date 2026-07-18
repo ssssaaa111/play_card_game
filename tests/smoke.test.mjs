@@ -56,6 +56,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/response-state.js");
   checkModuleSyntax("src/selection-state.js");
   checkModuleSyntax("src/target-selection.js");
+  checkModuleSyntax("src/tribute-selection.js");
   checkModuleSyntax("src/rules.js");
   checkModuleSyntax("src/scenario-state.js");
   checkModuleSyntax("src/setup-renderer.js");
@@ -1171,7 +1172,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/control-renderer.js", "src/data.js", "src/deck.js", "src/duel-modal-renderer.js", "src/engine-adapter.js", "src/field-renderer.js", "src/fusion-selection-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/selection-state.js", "src/setup-options.js", "src/setup-renderer.js", "src/spells.js", "src/target-selection.js", "src/timeline.js", "src/timeline-renderer.js", "src/trap-response-renderer.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/control-renderer.js", "src/data.js", "src/deck.js", "src/duel-modal-renderer.js", "src/engine-adapter.js", "src/field-renderer.js", "src/fusion-selection-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/selection-state.js", "src/setup-options.js", "src/setup-renderer.js", "src/spells.js", "src/target-selection.js", "src/timeline.js", "src/timeline-renderer.js", "src/trap-response-renderer.js", "src/traps.js", "src/tribute-selection.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });
