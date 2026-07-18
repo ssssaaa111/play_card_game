@@ -25,6 +25,7 @@ import { cardDefinitionById, cardDetailViewModel, cardInspectorViewModel } from 
 import { bindCardInspector, renderCardInspector } from './card-inspector-renderer.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
+import { renderHandCards } from './hand-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import { buildPreDuelPreview } from './pre-duel-preview.js';
@@ -4915,41 +4916,20 @@ function handActionInfo(card, handIndex) {
 }
 
 function renderHand(animationKey) {
-  els.hand.innerHTML = "";
-  state.player.hand.forEach((card, index) => {
-    const cardEl = renderCardElement(document, card, { asset: monsterAsset(card), handSummary: true });
-    cardEl.dataset.zone = "hand";
-    const action = handActionInfo(card, index);
-    const fusionMaterialCandidate = Boolean(state.pendingFusion) && isFusionHandMaterialCandidate(card.uid);
-    const fusionMaterialSelected = Boolean(state.pendingFusion) && selectedFusionHandUids().includes(card.uid);
-    cardEl.classList.toggle("selected", state.selected?.zone === "hand" && state.selected.uid === card.uid);
-    cardEl.classList.toggle("tribute-candidate", fusionMaterialCandidate);
-    cardEl.classList.toggle("tribute-selected", fusionMaterialSelected);
-    cardEl.classList.toggle("action-ready", action.ok);
-    cardEl.classList.toggle("action-blocked", !action.ok && state.started && canPlayerAct());
-    cardEl.title = `${card.name}：${action.reason}`;
-    const actionTag = document.createElement("span");
-    actionTag.className = "action-tag";
-    actionTag.textContent = fusionMaterialSelected ? "融合素材 ✓" : fusionMaterialCandidate ? "融合素材" : action.label;
-    cardEl.appendChild(actionTag);
-    const actionReason = document.createElement("span");
-    actionReason.className = "action-reason";
-    actionReason.textContent = fusionMaterialSelected
-      ? "已选择为手牌融合素材，再次点击可取消。"
-      : fusionMaterialCandidate
-        ? "点击选择为手牌融合素材。"
-        : action.reason;
-    const showActionReason = fusionMaterialSelected || fusionMaterialCandidate || state.selected?.uid === card.uid || !action.ok;
-    actionReason.hidden = !showActionReason;
-    cardEl.classList.toggle("compact-action-state", !showActionReason);
-    cardEl.appendChild(actionReason);
-    if (animationKey === "draw-player" && card === state.player.hand[state.player.hand.length - 1]) {
-      cardEl.classList.add("draw-flash");
-    }
-    cardEl.addEventListener("click", () => {
-      selectHandCard(card.uid);
-    });
-    els.hand.appendChild(cardEl);
+  renderHandCards({
+    document,
+    root: els.hand,
+    cards: state.player.hand,
+    animationKey,
+    assetForCard: monsterAsset,
+    actionForCard: handActionInfo,
+    selectedZone: state.selected?.zone,
+    selectedUid: state.selected?.uid,
+    started: state.started,
+    canAct: canPlayerAct(),
+    fusionCandidateForCard: (card) => Boolean(state.pendingFusion) && isFusionHandMaterialCandidate(card.uid),
+    fusionSelectedUids: state.pendingFusion ? selectedFusionHandUids() : [],
+    onCardClick: (card) => selectHandCard(card.uid)
   });
 }
 

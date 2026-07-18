@@ -37,6 +37,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/card-renderer.js");
   checkModuleSyntax("src/card-state-display.js");
   checkModuleSyntax("src/field-renderer.js");
+  checkModuleSyntax("src/hand-renderer.js");
   checkModuleSyntax("src/cards.js");
   checkModuleSyntax("src/combos.js");
   checkModuleSyntax("src/data.js");
@@ -446,16 +447,20 @@ test("app uses extracted card display metadata", () => {
 test("app uses extracted card renderer", () => {
   const app = readProjectFile("src/app.js");
   const fieldRenderer = readProjectFile("src/field-renderer.js");
+  const handRenderer = readProjectFile("src/hand-renderer.js");
   const renderer = readProjectFile("src/card-renderer.js");
 
   assert.match(app, /from '\.\/card-renderer\.js'/);
   assert.match(app, /from '\.\/field-renderer\.js'/);
+  assert.match(app, /from '\.\/hand-renderer\.js'/);
   assert.match(fieldRenderer, /from "\.\/card-renderer\.js"/);
+  assert.match(handRenderer, /from "\.\/card-renderer\.js"/);
   assert.match(app, /renderCardElement\(document, card/);
   assert.match(fieldRenderer, /slot\.dataset\.testid = `\$\{owner\}-field-\$\{index\}`/);
   assert.match(app, /renderMonsterZones\(\{/);
   assert.match(app, /renderSupportZones\(\{/);
-  assert.match(app, /cardEl\.dataset\.zone = "hand"/);
+  assert.match(app, /renderHandCards\(\{/);
+  assert.match(handRenderer, /cardEl\.dataset\.zone = "hand"/);
   assert.match(renderer, /el\.dataset\.cardId = card\.id/);
   assert.doesNotMatch(app, /function createCardElement/);
   assert.doesNotMatch(app, /cardBadgeText\(card\)/);
@@ -1124,7 +1129,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/field-renderer.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

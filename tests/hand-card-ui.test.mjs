@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const css = readFileSync(fileURLToPath(new URL("../styles.css", import.meta.url)), "utf8");
-const app = readFileSync(fileURLToPath(new URL("../src/app.js", import.meta.url)), "utf8");
+const handRenderer = readFileSync(fileURLToPath(new URL("../src/hand-renderer.js", import.meta.url)), "utf8");
 const renderer = readFileSync(fileURLToPath(new URL("../src/card-renderer.js", import.meta.url)), "utf8");
 
 test("hand action states use distinct card-type accents", () => {
@@ -32,14 +32,14 @@ test("blocked hand cards dim artwork without hiding the failure reason", () => {
 });
 
 test("hand cards use tactical summaries while full card renders stay available", () => {
-  assert.match(app, /renderCardElement\(document, card, \{ asset: monsterAsset\(card\), handSummary: true \}\)/);
+  assert.match(handRenderer, /createCardElement\(document, card, \{ asset: assetForCard\(card\), handSummary: true \}\)/);
   assert.match(renderer, /handSummary \? cardHandSummary\(card\) : card\.text/);
   assert.match(renderer, /el\.dataset\.textMode = model\.textMode/);
   assert.match(css, /\.hand \.card \.card-text\.hand-summary\s*\{[\s\S]*font-weight: 800;/);
 });
 
 test("short desktop hands reserve two effect lines and collapse redundant action copy", () => {
-  assert.match(app, /cardEl\.classList\.toggle\("compact-action-state", !showActionReason\)/);
+  assert.match(handRenderer, /"compact-action-state": !showActionReason/);
   assert.match(css, /\.action-reason\[hidden\]\s*\{\s*display: none;/);
   assert.match(css, /\.hand \.card\.compact-action-state\s*\{[\s\S]*grid-template-rows: auto minmax\(60px, 1fr\) 36px 24px;/);
   assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 980px\)[\s\S]*\.hand \.card \.card-text\.hand-summary\s*\{[\s\S]*min-height: 28px;[\s\S]*-webkit-line-clamp: 2;/);
