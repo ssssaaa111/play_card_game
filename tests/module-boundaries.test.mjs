@@ -75,6 +75,20 @@ test("app delegates transient selection transitions to the selection state modul
   assert.match(selectionState, /conflicted: pendingKinds\.length > 1/);
 });
 
+test("app delegates target selection rules to the target selection module", () => {
+  const app = source("../src/app.js");
+  const targetSelection = source("../src/target-selection.js");
+
+  assert.match(app, /pendingTargetForCard\(card, handIndex, spellEffects\)/);
+  assert.match(app, /validateTargetSelection\(/);
+  assert.match(app, /collectLegalTargetSelections\(pending/);
+  assert.doesNotMatch(app, /function validateSpellTarget/);
+  assert.doesNotMatch(app, /pending\.mode === "enemySpellTrap"/);
+  assert.match(targetSelection, /pending\.mode === "enemySpellTrap"/);
+  assert.match(targetSelection, /pending\.mode === "ownGraveMonster"/);
+  assert.match(targetSelection, /validateSpellTargetRule\(pending, duelist, target\)/);
+});
+
 test("background music stays independent from rules and effect audio", () => {
   const app = source("../src/app.js");
   const audio = source("../src/audio.js");

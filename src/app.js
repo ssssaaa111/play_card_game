@@ -101,6 +101,14 @@ import {
   createSelectionState,
   selectionStateSnapshot
 } from './selection-state.js';
+import {
+  collectLegalTargetSelections,
+  pendingTargetForCard,
+  spellNeedsManualTarget,
+  targetSelectionForCard,
+  targetSelectionPrompt,
+  validateTargetSelection
+} from './target-selection.js';
 import { buildScenarioState } from './scenario-state.js';
 import { scenarioTacticalGoal } from './scenario-guidance.js';
 import {
@@ -136,11 +144,8 @@ import {
   fieldElements,
   makeAttackIntentPreview,
   makeBattlePreview,
-  spellTargetPrompt,
   strongestMonster,
   totalAtk,
-  canEffectTargetCard,
-  validateSpellTargetRule,
   weakestMonster
 } from './rules.js';
 
@@ -963,18 +968,6 @@ function currentPlayerActions() {
   };
 }
 
-function spellTargetMode(card) {
-  return spellEffects[card?.effect]?.target || "";
-}
-
-function spellNeedsManualTarget(owner, card) {
-  return owner.owner === "player" && Boolean(spellTargetMode(card));
-}
-
-function targetPromptFor(mode, cardName = "这张卡", effectName = "") {
-  return spellTargetPrompt(mode, cardName, spellEffects[effectName]?.targetRule || "");
-}
-
 function clearPendingTarget() {
   clearPendingSelection(state, "target");
   if (state.actionWindow === ACTION_WINDOWS.targetSelect) {
@@ -983,21 +976,12 @@ function clearPendingTarget() {
 }
 
 function beginSpellTargetSelection(handIndex, card) {
-  const mode = spellTargetMode(card);
-  if (!mode) return false;
+  const pendingTarget = pendingTargetForCard(card, handIndex, spellEffects);
+  if (!pendingTarget) return false;
   beginPendingSelection(
     state,
     "target",
-    {
-      handUid: card.uid,
-      handIndex,
-      effect: card.effect,
-      mode,
-      targetRule: spellEffects[card.effect]?.targetRule || "",
-      cardName: card.name,
-      sourceCard: card,
-      sourceOwner: "player"
-    },
+    pendingTarget,
     { zone: "hand", uid: card.uid }
   );
   setActionWindow(ACTION_WINDOWS.targetSelect, { reason: `target:${card.uid}` });
@@ -1009,7 +993,7 @@ function beginSpellTargetSelection(handIndex, card) {
     resolvePlayerActionWindow("没有合法目标");
     return false;
   }
-  const prompt = targetPromptFor(mode, card.name, card.effect);
+  const prompt = targetSelectionPrompt(pendingTarget);
   cue(prompt);
   addLog(`等待选择 ${card.name} 的目标。`);
   render();
@@ -1017,76 +1001,30 @@ function beginSpellTargetSelection(handIndex, card) {
   return true;
 }
 
-function validateSpellTarget(pending, ownerName, index, zone = "field") {
-  if (!pending) return { ok: false, reason: "当前没有需要选择目标的效果。" };
-  const duelist = ownerName === "player" ? state.player : state.ai;
-
-  if (pending.mode === "enemySpellTrap") {
-    if (zone !== "traps" || ownerName !== "ai") {
-      return { ok: false, reason: "这个效果需要选择敌方魔陷区的卡。" };
-    }
-    const target = duelist.traps[index];
-    if (!target) return { ok: false, reason: "请选择敌方魔陷区的卡作为目标。" };
-    return { ok: true, target, targetOwner: ownerName, targetIndex: index, targetZone: zone };
-  }
-
-  if (pending.mode === "ownGraveMonster") {
-    if (zone !== "grave" || ownerName !== "player") {
-      return { ok: false, reason: "这个效果需要选择我方墓地中的怪兽。" };
-    }
-    const target = duelist.grave[index];
-    if (!target || target.type !== "monster") {
-      return { ok: false, reason: "请选择我方墓地中的怪兽作为目标。" };
-    }
-    return { ok: true, target, targetOwner: ownerName, targetIndex: index, targetZone: zone };
-  }
-
-  if (zone !== "field") return { ok: false, reason: "这个效果需要选择场上的怪兽。" };
-  const target = duelist.field[index];
-  if (!target) return { ok: false, reason: "请选择场上的怪兽作为目标。" };
-  if (pending.mode === "ownMonster" && ownerName !== "player") {
-    return { ok: false, reason: "这个效果需要选择我方怪兽。" };
-  }
-  if (pending.mode === "enemyMonster" && ownerName !== "ai") {
-    return { ok: false, reason: "这个效果需要选择敌方怪兽。" };
-  }
-  if (!canEffectTargetCard(pending.sourceCard, target, {
-    sourceOwner: pending.sourceOwner || "player",
-    targetOwner: ownerName
-  })) {
-    return { ok: false, reason: `${target.name} 拥有神格目标抗性，不能成为对手效果的指定目标。` };
-  }
-  const rule = validateSpellTargetRule(pending, duelist, target);
-  if (!rule.ok) return rule;
-  return { ok: true, target, targetOwner: ownerName, targetIndex: index };
+function validateCurrentTarget(ownerName, index, zone = "field") {
+  return validateTargetSelection(
+    state.pendingTarget,
+    { player: state.player, ai: state.ai },
+    ownerName,
+    index,
+    zone
+  );
 }
 
 function isPendingTargetSlot(ownerName, index) {
   if (!state.pendingTarget) return false;
-  return validateSpellTarget(state.pendingTarget, ownerName, index).ok;
+  return validateCurrentTarget(ownerName, index).ok;
 }
 
 function isPendingTrapTargetSlot(ownerName, index) {
   if (!state.pendingTarget) return false;
-  return validateSpellTarget(state.pendingTarget, ownerName, index, "traps").ok;
-}
-
-function targetInfoFromPending(ownerName, index, zone = "field") {
-  const validation = validateSpellTarget(state.pendingTarget, ownerName, index, zone);
-  if (!validation.ok) return validation;
-  return {
-    ok: true,
-    owner: ownerName,
-    index,
-    zone,
-    card: validation.target
-  };
+  return validateCurrentTarget(ownerName, index, "traps").ok;
 }
 
 async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
   notePlayerIntent();
-  const targetInfo = targetInfoFromPending(ownerName, index, zone);
+  const targetInfo = validateCurrentTarget(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
     resetPlayerIdleCountdown();
@@ -1232,7 +1170,7 @@ async function selectHandCard(uid) {
   state.selected = { zone: "hand", uid };
   clearBattlePreview();
   showDetail(card);
-  if (card.type === "spell" && spellNeedsManualTarget(state.player, card)) {
+  if (card.type === "spell" && spellNeedsManualTarget(state.player, card, spellEffects)) {
     beginSpellTargetSelection(handIndex, card);
     return;
   }
@@ -1734,7 +1672,7 @@ function canUseAttackIntentWindow() {
 async function quickAttackOnlyTarget(attackerIndex) {
   if (!canPlayerAct()) return false;
   if (state.pendingTarget) {
-    cue(targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect));
+    cue(targetSelectionPrompt(state.pendingTarget));
     resetPlayerIdleCountdown();
     return false;
   }
@@ -1774,7 +1712,7 @@ function handConfirmLabel(card) {
   if (!card) return "确认";
   if (card.type === "spell") {
     if (fusionDefinition(card)) return "确认融合";
-    return spellNeedsManualTarget(state.player, card) ? "确认选目标" : "确认发动";
+    return spellNeedsManualTarget(state.player, card, spellEffects) ? "确认选目标" : "确认发动";
   }
   if (card.type === "monster") return "确认召唤";
   if (card.type === "trap") return "确认盖放";
@@ -2010,7 +1948,7 @@ async function handlePlayerTrapSlot(index) {
       await resolvePendingSpellTarget("player", index, "traps");
       return;
     }
-    cue(targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect));
+    cue(targetSelectionPrompt(state.pendingTarget));
     return;
   }
   if (existing && (!canPlayerAct() || !state.selected || state.selected.zone !== "hand")) {
@@ -2106,7 +2044,7 @@ async function handleAiPanelAttack() {
   if (!canPlayerAct()) return;
   notePlayerIntent();
   if (state.pendingTarget) {
-    cue(targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect));
+    cue(targetSelectionPrompt(state.pendingTarget));
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
@@ -2280,7 +2218,7 @@ async function playSpell(owner, rival, handIndex, targetInfo = null) {
     if (owner.owner === "player") resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
   }
-  if (spellNeedsManualTarget(owner, selectedCard) && !targetInfo) {
+  if (spellNeedsManualTarget(owner, selectedCard, spellEffects) && !targetInfo) {
     beginSpellTargetSelection(handIndex, selectedCard);
     return false;
   }
@@ -4062,33 +4000,10 @@ function resetPlayerIdleCountdown() {
 }
 
 function legalPendingTargets(pending = state.pendingTarget) {
-  if (!pending) return [];
-  const targets = [];
-  ["player", "ai"].forEach((ownerName) => {
-    const duelist = ownerName === "player" ? state.player : state.ai;
-    duelist.field.forEach((card, index) => {
-      if (!card) return;
-      const targetInfo = targetInfoFromPending(ownerName, index);
-      if (targetInfo.ok) {
-        targets.push(targetInfo);
-      }
-    });
-    duelist.traps.forEach((card, index) => {
-      if (!card) return;
-      const targetInfo = targetInfoFromPending(ownerName, index, "traps");
-      if (targetInfo.ok) {
-        targets.push(targetInfo);
-      }
-    });
-    duelist.grave.forEach((card, index) => {
-      if (!card) return;
-      const targetInfo = targetInfoFromPending(ownerName, index, "grave");
-      if (targetInfo.ok) {
-        targets.push(targetInfo);
-      }
-    });
+  return collectLegalTargetSelections(pending, {
+    player: state.player,
+    ai: state.ai
   });
-  return targets;
 }
 
 function handleTargetSelectionTimeout() {
@@ -4151,7 +4066,7 @@ function playSpellEffect(owner, rival, card, targetCard = null, targetOwner = ow
 
 function render(animationKey = "") {
   const scenario = scenarioSetups[state.scenarioId] || scenarioSetups.normal;
-  const targetPrompt = state.pendingTarget ? targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect) : "";
+  const targetPrompt = state.pendingTarget ? targetSelectionPrompt(state.pendingTarget) : "";
   const actions = currentPlayerActions();
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
   const musicMode = currentMusicMode();
@@ -4339,7 +4254,8 @@ function renderTraps(root, duelist, owner) {
 
 function handActionInfo(card, handIndex) {
   const selected = state.selected?.zone === "hand" && state.selected.uid === card.uid;
-  const needsTarget = card.type === "spell" && spellNeedsManualTarget(state.player, card);
+  const targetSelection = card.type === "spell" ? targetSelectionForCard(card, spellEffects) : null;
+  const needsTarget = spellNeedsManualTarget(state.player, card, spellEffects);
   const action = describeHandAction(card, {
     started: state.started,
     canAct: canUseHandCards(card) || Boolean(state.pendingTarget),
@@ -4355,9 +4271,9 @@ function handActionInfo(card, handIndex) {
     spellValidation: card.type === "spell" ? validateSpell(state.player, state.ai, card, handIndex) : { ok: true },
     spellNeedsManualTarget: needsTarget,
     spellTargetPrompt: needsTarget
-      ? targetPromptFor(spellTargetMode(card), card.name, card.effect)
+      ? targetSelectionPrompt(targetSelection)
       : state.pendingTarget
-        ? targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect)
+        ? targetSelectionPrompt(state.pendingTarget)
         : ""
   });
   if (card.type === "spell" && fusionDefinition(card)) {
@@ -4428,7 +4344,7 @@ function renderGraveTargets() {
   if (!active) return;
   state.player.grave.forEach((card, index) => {
     if (!card) return;
-    const targetInfo = targetInfoFromPending("player", index, "grave");
+    const targetInfo = validateCurrentTarget("player", index, "grave");
     if (!targetInfo.ok) return;
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
     cardEl.dataset.zone = "player-grave";
