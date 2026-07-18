@@ -34,13 +34,13 @@ export function buildDuelControlsView({
   const hasTribute = pending(pendingTribute);
   const hasPendingSelection = hasTarget || hasFusion || hasTribute;
   const selectionBlocksTurn = hasPendingSelection;
-  const currentConfirmLabel = hasTarget ? "确认默认目标" : confirmLabel;
+  const currentConfirmLabel = hasTarget ? "确认推荐目标" : confirmLabel;
   const cancelLabel = hasTarget ? "取消目标" : "取消选择";
   const showChoiceActions = canAct && (hasPendingSelection || selectedHandReady);
   let choiceText = "";
 
   if (hasTarget) {
-    choiceText = `${targetPrompt} 再点这张手牌或确认，将默认选择合法目标。`;
+    choiceText = `${targetPrompt} 请点击高亮目标；也可点击“确认推荐目标”自动选择。`;
   } else if (hasFusion) {
     const fusionName = pendingFusion?.cardName || selectedHandName;
     choiceText = fusionStatus?.needsResult
@@ -101,6 +101,7 @@ export function buildDuelControlsView({
       confirmDisabled: hasTarget ? false : !selectedHandReady,
       cancelText: cancelLabel,
       cancelDisabled: !canAct,
+      target: hasTarget,
       fusion: hasFusion,
       material: hasFusion || hasTribute
     },
@@ -152,6 +153,7 @@ export function renderDuelControls(elements, view) {
     }
     elements.choiceActions.classList.toggle("fusion-choice", view.choice.fusion);
     elements.choiceActions.classList.toggle("material-choice", view.choice.material);
+    elements.choiceActions.classList.toggle("target-choice", view.choice.target);
   }
 
   elements.modeBtn.disabled = view.modeDisabled;

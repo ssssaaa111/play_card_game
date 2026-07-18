@@ -281,7 +281,7 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /async function queuePendingAttack\(targetIndex\)/);
   assert.match(app, /function confirmSelectedHandAction\(\)/);
   assert.match(app, /function cancelSelectedHandAction\(\)/);
-  assert.match(controls, /const currentConfirmLabel = hasTarget \? "确认默认目标" : confirmLabel/);
+  assert.match(controls, /const currentConfirmLabel = hasTarget \? "确认推荐目标" : confirmLabel/);
   assert.match(app, /function resolvePendingSpellDefault\(\)/);
   assert.match(app, /resolvePendingSpellTarget\(targets\[0\]\.owner, targets\[0\]\.index, targets\[0\]\.zone\)/);
   assert.match(app, /beginSpellTargetSelection\(handIndex, card\)/);
@@ -645,6 +645,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /renderFusionPreview\(\)/);
   assert.match(controls, /classList\.toggle\("fusion-choice", view\.choice\.fusion\)/);
   assert.match(controls, /classList\.toggle\("material-choice", view\.choice\.material\)/);
+  assert.match(controls, /classList\.toggle\("target-choice", view\.choice\.target\)/);
   assert.match(app, /els\.fusionPreviewDetail\.addEventListener\("click"/);
   assert.match(app, /pendingAiRevealQueue = \[\]/);
   assert.match(app, /withAiRevealQueuePosition\(/);
@@ -762,7 +763,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /连锁场景应该在弹窗内显示三张可选陷阱/);
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /Blade Sigil continuous effect registered/);
-  assert.match(smoke, /再次点击解印射线默认选择唯一魔陷/);
+  assert.match(smoke, /再次点击解印射线仍等待手动选目标/);
   assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
   assert.match(smoke, /targetChangedEvents/);
   assert.match(smoke, /幻影换位重定向后仍未按新目标结算/);

@@ -37,7 +37,15 @@ export function buildDuelistHudView({
   maxLife = 4000,
   directTargetReady = false
 } = {}) {
-  const life = buildLifeDisplay(duelist.lp, maxLife);
+  const baseLife = buildLifeDisplay(duelist.lp, maxLife);
+  const shield = Math.max(0, Math.round(Number(duelist.shield) || 0));
+  const life = shield > 0
+    ? {
+      ...baseLife,
+      text: `${baseLife.current} / ${baseLife.max} · 盾 ${shield}`,
+      ariaLabel: `${baseLife.ariaLabel}，护盾 ${shield}`
+    }
+    : baseLife;
   const isAi = duelist.owner === "ai";
   const targetReady = isAi && Boolean(directTargetReady);
   return {
@@ -45,6 +53,7 @@ export function buildDuelistHudView({
     name: duelist.owner === "player" ? `${profile.name || ""}（你）` : profile.name || "",
     skillHtml: `<strong>${profile.skill || ""}</strong>：${profile.text || ""}`,
     life,
+    shield,
     vitalItems: vitalStatusItems({
       duelist,
       lifeTone: life.tone,
@@ -88,7 +97,10 @@ function applyDuelistHud(document, elements, view) {
     lp.setAttribute("aria-label", view.life.ariaLabel);
   }
   if (lifeFill) lifeFill.style.width = `${view.life.percent}%`;
-  if (lifeBar) lifeBar.dataset.tone = view.life.tone;
+  if (lifeBar) {
+    lifeBar.dataset.tone = view.life.tone;
+    lifeBar.dataset.shield = view.shield > 0 ? "true" : "false";
+  }
   if (panel) {
     panel.dataset.lifeTone = view.life.tone;
     panel.classList.toggle("active-turn", view.active);

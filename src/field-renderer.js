@@ -97,7 +97,8 @@ export function supportFieldSlotView({
   trapChoiceReady = false,
   trapChoiceSelected = false
 } = {}) {
-  const supportDisplay = card && owner === "player"
+  const revealed = Boolean(card && (owner === "player" || card.type === "spell"));
+  const supportDisplay = revealed
     ? buildSupportCardDisplay(card, {
       responseReady: trapChoiceReady,
       responseSelected: trapChoiceSelected,
@@ -112,6 +113,7 @@ export function supportFieldSlotView({
     targetable,
     trapChoiceReady,
     trapChoiceSelected,
+    revealed,
     supportDisplay,
     ariaLabel: supportDisplay
       ? `${zoneLabel}，${card.name}，${supportDisplay.description}`
@@ -254,17 +256,17 @@ export function renderSupportZones({
     slot.addEventListener("click", () => onSlotClick(index));
 
     if (card) {
-      const cardEl = owner === "player"
+      const cardEl = view.revealed
         ? createCardElement(document, card, { asset: assetForCard(card) })
         : document.createElement("article");
       const supportTypeClass = card.type === "spell" ? "player-spell" : "player-trap";
-      cardEl.className = owner === "player"
+      cardEl.className = view.revealed
         ? `${cardEl.className} field-support-card ${supportTypeClass}`
         : "card back";
       cardEl.dataset.zone = `${owner}-trap`;
-      cardEl.dataset.cardId = owner === "player" ? card.id || "" : "hidden";
-      cardEl.dataset.cardName = owner === "player" ? card.name || "" : "盖放的卡牌";
-      cardEl.dataset.cardType = owner === "player" ? card.type || "trap" : "hidden";
+      cardEl.dataset.cardId = view.revealed ? card.id || "" : "hidden";
+      cardEl.dataset.cardName = view.revealed ? card.name || "" : "盖放的卡牌";
+      cardEl.dataset.cardType = view.revealed ? card.type || "trap" : "hidden";
       addClasses(cardEl, view.cardClasses);
 
       if (view.supportDisplay) {

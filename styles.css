@@ -408,6 +408,10 @@ body[data-duel-turn="ai"] .phase span {
   pointer-events: none;
 }
 
+.life-bar[data-shield="true"] .life-value {
+  font-size: 11px;
+}
+
 .duelist-figure::after {
   content: "";
   position: absolute;
@@ -3628,6 +3632,11 @@ button.chain-stack-card:focus-visible {
 
 .choice-actions[hidden] {
   display: none;
+}
+
+.choice-actions.target-choice {
+  top: calc(var(--safe-area-top) + 12px);
+  transform: translateX(-50%);
 }
 
 .choice-actions.fusion-choice,

@@ -1,4 +1,4 @@
-export const TIMELINE_LIMIT = 18;
+export const TIMELINE_LIMIT = Number.POSITIVE_INFINITY;
 
 export function timelineKind(text = "") {
   if (/连锁|陷阱|反制|反击阵列|弱化力场|护壁/.test(text)) return "trap";

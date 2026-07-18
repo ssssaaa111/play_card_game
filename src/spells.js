@@ -66,8 +66,8 @@ export const spellDefinitions = {
     targetRule: "strongest"
   },
   lunarDominion: {
-    handSummary: "持续压制 · ATK/DEF -900",
-    caption: "月曜帷幕，持续压低目标",
+    handSummary: "持续魔法 · 留场时 ATK/DEF -900",
+    caption: "月曜帷幕，留场期间持续压低目标",
     target: "enemyMonster"
   },
   trioFinalCounter: {

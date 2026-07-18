@@ -28,3 +28,18 @@ test("builds capped timeline state without mutating input", () => {
   assert.deepEqual(timeline, [{ step: 1, kind: "turn", text: "决斗开始。" }]);
   assert.deepEqual(second.timeline.map((entry) => entry.kind), ["summon", "draw"]);
 });
+
+test("keeps the complete timeline by default", () => {
+  let timeline = [];
+  let step = 0;
+
+  for (let index = 1; index <= 30; index += 1) {
+    const next = nextTimelineState(timeline, `第 ${index} 条记录`, step);
+    timeline = next.timeline;
+    step = next.step;
+  }
+
+  assert.equal(timeline.length, 30);
+  assert.equal(timeline[0].step, 30);
+  assert.equal(timeline.at(-1).step, 1);
+});

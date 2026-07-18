@@ -70,9 +70,10 @@ test("target and fusion selections block turn controls and expose the correct pr
 
   assert.equal(target.skipAttack.disabled, true);
   assert.equal(target.endTurn.disabled, true);
-  assert.equal(target.hand.confirmText, "确认默认目标");
+  assert.equal(target.hand.confirmText, "确认推荐目标");
   assert.equal(target.hand.confirmDisabled, false);
-  assert.equal(target.choice.text, "选择对方攻击力最高怪兽。 再点这张手牌或确认，将默认选择合法目标。");
+  assert.equal(target.choice.text, "选择对方攻击力最高怪兽。 请点击高亮目标；也可点击“确认推荐目标”自动选择。");
+  assert.equal(target.choice.target, true);
 
   const fusion = buildDuelControlsView({
     started: true,
@@ -86,6 +87,7 @@ test("target and fusion selections block turn controls and expose the correct pr
   });
 
   assert.equal(fusion.choice.hidden, false);
+  assert.equal(fusion.choice.target, false);
   assert.equal(fusion.choice.fusion, true);
   assert.equal(fusion.choice.material, true);
   assert.equal(fusion.choice.text, "星魂融合：选择融合素材 1/2。");

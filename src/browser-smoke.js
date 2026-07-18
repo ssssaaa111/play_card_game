@@ -4017,13 +4017,23 @@ async function runEquipmentSpellSmoke(ctx) {
     "解印射线选择敌方魔陷目标",
     6000
   );
-  clickSmokeElement(handCard(ctx.els, "dispelling-ray"), "再次点击解印射线默认选择唯一魔陷");
+  clickSmokeElement(handCard(ctx.els, "dispelling-ray"), "再次点击解印射线仍等待手动选目标");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "destroySpellTrap" &&
+      ctx.state.ai.traps[0]?.id === "blade-sigil",
+    "重复点击目标魔法不应自动破坏第一张魔陷",
+    3000
+  );
+  clickSmokeElement(
+    ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"]'),
+    "手动选择要破坏的敌方魔陷"
+  );
   await waitForSmoke(
     () => !ctx.state.ai.traps[0] &&
       ctx.state.ai.grave.some((card) => card?.id === "blade-sigil") &&
       countGameEvents(ctx.state, "CARD_DESTROYED") >= 1 &&
       ctx.state.log.some((entry) => entry.includes("解印射线 破坏了")) &&
-      ctx.state.log.some((entry) => entry.includes("装备持续效果失效")),
+      ctx.state.log.some((entry) => entry.includes("持续效果失效")),
     "解印射线破坏敌方魔陷",
     9000
   );

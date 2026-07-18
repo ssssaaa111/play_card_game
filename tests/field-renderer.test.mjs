@@ -77,8 +77,8 @@ test("monster field view locks skipped attacks and disables empty rival slots", 
   assert.equal(emptyRival.ariaLabel, "敌方召唤区 5");
 });
 
-test("support field view exposes player state while keeping rival cards concealed", () => {
-  const card = {
+test("support field view reveals active spells while keeping rival traps concealed", () => {
+  const trap = {
     id: "mirror-snare",
     type: "trap",
     name: "镜光反制",
@@ -86,22 +86,39 @@ test("support field view exposes player state while keeping rival cards conceale
     trigger: "destroyAttacker"
   };
   const player = supportFieldSlotView({
-    card,
+    card: trap,
     owner: "player",
     index: 1,
     trapChoiceReady: true,
     trapChoiceSelected: true
   });
-  const rival = supportFieldSlotView({
-    card,
+  const rivalTrap = supportFieldSlotView({
+    card: trap,
     owner: "ai",
     index: 1
   });
+  const rivalSpell = supportFieldSlotView({
+    card: {
+      id: "trio-moon-dominion",
+      type: "spell",
+      name: "月曜帷幕",
+      text: "持续降低目标攻击力和守备力。",
+      effect: "lunarDominion"
+    },
+    owner: "ai",
+    index: 2
+  });
 
   assert.equal(player.supportDisplay.key, "selected");
+  assert.equal(player.revealed, true);
   assert.match(player.ariaLabel, /镜光反制/);
   assert.ok(player.slotClasses.includes("trap-response-selected"));
   assert.ok(player.cardClasses.includes("support-selected"));
-  assert.equal(rival.supportDisplay, null);
-  assert.equal(rival.ariaLabel, "敌方魔陷区 2，盖放卡牌");
+  assert.equal(rivalTrap.revealed, false);
+  assert.equal(rivalTrap.supportDisplay, null);
+  assert.equal(rivalTrap.ariaLabel, "敌方魔陷区 2，盖放卡牌");
+  assert.equal(rivalSpell.revealed, true);
+  assert.equal(rivalSpell.supportDisplay.key, "active");
+  assert.match(rivalSpell.ariaLabel, /月曜帷幕/);
+  assert.match(rivalSpell.ariaLabel, /持续魔法生效中/);
 });

@@ -1178,7 +1178,11 @@ async function selectHandCard(uid) {
     notePlayerIntent();
     const sameCard = state.pendingTarget.handUid === uid;
     if (sameCard) {
-      await resolvePendingSpellDefault();
+      showDetail(card);
+      cue("请点击高亮目标；也可以点击“确认推荐目标”自动选择。");
+      playSound("click");
+      render();
+      resetPlayerIdleCountdown();
       return;
     } else {
       const previousCardName = state.pendingTarget.cardName;
@@ -2508,27 +2512,27 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       if (found) {
         result.effectTarget = found.card;
         result.targetOwner = found.owner;
-        addLog(`${card.name} 装备给 ${found.card.name}，持续效果已登记。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
-        playEpicAction("装备", "guard");
+        addLog(`${card.name} 对 ${found.card.name} 的持续效果开始生效。`, cardLogMeta(card, { actor: owner.owner, type: "effect", relatedCardIds: relatedCardIds(found.card) }));
+        playEpicAction("持续生效", "guard");
       }
     }
     if (event.type === "CONTINUOUS_EFFECT_RELEASED") {
       const source = findRuntimeCard(event.sourceCardId);
       const target = findRuntimeCard(event.targetCardId);
-      const sourceName = source?.card?.name || "装备卡";
+      const sourceName = source?.card?.name || "持续卡";
       const targetText = target?.card?.name ? `，${target.card.name} 失去持续加成` : "";
       if (target?.card) {
         result.effectTarget = target.card;
         result.targetOwner = target.owner;
       }
-      addLog(`${sourceName} 的装备持续效果失效${targetText}。`, {
+      addLog(`${sourceName} 的持续效果失效${targetText}。`, {
         actor: owner.owner,
         type: "effect",
         public: true,
         cardId: source?.card?.id || card.id,
         relatedCardIds: relatedCardIds(target?.card)
       });
-      playEpicAction("装备失效", "draw");
+      playEpicAction("持续失效", "draw");
     }
     if (event.type === "CARD_DESTROYED" && event.cardId !== runtimeCardId(card)) {
       const destroyed = findRuntimeCard(event.cardId);
@@ -4226,7 +4230,6 @@ function addLog(input, metadata = {}) {
     })
     : logEntryMessage(input);
   state.log.unshift(entry);
-  state.log = state.log.slice(0, 12);
   addTimeline(logEntryMessage(entry));
   renderLog();
   renderTimeline();
