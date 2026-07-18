@@ -39,6 +39,8 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/field-renderer.js");
   checkModuleSyntax("src/hand-renderer.js");
   checkModuleSyntax("src/hud-renderer.js");
+  checkModuleSyntax("src/log-renderer.js");
+  checkModuleSyntax("src/timeline-renderer.js");
   checkModuleSyntax("src/cards.js");
   checkModuleSyntax("src/combos.js");
   checkModuleSyntax("src/data.js");
@@ -506,15 +508,17 @@ test("app uses extracted log audit module", () => {
   const app = readProjectFile("src/app.js");
   const smoke = readProjectFile("src/browser-smoke.js");
   const audit = readProjectFile("src/log-audit.js");
+  const timelineRenderer = readProjectFile("src/timeline-renderer.js");
   const css = readProjectFile("styles.css");
 
-  assert.match(app, /from '\.\/log-audit\.js'/);
+  assert.match(app, /from '\.\/timeline-renderer\.js'/);
+  assert.match(timelineRenderer, /from "\.\/log-audit\.js"/);
   assert.match(app, /timelineAudit: document\.querySelector\("#timelineAudit"\)/);
-  assert.match(app, /auditLogEntries\(state\.timeline\)/);
-  assert.match(app, /function auditIssueLabel\(issue\)/);
-  assert.match(app, /const firstIssueText = firstIssue \? `\$\{auditIssueLabel\(firstIssue\)\} - \$\{firstIssue\.message\}` : ""/);
-  assert.match(app, /els\.timelineAudit\.textContent = audit\.ok \? "审计 OK" : `疑点 \$\{audit\.issueCount\}：\$\{firstIssueText\}`/);
-  assert.match(app, /els\.timelineAudit\.dataset\.auditDetail = audit\.ok/);
+  assert.match(timelineRenderer, /auditLogEntries\(timeline\)/);
+  assert.match(timelineRenderer, /export function auditIssueLabel\(issue\)/);
+  assert.match(timelineRenderer, /const firstIssueText = firstIssue/);
+  assert.match(timelineRenderer, /text: audit\.ok \? "审计 OK" : `疑点 \$\{audit\.issueCount\}：\$\{firstIssueText\}`/);
+  assert.match(timelineRenderer, /elements\.timelineAudit\.dataset\.auditDetail = auditView\.detail/);
   assert.match(smoke, /from '\.\/log-audit\.js'/);
   assert.match(audit, /export function auditLogEntries/);
   assert.match(audit, /missing-spell-resolution/);
@@ -886,12 +890,14 @@ test("card faces prioritize full monster art and illustrated spell trap identiti
 
 test("app uses extracted card details", () => {
   const app = readProjectFile("src/app.js");
+  const logRenderer = readProjectFile("src/log-renderer.js");
 
   assert.match(app, /from '\.\/card-detail\.js'/);
   assert.match(app, /cardInspectorViewModel\(card\)/);
   assert.match(app, /cardDetailViewModel\(cardOrId\)/);
-  assert.match(app, /state\.log\.slice\(0, 5\)/);
-  assert.match(app, /appendLogEntryContent\(line, entry\)/);
+  assert.match(app, /renderCurrentLog\(\{/);
+  assert.match(logRenderer, /log\.slice\(0, Math\.max\(0, limit\)\)/);
+  assert.match(logRenderer, /appendLogEntryContent\(\{/);
   assert.doesNotMatch(app, /cardTagText\(card\)/);
   assert.doesNotMatch(app, /attachCardDetailTrigger/);
 });
@@ -1130,7 +1136,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/timeline-renderer.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

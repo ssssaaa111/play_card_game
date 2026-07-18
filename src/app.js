@@ -17,7 +17,7 @@ import {
   shouldSwitchSummonedMonsterToDefense
 } from './ai.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
-import { createBattleLogEntry, logEntryMessage, publicLogCardIds } from './battle-log.js';
+import { createBattleLogEntry, logEntryMessage } from './battle-log.js';
 import { renderBattlePreviewElement } from './battle-preview-renderer.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { applyCardArt } from './card-art.js';
@@ -31,7 +31,6 @@ import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js'
 import { buildPreDuelPreview } from './pre-duel-preview.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
 import { buildChainStackEntries, chainResolutionOrderText } from './chain-view.js';
-import { buildChainHistory } from './chain-history.js';
 import { fusionOptionsForCard } from './fusion.js';
 import {
   buildEngineStateFromUiState,
@@ -71,7 +70,8 @@ import {
   explainSummonMonsterFromUiState,
   projectBattleFromUiState
 } from './engine-adapter.js';
-import { auditLogEntries } from './log-audit.js';
+import { renderCurrentLog } from './log-renderer.js';
+import { renderChainHistoryPanel, renderTimelinePanel } from './timeline-renderer.js';
 import { spellDefinitions, validateSpellCondition } from './spells.js';
 import { nextTimelineState } from './timeline.js';
 import { selectRedirectTarget, trapActivationText, trapCanResolve, trapConsumesAttack } from './traps.js';
@@ -4906,189 +4906,37 @@ function renderGraveTargets() {
   });
 }
 
-function logCardRefs(entry) {
-  const message = logEntryMessage(entry);
-  return publicLogCardIds(entry)
-    .map((cardId) => cardDefinitionById(cardId))
-    .filter((card) => card?.id && card?.name && message.includes(card.name))
-    .filter((card, index, list) => list.findIndex((item) => item.id === card.id) === index);
-}
-
-function appendLogEntryContent(root, entry) {
-  const message = logEntryMessage(entry);
-  const refs = logCardRefs(entry);
-  if (refs.length === 0) {
-    root.textContent = message;
-    return;
-  }
-  let offset = 0;
-  while (offset < message.length) {
-    let next = null;
-    refs.forEach((card) => {
-      const index = message.indexOf(card.name, offset);
-      if (index < 0) return;
-      if (!next || index < next.index || (index === next.index && card.name.length > next.card.name.length)) {
-        next = { index, card };
-      }
-    });
-    if (!next) {
-      root.appendChild(document.createTextNode(message.slice(offset)));
-      break;
-    }
-    if (next.index > offset) {
-      root.appendChild(document.createTextNode(message.slice(offset, next.index)));
-    }
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "log-card-link";
-    button.dataset.cardId = next.card.id;
-    button.textContent = next.card.name;
-    button.title = `查看 ${next.card.name} 详情`;
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openCardDetail(next.card.id);
-    });
-    root.appendChild(button);
-    offset = next.index + next.card.name.length;
-  }
-}
-
 function renderLog() {
-  els.log.innerHTML = "";
-  const head = document.createElement("div");
-  head.className = "log-head";
-  head.innerHTML = `<span>当前战况</span><span class="log-badge">最近</span>`;
-  els.log.appendChild(head);
-  const entries = state.log.length
-    ? state.log.slice(0, 5)
-    : [state.started ? "等待行动结算。" : "准备决斗。"];
-  entries.forEach((entry, index) => {
-    const line = document.createElement("div");
-    line.className = index === 0 ? "log-line" : "log-line secondary";
-    appendLogEntryContent(line, entry);
-    els.log.appendChild(line);
+  renderCurrentLog({
+    document,
+    root: els.log,
+    log: state.log,
+    started: state.started,
+    findCard: cardDefinitionById,
+    onCardClick: openCardDetail
   });
 }
 
-function auditIssueLabel(issue) {
-  const labels = {
-    "duplicate-log": "重复日志",
-    "missing-spell-resolution": "缺少魔法结算",
-    "direct-after-block": "直击规则矛盾",
-    "missing-attack-resolution": "缺少攻击结算",
-    "attack-no-impact": "攻击无影响"
-  };
-  return labels[issue?.code] || issue?.code || "未知疑点";
-}
-
 function renderChainHistory() {
-  if (!els.chainHistoryToggle || !els.chainHistoryList) return;
-  const histories = buildChainHistory(state.gameEvents, { findCard: findRuntimeCard });
-  const hasHistory = histories.length > 0;
-  els.chainHistoryToggle.hidden = !hasHistory;
-  els.chainHistoryToggle.setAttribute("aria-expanded", String(hasHistory && chainHistoryExpanded));
-  if (els.chainHistoryCount) els.chainHistoryCount.textContent = `${histories.length}`;
-  els.chainHistoryList.hidden = !hasHistory || !chainHistoryExpanded;
-  els.chainHistoryList.replaceChildren();
-  if (!hasHistory || !chainHistoryExpanded) return;
-
-  histories.forEach((history) => {
-    const entry = document.createElement("section");
-    entry.className = "chain-history-entry";
-
-    const heading = document.createElement("div");
-    heading.className = "chain-history-heading";
-    const title = document.createElement("strong");
-    title.textContent = `${history.linkCount} 段连锁`;
-    const orders = document.createElement("span");
-    orders.className = "chain-history-orders";
-    const activationOrder = document.createElement("span");
-    activationOrder.textContent = `发动 ${history.activationOrder}`;
-    const resolutionOrder = document.createElement("span");
-    resolutionOrder.textContent = `结算 ${history.resolutionOrder}`;
-    orders.appendChild(activationOrder);
-    orders.appendChild(resolutionOrder);
-    heading.appendChild(title);
-    heading.appendChild(orders);
-    entry.appendChild(heading);
-
-    history.links.forEach((link) => {
-      const row = document.createElement("div");
-      row.className = "chain-history-link";
-      row.dataset.chainIndex = `${link.chainIndex}`;
-      row.dataset.owner = link.owner || "unknown";
-
-      const art = document.createElement("span");
-      art.className = "chain-history-art";
-      art.setAttribute("aria-hidden", "true");
-      if (!link.cardId || !applyCardArt(art, link.cardId)) art.textContent = link.name.slice(0, 1);
-
-      const index = document.createElement("span");
-      index.className = "chain-history-index";
-      index.textContent = `CL${link.chainIndex}`;
-      art.appendChild(index);
-
-      const main = document.createElement("span");
-      main.className = "chain-history-main";
-      const owner = document.createElement("span");
-      owner.className = "chain-history-owner";
-      owner.textContent = link.ownerLabel;
-      const card = document.createElement(link.cardId ? "button" : "span");
-      card.className = "chain-history-card";
-      card.textContent = link.name;
-      if (link.cardId) {
-        card.type = "button";
-        card.dataset.cardId = link.cardId;
-        card.title = `查看 ${link.name} 详情`;
-        card.addEventListener("click", () => openCardDetail(link.cardId));
-      }
-      const status = document.createElement("span");
-      status.className = `chain-history-status ${link.status}`;
-      status.textContent = link.negatedByChainIndex
-        ? `${link.statusLabel} · CL${link.negatedByChainIndex}`
-        : link.statusLabel;
-      main.appendChild(owner);
-      main.appendChild(card);
-      row.appendChild(art);
-      row.appendChild(main);
-      row.appendChild(status);
-      entry.appendChild(row);
-    });
-    els.chainHistoryList.appendChild(entry);
+  renderChainHistoryPanel({
+    document,
+    elements: els,
+    events: state.gameEvents,
+    findCard: findRuntimeCard,
+    expanded: chainHistoryExpanded,
+    onCardClick: openCardDetail
   });
 }
 
 function renderTimeline() {
-  if (!els.timeline) return;
-  els.timeline.innerHTML = "";
-  if (els.timelineCount) {
-    els.timelineCount.textContent = `${state.timeline.length}`;
-  }
-  if (els.timelineAudit) {
-    const audit = auditLogEntries(state.timeline);
-    const hasError = audit.issues.some((issue) => issue.severity === "error");
-    const firstIssue = audit.issues[0];
-    const firstIssueText = firstIssue ? `${auditIssueLabel(firstIssue)} - ${firstIssue.message}` : "";
-    els.timelineAudit.textContent = audit.ok ? "审计 OK" : `疑点 ${audit.issueCount}：${firstIssueText}`;
-    els.timelineAudit.className = `timeline-audit ${audit.ok ? "ok" : hasError ? "error" : "warn"}`;
-    els.timelineAudit.dataset.auditDetail = audit.ok
-      ? ""
-      : audit.issues.map((issue) => `${auditIssueLabel(issue)}：${issue.message}`).join(" | ");
-    els.timelineAudit.title = audit.ok
-      ? "日志审计未发现异常。"
-      : audit.issues.map((issue) => `${issue.severity.toUpperCase()} ${issue.code}: ${issue.message}`).join("\n");
-  }
-  renderChainHistory();
-  state.timeline.forEach((entry) => {
-    const item = document.createElement("div");
-    item.className = `timeline-item ${entry.kind}`;
-    item.innerHTML = `
-      <span class="timeline-step">${entry.step}</span>
-      <span class="timeline-text"></span>
-    `;
-    item.querySelector(".timeline-text").textContent = entry.text;
-    els.timeline.appendChild(item);
+  renderTimelinePanel({
+    document,
+    elements: els,
+    timeline: state.timeline,
+    gameEvents: state.gameEvents,
+    chainHistoryExpanded,
+    findCard: findRuntimeCard,
+    onCardClick: openCardDetail
   });
 }
 

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const app = readFileSync(fileURLToPath(new URL("../src/app.js", import.meta.url)), "utf8");
+const timelineRenderer = readFileSync(fileURLToPath(new URL("../src/timeline-renderer.js", import.meta.url)), "utf8");
 const css = readFileSync(fileURLToPath(new URL("../styles.css", import.meta.url)), "utf8");
 
 test("current chain stack exposes artwork, owner, and structured resolution order", () => {
@@ -17,9 +18,9 @@ test("current chain stack exposes artwork, owner, and structured resolution orde
 });
 
 test("chain history distinguishes activation and resolution order with compact art", () => {
-  assert.match(app, /activationOrder\.textContent = `发动 \$\{history\.activationOrder\}`/);
-  assert.match(app, /resolutionOrder\.textContent = `结算 \$\{history\.resolutionOrder\}`/);
-  assert.match(app, /applyCardArt\(art, link\.cardId\)/);
+  assert.match(timelineRenderer, /activationOrder\.textContent = `发动 \$\{history\.activationOrder\}`/);
+  assert.match(timelineRenderer, /resolutionOrder\.textContent = `结算 \$\{history\.resolutionOrder\}`/);
+  assert.match(timelineRenderer, /applyCardArt\(art, link\.cardId\)/);
   assert.match(css, /\.chain-history-link\s*\{[\s\S]*grid-template-columns: 38px minmax\(0, 1fr\) auto;/);
   assert.match(css, /\.chain-history-art\s*\{[\s\S]*width: 38px;[\s\S]*height: 28px;/);
 });
