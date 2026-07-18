@@ -94,6 +94,13 @@ import {
   resolveTrapResponse,
   selectTrapResponse
 } from './response-state.js';
+import {
+  beginPendingSelection,
+  clearPendingSelection,
+  clearTransientSelection,
+  createSelectionState,
+  selectionStateSnapshot
+} from './selection-state.js';
 import { buildScenarioState } from './scenario-state.js';
 import { scenarioTacticalGoal } from './scenario-guidance.js';
 import {
@@ -165,10 +172,7 @@ const state = {
   turn: "player",
   phase: PHASES.draw,
   timing: TIMINGS.draw,
-  selected: null,
-  pendingTarget: null,
-  pendingTribute: null,
-  pendingFusion: null,
+  ...createSelectionState(),
   focusedCard: null,
   autoEnding: false,
   autoEndTimer: null,
@@ -625,10 +629,7 @@ function startGame() {
   state.ai.deck = buildDeck(aiProfiles[state.aiStyle]?.deckPreset || "balanced");
   state.turn = "player";
   state.phase = "draw";
-  state.selected = null;
-  state.pendingTarget = null;
-  state.pendingTribute = null;
-  state.pendingFusion = null;
+  clearTransientSelection(state);
   state.focusedCard = null;
   clearBattlePreview();
   state.autoEnding = false;
@@ -694,10 +695,7 @@ function prepareGame() {
   Object.assign(state.ai, createDuelist("ai", characterProfiles.ai.passive));
   state.turn = "player";
   state.phase = "ready";
-  state.selected = null;
-  state.pendingTarget = null;
-  state.pendingTribute = null;
-  state.pendingFusion = null;
+  clearTransientSelection(state);
   state.focusedCard = null;
   clearBattlePreview();
   state.autoEnding = false;
@@ -978,7 +976,7 @@ function targetPromptFor(mode, cardName = "这张卡", effectName = "") {
 }
 
 function clearPendingTarget() {
-  state.pendingTarget = null;
+  clearPendingSelection(state, "target");
   if (state.actionWindow === ACTION_WINDOWS.targetSelect) {
     setActionWindow(state.phase === PHASES.battle ? ACTION_WINDOWS.battle : ACTION_WINDOWS.main, { reason: "target cleared" });
   }
@@ -987,17 +985,21 @@ function clearPendingTarget() {
 function beginSpellTargetSelection(handIndex, card) {
   const mode = spellTargetMode(card);
   if (!mode) return false;
-  state.pendingTarget = {
-    handUid: card.uid,
-    handIndex,
-    effect: card.effect,
-    mode,
-    targetRule: spellEffects[card.effect]?.targetRule || "",
-    cardName: card.name,
-    sourceCard: card,
-    sourceOwner: "player"
-  };
-  state.selected = { zone: "hand", uid: card.uid };
+  beginPendingSelection(
+    state,
+    "target",
+    {
+      handUid: card.uid,
+      handIndex,
+      effect: card.effect,
+      mode,
+      targetRule: spellEffects[card.effect]?.targetRule || "",
+      cardName: card.name,
+      sourceCard: card,
+      sourceOwner: "player"
+    },
+    { zone: "hand", uid: card.uid }
+  );
   setActionWindow(ACTION_WINDOWS.targetSelect, { reason: `target:${card.uid}` });
   if (!legalPendingTargets().length) {
     clearPendingTarget();
@@ -1199,7 +1201,7 @@ async function selectHandCard(uid) {
     }
   }
   if (state.pendingTribute && state.pendingTribute.handUid !== uid) {
-    state.pendingTribute = null;
+    clearPendingSelection(state, "tribute");
     clearBattlePreview();
   }
   if (state.pendingFusion && state.pendingFusion.handUid !== uid) {
@@ -1266,14 +1268,18 @@ function beginTributeSelection(handIndex, card) {
   notePlayerIntent();
   clearBattlePreview();
   const selectedIndexes = defaultTributeSelection(state.player.field, cost);
-  state.pendingTribute = {
-    handUid: card.uid,
-    handIndex,
-    cardName: card.name,
-    cost,
-    selectedIndexes
-  };
-  state.selected = { zone: "hand", uid: card.uid };
+  beginPendingSelection(
+    state,
+    "tribute",
+    {
+      handUid: card.uid,
+      handIndex,
+      cardName: card.name,
+      cost,
+      selectedIndexes
+    },
+    { zone: "hand", uid: card.uid }
+  );
   cue(selectedIndexes.length === cost
     ? `场上正好有 ${cost} 只怪兽，已全部选为 ${card.name} 的祭品；确认后召唤。`
     : `选择 ${cost} 只我方场上怪兽作为 ${card.name} 的祭品。`);
@@ -1297,7 +1303,7 @@ function selectedTributeIndexes() {
 function toggleTributeSelection(index) {
   const info = pendingTributeHandInfo();
   if (!info) {
-    state.pendingTribute = null;
+    clearPendingSelection(state, "tribute");
     render();
     return false;
   }
@@ -1329,7 +1335,7 @@ function toggleTributeSelection(index) {
 async function confirmTributeSummon(fieldIndex = null) {
   const info = pendingTributeHandInfo();
   if (!info) {
-    state.pendingTribute = null;
+    clearPendingSelection(state, "tribute");
     cue("祭品召唤已失效。");
     render();
     resumePlayerIdleCountdownAfterPassiveIntent();
@@ -1355,8 +1361,7 @@ async function confirmTributeSummon(fieldIndex = null) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
   }
-  state.pendingTribute = null;
-  state.selected = null;
+  clearTransientSelection(state);
   render("summon-player-" + summonIndex);
   resolvePlayerActionWindow("祭品召唤完成");
   return true;
@@ -1423,17 +1428,21 @@ function beginFusionSelection(handIndex, card) {
   }
   notePlayerIntent();
   clearBattlePreview();
-  state.pendingFusion = {
-    handUid: card.uid,
-    handIndex,
-    cardName: card.name,
-    resultOptions: options,
-    resultId: options.length === 1 ? fusion.resultId : "",
-    materials: options.length === 1 ? fusion.materials : [],
-    selectedIndexes: [],
-    selectedHandUids: []
-  };
-  state.selected = { zone: "hand", uid: card.uid };
+  beginPendingSelection(
+    state,
+    "fusion",
+    {
+      handUid: card.uid,
+      handIndex,
+      cardName: card.name,
+      resultOptions: options,
+      resultId: options.length === 1 ? fusion.resultId : "",
+      materials: options.length === 1 ? fusion.materials : [],
+      selectedIndexes: [],
+      selectedHandUids: []
+    },
+    { zone: "hand", uid: card.uid }
+  );
   cue(options.length > 1
     ? `先为 ${card.name} 选择融合结果。`
     : `选择 ${fusionMaterialCount(fusion.materials)} 只融合素材：${fusionMaterialNames(fusion.materials)}。`);
@@ -1545,7 +1554,7 @@ function isFusionHandMaterialCandidate(uid) {
 function toggleFusionSelection(index) {
   const info = pendingFusionHandInfo();
   if (!info) {
-    state.pendingFusion = null;
+    clearPendingSelection(state, "fusion");
     render();
     return false;
   }
@@ -1579,7 +1588,7 @@ function toggleFusionSelection(index) {
 function toggleFusionHandSelection(uid) {
   const info = pendingFusionHandInfo();
   if (!info) {
-    state.pendingFusion = null;
+    clearPendingSelection(state, "fusion");
     render();
     return false;
   }
@@ -1609,7 +1618,7 @@ function toggleFusionHandSelection(uid) {
 async function confirmFusionSummon(fieldIndex = null) {
   const info = pendingFusionHandInfo();
   if (!info) {
-    state.pendingFusion = null;
+    clearPendingSelection(state, "fusion");
     cue("融合召唤已失效。");
     render();
     resumePlayerIdleCountdownAfterPassiveIntent();
@@ -1664,8 +1673,7 @@ async function confirmFusionSummon(fieldIndex = null) {
   }));
   resolveEngineSpellFeedback(state.player, state.ai, info.card, fusionEvents);
   resolveElementCombos(state.player, state.ai, "spell");
-  state.pendingFusion = null;
-  state.selected = null;
+  clearTransientSelection(state);
   checkGameOver();
   render("summon-player-" + summonIndex);
   if (!state.gameOver) resolvePlayerActionWindow("融合召唤完成");
@@ -1837,9 +1845,10 @@ async function confirmSelectedHandAction() {
 }
 
 function cancelSelectedHandAction() {
-  const hadPendingTarget = Boolean(state.pendingTarget);
-  const hadPendingTribute = Boolean(state.pendingTribute);
-  const hadPendingFusion = Boolean(state.pendingFusion);
+  const selectionSnapshot = selectionStateSnapshot(state);
+  const hadPendingTarget = selectionSnapshot.pendingKinds.includes("target");
+  const hadPendingTribute = selectionSnapshot.pendingKinds.includes("tribute");
+  const hadPendingFusion = selectionSnapshot.pendingKinds.includes("fusion");
   const selected = selectedHandInfo();
   if (!hadPendingTarget && !hadPendingTribute && !hadPendingFusion && !selected) {
     cue("当前没有选中的手牌。");
@@ -1847,9 +1856,7 @@ function cancelSelectedHandAction() {
     return;
   }
   clearPendingTarget();
-  state.pendingTribute = null;
-  state.pendingFusion = null;
-  state.selected = null;
+  clearTransientSelection(state);
   clearBattlePreview();
   playSound("click");
   cue(hadPendingTarget ? "已取消目标选择。" : "已取消选择。");
@@ -3451,10 +3458,7 @@ function confirmTrapChoice() {
 }
 
 function handOffToAiTurn() {
-  state.selected = null;
-  state.pendingTarget = null;
-  state.pendingTribute = null;
-  state.pendingFusion = null;
+  clearTransientSelection(state);
   clearBattlePreview();
   clearPlayerIdleTimers();
   beginTurn("ai");
@@ -3465,10 +3469,7 @@ function handOffToAiTurn() {
 function endPlayerTurn(reason = "manual") {
   if (!canPlayerAct()) return;
   cancelAutoEnd();
-  state.selected = null;
-  state.pendingTarget = null;
-  state.pendingTribute = null;
-  state.pendingFusion = null;
+  clearTransientSelection(state);
   clearBattlePreview();
   clearPlayerIdleTimers();
   try {
@@ -3567,10 +3568,7 @@ function manualEndPlayerTurn() {
   }
   cancelAutoEnd();
   clearPlayerIdleTimers();
-  state.selected = null;
-  state.pendingTarget = null;
-  state.pendingTribute = null;
-  state.pendingFusion = null;
+  clearTransientSelection(state);
   clearBattlePreview();
   playSound("click");
   addLog("你主动结束回合，放弃后续操作。");
@@ -3626,10 +3624,7 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
     console.error(error);
     return;
   }
-  state.selected = null;
-  state.pendingTarget = null;
-  state.pendingTribute = null;
-  state.pendingFusion = null;
+  clearTransientSelection(state);
   clearPlayerIdleTimers();
   cue(`${reason}，回合即将结束。`);
   render();

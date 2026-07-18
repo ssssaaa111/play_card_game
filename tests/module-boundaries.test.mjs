@@ -61,6 +61,20 @@ test("app delegates fusion selection DOM work to the fusion renderer", () => {
   assert.doesNotMatch(renderer, /(?:^|\s)state\./m);
 });
 
+test("app delegates transient selection transitions to the selection state module", () => {
+  const app = source("../src/app.js");
+  const selectionState = source("../src/selection-state.js");
+
+  assert.match(app, /\.\.\.createSelectionState\(\)/);
+  assert.match(app, /beginPendingSelection\(\s*state,\s*"target"/);
+  assert.match(app, /beginPendingSelection\(\s*state,\s*"tribute"/);
+  assert.match(app, /beginPendingSelection\(\s*state,\s*"fusion"/);
+  assert.match(app, /clearTransientSelection\(state\)/);
+  assert.doesNotMatch(app, /state\.pending(?:Target|Tribute|Fusion) = null/);
+  assert.match(selectionState, /const PENDING_FIELD_BY_KIND/);
+  assert.match(selectionState, /conflicted: pendingKinds\.length > 1/);
+});
+
 test("background music stays independent from rules and effect audio", () => {
   const app = source("../src/app.js");
   const audio = source("../src/audio.js");

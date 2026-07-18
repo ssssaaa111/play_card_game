@@ -58,6 +58,8 @@ test("builds read-only browser smoke snapshots from live state", () => {
   assert.equal(snapshot.machine.phase, "main");
   assert.equal(snapshot.machine.chainLength, 0);
   assert.equal(snapshot.selectedCard.id, "star-lancer");
+  assert.equal(snapshot.selection.pendingKind, "");
+  assert.equal(snapshot.selection.conflicted, false);
   assert.equal(snapshot.activePlayerMonsters[0].canAttack, true);
   assert.equal(snapshot.controls.skipAttackButtonDisabled, false);
   assert.equal(snapshot.player.directAttacks, 1);

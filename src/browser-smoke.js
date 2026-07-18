@@ -2,6 +2,7 @@ import { auditLogEntries } from './log-audit.js';
 import { logEntryMessage } from './battle-log.js';
 import { cloneCardById } from './deck.js';
 import { projectMachineStateFromEvents } from './game-engine.js';
+import { selectionStateSnapshot } from './selection-state.js';
 
 function cardIds(list = []) {
   return list.map((card) => card?.id || null);
@@ -63,6 +64,13 @@ function activeMonsterSnapshots(state) {
   });
 }
 
+function assertPendingSelection(ctx, expectedKind, label) {
+  const selection = selectionStateSnapshot(ctx.state);
+  if (selection.conflicted || selection.pendingKind !== expectedKind) {
+    throw new Error(`${label}: expected ${expectedKind || "no"} pending selection, got ${selection.pendingKinds.join(", ") || "none"}`);
+  }
+}
+
 export function createTestSnapshot({ testMode = false, state, els, currentPlayerActions }) {
   return function testSnapshot() {
     const actions = currentPlayerActions();
@@ -111,6 +119,7 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         chainLength: machine.chain?.length || 0
       },
       selectedCard: selectedCardSnapshot(state),
+      selection: selectionStateSnapshot(state),
       pendingFusion: state.pendingFusion ? {
         cardName: state.pendingFusion.cardName || "",
         resultId: state.pendingFusion.resultId || "",
@@ -1377,6 +1386,7 @@ async function runFusionResultChoiceSmoke(ctx) {
     "fusion-result-choice: two explicit result options",
     6000
   );
+  assertPendingSelection(ctx, "fusion", "fusion-result-choice: result selection");
   if (!ctx.els.choiceConfirmBtn.disabled) {
     throw new Error("fusion-result-choice: summon confirmation must stay disabled before choosing a result");
   }
@@ -1397,6 +1407,7 @@ async function runFusionResultChoiceSmoke(ctx) {
     "fusion-result-choice: defensive result selected",
     6000
   );
+  assertPendingSelection(ctx, "fusion", "fusion-result-choice: material selection");
   if (!ctx.els.fusionPreviewName?.textContent.includes(resultDefinition.name) ||
       !ctx.els.fusionPreviewStats?.textContent.includes("ATK 2000") ||
       !ctx.els.fusionPreviewStats?.textContent.includes("DEF 2600")) {
@@ -1432,6 +1443,7 @@ async function runFusionResultChoiceSmoke(ctx) {
     `fusion-result-choice: selected result should resolve with its summon effect. ${smokeDebug(ctx)}`,
     9000
   );
+  assertPendingSelection(ctx, "", "fusion-result-choice: resolved selection");
   if (!ctx.state.gameEvents.some((event) => event.type === "FUSION_SUMMONED" && event.resultTemplateId === "tempest-aegis-archon")) {
     throw new Error("fusion-result-choice: selected FUSION_SUMMONED event missing");
   }
@@ -2933,6 +2945,7 @@ async function runTargetWindowSmoke(ctx) {
     () => ctx.state.pendingTarget?.effect === "buff500" && ctx.state.actionWindow === "targetSelect",
     "战意高扬目标选择窗口"
   );
+  assertPendingSelection(ctx, "target", "战意高扬目标选择窗口");
   if (ctx.state.timing !== "targetSelection") {
     throw new Error("目标选择没有进入 targetSelection 时点");
   }
@@ -2947,6 +2960,7 @@ async function runTargetWindowSmoke(ctx) {
     () => ctx.state.pendingTarget?.effect === "pierceLine" && ctx.state.pendingTarget?.cardName === "破阵星芒",
     "点其它手牌会取消当前目标选择并切换"
   );
+  assertPendingSelection(ctx, "target", "切换到破阵星芒目标选择");
   if (!ctx.state.log.some((entry) => entry.includes("已取消 战意高扬 的目标选择"))) {
     throw new Error("切换手牌时没有记录取消原目标选择");
   }
@@ -2955,11 +2969,13 @@ async function runTargetWindowSmoke(ctx) {
     () => ctx.state.pendingTarget?.effect === "buff500" && ctx.state.pendingTarget?.cardName === "战意高扬",
     "切回战意高扬目标选择"
   );
-  clickSmokeElement(handCard(ctx.els, "war-chant"), "再次点击战意高扬默认发动");
+  assertPendingSelection(ctx, "target", "切回战意高扬目标选择");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "确认战意高扬推荐目标");
   await waitForSmoke(
     () => !ctx.state.pendingTarget && ctx.state.log.some((entry) => entry.includes("发动魔法卡 战意高扬")),
-    "战意高扬二次点击默认发动"
+    "确认推荐目标后发动战意高扬"
   );
+  assertPendingSelection(ctx, "", "战意高扬结算后");
   if (countGameEvents(ctx.state, "STAT_MODIFIED") < 1 || countGameEvents(ctx.state, "CARD_ACTIVATED") < 1) {
     throw new Error("War chant must resolve through engine spell events");
   }
