@@ -313,6 +313,7 @@ export const deckPresets = {
   },
   aceSuppressionRival: {
     label: "王牌压制对手",
+    setupVisibility: "internal",
     ids: [
       "void-siege-breaker", "void-siege-breaker", "void-siege-breaker",
       "corebreak-edict", "corebreak-edict", "corebreak-edict",
@@ -360,6 +361,7 @@ export const deckPresets = {
   },
   trioOmegaRival: {
     label: "三曜压制对手",
+    setupVisibility: "internal",
     ids: [
       "trio-sun-judicator", "trio-sun-judicator", "trio-sun-judicator",
       "trio-moon-warden", "trio-moon-warden", "trio-moon-warden",
@@ -377,6 +379,7 @@ export const deckPresets = {
   },
   trioOmegaRivalFull: {
     label: "三曜完整压制对手",
+    setupVisibility: "internal",
     ids: [
       "trio-moon-dominion", "trio-sun-judicator", "trio-moon-warden", "trio-star-herald", "mirror-snare",
       "chain-nullifier", "trio-star-herald", "trio-sun-judicator", "war-chant", "trio-moon-dominion",
@@ -390,6 +393,7 @@ export const deckPresets = {
   },
   suppressionRival: {
     label: "压制型对手",
+    setupVisibility: "internal",
     ids: [
       "star-lancer", "star-lancer", "flare-titan", "flare-titan",
       "sky-raider", "sky-raider", "ember-drake", "ember-drake",
@@ -599,6 +603,7 @@ export const scenarioSetups = {
   },
   normal: {
     label: "正常决斗",
+    setupVisibility: "player",
     text: "随机起手和常规流程。"
   },
   chain: {
@@ -843,6 +848,7 @@ export const scenarioSetups = {
   },
   protagonistComeback: {
     label: "逆境觉醒演示",
+    setupVisibility: "player",
     text: "主角生命值很低，场面落后；手牌和墓地预置抽牌、复活、加攻与防御陷阱，用来演示关键资源到手后的翻盘节奏。",
     goal: "发动余烬星愿补资源，醒星回召复活天穹逆星者，盖放残光护幕后挡下对手攻击，再用强化后的王牌完成反击。",
     difficulty: "demo",
@@ -863,6 +869,7 @@ export const scenarioSetups = {
   },
   protagonistComebackChallenge: {
     label: "逆境觉醒挑战",
+    setupVisibility: "player",
     text: "主角仍处在低生命值与场面劣势中，但墓地、手牌和对手盖卡都会惩罚无脑全点。需要先补资源，正确回召王牌，保留再攻击资源，并在反击前处理对手的反制陷阱。",
     goal: "先用余烬星愿补牌，醒星回召必须选择天穹逆星者；第一回合盖下残光护幕并忍住不攻，挡下对手攻击后抽到解印射线，先清掉对手盖卡，再用战斗狂热开启反击。",
     difficulty: "challenge",
@@ -911,6 +918,7 @@ export const scenarioSetups = {
   },
   protagonistAceEvolution: {
     label: "王牌进化演示",
+    setupVisibility: "player",
     text: "主角已经站住两只进化素材，手牌持有星魂铸升；对手场上有压制怪，适合演示素材送墓、王牌从卡组登场和登场压场。",
     goal: "发动星魂铸升，将两只素材送墓，特殊召唤天炉星铠王，并观察对手场上怪兽被压低。",
     difficulty: "demo",
@@ -929,6 +937,7 @@ export const scenarioSetups = {
   },
   protagonistAceProtection: {
     label: "王牌守护演示",
+    setupVisibility: "player",
     text: "主角王牌已登场，对手握有裂核裁令并准备高攻压制；主角需要盖放王牌誓护守住王牌，再完成反击。",
     goal: "盖放王牌誓护并结束回合；对手削弱并攻击王牌时发动陷阱守住，再用王牌反击。",
     difficulty: "demo",
@@ -947,6 +956,7 @@ export const scenarioSetups = {
   },
   protagonistTrioOmega: {
     label: "终局三曜演示",
+    setupVisibility: "player",
     text: "对手已经展开日曜、月曜、星曜三张压场王牌；月曜帷幕正在削弱诱标卫，玩家需要先盖下诱锁挡住日曜攻击，再清除帷幕、回收墓地小怪并完成终局反击。",
     goal: "盖放日冕诱锁并结束回合；挡下日曜攻击后，用碎月解幕清掉月曜帷幕，余烁归轨回场余烁小卫，再发动三曜终断连续突破月曜与星曜。",
     difficulty: "demo",
@@ -993,6 +1003,7 @@ export const scenarioSetups = {
   },
   protagonistTrioOmegaChallenge: {
     label: "终局三曜挑战",
+    setupVisibility: "player",
     text: "终局战结构复现：三张原创三曜王牌分工压制。挑战版不再把答案一次交到手里，错误回召或急着攻击都会消耗关键资源，必须先撑过对手回合再组织反击。",
     goal: "保留墓地里的真正终局资源，先布置防御并撑过日曜攻势；回到自己回合后再判断清场、回召和终断的顺序。",
     difficulty: "challenge",
@@ -1030,6 +1041,7 @@ export const scenarioSetups = {
   },
   protagonistTrioOmegaFull: {
     label: "终局三曜完整对局",
+    setupVisibility: "player",
     text: "从 4000 生命值和完整牌堆开始的三曜主题对局。对手会优先建立三曜压制，玩家需要用低星资源、抽滤、防御陷阱和墓地回收逐步换取反击窗口。",
     goal: "在正常起手和长牌堆中识别三曜压制核心；先守住关键资源，再清理持续压制并利用保留下来的低星资源建立优势。",
     difficulty: "challenge",

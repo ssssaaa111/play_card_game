@@ -42,5 +42,5 @@ test("short desktop hands reserve two effect lines and collapse redundant action
   assert.match(app, /cardEl\.classList\.toggle\("compact-action-state", !showActionReason\)/);
   assert.match(css, /\.action-reason\[hidden\]\s*\{\s*display: none;/);
   assert.match(css, /\.hand \.card\.compact-action-state\s*\{[\s\S]*grid-template-rows: auto minmax\(60px, 1fr\) 36px 24px;/);
-  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*\.hand \.card \.card-text\.hand-summary\s*\{[\s\S]*min-height: 28px;[\s\S]*-webkit-line-clamp: 2;/);
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 980px\)[\s\S]*\.hand \.card \.card-text\.hand-summary\s*\{[\s\S]*min-height: 28px;[\s\S]*-webkit-line-clamp: 2;/);
 });

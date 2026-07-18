@@ -44,23 +44,36 @@ test("short desktop layouts reserve enough height for both field rows", () => {
   const css = read("styles.css");
 
   assert.match(css, /#app\s*\{[\s\S]*grid-template-rows: auto minmax\(360px, 1fr\) clamp\(190px, 26vh, 224px\);/);
-  assert.match(css, /\.field\s*\{[\s\S]*grid-template-rows: minmax\(104px, 1fr\)[\s\S]*transform-style: flat;/);
-  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*grid-template-rows: auto minmax\(360px, 1fr\) 190px;/);
+  assert.match(css, /\.field\s*\{[\s\S]*--support-track-size: clamp\(48px, 5\.4dvh, 60px\);[\s\S]*minmax\(96px, 1fr\)[\s\S]*var\(--support-track-size\)[\s\S]*30px[\s\S]*transform-style: flat;/);
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 980px\)[\s\S]*grid-template-rows: auto minmax\(360px, 1fr\) 190px;[\s\S]*--support-track-size: 48px;/);
 });
 
-test("field support cards stay inside their compact spell trap rows", () => {
+test("field support cards cannot resize their fixed spell trap rows", () => {
   const css = read("styles.css");
 
+  assert.match(css, /\.trap-row\s*\{[\s\S]*height: 100%;[\s\S]*min-height: 0;/);
   assert.match(css, /\.trap-slot\s*\{[\s\S]*overflow: hidden;/);
-  assert.match(css, /\.trap-slot \.card\s*\{[\s\S]*height: 100%;[\s\S]*aspect-ratio: auto;[\s\S]*overflow: hidden;/);
+  assert.match(css, /\.trap-slot \.card\s*\{[\s\S]*height: 100%;[\s\S]*aspect-ratio: auto;[\s\S]*grid-template-rows: minmax\(0, 1fr\);[\s\S]*overflow: hidden;/);
+  assert.match(css, /\.trap-slot \.card\.field-support-card\s*\{[\s\S]*max-height: 100%;[\s\S]*min-height: 0;[\s\S]*grid-template-rows: 14px minmax\(0, 1fr\);/);
+  assert.match(css, /\.trap-slot \.card\.field-support-card \.card-head\s*\{[\s\S]*min-height: 14px;/);
+  assert.match(css, /\.trap-slot \.card\.field-support-card \.art\s*\{[\s\S]*min-height: 0;/);
+  assert.match(css, /\.trap-slot \.card\.back::after\s*\{[\s\S]*inset: 2px;/);
+});
+
+test("desktop field monsters preserve a bounded card ratio", () => {
+  const css = read("styles.css");
+
+  assert.match(css, /\.field-monster-card\s*\{[\s\S]*width: auto;[\s\S]*max-width: min\(100%, 220px\);[\s\S]*height: min\(100%, clamp\(190px, 20dvh, 320px\)\);[\s\S]*aspect-ratio: 0\.68;/);
+  assert.match(css, /\.field-monster-card > \*\s*\{[\s\S]*min-width: 0;/);
+  assert.match(css, /\.field-monster-card \.stats\s*\{[\s\S]*overflow: hidden;/);
 });
 
 test("short desktop status columns keep the player life panel on screen", () => {
   const css = read("styles.css");
 
-  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*\.side\s*\{[\s\S]*align-content: start;/);
-  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*\.side:not\(\.enemy\)\s*\{[\s\S]*grid-template-rows: auto auto 60px minmax\(72px, 1fr\);/);
-  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*\.profile-stats\s*\{[\s\S]*white-space: nowrap;/);
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 980px\)[\s\S]*\.side\s*\{[\s\S]*align-content: start;/);
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 980px\)[\s\S]*\.side:not\(\.enemy\)\s*\{[\s\S]*grid-template-rows: auto auto 60px minmax\(72px, 1fr\);/);
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 980px\)[\s\S]*\.profile-stats\s*\{[\s\S]*white-space: nowrap;/);
 });
 
 test("mobile duel commands use fixed columns without label wrapping", () => {
@@ -73,8 +86,8 @@ test("mobile duel commands use fixed columns without label wrapping", () => {
 test("mobile field tracks preserve both monster stats and horizontal support names", () => {
   const css = read("styles.css");
 
-  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field\s*\{[\s\S]*grid-template-rows: 170px 84px auto 84px 170px;/);
-  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field-monster-card\s*\{[\s\S]*grid-template-rows: 18px minmax\(42px, 1fr\) 15px 36px;/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field\s*\{[\s\S]*--support-track-size: 52px;[\s\S]*grid-template-rows: 112px var\(--support-track-size\) 28px var\(--support-track-size\) 112px;/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field-monster-card\s*\{[\s\S]*height: 100%;[\s\S]*aspect-ratio: auto;[\s\S]*grid-template-rows: 15px minmax\(24px, 1fr\) 14px 30px;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.trap-slot \.card\.field-support-card \.card-name\s*\{[\s\S]*white-space: nowrap;/);
 });
 

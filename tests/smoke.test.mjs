@@ -521,14 +521,18 @@ test("browser smoke runner covers key click regressions", () => {
   const data = readProjectFile("src/data.js");
   const app = readProjectFile("src/app.js");
   const smoke = readProjectFile("src/browser-smoke.js");
+  const setupOptions = readProjectFile("src/setup-options.js");
 
-  assert.match(html, /<option value="protagonistAceEvolution">/);
-  assert.match(html, /<option value="aceSuppressionRival">/);
-  assert.match(html, /<option value="protagonistAceProtection">/);
-  assert.match(html, /<option value="protagonistTrioOmega">/);
-  assert.match(html, /<option value="protagonistTrioOmegaFull">/);
-  assert.match(html, /<option value="trioOmegaRival">/);
-  assert.match(html, /<option value="trioOmegaRivalFull">/);
+  assert.match(html, /<select id="deckSelect"><\/select>/);
+  assert.match(html, /<select id="scenarioSelect"><\/select>/);
+  assert.match(html, /id="scenarioSelectLabel">玩法模式</);
+  assert.match(app, /from ['"]\.\/setup-options\.js['"]/);
+  assert.match(app, /function initializeSetupControls\(\)/);
+  assert.match(app, /initializeSetupControls\(\);/);
+  assert.match(setupOptions, /setupVisibility !== "internal"/);
+  assert.match(setupOptions, /setupVisibility === "player"/);
+  assert.match(data, /setupVisibility: "internal"/);
+  assert.match(data, /setupVisibility: "player"/);
   assert.match(data, /protagonistAceEvolution: \{/);
   assert.match(data, /aceSuppressionRival: \{/);
   assert.match(data, /protagonistTrioOmega: \{/);
@@ -550,40 +554,6 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-happy-clicker-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-full-duel"\)/);
 
-  assert.match(html, /<option value="skipLock">跳攻锁定<\/option>/);
-  assert.match(html, /<option value="directTrap">直击陷阱<\/option>/);
-  assert.match(html, /<option value="trapChoice">陷阱选择<\/option>/);
-  assert.match(html, /<option value="guardSkip">守备停攻<\/option>/);
-  assert.match(html, /<option value="summonEffects">召唤效果<\/option>/);
-  assert.match(html, /<option value="summonFireBuff">召唤火强化<\/option>/);
-  assert.match(html, /<option value="summonShield">召唤护盾<\/option>/);
-  assert.match(html, /<option value="summonShadowBurn">召唤暗伤<\/option>/);
-  assert.match(html, /<option value="tributeSummon">祭品召唤测试<\/option>/);
-  assert.match(html, /<option value="tributeSummonDouble">双祭品召唤测试<\/option>/);
-  assert.match(html, /<option value="divineSummon">神格召唤测试<\/option>/);
-  assert.match(html, /<option value="divineGuard">神格守护测试<\/option>/);
-  assert.match(html, /<option value="divinePierce">神格贯穿测试<\/option>/);
-  assert.match(html, /<option value="divinePressure">神格威压测试<\/option>/);
-  assert.match(html, /<option value="divineResistance">神格抗性测试<\/option>/);
-  assert.match(html, /<option value="divineBreak">破神对策测试<\/option>/);
-  assert.match(html, /<option value="fusionSummon">融合召唤测试<\/option>/);
-  assert.match(html, /<option value="fusionResultChoice">融合形态选择测试<\/option>/);
-  assert.match(html, /<option value="fusionMixedMaterials">混合素材融合测试<\/option>/);
-  assert.match(html, /<option value="playerCounterChain">玩家反制连锁<\/option>/);
-  assert.match(html, /<option value="tripleCounterChain">三段反制连锁<\/option>/);
-  assert.match(html, /<option value="equipment">装备魔法<\/option>/);
-  assert.match(html, /<option value="basicExpansion">星魂基础扩展 01<\/option>/);
-  assert.match(html, /<option value="protagonistComeback">星魂主角战役 01：逆境觉醒<\/option>/);
-  assert.match(html, /<option value="protagonistTrioOmega">星魂主角战役 03：终局三曜<\/option>/);
-  assert.match(html, /<option value="suppressionRival">压制型对手<\/option>/);
-  assert.match(html, /<option value="trioOmegaRival">三曜压制对手<\/option>/);
-  assert.match(html, /<option value="expansionSummon">扩展召唤演示<\/option>/);
-  assert.match(html, /<option value="expansionParry">扩展格挡演示<\/option>/);
-  assert.match(html, /<option value="protagonistComeback">逆境觉醒演示<\/option>/);
-  assert.match(html, /<option value="protagonistComebackChallenge">逆境觉醒挑战<\/option>/);
-  assert.match(html, /<option value="protagonistFinalCounter">终局反击演示<\/option>/);
-  assert.match(html, /<option value="protagonistTrioOmega">终局三曜演示<\/option>/);
-  assert.match(html, /<option value="protagonistTrioOmegaChallenge">终局三曜挑战<\/option>/);
   assert.match(html, /id="graveTargets"/);
   assert.match(html, /id="scenarioBrief"/);
   assert.match(html, /id="scenarioDifficulty"/);
@@ -597,7 +567,6 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /id="fusionPreviewMaterials"/);
   assert.match(html, /id="fusionPreviewDetail"/);
   assert.match(html, /id="chainStack"/);
-  assert.match(html, /<option value="phantomRedirect">幻影换位回归<\/option>/);
   assert.match(data, /skipLock: \{/);
   assert.match(data, /directTrap: \{/);
   assert.match(data, /trapChoice: \{/);
@@ -878,7 +847,7 @@ test("browser test attacks preserve production timing and field portraits stay v
   assert.match(app, /window\.setTimeout\(resolve, ms\)/);
   assert.doesNotMatch(app, /BROWSER_TEST_SLEEP_CAP_MS/);
   assert.doesNotMatch(app, /!BROWSER_TEST_MODE\) await sleep/);
-  assert.match(css, /\.field-monster-card\s*\{[\s\S]*height: 100%;[\s\S]*overflow: hidden;[\s\S]*grid-template-rows: 18px minmax\(32px, 1fr\) 15px 18px;/);
+  assert.match(css, /\.field-monster-card\s*\{[\s\S]*height: min\(100%, clamp\(190px, 20dvh, 320px\)\);[\s\S]*overflow: hidden;[\s\S]*aspect-ratio: 0\.68;[\s\S]*grid-template-rows: 18px minmax\(32px, 1fr\) 15px 18px;/);
   assert.match(css, /\.field-monster-card \.art\s*\{[\s\S]*overflow: hidden;[\s\S]*isolation: isolate;/);
   assert.match(css, /\.field-monster-card \.monster-projection\s*\{[\s\S]*width: 100%;[\s\S]*height: 100%;/);
   assert.match(css, /\.field-monster-card \.card-text\s*\{[\s\S]*display: none;/);
@@ -1148,7 +1117,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

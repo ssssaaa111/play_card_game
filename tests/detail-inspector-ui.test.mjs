@@ -24,7 +24,7 @@ test("detail inspector uses card-type accents and bounded complete text", () => 
 });
 
 test("short desktop and mobile layouts preserve readable detail boundaries", () => {
-  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 780px\)[\s\S]*\.detail-card \.detail-effect\s*\{[\s\S]*max-height: 50px;/);
+  assert.match(css, /@media \(min-width: 1041px\) and \(max-height: 980px\)[\s\S]*\.detail-card \.detail-effect\s*\{[\s\S]*max-height: 50px;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.detail-card \.detail-effect\s*\{[\s\S]*max-height: 124px;/);
   assert.doesNotMatch(css, /\.detail-card:has\(\.battle-preview:not\(\.empty\)\) > \.detail-inspector\s*\{\s*display: none;/);
   assert.match(css, /\.detail-card:has\(\.battle-preview:not\(\.empty\)\) \.detail-summary\s*\{[\s\S]*-webkit-line-clamp: 1;/);

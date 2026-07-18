@@ -2,6 +2,12 @@ import { createAudioController, createAudioSettings } from './audio.js';
 import { createAnimationController } from './animation.js';
 import { createMusicController, createMusicSettings, musicModeForDuel } from './music.js';
 import { monsterAssets, roleProfiles, aiProfiles, deckPresets, characterProfiles, scenarioSetups } from './data.js';
+import {
+  aiSetupOptions,
+  deckSetupOptions,
+  roleSetupOptions,
+  scenarioSetupOptions
+} from './setup-options.js';
 import { actionsForPhase, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import {
   chooseAiAttackAction,
@@ -272,6 +278,7 @@ const els = {
   deckSelect: document.querySelector("#deckSelect"),
   aiSelect: document.querySelector("#aiSelect"),
   scenarioSelect: document.querySelector("#scenarioSelect"),
+  scenarioSelectLabel: document.querySelector("#scenarioSelectLabel"),
   setupStats: document.querySelector("#setupStats"),
   scenarioBrief: document.querySelector("#scenarioBrief"),
   scenarioBriefTitle: document.querySelector("#scenarioBriefTitle"),
@@ -444,6 +451,28 @@ function saveDuelStats() {
 
 function setupLabel(map, key) {
   return map[key]?.label || key;
+}
+
+function replaceSelectOptions(select, entries = []) {
+  if (!select) return;
+  select.innerHTML = "";
+  entries.forEach((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = entry.label;
+    select.appendChild(option);
+  });
+}
+
+function initializeSetupControls() {
+  replaceSelectOptions(els.roleSelect, roleSetupOptions(roleProfiles));
+  replaceSelectOptions(els.deckSelect, deckSetupOptions(deckPresets, { testMode: BROWSER_TEST_MODE }));
+  replaceSelectOptions(els.aiSelect, aiSetupOptions(aiProfiles));
+  replaceSelectOptions(els.scenarioSelect, scenarioSetupOptions(scenarioSetups, { testMode: BROWSER_TEST_MODE }));
+  if (els.scenarioSelectLabel) {
+    els.scenarioSelectLabel.textContent = BROWSER_TEST_MODE ? "规则测试" : "玩法模式";
+  }
+  syncSetupControls();
 }
 
 function scenarioDifficultyText(difficulty) {
@@ -731,9 +760,10 @@ function applyScenarioSetup() {
   Object.assign(state.player, setup.player);
   Object.assign(state.ai, setup.ai);
   state.gameEvents = Array.isArray(setup.gameEvents) ? setup.gameEvents.map((event) => ({ ...event })) : [];
-  addLog(`规则测试场景：${scenario.label}。${scenario.text}`);
+  const scenarioKind = !BROWSER_TEST_MODE && scenario.setupVisibility === "player" ? "玩法场景" : "规则测试场景";
+  addLog(`${scenarioKind}：${scenario.label}。${scenario.text}`);
   if (scenario.goal) {
-    addLog(`测试目标：${scenario.goal}`);
+    addLog(`${scenarioKind === "玩法场景" ? "场景目标" : "测试目标"}：${scenario.goal}`);
   }
   return scenario;
 }
@@ -5438,6 +5468,7 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+initializeSetupControls();
 prepareGame();
 scheduleBrowserSmoke({
   smoke: BROWSER_SMOKE,

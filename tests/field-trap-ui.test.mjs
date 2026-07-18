@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const css = readFileSync(fileURLToPath(new URL("../styles.css", import.meta.url)), "utf8");
 
 test("set player traps use a restrained armed treatment", () => {
-  assert.match(css, /\.trap-slot \.card\.field-support-card\s*\{[\s\S]*max-height: 86px;[\s\S]*aspect-ratio: auto;/);
+  assert.match(css, /\.trap-slot \.card\.field-support-card\s*\{[\s\S]*max-height: 100%;[\s\S]*min-height: 0;[\s\S]*aspect-ratio: auto;/);
   assert.match(css, /\.trap-slot:has\(\.card\.field-support-card\)\s*\{[\s\S]*radial-gradient/);
   assert.match(css, /\.trap-slot \.card\.player-trap \.art\s*\{[\s\S]*brightness\(0\.78\);/);
   assert.match(css, /body\[data-duel-turn="player"\] #playerTraps \.trap-slot:has\(\.card\.field-support-card\)\s*\{[\s\S]*0\.44/);
