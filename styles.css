@@ -12,6 +12,10 @@
   --violet: #b794f4;
   --black: #080a10;
   --shadow: 0 18px 45px rgba(0, 0, 0, 0.36);
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
 }
 
 * {
@@ -44,7 +48,11 @@ button {
   display: grid;
   grid-template-rows: auto minmax(360px, 1fr) clamp(190px, 26vh, 224px);
   gap: 10px;
-  padding: 12px;
+  padding:
+    max(12px, var(--safe-area-top))
+    max(12px, var(--safe-area-right))
+    max(12px, var(--safe-area-bottom))
+    max(12px, var(--safe-area-left));
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -3059,7 +3067,11 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   inset: 0;
   display: none;
   place-items: center;
-  padding: 18px;
+  padding:
+    max(18px, var(--safe-area-top))
+    max(18px, var(--safe-area-right))
+    max(18px, var(--safe-area-bottom))
+    max(18px, var(--safe-area-left));
   z-index: 20;
   background: rgba(0, 0, 0, 0.66);
   overflow: auto;
@@ -3071,7 +3083,11 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .modal-box {
   width: min(440px, 100%);
-  max-height: calc(100vh - 36px);
+  max-height: calc(
+    100dvh
+    - max(18px, var(--safe-area-top))
+    - max(18px, var(--safe-area-bottom))
+  );
   overflow: auto;
   padding: 22px;
   border: 1px solid rgba(246, 189, 96, 0.58);
@@ -3087,7 +3103,11 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .modal-box.guide {
   width: min(760px, 100%);
-  max-height: calc(100vh - 36px);
+  max-height: calc(
+    100dvh
+    - max(18px, var(--safe-area-top))
+    - max(18px, var(--safe-area-bottom))
+  );
   overflow: auto;
   text-align: left;
 }
@@ -3586,7 +3606,10 @@ button.chain-stack-card:focus-visible {
   left: 50%;
   top: 56%;
   z-index: 8;
-  width: min(520px, calc(100vw - 32px));
+  width: min(
+    520px,
+    calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 24px)
+  );
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
@@ -5660,7 +5683,11 @@ button.chain-stack-card:focus-visible {
 
 @media (max-width: 720px) {
   #app {
-    padding: 8px;
+    padding:
+      max(8px, var(--safe-area-top))
+      max(8px, var(--safe-area-right))
+      max(8px, var(--safe-area-bottom))
+      max(8px, var(--safe-area-left));
     grid-template-rows: auto auto auto;
   }
 
@@ -5672,12 +5699,25 @@ button.chain-stack-card:focus-visible {
   .phase {
     width: 100%;
     min-width: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
     justify-items: start;
+    column-gap: 8px;
+    row-gap: 2px;
+    padding: 7px 10px;
+  }
+
+  .phase #timerText {
+    grid-column: 1 / -1;
+  }
+
+  .phase #timerText:empty {
+    display: none;
   }
 
   .actions {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -5758,6 +5798,7 @@ button.chain-stack-card:focus-visible {
     width: 100%;
     max-width: none;
     height: 100%;
+    min-height: 0;
     max-height: none;
     aspect-ratio: auto;
     grid-template-rows: 15px minmax(24px, 1fr) 14px 30px;
@@ -5871,5 +5912,246 @@ button.chain-stack-card:focus-visible {
     width: 46px;
     height: 46px;
     font-size: 14px;
+  }
+}
+
+@media (max-width: 380px) {
+  .actions .btn,
+  .actions .btn.turn-control {
+    padding-inline: 2px;
+    font-size: 11px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  button,
+  select,
+  input,
+  .hand .card {
+    touch-action: manipulation;
+  }
+
+  .btn,
+  .btn.small-action,
+  .music-volume-control,
+  .setup-field select {
+    min-height: 44px;
+  }
+
+  .slot,
+  .trap-slot {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .hand {
+    scroll-snap-type: x proximity;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .hand .card {
+    scroll-snap-align: center;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
+  #app {
+    gap: 6px;
+    padding:
+      max(6px, var(--safe-area-top))
+      max(6px, var(--safe-area-right))
+      max(6px, var(--safe-area-bottom))
+      max(6px, var(--safe-area-left));
+  }
+
+  .topbar {
+    grid-template-columns: minmax(122px, 0.72fr) minmax(108px, 0.58fr) minmax(0, 2fr);
+    align-items: center;
+    gap: 6px;
+    padding: 5px 7px;
+  }
+
+  .brand {
+    gap: 6px;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    font-size: 17px;
+  }
+
+  h1 {
+    font-size: 16px;
+  }
+
+  .subtitle {
+    display: none;
+  }
+
+  .phase {
+    width: 100%;
+    min-width: 0;
+    gap: 1px;
+    padding: 4px 6px;
+  }
+
+  .phase strong {
+    overflow: hidden;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .phase span {
+    overflow: hidden;
+    max-width: 100%;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .actions {
+    min-width: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 4px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .actions .btn,
+  .actions .btn.turn-control {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 58px;
+    min-height: 44px;
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .actions .btn.turn-control {
+    min-width: 68px;
+  }
+
+  .music-volume-control {
+    flex: 0 0 92px;
+    width: 92px;
+    min-height: 44px;
+  }
+
+  .field {
+    --support-track-size: 34px;
+    grid-template-rows: 72px var(--support-track-size) 20px var(--support-track-size) 72px;
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .zone-row,
+  .trap-row {
+    gap: 4px;
+    min-height: 0;
+  }
+
+  .slot,
+  .trap-slot {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .slot {
+    padding: 2px;
+  }
+
+  .slot:has(.field-monster-card) {
+    overflow: hidden;
+  }
+
+  .field-monster-card {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    aspect-ratio: auto;
+    grid-template-rows: 13px minmax(16px, 1fr) 12px 20px;
+    gap: 1px;
+    padding: 2px;
+  }
+
+  .field-monster-card .card-head,
+  .field-monster-card .card-state-rail {
+    min-height: 0;
+    height: 12px;
+  }
+
+  .field-monster-card .card-name {
+    font-size: 9px;
+  }
+
+  .field-monster-card .art {
+    min-height: 16px;
+  }
+
+  .field-monster-card .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
+    font-size: 8px;
+  }
+
+  .field-monster-card .stat {
+    min-height: 18px;
+    height: 18px;
+    padding: 1px 2px;
+    white-space: nowrap;
+  }
+
+  .center-line {
+    font-size: 9px;
+  }
+
+  .hand .card {
+    flex-basis: clamp(146px, 28vw, 170px);
+  }
+
+  .modal {
+    place-items: start center;
+    padding:
+      max(8px, var(--safe-area-top))
+      max(8px, var(--safe-area-right))
+      max(8px, var(--safe-area-bottom))
+      max(8px, var(--safe-area-left));
+  }
+
+  .modal-box,
+  .modal-box.guide {
+    max-height: calc(
+      100dvh
+      - max(8px, var(--safe-area-top))
+      - max(8px, var(--safe-area-bottom))
+    );
+  }
+}
+
+@media (orientation: landscape) and (max-height: 360px) and (max-width: 1040px) {
+  .field {
+    --support-track-size: 30px;
+    grid-template-rows: 58px var(--support-track-size) 18px var(--support-track-size) 58px;
+  }
+
+  .field-monster-card {
+    grid-template-rows: 12px minmax(12px, 1fr) 11px 17px;
+  }
+
+  .field-monster-card .stat {
+    min-height: 15px;
+    height: 15px;
   }
 }

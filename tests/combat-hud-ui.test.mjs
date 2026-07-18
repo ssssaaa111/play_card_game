@@ -79,7 +79,9 @@ test("short desktop status columns keep the player life panel on screen", () => 
 test("mobile duel commands use fixed columns without label wrapping", () => {
   const css = read("styles.css");
 
-  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.actions\s*\{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.phase\s*\{[\s\S]*grid-template-columns: auto minmax\(0, 1fr\);/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.phase #timerText:empty\s*\{[\s\S]*display: none;/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.actions\s*\{[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.btn\s*\{[\s\S]*white-space: nowrap;/);
 });
 

@@ -1079,7 +1079,7 @@ test("setup modal keeps the start action reachable", () => {
   assert.match(app, /els\.startBtn\.disabled = setupModalOpen \|\| \(state\.started && !state\.gameOver\)/);
   assert.match(css, /\.modal \{[\s\S]*z-index: 20;[\s\S]*overflow: auto;/);
   assert.match(css, /#cardModal\.show \{[\s\S]*z-index: 22;/);
-  assert.match(css, /\.modal-box \{[\s\S]*max-height: calc\(100vh - 36px\);[\s\S]*overflow: auto;/);
+  assert.match(css, /\.modal-box \{[\s\S]*max-height: calc\([\s\S]*100dvh[\s\S]*var\(--safe-area-top\)[\s\S]*var\(--safe-area-bottom\)[\s\S]*\);[\s\S]*overflow: auto;/);
   assert.match(css, /\.modal-actions \{[\s\S]*position: sticky;[\s\S]*width: 100%;/);
   assert.match(css, /#modalRestart \{[\s\S]*width: 100%;[\s\S]*min-height: 44px;/);
   assert.match(css, /grid-template-columns: repeat\(auto-fit, minmax\(128px, 1fr\)\)/);
