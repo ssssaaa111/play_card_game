@@ -39,6 +39,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/control-renderer.js");
   checkModuleSyntax("src/duel-modal-renderer.js");
   checkModuleSyntax("src/field-renderer.js");
+  checkModuleSyntax("src/fusion-selection-renderer.js");
   checkModuleSyntax("src/hand-renderer.js");
   checkModuleSyntax("src/hud-renderer.js");
   checkModuleSyntax("src/log-renderer.js");
@@ -589,6 +590,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(html, /id="scenarioHintToggle"/);
   assert.match(html, /id="scenarioHints"/);
   assert.match(html, /id="fusionPreview"/);
+  assert.match(html, /id="fusionPreviewKicker"/);
   assert.match(html, /id="fusionPreviewName"/);
   assert.match(html, /id="fusionPreviewStats"/);
   assert.match(html, /id="fusionResultChoices"/);
@@ -643,9 +645,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /renderSetupPanel\(document, els, \{/);
   assert.match(setupRenderer, /export function renderScenarioBrief/);
   assert.match(setupRenderer, /export function renderPreDuelPreview/);
-  assert.match(app, /function fusionPreviewViewModel/);
-  assert.match(app, /function renderFusionPreview/);
-  assert.match(app, /renderFusionPreview\(\)/);
+  assert.match(app, /function currentFusionSelectionView/);
+  assert.match(app, /renderFusionSelectionPanel\(\{/);
   assert.match(controls, /classList\.toggle\("fusion-choice", view\.choice\.fusion\)/);
   assert.match(controls, /classList\.toggle\("material-choice", view\.choice\.material\)/);
   assert.match(controls, /classList\.toggle\("target-choice", view\.choice\.target\)/);
@@ -695,9 +696,11 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"graveyard-summon-basic": runGraveyardSummonBasicSmoke/);
   assert.match(smoke, /"mechanics-regression-basic": runMechanicsRegressionBasicSmoke/);
   assert.match(smoke, /fusionPreviewName/);
+  assert.match(smoke, /fusionPreviewKicker/);
   assert.match(smoke, /fusionPreviewStats/);
   assert.match(smoke, /fusionPreviewMaterials/);
   assert.match(smoke, /fusionPreviewDetail/);
+  assert.match(smoke, /every result option should expose stats and recipe/);
   assert.match(smoke, /fusion-choice/);
   assert.match(smoke, /material-choice/);
   assert.match(smoke, /"five-zone-layout": runFiveZoneLayoutSmoke/);
@@ -1164,7 +1167,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/control-renderer.js", "src/data.js", "src/deck.js", "src/duel-modal-renderer.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/setup-renderer.js", "src/spells.js", "src/timeline.js", "src/timeline-renderer.js", "src/trap-response-renderer.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/control-renderer.js", "src/data.js", "src/deck.js", "src/duel-modal-renderer.js", "src/engine-adapter.js", "src/field-renderer.js", "src/fusion-selection-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/setup-renderer.js", "src/spells.js", "src/timeline.js", "src/timeline-renderer.js", "src/trap-response-renderer.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

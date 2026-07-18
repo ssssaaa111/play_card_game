@@ -3669,6 +3669,15 @@ button.chain-stack-card:focus-visible {
   display: none;
 }
 
+.fusion-preview[data-material-state="complete"] {
+  border-color: rgba(74, 222, 128, 0.58);
+}
+
+.fusion-preview[data-material-state="complete"] .fusion-preview-kicker,
+.fusion-preview[data-material-state="complete"] .fusion-preview-materials {
+  color: #86efac;
+}
+
 .fusion-preview-copy {
   min-width: 0;
   display: grid;
@@ -3711,7 +3720,7 @@ button.chain-stack-card:focus-visible {
 
 .fusion-result-option {
   min-width: 0;
-  min-height: 54px;
+  min-height: 68px;
   display: grid;
   gap: 3px;
   align-content: center;
@@ -3736,8 +3745,7 @@ button.chain-stack-card:focus-visible {
   color: #fff7d6;
 }
 
-.fusion-result-option strong,
-.fusion-result-option span {
+.fusion-result-option strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3748,8 +3756,14 @@ button.chain-stack-card:focus-visible {
 }
 
 .fusion-result-option span {
+  display: -webkit-box;
+  overflow: hidden;
   color: #aebdce;
   font-size: 11px;
+  line-height: 1.25;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .fusion-preview-materials {

@@ -1380,6 +1380,13 @@ async function runFusionResultChoiceSmoke(ctx) {
   if (!ctx.els.choiceConfirmBtn.disabled) {
     throw new Error("fusion-result-choice: summon confirmation must stay disabled before choosing a result");
   }
+  const resultChoicesText = ctx.els.fusionResultChoices?.textContent || "";
+  if (!resultChoicesText.includes("ATK 2400") ||
+      !resultChoicesText.includes("ATK 2000") ||
+      !resultChoicesText.includes("赤焰幼龙") ||
+      !resultChoicesText.includes("疾风术士")) {
+    throw new Error(`fusion-result-choice: every result option should expose stats and recipe. ${resultChoicesText}`);
+  }
 
   const defensiveChoice = ctx.els.fusionResultChoices.querySelector('[data-card-id="tempest-aegis-archon"]');
   clickSmokeElement(defensiveChoice, "fusion-result-choice: choose defensive result");
@@ -1395,6 +1402,10 @@ async function runFusionResultChoiceSmoke(ctx) {
       !ctx.els.fusionPreviewStats?.textContent.includes("DEF 2600")) {
     throw new Error("fusion-result-choice: preview should show selected result name and stats");
   }
+  if (!ctx.els.fusionPreviewKicker?.textContent.includes("素材 0/2") ||
+      ctx.els.fusionPreview?.dataset.materialState !== "selecting") {
+    throw new Error("fusion-result-choice: selected result should expose material progress");
+  }
   clickSmokeElement(ctx.els.fusionPreviewDetail, "fusion-result-choice: open selected result detail");
   await assertCardDetailModal(ctx, resultDefinition, "fusion-result-choice-preview");
   clickSmokeElement(ctx.els.zoomClose, "fusion-result-choice: close selected result detail");
@@ -1405,6 +1416,8 @@ async function runFusionResultChoiceSmoke(ctx) {
   await waitForSmoke(
     () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
       ctx.state.pendingFusion?.selectedHandUids?.length === 1 &&
+      ctx.els.fusionPreview?.dataset.materialState === "complete" &&
+      ctx.els.fusionPreviewKicker?.textContent.includes("素材齐备") &&
       !ctx.els.choiceConfirmBtn.disabled,
     "fusion-result-choice: mixed materials selected",
     6000

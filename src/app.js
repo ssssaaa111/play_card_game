@@ -44,6 +44,7 @@ import {
 } from './effect-feedback.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
 import { fusionOptionsForCard } from './fusion.js';
+import { buildFusionSelectionView, renderFusionSelectionPanel } from './fusion-selection-renderer.js';
 import {
   buildEngineStateFromUiState,
   canDispatchSummonEffectFromUiState,
@@ -280,6 +281,7 @@ const els = {
   choiceConfirmBtn: document.querySelector("#choiceConfirmBtn"),
   choiceCancelBtn: document.querySelector("#choiceCancelBtn"),
   fusionPreview: document.querySelector("#fusionPreview"),
+  fusionPreviewKicker: document.querySelector("#fusionPreviewKicker"),
   fusionPreviewName: document.querySelector("#fusionPreviewName"),
   fusionPreviewStats: document.querySelector("#fusionPreviewStats"),
   fusionResultChoices: document.querySelector("#fusionResultChoices"),
@@ -1511,89 +1513,15 @@ function selectFusionResult(resultId) {
   return true;
 }
 
-function fusionPreviewViewModel() {
+function currentFusionSelectionView() {
   const info = pendingFusionHandInfo();
-  if (!info) return null;
-  const resultOptions = info.pending.resultOptions || [];
-  if (!info.pending.resultId) {
-    return {
-      resultId: "",
-      resultName: "请选择融合结果",
-      stats: `可选 ${resultOptions.length} 种融合形态`,
-      materials: "",
-      progress: "0/0",
-      selectedNames: [],
-      remainingText: "",
-      resultOptions
-    };
-  }
-  const result = cardDefinitionById(info.pending.resultId);
-  const status = fusionSelectionStatus();
-  const remaining = status.remaining.filter((entry) => entry.count > 0);
-  const selectedNames = selectedFusionMaterials()
-    .map(({ zone, card }) => `${card.name}（${zone === "hand" ? "手牌" : "场上"}）`);
-  const resultType = result?.type === "monster" ? "怪兽" : result?.type === "trap" ? "陷阱" : "魔法";
-  const stats = result?.type === "monster"
-    ? `${resultType} / ATK ${result.atk} / DEF ${result.def}`
-    : resultType;
-  const remainingText = fusionMaterialNames(remaining);
-  return {
-    resultId: info.pending.resultId,
-    resultName: result?.name || info.pending.resultId,
-    stats,
-    materials: fusionMaterialNames(info.pending.materials),
-    progress: `${status.selectedCount}/${status.requiredCount}`,
-    selectedNames,
-    remainingText,
-    resultOptions
-  };
-}
-
-function renderFusionPreview() {
-  if (!els.fusionPreview) return;
-  const view = fusionPreviewViewModel();
-  if (!state.pendingFusion || !view) {
-    els.fusionPreview.hidden = true;
-    if (els.fusionPreviewDetail) {
-      els.fusionPreviewDetail.disabled = true;
-      els.fusionPreviewDetail.dataset.cardId = "";
-    }
-    if (els.fusionResultChoices) els.fusionResultChoices.replaceChildren();
-    return;
-  }
-  els.fusionPreview.hidden = false;
-  els.fusionPreview.dataset.cardId = view.resultId;
-  if (els.fusionPreviewName) els.fusionPreviewName.textContent = view.resultName;
-  if (els.fusionPreviewStats) els.fusionPreviewStats.textContent = view.stats;
-  if (els.fusionResultChoices) {
-    const buttons = view.resultOptions.map((option) => {
-      const definition = cardDefinitionById(option.resultId);
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "fusion-result-option";
-      button.dataset.cardId = option.resultId;
-      button.classList.toggle("selected", option.resultId === view.resultId);
-      button.setAttribute("aria-pressed", String(option.resultId === view.resultId));
-      button.innerHTML = `<strong>${definition?.name || option.resultId}</strong><span>ATK ${definition?.atk ?? "-"} / DEF ${definition?.def ?? "-"}</span>`;
-      button.addEventListener("click", () => selectFusionResult(option.resultId));
-      return button;
-    });
-    els.fusionResultChoices.replaceChildren(...buttons);
-    els.fusionResultChoices.hidden = buttons.length <= 1;
-  }
-  if (els.fusionPreviewMaterials) {
-    if (!view.resultId) {
-      els.fusionPreviewMaterials.textContent = "先选择一种融合形态，再选择对应素材。";
-    } else {
-      const selected = view.selectedNames.length ? ` / 已选：${view.selectedNames.join("、")}` : "";
-      const remaining = view.remainingText ? ` / 还需：${view.remainingText}` : " / 素材齐备";
-      els.fusionPreviewMaterials.textContent = `素材：${view.materials} / 进度 ${view.progress}${selected}${remaining}`;
-    }
-  }
-  if (els.fusionPreviewDetail) {
-    els.fusionPreviewDetail.disabled = !view.resultId;
-    els.fusionPreviewDetail.dataset.cardId = view.resultId;
-  }
+  return buildFusionSelectionView({
+    pendingFusion: info?.pending || null,
+    status: info ? fusionSelectionStatus() : null,
+    selectedMaterials: info ? selectedFusionMaterials() : [],
+    findCard: cardDefinitionById,
+    formatMaterials: fusionMaterialNames
+  });
 }
 
 function isFusionMaterialCandidate(index) {
@@ -4291,7 +4219,12 @@ function render(animationKey = "") {
     musicVolume: state.musicVolume,
     voiceOn: state.voiceOn
   }));
-  renderFusionPreview();
+  renderFusionSelectionPanel({
+    document,
+    elements: els,
+    view: currentFusionSelectionView(),
+    onSelectResult: selectFusionResult
+  });
   const setupView = renderSetupPanel(document, els, {
     state,
     scenario,

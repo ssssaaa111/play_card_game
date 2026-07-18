@@ -49,6 +49,18 @@ test("app delegates trap response DOM work to the response renderer", () => {
   assert.doesNotMatch(renderer, /(?:^|\s)state\./m);
 });
 
+test("app delegates fusion selection DOM work to the fusion renderer", () => {
+  const app = source("../src/app.js");
+  const renderer = source("../src/fusion-selection-renderer.js");
+
+  assert.match(app, /renderFusionSelectionPanel\(\{/);
+  assert.match(app, /buildFusionSelectionView\(\{/);
+  assert.doesNotMatch(app, /className = "fusion-result-option"/);
+  assert.match(renderer, /className = "fusion-result-option"/);
+  assert.match(renderer, /option\.subtitle/);
+  assert.doesNotMatch(renderer, /(?:^|\s)state\./m);
+});
+
 test("background music stays independent from rules and effect audio", () => {
   const app = source("../src/app.js");
   const audio = source("../src/audio.js");
