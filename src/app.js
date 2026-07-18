@@ -24,11 +24,20 @@ import { applyCardArt } from './card-art.js';
 import { cardDefinitionById, cardDetailViewModel, cardInspectorViewModel } from './card-detail.js';
 import { bindCardInspector, renderCardInspector } from './card-inspector-renderer.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
+import { buildDuelControlsView, renderDuelControls } from './control-renderer.js';
+import {
+  hideCardDetailModal,
+  renderAiRevealModal,
+  renderCardDetailModal,
+  renderGameOverDuelModal,
+  renderSetupDuelModal,
+  resetDuelModal,
+  showDuelModal
+} from './duel-modal-renderer.js';
 import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
 import { renderHandCards } from './hand-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
-import { buildPreDuelPreview } from './pre-duel-preview.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
 import { buildChainStackEntries, chainResolutionOrderText } from './chain-view.js';
 import { fusionOptionsForCard } from './fusion.js';
@@ -82,6 +91,13 @@ import {
   selectTrapResponse
 } from './response-state.js';
 import { buildScenarioState } from './scenario-state.js';
+import {
+  definitionLabel,
+  formatDuelStats,
+  initializeSetupControlOptions,
+  renderSetupPanel,
+  syncSetupControlValues
+} from './setup-renderer.js';
 import { renderCombatHud } from './hud-renderer.js';
 import { buildTrapChoiceDisplay } from './trap-choice-display.js';
 import {
@@ -450,199 +466,19 @@ function saveDuelStats() {
   }
 }
 
-function setupLabel(map, key) {
-  return map[key]?.label || key;
-}
-
-function replaceSelectOptions(select, entries = []) {
-  if (!select) return;
-  select.innerHTML = "";
-  entries.forEach((entry) => {
-    const option = document.createElement("option");
-    option.value = entry.id;
-    option.textContent = entry.label;
-    select.appendChild(option);
-  });
-}
-
 function initializeSetupControls() {
-  replaceSelectOptions(els.roleSelect, roleSetupOptions(roleProfiles));
-  replaceSelectOptions(els.deckSelect, deckSetupOptions(deckPresets, { testMode: BROWSER_TEST_MODE }));
-  replaceSelectOptions(els.aiSelect, aiSetupOptions(aiProfiles));
-  replaceSelectOptions(els.scenarioSelect, scenarioSetupOptions(scenarioSetups, { testMode: BROWSER_TEST_MODE }));
-  if (els.scenarioSelectLabel) {
-    els.scenarioSelectLabel.textContent = BROWSER_TEST_MODE ? "规则测试" : "玩法模式";
-  }
-  syncSetupControls();
-}
-
-function scenarioDifficultyText(difficulty) {
-  if (difficulty === "demo") return "演示版";
-  if (difficulty === "challenge") return "挑战版";
-  return "";
-}
-
-function scenarioObjectiveList(scenario = {}) {
-  if (Array.isArray(scenario.objectives) && scenario.objectives.length) {
-    return scenario.objectives.filter(Boolean);
-  }
-  return scenario.goal ? [scenario.goal] : [];
-}
-
-function scenarioHintList(scenario = {}) {
-  return Array.isArray(scenario.hints) ? scenario.hints.filter(Boolean) : [];
-}
-
-function renderTextList(root, entries) {
-  if (!root) return;
-  root.innerHTML = "";
-  entries.forEach((entry) => {
-    const item = document.createElement("li");
-    item.textContent = entry;
-    root.appendChild(item);
+  initializeSetupControlOptions(document, els, {
+    roleOptions: roleSetupOptions(roleProfiles),
+    deckOptions: deckSetupOptions(deckPresets, { testMode: BROWSER_TEST_MODE }),
+    aiOptions: aiSetupOptions(aiProfiles),
+    scenarioOptions: scenarioSetupOptions(scenarioSetups, { testMode: BROWSER_TEST_MODE }),
+    testMode: BROWSER_TEST_MODE,
+    values: state
   });
-}
-
-function renderScenarioBrief(scenario = {}) {
-  const root = els.scenarioBrief;
-  if (!root) return;
-  const objectives = scenarioObjectiveList(scenario);
-  const hints = scenarioHintList(scenario);
-  const difficultyText = scenarioDifficultyText(scenario.difficulty);
-  const hasBrief = Boolean(scenario.label || difficultyText || objectives.length || hints.length);
-
-  root.hidden = !hasBrief;
-  if (!hasBrief) return;
-
-  if (els.scenarioBriefTitle) {
-    els.scenarioBriefTitle.textContent = scenario.label || "正常决斗";
-  }
-  if (els.scenarioDifficulty) {
-    els.scenarioDifficulty.textContent = difficultyText || "场景";
-    els.scenarioDifficulty.classList.toggle("challenge", scenario.difficulty === "challenge");
-  }
-  renderTextList(els.scenarioObjectives, objectives);
-
-  if (!hints.length) {
-    scenarioHintsVisible = false;
-  }
-  if (els.scenarioHintToggle) {
-    els.scenarioHintToggle.disabled = !hints.length;
-    els.scenarioHintToggle.textContent = hints.length
-      ? (scenarioHintsVisible ? "隐藏提示" : "显示提示")
-      : "无提示";
-  }
-  if (els.scenarioHints) {
-    renderTextList(els.scenarioHints, hints);
-    els.scenarioHints.hidden = !scenarioHintsVisible || !hints.length;
-  }
-}
-
-function appendTextNode(root, className, text) {
-  const node = document.createElement("span");
-  node.className = className;
-  node.textContent = text;
-  root.appendChild(node);
-  return node;
-}
-
-function renderPreDuelDeckCard(entry) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "pre-duel-card";
-  button.dataset.cardId = entry.id;
-  button.dataset.zone = entry.zone;
-  button.dataset.count = String(entry.count || 1);
-  button.title = `查看 ${entry.name} 详情`;
-
-  const title = document.createElement("span");
-  title.className = "pre-duel-card-title";
-  appendTextNode(title, "pre-duel-zone", entry.zoneSummary || entry.zoneLabel);
-  appendTextNode(title, "pre-duel-card-name", entry.name);
-  if ((entry.count || 1) > 1) {
-    appendTextNode(title, "pre-duel-count", `x${entry.count}`);
-  }
-  button.appendChild(title);
-
-  const meta = document.createElement("span");
-  meta.className = "pre-duel-card-meta";
-  const stats = Number.isFinite(entry.attack) && Number.isFinite(entry.defense)
-    ? ` · ATK ${entry.attack} / DEF ${entry.defense}`
-    : "";
-  meta.textContent = `${entry.type}${stats}`;
-  button.appendChild(meta);
-
-  if (entry.summary) {
-    appendTextNode(button, "pre-duel-card-summary", entry.summary);
-  }
-
-  button.addEventListener("click", () => openCardDetail(entry.id));
-  return button;
-}
-
-function renderPreDuelPreview(scenario = {}) {
-  const root = els.preDuelPreview;
-  if (!root) return;
-  const preview = buildPreDuelPreview({
-    scenarioId: state.scenarioId,
-    scenario,
-    playerPreset: state.deckPreset,
-    playerProfile: characterProfiles.player
-  });
-
-  root.hidden = state.started || state.gameOver;
-  if (els.preDuelLp) {
-    els.preDuelLp.textContent = `己方 ${preview.playerLp} / 对方 ${preview.aiLp}`;
-  }
-  if (els.preDuelSkillName) {
-    els.preDuelSkillName.textContent = preview.skill.name || "无技能";
-  }
-  if (els.preDuelSkillText) {
-    els.preDuelSkillText.textContent = preview.skill.text || "";
-  }
-  if (els.preDuelRecommended) {
-    els.preDuelRecommended.hidden = !preview.recommendedLine.length;
-  }
-  renderTextList(els.preDuelRecommendedList, preview.recommendedLine);
-
-  if (els.preDuelDeckCount) {
-    const displayCount = preview.displayDeckCards?.length || preview.deckCards.length;
-    els.preDuelDeckCount.textContent = displayCount === preview.deckCards.length
-      ? `${preview.deckCards.length} 张`
-      : `${displayCount} 种 / ${preview.deckCards.length} 张`;
-  }
-  if (els.preDuelDeckToggle) {
-    els.preDuelDeckToggle.textContent = preDuelDeckExpanded ? "收起牌组" : "查看牌组";
-    els.preDuelDeckToggle.setAttribute("aria-expanded", String(preDuelDeckExpanded));
-  }
-  if (els.preDuelDeckList) {
-    els.preDuelDeckList.innerHTML = "";
-    els.preDuelDeckList.hidden = !preDuelDeckExpanded;
-    (preview.displayDeckCards || preview.deckCards).forEach((entry) => {
-      els.preDuelDeckList.appendChild(renderPreDuelDeckCard(entry));
-    });
-  }
 }
 
 function renderAiReveal() {
-  if (!els.aiRevealModal) return;
-  const reveal = pendingAiReveal;
-  els.aiRevealModal.classList.toggle("show", Boolean(reveal));
-  if (!reveal) {
-    if (els.aiRevealProgress) {
-      els.aiRevealProgress.textContent = "";
-      els.aiRevealProgress.hidden = true;
-    }
-    return;
-  }
-  els.aiRevealModal.dataset.cardId = reveal.cardId;
-  if (els.aiRevealTitle) els.aiRevealTitle.textContent = reveal.title;
-  if (els.aiRevealProgress) {
-    els.aiRevealProgress.textContent = reveal.progressText || "";
-    els.aiRevealProgress.hidden = !reveal.progressText;
-  }
-  if (els.aiRevealType) els.aiRevealType.textContent = reveal.type;
-  if (els.aiRevealSummary) els.aiRevealSummary.textContent = reveal.summary;
+  renderAiRevealModal(els, pendingAiReveal);
 }
 
 function renderNextAiReveal() {
@@ -713,11 +549,6 @@ function waitForAiReveal(input) {
   });
 }
 
-function statsLine() {
-  const stats = state.stats;
-  return `战绩 ${stats.wins}胜/${stats.losses}负 / 总局数 ${stats.duels} / 当前连胜 ${stats.streak} / 最高连胜 ${stats.bestStreak}`;
-}
-
 function recordGameResult(win) {
   if (state.statsRecorded) return;
   state.statsRecorded = true;
@@ -743,10 +574,7 @@ function applySetupChoices() {
 }
 
 function syncSetupControls() {
-  if (els.roleSelect) els.roleSelect.value = state.roleId;
-  if (els.deckSelect) els.deckSelect.value = state.deckPreset;
-  if (els.aiSelect) els.aiSelect.value = state.aiStyle;
-  if (els.scenarioSelect) els.scenarioSelect.value = state.scenarioId;
+  syncSetupControlValues(els, state);
 }
 
 function applyScenarioSetup() {
@@ -818,9 +646,7 @@ function startGame() {
   state.timelineStep = 0;
   state.gameEvents = [];
   chainHistoryExpanded = false;
-  els.modal.classList.remove("show", "setup-modal");
-  els.modalRestart.textContent = "再来一局";
-  if (els.modalReviewLog) els.modalReviewLog.hidden = true;
+  resetDuelModal(els);
   if (state.scenarioId === "normal") {
     drawCards(state.player, 5, { announce: false, reason: "opening" });
     drawCards(state.ai, 5, { announce: false, reason: "opening" });
@@ -833,7 +659,7 @@ function startGame() {
     }
   }
   addLog("决斗开始。你先攻，抽卡后展开第一波攻势。");
-  addLog(`基础扩展已启用：${characterProfiles.player.skill} / ${setupLabel(deckPresets, state.deckPreset)} / ${characterProfiles.ai.name}。`);
+  addLog(`基础扩展已启用：${characterProfiles.player.skill} / ${definitionLabel(deckPresets, state.deckPreset)} / ${characterProfiles.ai.name}。`);
   addLog("教学目标：召唤怪兽、发动魔法或盖陷阱，然后完成一次攻击。");
   playMusic(currentMusicMode());
   playVoice("player", "start", "决斗开始。轮到你，先抽卡。", true);
@@ -888,11 +714,7 @@ function prepareGame() {
   state.timelineStep = 0;
   state.gameEvents = [];
   clearPlayerIdleTimers();
-  els.modalTitle.textContent = "战前准备";
-  els.modalText.textContent = "先熟悉己方卡组、技能和场景目标，再开始决斗。";
-  els.modalRestart.textContent = "开始决斗";
-  if (els.modalReviewLog) els.modalReviewLog.hidden = true;
-  els.modal.classList.add("show", "setup-modal");
+  renderSetupDuelModal(els);
   render();
 }
 
@@ -4338,14 +4160,11 @@ function checkGameOver() {
     recordGameResult(win);
     playSound(win ? "win" : "lose");
     playVoice(win ? "player" : "ai", "win", win ? "你赢了。" : "决斗败北。", true);
-    els.modalTitle.textContent = win ? "你赢了" : "决斗败北";
-    els.modalText.textContent = win
-      ? `星魂回应了你的召唤。${statsLine()}。`
-      : `AI 抢到了节奏。调整卡组顺序或更早展开怪兽试试看。${statsLine()}。`;
-    els.modalRestart.textContent = "回到准备";
-    if (els.modalReviewLog) els.modalReviewLog.hidden = false;
-    els.modal.classList.remove("setup-modal");
-    window.setTimeout(() => els.modal.classList.add("show"), 260);
+    renderGameOverDuelModal(els, {
+      win,
+      statsText: formatDuelStats(state.stats)
+    });
+    window.setTimeout(() => showDuelModal(els), 260);
   }
 }
 
@@ -4365,14 +4184,7 @@ function openCardDetail(cardOrId) {
   }
   state.focusedCard = card;
   resetPlayerIdleCountdown();
-  els.zoomName.textContent = view.name;
-  els.zoomCard.innerHTML = "";
-  const preview = renderCardElement(document, card, { asset: monsterAsset(card) });
-  preview.classList.remove("selected", "used", "defense");
-  els.zoomCard.appendChild(preview);
-  els.zoomText.textContent = view.effectText;
-  els.zoomMeta.textContent = view.meta;
-  els.cardModal.classList.add("show");
+  renderCardDetailModal(document, els, view, { asset: monsterAsset(card) });
 }
 
 function openFocusedCardDetail() {
@@ -4384,7 +4196,7 @@ function openFocusedCardDetail() {
 }
 
 function closeCardDetail() {
-  els.cardModal.classList.remove("show");
+  hideCardDetailModal(els);
   resetPlayerIdleCountdown();
 }
 
@@ -4622,81 +4434,59 @@ function render(animationKey = "") {
     canChangeMode: actions.mode
   });
   const setupModalOpen = els.modal?.classList.contains("show") && !state.started && !state.gameOver;
-  els.startBtn.disabled = setupModalOpen || (state.started && !state.gameOver);
-  els.startBtn.title = setupModalOpen ? "请点击准备面板里的开始决斗" : "开始决斗";
-  els.pauseBtn.disabled = !state.started || state.gameOver;
-  els.pauseBtn.textContent = state.paused ? "继续" : "暂停";
   const canUseTurnControls = canUsePlayerTurnControls(state);
-  els.skipAttackBtn.disabled = !canUseTurnControls || Boolean(state.pendingTarget) || Boolean(state.pendingFusion) || Boolean(state.pendingTribute) || !actions.attack;
-  els.skipAttackBtn.title = "放弃本回合剩余攻击机会";
-  els.endTurnBtn.textContent = "结束回合";
-  els.endTurnBtn.title = "结束你的回合";
-  els.endTurnBtn.disabled = !canUseTurnControls || Boolean(state.pendingTarget) || Boolean(state.pendingFusion) || Boolean(state.pendingTribute);
-  els.soundBtn.textContent = state.soundOn ? "音效 开" : "音效 关";
-  els.soundBtn.classList.toggle("sound-off", !state.soundOn);
-  els.musicBtn.textContent = state.musicOn ? (musicMode === "critical" ? "音乐 紧张" : "音乐 开") : "音乐 关";
-  els.musicBtn.classList.toggle("sound-off", !state.musicOn);
-  els.musicBtn.classList.toggle("music-critical", state.musicOn && musicMode === "critical");
-  els.musicBtn.dataset.mode = musicMode;
-  els.musicBtn.dataset.playing = String(musicStatus().playing);
-  els.musicBtn.setAttribute("aria-pressed", String(state.musicOn));
-  els.musicVolume.value = String(Math.round(state.musicVolume * 100));
-  els.musicVolume.disabled = !state.musicOn;
-  els.musicVolume.style.setProperty("--music-volume", `${Math.round(state.musicVolume * 100)}%`);
-  els.voiceBtn.textContent = state.voiceOn ? "语音 开" : "语音 关";
-  els.voiceBtn.classList.toggle("sound-off", !state.voiceOn);
+  const canAct = canPlayerAct();
   const selectedHand = selectedHandInfo();
   const selectedHandAction = selectedHand ? handActionInfo(selectedHand.card, selectedHand.index) : null;
+  const fusionStatus = state.pendingFusion ? fusionSelectionStatus() : null;
   const selectedHandReady = Boolean(
     selectedHand &&
     selectedHandAction?.ok &&
     canUseHandCards(selectedHand.card) &&
     (!state.pendingTribute || selectedTributeIndexes().length === state.pendingTribute.cost) &&
-    (!state.pendingFusion || fusionSelectionStatus().complete)
+    (!state.pendingFusion || fusionStatus?.complete)
   );
-  els.handConfirmBtn.textContent = state.pendingTarget ? "确认默认目标" : handConfirmLabel(selectedHand?.card);
-  els.handConfirmBtn.disabled = state.pendingTarget ? false : !selectedHandReady;
-  els.handCancelBtn.textContent = state.pendingTarget ? "取消目标" : "取消选择";
-  els.handCancelBtn.disabled = !canPlayerAct() || (!state.pendingTarget && !state.pendingTribute && !state.pendingFusion && !selectedHandReady);
-  if (els.choiceActions) {
-    const showChoiceActions = canPlayerAct() && (Boolean(state.pendingTarget) || Boolean(state.pendingTribute) || Boolean(state.pendingFusion) || selectedHandReady);
-    els.choiceActions.hidden = !showChoiceActions;
-    if (showChoiceActions) {
-      const confirmLabel = state.pendingTarget ? "确认默认目标" : handConfirmLabel(selectedHand?.card);
-      const cancelLabel = state.pendingTarget ? "取消目标" : "取消选择";
-      const text = state.pendingTarget
-        ? `${targetPrompt} 再点这张手牌或确认，将默认选择合法目标。`
-        : state.pendingFusion
-          ? fusionSelectionStatus().needsResult
-            ? `${state.pendingFusion.cardName}：先选择融合结果。`
-            : `${state.pendingFusion.cardName}：选择融合素材 ${fusionSelectionStatus().selectedCount}/${fusionSelectionStatus().requiredCount}。`
-          : `${selectedHand.card.name}：${selectedHandAction?.reason || "确认后发动。"}`;
-      els.choiceText.textContent = text;
-      els.choiceConfirmBtn.textContent = confirmLabel;
-      els.choiceConfirmBtn.disabled = state.pendingTarget ? false : !selectedHandReady;
-      els.choiceCancelBtn.textContent = cancelLabel;
-      els.choiceCancelBtn.disabled = !canPlayerAct();
-    }
-    els.choiceActions.classList.toggle("fusion-choice", Boolean(state.pendingFusion));
-    els.choiceActions.classList.toggle("material-choice", Boolean(state.pendingFusion || state.pendingTribute));
-  }
-  renderFusionPreview();
   const selectedPlayerMonster = state.selected?.zone === "playerField" && Boolean(state.player.field[state.selected.index]);
-  els.modeBtn.disabled = Boolean(state.pendingTarget) || Boolean(state.pendingFusion) || Boolean(state.pendingTribute) || !canPlayerAct() || state.phase !== PHASES.main || !selectedPlayerMonster;
-  els.detailBtn.disabled = !state.focusedCard;
-  if (els.setupPanel) {
-    els.setupPanel.hidden = state.started || state.gameOver;
-  }
-  renderScenarioBrief(scenario);
-  renderPreDuelPreview(scenario);
-  if (els.setupStats) {
-    const aiLabel = aiProfiles[state.aiStyle]?.label || characterProfiles.ai.name;
-    els.setupStats.textContent = `${statsLine()} / 当前配置：${characterProfiles.player.name}、${setupLabel(deckPresets, state.deckPreset)}、${aiLabel} / ${scenario.label}${scenario.goal ? ` / 目标：${scenario.goal}` : ""}`;
-  }
-
-  if (els.profileStats) {
-    els.profileStats.textContent = `${setupLabel(deckPresets, state.deckPreset)} / ${scenario.label} / ${statsLine()}`;
-  }
+  renderDuelControls(els, buildDuelControlsView({
+    started: state.started,
+    gameOver: state.gameOver,
+    paused: state.paused,
+    setupModalOpen,
+    actions,
+    canUseTurnControls,
+    canAct,
+    pendingTarget: state.pendingTarget,
+    pendingFusion: state.pendingFusion,
+    pendingTribute: state.pendingTribute,
+    selectedHandReady,
+    selectedHandName: selectedHand?.card.name || "",
+    selectedHandReason: selectedHandAction?.reason || "",
+    targetPrompt,
+    fusionStatus,
+    confirmLabel: handConfirmLabel(selectedHand?.card),
+    phase: state.phase,
+    selectedPlayerMonster,
+    focusedCard: state.focusedCard,
+    soundOn: state.soundOn,
+    musicOn: state.musicOn,
+    musicMode,
+    musicPlaying: musicStatus().playing,
+    musicVolume: state.musicVolume,
+    voiceOn: state.voiceOn
+  }));
+  renderFusionPreview();
+  const setupView = renderSetupPanel(document, els, {
+    state,
+    scenario,
+    playerProfile: characterProfiles.player,
+    aiLabel: aiProfiles[state.aiStyle]?.label || characterProfiles.ai.name,
+    deckDefinitions: deckPresets,
+    statsText: formatDuelStats(state.stats),
+    hintsVisible: scenarioHintsVisible,
+    deckExpanded: preDuelDeckExpanded,
+    onOpenCardDetail: openCardDetail
+  });
+  scenarioHintsVisible = setupView.hintsVisible;
   const directTargetReady = canPlayerTargetAiPanel();
   renderCombatHud({
     document,

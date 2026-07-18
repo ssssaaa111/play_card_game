@@ -36,6 +36,8 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/card-inspector-renderer.js");
   checkModuleSyntax("src/card-renderer.js");
   checkModuleSyntax("src/card-state-display.js");
+  checkModuleSyntax("src/control-renderer.js");
+  checkModuleSyntax("src/duel-modal-renderer.js");
   checkModuleSyntax("src/field-renderer.js");
   checkModuleSyntax("src/hand-renderer.js");
   checkModuleSyntax("src/hud-renderer.js");
@@ -52,6 +54,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/response-state.js");
   checkModuleSyntax("src/rules.js");
   checkModuleSyntax("src/scenario-state.js");
+  checkModuleSyntax("src/setup-renderer.js");
   checkModuleSyntax("src/spells.js");
   checkModuleSyntax("src/timeline.js");
   checkModuleSyntax("src/traps.js");
@@ -231,6 +234,7 @@ test("app uses extracted turn state machine", () => {
 
 test("app exposes manual turn control buttons", () => {
   const app = readProjectFile("src/app.js");
+  const controls = readProjectFile("src/control-renderer.js");
 
   assert.match(app, /handConfirmBtn: document\.querySelector\("#handConfirmBtn"\)/);
   assert.match(app, /handCancelBtn: document\.querySelector\("#handCancelBtn"\)/);
@@ -242,14 +246,17 @@ test("app exposes manual turn control buttons", () => {
   assert.match(app, /els\.handCancelBtn\.addEventListener\("click", cancelSelectedHandAction\)/);
   assert.match(app, /els\.choiceConfirmBtn\.addEventListener\("click"/);
   assert.match(app, /els\.choiceCancelBtn\.addEventListener\("click", cancelSelectedHandAction\)/);
-  assert.match(app, /els\.skipAttackBtn\.disabled = !canUseTurnControls \|\| Boolean\(state\.pendingTarget\) \|\| Boolean\(state\.pendingFusion\) \|\| Boolean\(state\.pendingTribute\) \|\| !actions\.attack/);
-  assert.match(app, /els\.endTurnBtn\.disabled = !canUseTurnControls \|\| Boolean\(state\.pendingTarget\) \|\| Boolean\(state\.pendingFusion\) \|\| Boolean\(state\.pendingTribute\)/);
+  assert.match(app, /from '\.\/control-renderer\.js'/);
+  assert.match(app, /renderDuelControls\(els, buildDuelControlsView\(\{/);
+  assert.match(controls, /disabled: !canUseTurnControls \|\| selectionBlocksTurn \|\| !actions\.attack/);
+  assert.match(controls, /disabled: !canUseTurnControls \|\| selectionBlocksTurn/);
   assert.match(app, /els\.skipAttackBtn\.addEventListener\("click", skipPlayerAttack\)/);
   assert.match(app, /els\.endTurnBtn\.addEventListener\("click", manualEndPlayerTurn\)/);
 });
 
 test("app gates hand and battle actions by explicit phase", () => {
   const app = readProjectFile("src/app.js");
+  const controls = readProjectFile("src/control-renderer.js");
 
   assert.match(app, /function canUseHandSpells\(\)/);
   assert.match(app, /function canUseHandCards\(card = null\)/);
@@ -259,12 +266,13 @@ test("app gates hand and battle actions by explicit phase", () => {
   assert.match(app, /function enterPlayerBattlePhase\(/);
   assert.match(app, /actions\.hasMain/);
   assert.match(app, /actions\.hasBattle/);
-  assert.match(app, /els\.endTurnBtn\.textContent = "结束回合"/);
+  assert.match(controls, /text: "结束回合"/);
   assert.match(app, /enterPlayerBattlePhase\("你发动攻击", \{ preserveSelection: true, quiet: true \}\)/);
 });
 
 test("selected hand cards use explicit confirm and cancel actions", () => {
   const app = readProjectFile("src/app.js");
+  const controls = readProjectFile("src/control-renderer.js");
   const fieldRenderer = readProjectFile("src/field-renderer.js");
   const viewModel = readProjectFile("src/view-model.js");
 
@@ -273,7 +281,7 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /async function queuePendingAttack\(targetIndex\)/);
   assert.match(app, /function confirmSelectedHandAction\(\)/);
   assert.match(app, /function cancelSelectedHandAction\(\)/);
-  assert.match(app, /els\.handConfirmBtn\.textContent = state\.pendingTarget \? "确认默认目标" : handConfirmLabel\(selectedHand\?\.card\)/);
+  assert.match(controls, /const currentConfirmLabel = hasTarget \? "确认默认目标" : confirmLabel/);
   assert.match(app, /function resolvePendingSpellDefault\(\)/);
   assert.match(app, /resolvePendingSpellTarget\(targets\[0\]\.owner, targets\[0\]\.index, targets\[0\]\.zone\)/);
   assert.match(app, /beginSpellTargetSelection\(handIndex, card\)/);
@@ -283,7 +291,7 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /selectedHandAction\?\.ok/);
   assert.match(app, /canUseHandCards\(selectedHand\.card\)/);
   assert.match(app, /!state\.pendingTribute \|\| selectedTributeIndexes\(\)\.length === state\.pendingTribute\.cost/);
-  assert.match(app, /Boolean\(state\.pendingTarget\) \|\| Boolean\(state\.pendingTribute\) \|\| Boolean\(state\.pendingFusion\) \|\| selectedHandReady/);
+  assert.match(controls, /const showChoiceActions = canAct && \(hasPendingSelection \|\| selectedHandReady\)/);
   assert.equal((fieldRenderer.match(/"attack-target": attackTargetable/g) || []).length, 2);
   assert.match(fieldRenderer, /const disabled = owner === "ai" && !card && !targetable && !attackTargetable/);
   assert.match(fieldRenderer, /slot\.disabled = view\.disabled/);
@@ -538,6 +546,8 @@ test("browser smoke runner covers key click regressions", () => {
   const app = readProjectFile("src/app.js");
   const smoke = readProjectFile("src/browser-smoke.js");
   const setupOptions = readProjectFile("src/setup-options.js");
+  const setupRenderer = readProjectFile("src/setup-renderer.js");
+  const controls = readProjectFile("src/control-renderer.js");
 
   assert.match(html, /<select id="deckSelect"><\/select>/);
   assert.match(html, /<select id="scenarioSelect"><\/select>/);
@@ -626,21 +636,23 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /fusionPreviewDetail: document\.querySelector\("#fusionPreviewDetail"\)/);
   assert.match(app, /chainStack: document\.querySelector\("#chainStack"\)/);
   assert.match(app, /from '\.\/chain-view\.js'/);
-  assert.match(app, /function renderScenarioBrief/);
-  assert.match(app, /function renderPreDuelPreview/);
+  assert.match(app, /from '\.\/setup-renderer\.js'/);
+  assert.match(app, /renderSetupPanel\(document, els, \{/);
+  assert.match(setupRenderer, /export function renderScenarioBrief/);
+  assert.match(setupRenderer, /export function renderPreDuelPreview/);
   assert.match(app, /function fusionPreviewViewModel/);
   assert.match(app, /function renderFusionPreview/);
   assert.match(app, /renderFusionPreview\(\)/);
-  assert.match(app, /classList\.toggle\("fusion-choice", Boolean\(state\.pendingFusion\)\)/);
-  assert.match(app, /classList\.toggle\("material-choice", Boolean\(state\.pendingFusion \|\| state\.pendingTribute\)\)/);
+  assert.match(controls, /classList\.toggle\("fusion-choice", view\.choice\.fusion\)/);
+  assert.match(controls, /classList\.toggle\("material-choice", view\.choice\.material\)/);
   assert.match(app, /els\.fusionPreviewDetail\.addEventListener\("click"/);
   assert.match(app, /pendingAiRevealQueue = \[\]/);
   assert.match(app, /withAiRevealQueuePosition\(/);
   assert.match(app, /function waitForAiReveal/);
   assert.match(app, /\["ai-card-reveal-confirm", "ai-card-reveal-queue"\]\.includes\(BROWSER_SMOKE\)/);
   assert.match(app, /buildAiCardReveal\(/);
-  assert.match(app, /buildPreDuelPreview\(\{/);
-  assert.match(app, /openCardDetail\(entry\.id\)/);
+  assert.match(setupRenderer, /buildPreDuelPreview\(\{/);
+  assert.match(setupRenderer, /onOpenCardDetail\(entry\.id\)/);
   assert.match(app, /scenarioHintsVisible = !scenarioHintsVisible/);
   assert.match(app, /pending\.mode === "ownGraveMonster"/);
   assert.match(app, /canDispatchSummonEffectFromUiState/);
@@ -1092,10 +1104,13 @@ test("mode changes re-evaluate the player action window", () => {
 
 test("setup modal keeps the start action reachable", () => {
   const app = readProjectFile("src/app.js");
+  const controls = readProjectFile("src/control-renderer.js");
+  const modalRenderer = readProjectFile("src/duel-modal-renderer.js");
   const css = readProjectFile("styles.css");
 
   assert.match(app, /const setupModalOpen = els\.modal\?\.classList\.contains\("show"\) && !state\.started && !state\.gameOver/);
-  assert.match(app, /els\.startBtn\.disabled = setupModalOpen \|\| \(state\.started && !state\.gameOver\)/);
+  assert.match(controls, /disabled: setupModalOpen \|\| \(started && !gameOver\)/);
+  assert.match(modalRenderer, /elements\.modal\.classList\.add\("show", "setup-modal"\)/);
   assert.match(css, /\.modal \{[\s\S]*z-index: 20;[\s\S]*overflow: auto;/);
   assert.match(css, /#cardModal\.show \{[\s\S]*z-index: 22;/);
   assert.match(css, /\.modal-box \{[\s\S]*max-height: calc\([\s\S]*100dvh[\s\S]*var\(--safe-area-top\)[\s\S]*var\(--safe-area-bottom\)[\s\S]*\);[\s\S]*overflow: auto;/);
@@ -1106,13 +1121,15 @@ test("setup modal keeps the start action reachable", () => {
 
 test("game-over modal can reveal the battle log without resetting duel state", () => {
   const app = readProjectFile("src/app.js");
+  const modalRenderer = readProjectFile("src/duel-modal-renderer.js");
   const html = readProjectFile("index.html");
   const reviewStart = app.indexOf('els.modalReviewLog.addEventListener("click"');
   const reviewEnd = app.indexOf("[els.roleSelect", reviewStart);
 
   assert.match(html, /id="modalReviewLog"[^>]*hidden/);
   assert.match(app, /modalReviewLog: document\.querySelector\("#modalReviewLog"\)/);
-  assert.match(app, /if \(els\.modalReviewLog\) els\.modalReviewLog\.hidden = false;/);
+  assert.match(app, /renderGameOverDuelModal\(els, \{/);
+  assert.match(modalRenderer, /elements\.modalReviewLog\.hidden = !view\.reviewLog/);
   assert.ok(reviewStart >= 0, "modal review log click handler should exist");
   assert.ok(reviewEnd > reviewStart, "modal review log click handler should be bounded");
 
@@ -1136,7 +1153,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/timeline-renderer.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/control-renderer.js", "src/data.js", "src/deck.js", "src/duel-modal-renderer.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/setup-renderer.js", "src/spells.js", "src/timeline.js", "src/timeline-renderer.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });
