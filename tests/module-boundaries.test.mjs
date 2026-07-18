@@ -33,7 +33,20 @@ test("app delegates battle preview DOM work without leaking state into the rende
   assert.doesNotMatch(app, /className = "battle-preview-title"/);
   assert.match(renderer, /className = "battle-preview-title"/);
   assert.doesNotMatch(renderer, /from '\.\/rules\.js'/);
-  assert.doesNotMatch(renderer, /\bstate\./);
+  assert.doesNotMatch(renderer, /(?:^|\s)state\./m);
+});
+
+test("app delegates trap response DOM work to the response renderer", () => {
+  const app = source("../src/app.js");
+  const renderer = source("../src/trap-response-renderer.js");
+
+  assert.match(app, /renderTrapResponsePanel\(\{/);
+  assert.match(app, /clearTrapResponsePanel\(els\)/);
+  assert.doesNotMatch(app, /className = "trap-choice-card"/);
+  assert.doesNotMatch(app, /className = "chain-stack-entry"/);
+  assert.match(renderer, /className = "trap-choice-card"/);
+  assert.match(renderer, /className = "chain-stack-entry"/);
+  assert.doesNotMatch(renderer, /(?:^|\s)state\./m);
 });
 
 test("background music stays independent from rules and effect audio", () => {

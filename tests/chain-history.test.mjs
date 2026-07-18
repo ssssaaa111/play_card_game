@@ -73,3 +73,17 @@ test("unfinished chains stay hidden and completed history is newest-first and ca
   assert.equal(history[0].eventId, 29);
   assert.equal(history[0].links.some((link) => link.runtimeCardId === "hidden:1"), false);
 });
+
+test("completed chain history keeps every duel chain by default", () => {
+  const events = Array.from({ length: 5 }, (_, chainIndex) => tripleChainEvents.map((event) => ({
+    ...event,
+    id: event.id + chainIndex * 20
+  }))).flat();
+  const history = buildChainHistory(events, {
+    findCard: (cardId) => runtimeCards.get(cardId)
+  });
+
+  assert.equal(history.length, 5);
+  assert.equal(history[0].eventId, 89);
+  assert.equal(history.at(-1).eventId, 9);
+});

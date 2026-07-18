@@ -51,7 +51,7 @@ function chainHistoryEntry(events, resolvedEvent, findCard) {
   };
 }
 
-export function buildChainHistory(events = [], { findCard = () => null, limit = 3 } = {}) {
+export function buildChainHistory(events = [], { findCard = () => null, limit = Number.POSITIVE_INFINITY } = {}) {
   const histories = [];
   let groupStart = 0;
 

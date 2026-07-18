@@ -43,6 +43,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/hud-renderer.js");
   checkModuleSyntax("src/log-renderer.js");
   checkModuleSyntax("src/timeline-renderer.js");
+  checkModuleSyntax("src/trap-response-renderer.js");
   checkModuleSyntax("src/cards.js");
   checkModuleSyntax("src/combos.js");
   checkModuleSyntax("src/data.js");
@@ -548,6 +549,7 @@ test("browser smoke runner covers key click regressions", () => {
   const setupOptions = readProjectFile("src/setup-options.js");
   const setupRenderer = readProjectFile("src/setup-renderer.js");
   const controls = readProjectFile("src/control-renderer.js");
+  const trapResponseRenderer = readProjectFile("src/trap-response-renderer.js");
 
   assert.match(html, /<select id="deckSelect"><\/select>/);
   assert.match(html, /<select id="scenarioSelect"><\/select>/);
@@ -635,7 +637,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /fusionResultChoices: document\.querySelector\("#fusionResultChoices"\)/);
   assert.match(app, /fusionPreviewDetail: document\.querySelector\("#fusionPreviewDetail"\)/);
   assert.match(app, /chainStack: document\.querySelector\("#chainStack"\)/);
-  assert.match(app, /from '\.\/chain-view\.js'/);
+  assert.match(app, /from '\.\/trap-response-renderer\.js'/);
+  assert.match(trapResponseRenderer, /from "\.\/chain-view\.js"/);
   assert.match(app, /from '\.\/setup-renderer\.js'/);
   assert.match(app, /renderSetupPanel\(document, els, \{/);
   assert.match(setupRenderer, /export function renderScenarioBrief/);
@@ -686,6 +689,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"player-counter-chain": runPlayerCounterChainSmoke/);
   assert.match(smoke, /"triple-counter-chain": runTripleCounterChainSmoke/);
   assert.match(smoke, /"chain-resolution-review": runChainResolutionReviewSmoke/);
+  assert.match(smoke, /chainStatus\?\.textContent\.includes\("将加入 CL3"\)/);
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /"token-split-basic": runTokenSplitBasicSmoke/);
   assert.match(smoke, /"graveyard-summon-basic": runGraveyardSummonBasicSmoke/);
@@ -1004,6 +1008,7 @@ test("app uses extracted spell metadata", () => {
 
 test("app uses extracted trap metadata", () => {
   const app = readProjectFile("src/app.js");
+  const trapResponseRenderer = readProjectFile("src/trap-response-renderer.js");
   const trapStart = app.indexOf("function resolveTrapCard");
   const trapEnd = app.indexOf("async function attack", trapStart);
   const resolveTrapCardSource = app.slice(trapStart, trapEnd);
@@ -1011,7 +1016,8 @@ test("app uses extracted trap metadata", () => {
   assert.match(app, /from '\.\/traps\.js'/);
   assert.match(app, /dispatchActivateTrapFromUiState/);
   assert.match(app, /canDispatchTrapFromUiState/);
-  assert.match(app, /trapActivationText\(selectedCard, choice\.eventName, choice\.details\)/);
+  assert.match(app, /activationText: trapActivationText/);
+  assert.match(trapResponseRenderer, /activationText\(selectedCard, choice\.eventName, choice\.details\)/);
   assert.match(app, /trapCanResolve\(card, eventName, \{ owner, context \}\)/);
   assert.match(app, /\.filter\(\(\{ card \}\) => trapCanResolve\(card, eventName, \{ owner, context \}\)\)/);
   assert.match(app, /selectRedirectTarget\(owner\.field, context\.targetIndex\)/);
@@ -1158,7 +1164,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/control-renderer.js", "src/data.js", "src/deck.js", "src/duel-modal-renderer.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/setup-renderer.js", "src/spells.js", "src/timeline.js", "src/timeline-renderer.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/control-renderer.js", "src/data.js", "src/deck.js", "src/duel-modal-renderer.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/setup-renderer.js", "src/spells.js", "src/timeline.js", "src/timeline-renderer.js", "src/trap-response-renderer.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

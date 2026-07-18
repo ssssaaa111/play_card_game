@@ -3515,6 +3515,8 @@ async function runTripleCounterChainSmoke(ctx) {
   await waitForSmoke(
     () => ctx.els.chainModal.classList.contains("show") &&
       ctx.els.chainText.textContent.includes("反击阵列") &&
+      ctx.els.chainStatus?.textContent.includes("将加入 CL1") &&
+      ctx.els.chainYes.textContent.includes("CL1") &&
       !ctx.els.chainYes.disabled,
     `triple-counter-chain: first response opens. ${smokeDebug(ctx)}`,
     16000
@@ -3525,6 +3527,8 @@ async function runTripleCounterChainSmoke(ctx) {
     () => ctx.els.chainModal.classList.contains("show") &&
       ctx.els.chainStack?.querySelectorAll(".chain-stack-entry").length === 3 &&
       ctx.els.chainStack?.textContent.includes("结算顺序：CL3 → CL2 → CL1") &&
+      ctx.els.chainStatus?.textContent.includes("将加入 CL3") &&
+      ctx.els.chainYes.textContent.includes("CL3") &&
       !ctx.els.chainYes.disabled,
     `triple-counter-chain: third response opens. ${smokeDebug(ctx)}`,
     12000

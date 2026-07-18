@@ -20,7 +20,6 @@ import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createBattleLogEntry, logEntryMessage } from './battle-log.js';
 import { renderBattlePreviewElement } from './battle-preview-renderer.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
-import { applyCardArt } from './card-art.js';
 import { cardDefinitionById, cardDetailViewModel, cardInspectorViewModel } from './card-detail.js';
 import { bindCardInspector, renderCardInspector } from './card-inspector-renderer.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
@@ -44,7 +43,6 @@ import {
   statChangeText
 } from './effect-feedback.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
-import { buildChainStackEntries, chainResolutionOrderText } from './chain-view.js';
 import { fusionOptionsForCard } from './fusion.js';
 import {
   buildEngineStateFromUiState,
@@ -105,7 +103,7 @@ import {
   syncSetupControlValues
 } from './setup-renderer.js';
 import { renderCombatHud } from './hud-renderer.js';
-import { buildTrapChoiceDisplay } from './trap-choice-display.js';
+import { clearTrapResponsePanel, renderTrapResponsePanel } from './trap-response-renderer.js';
 import {
   ACTION_WINDOWS,
   PHASES,
@@ -2850,216 +2848,27 @@ function closeTrapResponseWindow(playerId, reason) {
   }
 }
 
-function pendingTrapChoiceDetailsText(choice = state.pendingTrapChoice) {
-  if (!choice) return "";
-  const selectedCard = state.player.traps[choice.selectedIndex];
-  if (selectedCard) {
-    return trapActivationText(selectedCard, choice.eventName, choice.details);
-  }
-  const firstCard = state.player.traps[choice.trapIndexes[0]];
-  const eventText = firstCard
-    ? trapActivationText(firstCard, choice.eventName, choice.details).split("是否连锁发动")[0]
-    : "";
-  const names = choice.trapIndexes
-    .map((index) => state.player.traps[index]?.name)
-    .filter(Boolean)
-    .join("、");
-  return `${eventText}可发动陷阱：${names}。单击响应卡选择，双击可直接发动；本事件只能发动一张。`;
-}
-
-function renderTrapChoiceOptions(choice = state.pendingTrapChoice) {
-  if (!els.chainChoices) return;
-  els.chainChoices.replaceChildren();
-  if (!choice?.trapIndexes?.length) {
-    els.chainChoices.hidden = true;
-    return;
-  }
-  els.chainChoices.hidden = false;
-  choice.trapIndexes.forEach((trapIndex) => {
-    const card = state.player.traps[trapIndex];
-    if (!card) return;
-    const selected = choice.selectedIndex === trapIndex;
-    const display = buildTrapChoiceDisplay(card, { selected });
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "trap-choice-card";
-    button.dataset.trapChoiceIndex = String(trapIndex);
-    button.dataset.cardId = card.id;
-    button.dataset.choiceState = display.state;
-    button.classList.toggle("selected", selected);
-    button.setAttribute("aria-pressed", String(selected));
-    button.setAttribute("aria-label", display.ariaLabel);
-    button.title = "单击选择，双击直接发动";
-
-    const art = document.createElement("span");
-    art.className = `trap-choice-art ${card.type || "trap"}`;
-    art.setAttribute("aria-hidden", "true");
-    const hasArt = applyCardArt(art, card.id);
-    if (!hasArt) art.textContent = card.icon || "陷";
-
-    const type = document.createElement("span");
-    type.className = "trap-choice-type";
-    type.textContent = display.typeLabel;
-    art.appendChild(type);
-
-    const body = document.createElement("span");
-    body.className = "trap-choice-body";
-
-    const heading = document.createElement("span");
-    heading.className = "trap-choice-title";
-
-    const name = document.createElement("strong");
-    name.textContent = display.name;
-
-    const status = document.createElement("span");
-    status.className = `trap-choice-state ${display.state}`;
-    status.textContent = display.stateLabel;
-
-    const text = document.createElement("span");
-    text.className = "trap-choice-effect";
-    text.textContent = display.effectText;
-
-    heading.appendChild(name);
-    heading.appendChild(status);
-    body.appendChild(heading);
-    body.appendChild(text);
-    button.appendChild(art);
-    button.appendChild(body);
-    button.addEventListener("click", () => selectPendingTrapChoice(trapIndex));
-    button.addEventListener("dblclick", (event) => {
-      event.preventDefault();
-      activatePendingTrapChoice(trapIndex);
-    });
-    els.chainChoices.appendChild(button);
-  });
-}
-
-function renderChainStack(choice = state.pendingTrapChoice) {
-  if (!els.chainStack) return;
-  const selectedCard = choice?.eventName === "chain"
-    ? state.player.traps[choice.selectedIndex]
-    : null;
-  const entries = buildChainStackEntries({
-    chain: currentEngineMachine()?.chain || [],
-    findCard: findRuntimeCard,
-    pendingCard: selectedCard,
-    pendingOwner: "player"
-  });
-  els.chainStack.replaceChildren();
-  els.chainStack.hidden = entries.length === 0;
-  if (entries.length > 0) {
-    const heading = document.createElement("div");
-    heading.className = "chain-stack-head";
-    const title = document.createElement("strong");
-    title.textContent = "当前连锁";
-    const rule = document.createElement("span");
-    rule.textContent = "后进先出";
-    heading.appendChild(title);
-    heading.appendChild(rule);
-    els.chainStack.appendChild(heading);
-  }
-  entries.forEach((entry) => {
-    const row = document.createElement("div");
-    row.className = "chain-stack-entry";
-    row.classList.toggle("pending", entry.pending);
-    row.dataset.owner = entry.owner || "unknown";
-    row.dataset.chainState = entry.pending ? "pending" : "queued";
-    row.setAttribute("aria-label", `CL${entry.chainIndex}，${entry.ownerLabel}，${entry.name}，${entry.pending ? "待发动" : "等待结算"}`);
-
-    const index = document.createElement("span");
-    index.className = "chain-stack-index";
-    index.textContent = `CL${entry.chainIndex}`;
-
-    const art = document.createElement("span");
-    art.className = "chain-stack-art";
-    art.setAttribute("aria-hidden", "true");
-    if (!entry.cardId || !applyCardArt(art, entry.cardId)) art.textContent = `CL${entry.chainIndex}`;
-
-    const main = document.createElement("span");
-    main.className = "chain-stack-main";
-
-    const owner = document.createElement("span");
-    owner.className = "chain-stack-owner";
-    owner.textContent = entry.ownerLabel;
-
-    const name = document.createElement(entry.cardId ? "button" : "span");
-    name.className = "chain-stack-card";
-    name.textContent = entry.name;
-    if (entry.cardId) {
-      name.type = "button";
-      name.dataset.cardId = entry.cardId;
-      name.title = `查看 ${entry.name} 详情`;
-      name.addEventListener("click", () => openCardDetail(entry.cardId));
-    }
-
-    const status = document.createElement("span");
-    status.className = "chain-stack-state";
-    status.textContent = entry.pending ? "待发动" : "等待结算";
-    main.appendChild(owner);
-    main.appendChild(name);
-    row.appendChild(index);
-    row.appendChild(art);
-    row.appendChild(main);
-    row.appendChild(status);
-    els.chainStack.appendChild(row);
-  });
-  if (entries.length > 1) {
-    const order = document.createElement("div");
-    order.className = "chain-resolution-order";
-    const label = document.createElement("span");
-    label.className = "chain-resolution-label";
-    label.textContent = "结算顺序：";
-    order.appendChild(label);
-    entries.slice().reverse().forEach((entry, index) => {
-      const step = document.createElement("span");
-      step.className = `chain-resolution-step ${entry.pending ? "pending" : ""}`;
-      step.textContent = `CL${entry.chainIndex}`;
-      order.appendChild(step);
-      if (index < entries.length - 1) {
-        const arrow = document.createElement("span");
-        arrow.className = "chain-resolution-arrow";
-        arrow.textContent = " → ";
-        order.appendChild(arrow);
-      }
-    });
-    order.setAttribute("aria-label", `结算顺序：${chainResolutionOrderText(entries)}`);
-    els.chainStack.appendChild(order);
-  }
-}
-
-function clearTrapChoiceOptions() {
-  if (!els.chainChoices) return;
-  els.chainChoices.replaceChildren();
-  els.chainChoices.hidden = true;
-  if (els.chainStack) {
-    els.chainStack.replaceChildren();
-    els.chainStack.hidden = true;
-  }
-}
-
 function updateTrapChoicePrompt() {
   if (!state.pendingTrapChoice) return;
-  els.chainText.textContent = pendingTrapChoiceDetailsText();
-  renderTrapChoiceOptions();
-  renderChainStack();
-  const selectedCard = state.player.traps[state.pendingTrapChoice.selectedIndex];
-  if (els.chainStatus) {
-    els.chainStatus.textContent = selectedCard
-      ? `已选择：${selectedCard.name}`
-      : `可响应 ${state.pendingTrapChoice.trapIndexes.length} 张 · 本事件限发动 1 张`;
-  }
-  els.chainYes.textContent = selectedCard ? `发动 ${selectedCard.name}` : "发动陷阱";
-  els.chainYes.disabled = !canActivateTrapResponse(state.pendingTrapChoice, state.player.traps);
+  renderTrapResponsePanel({
+    document,
+    elements: els,
+    choice: state.pendingTrapChoice,
+    traps: state.player.traps,
+    chain: currentEngineMachine()?.chain || [],
+    findCard: findRuntimeCard,
+    activationText: trapActivationText,
+    onSelect: selectPendingTrapChoice,
+    onActivate: activatePendingTrapChoice,
+    onCardClick: openCardDetail
+  });
 }
 
 function closeTrapChoicePrompt() {
   els.chainModal.classList.remove("show");
   state.pendingTrapChoice = null;
   pendingTrapChoiceResolver = null;
-  clearTrapChoiceOptions();
-  if (els.chainStatus) els.chainStatus.textContent = "";
-  els.chainYes.disabled = false;
-  els.chainYes.textContent = "发动陷阱";
+  clearTrapResponsePanel(els);
 }
 
 function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex = 1, options = {}) {
