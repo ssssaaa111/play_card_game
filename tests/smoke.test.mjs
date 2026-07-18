@@ -36,6 +36,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/card-inspector-renderer.js");
   checkModuleSyntax("src/card-renderer.js");
   checkModuleSyntax("src/card-state-display.js");
+  checkModuleSyntax("src/field-renderer.js");
   checkModuleSyntax("src/cards.js");
   checkModuleSyntax("src/combos.js");
   checkModuleSyntax("src/data.js");
@@ -260,6 +261,7 @@ test("app gates hand and battle actions by explicit phase", () => {
 
 test("selected hand cards use explicit confirm and cancel actions", () => {
   const app = readProjectFile("src/app.js");
+  const fieldRenderer = readProjectFile("src/field-renderer.js");
   const viewModel = readProjectFile("src/view-model.js");
 
   assert.match(app, /function selectedHandInfo\(\)/);
@@ -278,10 +280,9 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /canUseHandCards\(selectedHand\.card\)/);
   assert.match(app, /!state\.pendingTribute \|\| selectedTributeIndexes\(\)\.length === state\.pendingTribute\.cost/);
   assert.match(app, /Boolean\(state\.pendingTarget\) \|\| Boolean\(state\.pendingTribute\) \|\| Boolean\(state\.pendingFusion\) \|\| selectedHandReady/);
-  assert.match(app, /slot\.classList\.toggle\("attack-target", attackTargetable\)/);
-  assert.match(app, /cardEl\.classList\.toggle\("attack-target", attackTargetable\)/);
-  assert.match(app, /const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable/);
-  assert.match(app, /slot\.disabled = disabledEnemyEmpty/);
+  assert.equal((fieldRenderer.match(/"attack-target": attackTargetable/g) || []).length, 2);
+  assert.match(fieldRenderer, /const disabled = owner === "ai" && !card && !targetable && !attackTargetable/);
+  assert.match(fieldRenderer, /slot\.disabled = view\.disabled/);
   assert.doesNotMatch(app, /state\.pendingAttack/);
   assert.doesNotMatch(app, /card\.type === "spell" && state\.selected\?\.uid === card\.uid[\s\S]{0,180}playSpell\(state\.player, state\.ai/);
   assert.match(viewModel, /label: selected \? "待确认" : "可发动"/);
@@ -444,11 +445,16 @@ test("app uses extracted card display metadata", () => {
 
 test("app uses extracted card renderer", () => {
   const app = readProjectFile("src/app.js");
+  const fieldRenderer = readProjectFile("src/field-renderer.js");
   const renderer = readProjectFile("src/card-renderer.js");
 
   assert.match(app, /from '\.\/card-renderer\.js'/);
+  assert.match(app, /from '\.\/field-renderer\.js'/);
+  assert.match(fieldRenderer, /from "\.\/card-renderer\.js"/);
   assert.match(app, /renderCardElement\(document, card/);
-  assert.match(app, /slot\.dataset\.testid = `\$\{owner\}-field-\$\{index\}`/);
+  assert.match(fieldRenderer, /slot\.dataset\.testid = `\$\{owner\}-field-\$\{index\}`/);
+  assert.match(app, /renderMonsterZones\(\{/);
+  assert.match(app, /renderSupportZones\(\{/);
   assert.match(app, /cardEl\.dataset\.zone = "hand"/);
   assert.match(renderer, /el\.dataset\.cardId = card\.id/);
   assert.doesNotMatch(app, /function createCardElement/);
@@ -807,14 +813,15 @@ test("browser smoke runner covers key click regressions", () => {
 });
 
 test("skipped attack lock is visible on field cards", () => {
-  const app = readProjectFile("src/app.js");
+  const fieldRenderer = readProjectFile("src/field-renderer.js");
   const css = readProjectFile("styles.css");
 
-  assert.match(app, /const attacksLocked = owner === "player" && state\.player\.attacksSkipped/);
-  assert.match(app, /const attackReady = card\.type === "monster"/);
-  assert.match(app, /showStateRail: card\.type === "monster"/);
-  assert.match(app, /cardEl\.classList\.toggle\("attack-ready", attackReady\)/);
-  assert.match(app, /cardEl\.classList\.toggle\("attack-locked", attacksLocked\)/);
+  assert.match(fieldRenderer, /const attacksLocked = Boolean\(/);
+  assert.match(fieldRenderer, /&& state\.player\?\.attacksSkipped/);
+  assert.match(fieldRenderer, /const attackReady = Boolean\(/);
+  assert.match(fieldRenderer, /showStateRail: card\.type === "monster"/);
+  assert.match(fieldRenderer, /"attack-ready": attackReady/);
+  assert.match(fieldRenderer, /"attack-locked": attacksLocked/);
   assert.match(css, /\.card\.attack-locked/);
   assert.match(css, /\.slot\.attack-target/);
   assert.match(css, /\.slot\.empty:disabled/);
@@ -1117,7 +1124,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/field-renderer.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

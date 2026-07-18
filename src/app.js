@@ -24,6 +24,7 @@ import { applyCardArt } from './card-art.js';
 import { cardDefinitionById, cardDetailViewModel, cardInspectorViewModel } from './card-detail.js';
 import { bindCardInspector, renderCardInspector } from './card-inspector-renderer.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
+import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import { buildPreDuelPreview } from './pre-duel-preview.js';
@@ -81,7 +82,6 @@ import {
 } from './response-state.js';
 import { buildScenarioState } from './scenario-state.js';
 import { buildLifeDisplay } from './life-display.js';
-import { buildSupportCardDisplay } from './support-card-display.js';
 import { buildTrapChoiceDisplay } from './trap-choice-display.js';
 import {
   ACTION_WINDOWS,
@@ -4808,166 +4808,45 @@ function restoreSelectedAttackPreview() {
 }
 
 function renderField(root, duelist, owner, animationKey) {
-  root.innerHTML = "";
-  duelist.field.forEach((card, index) => {
-    const slot = document.createElement("button");
-    slot.type = "button";
-    slot.className = `slot ${card ? "" : "empty"}`;
-    slot.dataset.owner = owner;
-    slot.dataset.index = index;
-    slot.dataset.testid = `${owner}-field-${index}`;
-    const targetable = isPendingTargetSlot(owner, index);
-    const attackTargetable = isAttackTargetSlot(owner, index);
-    const tributeCandidate = owner === "player" && Boolean(state.pendingTribute) && Boolean(card);
-    const tributeSelected = tributeCandidate && selectedTributeIndexes().includes(index);
-    const fusionCandidate = owner === "player" && Boolean(state.pendingFusion) && Boolean(card) && isFusionMaterialCandidate(index);
-    const fusionSelected = owner === "player" && Boolean(state.pendingFusion) && selectedFusionIndexes().includes(index);
-    const materialCandidate = tributeCandidate || fusionCandidate;
-    const materialSelected = tributeSelected || fusionSelected;
-    const disabledEnemyEmpty = owner === "ai" && !card && !targetable && !attackTargetable;
-    slot.classList.toggle("targetable", targetable);
-    slot.classList.toggle("attack-target", attackTargetable);
-    slot.classList.toggle("tribute-candidate", materialCandidate);
-    slot.classList.toggle("tribute-selected", materialSelected);
-    slot.disabled = disabledEnemyEmpty;
-    slot.setAttribute("aria-disabled", disabledEnemyEmpty ? "true" : "false");
-    slot.setAttribute("aria-label", `${owner === "player" ? "我方" : "敌方"}召唤区 ${index + 1}`);
-    if (owner === "player") {
-      slot.addEventListener("click", () => handlePlayerSlot(index));
-    } else {
-      slot.addEventListener("click", () => handleAiSlot(index));
-    }
-    if (attackTargetable) {
-      slot.addEventListener("pointerenter", () => showSelectedAttackTargetPreview(index));
-      slot.addEventListener("pointerleave", restoreSelectedAttackPreview);
-      slot.addEventListener("focus", () => showSelectedAttackTargetPreview(index));
-      slot.addEventListener("blur", restoreSelectedAttackPreview);
-    }
-    if (card) {
-      const attacksLocked = owner === "player" && state.player.attacksSkipped && card.type === "monster" && !card.used && card.mode !== "defense";
-      const attackReady = card.type === "monster"
-        && state.started
-        && !state.paused
-        && !state.gameOver
-        && state.turn === owner
-        && state.phase === PHASES.battle
-        && card.mode !== "defense"
-        && !card.used
-        && !attacksLocked;
-      const cardEl = renderCardElement(document, card, {
-        asset: monsterAsset(card),
-        attacksLocked,
-        attackReady,
-        showStateRail: card.type === "monster"
-      });
-      cardEl.dataset.zone = `${owner}-field`;
-      if (card.type === "monster") cardEl.classList.add("field-monster-card");
-      cardEl.classList.toggle("selected", state.selected?.zone === "playerField" && state.selected.index === index && owner === "player");
-      cardEl.classList.toggle("used", card.used);
-      cardEl.classList.toggle("attack-ready", attackReady);
-      cardEl.classList.toggle("attack-locked", attacksLocked);
-      cardEl.classList.toggle("defense", card.mode === "defense");
-      cardEl.classList.toggle("enhanced", card.tempAtk > 0 || card.tempDef > 0);
-      cardEl.classList.toggle("weakened", card.tempAtk < 0 || card.tempDef < 0 || card.battleWear > 0);
-      cardEl.classList.toggle("protected", Boolean(card.destructionProtection && !card.destructionProtectionUsed));
-      cardEl.classList.toggle("targetable", targetable);
-      cardEl.classList.toggle("attack-target", attackTargetable);
-      cardEl.classList.toggle("tribute-candidate", materialCandidate);
-      cardEl.classList.toggle("tribute-selected", materialSelected);
-      if (animationKey === `summon-${owner}-${index}`) cardEl.classList.add("summon-flash");
-      if (animationKey === `hit-${owner}-${index}`) cardEl.classList.add("hit-flash");
-      if (owner === "player") {
-        cardEl.addEventListener("click", (event) => {
-          event.stopPropagation();
-          selectPlayerMonster(index);
-        });
-      } else {
-        cardEl.addEventListener("click", (event) => {
-          event.stopPropagation();
-          handleAiSlot(index);
-        });
-      }
-      slot.appendChild(cardEl);
-    }
-    root.appendChild(slot);
+  renderMonsterZones({
+    document,
+    root,
+    duelist,
+    owner,
+    state,
+    animationKey,
+    assetForCard: monsterAsset,
+    targetableAt: (index) => isPendingTargetSlot(owner, index),
+    attackTargetableAt: (index) => isAttackTargetSlot(owner, index),
+    selectedTributeIndexes: owner === "player" ? selectedTributeIndexes() : [],
+    selectedFusionIndexes: owner === "player" ? selectedFusionIndexes() : [],
+    fusionCandidateAt: (index) => isFusionMaterialCandidate(index),
+    onSlotClick: (index) => owner === "player" ? handlePlayerSlot(index) : handleAiSlot(index),
+    onCardClick: (index) => owner === "player" ? selectPlayerMonster(index) : handleAiSlot(index),
+    onAttackPreview: showSelectedAttackTargetPreview,
+    onAttackPreviewRestore: restoreSelectedAttackPreview
   });
 }
 
 function renderTraps(root, duelist, owner) {
-  root.innerHTML = "";
-  duelist.traps.forEach((card, index) => {
-    const slot = document.createElement("button");
-    slot.type = "button";
-    slot.className = `trap-slot ${card ? "" : "empty"}`;
-    slot.dataset.owner = owner;
-    slot.dataset.index = index;
-    slot.dataset.testid = `${owner}-trap-${index}`;
-    const trapChoiceReady = owner === "player" && Boolean(state.pendingTrapChoice?.trapIndexes?.includes(index));
-    const trapChoiceSelected = trapChoiceReady && state.pendingTrapChoice?.selectedIndex === index;
-    const targetable = isPendingTrapTargetSlot(owner, index);
-    const supportDisplay = card && owner === "player"
-      ? buildSupportCardDisplay(card, {
-        responseReady: trapChoiceReady,
-        responseSelected: trapChoiceSelected,
-        targetable
-      })
-      : null;
-    slot.classList.toggle("trap-response", trapChoiceReady);
-    slot.classList.toggle("trap-response-selected", trapChoiceSelected);
-    slot.classList.toggle("targetable", targetable);
-    if (supportDisplay) {
-      slot.classList.add(`support-${supportDisplay.key}`);
-      slot.dataset.supportState = supportDisplay.key;
-    }
-    const zoneLabel = `${owner === "player" ? "我方" : "敌方"}魔陷区 ${index + 1}`;
-    slot.setAttribute("aria-label", supportDisplay
-      ? `${zoneLabel}，${card.name}，${supportDisplay.description}`
-      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`);
-    if (owner === "player") {
-      slot.addEventListener("click", () => handlePlayerTrapSlot(index));
-    } else {
-      slot.addEventListener("click", () => handleAiTrapSlot(index));
-    }
-    if (card) {
-      const cardEl = owner === "player" ? renderCardElement(document, card, { asset: monsterAsset(card) }) : document.createElement("article");
-      const supportTypeClass = card.type === "spell" ? "player-spell" : "player-trap";
-      cardEl.className = owner === "player" ? `${cardEl.className} field-support-card ${supportTypeClass}` : "card back";
-      cardEl.dataset.zone = `${owner}-trap`;
-      cardEl.dataset.cardId = owner === "player" ? card.id || "" : "hidden";
-      cardEl.dataset.cardName = owner === "player" ? card.name || "" : "盖放的卡牌";
-      cardEl.dataset.cardType = owner === "player" ? card.type || "trap" : "hidden";
-      if (supportDisplay) {
-        cardEl.classList.add(`support-${supportDisplay.key}`);
-        cardEl.dataset.supportState = supportDisplay.key;
-        cardEl.setAttribute("aria-label", `${card.name}，${supportDisplay.typeLabel}，${supportDisplay.description}`);
-        const stateChip = document.createElement("span");
-        stateChip.className = `support-state-chip ${supportDisplay.key}`;
-        stateChip.textContent = supportDisplay.label;
-        stateChip.setAttribute("aria-hidden", "true");
-        cardEl.appendChild(stateChip);
-      }
-      cardEl.classList.toggle("trap-response", trapChoiceReady);
-      cardEl.classList.toggle("trap-response-selected", trapChoiceSelected);
-      cardEl.classList.toggle("targetable", targetable);
-      if (owner === "player") {
-        cardEl.addEventListener("click", (event) => {
-          event.stopPropagation();
-          if (selectPendingTrapChoice(index)) return;
-          state.selected = null;
-          clearBattlePreview();
-          showDetail(card);
-          render();
-          if (canPlayerAct()) resumePlayerIdleCountdownAfterPassiveIntent();
-        });
-        cardEl.addEventListener("dblclick", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          activatePendingTrapChoice(index);
-        });
-      }
-      slot.appendChild(cardEl);
-    }
-    root.appendChild(slot);
+  renderSupportZones({
+    document,
+    root,
+    duelist,
+    owner,
+    state,
+    assetForCard: monsterAsset,
+    targetableAt: (index) => isPendingTrapTargetSlot(owner, index),
+    onSlotClick: (index) => owner === "player" ? handlePlayerTrapSlot(index) : handleAiTrapSlot(index),
+    onCardClick: (card, index) => {
+      if (selectPendingTrapChoice(index)) return;
+      state.selected = null;
+      clearBattlePreview();
+      showDetail(card);
+      render();
+      if (canPlayerAct()) resumePlayerIdleCountdownAfterPassiveIntent();
+    },
+    onCardDoubleClick: (_card, index) => activatePendingTrapChoice(index)
   });
 }
 
