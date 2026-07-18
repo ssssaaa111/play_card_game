@@ -38,6 +38,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/card-state-display.js");
   checkModuleSyntax("src/field-renderer.js");
   checkModuleSyntax("src/hand-renderer.js");
+  checkModuleSyntax("src/hud-renderer.js");
   checkModuleSyntax("src/cards.js");
   checkModuleSyntax("src/combos.js");
   checkModuleSyntax("src/data.js");
@@ -834,12 +835,12 @@ test("skipped attack lock is visible on field cards", () => {
 });
 
 test("duel UI exposes turn ownership and side-specific field feedback", () => {
-  const app = readProjectFile("src/app.js");
+  const hudRenderer = readProjectFile("src/hud-renderer.js");
   const css = readProjectFile("styles.css");
 
-  assert.match(app, /document\.body\.dataset\.duelTurn = state\.paused \? "paused" : activeTurn/);
-  assert.match(app, /els\.playerPanel\.classList\.toggle\("active-turn", activeTurn === "player" && !state\.paused\)/);
-  assert.match(app, /els\.aiPanel\.classList\.toggle\("active-turn", activeTurn === "ai" && !state\.paused\)/);
+  assert.match(hudRenderer, /body\.dataset\.duelTurn = paused \? "paused" : activeTurn/);
+  assert.match(hudRenderer, /panel\.classList\.toggle\("active-turn", view\.active\)/);
+  assert.match(hudRenderer, /panel\.classList\.toggle\("direct-target", view\.directTargetReady\)/);
   assert.match(css, /body\[data-duel-turn="player"\] \.phase/);
   assert.match(css, /body\[data-duel-turn="ai"\] #aiField \.slot/);
   assert.match(css, /#playerField,[\s\S]*--zone-accent: 84, 210, 210/);
@@ -1129,7 +1130,7 @@ test("hand action prompts have visible layout room", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/data.js", "src/deck.js", "src/engine-adapter.js", "src/field-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/setup-options.js", "src/spells.js", "src/timeline.js", "src/traps.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });

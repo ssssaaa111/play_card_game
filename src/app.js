@@ -82,7 +82,7 @@ import {
   selectTrapResponse
 } from './response-state.js';
 import { buildScenarioState } from './scenario-state.js';
-import { buildLifeDisplay } from './life-display.js';
+import { renderCombatHud } from './hud-renderer.js';
 import { buildTrapChoiceDisplay } from './trap-choice-display.js';
 import {
   ACTION_WINDOWS,
@@ -4597,41 +4597,6 @@ function playSpellEffect(owner, rival, card, targetCard = null, targetOwner = ow
   playArrow(source, target, "spell", card.name);
 }
 
-function renderCharacterPanel(duelist, profile, nameEl, skillEl) {
-  if (nameEl) {
-    nameEl.textContent = duelist.owner === "player" ? `${profile.name}（你）` : profile.name;
-  }
-  if (skillEl) {
-    skillEl.innerHTML = `<strong>${profile.skill}</strong>：${profile.text}`;
-  }
-}
-
-function renderVitalStatus(duelist, root, lifeDisplay, activeTurn) {
-  if (!root) return;
-  const turnLabel = state.paused
-    ? "已暂停"
-    : activeTurn === duelist.owner
-      ? (duelist.owner === "player" ? "你的回合" : "对手行动")
-      : "待机";
-  const items = [
-    { label: turnLabel, tone: state.paused ? "idle" : activeTurn === duelist.owner ? "turn" : "idle" },
-    duelist.shield > 0 ? { label: `护盾 ${duelist.shield}`, tone: "shield" } : null,
-    duelist.extraSummon > 0 ? { label: `额外召唤 ${duelist.extraSummon}`, tone: "resource" } : null,
-    lifeDisplay.tone === "critical"
-      ? { label: "生命危急", tone: "critical" }
-      : lifeDisplay.tone === "warning"
-        ? { label: "生命警戒", tone: "warning" }
-        : null
-  ].filter(Boolean);
-
-  root.replaceChildren(...items.map((item) => {
-    const chip = document.createElement("span");
-    chip.className = `vital-chip ${item.tone}`;
-    chip.textContent = item.label;
-    return chip;
-  }));
-}
-
 function render(animationKey = "") {
   const scenario = scenarioSetups[state.scenarioId] || scenarioSetups.normal;
   const targetPrompt = state.pendingTarget ? targetPromptFor(state.pendingTarget.mode, state.pendingTarget.cardName, state.pendingTarget.effect) : "";
@@ -4639,10 +4604,7 @@ function render(animationKey = "") {
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
   const musicMode = currentMusicMode();
   setMusicMode(musicMode);
-  document.body.dataset.duelTurn = state.paused ? "paused" : activeTurn;
   document.body.dataset.musicMode = musicMode;
-  els.playerPanel.classList.toggle("active-turn", activeTurn === "player" && !state.paused);
-  els.aiPanel.classList.toggle("active-turn", activeTurn === "ai" && !state.paused);
   els.phaseText.textContent = phaseLabel(state);
   els.turnText.textContent = turnLabel(state);
   els.duelHint.textContent = duelHintText({
@@ -4732,34 +4694,23 @@ function render(animationKey = "") {
     els.setupStats.textContent = `${statsLine()} / 当前配置：${characterProfiles.player.name}、${setupLabel(deckPresets, state.deckPreset)}、${aiLabel} / ${scenario.label}${scenario.goal ? ` / 目标：${scenario.goal}` : ""}`;
   }
 
-  const playerLife = buildLifeDisplay(state.player.lp, MAX_LP);
-  const aiLife = buildLifeDisplay(state.ai.lp, MAX_LP);
-  els.playerLp.textContent = playerLife.text;
-  els.playerLp.setAttribute("aria-label", playerLife.ariaLabel);
-  els.aiLp.textContent = aiLife.text;
-  els.aiLp.setAttribute("aria-label", aiLife.ariaLabel);
-  els.playerLife.style.width = `${playerLife.percent}%`;
-  els.aiLife.style.width = `${aiLife.percent}%`;
-  els.playerLifeBar.dataset.tone = playerLife.tone;
-  els.aiLifeBar.dataset.tone = aiLife.tone;
-  els.playerPanel.dataset.lifeTone = playerLife.tone;
-  els.aiPanel.dataset.lifeTone = aiLife.tone;
-  renderVitalStatus(state.player, els.playerVitalStatus, playerLife, activeTurn);
-  renderVitalStatus(state.ai, els.aiVitalStatus, aiLife, activeTurn);
-  els.playerDeckCount.textContent = state.player.deck.length;
-  els.aiDeckCount.textContent = state.ai.deck.length;
-  els.playerGraveCount.textContent = state.player.grave.length;
-  els.aiGraveCount.textContent = state.ai.grave.length;
-  renderCharacterPanel(state.player, characterProfiles.player, els.playerName, els.playerSkill);
-  renderCharacterPanel(state.ai, characterProfiles.ai, els.aiName, els.aiSkill);
   if (els.profileStats) {
     els.profileStats.textContent = `${setupLabel(deckPresets, state.deckPreset)} / ${scenario.label} / ${statsLine()}`;
   }
   const directTargetReady = canPlayerTargetAiPanel();
-  els.aiPanel.classList.toggle("direct-target", directTargetReady);
-  els.aiPanel.setAttribute("aria-label", directTargetReady ? "直接攻击 AI 玩家" : "AI 玩家状态");
-  els.aiPanel.setAttribute("role", directTargetReady ? "button" : "region");
-  els.aiPanel.tabIndex = directTargetReady ? 0 : -1;
+  renderCombatHud({
+    document,
+    body: document.body,
+    elements: els,
+    player: state.player,
+    ai: state.ai,
+    playerProfile: characterProfiles.player,
+    aiProfile: characterProfiles.ai,
+    activeTurn,
+    paused: state.paused,
+    maxLife: MAX_LP,
+    directTargetReady
+  });
 
   renderField(els.playerField, state.player, "player", animationKey);
   renderField(els.aiField, state.ai, "ai", animationKey);

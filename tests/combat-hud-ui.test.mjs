@@ -9,15 +9,15 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
 test("combat HUD keeps life tone and turn resources in dedicated status rails", () => {
   const html = read("index.html");
-  const app = read("src/app.js");
+  const hudRenderer = read("src/hud-renderer.js");
   const css = read("styles.css");
 
   assert.match(html, /id="playerLifeBar"/);
   assert.match(html, /id="playerVitalStatus"/);
   assert.match(html, /id="aiVitalStatus"/);
-  assert.match(app, /function renderVitalStatus\(/);
-  assert.match(app, /els\.playerLifeBar\.dataset\.tone = playerLife\.tone/);
-  assert.match(app, /els\.playerPanel\.dataset\.lifeTone = playerLife\.tone/);
+  assert.match(hudRenderer, /export function vitalStatusItems/);
+  assert.match(hudRenderer, /lifeBar\.dataset\.tone = view\.life\.tone/);
+  assert.match(hudRenderer, /panel\.dataset\.lifeTone = view\.life\.tone/);
   assert.match(css, /\.life-bar\[data-tone="critical"\]/);
   assert.match(css, /\.vital-chip\.turn/);
   assert.match(css, /\.vital-chip\.shield/);
