@@ -28,3 +28,33 @@ test("builds compact field state chips in a stable priority order", () => {
     ]
   );
 });
+
+test("explains convergence attack locks and sourced effect markers before generic used state", () => {
+  assert.equal(
+    cardStatusText({
+      type: "monster",
+      mode: "attack",
+      used: true,
+      attackLockReason: "trioConvergence"
+    }),
+    "三曜共降：本回合不能攻击"
+  );
+  assert.deepEqual(
+    cardStateChips({
+      type: "monster",
+      mode: "attack",
+      used: true,
+      attackLockReason: "trioConvergence",
+      tempAtk: 2100
+    }, {
+      effectMarkers: [
+        { label: "再攻 ×2", tone: "ability", detail: "三曜终断、战斗狂热" }
+      ]
+    }),
+    [
+      { label: "本回合禁攻", tone: "locked", detail: "三曜共降：本回合不能攻击" },
+      { label: "再攻 ×2", tone: "ability", detail: "三曜终断、战斗狂热" },
+      { label: "攻 +2100", tone: "buff" }
+    ]
+  );
+});

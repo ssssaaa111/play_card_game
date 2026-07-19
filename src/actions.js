@@ -3,7 +3,7 @@ import { PHASES } from './turn-state.js';
 export { shouldRunPlayerIdleCountdown } from './turn-state.js';
 
 export function hasAvailableAttack(field = []) {
-  return field.some((card) => card && !card.used && card.mode !== "defense");
+  return field.some((card) => card && !card.used && !card.attackLockReason && card.mode !== "defense");
 }
 
 export function canDuelistAttack(duelist) {

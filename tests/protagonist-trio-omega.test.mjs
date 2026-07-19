@@ -287,10 +287,37 @@ test("first legal trio tribute summon establishes all three gods through summon 
   assert.equal(summonEvents.filter((event) => event.summonType === "trioConvergence").length, 2);
   assert.ok(summonEvents.filter((event) => event.summonType === "trioConvergence").every((event) => event.sourceCardId === sunId));
   assert.ok(summonEvents.filter((event) => event.summonType === "trioConvergence").every((event) => event.used === true));
+  assert.ok(summonEvents.filter((event) => event.summonType === "trioConvergence").every((event) => event.attackLockReason === "trioConvergence"));
   assert.equal(trioPressureCards.length, 3);
   assert.equal(trioPressureCards.filter((card) => card.used).length, 2);
+  assert.equal(trioPressureCards.filter((card) => card.attackLockReason === "trioConvergence").length, 2);
   assert.equal(trioPressureCards.reduce((total, card) => total + card.atk, 0), 7500);
   assert.equal(events.filter((event) => event.type === "CARD_TRIBUTED").length, 3);
+  const convergedCardId = summonEvents.find((event) => event.summonType === "trioConvergence").cardId;
+  engine.dispatch({ type: "CHANGE_PHASE", playerId: AI, phase: Phase.battle });
+  assert.throws(
+    () => engine.dispatch({
+      type: "DECLARE_ATTACK",
+      playerId: AI,
+      rivalId: PLAYER,
+      attackerCardId: convergedCardId
+    }),
+    /cannot attack this turn.*trioConvergence/
+  );
+  const blockedResetEvents = engine.dispatch({
+    type: "GRANT_ABILITY",
+    playerId: AI,
+    ability: "attackReset",
+    uses: 1,
+    sourceCardId: "test-reset-source",
+    targetCardId: convergedCardId
+  });
+  assert.ok(blockedResetEvents.some((event) =>
+    event.type === "ABILITY_GRANT_BLOCKED"
+    && event.reason === "trioConvergence"
+    && event.targetCardId === convergedCardId
+  ));
+  assert.equal(engine.getState().abilities[AI].some((entry) => entry.targetCardId === convergedCardId), false);
   assertValidGameState(state);
 });
 
@@ -548,6 +575,10 @@ test("correct trio line crosses the rival turn, clears pressure, revives the low
   assert.equal(state.cards[pawnId].atk, 600);
   assert.equal(state.cards[pawnId].tempAtk, 2100);
   assert.ok(finalEvents.some((event) => event.type === "ABILITY_GRANTED" && event.ability === "attackReset"));
+  assert.equal(
+    finalEvents.find((event) => event.type === "ABILITY_GRANTED" && event.ability === "attackReset")?.targetCardId,
+    pawnId
+  );
   assert.ok(engine.getState().events.some((event) => event.type === "TURN_STARTED" && event.playerId === AI));
 
   engine.dispatch({ type: "CHANGE_PHASE", playerId: PLAYER, phase: Phase.battle });

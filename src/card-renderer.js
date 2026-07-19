@@ -12,14 +12,21 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#39;");
 }
 
-export function cardRenderModel(card, { asset = "", attacksLocked = false, attackReady = false, handSummary = false } = {}) {
+export function cardRenderModel(card, {
+  asset = "",
+  attacksLocked = false,
+  attackReady = false,
+  handSummary = false,
+  effectMarkers = [],
+  showTributeRequirement = true
+} = {}) {
   const badge = cardBadgeText(card);
   const typeLabel = cardTypeLabel(card);
   const elementText = elementBadgeText(card);
   const ruleText = cardRuleText(card);
-  const tributeText = tributeRequirementText(card, { compact: true });
-  const statusText = cardStatusText(card, { attacksLocked });
-  const stateChips = cardStateChips(card, { attacksLocked, attackReady });
+  const tributeText = showTributeRequirement ? tributeRequirementText(card, { compact: true }) : "";
+  const statusText = cardStatusText(card, { attacksLocked, effectMarkers });
+  const stateChips = cardStateChips(card, { attacksLocked, attackReady, effectMarkers });
   const monsterArt = card.type === "monster"
     ? `<span class="monster-element-chip ${escapeHtml(card.element || "neutral")}">${escapeHtml(elementText || "无属性")}</span><div class="monster-projection ${escapeHtml(card.element || "")} ${card.mode === "defense" ? "defense" : ""}">${asset ? `<img class="monster-sprite" src="${escapeHtml(asset)}" alt="">` : `<div class="monster-head"></div><div class="monster-body"></div><div class="monster-limb left"></div><div class="monster-limb right"></div>`}</div>`
     : `<span class="card-art-symbol">${escapeHtml(card.icon)}</span>`;
@@ -64,7 +71,7 @@ export function createCardElement(doc, card, options = {}) {
       ${model.artHtml}
       ${!showStateRail && model.statusText ? `<span class="card-status">${escapeHtml(model.statusText)}</span>` : ""}
     </div>
-    ${showStateRail ? `<div class="card-state-rail">${model.stateChips.map((chip) => `<span class="card-state-chip ${escapeHtml(chip.tone)}">${escapeHtml(chip.label)}</span>`).join("")}</div>` : ""}
+    ${showStateRail ? `<div class="card-state-rail">${model.stateChips.map((chip) => `<span class="card-state-chip ${escapeHtml(chip.tone)}"${chip.detail ? ` title="${escapeHtml(chip.detail)}"` : ""}>${escapeHtml(chip.label)}</span>`).join("")}</div>` : ""}
     <div class="card-text ${escapeHtml(model.textMode)}">${escapeHtml(model.text)}</div>
     <div class="stats">
       <div class="stat">${escapeHtml(model.stats[0])}</div>

@@ -21,5 +21,5 @@ export function statChangeText(event = {}, { continuousReleased = false } = {}) 
 }
 
 export function shouldLogGenericDestroyedEvent(card = {}) {
-  return card.trigger !== "attackDestroy";
+  return Boolean(card);
 }

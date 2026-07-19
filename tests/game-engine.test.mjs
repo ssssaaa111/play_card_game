@@ -1320,7 +1320,8 @@ test("rally-attack stores an attack reset ability when no monster has attacked",
     event.playerId === PLAYER &&
     event.ability === Ability.attackReset &&
     event.uses === 1 &&
-    event.sourceCardId === "rally-2"
+    event.sourceCardId === "rally-2" &&
+    event.targetCardId === "lancer-2"
   ));
   assert.ok(!events.some((event) => event.type === "MONSTER_READIED"));
   assertValidGameState(next);
@@ -1364,7 +1365,8 @@ test("battle-trance buffs the strongest monster and grants attack reset through 
     event.playerId === PLAYER &&
     event.ability === Ability.attackReset &&
     event.uses === 1 &&
-    event.sourceCardId === "trance-1"
+    event.sourceCardId === "trance-1" &&
+    event.targetCardId === "lancer-1"
   ));
   assertValidGameState(next);
 });
@@ -3719,6 +3721,99 @@ test("attack reset is spent and readies a surviving attacker through battle even
   assert.ok(events.some((event) => event.type === "MONSTER_READIED" && event.cardId === "reset-attacker"));
 });
 
+test("attack reset stays bound to its target and preserves the granting source", () => {
+  const state = makeState({
+    cards: [
+      card("bound-attacker", { type: "monster", atk: 1500, def: 1000, mode: "attack", used: false }),
+      card("other-attacker", { type: "monster", atk: 1200, def: 800, mode: "attack", used: false })
+    ],
+    player: { monsterZone: ["bound-attacker", "other-attacker"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  state.abilities[PLAYER] = [
+    {
+      ability: Ability.attackReset,
+      uses: 1,
+      duration: "turn",
+      sourceCardId: "reset-source",
+      targetCardId: "bound-attacker"
+    }
+  ];
+  const engine = new GameEngine(state);
+
+  const otherEvents = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "other-attacker"
+  });
+  assert.equal(engine.getState().cards["other-attacker"].used, true);
+  assert.equal(hasAbility(engine.getState(), PLAYER, Ability.attackReset), true);
+  assert.ok(!otherEvents.some((event) => event.type === "ABILITY_SPENT" && event.ability === Ability.attackReset));
+
+  const boundEvents = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "bound-attacker"
+  });
+  const spent = boundEvents.find((event) => event.type === "ABILITY_SPENT" && event.ability === Ability.attackReset);
+  assert.equal(engine.getState().cards["bound-attacker"].used, false);
+  assert.equal(hasAbility(engine.getState(), PLAYER, Ability.attackReset), false);
+  assert.equal(spent?.sourceCardId, "reset-source");
+  assert.equal(spent?.targetCardId, "bound-attacker");
+});
+
+test("stacked attack resets keep both sources and give only their target two extra attacks", () => {
+  const state = makeState({
+    cards: [
+      card("triple-attacker", { type: "monster", atk: 600, def: 600, mode: "attack", used: false }),
+      card("bystander", { type: "monster", atk: 800, def: 800, mode: "attack", used: false })
+    ],
+    player: { monsterZone: ["triple-attacker", "bystander"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  state.abilities[PLAYER] = [
+    { ability: Ability.attackReset, uses: 1, duration: "turn", sourceCardId: "final-counter", targetCardId: "triple-attacker" },
+    { ability: Ability.attackReset, uses: 1, duration: "turn", sourceCardId: "battle-trance", targetCardId: "triple-attacker" }
+  ];
+  const engine = new GameEngine(state);
+
+  const first = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "triple-attacker"
+  });
+  const second = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "triple-attacker"
+  });
+  const third = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "triple-attacker"
+  });
+
+  assert.deepEqual(
+    [first, second]
+      .map((events) => events.find((event) => event.type === "ABILITY_SPENT" && event.ability === Ability.attackReset)?.sourceCardId),
+    ["final-counter", "battle-trance"]
+  );
+  assert.ok(first.some((event) => event.type === "MONSTER_READIED" && event.cardId === "triple-attacker"));
+  assert.ok(second.some((event) => event.type === "MONSTER_READIED" && event.cardId === "triple-attacker"));
+  assert.ok(!third.some((event) => event.type === "MONSTER_READIED"));
+  assert.equal(engine.getState().cards["triple-attacker"].used, true);
+  assert.equal(engine.getState().cards["bystander"].used, false);
+});
+
 test("cancelled attacks consume queued attack reset through mark-used events", () => {
   const state = makeState({
     cards: [card("cancelled-attacker", { type: "monster", mode: "attack", used: false })],
@@ -3738,6 +3833,32 @@ test("cancelled attacks consume queued attack reset through mark-used events", (
   assert.equal(hasAbility(engine.getState(), PLAYER, Ability.attackReset), false);
   assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === "cancelled-attacker"));
   assert.ok(events.some((event) => event.type === "MONSTER_READIED" && event.cardId === "cancelled-attacker"));
+});
+
+test("turn start clears a monster's temporary attack lock through its reset event", () => {
+  const state = makeState({
+    cards: [
+      card("converged-monster", {
+        type: "monster",
+        mode: "attack",
+        used: true,
+        attackLockReason: "trioConvergence"
+      })
+    ],
+    player: { monsterZone: ["converged-monster"] },
+    turn: { playerId: AI, phase: Phase.end }
+  });
+  state.machine.phase = Phase.end;
+  state.machine.timing = Timing.end;
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({ type: "START_TURN", playerId: PLAYER });
+  const reset = events.find((event) => event.type === "MONSTER_TURN_RESET" && event.cardId === "converged-monster");
+
+  assert.equal(reset?.beforeAttackLockReason, "trioConvergence");
+  assert.equal(reset?.afterAttackLockReason, null);
+  assert.equal(engine.getState().cards["converged-monster"].attackLockReason, null);
+  assert.equal(engine.getState().cards["converged-monster"].used, false);
 });
 
 test("skip attack lock blocks attack reset and direct attack grants", () => {

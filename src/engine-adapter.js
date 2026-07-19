@@ -181,10 +181,23 @@ function uiDuelistToEngine(duelist) {
 }
 
 function uiAbilityEntries(duelist) {
-  return [
+  const attackResetEntries = Array.isArray(duelist.attackResetEntries)
+    ? duelist.attackResetEntries
+      .filter((entry) => Math.max(0, Number(entry.uses) || 0) > 0)
+      .map((entry) => ({
+        ability: Ability.attackReset,
+        uses: Math.max(0, Number(entry.uses) || 0),
+        duration: entry.duration || "turn",
+        sourceCardId: entry.sourceCardId || null,
+        targetCardId: entry.targetCardId || null
+      }))
+    : [];
+  const trackedAttackResetUses = attackResetEntries.reduce((total, entry) => total + entry.uses, 0);
+  const legacyAttackResetUses = Math.max(0, (Number(duelist.attackResets) || 0) - trackedAttackResetUses);
+  const genericEntries = [
     [Ability.directAttack, duelist.directAttacks],
     [Ability.extraSummon, duelist.extraSummon],
-    [Ability.attackReset, duelist.attackResets],
+    [Ability.attackReset, legacyAttackResetUses],
     [Ability.skipAttackLock, duelist.attacksSkipped ? 1 : 0]
   ]
     .filter(([, uses]) => Math.max(0, Number(uses) || 0) > 0)
@@ -194,6 +207,7 @@ function uiAbilityEntries(duelist) {
       duration: "turn",
       sourceCardId: null
     }));
+  return [...attackResetEntries, ...genericEntries];
 }
 
 function enginePhaseFromUiPhase(phase) {
@@ -353,6 +367,27 @@ function applyUiAbilityEvent(uiState, event, direction) {
   }
   if (event.ability === Ability.attackReset) {
     duelist.attackResets = Math.max(0, (Number(duelist.attackResets) || 0) + uses);
+    duelist.attackResetEntries = Array.isArray(duelist.attackResetEntries) ? duelist.attackResetEntries : [];
+    if (direction > 0) {
+      duelist.attackResetEntries.push({
+        uses: Math.max(1, Number(event.uses) || 1),
+        duration: event.duration || "turn",
+        sourceCardId: event.sourceCardId || null,
+        targetCardId: event.targetCardId || null
+      });
+    } else {
+      const index = duelist.attackResetEntries.findIndex((entry) =>
+        entry.uses > 0
+        && (!event.sourceCardId || entry.sourceCardId === event.sourceCardId)
+        && (!event.targetCardId || entry.targetCardId === event.targetCardId)
+      );
+      if (index >= 0) {
+        duelist.attackResetEntries[index].uses -= Math.max(1, Number(event.uses) || 1);
+        if (duelist.attackResetEntries[index].uses <= 0) {
+          duelist.attackResetEntries.splice(index, 1);
+        }
+      }
+    }
   }
   if (event.ability === Ability.skipAttackLock) {
     duelist.attacksSkipped = direction > 0;
@@ -454,6 +489,7 @@ export function applyUiGameEvents(uiState, events = []) {
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
       card.mode = event.mode || "attack";
       card.used = Boolean(event.used);
+      card.attackLockReason = event.attackLockReason || null;
       card.changedMode = Boolean(event.changedMode);
       card.tempAtk = Number(event.tempAtk) || 0;
       card.tempDef = Number(event.tempDef) || 0;
@@ -485,6 +521,7 @@ export function applyUiGameEvents(uiState, events = []) {
       if (!card) throw new Error(`Card ${event.cardId} was not found in UI state`);
       card.used = Boolean(event.afterUsed);
       card.changedMode = Boolean(event.afterChangedMode);
+      card.attackLockReason = event.afterAttackLockReason || null;
       if ("afterDestructionProtectionUsed" in event) {
         card.destructionProtectionUsed = Boolean(event.afterDestructionProtectionUsed);
       }
@@ -546,6 +583,7 @@ export function applyUiGameEvents(uiState, events = []) {
       duelist.directAttacks = 0;
       duelist.extraSummon = 0;
       duelist.attackResets = 0;
+      duelist.attackResetEntries = [];
       if ((event.abilities || []).some((entry) => entry.ability === Ability.skipAttackLock)) {
         duelist.attacksSkipped = false;
       }

@@ -1799,6 +1799,12 @@ test("dispatches engine-backed battle-trance as a stat buff plus attack reset ab
   assert.equal(strongest.tempAtk, 200);
   assert.equal(weaker.tempAtk || 0, 0);
   assert.equal(state.player.attackResets, 1);
+  assert.deepEqual(state.player.attackResetEntries, [{
+    uses: 1,
+    duration: "turn",
+    sourceCardId: trance.uid,
+    targetCardId: strongest.uid
+  }]);
   assert.ok(events.some((event) =>
     event.type === "STAT_MODIFIED" &&
     event.cardId === strongest.uid &&
@@ -1809,8 +1815,20 @@ test("dispatches engine-backed battle-trance as a stat buff plus attack reset ab
     event.playerId === "player" &&
     event.ability === "attackReset" &&
     event.uses === 1 &&
-    event.sourceCardId === trance.uid
+    event.sourceCardId === trance.uid &&
+    event.targetCardId === strongest.uid
   ));
+  assert.deepEqual(
+    buildEngineStateFromUiState(state).abilities.player
+      .filter((entry) => entry.ability === "attackReset"),
+    [{
+      ability: "attackReset",
+      uses: 1,
+      duration: "turn",
+      sourceCardId: trance.uid,
+      targetCardId: strongest.uid
+    }]
+  );
 });
 
 test("dispatches battle-trance as an immediate ready when the strongest monster already attacked", () => {

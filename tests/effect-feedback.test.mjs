@@ -41,7 +41,7 @@ test("matches stat rollback events to their continuous release", () => {
   assert.equal(isContinuousReleaseStat([], statEvent), false);
 });
 
-test("leaves attack-destroy trap logging to its dedicated feedback", () => {
-  assert.equal(shouldLogGenericDestroyedEvent({ trigger: "attackDestroy" }), false);
+test("logs attack-destroy results through the shared public effect feedback", () => {
+  assert.equal(shouldLogGenericDestroyedEvent({ trigger: "attackDestroy" }), true);
   assert.equal(shouldLogGenericDestroyedEvent({ effect: "destroySpellTrap" }), true);
 });

@@ -290,6 +290,10 @@ export class EffectContext {
     this.#emit = emit;
   }
 
+  resolveCardIds(cardId) {
+    return resolveCardIdInput(this.#state, cardId);
+  }
+
   drawCards(playerId, count, options = {}) {
     const player = requirePlayer(this.#state, playerId);
     const requested = Math.max(0, Number(count) || 0);
@@ -506,6 +510,7 @@ export class EffectContext {
       sourceCardId: options.sourceCardId || cardId,
       mode: options.mode || "attack",
       used: Boolean(options.used),
+      attackLockReason: options.attackLockReason || null,
       changedMode: false,
       tempAtk: 0,
       tempDef: 0,
@@ -773,19 +778,34 @@ export class EffectContext {
       });
       return false;
     }
+    if (ability === Ability.attackReset && options.targetCardId) {
+      const target = requireCardInZone(this.#state, playerId, "monsterZone", options.targetCardId);
+      if (target.attackLockReason) {
+        this.#emit("ABILITY_GRANT_BLOCKED", {
+          playerId,
+          ability,
+          reason: target.attackLockReason,
+          sourceCardId: options.sourceCardId || null,
+          targetCardId: options.targetCardId
+        });
+        return false;
+      }
+    }
 
     this.#emit("ABILITY_GRANTED", {
       playerId,
       ability,
       uses: Math.max(1, Number(options.uses) || 1),
       duration: options.duration || "turn",
-      sourceCardId: options.sourceCardId || null
+      sourceCardId: options.sourceCardId || null,
+      targetCardId: options.targetCardId || null
     });
     return true;
   }
 
   readyMonster(cardId, options = {}) {
     const card = requireCard(this.#state, cardId);
+    if (card.attackLockReason) return false;
     const beforeUsed = Boolean(card.used);
     if (!beforeUsed) return false;
 
@@ -809,11 +829,25 @@ export class EffectContext {
       return null;
     }
     const cardIds = resolveCardIdInput(this.#state, cardId);
+    const targetCardId = cardIds[0] || options.targetCardId || null;
+    if (targetCardId) {
+      const target = requireCardInZone(this.#state, playerId, "monsterZone", targetCardId);
+      if (target.attackLockReason) {
+        this.#emit("ABILITY_GRANT_BLOCKED", {
+          playerId,
+          ability,
+          reason: target.attackLockReason,
+          sourceCardId: options.sourceCardId || null,
+          targetCardId
+        });
+        return null;
+      }
+    }
     const usedCardId = cardIds.find((targetCardId) => Boolean(requireCard(this.#state, targetCardId).used));
     if (usedCardId && this.readyMonster(usedCardId, options)) {
       return usedCardId;
     }
-    this.grantAbility(playerId, ability, options);
+    this.grantAbility(playerId, ability, { ...options, targetCardId });
     return null;
   }
 }
@@ -1237,7 +1271,8 @@ export class GameEngine {
     const summonedCardIds = candidates.map((cardId) => ctx.specialSummonFromHand(action.playerId, cardId, {
       sourceCardId: action.cardId,
       summonType: "trioConvergence",
-      used: true
+      used: true,
+      attackLockReason: "trioConvergence"
     }));
     emit("TRIO_CONVERGENCE_RESOLVED", {
       playerId: action.playerId,
@@ -1564,12 +1599,13 @@ export class GameEngine {
     const player = requirePlayer(state, action.playerId);
     const monsterResets = player.monsterZone
       .map((cardId) => requireCard(state, cardId))
-      .filter((card) => card.used || card.changedMode || card.destructionProtectionUsed)
+      .filter((card) => card.used || card.changedMode || card.destructionProtectionUsed || card.attackLockReason)
       .map((card) => {
         const reset = {
           cardId: card.id,
           beforeUsed: Boolean(card.used),
-          beforeChangedMode: Boolean(card.changedMode)
+          beforeChangedMode: Boolean(card.changedMode),
+          beforeAttackLockReason: card.attackLockReason || null
         };
         if (card.destructionProtectionUsed) {
           reset.beforeDestructionProtectionUsed = true;
@@ -1592,7 +1628,8 @@ export class GameEngine {
         playerId: action.playerId,
         ...reset,
         afterUsed: false,
-        afterChangedMode: false
+        afterChangedMode: false,
+        afterAttackLockReason: null
       };
       if (reset.beforeDestructionProtectionUsed) {
         resetEvent.afterDestructionProtectionUsed = false;
@@ -1993,13 +2030,27 @@ export class GameEngine {
       });
       return;
     }
+    if (action.ability === Ability.attackReset && action.targetCardId) {
+      const target = requireCardInZone(state, action.playerId, "monsterZone", action.targetCardId);
+      if (target.attackLockReason) {
+        emit("ABILITY_GRANT_BLOCKED", {
+          playerId: action.playerId,
+          ability: action.ability,
+          reason: target.attackLockReason,
+          sourceCardId: action.sourceCardId || null,
+          targetCardId: action.targetCardId
+        });
+        return;
+      }
+    }
 
     emit("ABILITY_GRANTED", {
       playerId: action.playerId,
       ability: action.ability,
       uses: Math.max(1, Number(action.uses) || 1),
       duration: action.duration || "turn",
-      sourceCardId: action.sourceCardId || null
+      sourceCardId: action.sourceCardId || null,
+      targetCardId: action.targetCardId || null
     });
   }
 
@@ -2769,6 +2820,7 @@ function applyMonsterSummoned(state, event) {
   const card = requireCard(state, event.cardId);
   card.mode = event.mode || "attack";
   card.used = Boolean(event.used);
+  card.attackLockReason = event.attackLockReason || null;
   card.changedMode = Boolean(event.changedMode);
   card.tempAtk = Number(event.tempAtk) || 0;
   card.tempDef = Number(event.tempDef) || 0;
@@ -2802,6 +2854,7 @@ function applyMonsterTurnReset(state, event) {
   }
   card.used = Boolean(event.afterUsed);
   card.changedMode = Boolean(event.afterChangedMode);
+  card.attackLockReason = event.afterAttackLockReason || null;
   if ("afterDestructionProtectionUsed" in event) {
     card.destructionProtectionUsed = Boolean(event.afterDestructionProtectionUsed);
   }
@@ -3126,7 +3179,8 @@ function applyAbilityGranted(state, event) {
     ability: event.ability,
     uses: Math.max(1, Number(event.uses) || 1),
     duration: event.duration || "turn",
-    sourceCardId: event.sourceCardId || null
+    sourceCardId: event.sourceCardId || null,
+    targetCardId: event.targetCardId || null
   });
 }
 
@@ -3134,7 +3188,12 @@ function applyAbilitySpent(state, event) {
   requirePlayer(state, event.playerId);
   requireAbility(event.ability);
   const abilities = state.abilities[event.playerId];
-  const index = abilities.findIndex((entry) => entry.ability === event.ability && entry.uses > 0);
+  const index = abilities.findIndex((entry) =>
+    entry.ability === event.ability
+    && entry.uses > 0
+    && (!event.sourceCardId || entry.sourceCardId === event.sourceCardId)
+    && (!event.targetCardId || entry.targetCardId === event.targetCardId)
+  );
   if (index === -1) {
     throw new GameRuleError(`${event.playerId} does not have ability ${event.ability}`);
   }
@@ -3429,9 +3488,29 @@ function runEffectDefinition(definition, ctx, action, card) {
   if (definition.duration !== EffectDuration.oneShot) {
     throw new GameRuleError(`Effect ${action.cardId} is not a one-shot effect`);
   }
-  for (const operation of definition.operations) {
+  const resolvedOperations = resolveOneShotOperationSelectors(definition.operations, ctx, action, card);
+  for (const operation of resolvedOperations) {
     runEffectOperation(operation, ctx, action, card);
   }
+}
+
+function resolveOneShotOperationSelectors(operations, ctx, action, card) {
+  const selectorTargets = new Map();
+  return operations.map((operation) => {
+    const selector = resolveValue(operation.cardId, action, card);
+    if (!selector || typeof selector !== "object" || Array.isArray(selector) || !selector.rule) {
+      return operation;
+    }
+    const selectorKey = JSON.stringify(selector);
+    if (!selectorTargets.has(selectorKey)) {
+      selectorTargets.set(selectorKey, ctx.resolveCardIds(selector));
+    }
+    const resolvedCardIds = selectorTargets.get(selectorKey);
+    return {
+      ...operation,
+      cardId: resolvedCardIds.length === 1 ? resolvedCardIds[0] : resolvedCardIds
+    };
+  });
 }
 
 function runContinuousEffectDefinition(definition, ctx, action, card) {
@@ -3504,7 +3583,8 @@ function runEffectOperation(operation, ctx, action, card, options = {}) {
       return ctx.readyMonsterOrGrantAbility(resolvePlayerRef(operation.player, action), resolveValue(operation.cardId, action, card), operation.ability, {
         ...source,
         uses: operation.uses,
-        duration: operation.duration
+        duration: operation.duration,
+        targetCardId: action.targetCardId || null
       });
     default:
       throw new GameRuleError(`Unsupported effect operation ${operation.op}`);
@@ -3603,6 +3683,9 @@ function validateBattleDeclaration(state, playerId, rivalId, action) {
     throw new GameRuleError(`${playerId} skipped attacks for this turn`);
   }
   const attacker = requireMonsterInZone(state, playerId, "monsterZone", action.attackerCardId, "attacker");
+  if (attacker.attackLockReason) {
+    throw new GameRuleError(`Monster ${action.attackerCardId} cannot attack this turn (${attacker.attackLockReason})`);
+  }
   if (attacker.used) {
     throw new GameRuleError(`Monster ${action.attackerCardId} has already attacked`);
   }
@@ -3698,19 +3781,27 @@ function consumeAttackResetForMonster(state, emit, playerId, cardId) {
   const player = requirePlayer(state, playerId);
   if (!player.monsterZone.includes(cardId)) return false;
   const card = requireCard(state, cardId);
-  if (!card.used) return false;
+  if (!card.used || card.attackLockReason) return false;
+  const reset = (state.abilities[playerId] || []).find((entry) =>
+    entry.ability === Ability.attackReset
+    && entry.uses > 0
+    && (!entry.targetCardId || entry.targetCardId === cardId)
+  );
+  if (!reset) return false;
 
   emit("ABILITY_SPENT", {
     playerId,
     ability: Ability.attackReset,
-    cardId
+    cardId,
+    sourceCardId: reset.sourceCardId || null,
+    targetCardId: reset.targetCardId || null
   });
   emit("MONSTER_READIED", {
     playerId,
     cardId,
     beforeUsed: true,
     afterUsed: false,
-    sourceCardId: null
+    sourceCardId: reset.sourceCardId || null
   });
   return true;
 }

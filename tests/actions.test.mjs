@@ -70,6 +70,17 @@ test("detects available attacks without mutating field state", () => {
   assert.equal(defender.used, false);
 });
 
+test("temporary summon locks are not projected as available attacks", () => {
+  const locked = {
+    type: "monster",
+    mode: "attack",
+    used: true,
+    attackLockReason: "trioConvergence"
+  };
+  assert.equal(hasAvailableAttack([locked]), false);
+  assert.equal(canDuelistAttack({ attacksSkipped: false, field: [locked] }), false);
+});
+
 test("detects when the player idle countdown should run", () => {
   assert.equal(shouldRunPlayerIdleCountdown({ canAct: true, phase: "main", actionWindow: "main" }), true);
   assert.equal(shouldRunPlayerIdleCountdown({ canAct: true, phase: "draw", actionWindow: "draw" }), false);

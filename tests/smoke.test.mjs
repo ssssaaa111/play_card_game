@@ -865,12 +865,16 @@ test("skipped attack lock is visible on field cards", () => {
   const css = readProjectFile("styles.css");
 
   assert.match(fieldRenderer, /const attacksLocked = Boolean\(/);
-  assert.match(fieldRenderer, /&& state\.player\?\.attacksSkipped/);
+  assert.match(fieldRenderer, /state\[owner\]\?\.attacksSkipped \|\| card\.attackLockReason/);
   assert.match(fieldRenderer, /const attackReady = Boolean\(/);
+  assert.match(fieldRenderer, /effectMarkers: effectMarkersAt\(index\)/);
   assert.match(fieldRenderer, /showStateRail: card\.type === "monster"/);
+  assert.match(fieldRenderer, /showTributeRequirement: false/);
   assert.match(fieldRenderer, /"attack-ready": attackReady/);
   assert.match(fieldRenderer, /"attack-locked": attacksLocked/);
   assert.match(css, /\.card\.attack-locked/);
+  assert.match(css, /\.card-state-chip\.continuous/);
+  assert.match(css, /\.card-state-chip\.ability/);
   assert.match(css, /\.slot\.attack-target/);
   assert.match(css, /\.slot\.empty:disabled/);
   assert.doesNotMatch(css, /pending-attack/);
@@ -885,6 +889,15 @@ test("attack-destroy trap outcome is logged once by shared engine feedback", () 
   assert.ok(branchStart >= 0 && branchEnd > branchStart);
   assert.match(app, /event\.type === "CARD_DESTROYED"/);
   assert.doesNotMatch(attackDestroyBranch, /addLog\(`\$\{trap\.name\} 破坏了/);
+});
+
+test("public rival support details cannot be intercepted by player trap choices", () => {
+  const app = readProjectFile("src/app.js");
+  const fieldRenderer = readProjectFile("src/field-renderer.js");
+
+  assert.match(app, /owner === "player" && selectPendingTrapChoice\(index\)/);
+  assert.match(fieldRenderer, /if \(view\.revealed\)/);
+  assert.match(fieldRenderer, /else onCardClick\(card, index\)/);
 });
 
 test("duel UI exposes turn ownership and side-specific field feedback", () => {

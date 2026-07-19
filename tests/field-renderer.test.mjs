@@ -77,6 +77,23 @@ test("monster field view locks skipped attacks and disables empty rival slots", 
   assert.equal(emptyRival.ariaLabel, "敌方召唤区 5");
 });
 
+test("monster field view exposes convergence locks on either side", () => {
+  const converged = monsterFieldSlotView({
+    card: monster({ used: true, attackLockReason: "trioConvergence" }),
+    owner: "ai",
+    state: {
+      started: true,
+      turn: "ai",
+      phase: "battle",
+      ai: { attacksSkipped: false }
+    }
+  });
+
+  assert.equal(converged.attacksLocked, true);
+  assert.equal(converged.attackReady, false);
+  assert.ok(converged.cardClasses.includes("attack-locked"));
+});
+
 test("mechanics targets expose candidate and failure reasons through field views", () => {
   const fusion = monsterFieldSlotView({
     card: monster({ name: "赤焰幼龙" }),

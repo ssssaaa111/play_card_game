@@ -2713,6 +2713,9 @@ async function runTrioOmegaChallengeSmoke(ctx) {
     `challenge: low attacker receives finale resource. ${trioOmegaFailureSnapshot(ctx)}`,
     9000
   );
+  if (!fieldCard(ctx.els, "player", "trio-ember-pawn")?.textContent.includes("再攻 ×1")) {
+    throw new Error(`trio-omega-challenge: final counter target should show one sourced extra attack. ${trioOmegaFailureSnapshot(ctx)}`);
+  }
 
   clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), "challenge: pawn first attack");
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), "challenge: moon target highlighted");
@@ -2724,6 +2727,11 @@ async function runTrioOmegaChallengeSmoke(ctx) {
     `challenge: first attack resolves and reset remains. ${trioOmegaFailureSnapshot(ctx)}`,
     12000
   );
+  if (!(ctx.state.log || []).some((entry) =>
+    logEntryMessage(entry).includes("余烁小卫 消耗来自「三曜终断」的追加攻击机会")
+  )) {
+    throw new Error(`trio-omega-challenge: attack reset log should name its source. ${trioOmegaFailureSnapshot(ctx)}`);
+  }
 
   clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), "challenge: pawn second attack");
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), "challenge: star target highlighted");
@@ -2914,6 +2922,26 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
       ctx.state.player.field.some((card) => card?.id === "spark-runner" && (card.tempAtk || 0) < 0),
     `full duel: rival should establish all three gods, protect moon pressure, and attack with sun. ${smokeDebug(ctx)}`,
     32000
+  );
+  const moonPressureCard = fieldCard(ctx.els, "player", "spark-runner");
+  if (!moonPressureCard?.textContent.includes("月幕 -900")) {
+    throw new Error(`trio-omega-full-duel: lunar dominion target marker is missing. ${smokeDebug(ctx)}`);
+  }
+  for (const cardId of ["trio-moon-warden", "trio-star-herald"]) {
+    const convergedCard = fieldCard(ctx.els, "ai", cardId);
+    if (!convergedCard?.textContent.includes("本回合禁攻")) {
+      throw new Error(`trio-omega-full-duel: ${cardId} should explain its convergence attack lock.`);
+    }
+    if (convergedCard.textContent.includes("祭品 3")) {
+      throw new Error(`trio-omega-full-duel: ${cardId} should not show its hand summon cost on the field.`);
+    }
+  }
+  clickSmokeElement(trapCard(ctx.els, "ai", "trio-moon-dominion"), "full duel: inspect public moon dominion on field");
+  await waitForSmoke(
+    () => document.querySelector("#detailName")?.textContent === "月曜帷幕" &&
+      document.querySelector("#detailEffect")?.textContent.includes("持续"),
+    "full duel: public moon dominion opens its real detail instead of concealed trap detail",
+    6000
   );
   await waitForSmoke(
     () => logCardLink(ctx.els, "trio-moon-warden") && logCardLink(ctx.els, "trio-star-herald"),

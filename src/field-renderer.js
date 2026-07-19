@@ -42,10 +42,8 @@ export function monsterFieldSlotView({
     && !interactionTarget;
   const attacksLocked = Boolean(
     card
-    && owner === "player"
-    && state.player?.attacksSkipped
+    && (state[owner]?.attacksSkipped || card.attackLockReason)
     && card.type === "monster"
-    && !card.used
     && card.mode !== "defense"
   );
   const attackReady = Boolean(
@@ -189,6 +187,7 @@ export function renderMonsterZones({
   fusionCandidateAt = () => false,
   materialTargetAt = () => null,
   splitTargetAt = () => null,
+  effectMarkersAt = () => [],
   onSlotClick = () => {},
   onCardClick = () => {},
   onAttackPreview = () => {},
@@ -250,7 +249,9 @@ export function renderMonsterZones({
         asset: assetForCard(card),
         attacksLocked: view.attacksLocked,
         attackReady: view.attackReady,
-        showStateRail: card.type === "monster"
+        effectMarkers: effectMarkersAt(index),
+        showStateRail: card.type === "monster",
+        showTributeRequirement: false
       });
       cardEl.dataset.zone = `${owner}-field`;
       if (card.type === "monster") cardEl.classList.add("field-monster-card");
@@ -331,11 +332,14 @@ export function renderSupportZones({
         cardEl.appendChild(stateChip);
       }
 
-      if (owner === "player") {
+      if (view.revealed) {
         cardEl.addEventListener("click", (event) => {
           event.stopPropagation();
-          onCardClick(card, index);
+          if (view.targetable) onSlotClick(index);
+          else onCardClick(card, index);
         });
+      }
+      if (owner === "player") {
         cardEl.addEventListener("dblclick", (event) => {
           event.preventDefault();
           event.stopPropagation();

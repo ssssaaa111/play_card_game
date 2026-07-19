@@ -76,4 +76,15 @@ test("renders tribute requirements on high-level monster cards", () => {
 
   assert.match(model.ruleText, /2/);
   assert.match(model.stats[1], /2/);
+  assert.doesNotMatch(cardRenderModel({
+    type: "monster",
+    name: "坠星巨卫",
+    element: "light",
+    stars: 8,
+    atk: 3200,
+    def: 2600,
+    tributeCost: 2,
+    icon: "坠",
+    text: "需要 2 只祭品。"
+  }, { showTributeRequirement: false }).stats[1], /祭品/);
 });

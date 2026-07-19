@@ -42,6 +42,7 @@ import {
   shouldLogGenericDestroyedEvent,
   statChangeText
 } from './effect-feedback.js';
+import { effectMarkersForCard } from './effect-markers.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
 import { fusionOptionsForCard } from './fusion.js';
 import { buildFusionSelectionView, renderFusionSelectionPanel } from './fusion-selection-renderer.js';
@@ -2563,7 +2564,13 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       if (!found) return;
       result.effectTarget = found.card;
       result.targetOwner = found.owner;
-      addLog(`${found.card.name} 重新进入可攻击状态。`, { actor: owner.owner, type: "effect", public: true, cardId: found.card.id });
+      addLog(`${found.card.name} 因「${card.name}」重新进入可攻击状态。`, {
+        actor: owner.owner,
+        type: "effect",
+        public: true,
+        cardId: found.card.id,
+        relatedCardIds: relatedCardIds(card)
+      });
       playEpicAction("再攻", "attack");
     }
     if (event.type === "ABILITY_GRANTED" && event.ability === "directAttack") {
@@ -2579,8 +2586,17 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       playEpicAction("额外召唤", "draw");
     }
     if (event.type === "ABILITY_GRANTED" && event.ability === "attackReset") {
-      result.targetOwner = owner.owner;
-      addLog(`${duelistLabel(owner)}获得 ${event.uses || 1} 次攻击重置。`);
+      const target = findRuntimeCard(event.targetCardId);
+      const totalUses = (owner.attackResetEntries || [])
+        .filter((entry) => entry.targetCardId === event.targetCardId)
+        .reduce((total, entry) => total + Number(entry.uses || 0), 0);
+      result.effectTarget = target?.card || result.effectTarget;
+      result.targetOwner = target?.owner || owner.owner;
+      addLog(`${target?.card?.name || duelistLabel(owner)}因「${card.name}」获得 ${event.uses || 1} 次追加攻击机会（当前 ${totalUses || event.uses || 1} 次）。`, cardLogMeta(card, {
+        actor: owner.owner,
+        type: "effect",
+        relatedCardIds: relatedCardIds(target?.card)
+      }));
       playEpicAction("攻击重置", "attack");
     }
   });
@@ -3199,11 +3215,27 @@ function consumeCancelledAttackWithEngine(owner, attacker, options = {}) {
 }
 
 function playAttackResetFeedback(owner, attacker, events = []) {
-  if (!events.some((event) => event.type === "MONSTER_READIED" && event.cardId === runtimeCardId(attacker))) {
+  const spent = events.find((event) =>
+    event.type === "ABILITY_SPENT"
+    && event.ability === "attackReset"
+    && (event.targetCardId || event.cardId) === runtimeCardId(attacker)
+  );
+  if (!spent || !events.some((event) => event.type === "MONSTER_READIED" && event.cardId === runtimeCardId(attacker))) {
     return false;
   }
+  const source = findRuntimeCard(spent.sourceCardId)?.card;
+  const remaining = (owner.attackResetEntries || [])
+    .filter((entry) => entry.targetCardId === runtimeCardId(attacker))
+    .reduce((total, entry) => total + Number(entry.uses || 0), 0);
+  const sourceText = source?.name ? `来自「${source.name}」的` : "";
   playEpicAction("再攻", "attack");
-  addLog(`${attacker.name} 消耗攻击重置，再次进入可攻击状态。`);
+  addLog(`${attacker.name} 消耗${sourceText}追加攻击机会，再次进入可攻击状态${remaining > 0 ? `（还剩 ${remaining} 次）` : ""}。`, {
+    actor: owner.owner,
+    type: "effect",
+    public: true,
+    cardId: attacker.id,
+    relatedCardIds: relatedCardIds(source)
+  });
   speak(`${attacker.name} 攻击重置，可以再次攻击。`, false, owner.owner);
   return true;
 }
@@ -3412,6 +3444,7 @@ function cardImpactSignature(card) {
     uid: card.uid,
     id: card.id,
     used: Boolean(card.used),
+    attackLockReason: card.attackLockReason || null,
     changedMode: Boolean(card.changedMode),
     mode: card.mode || "attack",
     tempAtk: card.tempAtk || 0,
@@ -3426,6 +3459,7 @@ function duelistImpactSignature(duelist) {
     shield: duelist.shield || 0,
     directAttacks: duelist.directAttacks || 0,
     attackResets: duelist.attackResets || 0,
+    attackResetEntries: (duelist.attackResetEntries || []).map((entry) => ({ ...entry })),
     hand: duelist.hand.map((card) => card.uid),
     deck: duelist.deck.map((card) => card.uid),
     field: duelist.field.map(cardImpactSignature),
@@ -4363,6 +4397,12 @@ function renderField(root, duelist, owner, animationKey) {
     splitTargetAt: (index) => state.pendingTarget?.effect === "splitToken"
       ? describeSplitTokenTarget({ owner, card: duelist.field[index] })
       : null,
+    effectMarkersAt: (index) => effectMarkersForCard({
+      card: duelist.field[index],
+      duelist,
+      gameEvents: state.gameEvents,
+      findCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId)
+    }),
     onSlotClick: (index) => owner === "player" ? handlePlayerSlot(index) : handleAiSlot(index),
     onCardClick: (index) => owner === "player" ? selectPlayerMonster(index) : handleAiSlot(index),
     onAttackPreview: showSelectedAttackTargetPreview,
@@ -4381,7 +4421,7 @@ function renderTraps(root, duelist, owner) {
     targetableAt: (index) => isPendingTrapTargetSlot(owner, index),
     onSlotClick: (index) => owner === "player" ? handlePlayerTrapSlot(index) : handleAiTrapSlot(index),
     onCardClick: (card, index) => {
-      if (selectPendingTrapChoice(index)) return;
+      if (owner === "player" && selectPendingTrapChoice(index)) return;
       state.selected = null;
       clearBattlePreview();
       showDetail(card);
