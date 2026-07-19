@@ -18,6 +18,7 @@ export function buildDuelControlsView({
   selectedHandReason = "",
   targetPrompt = "",
   fusionStatus = null,
+  selectionPrompt = "",
   confirmLabel = "确认",
   phase = "ready",
   selectedPlayerMonster = false,
@@ -43,9 +44,11 @@ export function buildDuelControlsView({
     choiceText = `${targetPrompt} 请点击高亮目标；也可点击“确认推荐目标”自动选择。`;
   } else if (hasFusion) {
     const fusionName = pendingFusion?.cardName || selectedHandName;
-    choiceText = fusionStatus?.needsResult
+    choiceText = selectionPrompt || (fusionStatus?.needsResult
       ? `${fusionName}：先选择融合结果。`
-      : `${fusionName}：选择融合素材 ${fusionStatus?.selectedCount || 0}/${fusionStatus?.requiredCount || 0}。`;
+      : `${fusionName}：选择融合素材 ${fusionStatus?.selectedCount || 0}/${fusionStatus?.requiredCount || 0}。`);
+  } else if (hasTribute && selectionPrompt) {
+    choiceText = selectionPrompt;
   } else if (showChoiceActions) {
     choiceText = `${selectedHandName}：${selectedHandReason || "确认后发动。"}`;
   }
@@ -103,7 +106,8 @@ export function buildDuelControlsView({
       cancelDisabled: !canAct,
       target: hasTarget,
       fusion: hasFusion,
-      material: hasFusion || hasTribute
+      material: hasFusion || hasTribute,
+      split: pendingTarget?.effect === "splitToken"
     },
     modeDisabled: hasPendingSelection || !canAct || phase !== "main" || !selectedPlayerMonster,
     detailDisabled: !focusedCard
@@ -154,6 +158,7 @@ export function renderDuelControls(elements, view) {
     elements.choiceActions.classList.toggle("fusion-choice", view.choice.fusion);
     elements.choiceActions.classList.toggle("material-choice", view.choice.material);
     elements.choiceActions.classList.toggle("target-choice", view.choice.target);
+    elements.choiceActions.classList.toggle("split-choice", view.choice.split);
   }
 
   elements.modeBtn.disabled = view.modeDisabled;

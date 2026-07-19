@@ -768,6 +768,70 @@ async function runTributeSummonBasicSmoke(ctx) {
   setSmokeStatus("passed", "tribute-summon-basic");
 }
 
+async function runTributeReadabilityBasicSmoke(ctx) {
+  setSmokeStatus("running", "tribute-readability-basic");
+  await startSmokeDuel(ctx, "tributeSummonDouble");
+  clickSmokeElement(handCard(ctx.els, "starfall-colossus"), "tribute-readability-basic: select monster");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-readability-basic: enter tribute selection");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("需要解放 2 只怪兽") &&
+      ctx.els.choiceText.textContent.includes("已选择 2 / 2") &&
+      ctx.els.choiceText.textContent.includes("星火信使") &&
+      ctx.els.choiceText.textContent.includes("微光机巧卫"),
+    "tribute-readability-basic: requirement and auto-selected materials are visible"
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-readability-basic: unselect first material");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("已选择 1 / 2：微光机巧卫") &&
+      ctx.els.choiceText.textContent.includes("还差 1 只解放素材") &&
+      ctx.els.choiceText.textContent.includes("请选择第 2 只解放素材"),
+    "tribute-readability-basic: selected name and remaining material are visible"
+  );
+
+  const selectedBeforeInvalidClicks = ctx.state.pendingTribute.selectedIndexes.slice();
+  clickSmokeElement(fieldSlot(ctx.els, "player", 2), "tribute-readability-basic: click empty own slot");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：该格为空。",
+    "tribute-readability-basic: empty slot explains why it is invalid"
+  );
+  if (ctx.state.pendingTribute.selectedIndexes.join(",") !== selectedBeforeInvalidClicks.join(",")) {
+    throw new Error("tribute-readability-basic: empty slot changed tribute selection");
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "tribute-readability-basic: click enemy monster");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：不是己方怪兽。",
+    "tribute-readability-basic: enemy monster explains why it is invalid"
+  );
+  if (ctx.state.pendingTribute.selectedIndexes.join(",") !== selectedBeforeInvalidClicks.join(",")) {
+    throw new Error("tribute-readability-basic: enemy monster changed tribute selection");
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-readability-basic: restore first material");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("已选择 2 / 2：星火信使、微光机巧卫") &&
+      ctx.els.choiceText.textContent.includes("解放素材已齐"),
+    "tribute-readability-basic: completed selection is explicit"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-readability-basic: confirm summon");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "starfall-colossus") &&
+      ctx.state.player.grave.some((card) => card?.id === "spark-runner") &&
+      ctx.state.player.grave.some((card) => card?.id === "lumen-gearlet") &&
+      !ctx.state.pendingTribute,
+    "tribute-readability-basic: legal tribute summon completes",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "tribute-readability-basic");
+
+  const summoned = ctx.state.player.field.find((card) => card?.id === "starfall-colossus");
+  await waitForSmoke(() => logCardLink(ctx.els, "starfall-colossus"), "tribute-readability-basic: public log card link");
+  clickSmokeElement(logCardLink(ctx.els, "starfall-colossus"), "tribute-readability-basic: open log card detail");
+  await assertCardDetailModal(ctx, summoned, "tribute-readability-basic");
+  setSmokeStatus("passed", "tribute-readability-basic");
+}
+
 async function runFusionSummonBasicSmoke(ctx) {
   setSmokeStatus("running", "fusion-summon-basic");
   await startSmokeDuel(ctx, "fusionSummon");
@@ -793,6 +857,91 @@ async function runFusionSummonBasicSmoke(ctx) {
   setSmokeStatus("passed", "fusion-summon-basic");
 }
 
+async function runFusionReadabilityBasicSmoke(ctx) {
+  setSmokeStatus("running", "fusion-readability-basic");
+  await startSmokeDuel(ctx, "fusionMixedMaterials");
+  clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-readability-basic: select fusion spell");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-readability-basic: enter material selection");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("融合召唤「焰岚合星者」") &&
+      ctx.els.choiceText.textContent.includes("需要素材：赤焰幼龙、疾风术士") &&
+      ctx.els.choiceText.textContent.includes("已选择 0 / 2：无") &&
+      ctx.els.choiceText.textContent.includes("还缺素材：赤焰幼龙、疾风术士"),
+    "fusion-readability-basic: result and full recipe are visible"
+  );
+  if (window.innerWidth <= 720) {
+    const choiceRect = ctx.els.choiceActions.getBoundingClientRect();
+    const handMaterialRect = handCard(ctx.els, "gale-mage").getBoundingClientRect();
+    const coversHandMaterial = choiceRect.left < handMaterialRect.right &&
+      choiceRect.right > handMaterialRect.left &&
+      choiceRect.top < handMaterialRect.bottom &&
+      choiceRect.bottom > handMaterialRect.top;
+    if (coversHandMaterial) {
+      throw new Error("fusion-readability-basic: fusion prompt should not cover the hand material on narrow screens");
+    }
+  }
+  const emberSlot = fieldSlot(ctx.els, "player", 0);
+  if (!emberSlot?.classList.contains("fusion-candidate") || emberSlot.dataset.materialReason !== "可选择「赤焰幼龙」作为融合素材。") {
+    throw new Error("fusion-readability-basic: field material should expose a fusion-specific candidate reason");
+  }
+
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-readability-basic: select field material");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("已选择 1 / 2：赤焰幼龙（场上）") &&
+      ctx.els.choiceText.textContent.includes("还缺素材：疾风术士") &&
+      ctx.els.choiceConfirmBtn.disabled,
+    "fusion-readability-basic: selected field material and missing hand material are visible"
+  );
+
+  const selectionBeforeInvalidClicks = {
+    indexes: ctx.state.pendingFusion.selectedIndexes.slice(),
+    handUids: ctx.state.pendingFusion.selectedHandUids.slice()
+  };
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), "fusion-readability-basic: click empty own slot");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该素材：该格为空。",
+    "fusion-readability-basic: empty slot explains why it is invalid"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "fusion-readability-basic: click enemy monster");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该素材：不是己方怪兽。",
+    "fusion-readability-basic: enemy monster explains why it is invalid"
+  );
+  clickSmokeElement(handCard(ctx.els, "war-chant"), "fusion-readability-basic: click non-monster hand card");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该素材：不是怪兽。",
+    "fusion-readability-basic: non-monster hand card explains why it is invalid"
+  );
+  if (ctx.state.pendingFusion.selectedIndexes.join(",") !== selectionBeforeInvalidClicks.indexes.join(",") ||
+      ctx.state.pendingFusion.selectedHandUids.join(",") !== selectionBeforeInvalidClicks.handUids.join(",")) {
+    throw new Error("fusion-readability-basic: invalid clicks changed the selected materials");
+  }
+
+  clickSmokeElement(handCard(ctx.els, "gale-mage"), "fusion-readability-basic: select legal hand material");
+  await waitForSmoke(
+    () => ctx.els.choiceText?.textContent.includes("已选择 2 / 2：赤焰幼龙（场上）、疾风术士（手牌）") &&
+      ctx.els.choiceText.textContent.includes("素材齐备，确认后完成融合召唤") &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "fusion-readability-basic: completed mixed selection is explicit"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-readability-basic: confirm fusion summon");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "flare-gale-archon") &&
+      ctx.state.player.grave.some((card) => card?.id === "ember-drake") &&
+      ctx.state.player.grave.some((card) => card?.id === "gale-mage") &&
+      !ctx.state.pendingFusion,
+    "fusion-readability-basic: legal fusion completes",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "fusion-readability-basic");
+
+  const result = ctx.state.player.field.find((card) => card?.id === "flare-gale-archon");
+  await waitForSmoke(() => logCardLink(ctx.els, "flare-gale-archon"), "fusion-readability-basic: public result log link");
+  clickSmokeElement(logCardLink(ctx.els, "flare-gale-archon"), "fusion-readability-basic: open result detail from log");
+  await assertCardDetailModal(ctx, result, "fusion-readability-basic");
+  setSmokeStatus("passed", "fusion-readability-basic");
+}
+
 async function runTokenSplitBasicSmoke(ctx) {
   setSmokeStatus("running", "token-split-basic");
   await startSmokeDuel(ctx, "splitToken");
@@ -808,6 +957,67 @@ async function runTokenSplitBasicSmoke(ctx) {
   );
   assertUniqueRuntimeCards(ctx.state, "token-split-basic");
   setSmokeStatus("passed", "token-split-basic");
+}
+
+async function runTokenReadabilityBasicSmoke(ctx) {
+  setSmokeStatus("running", "token-readability-basic");
+  await startSmokeDuel(ctx, "splitToken");
+  clickSmokeElement(handCard(ctx.els, "spark-split"), "token-readability-basic: select split spell");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "splitToken" &&
+      ctx.els.choiceText?.textContent.includes("发动「星火分裂」") &&
+      ctx.els.choiceText.textContent.includes("请选择分裂来源：己方场上的怪兽") &&
+      ctx.els.choiceText.textContent.includes("将生成 2 只「星火衍生体」") &&
+      ctx.els.choiceText.textContent.includes("需要 2 个空怪兽格。当前空位：4。空位充足") &&
+      ctx.els.choiceText.textContent.includes("token 离场后会消失，不进入墓地、手牌或卡组"),
+    "token-readability-basic: source, count, space, and lifecycle are visible"
+  );
+
+  const sourceSlot = fieldSlot(ctx.els, "player", 0);
+  if (!sourceSlot?.classList.contains("split-candidate") ||
+      sourceSlot.dataset.targetReason !== "可选择「星火信使」作为分裂来源。") {
+    throw new Error("token-readability-basic: source monster should expose a split-specific candidate reason");
+  }
+  const beforeInvalid = {
+    pendingUid: ctx.state.pendingTarget.handUid,
+    tokenCount: ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length,
+    handCount: ctx.state.player.hand.length
+  };
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), "token-readability-basic: click empty own slot");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该来源：该格为空。",
+    "token-readability-basic: empty slot explains why it is invalid"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "token-readability-basic: click enemy monster");
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该来源：不是己方怪兽。",
+    "token-readability-basic: enemy monster explains why it is invalid"
+  );
+  if (ctx.state.pendingTarget?.handUid !== beforeInvalid.pendingUid ||
+      ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length !== beforeInvalid.tokenCount ||
+      ctx.state.player.hand.length !== beforeInvalid.handCount) {
+    throw new Error("token-readability-basic: invalid source clicks changed duel state");
+  }
+
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "spark-runner"), "token-readability-basic: choose legal split source");
+  await waitForSmoke(
+    () => ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length === 2 &&
+      !ctx.state.pendingTarget &&
+      ctx.state.log.some((entry) =>
+        logEntryMessage(entry).includes("「星火信使」通过「星火分裂」生成了 2 只「星火衍生体」") &&
+        entry.relatedCardIds?.includes("spark-runner") &&
+        entry.relatedCardIds?.includes("spark-fragment-token")
+      ),
+    "token-readability-basic: legal split completes with a linked aggregate log",
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, "token-readability-basic");
+
+  const token = ctx.state.player.field.find((card) => card?.id === "spark-fragment-token");
+  await waitForSmoke(() => logCardLink(ctx.els, "spark-fragment-token"), "token-readability-basic: public token log link");
+  clickSmokeElement(logCardLink(ctx.els, "spark-fragment-token"), "token-readability-basic: open token detail from log");
+  await assertCardDetailModal(ctx, token, "token-readability-basic");
+  setSmokeStatus("passed", "token-readability-basic");
 }
 
 async function runGraveyardSummonBasicSmoke(ctx) {
@@ -2724,6 +2934,23 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     `full duel: prepared trap should trade for sun without erasing the remaining gods. ${smokeDebug(ctx)}`,
     12000
   );
+  await waitForSmoke(
+    () => (ctx.state.log || []).some((entry) => logEntryMessage(entry) === "日冕诱锁 破坏了 曜冕裁决者。"),
+    `full duel: solar snare destruction should reach the public log. ${smokeDebug(ctx)}`,
+    9000
+  );
+  const remainingTrio = ctx.state.ai.field.filter((card) =>
+    card?.id === "trio-moon-warden" || card?.id === "trio-star-herald"
+  );
+  const remainingTrioAttack = remainingTrio.reduce((total, card) => total + (card.atk || 0) + (card.tempAtk || 0), 0);
+  const sunDestructionLogs = (ctx.state.log || []).filter((entry) =>
+    logEntryMessage(entry) === "日冕诱锁 破坏了 曜冕裁决者。"
+  );
+  const pressureAudit = auditLogEntries(ctx.state.timeline);
+  if (remainingTrio.length !== 2 || remainingTrioAttack !== 4500 || sunDestructionLogs.length !== 1 ||
+      pressureAudit.issues.some((issue) => issue.code === "duplicate-log")) {
+    throw new Error(`trio-omega-full-duel: first counter should leave exactly two gods / 4500 ATK pressure and one destruction log. ${smokeDebug(ctx)}`);
+  }
   const aiSunTributes = (ctx.state.gameEvents || []).filter((event) =>
     event.type === "CARD_TRIBUTED" &&
     event.playerId === "ai" &&
@@ -4188,6 +4415,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "summon-position-basic": runSummonPositionBasicSmoke,
     "tribute-summon": runTributeSummonSmoke,
     "tribute-summon-basic": runTributeSummonBasicSmoke,
+    "tribute-readability-basic": runTributeReadabilityBasicSmoke,
     "tribute-summon-double": runTributeSummonDoubleSmoke,
     "divine-summon": runDivineSummonSmoke,
     "trio-tribute-summon": runTrioTributeSummonSmoke,
@@ -4198,10 +4426,12 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-break": runDivineBreakSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "fusion-summon-basic": runFusionSummonBasicSmoke,
+    "fusion-readability-basic": runFusionReadabilityBasicSmoke,
     "fusion-mixed-materials": runFusionMixedMaterialsSmoke,
     "fusion-result-choice": runFusionResultChoiceSmoke,
     "split-token": runSplitTokenSmoke,
     "token-split-basic": runTokenSplitBasicSmoke,
+    "token-readability-basic": runTokenReadabilityBasicSmoke,
     "graveyard-summon-basic": runGraveyardSummonBasicSmoke,
     "mechanics-regression-basic": runMechanicsRegressionBasicSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,

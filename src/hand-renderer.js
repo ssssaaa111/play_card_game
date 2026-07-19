@@ -12,36 +12,49 @@ export function handCardView({
   selected = false,
   fusionMaterialCandidate = false,
   fusionMaterialSelected = false,
+  fusionMaterialTarget = null,
   started = false,
   canAct = false,
   drawHighlighted = false
 } = {}) {
-  const actionReady = Boolean(action.ok);
+  const materialCandidate = fusionMaterialTarget
+    ? Boolean(fusionMaterialTarget.ok)
+    : Boolean(fusionMaterialCandidate);
+  const materialUnavailable = Boolean(fusionMaterialTarget && !fusionMaterialTarget.ok);
+  const actionReady = Boolean(action.ok) && !materialUnavailable;
   const actionBlocked = !actionReady && started && canAct;
   const showActionReason = Boolean(
     fusionMaterialSelected
-    || fusionMaterialCandidate
+    || materialCandidate
+    || materialUnavailable
     || selected
     || !actionReady
   );
 
   return {
-    title: `${card.name || "卡牌"}：${action.reason || ""}`,
+    title: `${card.name || "卡牌"}：${fusionMaterialTarget?.reason || action.reason || ""}`,
     actionLabel: fusionMaterialSelected
       ? "融合素材 ✓"
-      : fusionMaterialCandidate
+      : materialCandidate
         ? "融合素材"
-        : action.label || "",
+        : materialUnavailable
+          ? "不可选素材"
+          : action.label || "",
     actionReason: fusionMaterialSelected
       ? "已选择为手牌融合素材，再次点击可取消。"
-      : fusionMaterialCandidate
+      : materialCandidate
         ? "点击选择为手牌融合素材。"
-        : action.reason || "",
+        : materialUnavailable
+          ? fusionMaterialTarget.reason
+          : action.reason || "",
     showActionReason,
     cardClasses: enabledClassEntries({
       selected,
-      "tribute-candidate": fusionMaterialCandidate,
+      "tribute-candidate": materialCandidate,
       "tribute-selected": fusionMaterialSelected,
+      "fusion-candidate": materialCandidate,
+      "fusion-selected": fusionMaterialSelected,
+      "fusion-unavailable": materialUnavailable,
       "action-ready": actionReady,
       "action-blocked": actionBlocked,
       "compact-action-state": !showActionReason,
@@ -62,18 +75,21 @@ export function renderHandCards({
   started = false,
   canAct = false,
   fusionCandidateForCard = () => false,
+  fusionTargetForCard = () => null,
   fusionSelectedUids = [],
   onCardClick = () => {}
 } = {}) {
   const fragment = document.createDocumentFragment();
   cards.forEach((card, index) => {
     const action = actionForCard(card, index);
+    const fusionMaterialTarget = fusionTargetForCard(card, index);
     const view = handCardView({
       card,
       action,
       selected: selectedZone === "hand" && selectedUid === card.uid,
       fusionMaterialCandidate: fusionCandidateForCard(card, index),
       fusionMaterialSelected: fusionSelectedUids.includes(card.uid),
+      fusionMaterialTarget,
       started,
       canAct,
       drawHighlighted: animationKey === "draw-player" && index === cards.length - 1

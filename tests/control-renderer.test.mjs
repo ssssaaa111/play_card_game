@@ -92,3 +92,23 @@ test("target and fusion selections block turn controls and expose the correct pr
   assert.equal(fusion.choice.material, true);
   assert.equal(fusion.choice.text, "星魂融合：选择融合素材 1/2。");
 });
+
+test("mechanics readability prompts survive the extracted control renderer", () => {
+  const tribute = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    pendingTribute: { cardName: "坠星巨卫" },
+    selectionPrompt: "召唤「坠星巨卫」需要解放 2 只怪兽。\n已选择 1 / 2：星火信使"
+  });
+  assert.match(tribute.choice.text, /已选择 1 \/ 2/);
+  assert.equal(tribute.choice.material, true);
+
+  const split = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    pendingTarget: { effect: "splitToken", cardName: "星火分裂" },
+    targetPrompt: "将生成 2 只「星火衍生体」。"
+  });
+  assert.equal(split.choice.split, true);
+  assert.match(split.choice.text, /将生成 2 只/);
+});

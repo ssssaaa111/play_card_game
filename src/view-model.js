@@ -104,3 +104,268 @@ export function describeHandAction(card, {
   }
   return { ok: false, label: "不可用", reason: "这张卡当前不能操作。" };
 }
+export function buildTributeSelectionDisplay({
+  cardName = "这只怪兽",
+  cost = 0,
+  field = [],
+  selectedIndexes = []
+} = {}) {
+  const required = Math.max(0, Number(cost) || 0);
+  const validIndexes = Array.from(new Set(Array.isArray(selectedIndexes) ? selectedIndexes : []))
+    .filter((index) => Number.isInteger(index) && Boolean(field[index]) && field[index]?.type !== "spell" && field[index]?.type !== "trap")
+    .sort((left, right) => left - right)
+    .slice(0, required);
+  const selectedNames = validIndexes.map((index) => field[index]?.name || `怪兽区 ${index + 1}`);
+  const selectedCount = selectedNames.length;
+  const remainingCount = Math.max(0, required - selectedCount);
+  const complete = required > 0 && remainingCount === 0;
+  const requirementText = `召唤「${cardName}」需要解放 ${required} 只怪兽。`;
+  const selectionText = `已选择 ${selectedCount} / ${required}：${selectedNames.length ? selectedNames.join("、") : "无"}`;
+  const instructionText = complete
+    ? "解放素材已齐，确认后完成祭品召唤。"
+    : `还差 ${remainingCount} 只解放素材。请选择第 ${selectedCount + 1} 只解放素材。`;
+  return {
+    cardName,
+    cost: required,
+    selectedCount,
+    selectedNames,
+    remainingCount,
+    complete,
+    requirementText,
+    selectionText,
+    instructionText,
+    text: [requirementText, selectionText, instructionText].join("\n")
+  };
+}
+
+export function describeTributeTarget({ owner = "player", card = null, selected = false } = {}) {
+  if (owner !== "player") {
+    return { ok: false, label: "不可选", reason: "不能选择该目标：不是己方怪兽。" };
+  }
+  if (!card) {
+    return { ok: false, label: "不可选", reason: "不能选择该目标：该格为空。" };
+  }
+  if (card.type && card.type !== "monster") {
+    return { ok: false, label: "不可选", reason: "不能选择该目标：该卡不是怪兽。" };
+  }
+  return selected
+    ? { ok: true, label: "已选解放素材", reason: `「${card.name}」已被选择，再次点击可取消。` }
+    : { ok: true, label: "可选解放素材", reason: `可选择「${card.name}」作为解放素材。` };
+}
+
+export function tributeSummonFailureMessage(reason = "") {
+  const detail = String(reason || "规则校验未通过。");
+  const exactCost = detail.match(/requires exactly (\d+) tribute cards?/i);
+  if (exactCost) return `祭品召唤失败：需要正好解放 ${exactCost[1]} 只己方怪兽。`;
+  if (/monsterZone slot \d+ is occupied/i.test(detail)) {
+    return "祭品召唤失败：目标怪兽区已被占用。";
+  }
+  if (/monsterZone is full/i.test(detail)) {
+    return "祭品召唤失败：我方怪兽区已满。";
+  }
+  return detail.startsWith("祭品召唤失败：") ? detail : `祭品召唤失败：${detail}`;
+}
+
+function fusionRequirementLabel(entry) {
+  const name = entry?.name || entry?.templateId || "未知素材";
+  const count = Math.max(1, Number(entry?.count) || 1);
+  return count > 1 ? `${name} ×${count}` : name;
+}
+
+function fusionMaterialTemplateId(card) {
+  return card?.templateId || card?.id || "";
+}
+
+export function buildFusionSelectionDisplay({
+  sourceName = "融合魔法",
+  resultName = "",
+  requirements = [],
+  selectedMaterials = [],
+  needsResult = false
+} = {}) {
+  if (needsResult || !resultName) {
+    const titleText = `发动「${sourceName}」`;
+    const requirementText = "请选择要融合召唤的怪兽。";
+    return {
+      sourceName,
+      resultName: "",
+      selectedCount: 0,
+      requiredCount: 0,
+      selectedNames: [],
+      remaining: [],
+      complete: false,
+      titleText,
+      requirementText,
+      selectionText: "",
+      remainingText: "",
+      text: `${titleText}\n${requirementText}`
+    };
+  }
+
+  const normalizedRequirements = (Array.isArray(requirements) ? requirements : []).map((entry) => ({
+    templateId: entry?.templateId || entry?.id || "",
+    name: entry?.name || entry?.templateId || entry?.id || "未知素材",
+    count: Math.max(1, Number(entry?.count) || 1)
+  })).filter((entry) => entry.templateId);
+  const availableSelections = (Array.isArray(selectedMaterials) ? selectedMaterials : []).map((entry, index) => ({
+    ...entry,
+    templateId: entry?.templateId || fusionMaterialTemplateId(entry?.card),
+    name: entry?.name || entry?.card?.name || entry?.templateId || "未知素材",
+    selectionIndex: index
+  }));
+  const usedSelections = new Set();
+  const selectedNames = [];
+  const remaining = [];
+
+  normalizedRequirements.forEach((requirement) => {
+    let matched = 0;
+    availableSelections.forEach((selection) => {
+      if (matched >= requirement.count || usedSelections.has(selection.selectionIndex)) return;
+      if (selection.templateId !== requirement.templateId) return;
+      usedSelections.add(selection.selectionIndex);
+      matched += 1;
+      const zoneLabel = selection.zone === "hand" ? "手牌" : "场上";
+      selectedNames.push(`${selection.name}（${zoneLabel}）`);
+    });
+    if (matched < requirement.count) {
+      remaining.push({ ...requirement, count: requirement.count - matched });
+    }
+  });
+
+  const selectedCount = selectedNames.length;
+  const requiredCount = normalizedRequirements.reduce((total, entry) => total + entry.count, 0);
+  const complete = selectedCount === requiredCount && remaining.length === 0 && usedSelections.size === availableSelections.length;
+  const titleText = `融合召唤「${resultName}」`;
+  const requirementText = `需要素材：${normalizedRequirements.map(fusionRequirementLabel).join("、")}。`;
+  const selectionText = `已选择 ${selectedCount} / ${requiredCount}：${selectedNames.length ? selectedNames.join("、") : "无"}`;
+  const remainingText = complete
+    ? "素材齐备，确认后完成融合召唤。"
+    : `还缺素材：${remaining.map(fusionRequirementLabel).join("、")}。`;
+  return {
+    sourceName,
+    resultName,
+    selectedCount,
+    requiredCount,
+    selectedNames,
+    remaining,
+    complete,
+    titleText,
+    requirementText,
+    selectionText,
+    remainingText,
+    text: [titleText, requirementText, selectionText, remainingText].join("\n")
+  };
+}
+
+export function describeFusionMaterialTarget({
+  owner = "player",
+  card = null,
+  sourceUid = "",
+  selected = false,
+  requirements = [],
+  remaining = requirements
+} = {}) {
+  if (owner !== "player") {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：不是己方怪兽。" };
+  }
+  if (!card) {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：该格为空。" };
+  }
+  if (sourceUid && card.uid === sourceUid) {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：融合魔法本身不能作为素材。" };
+  }
+  if (card.type !== "monster") {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：不是怪兽。" };
+  }
+  if (selected) {
+    return { ok: true, label: "已选融合素材", reason: `「${card.name}」已被选择，再次点击可取消。` };
+  }
+  const templateId = fusionMaterialTemplateId(card);
+  const required = (Array.isArray(requirements) ? requirements : []).some((entry) => entry?.templateId === templateId);
+  if (!required) {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：不满足融合条件。" };
+  }
+  const stillNeeded = (Array.isArray(remaining) ? remaining : []).some((entry) => entry?.templateId === templateId && Math.max(0, Number(entry?.count) || 0) > 0);
+  if (!stillNeeded) {
+    return { ok: false, label: "不可选", reason: "不能选择该素材：该种素材数量已经满足。" };
+  }
+  return { ok: true, label: "可选融合素材", reason: `可选择「${card.name}」作为融合素材。` };
+}
+
+export function fusionSummonFailureMessage(reason = "") {
+  const detail = String(reason || "规则校验未通过。");
+  const exactCount = detail.match(/requires exactly (\d+) material cards?/i);
+  if (exactCount) return `融合失败：需要正好选择 ${exactCount[1]} 只融合素材。`;
+  if (/Fusion materials must be unique/i.test(detail)) return "融合失败：不能重复使用同一张素材。";
+  if (/Fusion spell cannot be used as its own material/i.test(detail)) return "融合失败：融合魔法本身不能作为素材。";
+  if (/does not match required materials|is missing materials/i.test(detail)) return "融合失败：所选素材不满足融合条件。";
+  if (/Fusion result .* is not a monster/i.test(detail)) return "融合失败：融合结果必须是怪兽。";
+  if (/Fusion material .* is not a monster/i.test(detail)) return "融合失败：融合素材必须是怪兽。";
+  if (/Fusion material .* is not in .*hand or .*monsterZone/i.test(detail)) return "融合失败：所选素材已不在己方手牌或场上。";
+  if (/No .* is available in hand or deck/i.test(detail)) return "融合失败：融合怪兽已不在手牌或卡组。";
+  if (/monsterZone slot \d+ is occupied/i.test(detail)) return "融合失败：目标怪兽区已被占用。";
+  if (/monsterZone is full/i.test(detail)) return "融合失败：我方怪兽区已满。";
+  return detail.startsWith("融合失败：") ? detail : `融合失败：${detail}`;
+}
+
+export function buildSplitTokenDisplay({
+  sourceName = "分裂效果",
+  tokenName = "衍生物",
+  count = 2,
+  field = [],
+  sourceMonster = null
+} = {}) {
+  const tokenCount = Math.max(1, Number(count) || 1);
+  const slots = Array.isArray(field) ? field : [];
+  const emptySlots = slots.filter((slot) => !slot).length;
+  const hasEnoughSpace = emptySlots >= tokenCount;
+  const missingSlots = Math.max(0, tokenCount - emptySlots);
+  const titleText = `发动「${sourceName}」`;
+  const sourceText = sourceMonster
+    ? `分裂来源：「${sourceMonster.name || "己方怪兽"}」。`
+    : "请选择分裂来源：己方场上的怪兽。";
+  const generationText = `将生成 ${tokenCount} 只「${tokenName}」。`;
+  const spaceText = `需要 ${tokenCount} 个空怪兽格。当前空位：${emptySlots}。${hasEnoughSpace ? "空位充足。" : `空位不足，还差 ${missingSlots} 个。`}`;
+  const ruleText = "token 离场后会消失，不进入墓地、手牌或卡组。";
+  return {
+    sourceName,
+    tokenName,
+    count: tokenCount,
+    emptySlots,
+    hasEnoughSpace,
+    titleText,
+    sourceText,
+    generationText,
+    spaceText,
+    ruleText,
+    text: [titleText, sourceText, generationText, spaceText, ruleText].join("\n")
+  };
+}
+
+export function describeSplitTokenTarget({ owner = "player", card = null } = {}) {
+  if (owner !== "player") {
+    return { ok: false, label: "不可选", reason: "不能选择该来源：不是己方怪兽。" };
+  }
+  if (!card) {
+    return { ok: false, label: "不可选", reason: "不能选择该来源：该格为空。" };
+  }
+  if (card.type !== "monster") {
+    return { ok: false, label: "不可选", reason: "不能选择该来源：不是怪兽。" };
+  }
+  return { ok: true, label: "可选分裂来源", reason: `可选择「${card.name}」作为分裂来源。` };
+}
+
+export function splitTokenFailureMessage(reason = "") {
+  const detail = String(reason || "规则校验未通过。");
+  const emptySlots = detail.match(/requires at least (\d+) empty monster zone slots/i);
+  if (emptySlots) return `分裂失败：需要至少 ${emptySlots[1]} 个空怪兽格。`;
+  if (/requires action\.targetCardId/i.test(detail)) {
+    return "分裂失败：请选择己方场上的怪兽作为分裂来源。";
+  }
+  if (/Target .* is not in .*\.monsterZone/i.test(detail)) {
+    return "分裂失败：所选来源不是己方场上的怪兽。";
+  }
+  if (/requires a monster target/i.test(detail)) return "分裂失败：分裂来源必须是怪兽。";
+  if (/Token template .* is not available/i.test(detail)) return "分裂失败：衍生物定义不可用。";
+  return detail.startsWith("分裂失败：") ? detail : `分裂失败：${detail}`;
+}

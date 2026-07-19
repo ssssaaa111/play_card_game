@@ -298,7 +298,10 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /!state\.pendingTribute \|\| selectedTributeIndexes\(\)\.length === state\.pendingTribute\.cost/);
   assert.match(controls, /const showChoiceActions = canAct && \(hasPendingSelection \|\| selectedHandReady\)/);
   assert.equal((fieldRenderer.match(/"attack-target": attackTargetable/g) || []).length, 2);
-  assert.match(fieldRenderer, /const disabled = owner === "ai" && !card && !targetable && !attackTargetable/);
+  assert.match(
+    fieldRenderer,
+    /const disabled = owner === "ai"\s*&& !card\s*&& !targetable\s*&& !attackTargetable\s*&& !interactionTarget/
+  );
   assert.match(fieldRenderer, /slot\.disabled = view\.disabled/);
   assert.doesNotMatch(app, /state\.pendingAttack/);
   assert.doesNotMatch(app, /card\.type === "spell" && state\.selected\?\.uid === card\.uid[\s\S]{0,180}playSpell\(state\.player, state\.ai/);
@@ -574,6 +577,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(data, /trioOmegaRivalFull: \{/);
   assert.match(smoke, /"protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke/);
   assert.match(smoke, /"protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke/);
+  assert.match(smoke, /"tribute-readability-basic": runTributeReadabilityBasicSmoke/);
+  assert.match(smoke, /"fusion-readability-basic": runFusionReadabilityBasicSmoke/);
+  assert.match(smoke, /"token-readability-basic": runTokenReadabilityBasicSmoke/);
   assert.match(smoke, /"trio-omega-demo": runTrioOmegaDemoSmoke/);
   assert.match(smoke, /"trio-omega-challenge": runTrioOmegaChallengeSmoke/);
   assert.match(smoke, /"trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke/);
@@ -581,6 +587,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"trio-omega-full-duel": runTrioOmegaFullDuelSmoke/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-evolution-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-protection-demo"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "tribute-readability-basic"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "fusion-readability-basic"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "token-readability-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-challenge"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
@@ -865,6 +874,17 @@ test("skipped attack lock is visible on field cards", () => {
   assert.match(css, /\.slot\.attack-target/);
   assert.match(css, /\.slot\.empty:disabled/);
   assert.doesNotMatch(css, /pending-attack/);
+});
+
+test("attack-destroy trap outcome is logged once by shared engine feedback", () => {
+  const app = readProjectFile("src/app.js");
+  const branchStart = app.indexOf('if (trap.trigger === "attackDestroy")');
+  const branchEnd = app.indexOf('if (trap.trigger === "counterBoost")', branchStart);
+  const attackDestroyBranch = app.slice(branchStart, branchEnd);
+
+  assert.ok(branchStart >= 0 && branchEnd > branchStart);
+  assert.match(app, /event\.type === "CARD_DESTROYED"/);
+  assert.doesNotMatch(attackDestroyBranch, /addLog\(`\$\{trap\.name\} 破坏了/);
 });
 
 test("duel UI exposes turn ownership and side-specific field feedback", () => {
@@ -1169,6 +1189,15 @@ test("hand action prompts have visible layout room", () => {
   assert.match(css, /\.action-reason\s*\{[\s\S]*-webkit-line-clamp: 1;/);
   assert.match(css, /\.detail-actions\s*\{[\s\S]*position: relative;[\s\S]*z-index: 9;/);
   assert.doesNotMatch(css, /\.card-detail-trigger/);
+});
+
+test("narrow fusion prompts stay clear of clickable hand materials", () => {
+  const css = readProjectFile("styles.css");
+  const smoke = readProjectFile("src/browser-smoke.js");
+
+  assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*?\.choice-actions\.fusion-choice \{[\s\S]*?top: 12px;[\s\S]*?bottom: auto;[\s\S]*?max-height: calc\(48vh - 12px\);[\s\S]*?overflow-y: auto;/);
+  assert.match(smoke, /window\.innerWidth <= 720/);
+  assert.match(smoke, /fusion prompt should not cover the hand material on narrow screens/);
 });
 
 test("required static files exist at documented paths", () => {

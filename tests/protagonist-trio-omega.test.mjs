@@ -270,6 +270,10 @@ test("first legal trio tribute summon establishes all three gods through summon 
   const fieldTemplates = state.players[AI].monsterZone
     .filter(Boolean)
     .map((cardId) => state.cards[cardId].templateId);
+  const trioPressureCards = state.players[AI].monsterZone
+    .filter(Boolean)
+    .map((cardId) => state.cards[cardId])
+    .filter((card) => card.trioConvergence === "trioOmega");
   const summonEvents = events.filter((event) => event.type === "MONSTER_SUMMONED");
 
   assert.deepEqual(new Set(fieldTemplates), new Set([
@@ -283,6 +287,9 @@ test("first legal trio tribute summon establishes all three gods through summon 
   assert.equal(summonEvents.filter((event) => event.summonType === "trioConvergence").length, 2);
   assert.ok(summonEvents.filter((event) => event.summonType === "trioConvergence").every((event) => event.sourceCardId === sunId));
   assert.ok(summonEvents.filter((event) => event.summonType === "trioConvergence").every((event) => event.used === true));
+  assert.equal(trioPressureCards.length, 3);
+  assert.equal(trioPressureCards.filter((card) => card.used).length, 2);
+  assert.equal(trioPressureCards.reduce((total, card) => total + card.atk, 0), 7500);
   assert.equal(events.filter((event) => event.type === "CARD_TRIBUTED").length, 3);
   assertValidGameState(state);
 });

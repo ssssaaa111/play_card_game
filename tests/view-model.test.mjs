@@ -1,7 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { describeHandAction, duelHintText, phaseLabel, turnLabel } from "../src/view-model.js";
+import {
+  buildFusionSelectionDisplay,
+  buildSplitTokenDisplay,
+  buildTributeSelectionDisplay,
+  describeHandAction,
+  describeFusionMaterialTarget,
+  describeSplitTokenTarget,
+  describeTributeTarget,
+  duelHintText,
+  phaseLabel,
+  fusionSummonFailureMessage,
+  splitTokenFailureMessage,
+  tributeSummonFailureMessage,
+  turnLabel
+} from "../src/view-model.js";
 
 test("builds phase and turn labels from state", () => {
   assert.equal(phaseLabel({ started: false }), "准备决斗");
@@ -110,4 +124,268 @@ test("keeps a legal tribute summon ready on a full field", () => {
   });
   assert.equal(blocked.ok, false);
   assert.equal(blocked.label, "场已满");
+});
+test("describes tribute progress with the summon card, selected names, and remaining count", () => {
+  const field = [
+    { uid: "spark", name: "星火信使" },
+    null,
+    { uid: "gearlet", name: "微光机巧卫" },
+    null,
+    null
+  ];
+
+  assert.deepEqual(buildTributeSelectionDisplay({
+    cardName: "坠星巨卫",
+    cost: 2,
+    field,
+    selectedIndexes: [0]
+  }), {
+    cardName: "坠星巨卫",
+    cost: 2,
+    selectedCount: 1,
+    selectedNames: ["星火信使"],
+    remainingCount: 1,
+    complete: false,
+    requirementText: "召唤「坠星巨卫」需要解放 2 只怪兽。",
+    selectionText: "已选择 1 / 2：星火信使",
+    instructionText: "还差 1 只解放素材。请选择第 2 只解放素材。",
+    text: "召唤「坠星巨卫」需要解放 2 只怪兽。\n已选择 1 / 2：星火信使\n还差 1 只解放素材。请选择第 2 只解放素材。"
+  });
+
+  const complete = buildTributeSelectionDisplay({
+    cardName: "坠星巨卫",
+    cost: 2,
+    field,
+    selectedIndexes: [2, 0]
+  });
+  assert.equal(complete.complete, true);
+  assert.equal(complete.remainingCount, 0);
+  assert.equal(complete.selectionText, "已选择 2 / 2：星火信使、微光机巧卫");
+  assert.equal(complete.instructionText, "解放素材已齐，确认后完成祭品召唤。");
+});
+
+test("explains which tribute targets are selectable and why others are blocked", () => {
+  const monster = { uid: "spark", name: "星火信使", type: "monster" };
+
+  assert.deepEqual(describeTributeTarget({ owner: "player", card: monster, selected: false }), {
+    ok: true,
+    label: "可选解放素材",
+    reason: "可选择「星火信使」作为解放素材。"
+  });
+  assert.deepEqual(describeTributeTarget({ owner: "player", card: monster, selected: true }), {
+    ok: true,
+    label: "已选解放素材",
+    reason: "「星火信使」已被选择，再次点击可取消。"
+  });
+  assert.deepEqual(describeTributeTarget({ owner: "player", card: null }), {
+    ok: false,
+    label: "不可选",
+    reason: "不能选择该目标：该格为空。"
+  });
+  assert.deepEqual(describeTributeTarget({ owner: "ai", card: monster }), {
+    ok: false,
+    label: "不可选",
+    reason: "不能选择该目标：不是己方怪兽。"
+  });
+});
+
+test("prefixes tribute dispatch failures without hiding the engine reason", () => {
+  assert.equal(
+    tributeSummonFailureMessage("player.monsterZone slot 1 is occupied"),
+    "祭品召唤失败：目标怪兽区已被占用。"
+  );
+  assert.equal(
+    tributeSummonFailureMessage("Card colossus requires exactly 2 tribute cards"),
+    "祭品召唤失败：需要正好解放 2 只己方怪兽。"
+  );
+  assert.equal(
+    tributeSummonFailureMessage("unexpected rule failure"),
+    "祭品召唤失败：unexpected rule failure"
+  );
+});
+
+test("describes fusion target, selected materials, and the missing recipe entry", () => {
+  const requirements = [
+    { templateId: "ember-drake", name: "赤焰幼龙", count: 1 },
+    { templateId: "gale-mage", name: "疾风术士", count: 1 }
+  ];
+  const display = buildFusionSelectionDisplay({
+    sourceName: "星魂融合",
+    resultName: "焰岚合星者",
+    requirements,
+    selectedMaterials: [
+      { templateId: "ember-drake", name: "赤焰幼龙", zone: "field" }
+    ]
+  });
+
+  assert.deepEqual(display, {
+    sourceName: "星魂融合",
+    resultName: "焰岚合星者",
+    selectedCount: 1,
+    requiredCount: 2,
+    selectedNames: ["赤焰幼龙（场上）"],
+    remaining: [{ templateId: "gale-mage", name: "疾风术士", count: 1 }],
+    complete: false,
+    titleText: "融合召唤「焰岚合星者」",
+    requirementText: "需要素材：赤焰幼龙、疾风术士。",
+    selectionText: "已选择 1 / 2：赤焰幼龙（场上）",
+    remainingText: "还缺素材：疾风术士。",
+    text: "融合召唤「焰岚合星者」\n需要素材：赤焰幼龙、疾风术士。\n已选择 1 / 2：赤焰幼龙（场上）\n还缺素材：疾风术士。"
+  });
+
+  const complete = buildFusionSelectionDisplay({
+    sourceName: "星魂融合",
+    resultName: "焰岚合星者",
+    requirements,
+    selectedMaterials: [
+      { templateId: "gale-mage", name: "疾风术士", zone: "hand" },
+      { templateId: "ember-drake", name: "赤焰幼龙", zone: "field" }
+    ]
+  });
+  assert.equal(complete.complete, true);
+  assert.equal(complete.selectionText, "已选择 2 / 2：赤焰幼龙（场上）、疾风术士（手牌）");
+  assert.equal(complete.remainingText, "素材齐备，确认后完成融合召唤。");
+});
+
+test("prompts for a fusion result before showing a material recipe", () => {
+  const display = buildFusionSelectionDisplay({ sourceName: "星魂融合", needsResult: true });
+  assert.equal(display.titleText, "发动「星魂融合」");
+  assert.equal(display.requirementText, "请选择要融合召唤的怪兽。");
+  assert.equal(display.text, "发动「星魂融合」\n请选择要融合召唤的怪兽。");
+  assert.equal(display.complete, false);
+});
+
+test("explains valid and invalid fusion material targets", () => {
+  const requirements = [
+    { templateId: "ember-drake", count: 1 },
+    { templateId: "gale-mage", count: 1 }
+  ];
+  const ember = { uid: "ember-1", id: "ember-drake", name: "赤焰幼龙", type: "monster" };
+
+  assert.deepEqual(describeFusionMaterialTarget({
+    owner: "player",
+    card: ember,
+    requirements,
+    remaining: requirements
+  }), {
+    ok: true,
+    label: "可选融合素材",
+    reason: "可选择「赤焰幼龙」作为融合素材。"
+  });
+  assert.deepEqual(describeFusionMaterialTarget({
+    owner: "player",
+    card: ember,
+    selected: true,
+    requirements,
+    remaining: [{ templateId: "gale-mage", count: 1 }]
+  }), {
+    ok: true,
+    label: "已选融合素材",
+    reason: "「赤焰幼龙」已被选择，再次点击可取消。"
+  });
+  assert.equal(describeFusionMaterialTarget({ owner: "player", card: null, requirements }).reason, "不能选择该素材：该格为空。");
+  assert.equal(describeFusionMaterialTarget({ owner: "ai", card: ember, requirements }).reason, "不能选择该素材：不是己方怪兽。");
+  assert.equal(describeFusionMaterialTarget({
+    owner: "player",
+    card: { uid: "spell-1", id: "war-chant", name: "战意高扬", type: "spell" },
+    requirements
+  }).reason, "不能选择该素材：不是怪兽。");
+  assert.equal(describeFusionMaterialTarget({
+    owner: "player",
+    card: { uid: "knight-1", id: "solar-knight", name: "日冕骑士", type: "monster" },
+    requirements,
+    remaining: requirements
+  }).reason, "不能选择该素材：不满足融合条件。");
+});
+
+test("prefixes fusion dispatch failures with localized reasons", () => {
+  assert.equal(
+    fusionSummonFailureMessage("Fusion spell fusion-1 requires exactly 2 material cards"),
+    "融合失败：需要正好选择 2 只融合素材。"
+  );
+  assert.equal(
+    fusionSummonFailureMessage("Fusion material knight-1 does not match required materials"),
+    "融合失败：所选素材不满足融合条件。"
+  );
+  assert.equal(
+    fusionSummonFailureMessage("unexpected fusion failure"),
+    "融合失败：unexpected fusion failure"
+  );
+});
+
+test("describes split source, token count, empty slots, and token lifecycle", () => {
+  const field = [
+    { uid: "spark-1", name: "星火信使", type: "monster" },
+    null,
+    null,
+    null,
+    null
+  ];
+  const display = buildSplitTokenDisplay({
+    sourceName: "星火分裂",
+    tokenName: "星火衍生体",
+    count: 2,
+    field
+  });
+
+  assert.deepEqual(display, {
+    sourceName: "星火分裂",
+    tokenName: "星火衍生体",
+    count: 2,
+    emptySlots: 4,
+    hasEnoughSpace: true,
+    titleText: "发动「星火分裂」",
+    sourceText: "请选择分裂来源：己方场上的怪兽。",
+    generationText: "将生成 2 只「星火衍生体」。",
+    spaceText: "需要 2 个空怪兽格。当前空位：4。空位充足。",
+    ruleText: "token 离场后会消失，不进入墓地、手牌或卡组。",
+    text: "发动「星火分裂」\n请选择分裂来源：己方场上的怪兽。\n将生成 2 只「星火衍生体」。\n需要 2 个空怪兽格。当前空位：4。空位充足。\ntoken 离场后会消失，不进入墓地、手牌或卡组。"
+  });
+
+  const selected = buildSplitTokenDisplay({
+    sourceName: "星火分裂",
+    tokenName: "星火衍生体",
+    count: 2,
+    field,
+    sourceMonster: field[0]
+  });
+  assert.equal(selected.sourceText, "分裂来源：「星火信使」。");
+
+  const blocked = buildSplitTokenDisplay({
+    count: 2,
+    field: [field[0], field[0], field[0], field[0], null]
+  });
+  assert.equal(blocked.hasEnoughSpace, false);
+  assert.equal(blocked.spaceText, "需要 2 个空怪兽格。当前空位：1。空位不足，还差 1 个。");
+});
+
+test("explains valid and invalid split token sources", () => {
+  const monster = { uid: "spark-1", name: "星火信使", type: "monster" };
+
+  assert.deepEqual(describeSplitTokenTarget({ owner: "player", card: monster }), {
+    ok: true,
+    label: "可选分裂来源",
+    reason: "可选择「星火信使」作为分裂来源。"
+  });
+  assert.equal(describeSplitTokenTarget({ owner: "player", card: null }).reason, "不能选择该来源：该格为空。");
+  assert.equal(describeSplitTokenTarget({ owner: "ai", card: monster }).reason, "不能选择该来源：不是己方怪兽。");
+  assert.equal(describeSplitTokenTarget({
+    owner: "player",
+    card: { uid: "spell-1", name: "星火分裂", type: "spell" }
+  }).reason, "不能选择该来源：不是怪兽。");
+});
+
+test("prefixes split token failures with localized reasons", () => {
+  assert.equal(
+    splitTokenFailureMessage("Effect splitToken requires at least 2 empty monster zone slots"),
+    "分裂失败：需要至少 2 个空怪兽格。"
+  );
+  assert.equal(
+    splitTokenFailureMessage("Effect splitToken requires action.targetCardId"),
+    "分裂失败：请选择己方场上的怪兽作为分裂来源。"
+  );
+  assert.equal(
+    splitTokenFailureMessage("unexpected token failure"),
+    "分裂失败：unexpected token failure"
+  );
 });

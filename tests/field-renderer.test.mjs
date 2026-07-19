@@ -77,6 +77,35 @@ test("monster field view locks skipped attacks and disables empty rival slots", 
   assert.equal(emptyRival.ariaLabel, "敌方召唤区 5");
 });
 
+test("mechanics targets expose candidate and failure reasons through field views", () => {
+  const fusion = monsterFieldSlotView({
+    card: monster({ name: "赤焰幼龙" }),
+    owner: "player",
+    materialKind: "fusion",
+    materialTarget: {
+      ok: true,
+      reason: "可选择「赤焰幼龙」作为融合素材。"
+    }
+  });
+  assert.ok(fusion.slotClasses.includes("fusion-candidate"));
+  assert.equal(fusion.materialState, "candidate");
+  assert.match(fusion.ariaLabel, /可选择「赤焰幼龙」/);
+
+  const enemySplit = monsterFieldSlotView({
+    card: null,
+    owner: "ai",
+    index: 1,
+    splitTarget: {
+      ok: false,
+      reason: "不能选择该来源：不是己方怪兽。"
+    }
+  });
+  assert.equal(enemySplit.disabled, false);
+  assert.ok(enemySplit.slotClasses.includes("split-unavailable"));
+  assert.equal(enemySplit.targetState, "unavailable");
+  assert.equal(enemySplit.targetReason, "不能选择该来源：不是己方怪兽。");
+});
+
 test("support field view reveals active spells while keeping rival traps concealed", () => {
   const trap = {
     id: "mirror-snare",

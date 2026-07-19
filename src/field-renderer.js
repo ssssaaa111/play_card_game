@@ -22,11 +22,24 @@ export function monsterFieldSlotView({
   tributeCandidate = false,
   tributeSelected = false,
   fusionCandidate = false,
-  fusionSelected = false
+  fusionSelected = false,
+  materialTarget = null,
+  materialKind = "",
+  splitTarget = null
 } = {}) {
-  const materialCandidate = Boolean(tributeCandidate || fusionCandidate);
+  const materialCandidate = materialTarget
+    ? Boolean(materialTarget.ok)
+    : Boolean(tributeCandidate || fusionCandidate);
   const materialSelected = Boolean(tributeSelected || fusionSelected);
-  const disabled = owner === "ai" && !card && !targetable && !attackTargetable;
+  const materialUnavailable = Boolean(materialTarget && !materialTarget.ok);
+  const splitCandidate = Boolean(splitTarget?.ok);
+  const splitUnavailable = Boolean(splitTarget && !splitTarget.ok);
+  const interactionTarget = materialTarget || splitTarget;
+  const disabled = owner === "ai"
+    && !card
+    && !targetable
+    && !attackTargetable
+    && !interactionTarget;
   const attacksLocked = Boolean(
     card
     && owner === "player"
@@ -58,17 +71,35 @@ export function monsterFieldSlotView({
     disabled,
     targetable,
     attackTargetable,
-    materialCandidate,
-    materialSelected,
     attacksLocked,
     attackReady,
     animationClass,
-    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}`,
+    materialTarget,
+    materialCandidate,
+    materialSelected,
+    materialUnavailable,
+    splitTarget,
+    splitCandidate,
+    splitUnavailable,
+    title: interactionTarget?.reason || "",
+    targetState: splitTarget ? (splitCandidate ? "candidate" : "unavailable") : "",
+    targetReason: splitTarget?.reason || "",
+    materialState: materialTarget
+      ? (materialCandidate ? (materialSelected ? "selected" : "candidate") : "unavailable")
+      : "",
+    materialReason: materialTarget?.reason || "",
+    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${interactionTarget ? `，${interactionTarget.reason}` : ""}`,
     slotClasses: enabledClassEntries({
       targetable,
       "attack-target": attackTargetable,
       "tribute-candidate": materialCandidate,
-      "tribute-selected": materialSelected
+      "tribute-selected": materialSelected,
+      "tribute-unavailable": materialKind === "tribute" && materialUnavailable,
+      "fusion-candidate": materialKind === "fusion" && materialCandidate,
+      "fusion-selected": materialKind === "fusion" && materialSelected,
+      "fusion-unavailable": materialKind === "fusion" && materialUnavailable,
+      "split-candidate": splitCandidate,
+      "split-unavailable": splitUnavailable
     }),
     cardClasses: enabledClassEntries({
       selected: owner === "player"
@@ -84,7 +115,13 @@ export function monsterFieldSlotView({
       targetable,
       "attack-target": attackTargetable,
       "tribute-candidate": materialCandidate,
-      "tribute-selected": materialSelected
+      "tribute-selected": materialSelected,
+      "tribute-unavailable": materialKind === "tribute" && materialUnavailable,
+      "fusion-candidate": materialKind === "fusion" && materialCandidate,
+      "fusion-selected": materialKind === "fusion" && materialSelected,
+      "fusion-unavailable": materialKind === "fusion" && materialUnavailable,
+      "split-candidate": splitCandidate,
+      "split-unavailable": splitUnavailable
     })
   };
 }
@@ -150,6 +187,8 @@ export function renderMonsterZones({
   selectedTributeIndexes = [],
   selectedFusionIndexes = [],
   fusionCandidateAt = () => false,
+  materialTargetAt = () => null,
+  splitTargetAt = () => null,
   onSlotClick = () => {},
   onCardClick = () => {},
   onAttackPreview = () => {},
@@ -159,6 +198,8 @@ export function renderMonsterZones({
   duelist.field.forEach((card, index) => {
     const targetable = targetableAt(index);
     const attackTargetable = attackTargetableAt(index);
+    const materialTarget = materialTargetAt(index);
+    const splitTarget = splitTargetAt(index);
     const tributeCandidate = owner === "player" && Boolean(state.pendingTribute) && Boolean(card);
     const fusionCandidate = owner === "player"
       && Boolean(state.pendingFusion)
@@ -173,9 +214,12 @@ export function renderMonsterZones({
       targetable,
       attackTargetable,
       tributeCandidate,
-      tributeSelected: tributeCandidate && selectedTributeIndexes.includes(index),
+      tributeSelected: selectedTributeIndexes.includes(index),
       fusionCandidate,
-      fusionSelected: fusionCandidate && selectedFusionIndexes.includes(index)
+      fusionSelected: selectedFusionIndexes.includes(index),
+      materialTarget,
+      materialKind: state.pendingTribute ? "tribute" : state.pendingFusion ? "fusion" : "",
+      splitTarget
     });
     const slot = document.createElement("button");
     slot.type = "button";
@@ -184,6 +228,11 @@ export function renderMonsterZones({
     slot.dataset.index = String(index);
     slot.dataset.testid = `${owner}-field-${index}`;
     addClasses(slot, view.slotClasses);
+    if (view.materialState) slot.dataset.materialState = view.materialState;
+    if (view.materialReason) slot.dataset.materialReason = view.materialReason;
+    if (view.targetState) slot.dataset.targetState = view.targetState;
+    if (view.targetReason) slot.dataset.targetReason = view.targetReason;
+    if (view.title) slot.title = view.title;
     slot.disabled = view.disabled;
     slot.setAttribute("aria-disabled", view.disabled ? "true" : "false");
     slot.setAttribute("aria-label", view.ariaLabel);

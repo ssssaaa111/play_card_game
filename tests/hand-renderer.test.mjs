@@ -85,3 +85,23 @@ test("fusion material states override normal hand action copy", () => {
   assert.ok(selected.cardClasses.includes("tribute-selected"));
   assert.ok(selected.cardClasses.includes("draw-flash"));
 });
+
+test("invalid fusion hand materials keep their exact reason after renderer extraction", () => {
+  const view = handCardView({
+    card: card({ type: "spell", name: "战意高扬" }),
+    action: { ok: true, label: "可发动", reason: "确认发动。" },
+    fusionMaterialTarget: {
+      ok: false,
+      reason: "不能选择该素材：不是怪兽。"
+    },
+    started: true,
+    canAct: true
+  });
+
+  assert.equal(view.title, "战意高扬：不能选择该素材：不是怪兽。");
+  assert.equal(view.actionLabel, "不可选素材");
+  assert.equal(view.actionReason, "不能选择该素材：不是怪兽。");
+  assert.ok(view.cardClasses.includes("fusion-unavailable"));
+  assert.ok(view.cardClasses.includes("action-blocked"));
+  assert.ok(!view.cardClasses.includes("action-ready"));
+});
