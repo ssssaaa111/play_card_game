@@ -16,6 +16,7 @@
     "test:sim": "node --test tests/rule-simulator.test.mjs",
     "sim:rules": "node scripts/rule-simulator.mjs",
     "sim:ci": "node scripts/rule-simulator.mjs --games=20 --seed=ci-rule-sim --max-steps=400",
+    "audit:finale": "node scripts/finale-balance-audit.mjs",
     "test:smoke": "node --test tests/smoke.test.mjs",
     "smoke:browser": "node scripts/browser-smoke.mjs"
   }
