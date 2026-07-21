@@ -103,10 +103,16 @@ import {
   selectionStateSnapshot
 } from './selection-state.js';
 import {
+  buildTargetSelectionDisplay,
   collectLegalTargetSelections,
+  isSelectedTargetSelection,
   pendingTargetForCard,
+  prepareDefaultTargetSelection,
+  resolveSelectedTargetSelection,
+  selectTargetSelection,
   spellNeedsManualTarget,
   targetSelectionForCard,
+  targetSelectionTargetLabel,
   targetSelectionPrompt,
   validateTargetSelection
 } from './target-selection.js';
@@ -1002,6 +1008,26 @@ function currentSplitTokenDisplay(sourceMonster = null) {
   });
 }
 
+function currentTargetSelectionDisplay(pending = state.pendingTarget) {
+  const display = buildTargetSelectionDisplay(pending, {
+    player: state.player,
+    ai: state.ai
+  });
+  if (pending?.effect !== "splitToken") return display;
+  const split = currentSplitTokenDisplay(display.selectedTarget?.card || null);
+  const selectionText = display.complete
+    ? `${display.selectedByDefault ? "已默认选择" : "已选择"}：${display.selectedName}。`
+    : "尚未选择分裂来源。";
+  return {
+    ...display,
+    text: [
+      split.text,
+      selectionText,
+      display.complete ? "点击其他高亮目标可以更换，确认后发动。" : "请点击一个高亮目标。"
+    ].join("\n")
+  };
+}
+
 function clearPendingTarget() {
   clearPendingSelection(state, "target");
   if (state.actionWindow === ACTION_WINDOWS.targetSelect) {
@@ -1010,8 +1036,23 @@ function clearPendingTarget() {
 }
 
 function beginSpellTargetSelection(handIndex, card) {
-  const pendingTarget = pendingTargetForCard(card, handIndex, spellEffects);
+  const initialTarget = pendingTargetForCard(card, handIndex, spellEffects);
+  const pendingTarget = prepareDefaultTargetSelection(initialTarget, {
+    player: state.player,
+    ai: state.ai
+  });
   if (!pendingTarget) return false;
+  const targets = collectLegalTargetSelections(pendingTarget, {
+    player: state.player,
+    ai: state.ai
+  });
+  if (!targets.length) {
+    state.selected = null;
+    cue(`${card.name} 没有合法目标，不能发动。`);
+    render();
+    resolvePlayerActionWindow("没有合法目标");
+    return false;
+  }
   beginPendingSelection(
     state,
     "target",
@@ -1019,19 +1060,9 @@ function beginSpellTargetSelection(handIndex, card) {
     { zone: "hand", uid: card.uid }
   );
   setActionWindow(ACTION_WINDOWS.targetSelect, { reason: `target:${card.uid}` });
-  if (!legalPendingTargets().length) {
-    clearPendingTarget();
-    state.selected = null;
-    cue(`${card.name} 没有合法目标，不能发动。`);
-    render();
-    resolvePlayerActionWindow("没有合法目标");
-    return false;
-  }
-  const prompt = pendingTarget.effect === "splitToken"
-    ? currentSplitTokenDisplay().text
-    : targetSelectionPrompt(pendingTarget);
-  cue(prompt);
-  addLog(`等待选择 ${card.name} 的目标。`);
+  const display = currentTargetSelectionDisplay(pendingTarget);
+  cue(display.text);
+  addLog(`等待确认 ${card.name} 的目标，已默认选择 ${display.selectedName}。`);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1087,11 +1118,47 @@ async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
   return true;
 }
 
+function selectPendingSpellTarget(ownerName, index, zone = "field") {
+  if (!state.pendingTarget) return false;
+  notePlayerIntent();
+  const targetInfo = validateCurrentTarget(ownerName, index, zone);
+  if (!targetInfo.ok) {
+    cue(targetInfo.reason);
+    resetPlayerIdleCountdown();
+    return true;
+  }
+  state.pendingTarget = selectTargetSelection(state.pendingTarget, targetInfo, { source: "player" });
+  const display = currentTargetSelectionDisplay();
+  playSound("click");
+  cue(`${targetSelectionTargetLabel(targetInfo)}已选为目标，请确认发动。`);
+  render();
+  resetPlayerIdleCountdown();
+  return true;
+}
+
 async function resolvePendingSpellDefault() {
   if (!state.pendingTarget) return false;
   const cardName = state.pendingTarget.cardName;
-  const targets = legalPendingTargets();
-  if (!targets.length) {
+  let target = resolveSelectedTargetSelection(state.pendingTarget, {
+    player: state.player,
+    ai: state.ai
+  });
+  if (!target) {
+    const refreshed = prepareDefaultTargetSelection(state.pendingTarget, {
+      player: state.player,
+      ai: state.ai
+    });
+    target = resolveSelectedTargetSelection(refreshed, {
+      player: state.player,
+      ai: state.ai
+    });
+    if (target) {
+      state.pendingTarget = refreshed;
+      cue(`原目标已失效，已重新选择 ${targetSelectionTargetLabel(target)}，请再次确认。`);
+      render();
+      resetPlayerIdleCountdown();
+      return true;
+    }
     clearPendingTarget();
     state.selected = null;
     clearBattlePreview();
@@ -1101,8 +1168,8 @@ async function resolvePendingSpellDefault() {
     resolvePlayerActionWindow("目标无效");
     return true;
   }
-  cue(`默认选择 ${targets[0].card.name}。`);
-  return await resolvePendingSpellTarget(targets[0].owner, targets[0].index, targets[0].zone);
+  cue(`确认目标：${targetSelectionTargetLabel(target)}。`);
+  return await resolvePendingSpellTarget(target.owner, target.index, target.zone);
 }
 
 function canChangeAnyPlayerMode() {
@@ -1169,7 +1236,7 @@ async function selectHandCard(uid) {
     const sameCard = state.pendingTarget.handUid === uid;
     if (sameCard) {
       showDetail(card);
-      cue("请点击高亮目标；也可以点击“确认推荐目标”自动选择。");
+      cue(currentTargetSelectionDisplay().text);
       playSound("click");
       render();
       resetPlayerIdleCountdown();
@@ -1751,7 +1818,7 @@ function canUseAttackIntentWindow() {
 async function quickAttackOnlyTarget(attackerIndex) {
   if (!canPlayerAct()) return false;
   if (state.pendingTarget) {
-    cue(targetSelectionPrompt(state.pendingTarget));
+    cue(currentTargetSelectionDisplay().text);
     resetPlayerIdleCountdown();
     return false;
   }
@@ -1905,7 +1972,7 @@ async function selectPlayerMonster(index) {
     return;
   }
   if (state.pendingTarget) {
-    await resolvePendingSpellTarget("player", index);
+    selectPendingSpellTarget("player", index);
     return;
   }
   notePlayerIntent();
@@ -1919,7 +1986,7 @@ async function selectPlayerMonster(index) {
 
 async function handlePlayerSlot(index) {
   if (state.pendingTarget) {
-    await resolvePendingSpellTarget("player", index);
+    selectPendingSpellTarget("player", index);
     return;
   }
   if (state.pendingTribute) {
@@ -2023,11 +2090,7 @@ async function handlePlayerTrapSlot(index) {
   if (selectPendingTrapChoice(index)) return;
   const existing = state.player.traps[index];
   if (state.pendingTarget) {
-    if (isPendingTrapTargetSlot("player", index)) {
-      await resolvePendingSpellTarget("player", index, "traps");
-      return;
-    }
-    cue(targetSelectionPrompt(state.pendingTarget));
+    selectPendingSpellTarget("player", index, "traps");
     return;
   }
   if (existing && (!canPlayerAct() || !state.selected || state.selected.zone !== "hand")) {
@@ -2077,7 +2140,7 @@ async function handlePlayerTrapSlot(index) {
 async function handleAiTrapSlot(index) {
   const card = state.ai.traps[index];
   if (state.pendingTarget) {
-    await resolvePendingSpellTarget("ai", index, "traps");
+    selectPendingSpellTarget("ai", index, "traps");
     return;
   }
   if (card) {
@@ -2105,7 +2168,7 @@ async function handleAiSlot(index) {
   }
   if (state.pendingTarget?.effect === "splitToken" && canPlayerAct()) {
     notePlayerIntent();
-    await resolvePendingSpellTarget("ai", index);
+    selectPendingSpellTarget("ai", index);
     return;
   }
   if (!card) return;
@@ -2116,7 +2179,7 @@ async function handleAiSlot(index) {
   notePlayerIntent();
   if (state.pendingTarget) {
     showDetail(card);
-    await resolvePendingSpellTarget("ai", index);
+    selectPendingSpellTarget("ai", index);
     return;
   }
   if (!canUseBattleActions()) {
@@ -2141,7 +2204,7 @@ async function handleAiPanelAttack() {
   if (!canPlayerAct()) return;
   notePlayerIntent();
   if (state.pendingTarget) {
-    cue(targetSelectionPrompt(state.pendingTarget));
+    cue(currentTargetSelectionDisplay().text);
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
@@ -4170,8 +4233,9 @@ function handleTargetSelectionTimeout() {
   const cardName = state.pendingTarget.cardName;
   const targets = legalPendingTargets();
   if (targets.length === 1) {
-    addLog(`${cardName} 目标选择超时，自动选择唯一合法目标 ${targets[0].card.name}。`);
-    cue(`已自动选择 ${targets[0].card.name}`);
+    const targetLabel = targetSelectionTargetLabel(targets[0]);
+    addLog(`${cardName} 目标选择超时，自动确认唯一合法目标 ${targetLabel}。`);
+    cue(`已自动确认 ${targetLabel}`);
     resolvePendingSpellTarget(targets[0].owner, targets[0].index, targets[0].zone);
     return;
   }
@@ -4221,11 +4285,8 @@ function playSpellEffect(owner, rival, card, targetCard = null, targetOwner = ow
 
 function render(animationKey = "") {
   const scenario = scenarioSetups[state.scenarioId] || scenarioSetups.normal;
-  const targetPrompt = state.pendingTarget
-    ? state.pendingTarget.effect === "splitToken"
-      ? currentSplitTokenDisplay().text
-      : targetSelectionPrompt(state.pendingTarget)
-    : "";
+  const targetSelectionDisplay = currentTargetSelectionDisplay();
+  const targetPrompt = targetSelectionDisplay.text;
   const actions = currentPlayerActions();
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
   const musicMode = currentMusicMode();
@@ -4276,6 +4337,7 @@ function render(animationKey = "") {
     selectedHandName: selectedHand?.card.name || "",
     selectedHandReason: selectedHandAction?.reason || "",
     targetPrompt,
+    targetSelectionStatus: targetSelectionDisplay,
     fusionStatus,
     selectionPrompt: state.pendingTribute
       ? currentTributeSelectionDisplay()?.text || ""
@@ -4383,6 +4445,7 @@ function renderField(root, duelist, owner, animationKey) {
     animationKey,
     assetForCard: monsterAsset,
     targetableAt: (index) => isPendingTargetSlot(owner, index),
+    targetSelectedAt: (index) => isSelectedTargetSelection(state.pendingTarget, owner, index),
     attackTargetableAt: (index) => isAttackTargetSlot(owner, index),
     selectedTributeIndexes: owner === "player" ? selectedTributeIndexes() : [],
     selectedFusionIndexes: owner === "player" ? selectedFusionIndexes() : [],
@@ -4419,6 +4482,7 @@ function renderTraps(root, duelist, owner) {
     state,
     assetForCard: monsterAsset,
     targetableAt: (index) => isPendingTrapTargetSlot(owner, index),
+    targetSelectedAt: (index) => isSelectedTargetSelection(state.pendingTarget, owner, index, "traps"),
     onSlotClick: (index) => owner === "player" ? handlePlayerTrapSlot(index) : handleAiTrapSlot(index),
     onCardClick: (card, index) => {
       if (owner === "player" && selectPendingTrapChoice(index)) return;
@@ -4436,6 +4500,7 @@ function handActionInfo(card, handIndex) {
   const selected = state.selected?.zone === "hand" && state.selected.uid === card.uid;
   const targetSelection = card.type === "spell" ? targetSelectionForCard(card, spellEffects) : null;
   const needsTarget = spellNeedsManualTarget(state.player, card, spellEffects);
+  const activeTargetSelection = state.pendingTarget?.handUid === card.uid;
   const action = describeHandAction(card, {
     started: state.started,
     canAct: canUseHandCards(card) || Boolean(state.pendingTarget),
@@ -4450,14 +4515,14 @@ function handActionInfo(card, handIndex) {
     trapValidation: card.type === "trap" ? explainSetTrapFromUiState(state, "player", handIndex) : { ok: true },
     spellValidation: card.type === "spell" ? validateSpell(state.player, state.ai, card, handIndex) : { ok: true },
     spellNeedsManualTarget: needsTarget,
-    spellTargetPrompt: needsTarget
+    spellTargetPrompt: activeTargetSelection
+      ? currentTargetSelectionDisplay().text
+      : needsTarget
       ? targetSelection?.effect === "splitToken"
         ? currentSplitTokenDisplay().text
         : targetSelectionPrompt(targetSelection)
       : state.pendingTarget
-        ? state.pendingTarget.effect === "splitToken"
-          ? currentSplitTokenDisplay().text
-          : targetSelectionPrompt(state.pendingTarget)
+        ? currentTargetSelectionDisplay().text
         : ""
   });
   if (card.type === "spell" && fusionDefinition(card)) {
@@ -4528,9 +4593,12 @@ function renderGraveTargets() {
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
     cardEl.dataset.zone = "player-grave";
     cardEl.classList.add("grave-target-card", "targetable");
+    const selected = isSelectedTargetSelection(state.pendingTarget, "player", index, "grave");
+    cardEl.classList.toggle("target-selected", selected);
+    cardEl.setAttribute("aria-pressed", String(selected));
     cardEl.title = `选择墓地目标：${card.name}`;
     cardEl.addEventListener("click", () => {
-      resolvePendingSpellTarget("player", index, "grave");
+      selectPendingSpellTarget("player", index, "grave");
     });
     root.appendChild(cardEl);
   });

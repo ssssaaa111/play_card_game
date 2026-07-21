@@ -164,7 +164,9 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       pendingTarget: state.pendingTarget ? {
         mode: state.pendingTarget.mode,
         cardName: state.pendingTarget.cardName,
-        effect: state.pendingTarget.effect
+        effect: state.pendingTarget.effect,
+        selectedTarget: state.pendingTarget.selectedTarget ? { ...state.pendingTarget.selectedTarget } : null,
+        selectedTargetSource: state.pendingTarget.selectedTargetSource || ""
       } : null,
       pendingTribute: state.pendingTribute ? {
         cardName: state.pendingTribute.cardName,
@@ -273,6 +275,29 @@ function clickSmokeElementCenter(element, label) {
     throw new Error(`${label} center is covered by ${target}`);
   }
   hit.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
+}
+
+async function selectSpellTarget(ctx, element, label, { center = false } = {}) {
+  const pendingUid = ctx.state.pendingTarget?.handUid;
+  if (!pendingUid) throw new Error(`${label}: spell target window is not open`);
+  if (center) clickSmokeElementCenter(element, label);
+  else clickSmokeElement(element, label);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.handUid === pendingUid &&
+      ctx.state.pendingTarget?.selectedTargetSource === "player" &&
+      Boolean(ctx.state.pendingTarget?.selectedTarget) &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${label}: target selected`
+  );
+}
+
+function confirmSpellTarget(ctx, label) {
+  clickSmokeElement(ctx.els.choiceConfirmBtn, label);
+}
+
+async function selectAndConfirmSpellTarget(ctx, element, label, options) {
+  await selectSpellTarget(ctx, element, label, options);
+  confirmSpellTarget(ctx, `${label}: confirm activation`);
 }
 
 function doubleClickSmokeElement(element, label) {
@@ -947,7 +972,7 @@ async function runTokenSplitBasicSmoke(ctx) {
   await startSmokeDuel(ctx, "splitToken");
   clickSmokeElement(handCard(ctx.els, "spark-split"), "token-split-basic: select split spell");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "splitToken", "token-split-basic: source selection opens");
-  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "token-split-basic: select source monster");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "spark-runner"), "token-split-basic: select source monster");
   await waitForSmoke(
     () => ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length === 2 &&
       ctx.state.gameEvents.filter((event) => event.type === "CARD_CREATED" && event.originCardId).length === 2 &&
@@ -965,11 +990,14 @@ async function runTokenReadabilityBasicSmoke(ctx) {
   clickSmokeElement(handCard(ctx.els, "spark-split"), "token-readability-basic: select split spell");
   await waitForSmoke(
     () => ctx.state.pendingTarget?.effect === "splitToken" &&
+      ctx.state.pendingTarget?.selectedTargetSource === "default" &&
       ctx.els.choiceText?.textContent.includes("发动「星火分裂」") &&
-      ctx.els.choiceText.textContent.includes("请选择分裂来源：己方场上的怪兽") &&
+      ctx.els.choiceText.textContent.includes("分裂来源：「星火信使」") &&
       ctx.els.choiceText.textContent.includes("将生成 2 只「星火衍生体」") &&
       ctx.els.choiceText.textContent.includes("需要 2 个空怪兽格。当前空位：4。空位充足") &&
-      ctx.els.choiceText.textContent.includes("token 离场后会消失，不进入墓地、手牌或卡组"),
+      ctx.els.choiceText.textContent.includes("token 离场后会消失，不进入墓地、手牌或卡组") &&
+      ctx.els.choiceText.textContent.includes("已默认选择") &&
+      fieldCard(ctx.els, "player", "spark-runner")?.classList.contains("target-selected"),
     "token-readability-basic: source, count, space, and lifecycle are visible"
   );
 
@@ -999,7 +1027,16 @@ async function runTokenReadabilityBasicSmoke(ctx) {
     throw new Error("token-readability-basic: invalid source clicks changed duel state");
   }
 
-  clickSmokeElementCenter(fieldCard(ctx.els, "player", "spark-runner"), "token-readability-basic: choose legal split source");
+  await selectSpellTarget(
+    ctx,
+    fieldCard(ctx.els, "player", "spark-runner"),
+    "token-readability-basic: choose legal split source",
+    { center: true }
+  );
+  if (!ctx.els.choiceText?.textContent.includes("已选择")) {
+    throw new Error("token-readability-basic: selected split source should remain visible before confirmation");
+  }
+  confirmSpellTarget(ctx, "token-readability-basic: confirm split source");
   await waitForSmoke(
     () => ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length === 2 &&
       !ctx.state.pendingTarget &&
@@ -1362,7 +1399,7 @@ async function runDivineResistanceSmoke(ctx) {
   if (fieldCard(ctx.els, "ai", "celestial-origin-dragon")?.classList.contains("targetable")) {
     throw new Error("divine-resistance: divine target resistance should prevent target highlight");
   }
-  clickSmokeElement(fieldCard(ctx.els, "ai", "starfall-colossus"), "divine-resistance: click colossus target");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "ai", "starfall-colossus"), "divine-resistance: click colossus target");
   await waitForSmoke(
     () => ctx.state.ai.field.some((card) => card?.id === "starfall-colossus" && card.tempAtk === -400 && card.tempDef === -400) &&
       ctx.state.ai.field.some((card) => card?.id === "celestial-origin-dragon" && (card.tempAtk || 0) === 0 && (card.tempDef || 0) === 0),
@@ -1405,7 +1442,7 @@ async function runDivineBreakSmoke(ctx) {
   if (fieldCard(ctx.els, "ai", "starfall-colossus")?.classList.contains("targetable")) {
     throw new Error("divine-break: lower attack monster should not replace the legal strongest target");
   }
-  clickSmokeElement(fieldCard(ctx.els, "ai", "celestial-origin-dragon"), "divine-break: target divine dragon");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "ai", "celestial-origin-dragon"), "divine-break: target divine dragon");
   await waitForSmoke(
     () => ctx.state.ai.field.some((card) => card?.id === "celestial-origin-dragon" && card.tempAtk === -400 && card.tempDef === -400) &&
       ctx.state.ai.field.some((card) => card?.id === "starfall-colossus" && (card.tempAtk || 0) === 0 && (card.tempDef || 0) === 0) &&
@@ -1681,7 +1718,7 @@ async function runSplitTokenSmoke(ctx) {
     () => ctx.state.pendingTarget?.effect === "splitToken" && ctx.state.pendingTarget?.mode === "ownMonster",
     "split-token: target selection opens"
   );
-  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "split-token: choose source monster");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "spark-runner"), "split-token: choose source monster");
   await waitForSmoke(
     () => ctx.state.player.field.filter((card) => card?.id === "spark-fragment-token").length === 2 &&
       ctx.state.player.grave.some((card) => card?.id === "spark-split") &&
@@ -1911,7 +1948,7 @@ async function runBasicExpansionSmoke(ctx) {
     "星魂共鸣目标选择",
     6000
   );
-  clickSmokeElement(fieldCard(ctx.els, "player", "rift-bulwark"), "星魂共鸣选择裂隙壁卫");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "rift-bulwark"), "星魂共鸣选择裂隙壁卫");
   await waitForSmoke(
     () => ctx.state.player.field[1]?.tempAtk === 200 &&
       ctx.state.player.field[1]?.tempDef === 200 &&
@@ -1988,7 +2025,7 @@ async function runProtagonistComebackDemoSmoke(ctx) {
 
   clickSmokeElement(handCard(ctx.els, "dawn-edge"), "破晓锋印手牌");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "dawnEdge", "破晓锋印目标选择");
-  clickSmokeElement(fieldCard(ctx.els, "player", "astral-comet-ace"), "破晓锋印选择天穹逆星者");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "astral-comet-ace"), "破晓锋印选择天穹逆星者");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace" && (card.tempAtk || 0) >= 900),
     "破晓锋印加攻结算",
@@ -1997,7 +2034,7 @@ async function runProtagonistComebackDemoSmoke(ctx) {
 
   clickSmokeElement(handCard(ctx.els, "limit-break-oath"), "临界誓辉手牌");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "lastStandSurge", "临界誓辉目标选择");
-  clickSmokeElement(fieldCard(ctx.els, "player", "astral-comet-ace"), "临界誓辉选择天穹逆星者");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "astral-comet-ace"), "临界誓辉选择天穹逆星者");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace" && (card.tempAtk || 0) >= 1600),
     "临界誓辉低生命强化结算",
@@ -2097,7 +2134,7 @@ async function runProtagonistComebackChallengeSmoke(ctx) {
     `挑战：醒星回召应显示多个墓地目标。${smokeDebug(ctx)}`,
     9000
   );
-  clickSmokeElement(graveTargetCard(ctx.els, "astral-comet-ace"), "挑战：选择天穹逆星者");
+  await selectAndConfirmSpellTarget(ctx, graveTargetCard(ctx.els, "astral-comet-ace"), "挑战：选择天穹逆星者");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace") &&
       ctx.state.player.grave.some((card) => card?.id === "spark-runner") &&
@@ -2108,7 +2145,7 @@ async function runProtagonistComebackChallengeSmoke(ctx) {
 
   clickSmokeElement(handCard(ctx.els, "dawn-edge"), "挑战：破晓锋印");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "dawnEdge", "挑战：破晓锋印目标选择");
-  clickSmokeElement(fieldCard(ctx.els, "player", "astral-comet-ace"), "挑战：破晓锋印选择王牌");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "astral-comet-ace"), "挑战：破晓锋印选择王牌");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace" && (card.tempAtk || 0) >= 900),
     `挑战：破晓锋印应强化王牌。${smokeDebug(ctx)}`,
@@ -2117,7 +2154,7 @@ async function runProtagonistComebackChallengeSmoke(ctx) {
 
   clickSmokeElement(handCard(ctx.els, "limit-break-oath"), "挑战：临界誓辉");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "lastStandSurge", "挑战：临界誓辉目标选择");
-  clickSmokeElement(fieldCard(ctx.els, "player", "astral-comet-ace"), "挑战：临界誓辉选择王牌");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "astral-comet-ace"), "挑战：临界誓辉选择王牌");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace" && (card.tempAtk || 0) >= 1600),
     `挑战：临界誓辉应叠到王牌。${smokeDebug(ctx)}`,
@@ -2160,7 +2197,7 @@ async function runProtagonistComebackChallengeSmoke(ctx) {
   const aiTrapBefore = ctx.state.ai.traps.find((card) => card?.id === "mirror-snare")?.uid || null;
   clickSmokeElement(handCard(ctx.els, "dispelling-ray"), "挑战：解印射线");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", "挑战：解印射线目标选择");
-  clickSmokeElement(ctx.els.aiTraps.querySelector(".trap-slot:not(.empty)"), "挑战：选择对手盖卡");
+  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot:not(.empty)"), "挑战：选择对手盖卡");
   await waitForSmoke(
     () => !ctx.state.ai.traps.some((card) => card?.id === "mirror-snare") &&
       ctx.state.ai.grave.some((card) => card?.id === "mirror-snare") &&
@@ -2174,7 +2211,7 @@ async function runProtagonistComebackChallengeSmoke(ctx) {
 
   clickSmokeElement(handCard(ctx.els, "battle-trance"), "挑战：战斗狂热");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "battleTrance", "挑战：战斗狂热目标选择");
-  clickSmokeElement(fieldCard(ctx.els, "player", "astral-comet-ace"), "挑战：战斗狂热选择王牌");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "astral-comet-ace"), "挑战：战斗狂热选择王牌");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace" && (card.tempAtk || 0) >= 1800),
     `挑战：战斗狂热应在反击回合强化王牌。${smokeDebug(ctx)}`,
@@ -2552,7 +2589,7 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
 
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-moonbreaker-ray", `${smokeName}：碎月解幕高亮`), `${smokeName}：选择碎月解幕`);
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}：碎月解幕目标选择`);
-  clickSmokeElement(ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}：破坏月曜帷幕`);
+  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}：破坏月曜帷幕`);
   await waitForSmoke(
     () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.player.field.some((card) => card?.id === "trio-decoy-ward" && (card.tempAtk || 0) === 0 && (card.tempDef || 0) === 0),
@@ -2562,7 +2599,7 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
 
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-ember-recall", `${smokeName}：余烁归轨高亮`), `${smokeName}：选择余烁归轨`);
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", `${smokeName}：余烁归轨墓地目标`);
-  clickSmokeElement(graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}：回召余烁小卫`);
+  await selectAndConfirmSpellTarget(ctx, graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}：回召余烁小卫`);
   await waitForSmoke(
     () => ctx.state.player.field.some((card) =>
       card?.id === "trio-ember-pawn" &&
@@ -2667,7 +2704,7 @@ async function runTrioOmegaChallengeSmoke(ctx) {
 
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-moonbreaker-ray", "challenge: moonbreaker highlight"), "challenge: select moonbreaker");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", "challenge: moonbreaker target selection");
-  clickSmokeElement(ctx.els.aiTraps.querySelector(".trap-slot.targetable"), "challenge: destroy moon dominion");
+  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), "challenge: destroy moon dominion");
   await waitForSmoke(
     () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.player.field.some((card) => card?.id === "trio-decoy-ward" && (card.tempAtk || 0) === 0 && (card.tempDef || 0) === 0),
@@ -2678,7 +2715,7 @@ async function runTrioOmegaChallengeSmoke(ctx) {
   const recallCard = ctx.state.player.hand.find((card) => card?.id === "trio-ember-recall");
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-ember-recall", "challenge: ember recall highlight"), "challenge: select ember recall");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", "challenge: grave target selection");
-  clickSmokeElement(graveTargetCard(ctx.els, "trio-ember-pawn"), "challenge: revive ember pawn");
+  await selectAndConfirmSpellTarget(ctx, graveTargetCard(ctx.els, "trio-ember-pawn"), "challenge: revive ember pawn");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) =>
       card?.id === "trio-ember-pawn" &&
@@ -2812,7 +2849,7 @@ async function runTrioOmegaCasualFailureLine(ctx, smokeName, { continueAfterRiva
     if (handCard(ctx.els, "trio-moonbreaker-ray")) {
       clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}: click newly drawn moonbreaker`);
       await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}: moonbreaker target`);
-      clickSmokeElement(ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: click obvious trap target`);
+      await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: click obvious trap target`);
       await waitForSmoke(
         () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"),
         `${smokeName}: moon dominion cleared late. ${trioOmegaFailureSnapshot(ctx)}`,
@@ -3011,7 +3048,7 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
 
   clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), "full duel: select moonbreaker");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", "full duel: moonbreaker target window");
-  clickSmokeElement(ctx.els.aiTraps.querySelector(".trap-slot.targetable"), "full duel: clear moon dominion");
+  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), "full duel: clear moon dominion");
   await waitForSmoke(
     () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.player.field.some((card) => card?.id === "spark-runner" && (card.tempAtk || 0) === 0) &&
@@ -3190,6 +3227,47 @@ async function runPhantomSwitchRedirectSmoke(ctx) {
   setSmokeStatus("passed", "phantom-switch-redirect");
 }
 
+async function runSpellTargetDefaultBasicSmoke(ctx) {
+  setSmokeStatus("running", "spell-target-default-basic");
+  await startSmokeDuel(ctx, "divineGuard");
+  const target = ctx.state.player.field[0];
+  const spell = ctx.state.player.hand.find((card) => card?.id === "war-chant");
+  if (!target || target.id !== "celestial-origin-dragon" || !spell) {
+    throw new Error("spell-target-default-basic: fixture should contain one monster and war-chant");
+  }
+  const tempAtkBefore = target.tempAtk || 0;
+  const activationsBefore = countGameEvents(ctx.state, "CARD_ACTIVATED");
+
+  clickSmokeElement(handCard(ctx.els, "war-chant"), "spell-target-default-basic: select war-chant");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "buff500" &&
+      ctx.state.pendingTarget?.selectedTarget?.cardUid === target.uid &&
+      ctx.state.pendingTarget?.selectedTargetSource === "default" &&
+      fieldCard(ctx.els, "player", "celestial-origin-dragon")?.classList.contains("target-selected") &&
+      ctx.els.choiceText?.textContent.includes("已默认选择：创星神龙") &&
+      ctx.els.choiceConfirmBtn?.textContent.includes("确认发动"),
+    "spell-target-default-basic: only legal target is visibly selected"
+  );
+  if (!ctx.state.player.hand.some((card) => card?.uid === spell.uid) ||
+      countGameEvents(ctx.state, "CARD_ACTIVATED") !== activationsBefore) {
+    throw new Error("spell-target-default-basic: opening target selection must not activate the spell");
+  }
+
+  confirmSpellTarget(ctx, "spell-target-default-basic: confirm default target");
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      !ctx.state.player.hand.some((card) => card?.uid === spell.uid) &&
+      (ctx.state.player.field[0]?.tempAtk || 0) === tempAtkBefore + 500 &&
+      countGameEvents(ctx.state, "CARD_ACTIVATED") === activationsBefore + 1,
+    "spell-target-default-basic: selected target resolves only after confirmation",
+    9000
+  );
+  await waitForSmoke(() => logCardLink(ctx.els, "war-chant"), "spell-target-default-basic: public spell log link");
+  clickSmokeElement(logCardLink(ctx.els, "war-chant"), "spell-target-default-basic: open spell detail from log");
+  await assertCardDetailModal(ctx, cloneCardById("war-chant"), "spell-target-default-basic");
+  setSmokeStatus("passed", "spell-target-default-basic");
+}
+
 async function runTargetWindowSmoke(ctx) {
   setSmokeStatus("running", "target-window");
   await startSmokeDuel(ctx, "target");
@@ -3200,6 +3278,13 @@ async function runTargetWindowSmoke(ctx) {
     () => ctx.state.pendingTarget?.effect === "buff500" && ctx.state.actionWindow === "targetSelect",
     "战意高扬目标选择窗口"
   );
+  const starLancer = ctx.state.player.field.find((card) => card?.id === "star-lancer");
+  if (ctx.state.pendingTarget?.selectedTarget?.cardUid !== starLancer?.uid ||
+      ctx.state.pendingTarget?.selectedTargetSource !== "default" ||
+      !fieldCard(ctx.els, "player", "star-lancer")?.classList.contains("target-selected") ||
+      !ctx.els.choiceText?.textContent.includes("已默认选择：星轨枪兵")) {
+    throw new Error("战意高扬没有把唯一合法目标明确显示为默认选中");
+  }
   assertPendingSelection(ctx, "target", "战意高扬目标选择窗口");
   if (ctx.state.timing !== "targetSelection") {
     throw new Error("目标选择没有进入 targetSelection 时点");
@@ -3215,6 +3300,12 @@ async function runTargetWindowSmoke(ctx) {
     () => ctx.state.pendingTarget?.effect === "pierceLine" && ctx.state.pendingTarget?.cardName === "破阵星芒",
     "点其它手牌会取消当前目标选择并切换"
   );
+  const skyRaider = ctx.state.ai.field.find((card) => card?.id === "sky-raider");
+  if (ctx.state.pendingTarget?.selectedTarget?.cardUid !== skyRaider?.uid ||
+      !fieldCard(ctx.els, "ai", "sky-raider")?.classList.contains("target-selected") ||
+      !ctx.els.choiceText?.textContent.includes("已默认选择：天岚突袭者")) {
+    throw new Error("切换魔法后没有重新计算并显示敌方默认目标");
+  }
   assertPendingSelection(ctx, "target", "切换到破阵星芒目标选择");
   if (!ctx.state.log.some((entry) => entry.includes("已取消 战意高扬 的目标选择"))) {
     throw new Error("切换手牌时没有记录取消原目标选择");
@@ -3228,7 +3319,7 @@ async function runTargetWindowSmoke(ctx) {
   clickSmokeElement(ctx.els.choiceConfirmBtn, "确认战意高扬推荐目标");
   await waitForSmoke(
     () => !ctx.state.pendingTarget && ctx.state.log.some((entry) => entry.includes("发动魔法卡 战意高扬")),
-    "确认推荐目标后发动战意高扬"
+    "确认已选目标后发动战意高扬"
   );
   assertPendingSelection(ctx, "", "战意高扬结算后");
   if (countGameEvents(ctx.state, "STAT_MODIFIED") < 1 || countGameEvents(ctx.state, "CARD_ACTIVATED") < 1) {
@@ -3395,7 +3486,7 @@ async function runBattleTranceReadySmoke(ctx) {
   );
   clickSmokeElement(handCard(ctx.els, "battle-trance"), "select battle trance");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "battleTrance", "battle trance target window");
-  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "target used strongest monster");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "ember-drake"), "target used strongest monster");
   await waitForSmoke(
     () => ctx.state.player.field[0]?.id === "ember-drake" &&
       ctx.state.player.field[0]?.used === false &&
@@ -4282,7 +4373,7 @@ async function runEquipmentSpellSmoke(ctx) {
     "Blade Sigil target selection",
     6000
   );
-  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "equip Blade Sigil to star-lancer");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "star-lancer"), "equip Blade Sigil to star-lancer");
   await waitForSmoke(
     () => ctx.state.player.field[0]?.tempAtk === 300 &&
       trapCard(ctx.els, "player", "blade-sigil") &&
@@ -4293,7 +4384,7 @@ async function runEquipmentSpellSmoke(ctx) {
 
   clickSmokeElement(handCard(ctx.els, "aegis-plate"), "Aegis Plate hand card");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "equipAegis", "Aegis Plate target selection", 6000);
-  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "equip Aegis Plate to star-lancer");
+  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "star-lancer"), "equip Aegis Plate to star-lancer");
   await waitForSmoke(
     () => ctx.state.player.field[0]?.tempDef === 500 &&
       trapCard(ctx.els, "player", "aegis-plate") &&
@@ -4341,6 +4432,11 @@ async function runEquipmentSpellSmoke(ctx) {
     ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"]'),
     "手动选择要破坏的敌方魔陷"
   );
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.selectedTargetSource === "player" && !ctx.els.choiceConfirmBtn.disabled,
+    "手动选择敌方魔陷后等待确认"
+  );
+  confirmSpellTarget(ctx, "确认破坏所选敌方魔陷");
   await waitForSmoke(
     () => !ctx.state.ai.traps[0] &&
       ctx.state.ai.grave.some((card) => card?.id === "blade-sigil") &&
@@ -4476,6 +4572,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-full-duel": runTrioOmegaFullDuelSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
+    "spell-target-default-basic": runSpellTargetDefaultBasicSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
     "battle-trap": runBattleTrapSmoke,

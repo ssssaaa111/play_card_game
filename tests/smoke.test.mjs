@@ -286,9 +286,12 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /async function queuePendingAttack\(targetIndex\)/);
   assert.match(app, /function confirmSelectedHandAction\(\)/);
   assert.match(app, /function cancelSelectedHandAction\(\)/);
-  assert.match(controls, /const currentConfirmLabel = hasTarget \? "确认推荐目标" : confirmLabel/);
+  assert.match(controls, /targetSelectionStatus\?\.confirmLabel \|\| "确认发动"/);
+  assert.match(controls, /confirmDisabled: hasTarget \? !targetSelectionStatus\?\.complete : !selectedHandReady/);
   assert.match(app, /function resolvePendingSpellDefault\(\)/);
-  assert.match(app, /resolvePendingSpellTarget\(targets\[0\]\.owner, targets\[0\]\.index, targets\[0\]\.zone\)/);
+  assert.match(app, /prepareDefaultTargetSelection\(initialTarget/);
+  assert.match(app, /resolveSelectedTargetSelection\(state\.pendingTarget/);
+  assert.match(app, /function selectPendingSpellTarget\(ownerName, index, zone = "field"\)/);
   assert.match(app, /beginSpellTargetSelection\(handIndex, card\)/);
   assert.match(app, /已取消 \$\{previousCardName\} 的目标选择，改选 \$\{card\.name\}/);
   assert.match(app, /playSpell\(state\.player, state\.ai, selected\.index\)/);
@@ -728,6 +731,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke/);
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
+  assert.match(smoke, /"spell-target-default-basic": runSpellTargetDefaultBasicSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
@@ -824,6 +828,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-comeback-autopilot-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "phantom-switch-redirect"\)/);
+  assert.match(smoke, /setSmokeStatus\("passed", "spell-target-default-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);

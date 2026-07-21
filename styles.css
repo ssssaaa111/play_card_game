@@ -1610,6 +1610,14 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   cursor: crosshair;
 }
 
+.slot.target-selected,
+.trap-slot.target-selected,
+.card.target-selected {
+  border-color: rgba(84, 210, 210, 0.98);
+  box-shadow: 0 0 0 4px rgba(84, 210, 210, 0.28), 0 0 34px rgba(84, 210, 210, 0.4);
+  cursor: pointer;
+}
+
 .slot.attack-target,
 .card.attack-target {
   border-color: rgba(239, 71, 111, 0.92);
@@ -1746,6 +1754,24 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   border: 1px solid rgba(246, 189, 96, 0.34);
   background: rgba(8, 10, 16, 0.78);
   color: var(--gold);
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+  pointer-events: none;
+}
+
+.slot.target-selected::after,
+.trap-slot.target-selected::after {
+  content: "已选魔法目标";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 5;
+  padding: 4px 6px;
+  border: 1px solid rgba(84, 210, 210, 0.48);
+  background: rgba(10, 45, 48, 0.92);
+  color: #c9ffff;
   font-size: 11px;
   font-weight: 900;
   text-align: center;
@@ -2608,6 +2634,23 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   gap: 4px;
   padding: 7px;
   border-color: rgba(183, 148, 244, 0.72);
+}
+
+.grave-targets .card.target-selected::after {
+  content: "已选墓地目标";
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 7px;
+  z-index: 5;
+  padding: 4px 5px;
+  border-radius: 999px;
+  background: rgba(10, 45, 48, 0.94);
+  color: #c9ffff;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+  pointer-events: none;
 }
 
 .grave-targets .card .art {

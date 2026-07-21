@@ -35,6 +35,7 @@ test("monster field view centralizes attack and selection states", () => {
       selected: { zone: "playerField", index: 2 }
     },
     targetable: true,
+    targetSelected: true,
     attackTargetable: true,
     fusionCandidate: true,
     fusionSelected: true,
@@ -46,9 +47,12 @@ test("monster field view centralizes attack and selection states", () => {
   assert.equal(ready.materialCandidate, true);
   assert.equal(ready.materialSelected, true);
   assert.equal(ready.animationClass, "summon-flash");
-  assert.equal(ready.ariaLabel, "我方召唤区 3");
+  assert.equal(ready.ariaLabel, "我方召唤区 3，已选择为魔法目标");
   assert.ok(ready.slotClasses.includes("attack-target"));
+  assert.ok(ready.slotClasses.includes("target-selected"));
   assert.ok(ready.cardClasses.includes("selected"));
+  assert.ok(ready.cardClasses.includes("target-selected"));
+  assert.match(ready.ariaLabel, /已选择为魔法目标/);
   assert.ok(ready.cardClasses.includes("enhanced"));
   assert.ok(ready.cardClasses.includes("tribute-selected"));
 });
@@ -154,6 +158,19 @@ test("support field view reveals active spells while keeping rival traps conceal
     owner: "ai",
     index: 2
   });
+  const selectedRivalSpell = supportFieldSlotView({
+    card: rivalSpell.supportDisplay ? {
+      id: "trio-moon-dominion",
+      type: "spell",
+      name: "月曜帷幕",
+      text: "持续降低目标攻击力和守备力。",
+      effect: "lunarDominion"
+    } : null,
+    owner: "ai",
+    index: 2,
+    targetable: true,
+    targetSelected: true
+  });
 
   assert.equal(player.supportDisplay.key, "selected");
   assert.equal(player.revealed, true);
@@ -167,4 +184,7 @@ test("support field view reveals active spells while keeping rival traps conceal
   assert.equal(rivalSpell.supportDisplay.key, "active");
   assert.match(rivalSpell.ariaLabel, /月曜帷幕/);
   assert.match(rivalSpell.ariaLabel, /持续魔法生效中/);
+  assert.ok(selectedRivalSpell.slotClasses.includes("target-selected"));
+  assert.ok(selectedRivalSpell.cardClasses.includes("target-selected"));
+  assert.match(selectedRivalSpell.ariaLabel, /已选择为魔法目标/);
 });

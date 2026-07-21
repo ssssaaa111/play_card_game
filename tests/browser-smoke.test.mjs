@@ -20,7 +20,14 @@ test("builds read-only browser smoke snapshots from live state", () => {
       { id: 2, type: "TRAP_SET", playerId: "player", cardId: "mirror-snare" }
     ],
     log: ["攻击无效：必须先攻击怪兽。"],
-    pendingTarget: null,
+    pendingTarget: {
+      handUid: "war-chant-ui",
+      mode: "ownMonster",
+      cardName: "战意高扬",
+      effect: "buff500",
+      selectedTarget: { owner: "player", zone: "field", index: 0, cardUid: "star-lancer-ui" },
+      selectedTargetSource: "default"
+    },
     player: {
       lp: 4000,
       shield: 0,
@@ -58,8 +65,15 @@ test("builds read-only browser smoke snapshots from live state", () => {
   assert.equal(snapshot.machine.phase, "main");
   assert.equal(snapshot.machine.chainLength, 0);
   assert.equal(snapshot.selectedCard.id, "star-lancer");
-  assert.equal(snapshot.selection.pendingKind, "");
+  assert.equal(snapshot.selection.pendingKind, "target");
   assert.equal(snapshot.selection.conflicted, false);
+  assert.deepEqual(snapshot.pendingTarget.selectedTarget, {
+    owner: "player",
+    zone: "field",
+    index: 0,
+    cardUid: "star-lancer-ui"
+  });
+  assert.equal(snapshot.pendingTarget.selectedTargetSource, "default");
   assert.equal(snapshot.activePlayerMonsters[0].canAttack, true);
   assert.equal(snapshot.controls.skipAttackButtonDisabled, false);
   assert.equal(snapshot.player.directAttacks, 1);
