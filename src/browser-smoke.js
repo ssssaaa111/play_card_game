@@ -3498,6 +3498,11 @@ async function runDoubleAttackSmoke(ctx) {
 async function runBattleTranceReadySmoke(ctx) {
   setSmokeStatus("running", "battle-trance-ready");
   await startSmokeDuel(ctx, "combo");
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "player", "ember-drake")?.classList.contains("attack-ready") &&
+      fieldCard(ctx.els, "player", "gale-mage")?.classList.contains("attack-ready"),
+    "main-window attack-ready highlights come from legal battle projection"
+  );
   const ember = fieldCard(ctx.els, "player", "ember-drake");
   clickSmokeElement(ember, "select ember for first attack");
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "first attack target");
@@ -3512,11 +3517,18 @@ async function runBattleTranceReadySmoke(ctx) {
   );
   clickSmokeElement(handCard(ctx.els, "battle-trance"), "select battle trance");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "battleTrance", "battle trance target window");
+  if (ctx.els.playerField.querySelector(".field-monster-card.attack-ready")) {
+    throw new Error("battle-trance-ready: attack highlight must pause during target selection");
+  }
+  if (!fieldCard(ctx.els, "player", "ember-drake")?.dataset.attackReason?.includes("目标选择")) {
+    throw new Error("battle-trance-ready: suspended attack highlight should expose the target-selection reason");
+  }
   doubleClickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "double click used strongest monster");
   await waitForSmoke(
     () => ctx.state.player.field[0]?.id === "ember-drake" &&
       ctx.state.player.field[0]?.used === false &&
-      (ctx.state.player.field[0]?.tempAtk || 0) >= 200,
+      (ctx.state.player.field[0]?.tempAtk || 0) >= 200 &&
+      fieldCard(ctx.els, "player", "ember-drake")?.classList.contains("attack-ready"),
     "battle trance readies used target",
     9000
   );

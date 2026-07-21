@@ -874,7 +874,7 @@ test("skipped attack lock is visible on field cards", () => {
 
   assert.match(fieldRenderer, /const attacksLocked = Boolean\(/);
   assert.match(fieldRenderer, /state\[owner\]\?\.attacksSkipped \|\| card\.attackLockReason/);
-  assert.match(fieldRenderer, /const attackReady = Boolean\(/);
+  assert.match(fieldRenderer, /const attackReady = attackReadiness/);
   assert.match(fieldRenderer, /effectMarkers: effectMarkersAt\(index\)/);
   assert.match(fieldRenderer, /showStateRail: card\.type === "monster"/);
   assert.match(fieldRenderer, /showTributeRequirement: false/);
@@ -902,6 +902,17 @@ test("player action window recovery refreshes action-ready projections after dis
   assert.match(recovery, /decision\.kind === "main"[\s\S]*setActionWindow\([\s\S]*render\(animationKey\)/);
   assert.match(recovery, /decision\.kind === "battle"[\s\S]*setActionWindow\([\s\S]*render\(animationKey\)/);
   assert.match(autoEnd, /if \(!force && actions\.hasAny\)[\s\S]*setActionWindow\([\s\S]*render\(\)/);
+});
+
+test("field attack highlights use engine adapter legality instead of renderer phase guesses", () => {
+  const app = readProjectFile("src/app.js");
+  const adapter = readProjectFile("src/engine-adapter.js");
+  const fieldRenderer = readProjectFile("src/field-renderer.js");
+
+  assert.match(adapter, /export function explainMonsterAttackReadinessFromUiState/);
+  assert.match(app, /attackReadinessAt: \(index\) => explainMonsterAttackReadinessFromUiState\(state, owner, index\)/);
+  assert.match(fieldRenderer, /attackReady = attackReadiness/);
+  assert.match(fieldRenderer, /dataset\.attackReason = view\.attackReason/);
 });
 
 test("attack-destroy trap outcome is logged once by shared engine feedback", () => {

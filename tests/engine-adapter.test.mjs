@@ -10,6 +10,7 @@ import {
   canDispatchSummonEffectFromUiState,
   explainActivateSpellFromUiState,
   explainChangeMonsterModeFromUiState,
+  explainMonsterAttackReadinessFromUiState,
   explainDeclareAttackFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
@@ -1263,6 +1264,32 @@ test("dispatches monster mode changes and replays them into UI state", () => {
     event.to === "defense"
   ));
   assert.equal(state.gameEvents.length, events.length);
+});
+
+test("projects monster attack readiness across main, selection, spent, and readied states", () => {
+  const attacker = uiMonster("readiness-attacker", "iron-guardian");
+  const target = uiMonster("readiness-target", "sky-raider");
+  target.ownerId = "ai";
+  const state = appState({ started: true, phase: PHASES.main, actionWindow: ACTION_WINDOWS.main });
+  state.player.field[0] = attacker;
+  state.ai.field[0] = target;
+
+  assert.equal(explainMonsterAttackReadinessFromUiState(state, "player", 0).ok, true);
+
+  state.actionWindow = ACTION_WINDOWS.targetSelect;
+  const selecting = explainMonsterAttackReadinessFromUiState(state, "player", 0);
+  assert.equal(selecting.ok, false);
+  assert.match(selecting.reason, /选择|结算/);
+
+  state.actionWindow = ACTION_WINDOWS.battle;
+  state.phase = PHASES.battle;
+  attacker.used = true;
+  const spent = explainMonsterAttackReadinessFromUiState(state, "player", 0);
+  assert.equal(spent.ok, false);
+  assert.match(spent.reason, /攻击过/);
+
+  attacker.used = false;
+  assert.equal(explainMonsterAttackReadinessFromUiState(state, "player", 0).ok, true);
 });
 
 test("mode legality projection disables a monster after its one allowed position change", () => {

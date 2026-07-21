@@ -188,3 +188,40 @@ test("support field view reveals active spells while keeping rival traps conceal
   assert.ok(selectedRivalSpell.cardClasses.includes("target-selected"));
   assert.match(selectedRivalSpell.ariaLabel, /已选择为魔法目标/);
 });
+
+test("monster field view follows projected attack legality instead of guessing from phase", () => {
+  const mainReady = monsterFieldSlotView({
+    card: monster(),
+    owner: "player",
+    state: {
+      started: true,
+      paused: false,
+      gameOver: null,
+      turn: "player",
+      phase: "main",
+      actionWindow: "main",
+      player: { attacksSkipped: false }
+    },
+    attackReadiness: { ok: true, reason: "" }
+  });
+  const resolving = monsterFieldSlotView({
+    card: monster(),
+    owner: "player",
+    state: {
+      started: true,
+      paused: false,
+      gameOver: null,
+      turn: "player",
+      phase: "battle",
+      actionWindow: "resolution",
+      player: { attacksSkipped: false }
+    },
+    attackReadiness: { ok: false, reason: "当前正在结算，暂时不能攻击。" }
+  });
+
+  assert.equal(mainReady.attackReady, true);
+  assert.ok(mainReady.cardClasses.includes("attack-ready"));
+  assert.equal(resolving.attackReady, false);
+  assert.ok(!resolving.cardClasses.includes("attack-ready"));
+  assert.equal(resolving.attackReason, "当前正在结算，暂时不能攻击。");
+});

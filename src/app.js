@@ -82,6 +82,7 @@ import {
   explainChangeMonsterModeFromUiState,
   explainDeclareAttackFromUiState,
   explainFusionSummonFromUiState,
+  explainMonsterAttackReadinessFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
   projectBattleFromUiState
@@ -4465,6 +4466,7 @@ function renderField(root, duelist, owner, animationKey) {
     targetableAt: (index) => isPendingTargetSlot(owner, index),
     targetSelectedAt: (index) => isSelectedTargetSelection(state.pendingTarget, owner, index),
     attackTargetableAt: (index) => isAttackTargetSlot(owner, index),
+    attackReadinessAt: (index) => explainMonsterAttackReadinessFromUiState(state, owner, index),
     selectedTributeIndexes: owner === "player" ? selectedTributeIndexes() : [],
     selectedFusionIndexes: owner === "player" ? selectedFusionIndexes() : [],
     materialTargetAt: (index) => {

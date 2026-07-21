@@ -845,6 +845,51 @@ export function projectBattleFromUiState(uiState, playerId = uiState.turn || "pl
   };
 }
 
+export function explainMonsterAttackReadinessFromUiState(uiState, playerId, fieldIndex) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.field[fieldIndex];
+  if (!card || card.type !== "monster") {
+    return { ok: false, reason: "该怪兽区没有可攻击的怪兽。", engineReason: "No attacker at index" };
+  }
+  if (!uiState.started || uiState.gameOver) {
+    return { ok: false, reason: "当前决斗不能进行攻击。", engineReason: "Duel is not active" };
+  }
+  if (uiState.paused) {
+    return { ok: false, reason: "决斗暂停时不能攻击。", engineReason: "Duel is paused" };
+  }
+  if (uiState.turn !== playerId) {
+    return { ok: false, reason: "当前不是这名决斗者的回合。", engineReason: "Not the active player" };
+  }
+  const inAttackIntentWindow = [PHASES.main, PHASES.battle].includes(uiState.phase) &&
+    [ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(uiState.actionWindow);
+  if (!inAttackIntentWindow) {
+    const selecting = uiState.actionWindow === ACTION_WINDOWS.targetSelect;
+    return {
+      ok: false,
+      reason: selecting ? "请先完成当前目标选择，再进行攻击。" : "当前正在结算，暂时不能攻击。",
+      engineReason: `Attack intent is unavailable during ${uiState.actionWindow || uiState.phase || "unknown"}`
+    };
+  }
+  if (card.mode === "defense") {
+    return { ok: false, reason: "守备表示怪兽不能攻击。", engineReason: "Defense position monsters cannot attack" };
+  }
+  if (card.used) {
+    return { ok: false, reason: "这只怪兽本回合已经攻击过。", engineReason: "Monster already attacked" };
+  }
+  if (duelist.attacksSkipped) {
+    return { ok: false, reason: "本回合已经跳过攻击，不能再攻击。", engineReason: "Player skipped attacks" };
+  }
+  if (card.attackLockReason) {
+    return { ok: false, reason: "这只怪兽当前受到攻击限制。", engineReason: card.attackLockReason };
+  }
+
+  const projection = projectBattleFromUiState(uiState, playerId, { attackerIndex: fieldIndex });
+  if (!projection.attackerCanAttack) {
+    return { ok: false, reason: "当前没有这只怪兽的合法攻击行动。", engineReason: "No legal attack action" };
+  }
+  return { ok: true, reason: "", engineReason: "" };
+}
+
 function stripNonEngineSummonEffects(engineState) {
   Object.values(engineState.cards || {}).forEach((card) => {
     if (card?.type === "monster" && card.onSummon && getCardEffectDefinition(card.onSummon)?.duration !== ONE_SHOT_EFFECT) {
