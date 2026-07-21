@@ -756,6 +756,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"pre-duel-deck-preview": runPreDuelDeckPreviewSmoke/);
   assert.match(smoke, /"pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke/);
   assert.match(smoke, /"equipment-spell": runEquipmentSpellSmoke/);
+  assert.match(smoke, /"hand-action-highlight-recovery-basic": runHandActionHighlightRecoveryBasicSmoke/);
   assert.match(smoke, /"game-over-event": runGameOverEventSmoke/);
   assert.match(smoke, /"post-duel-log-review": runPostDuelLogReviewSmoke/);
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
@@ -863,6 +864,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /logCardLink\(ctx\.els, "chain-nullifier"\)/);
   assert.doesNotMatch(smoke, /cardDetailTrigger/);
   assert.match(smoke, /setSmokeStatus\("passed", "equipment-spell"\)/);
+  assert.match(smoke, /const smokeName = "hand-action-highlight-recovery-basic";[\s\S]*setSmokeStatus\("passed", smokeName\)/);
 });
 
 test("skipped attack lock is visible on field cards", () => {
@@ -883,6 +885,22 @@ test("skipped attack lock is visible on field cards", () => {
   assert.match(css, /\.slot\.attack-target/);
   assert.match(css, /\.slot\.empty:disabled/);
   assert.doesNotMatch(css, /pending-attack/);
+});
+
+test("player action window recovery refreshes action-ready projections after dispatch", () => {
+  const app = readProjectFile("src/app.js");
+  const recoveryStart = app.indexOf("function resolvePlayerActionWindow");
+  const recoveryEnd = app.indexOf("function hasAvailablePlayerAttack", recoveryStart);
+  const recovery = app.slice(recoveryStart, recoveryEnd);
+  const autoEndStart = app.indexOf("function scheduleAutoEnd");
+  const autoEndEnd = app.indexOf("function beginTurn", autoEndStart);
+  const autoEnd = app.slice(autoEndStart, autoEndEnd);
+
+  assert.match(recovery, /function resolvePlayerActionWindow\(reason = "操作完成", animationKey = ""\)/);
+  assert.match(recovery, /decision\.kind === "targetSelect"[\s\S]*setActionWindow\([\s\S]*render\(animationKey\)/);
+  assert.match(recovery, /decision\.kind === "main"[\s\S]*setActionWindow\([\s\S]*render\(animationKey\)/);
+  assert.match(recovery, /decision\.kind === "battle"[\s\S]*setActionWindow\([\s\S]*render\(animationKey\)/);
+  assert.match(autoEnd, /if \(!force && actions\.hasAny\)[\s\S]*setActionWindow\([\s\S]*render\(\)/);
 });
 
 test("attack-destroy trap outcome is logged once by shared engine feedback", () => {

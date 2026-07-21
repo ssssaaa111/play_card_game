@@ -1180,7 +1180,7 @@ function hasPlayerMainAction() {
   return currentPlayerActions().hasAny;
 }
 
-function resolvePlayerActionWindow(reason = "操作完成") {
+function resolvePlayerActionWindow(reason = "操作完成", animationKey = "") {
   if (isAttackFlowPending()) return;
   const actions = currentPlayerActions();
   const decision = playerActionWindowDecision(state, {
@@ -1191,6 +1191,7 @@ function resolvePlayerActionWindow(reason = "操作完成") {
   if (decision.kind === "targetSelect") {
     setActionWindow(decision.actionWindow, { reason });
     resetPlayerIdleCountdown();
+    render(animationKey);
     return;
   }
   cancelAutoEnd();
@@ -1200,6 +1201,7 @@ function resolvePlayerActionWindow(reason = "操作完成") {
     if (!actions.attack && actions.spell) {
       cue(`${reason}，还有可发动的卡牌。`);
     }
+    render(animationKey);
   } else if (decision.kind === "battle") {
     if (decision.enterBattle) {
       enterPlayerBattlePhase(reason);
@@ -1207,6 +1209,7 @@ function resolvePlayerActionWindow(reason = "操作完成") {
     }
     setActionWindow(decision.actionWindow, { reason });
     resetPlayerIdleCountdown();
+    render(animationKey);
   } else if (decision.kind === "autoEnd") {
     scheduleAutoEnd(reason);
   }
@@ -1406,7 +1409,7 @@ async function confirmTributeSummon(fieldIndex = null) {
   }
   clearTransientSelection(state);
   render("summon-player-" + selection.summonIndex);
-  resolvePlayerActionWindow("祭品召唤完成");
+  resolvePlayerActionWindow("祭品召唤完成", "summon-player-" + selection.summonIndex);
   return true;
 }
 
@@ -1760,7 +1763,7 @@ async function confirmFusionSummon(fieldIndex = null) {
   clearTransientSelection(state);
   checkGameOver();
   render("summon-player-" + summonIndex);
-  if (!state.gameOver) resolvePlayerActionWindow("融合召唤完成");
+  if (!state.gameOver) resolvePlayerActionWindow("融合召唤完成", "summon-player-" + summonIndex);
   return true;
 }
 
@@ -1804,7 +1807,7 @@ async function queuePendingAttack(targetIndex) {
   clearBattlePreview();
   render(targetIndex >= 0 ? "hit-ai-" + targetIndex : "hit-ai-direct");
   if (!state.gameOver && resolved) {
-    resolvePlayerActionWindow("攻击完成");
+    resolvePlayerActionWindow("攻击完成", targetIndex >= 0 ? "hit-ai-" + targetIndex : "hit-ai-direct");
   } else if (!state.gameOver) {
     resetPlayerIdleCountdown();
   }
@@ -2050,7 +2053,7 @@ async function handlePlayerSlot(index) {
   }
   state.selected = null;
   render("summon-player-" + index);
-  resolvePlayerActionWindow("召唤完成");
+  resolvePlayerActionWindow("召唤完成", "summon-player-" + index);
 }
 
 function selectPendingTrapChoice(index) {
@@ -3767,6 +3770,7 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
   if (!force && actions.hasAny) {
     setActionWindow(state.phase === PHASES.battle ? ACTION_WINDOWS.battle : ACTION_WINDOWS.main, { reason });
     resetPlayerIdleCountdown();
+    render();
     return;
   }
   try {

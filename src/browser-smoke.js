@@ -4449,6 +4449,56 @@ async function runEquipmentSpellSmoke(ctx) {
   setSmokeStatus("passed", "equipment-spell");
 }
 
+async function runHandActionHighlightRecoveryBasicSmoke(ctx) {
+  const smokeName = "hand-action-highlight-recovery-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "equipment");
+
+  clickSmokeElement(
+    assertHandCardReady(ctx.els, "nova-squire", `${smokeName}：召唤前怪兽高亮`),
+    `${smokeName}：选择新星侍从`
+  );
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), `${smokeName}：选择第二怪兽区`);
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}：召唤确认可用`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}：确认召唤`);
+  await waitForSmoke(
+    () => ctx.state.player.field[1]?.id === "nova-squire" && ctx.state.actionWindow === "main",
+    `${smokeName}：召唤结算后恢复主要行动窗口`,
+    9000
+  );
+  await waitForSmoke(
+    () => {
+      const card = handCard(ctx.els, "blade-sigil");
+      return card?.classList.contains("action-ready") && !card.classList.contains("action-blocked");
+    },
+    `${smokeName}：召唤结算后合法魔法恢复高亮`
+  );
+
+  clickSmokeElement(
+    assertHandCardReady(ctx.els, "blade-sigil", `${smokeName}：锋刃刻印高亮`),
+    `${smokeName}：选择锋刃刻印`
+  );
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "equipBlade",
+    `${smokeName}：锋刃刻印进入目标选择`
+  );
+  await selectAndConfirmSpellTarget(
+    ctx,
+    fieldCard(ctx.els, "player", "star-lancer"),
+    `${smokeName}：装备锋刃刻印`
+  );
+  await waitForSmoke(
+    () => trapCard(ctx.els, "player", "blade-sigil") && ctx.state.actionWindow === "main",
+    `${smokeName}：魔法结算后恢复主要行动窗口`,
+    9000
+  );
+  assertHandCardReady(ctx.els, "aegis-plate", `${smokeName}：魔法结算后下一张合法魔法高亮`);
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runGameOverEventSmoke(ctx) {
   setSmokeStatus("running", "game-over-event");
   await startSmokeDuel(ctx, "combo");
@@ -4602,6 +4652,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
+    "hand-action-highlight-recovery-basic": runHandActionHighlightRecoveryBasicSmoke,
     "game-over-event": runGameOverEventSmoke,
     "post-duel-log-review": runPostDuelLogReviewSmoke
   };
