@@ -1,9 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { library } from "../src/data.js";
+import { spellDefinitions } from "../src/spells.js";
+
 import {
+  buildTargetSelectionDisplay,
   collectLegalTargetSelections,
+  isSelectedTargetSelection,
   pendingTargetForCard,
+  prepareDefaultTargetSelection,
+  resolveSelectedTargetSelection,
+  selectTargetSelection,
   spellNeedsManualTarget,
   targetSelectionForCard,
   targetSelectionPrompt,
@@ -11,11 +19,31 @@ import {
 } from "../src/target-selection.js";
 
 const effects = {
+  dawnEdge: { target: "ownMonster" },
   buff500: { target: "ownMonster", targetRule: "strongest" },
   pierceLine: { target: "enemyMonster", targetRule: "strongest" },
   destroySpellTrap: { target: "enemySpellTrap" },
   graveRevive: { target: "ownGraveMonster" },
   draw2: {}
+};
+
+const expectedTargetedSpellEffects = {
+  aceCrackdown: "enemyMonster",
+  battleTrance: "ownMonster",
+  buff500: "ownMonster",
+  dawnEdge: "ownMonster",
+  destroySpellTrap: "enemySpellTrap",
+  equipAegis: "ownMonster",
+  equipBlade: "ownMonster",
+  equipOverclock: "ownMonster",
+  equipPrism: "ownMonster",
+  graveRevive: "ownGraveMonster",
+  lastStandSurge: "ownMonster",
+  lunarDominion: "enemyMonster",
+  pierceLine: "enemyMonster",
+  rallyAttack: "ownMonster",
+  soulResonance: "ownMonster",
+  splitToken: "ownMonster"
 };
 
 function monster(name, atk, extra = {}) {
@@ -156,4 +184,124 @@ test("missing selections and invalid owners fail without reading a zone", () => 
     validateTargetSelection({ mode: "ownMonster" }, duelists(), "spectator", 0).reason,
     /有效的目标区域/
   );
+});
+
+test("every targeted spell definition uses a supported default-selection zone", () => {
+  const actualModes = Object.fromEntries(
+    Object.entries(spellDefinitions)
+      .filter(([, definition]) => Boolean(definition.target))
+      .map(([effect, definition]) => [effect, definition.target])
+      .sort(([left], [right]) => left.localeCompare(right))
+  );
+  assert.deepEqual(actualModes, expectedTargetedSpellEffects);
+
+  const state = duelists();
+  const cards = library.filter((card) => card.type === "spell" && expectedTargetedSpellEffects[card.effect]);
+  assert.ok(cards.length >= Object.keys(expectedTargetedSpellEffects).length);
+  cards.forEach((card, handIndex) => {
+    const pending = prepareDefaultTargetSelection(pendingTargetForCard(
+      { ...card, uid: `${card.id}-audit-${handIndex}` },
+      handIndex,
+      spellDefinitions
+    ), state);
+    const selected = resolveSelectedTargetSelection(pending, state);
+    assert.ok(selected, `${card.name} should receive a legal default target`);
+    assert.equal(pending.mode, expectedTargetedSpellEffects[card.effect]);
+    assert.equal(pending.selectedTargetSource, "default");
+  });
+});
+
+test("target windows default to the first legal target and expose that selection", () => {
+  const state = duelists();
+  const pending = targetSelectionForCard(
+    { id: "war-chant", uid: "war-chant-1", type: "spell", name: "战意高扬", effect: "buff500" },
+    effects
+  );
+  const prepared = prepareDefaultTargetSelection(pending, state);
+  const selected = resolveSelectedTargetSelection(prepared, state);
+  const display = buildTargetSelectionDisplay(prepared, state);
+
+  assert.equal(selected.card.name, "最高怪");
+  assert.equal(prepared.selectedTargetSource, "default");
+  assert.equal(isSelectedTargetSelection(prepared, "player", 1), true);
+  assert.equal(display.complete, true);
+  assert.equal(display.selectedByDefault, true);
+  assert.match(display.text, /已默认选择：最高怪（我方怪兽区 2）/);
+  assert.equal(display.confirmLabel, "确认发动");
+});
+
+test("default target preparation covers every supported target zone", () => {
+  const state = duelists();
+  const cases = [
+    {
+      card: { id: "dawn-edge", uid: "dawn-edge-zone", type: "spell", name: "破晓锋印", effect: "dawnEdge" },
+      expected: { owner: "player", zone: "field", index: 0, name: "低攻怪" }
+    },
+    {
+      card: { id: "pierce-line", uid: "pierce-zone", type: "spell", name: "破阵星芒", effect: "pierceLine" },
+      expected: { owner: "ai", zone: "field", index: 1, name: "敌方最高" }
+    },
+    {
+      card: { id: "dispelling-ray", uid: "ray-zone", type: "spell", name: "解印射线", effect: "destroySpellTrap" },
+      expected: { owner: "ai", zone: "traps", index: 0, name: "敌方装备" }
+    },
+    {
+      card: { id: "grave-return", uid: "revive-zone", type: "spell", name: "醒星回召", effect: "graveRevive" },
+      expected: { owner: "player", zone: "grave", index: 0, name: "墓地怪兽" }
+    }
+  ];
+
+  cases.forEach(({ card, expected }) => {
+    const prepared = prepareDefaultTargetSelection(targetSelectionForCard(card, effects), state);
+    const selected = resolveSelectedTargetSelection(prepared, state);
+    assert.deepEqual(
+      { owner: selected.owner, zone: selected.zone, index: selected.index, name: selected.card.name },
+      expected
+    );
+    assert.equal(prepared.selectedTargetSource, "default");
+  });
+});
+
+test("clicking another legal target changes selection without resolving the spell", () => {
+  const state = duelists();
+  const pending = prepareDefaultTargetSelection(targetSelectionForCard(
+    { id: "dawn-edge", uid: "dawn-edge-1", type: "spell", name: "破晓锋印", effect: "dawnEdge" },
+    effects
+  ), state);
+  const otherTarget = validateTargetSelection(pending, state, "player", 1);
+  const changed = selectTargetSelection(pending, otherTarget, { source: "player" });
+  const display = buildTargetSelectionDisplay(changed, state);
+
+  assert.equal(resolveSelectedTargetSelection(pending, state).card.name, "低攻怪");
+  assert.equal(resolveSelectedTargetSelection(changed, state).card.name, "最高怪");
+  assert.equal(changed.selectedTargetSource, "player");
+  assert.match(display.text, /已选择：最高怪（我方怪兽区 2）/);
+  assert.doesNotMatch(display.text, /已默认选择/);
+});
+
+test("stale selected targets are rejected instead of silently targeting a replacement", () => {
+  const state = duelists();
+  const pending = prepareDefaultTargetSelection(targetSelectionForCard(
+    { id: "dawn-edge", uid: "dawn-edge-1", type: "spell", name: "破晓锋印", effect: "dawnEdge" },
+    effects
+  ), state);
+  state.player.field[0] = monster("替补怪兽", 900);
+
+  assert.equal(resolveSelectedTargetSelection(pending, state), null);
+  const refreshed = prepareDefaultTargetSelection(pending, state);
+  assert.equal(resolveSelectedTargetSelection(refreshed, state).card.name, "替补怪兽");
+  assert.equal(refreshed.selectedTargetSource, "default");
+});
+
+test("selected concealed enemy support targets never expose their card name", () => {
+  const state = duelists();
+  state.ai.traps[0] = { id: "mirror-snare", uid: "hidden-trap-1", type: "trap", name: "镜光反制" };
+  const pending = prepareDefaultTargetSelection(targetSelectionForCard(
+    { id: "dispelling-ray", uid: "ray-1", type: "spell", name: "解印射线", effect: "destroySpellTrap" },
+    effects
+  ), state);
+  const display = buildTargetSelectionDisplay(pending, state);
+
+  assert.match(display.text, /盖放卡牌（敌方魔陷区 1）/);
+  assert.doesNotMatch(display.text, /镜光反制/);
 });

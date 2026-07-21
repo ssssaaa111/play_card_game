@@ -117,3 +117,117 @@ export function collectLegalTargetSelections(pending, duelists = {}) {
   }
   return targets;
 }
+
+function targetCardUid(card) {
+  return card?.uid || card?.engineId || card?.id || "";
+}
+
+function targetReference(target) {
+  if (!target?.ok) return null;
+  return {
+    owner: target.owner,
+    index: target.index,
+    zone: target.zone,
+    cardUid: targetCardUid(target.card)
+  };
+}
+
+export function selectTargetSelection(pending, target, { source = "player" } = {}) {
+  const selectedTarget = targetReference(target);
+  if (!pending || !selectedTarget) return pending || null;
+  return {
+    ...pending,
+    selectedTarget,
+    selectedTargetSource: source
+  };
+}
+
+export function resolveSelectedTargetSelection(pending, duelists = {}) {
+  const selected = pending?.selectedTarget;
+  if (!selected) return null;
+  const target = validateTargetSelection(
+    pending,
+    duelists,
+    selected.owner,
+    selected.index,
+    selected.zone || "field"
+  );
+  if (!target.ok) return null;
+  if (selected.cardUid && targetCardUid(target.card) !== selected.cardUid) return null;
+  return target;
+}
+
+export function prepareDefaultTargetSelection(pending, duelists = {}) {
+  if (!pending) return null;
+  if (resolveSelectedTargetSelection(pending, duelists)) return pending;
+  const recommended = collectLegalTargetSelections(pending, duelists)[0];
+  return recommended
+    ? selectTargetSelection(pending, recommended, { source: "default" })
+    : pending;
+}
+
+export function isSelectedTargetSelection(pending, owner, index, zone = "field") {
+  const selected = pending?.selectedTarget;
+  return Boolean(
+    selected
+    && selected.owner === owner
+    && selected.index === index
+    && (selected.zone || "field") === zone
+  );
+}
+
+function targetOwnerLabel(owner) {
+  return owner === "player" ? "我方" : "敌方";
+}
+
+export function targetSelectionTargetLabel(target) {
+  if (!target?.ok) return "未选择";
+  const owner = targetOwnerLabel(target.owner);
+  const position = Math.max(0, Number(target.index) || 0) + 1;
+  if (target.zone === "traps") {
+    const publicName = target.owner === "ai" && target.card?.type !== "spell"
+      ? "盖放卡牌"
+      : target.card?.name || "魔陷卡";
+    return `${publicName}（${owner}魔陷区 ${position}）`;
+  }
+  if (target.zone === "grave") {
+    return `${target.card?.name || "墓地怪兽"}（${owner}墓地）`;
+  }
+  return `${target.card?.name || "怪兽"}（${owner}怪兽区 ${position}）`;
+}
+
+export function buildTargetSelectionDisplay(pending, duelists = {}) {
+  if (!pending) {
+    return {
+      complete: false,
+      legalCount: 0,
+      selectedTarget: null,
+      selectedName: "",
+      selectedByDefault: false,
+      prompt: "",
+      text: "",
+      confirmLabel: "请选择目标"
+    };
+  }
+  const legalTargets = collectLegalTargetSelections(pending, duelists);
+  const selectedTarget = resolveSelectedTargetSelection(pending, duelists);
+  const selectedName = selectedTarget ? targetSelectionTargetLabel(selectedTarget) : "";
+  const selectedByDefault = Boolean(selectedTarget && pending.selectedTargetSource === "default");
+  const prompt = targetSelectionPrompt(pending);
+  const selectionText = selectedTarget
+    ? `${selectedByDefault ? "已默认选择" : "已选择"}：${selectedName}。`
+    : "尚未选择目标。";
+  const guidance = selectedTarget
+    ? "点击其他高亮目标可以更换，确认后发动。"
+    : "请点击一个高亮目标。";
+  return {
+    complete: Boolean(selectedTarget),
+    legalCount: legalTargets.length,
+    selectedTarget,
+    selectedName,
+    selectedByDefault,
+    prompt,
+    text: [prompt, selectionText, guidance].filter(Boolean).join("\n"),
+    confirmLabel: selectedTarget ? "确认发动" : "请选择目标"
+  };
+}

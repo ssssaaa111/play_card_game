@@ -65,15 +65,33 @@ test("target and fusion selections block turn controls and expose the correct pr
     canUseTurnControls: true,
     canAct: true,
     pendingTarget: { cardName: "破阵星芒" },
-    targetPrompt: "选择对方攻击力最高怪兽。"
+    targetPrompt: "选择对方攻击力最高怪兽。",
+    targetSelectionStatus: {
+      complete: true,
+      confirmLabel: "确认发动",
+      text: "选择对方攻击力最高怪兽。\n已默认选择：苍穹骑手（敌方怪兽区 2）。"
+    }
   });
 
   assert.equal(target.skipAttack.disabled, true);
   assert.equal(target.endTurn.disabled, true);
-  assert.equal(target.hand.confirmText, "确认推荐目标");
+  assert.equal(target.hand.confirmText, "确认发动");
   assert.equal(target.hand.confirmDisabled, false);
-  assert.equal(target.choice.text, "选择对方攻击力最高怪兽。 请点击高亮目标；也可点击“确认推荐目标”自动选择。");
+  assert.equal(target.choice.text, "选择对方攻击力最高怪兽。\n已默认选择：苍穹骑手（敌方怪兽区 2）。");
   assert.equal(target.choice.target, true);
+
+  const staleTarget = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    pendingTarget: { cardName: "破阵星芒" },
+    targetSelectionStatus: {
+      complete: false,
+      confirmLabel: "请选择目标",
+      text: "原目标已失效，请重新选择。"
+    }
+  });
+  assert.equal(staleTarget.choice.confirmDisabled, true);
+  assert.equal(staleTarget.choice.confirmText, "请选择目标");
 
   const fusion = buildDuelControlsView({
     started: true,

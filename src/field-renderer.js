@@ -18,6 +18,7 @@ export function monsterFieldSlotView({
   state = {},
   animationKey = "",
   targetable = false,
+  targetSelected = false,
   attackTargetable = false,
   tributeCandidate = false,
   tributeSelected = false,
@@ -68,6 +69,7 @@ export function monsterFieldSlotView({
     index,
     disabled,
     targetable,
+    targetSelected,
     attackTargetable,
     attacksLocked,
     attackReady,
@@ -86,9 +88,10 @@ export function monsterFieldSlotView({
       ? (materialCandidate ? (materialSelected ? "selected" : "candidate") : "unavailable")
       : "",
     materialReason: materialTarget?.reason || "",
-    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${interactionTarget ? `，${interactionTarget.reason}` : ""}`,
+    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${targetSelected ? "，已选择为魔法目标" : ""}${interactionTarget ? `，${interactionTarget.reason}` : ""}`,
     slotClasses: enabledClassEntries({
       targetable,
+      "target-selected": targetSelected,
       "attack-target": attackTargetable,
       "tribute-candidate": materialCandidate,
       "tribute-selected": materialSelected,
@@ -111,6 +114,7 @@ export function monsterFieldSlotView({
       weakened: (card?.tempAtk || 0) < 0 || (card?.tempDef || 0) < 0 || (card?.battleWear || 0) > 0,
       protected: Boolean(card?.destructionProtection && !card?.destructionProtectionUsed),
       targetable,
+      "target-selected": targetSelected,
       "attack-target": attackTargetable,
       "tribute-candidate": materialCandidate,
       "tribute-selected": materialSelected,
@@ -129,6 +133,7 @@ export function supportFieldSlotView({
   owner = "player",
   index = 0,
   targetable = false,
+  targetSelected = false,
   trapChoiceReady = false,
   trapChoiceSelected = false
 } = {}) {
@@ -146,23 +151,26 @@ export function supportFieldSlotView({
     owner,
     index,
     targetable,
+    targetSelected,
     trapChoiceReady,
     trapChoiceSelected,
     revealed,
     supportDisplay,
-    ariaLabel: supportDisplay
+    ariaLabel: `${supportDisplay
       ? `${zoneLabel}，${card.name}，${supportDisplay.description}`
-      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`,
+      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为魔法目标" : ""}`,
     slotClasses: enabledClassEntries({
       "trap-response": trapChoiceReady,
       "trap-response-selected": trapChoiceSelected,
       targetable,
+      "target-selected": targetSelected,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     }),
     cardClasses: enabledClassEntries({
       "trap-response": trapChoiceReady,
       "trap-response-selected": trapChoiceSelected,
       targetable,
+      "target-selected": targetSelected,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     })
   };
@@ -181,6 +189,7 @@ export function renderMonsterZones({
   animationKey = "",
   assetForCard = () => "",
   targetableAt = () => false,
+  targetSelectedAt = () => false,
   attackTargetableAt = () => false,
   selectedTributeIndexes = [],
   selectedFusionIndexes = [],
@@ -196,6 +205,7 @@ export function renderMonsterZones({
   const fragment = document.createDocumentFragment();
   duelist.field.forEach((card, index) => {
     const targetable = targetableAt(index);
+    const targetSelected = targetSelectedAt(index);
     const attackTargetable = attackTargetableAt(index);
     const materialTarget = materialTargetAt(index);
     const splitTarget = splitTargetAt(index);
@@ -211,6 +221,7 @@ export function renderMonsterZones({
       state,
       animationKey,
       targetable,
+      targetSelected,
       attackTargetable,
       tributeCandidate,
       tributeSelected: selectedTributeIndexes.includes(index),
@@ -235,6 +246,7 @@ export function renderMonsterZones({
     slot.disabled = view.disabled;
     slot.setAttribute("aria-disabled", view.disabled ? "true" : "false");
     slot.setAttribute("aria-label", view.ariaLabel);
+    slot.setAttribute("aria-pressed", String(view.targetSelected));
     slot.addEventListener("click", () => onSlotClick(index));
 
     if (attackTargetable) {
@@ -276,6 +288,7 @@ export function renderSupportZones({
   state,
   assetForCard = () => "",
   targetableAt = () => false,
+  targetSelectedAt = () => false,
   onSlotClick = () => {},
   onCardClick = () => {},
   onCardDoubleClick = () => {}
@@ -291,6 +304,7 @@ export function renderSupportZones({
       owner,
       index,
       targetable: targetableAt(index),
+      targetSelected: targetSelectedAt(index),
       trapChoiceReady,
       trapChoiceSelected
     });
@@ -301,6 +315,7 @@ export function renderSupportZones({
     slot.dataset.index = String(index);
     slot.dataset.testid = `${owner}-trap-${index}`;
     addClasses(slot, view.slotClasses);
+    slot.setAttribute("aria-pressed", String(view.targetSelected));
     if (view.supportDisplay) slot.dataset.supportState = view.supportDisplay.key;
     slot.setAttribute("aria-label", view.ariaLabel);
     slot.addEventListener("click", () => onSlotClick(index));

@@ -17,6 +17,7 @@ export function buildDuelControlsView({
   selectedHandName = "",
   selectedHandReason = "",
   targetPrompt = "",
+  targetSelectionStatus = null,
   fusionStatus = null,
   selectionPrompt = "",
   confirmLabel = "确认",
@@ -35,13 +36,15 @@ export function buildDuelControlsView({
   const hasTribute = pending(pendingTribute);
   const hasPendingSelection = hasTarget || hasFusion || hasTribute;
   const selectionBlocksTurn = hasPendingSelection;
-  const currentConfirmLabel = hasTarget ? "确认推荐目标" : confirmLabel;
+  const currentConfirmLabel = hasTarget
+    ? targetSelectionStatus?.confirmLabel || "确认发动"
+    : confirmLabel;
   const cancelLabel = hasTarget ? "取消目标" : "取消选择";
   const showChoiceActions = canAct && (hasPendingSelection || selectedHandReady);
   let choiceText = "";
 
   if (hasTarget) {
-    choiceText = `${targetPrompt} 请点击高亮目标；也可点击“确认推荐目标”自动选择。`;
+    choiceText = targetSelectionStatus?.text || targetPrompt;
   } else if (hasFusion) {
     const fusionName = pendingFusion?.cardName || selectedHandName;
     choiceText = selectionPrompt || (fusionStatus?.needsResult
@@ -93,7 +96,7 @@ export function buildDuelControlsView({
     },
     hand: {
       confirmText: currentConfirmLabel,
-      confirmDisabled: hasTarget ? false : !selectedHandReady,
+      confirmDisabled: hasTarget ? !targetSelectionStatus?.complete : !selectedHandReady,
       cancelText: cancelLabel,
       cancelDisabled: !canAct || (!hasPendingSelection && !selectedHandReady)
     },
@@ -101,7 +104,7 @@ export function buildDuelControlsView({
       hidden: !showChoiceActions,
       text: choiceText,
       confirmText: currentConfirmLabel,
-      confirmDisabled: hasTarget ? false : !selectedHandReady,
+      confirmDisabled: hasTarget ? !targetSelectionStatus?.complete : !selectedHandReady,
       cancelText: cancelLabel,
       cancelDisabled: !canAct,
       target: hasTarget,
