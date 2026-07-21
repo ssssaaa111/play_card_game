@@ -770,7 +770,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /preDuelPreview: \{/);
   assert.match(smoke, /aiReveal: \{/);
   assert.match(smoke, /function assertScenarioBrief/);
-  assert.match(smoke, /function doubleClickSmokeElement/);
+  assert.match(smoke, /async function clickSmokeElementTwiceAcrossRender/);
+  assert.doesNotMatch(smoke, /new MouseEvent\("dblclick"/);
   assert.match(smoke, /"lunar-dominion-persistence-basic": runLunarDominionPersistenceSmoke/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
   assert.match(smoke, /ctx\.els\.choiceConfirmBtn/);

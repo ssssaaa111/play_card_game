@@ -300,9 +300,13 @@ async function selectAndConfirmSpellTarget(ctx, element, label, options) {
   confirmSpellTarget(ctx, `${label}: confirm activation`);
 }
 
-function doubleClickSmokeElement(element, label) {
-  if (!element) throw new Error(`找不到测试目标：${label}`);
-  element.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }));
+async function clickSmokeElementTwiceAcrossRender(resolveElement, label, afterFirstClick = () => true) {
+  clickSmokeElement(resolveElement(), `${label}：第一次点击`);
+  await waitForSmoke(
+    () => afterFirstClick() && Boolean(resolveElement()),
+    `${label}：第一次点击后仍可继续操作`
+  );
+  clickSmokeElement(resolveElement(), `${label}：第二次点击`);
 }
 
 function selectScenario(els, scenarioId) {
@@ -2589,7 +2593,11 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
 
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-moonbreaker-ray", `${smokeName}：碎月解幕高亮`), `${smokeName}：选择碎月解幕`);
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}：碎月解幕目标选择`);
-  doubleClickSmokeElement(ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}：双击破坏月曜帷幕`);
+  await clickSmokeElementTwiceAcrossRender(
+    () => ctx.els.aiTraps.querySelector(".trap-slot.targetable"),
+    `${smokeName}：连续点击破坏月曜帷幕`,
+    () => Boolean(ctx.state.pendingTarget?.selectedTarget)
+  );
   await waitForSmoke(
     () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.player.field.some((card) => card?.id === "trio-decoy-ward" && (card.tempAtk || 0) === 0 && (card.tempDef || 0) === 0),
@@ -2599,7 +2607,11 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
 
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-ember-recall", `${smokeName}：余烁归轨高亮`), `${smokeName}：选择余烁归轨`);
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", `${smokeName}：余烁归轨墓地目标`);
-  doubleClickSmokeElement(graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}：双击回召余烁小卫`);
+  await clickSmokeElementTwiceAcrossRender(
+    () => graveTargetCard(ctx.els, "trio-ember-pawn"),
+    `${smokeName}：连续点击回召余烁小卫`,
+    () => Boolean(ctx.state.pendingTarget?.selectedTarget)
+  );
   await waitForSmoke(
     () => ctx.state.player.field.some((card) =>
       card?.id === "trio-ember-pawn" &&
@@ -3523,7 +3535,11 @@ async function runBattleTranceReadySmoke(ctx) {
   if (!fieldCard(ctx.els, "player", "ember-drake")?.dataset.attackReason?.includes("目标选择")) {
     throw new Error("battle-trance-ready: suspended attack highlight should expose the target-selection reason");
   }
-  doubleClickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "double click used strongest monster");
+  await clickSmokeElementTwiceAcrossRender(
+    () => fieldCard(ctx.els, "player", "ember-drake"),
+    "repeat click used strongest monster",
+    () => Boolean(ctx.state.pendingTarget?.selectedTarget)
+  );
   await waitForSmoke(
     () => ctx.state.player.field[0]?.id === "ember-drake" &&
       ctx.state.player.field[0]?.used === false &&
