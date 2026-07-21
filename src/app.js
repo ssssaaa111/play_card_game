@@ -24,6 +24,7 @@ import { cardDefinitionById, cardDetailViewModel, cardInspectorViewModel } from 
 import { bindCardInspector, renderCardInspector } from './card-inspector-renderer.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDuelControlsView, renderDuelControls } from './control-renderer.js';
+import { createDirectActivationTracker } from './direct-activation.js';
 import {
   hideCardDetailModal,
   renderAiRevealModal,
@@ -78,13 +79,13 @@ import {
   dispatchSummonMonsterFromUiState,
   dispatchTrapResponseFromUiState,
   explainActivateSpellFromUiState,
+  explainChangeMonsterModeFromUiState,
   explainDeclareAttackFromUiState,
   explainFusionSummonFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
   projectBattleFromUiState
 } from './engine-adapter.js';
-import { renderCurrentLog } from './log-renderer.js';
 import { renderChainHistoryPanel, renderTimelinePanel } from './timeline-renderer.js';
 import { spellDefinitions, validateSpellCondition } from './spells.js';
 import { nextTimelineState } from './timeline.js';
@@ -253,6 +254,7 @@ let pendingAiRevealIndex = 0;
 let pendingAiRevealTotal = 0;
 let preDuelDeckExpanded = false;
 let chainHistoryExpanded = false;
+const directActivationTracker = createDirectActivationTracker();
 
 const els = {
   phaseText: document.querySelector("#phaseText"),
@@ -299,7 +301,6 @@ const els = {
   aiTraps: document.querySelector("#aiTraps"),
   hand: document.querySelector("#hand"),
   graveTargets: document.querySelector("#graveTargets"),
-  log: document.querySelector("#log"),
   timeline: document.querySelector("#timeline"),
   timelineCount: document.querySelector("#timelineCount"),
   timelineAudit: document.querySelector("#timelineAudit"),
@@ -1136,6 +1137,12 @@ function selectPendingSpellTarget(ownerName, index, zone = "field") {
   return true;
 }
 
+function interactWithPendingSpellTarget(ownerName, index, zone = "field", { directActivate = false } = {}) {
+  return directActivate
+    ? resolvePendingSpellTarget(ownerName, index, zone)
+    : selectPendingSpellTarget(ownerName, index, zone);
+}
+
 async function resolvePendingSpellDefault() {
   if (!state.pendingTarget) return false;
   const cardName = state.pendingTarget.cardName;
@@ -1219,7 +1226,7 @@ function hasAvailablePlayerAttack() {
   return projectBattleFromUiState(state, "player").canAttack;
 }
 
-async function selectHandCard(uid) {
+async function selectHandCard(uid, { directActivate = false } = {}) {
   const card = state.player.hand.find((item) => item.uid === uid);
   if (!card) return;
   if (!canPlayerAct()) {
@@ -1238,6 +1245,10 @@ async function selectHandCard(uid) {
     notePlayerIntent();
     const sameCard = state.pendingTarget.handUid === uid;
     if (sameCard) {
+      if (directActivate) {
+        await resolvePendingSpellDefault();
+        return;
+      }
       showDetail(card);
       cue(currentTargetSelectionDisplay().text);
       playSound("click");
@@ -1951,7 +1962,7 @@ function cancelSelectedHandAction() {
   resolvePlayerActionWindow(hadPendingTarget ? "取消目标选择" : "取消选择");
 }
 
-async function selectPlayerMonster(index) {
+async function selectPlayerMonster(index, interaction = {}) {
   const card = state.player.field[index];
   if (!card) return;
   if (!canPlayerAct()) {
@@ -1975,7 +1986,7 @@ async function selectPlayerMonster(index) {
     return;
   }
   if (state.pendingTarget) {
-    selectPendingSpellTarget("player", index);
+    interactWithPendingSpellTarget("player", index, "field", interaction);
     return;
   }
   notePlayerIntent();
@@ -1987,9 +1998,9 @@ async function selectPlayerMonster(index) {
   resumePlayerIdleCountdownAfterPassiveIntent();
 }
 
-async function handlePlayerSlot(index) {
+async function handlePlayerSlot(index, interaction = {}) {
   if (state.pendingTarget) {
-    selectPendingSpellTarget("player", index);
+    interactWithPendingSpellTarget("player", index, "field", interaction);
     return;
   }
   if (state.pendingTribute) {
@@ -2089,11 +2100,11 @@ function activatePendingTrapChoice(index) {
   return true;
 }
 
-async function handlePlayerTrapSlot(index) {
+async function handlePlayerTrapSlot(index, interaction = {}) {
   if (selectPendingTrapChoice(index)) return;
   const existing = state.player.traps[index];
   if (state.pendingTarget) {
-    selectPendingSpellTarget("player", index, "traps");
+    interactWithPendingSpellTarget("player", index, "traps", interaction);
     return;
   }
   if (existing && (!canPlayerAct() || !state.selected || state.selected.zone !== "hand")) {
@@ -2140,10 +2151,10 @@ async function handlePlayerTrapSlot(index) {
   resolvePlayerActionWindow("陷阱盖放完成");
 }
 
-async function handleAiTrapSlot(index) {
+async function handleAiTrapSlot(index, interaction = {}) {
   const card = state.ai.traps[index];
   if (state.pendingTarget) {
-    selectPendingSpellTarget("ai", index, "traps");
+    interactWithPendingSpellTarget("ai", index, "traps", interaction);
     return;
   }
   if (card) {
@@ -2154,7 +2165,7 @@ async function handleAiTrapSlot(index) {
   }
 }
 
-async function handleAiSlot(index) {
+async function handleAiSlot(index, interaction = {}) {
   const card = state.ai.field[index];
   if (state.pendingTribute && canPlayerAct()) {
     notePlayerIntent();
@@ -2171,7 +2182,7 @@ async function handleAiSlot(index) {
   }
   if (state.pendingTarget?.effect === "splitToken" && canPlayerAct()) {
     notePlayerIntent();
-    selectPendingSpellTarget("ai", index);
+    interactWithPendingSpellTarget("ai", index, "field", interaction);
     return;
   }
   if (!card) return;
@@ -2182,7 +2193,7 @@ async function handleAiSlot(index) {
   notePlayerIntent();
   if (state.pendingTarget) {
     showDetail(card);
-    selectPendingSpellTarget("ai", index);
+    interactWithPendingSpellTarget("ai", index, "field", interaction);
     return;
   }
   if (!canUseBattleActions()) {
@@ -4127,14 +4138,13 @@ function addLog(input, metadata = {}) {
     })
     : logEntryMessage(input);
   state.log.unshift(entry);
-  addTimeline(logEntryMessage(entry));
-  renderLog();
+  addTimeline(entry);
   renderTimeline();
   return entry;
 }
 
-function addTimeline(text) {
-  const next = nextTimelineState(state.timeline, text, state.timelineStep);
+function addTimeline(entry) {
+  const next = nextTimelineState(state.timeline, entry, state.timelineStep);
   state.timelineStep = next.step;
   state.timeline = next.timeline;
 }
@@ -4326,6 +4336,9 @@ function render(animationKey = "") {
     (!state.pendingFusion || fusionStatus?.complete)
   );
   const selectedPlayerMonster = state.selected?.zone === "playerField" && Boolean(state.player.field[state.selected.index]);
+  const selectedPlayerMonsterModeValidation = selectedPlayerMonster
+    ? explainChangeMonsterModeFromUiState(state, "player", state.selected.index)
+    : { ok: false, reason: "请选择你场上的怪兽。" };
   renderDuelControls(els, buildDuelControlsView({
     started: state.started,
     gameOver: state.gameOver,
@@ -4351,6 +4364,8 @@ function render(animationKey = "") {
     confirmLabel: handConfirmLabel(selectedHand?.card),
     phase: state.phase,
     selectedPlayerMonster,
+    selectedPlayerMonsterCanChangeMode: selectedPlayerMonsterModeValidation.ok,
+    selectedPlayerMonsterModeReason: selectedPlayerMonsterModeValidation.reason,
     focusedCard: state.focusedCard,
     soundOn: state.soundOn,
     musicOn: state.musicOn,
@@ -4398,7 +4413,6 @@ function render(animationKey = "") {
   renderTraps(els.aiTraps, state.ai, "ai");
   renderHand(animationKey);
   renderGraveTargets();
-  renderLog();
   renderTimeline();
   renderBattlePreview();
   renderAiReveal();
@@ -4470,8 +4484,17 @@ function renderField(root, duelist, owner, animationKey) {
       gameEvents: state.gameEvents,
       findCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId)
     }),
-    onSlotClick: (index) => owner === "player" ? handlePlayerSlot(index) : handleAiSlot(index),
-    onCardClick: (index) => owner === "player" ? selectPlayerMonster(index) : handleAiSlot(index),
+    onSlotClick: (index) => {
+      const interaction = { directActivate: directActivationTracker.register(`${owner}:field:${index}`) };
+      return owner === "player" ? handlePlayerSlot(index, interaction) : handleAiSlot(index, interaction);
+    },
+    onSlotDoubleClick: (index) => owner === "player"
+      ? handlePlayerSlot(index, { directActivate: true })
+      : handleAiSlot(index, { directActivate: true }),
+    onCardClick: (index) => {
+      const interaction = { directActivate: directActivationTracker.register(`${owner}:field:${index}`) };
+      return owner === "player" ? selectPlayerMonster(index, interaction) : handleAiSlot(index, interaction);
+    },
     onAttackPreview: showSelectedAttackTargetPreview,
     onAttackPreviewRestore: restoreSelectedAttackPreview
   });
@@ -4487,7 +4510,13 @@ function renderTraps(root, duelist, owner) {
     assetForCard: monsterAsset,
     targetableAt: (index) => isPendingTrapTargetSlot(owner, index),
     targetSelectedAt: (index) => isSelectedTargetSelection(state.pendingTarget, owner, index, "traps"),
-    onSlotClick: (index) => owner === "player" ? handlePlayerTrapSlot(index) : handleAiTrapSlot(index),
+    onSlotClick: (index) => {
+      const interaction = { directActivate: directActivationTracker.register(`${owner}:traps:${index}`) };
+      return owner === "player" ? handlePlayerTrapSlot(index, interaction) : handleAiTrapSlot(index, interaction);
+    },
+    onSlotDoubleClick: (index) => owner === "player"
+      ? handlePlayerTrapSlot(index, { directActivate: true })
+      : handleAiTrapSlot(index, { directActivate: true }),
     onCardClick: (card, index) => {
       if (owner === "player" && selectPendingTrapChoice(index)) return;
       state.selected = null;
@@ -4496,7 +4525,15 @@ function renderTraps(root, duelist, owner) {
       render();
       if (canPlayerAct()) resumePlayerIdleCountdownAfterPassiveIntent();
     },
-    onCardDoubleClick: (_card, index) => activatePendingTrapChoice(index)
+    onCardDoubleClick: (_card, index) => {
+      if (state.pendingTarget) {
+        return owner === "player"
+          ? handlePlayerTrapSlot(index, { directActivate: true })
+          : handleAiTrapSlot(index, { directActivate: true });
+      }
+      if (owner === "player") return activatePendingTrapChoice(index);
+      return false;
+    }
   });
 }
 
@@ -4579,7 +4616,10 @@ function renderHand(animationKey) {
         : null;
     },
     fusionSelectedUids: state.pendingFusion ? selectedFusionHandUids() : [],
-    onCardClick: (card) => selectHandCard(card.uid)
+    onCardClick: (card) => selectHandCard(card.uid, {
+      directActivate: directActivationTracker.register(`hand:${card.uid}`)
+    }),
+    onCardDoubleClick: (card) => selectHandCard(card.uid, { directActivate: true })
   });
 }
 
@@ -4602,20 +4642,15 @@ function renderGraveTargets() {
     cardEl.setAttribute("aria-pressed", String(selected));
     cardEl.title = `选择墓地目标：${card.name}`;
     cardEl.addEventListener("click", () => {
-      selectPendingSpellTarget("player", index, "grave");
+      interactWithPendingSpellTarget("player", index, "grave", {
+        directActivate: directActivationTracker.register(`player:grave:${index}`)
+      });
+    });
+    cardEl.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      interactWithPendingSpellTarget("player", index, "grave", { directActivate: true });
     });
     root.appendChild(cardEl);
-  });
-}
-
-function renderLog() {
-  renderCurrentLog({
-    document,
-    root: els.log,
-    log: state.log,
-    started: state.started,
-    findCard: cardDefinitionById,
-    onCardClick: openCardDetail
   });
 }
 
@@ -4638,6 +4673,7 @@ function renderTimeline() {
     gameEvents: state.gameEvents,
     chainHistoryExpanded,
     findCard: findRuntimeCard,
+    findTimelineCard: cardDefinitionById,
     onCardClick: openCardDetail
   });
 }

@@ -9,6 +9,7 @@ import {
   canDispatchSpellFromUiState,
   canDispatchSummonEffectFromUiState,
   explainActivateSpellFromUiState,
+  explainChangeMonsterModeFromUiState,
   explainDeclareAttackFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
@@ -1262,6 +1263,22 @@ test("dispatches monster mode changes and replays them into UI state", () => {
     event.to === "defense"
   ));
   assert.equal(state.gameEvents.length, events.length);
+});
+
+test("mode legality projection disables a monster after its one allowed position change", () => {
+  const monster = uiMonster("mode-projection", "iron-guardian");
+  monster.mode = "defense";
+  monster.used = false;
+  monster.changedMode = false;
+  const state = appState();
+  state.player.field[0] = monster;
+
+  assert.equal(explainChangeMonsterModeFromUiState(state, "player", 0).ok, true);
+  dispatchChangeMonsterModeFromUiState(state, "player", 0, "attack");
+  const blocked = explainChangeMonsterModeFromUiState(state, "player", 0);
+
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.reason, /本回合|表示/);
 });
 
 test("dispatches turn start and replays rule resets into UI state", () => {

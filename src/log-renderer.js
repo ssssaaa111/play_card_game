@@ -46,7 +46,8 @@ export function appendLogEntryContent({
   root,
   entry,
   findCard = () => null,
-  onCardClick = () => {}
+  onCardClick = () => {},
+  buttonClassName = "log-card-link"
 } = {}) {
   logEntrySegments(entry, { findCard }).forEach((segment) => {
     if (segment.type === "text") {
@@ -55,7 +56,7 @@ export function appendLogEntryContent({
     }
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "log-card-link";
+    button.className = buttonClassName;
     button.dataset.cardId = segment.cardId;
     button.textContent = segment.name;
     button.title = `查看 ${segment.name} 详情`;

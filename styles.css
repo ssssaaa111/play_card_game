@@ -1217,6 +1217,12 @@ button.chain-history-card:focus-visible {
   min-width: 0;
 }
 
+.timeline-card-link {
+  border-color: rgba(246, 189, 96, 0.46);
+  background: rgba(246, 189, 96, 0.12);
+  box-shadow: 0 0 9px rgba(246, 189, 96, 0.1);
+}
+
 .field {
   --support-track-size: clamp(48px, 5.4dvh, 60px);
   min-width: 0;

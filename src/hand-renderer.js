@@ -77,7 +77,8 @@ export function renderHandCards({
   fusionCandidateForCard = () => false,
   fusionTargetForCard = () => null,
   fusionSelectedUids = [],
-  onCardClick = () => {}
+  onCardClick = () => {},
+  onCardDoubleClick = () => {}
 } = {}) {
   const fragment = document.createDocumentFragment();
   cards.forEach((card, index) => {
@@ -111,6 +112,10 @@ export function renderHandCards({
     cardEl.appendChild(actionReason);
 
     cardEl.addEventListener("click", () => onCardClick(card, index));
+    cardEl.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      onCardDoubleClick(card, index);
+    });
     fragment.appendChild(cardEl);
   });
   root.replaceChildren(fragment);

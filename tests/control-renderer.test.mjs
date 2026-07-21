@@ -58,6 +58,18 @@ test("open battle window enables manual turn controls without a pending selectio
   assert.equal(view.detailDisabled, false);
 });
 
+test("mode button is disabled after the selected monster already changed position", () => {
+  const view = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    phase: "main",
+    selectedPlayerMonster: true,
+    selectedPlayerMonsterCanChangeMode: false
+  });
+
+  assert.equal(view.modeDisabled, true);
+});
+
 test("target and fusion selections block turn controls and expose the correct prompt", () => {
   const target = buildDuelControlsView({
     started: true,

@@ -225,6 +225,7 @@ function projectContinuousEffectsFromEvents(events = []) {
         sourceCardId: event.sourceCardId,
         effectId: event.effectId,
         targetCardId: event.targetCardId || null,
+        destroySourceWhenTargetLeaves: event.destroySourceWhenTargetLeaves !== false,
         operations: (event.operations || []).map((operation) => ({ ...operation }))
       });
     }
@@ -716,6 +717,19 @@ export function explainSummonMonsterFromUiState(uiState, playerId, handIndex, fi
   }, "召唤这只怪兽");
 }
 
+export function explainChangeMonsterModeFromUiState(uiState, playerId, fieldIndex, mode = null) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.field[fieldIndex];
+  if (!card) return { ok: false, reason: "请选择你场上的怪兽。", engineReason: "No monster at index" };
+  const action = {
+    type: "CHANGE_MONSTER_MODE",
+    playerId,
+    cardId: cardKey(card)
+  };
+  if (mode) action.mode = mode;
+  return explainUiAction(buildEngineStateFromUiState(uiState), action, "切换表示");
+}
+
 export function explainSetTrapFromUiState(uiState, playerId, handIndex, trapIndex = null) {
   const duelist = uiDuelist(uiState, playerId);
   const card = duelist.hand[handIndex];
@@ -862,6 +876,8 @@ function localizeEngineRuleReason(message = "", actionLabel = "操作") {
   if (/monsterZone is full/.test(message)) return "召唤区已满。";
   if (/spellTrapZone is full/.test(message)) return "魔陷区已满。";
   if (/already attacked/.test(message)) return "这只怪兽已经攻击过。";
+  if (/already changed mode/.test(message)) return "这只怪兽本回合已经切换过表示。";
+  if (/cannot change mode after attacking/.test(message)) return "这只怪兽攻击后不能再切换表示。";
   if (/Defense position monsters cannot attack/.test(message)) return "守备表示怪兽不能攻击。";
   if (/must attack a monster/.test(message)) return "对方场上还有怪兽，不能直接攻击玩家。";
   if (/skipped attacks/.test(message)) return "本回合已经跳过攻击，不能再攻击。";

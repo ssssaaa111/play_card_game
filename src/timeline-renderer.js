@@ -1,6 +1,7 @@
 import { applyCardArt } from "./card-art.js";
 import { buildChainHistory } from "./chain-history.js";
 import { auditLogEntries } from "./log-audit.js";
+import { appendLogEntryContent } from "./log-renderer.js";
 
 export function auditIssueLabel(issue) {
   const labels = {
@@ -148,6 +149,7 @@ export function renderTimelinePanel({
   gameEvents = [],
   chainHistoryExpanded = false,
   findCard = () => null,
+  findTimelineCard = findCard,
   onCardClick = () => {}
 } = {}) {
   const root = elements.timeline;
@@ -180,7 +182,14 @@ export function renderTimelinePanel({
       <span class="timeline-step">${entry.step}</span>
       <span class="timeline-text"></span>
     `;
-    item.querySelector(".timeline-text").textContent = entry.text;
+    appendLogEntryContent({
+      document,
+      root: item.querySelector(".timeline-text"),
+      entry,
+      findCard: findTimelineCard,
+      onCardClick,
+      buttonClassName: "log-card-link timeline-card-link"
+    });
     fragment.appendChild(item);
   });
   root.appendChild(fragment);

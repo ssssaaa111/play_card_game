@@ -198,6 +198,7 @@ export function renderMonsterZones({
   splitTargetAt = () => null,
   effectMarkersAt = () => [],
   onSlotClick = () => {},
+  onSlotDoubleClick = () => {},
   onCardClick = () => {},
   onAttackPreview = () => {},
   onAttackPreviewRestore = () => {}
@@ -248,6 +249,10 @@ export function renderMonsterZones({
     slot.setAttribute("aria-label", view.ariaLabel);
     slot.setAttribute("aria-pressed", String(view.targetSelected));
     slot.addEventListener("click", () => onSlotClick(index));
+    slot.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      onSlotDoubleClick(index);
+    });
 
     if (attackTargetable) {
       slot.addEventListener("pointerenter", () => onAttackPreview(index));
@@ -290,6 +295,7 @@ export function renderSupportZones({
   targetableAt = () => false,
   targetSelectedAt = () => false,
   onSlotClick = () => {},
+  onSlotDoubleClick = () => {},
   onCardClick = () => {},
   onCardDoubleClick = () => {}
 } = {}) {
@@ -319,6 +325,10 @@ export function renderSupportZones({
     if (view.supportDisplay) slot.dataset.supportState = view.supportDisplay.key;
     slot.setAttribute("aria-label", view.ariaLabel);
     slot.addEventListener("click", () => onSlotClick(index));
+    slot.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      onSlotDoubleClick(index);
+    });
 
     if (card) {
       const cardEl = view.revealed
@@ -354,13 +364,11 @@ export function renderSupportZones({
           else onCardClick(card, index);
         });
       }
-      if (owner === "player") {
-        cardEl.addEventListener("dblclick", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onCardDoubleClick(card, index);
-        });
-      }
+      cardEl.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onCardDoubleClick(card, index);
+      });
       slot.appendChild(cardEl);
     }
     fragment.appendChild(slot);

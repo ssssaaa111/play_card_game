@@ -771,6 +771,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /aiReveal: \{/);
   assert.match(smoke, /function assertScenarioBrief/);
   assert.match(smoke, /function doubleClickSmokeElement/);
+  assert.match(smoke, /"lunar-dominion-persistence-basic": runLunarDominionPersistenceSmoke/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
   assert.match(smoke, /ctx\.els\.choiceConfirmBtn/);
   assert.match(smoke, /守护刻印挡住直击后消耗攻击机会/);
@@ -976,11 +977,16 @@ test("card faces prioritize full monster art and illustrated spell trap identiti
 test("app uses extracted card details", () => {
   const app = readProjectFile("src/app.js");
   const logRenderer = readProjectFile("src/log-renderer.js");
+  const timelineRenderer = readProjectFile("src/timeline-renderer.js");
+  const html = readProjectFile("index.html");
 
   assert.match(app, /from '\.\/card-detail\.js'/);
   assert.match(app, /cardInspectorViewModel\(card\)/);
   assert.match(app, /cardDetailViewModel\(cardOrId\)/);
-  assert.match(app, /renderCurrentLog\(\{/);
+  assert.doesNotMatch(app, /renderCurrentLog\(\{/);
+  assert.doesNotMatch(html, /id="log"/);
+  assert.match(timelineRenderer, /appendLogEntryContent\(\{/);
+  assert.match(timelineRenderer, /buttonClassName: "log-card-link timeline-card-link"/);
   assert.match(logRenderer, /log\.slice\(0, Math\.max\(0, limit\)\)/);
   assert.match(logRenderer, /appendLogEntryContent\(\{/);
   assert.doesNotMatch(app, /cardTagText\(card\)/);
@@ -1037,7 +1043,7 @@ test("app uses extracted timeline classification", () => {
   const app = readProjectFile("src/app.js");
 
   assert.match(app, /from '\.\/timeline\.js'/);
-  assert.match(app, /nextTimelineState\(state\.timeline, text, state\.timelineStep\)/);
+  assert.match(app, /nextTimelineState\(state\.timeline, entry, state\.timelineStep\)/);
   assert.doesNotMatch(app, /function timelineKind/);
 });
 
