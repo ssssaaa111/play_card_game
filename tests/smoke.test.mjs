@@ -841,6 +841,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);
+  assert.match(smoke, /const smokeName = "trap-choice-field-double";[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "response-restart"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-attack-reentry"\)/);
@@ -930,7 +931,8 @@ test("public rival support details cannot be intercepted by player trap choices"
   const app = readProjectFile("src/app.js");
   const fieldRenderer = readProjectFile("src/field-renderer.js");
 
-  assert.match(app, /owner === "player" && selectPendingTrapChoice\(index\)/);
+  assert.match(app, /owner === "player" && state\.pendingTrapChoice/);
+  assert.match(app, /return interactWithPendingTrapChoice\(index/);
   assert.match(fieldRenderer, /if \(view\.revealed\)/);
   assert.match(fieldRenderer, /else onCardClick\(card, index\)/);
 });

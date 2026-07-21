@@ -2092,6 +2092,12 @@ function selectPendingTrapChoice(index) {
   return true;
 }
 
+function interactWithPendingTrapChoice(index, { directActivate = false } = {}) {
+  return directActivate
+    ? activatePendingTrapChoice(index)
+    : selectPendingTrapChoice(index);
+}
+
 function activatePendingTrapChoice(index) {
   const choice = state.pendingTrapChoice;
   const nextChoice = selectTrapResponse(choice, index);
@@ -2102,7 +2108,10 @@ function activatePendingTrapChoice(index) {
 }
 
 async function handlePlayerTrapSlot(index, interaction = {}) {
-  if (selectPendingTrapChoice(index)) return;
+  if (state.pendingTrapChoice) {
+    interactWithPendingTrapChoice(index, interaction);
+    return;
+  }
   const existing = state.player.traps[index];
   if (state.pendingTarget) {
     interactWithPendingSpellTarget("player", index, "traps", interaction);
@@ -2947,8 +2956,10 @@ function updateTrapChoicePrompt() {
     chain: currentEngineMachine()?.chain || [],
     findCard: findRuntimeCard,
     activationText: trapActivationText,
-    onSelect: selectPendingTrapChoice,
-    onActivate: activatePendingTrapChoice,
+    onSelect: (index) => interactWithPendingTrapChoice(index, {
+      directActivate: directActivationTracker.register(`trap-response:${index}`)
+    }),
+    onActivate: (index) => interactWithPendingTrapChoice(index, { directActivate: true }),
     onCardClick: openCardDetail
   });
 }
@@ -4513,14 +4524,21 @@ function renderTraps(root, duelist, owner) {
     targetableAt: (index) => isPendingTrapTargetSlot(owner, index),
     targetSelectedAt: (index) => isSelectedTargetSelection(state.pendingTarget, owner, index, "traps"),
     onSlotClick: (index) => {
-      const interaction = { directActivate: directActivationTracker.register(`${owner}:traps:${index}`) };
+      const interactionKey = owner === "player" && state.pendingTrapChoice
+        ? `trap-response:${index}`
+        : `${owner}:traps:${index}`;
+      const interaction = { directActivate: directActivationTracker.register(interactionKey) };
       return owner === "player" ? handlePlayerTrapSlot(index, interaction) : handleAiTrapSlot(index, interaction);
     },
     onSlotDoubleClick: (index) => owner === "player"
       ? handlePlayerTrapSlot(index, { directActivate: true })
       : handleAiTrapSlot(index, { directActivate: true }),
     onCardClick: (card, index) => {
-      if (owner === "player" && selectPendingTrapChoice(index)) return;
+      if (owner === "player" && state.pendingTrapChoice) {
+        return interactWithPendingTrapChoice(index, {
+          directActivate: directActivationTracker.register(`trap-response:${index}`)
+        });
+      }
       state.selected = null;
       clearBattlePreview();
       showDetail(card);
@@ -4528,6 +4546,9 @@ function renderTraps(root, duelist, owner) {
       if (canPlayerAct()) resumePlayerIdleCountdownAfterPassiveIntent();
     },
     onCardDoubleClick: (_card, index) => {
+      if (owner === "player" && state.pendingTrapChoice) {
+        return interactWithPendingTrapChoice(index, { directActivate: true });
+      }
       if (state.pendingTarget) {
         return owner === "player"
           ? handlePlayerTrapSlot(index, { directActivate: true })

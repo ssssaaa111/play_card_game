@@ -32,3 +32,9 @@ test("monster, support, and grave targets expose direct double-click resolution"
   assert.match(fieldRenderer, /onCardDoubleClick\(card, index\)/);
   assert.match(app, /interactWithPendingSpellTarget\("player", index, "grave"/);
 });
+
+test("trap response choices preserve rapid double activation across rerenders", () => {
+  assert.match(app, /function interactWithPendingTrapChoice\(index, \{ directActivate = false \} = \{\}\)/);
+  assert.match(app, /directActivationTracker\.register\(`trap-response:\$\{index\}`\)/);
+  assert.match(app, /onActivate: \(index\) => interactWithPendingTrapChoice\(index, \{ directActivate: true \}\)/);
+});

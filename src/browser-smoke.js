@@ -3616,7 +3616,12 @@ async function runTrapChoiceDoubleSmoke(ctx) {
   await startSmokeDuel(ctx, "trapChoice");
   await finishPlayerTurn(ctx);
   await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "陷阱双击响应窗口", 12000);
-  doubleClickSmokeElement(chainChoiceButton(ctx.els, "void-lock"), "双击星界封锁直接发动");
+  clickSmokeElement(chainChoiceButton(ctx.els, "void-lock"), "双击第一击选择星界封锁");
+  await waitForSmoke(
+    () => ctx.state.pendingTrapChoice?.selectedIndex === 1 && chainChoiceButton(ctx.els, "void-lock")?.classList.contains("selected"),
+    "第一击重渲染后仍保留选中的星界封锁"
+  );
+  clickSmokeElement(chainChoiceButton(ctx.els, "void-lock"), "双击第二击直接发动星界封锁");
   await waitForSmoke(
     () => !ctx.state.player.traps.some((card) => card?.id === "void-lock") &&
       ctx.state.player.traps.some((card) => card?.id === "mirror-snare"),
@@ -3624,6 +3629,28 @@ async function runTrapChoiceDoubleSmoke(ctx) {
     9000
   );
   setSmokeStatus("passed", "trap-choice-double");
+}
+
+async function runTrapChoiceFieldDoubleSmoke(ctx) {
+  const smokeName = "trap-choice-field-double";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trapChoice");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `${smokeName}: response window`, 12000);
+  clickSmokeElement(trapCard(ctx.els, "player", "void-lock"), `${smokeName}: first field click selects void lock`);
+  await waitForSmoke(
+    () => ctx.state.pendingTrapChoice?.selectedIndex === 1 &&
+      trapCard(ctx.els, "player", "void-lock")?.classList.contains("trap-response-selected"),
+    `${smokeName}: field response survives selection rerender`
+  );
+  clickSmokeElement(trapCard(ctx.els, "player", "void-lock"), `${smokeName}: second field click activates void lock`);
+  await waitForSmoke(
+    () => !ctx.state.player.traps.some((card) => card?.id === "void-lock") &&
+      ctx.state.player.traps.some((card) => card?.id === "mirror-snare"),
+    `${smokeName}: field double activation resolves selected trap`,
+    9000
+  );
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runResponseRestartSmoke(ctx) {
@@ -4675,6 +4702,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
     "trap-choice-double": runTrapChoiceDoubleSmoke,
+    "trap-choice-field-double": runTrapChoiceFieldDoubleSmoke,
     "response-restart": runResponseRestartSmoke,
     "chain-trap-choice": runChainTrapChoiceSmoke,
     "chain-attack-reentry": runChainAttackReentrySmoke,
