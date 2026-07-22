@@ -1338,7 +1338,7 @@ test("dispatches turn start and replays rule resets into UI state", () => {
   const second = uiMonster("turn-second", "iron-guardian");
   second.used = false;
   second.changedMode = true;
-  const state = appState({ turn: "ai", phase: PHASES.battle });
+  const state = appState({ turn: "ai", phase: PHASES.end });
   state.player.field[0] = first;
   state.player.field[1] = second;
   state.player.extraSummon = 2;
@@ -1425,6 +1425,7 @@ test("phase events preserve attack response windows after a started turn", () =>
   state.player.traps[0] = trap;
   state.ai.field[0] = attacker;
 
+  dispatchEndTurnFromUiState(state, "player", { reason: "test-handoff" });
   dispatchStartTurnFromUiState(state, "ai");
   dispatchChangePhaseFromUiState(state, "ai", PHASES.main);
   dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);

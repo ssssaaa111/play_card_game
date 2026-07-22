@@ -4275,6 +4275,46 @@ async function runChainResolutionReviewSmoke(ctx) {
   setSmokeStatus("passed", "chain-resolution-review");
 }
 
+async function runTurnHandoffBasicSmoke(ctx) {
+  const smokeName = "turn-handoff-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "direct");
+  ctx.state.ai.hand = [];
+  ctx.state.ai.deck = [];
+  ctx.state.ai.field = ctx.state.ai.field.map(() => null);
+  ctx.state.ai.traps = ctx.state.ai.traps.map(() => null);
+  ctx.render?.();
+
+  const eventStart = (ctx.state.gameEvents || []).length;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => {
+      const events = (ctx.state.gameEvents || []).slice(eventStart);
+      return ctx.state.turn === "player" &&
+        events.some((event) => event.type === "TURN_ENDED" && event.playerId === "player" && event.nextPlayerId === "ai") &&
+        events.some((event) => event.type === "TURN_STARTED" && event.playerId === "ai") &&
+        events.some((event) => event.type === "TURN_ENDED" && event.playerId === "ai" && event.nextPlayerId === "player") &&
+        events.some((event) => event.type === "TURN_STARTED" && event.playerId === "player");
+    },
+    `${smokeName}: player and AI turns complete through paired end/start events`,
+    12000
+  );
+
+  const handoffEvents = (ctx.state.gameEvents || []).slice(eventStart)
+    .filter((event) => ["TURN_ENDED", "TURN_STARTED"].includes(event.type));
+  const sequence = handoffEvents.map((event) => `${event.type}:${event.playerId}`);
+  const expected = [
+    "TURN_ENDED:player",
+    "TURN_STARTED:ai",
+    "TURN_ENDED:ai",
+    "TURN_STARTED:player"
+  ];
+  if (expected.some((entry, index) => sequence[index] !== entry)) {
+    throw new Error(`${smokeName}: invalid turn handoff sequence ${sequence.join(" -> ")}. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("running", "mode-auto-end");
   await startSmokeDuel(ctx, "combo");
@@ -5004,6 +5044,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "player-counter-chain": runPlayerCounterChainSmoke,
     "triple-counter-chain": runTripleCounterChainSmoke,
     "chain-resolution-review": runChainResolutionReviewSmoke,
+    "turn-handoff-basic": runTurnHandoffBasicSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,

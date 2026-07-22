@@ -4075,10 +4075,10 @@ test("start turn switches ownership and resets turn-scoped state through events"
       comboThisTurn: true,
       comboFlags: { fireWind: true }
     },
-    turn: { playerId: AI, phase: Phase.battle }
+    turn: { playerId: AI, phase: Phase.end }
   });
-  state.machine.phase = Phase.battle;
-  state.machine.timing = Timing.battleOpen;
+  state.machine.phase = Phase.end;
+  state.machine.timing = Timing.end;
   state.abilities[PLAYER] = [
     { ability: Ability.directAttack, uses: 1, duration: "turn", sourceCardId: "breach-1" },
     { ability: Ability.extraSummon, uses: 2, duration: "turn", sourceCardId: "twin-1" },
@@ -4109,6 +4109,42 @@ test("start turn switches ownership and resets turn-scoped state through events"
     event.playerId === PLAYER &&
     event.abilities.length === 2
   ));
+});
+
+test("start turn rejects skipping the prior end phase without changing state", () => {
+  const engine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.main }
+  }));
+  const before = engine.getState();
+
+  assert.throws(
+    () => engine.dispatch({ type: "START_TURN", playerId: AI }),
+    /end phase/
+  );
+  assert.deepEqual(engine.getState(), before);
+});
+
+test("turn handoff rejects same-player extra turns without changing state", () => {
+  const endEngine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.main }
+  }));
+  const beforeEnd = endEngine.getState();
+  assert.throws(
+    () => endEngine.dispatch({ type: "END_TURN", playerId: PLAYER, nextPlayerId: PLAYER }),
+    /opponent/
+  );
+  assert.deepEqual(endEngine.getState(), beforeEnd);
+
+  const startEngine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.end },
+    machine: { phase: Phase.end, timing: Timing.end }
+  }));
+  const beforeStart = startEngine.getState();
+  assert.throws(
+    () => startEngine.dispatch({ type: "START_TURN", playerId: PLAYER }),
+    /opponent/
+  );
+  assert.deepEqual(startEngine.getState(), beforeStart);
 });
 
 test("start turn rejects unresolved response windows", () => {

@@ -222,6 +222,7 @@ test("app uses extracted turn state machine", () => {
   assert.match(app, /dispatchCancelAutoEndFromUiState\(/);
   assert.match(app, /dispatchCommitAutoEndFromUiState\(/);
   assert.match(app, /dispatchEndTurnFromUiState\(/);
+  assert.match(app, /async function runAiTurn\(\)[\s\S]*dispatchEndTurnFromUiState\(state, "ai", \{[\s\S]*beginTurn\("player"\)/);
   assert.match(app, /dispatchResolveTurnDrawFromUiState\(/);
   assert.match(app, /function autoPlayerDraw\(\)[\s\S]*dispatchResolveTurnDrawFromUiState\(state, "player"\)/);
   assert.match(app, /playerActionWindowDecision\(state, \{[\s\S]*hasMainAction: actions\.hasMain[\s\S]*hasBattleAction: actions\.hasBattle[\s\S]*\}\)/);
@@ -747,6 +748,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"chain-attack-reentry": runChainAttackReentrySmoke/);
   assert.match(smoke, /"chain-weaken-resolution": runChainWeakenResolutionSmoke/);
   assert.match(smoke, /"ai-counter-chain": runAiCounterChainSmoke/);
+  assert.match(smoke, /"turn-handoff-basic": runTurnHandoffBasicSmoke/);
   assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
   assert.match(smoke, /"ai-mode-event": runAiModeEventSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
@@ -857,6 +859,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "player-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
+  assert.match(smoke, /const smokeName = "turn-handoff-basic";[\s\S]*"TURN_ENDED:ai"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);

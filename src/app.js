@@ -3995,6 +3995,16 @@ async function runAiTurn() {
     await aiAttack();
     if (!state.gameOver) {
       await sleep(1150);
+      try {
+        dispatchEndTurnFromUiState(state, "ai", {
+          reason: "ai-complete",
+          endedBy: "system"
+        });
+      } catch (error) {
+        cue(error.message || "AI 回合结束失败。");
+        console.error(error);
+        return;
+      }
       beginTurn("player");
       render();
     }

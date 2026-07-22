@@ -1606,8 +1606,16 @@ export class GameEngine {
     if (state.machine.pendingAttack) {
       throw new GameRuleError("Cannot start a turn while an attack is pending");
     }
+    if (state.turn.phase !== Phase.end) {
+      throw new GameRuleError("Cannot start a turn before the previous turn reaches end phase");
+    }
 
     const previousPlayerId = state.turn.playerId;
+    const expectedPlayerId = otherPlayerId(state, previousPlayerId);
+    if (action.playerId !== expectedPlayerId) {
+      throw new GameRuleError(`Next turn must belong to opponent ${expectedPlayerId}`);
+    }
+
     const player = requirePlayer(state, action.playerId);
     const monsterResets = player.monsterZone
       .map((cardId) => requireCard(state, cardId))
@@ -1669,8 +1677,12 @@ export class GameEngine {
       throw new GameRuleError("Cannot end a turn while an attack is pending");
     }
 
-    const nextPlayerId = action.nextPlayerId || otherPlayerId(state, action.playerId);
+    const expectedPlayerId = otherPlayerId(state, action.playerId);
+    const nextPlayerId = action.nextPlayerId || expectedPlayerId;
     requirePlayer(state, nextPlayerId);
+    if (nextPlayerId !== expectedPlayerId) {
+      throw new GameRuleError(`Turn must pass to opponent ${expectedPlayerId}`);
+    }
     emit("TURN_ENDED", {
       playerId: action.playerId,
       nextPlayerId,
