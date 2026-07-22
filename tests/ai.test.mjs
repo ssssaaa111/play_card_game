@@ -182,7 +182,8 @@ test("AI spell planner fails closed when engine legality is not provided", () =>
 test("AI trap planner returns the first hand trap and first empty trap zone", () => {
   const action = chooseAiSetTrapAction({
     hand: [monster(), trap({ id: "mirror" })],
-    traps: [trap({ id: "filled" }), null, null]
+    traps: [trap({ id: "filled" }), null, null],
+    canSetTrap: () => true
   });
 
   assert.deepEqual({
@@ -198,6 +199,26 @@ test("AI trap planner returns the first hand trap and first empty trap zone", ()
   });
 });
 
+test("AI trap planner filters candidates through engine legality", () => {
+  const checked = [];
+  const action = chooseAiSetTrapAction({
+    hand: [trap({ id: "mirror-snare" }), trap({ id: "chain-nullifier" })],
+    traps: [null, null, null],
+    aiStyle: "scriptedPressure",
+    canSetTrap: (card, handIndex, trapIndex) => {
+      checked.push([card.id, handIndex, trapIndex]);
+      return card.id === "chain-nullifier";
+    }
+  });
+
+  assert.deepEqual(checked, [
+    ["mirror-snare", 0, 0],
+    ["chain-nullifier", 1, 0]
+  ]);
+  assert.equal(action.card.id, "chain-nullifier");
+  assert.equal(action.handIndex, 1);
+});
+
 test("scripted pressure AI protects trio pressure before generic traps", () => {
   const action = chooseAiSetTrapAction({
     hand: [
@@ -206,7 +227,8 @@ test("scripted pressure AI protects trio pressure before generic traps", () => {
       trap({ id: "chain-nullifier" })
     ],
     traps: [null, null, null],
-    aiStyle: "scriptedPressure"
+    aiStyle: "scriptedPressure",
+    canSetTrap: () => true
   });
 
   assert.equal(action.type, "setTrap");
@@ -221,12 +243,36 @@ test("AI summon planner chooses the best monster for its style", () => {
       monster({ name: "ace", atk: 1900, stars: 4 })
     ],
     field: [null, null, null],
-    aiStyle: "aggressive"
+    aiStyle: "aggressive",
+    canSummon: () => true
   });
 
   assert.equal(action.type, "summon");
   assert.equal(action.handIndex, 1);
   assert.equal(action.fieldIndex, 0);
+});
+
+test("AI summon planner skips a higher-scored candidate rejected by engine legality", () => {
+  const checked = [];
+  const action = chooseAiSummonAction({
+    hand: [
+      monster({ id: "small", name: "small", atk: 1000, stars: 1 }),
+      monster({ id: "ace", name: "ace", atk: 1900, stars: 4 })
+    ],
+    field: [null, null, null],
+    aiStyle: "aggressive",
+    canSummon: (card, handIndex, options) => {
+      checked.push([card.id, handIndex, options.fieldIndex, options.tributeIndexes]);
+      return card.id === "small";
+    }
+  });
+
+  assert.deepEqual(checked, [
+    ["small", 0, 0, []],
+    ["ace", 1, 0, []]
+  ]);
+  assert.equal(action.card.id, "small");
+  assert.equal(action.handIndex, 0);
 });
 
 test("scripted pressure AI prioritizes trio pressure bodies over raw generic attack", () => {
@@ -236,7 +282,8 @@ test("scripted pressure AI prioritizes trio pressure bodies over raw generic att
       monster({ id: "trio-moon-warden", name: "moon", atk: 2100, def: 2600, stars: 6 })
     ],
     field: [null, null, null],
-    aiStyle: "scriptedPressure"
+    aiStyle: "scriptedPressure",
+    canSummon: () => true
   });
 
   assert.equal(action.type, "summon");
@@ -251,7 +298,8 @@ test("AI summon planner skips high-level monsters when tribute material is insuf
       monster({ id: "star-lancer", name: "lancer", atk: 1800, stars: 4 })
     ],
     field: [monster({ id: "material-1" }), null, null, null, null],
-    aiStyle: "scriptedPressure"
+    aiStyle: "scriptedPressure",
+    canSummon: () => true
   });
 
   assert.equal(action.card.id, "star-lancer");
@@ -269,7 +317,8 @@ test("AI summon planner can choose a three-tribute god and reuse a full tribute 
       monster({ id: "material-4" }),
       monster({ id: "material-5" })
     ],
-    aiStyle: "scriptedPressure"
+    aiStyle: "scriptedPressure",
+    canSummon: () => true
   });
 
   assert.equal(action.card.id, "trio-sun-judicator");
@@ -288,7 +337,8 @@ test("scripted pressure AI never tributes an established trio god for a generic 
       null,
       null
     ],
-    aiStyle: "scriptedPressure"
+    aiStyle: "scriptedPressure",
+    canSummon: () => true
   });
 
   assert.equal(action, null);
@@ -304,7 +354,8 @@ test("scripted pressure AI selects ordinary bodies before trio gods as tribute",
       null,
       null
     ],
-    aiStyle: "scriptedPressure"
+    aiStyle: "scriptedPressure",
+    canSummon: () => true
   });
 
   assert.deepEqual(action.tributeIndexes, [1]);
@@ -330,7 +381,8 @@ test("AI attack planner emits command objects and skip decisions", () => {
   const skip = chooseAiAttackAction({
     field: [attacker],
     rivalField: [monster({ mode: "defense", def: 2200 })],
-    rivalLp: 4000
+    rivalLp: 4000,
+    canAttackMonster: () => true
   });
   assert.equal(skip.type, "skipAttack");
   assert.equal(skip.cardUid, "attacker");
@@ -338,9 +390,38 @@ test("AI attack planner emits command objects and skip decisions", () => {
   const attack = chooseAiAttackAction({
     field: [attacker],
     rivalField: [monster({ mode: "attack", atk: 1200 })],
-    rivalLp: 4000
+    rivalLp: 4000,
+    canAttackMonster: () => true
   });
   assert.equal(attack.type, "attack");
   assert.equal(attack.attackerIndex, 0);
   assert.equal(attack.targetIndex, 0);
+});
+
+test("AI attack planner ignores a stronger attacker rejected by engine legality", () => {
+  const locked = monster({ uid: "locked", name: "locked", atk: 3000, attackLockReason: "trioConvergence" });
+  const ready = monster({ uid: "ready", name: "ready", atk: 1200 });
+  const checked = [];
+
+  const action = chooseAiAttackAction({
+    field: [locked, ready],
+    rivalField: [],
+    rivalLp: 4000,
+    canAttackMonster: (card, fieldIndex) => {
+      checked.push([card.uid, fieldIndex]);
+      return !card.attackLockReason;
+    }
+  });
+
+  assert.deepEqual(checked, [["locked", 0], ["ready", 1]]);
+  assert.equal(action.type, "attack");
+  assert.equal(action.cardUid, "ready");
+  assert.equal(action.attackerIndex, 1);
+  assert.equal(action.targetIndex, -1);
+});
+
+test("AI non-spell planners fail closed without engine legality", () => {
+  assert.equal(chooseAiSetTrapAction({ hand: [trap()], traps: [null] }), null);
+  assert.equal(chooseAiSummonAction({ hand: [monster()], field: [null] }), null);
+  assert.equal(chooseAiAttackAction({ field: [monster()], rivalField: [], rivalLp: 4000 }).type, "none");
 });

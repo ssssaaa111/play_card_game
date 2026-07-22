@@ -1266,6 +1266,28 @@ test("dispatches monster mode changes and replays them into UI state", () => {
   assert.equal(state.gameEvents.length, events.length);
 });
 
+test("projects AI battle legality while the UI is in the AI action window", () => {
+  const attacker = uiMonster("ai-window-attacker", "trio-ember-pawn");
+  attacker.ownerId = "ai";
+  const state = appState({
+    started: true,
+    turn: "ai",
+    phase: PHASES.battle,
+    actionWindow: ACTION_WINDOWS.ai
+  });
+  state.ai.field[0] = attacker;
+  const before = snapshotUiState(state);
+
+  const projection = projectBattleFromUiState(state, "ai", { attackerIndex: 0 });
+  const readiness = explainMonsterAttackReadinessFromUiState(state, "ai", 0);
+
+  assert.equal(projection.inAttackIntentWindow, true);
+  assert.equal(projection.attackerCanAttack, true);
+  assert.equal(projection.canDirectAttack, true);
+  assert.equal(readiness.ok, true);
+  assert.deepEqual(snapshotUiState(state), before);
+});
+
 test("projects monster attack readiness across main, selection, spent, and readied states", () => {
   const attacker = uiMonster("readiness-attacker", "iron-guardian");
   const target = uiMonster("readiness-target", "sky-raider");

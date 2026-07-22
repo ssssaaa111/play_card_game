@@ -644,7 +644,7 @@ async function runAiGuardSkipSmoke(ctx) {
   if (!ctx.state.ai.field.some((card) => card?.id === "star-lancer")) {
     throw new Error("AI 跳过守备攻击后星轨枪兵应仍在场");
   }
-  if (!ctx.state.log.some((entry) => entry.includes("AI 保留 星轨枪兵"))) {
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("对手保留 星轨枪兵"))) {
     throw new Error("AI 应记录保留攻击，避免玩家以为流程卡住");
   }
   if (guardian.used || guardian.changedMode) {
@@ -663,6 +663,59 @@ async function runAiGuardSkipSmoke(ctx) {
     throw new Error("完整回合循环缺少开始回合、怪兽重置或能力过期事件");
   }
   setSmokeStatus("passed", "ai-guard-skip");
+}
+
+async function runAiEngineLegalityBasicSmoke(ctx) {
+  const smokeName = "ai-engine-legality-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "guardSkip");
+  const attackEventsBefore = countGameEvents(ctx.state, "ATTACK_DECLARED");
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "ai" && ctx.state.actionWindow === "ai" && ctx.state.aiRunning,
+    `${smokeName}：AI 行动窗口`
+  );
+
+  const locked = cloneCardById("trio-sun-judicator");
+  const ready = cloneCardById("star-lancer");
+  if (!locked || !ready) throw new Error(`${smokeName}：测试怪兽定义缺失`);
+  locked.attackLockReason = "trioConvergence";
+  locked.mode = "attack";
+  locked.used = false;
+  ready.mode = "attack";
+  ready.used = false;
+  ctx.state.ai.field = [locked, ready, null, null, null];
+  ctx.state.ai.hand = [];
+  ctx.state.ai.deck = [];
+  ctx.state.ai.traps = [null, null, null, null, null];
+  ctx.state.player.field = [null, null, null, null, null];
+  ctx.state.player.traps = [null, null, null, null, null];
+  ctx.render?.();
+
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).some((event) =>
+      event.type === "ATTACK_DECLARED" && event.attackerCardId === ready.uid
+    ),
+    `${smokeName}：AI 改用合法怪兽攻击`,
+    22000
+  );
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.aiRunning,
+    `${smokeName}：完整回合返回玩家`,
+    26000
+  );
+
+  const newAttackEvents = (ctx.state.gameEvents || [])
+    .filter((event) => event.type === "ATTACK_DECLARED")
+    .slice(attackEventsBefore);
+  if (newAttackEvents.some((event) => event.attackerCardId === locked.uid)) {
+    throw new Error(`${smokeName}：受攻击限制的怪兽不应宣言攻击`);
+  }
+  if (!newAttackEvents.some((event) => event.attackerCardId === ready.uid)) {
+    throw new Error(`${smokeName}：AI 应跳过非法候选并使用合法怪兽`);
+  }
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runSummonEffectsSmoke(ctx) {
@@ -3020,6 +3073,13 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
 
   await finishPlayerTurn(ctx);
   await waitForSmoke(
+    () => ctx.state.turn === "ai" && ctx.state.actionWindow === "ai" && ctx.state.aiRunning,
+    `full duel: AI action loop should start. ${smokeDebug(ctx)}`,
+    6000
+  );
+  // Let the production-timed AI sequence reach the player response before virtual-time polling resumes.
+  await new Promise((resolve) => window.setTimeout(resolve, 11000));
+  await waitForSmoke(
     () => ctx.els.chainModal.classList.contains("show") &&
       ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.ai.traps.some((card) => card?.id === "mirror-snare") &&
@@ -4740,6 +4800,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "direct-shield-consume": runDirectShieldConsumeSmoke,
     "guard-counter": runGuardCounterSmoke,
     "ai-guard-skip": runAiGuardSkipSmoke,
+    "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
     "summon-effects": runSummonEffectsSmoke,
     "summon-fire-buff": runSummonFireBuffSmoke,
     "summon-shield": runSummonShieldSmoke,

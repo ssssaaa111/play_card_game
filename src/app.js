@@ -3990,6 +3990,7 @@ async function runAiTurn() {
       await sleep(1850);
     }
     if (state.gameOver) return;
+    setActionWindow(ACTION_WINDOWS.ai, { playerId: "ai", reason: "ai battle" });
     dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
     await aiAttack();
     if (!state.gameOver) {
@@ -4028,7 +4029,14 @@ async function aiSummon() {
   const action = chooseAiSummonAction({
     hand: state.ai.hand,
     field: state.ai.field,
-    aiStyle: state.aiStyle
+    aiStyle: state.aiStyle,
+    canSummon: (_card, handIndex, options) => explainSummonMonsterFromUiState(
+      state,
+      "ai",
+      handIndex,
+      options.fieldIndex,
+      { tributeIndexes: options.tributeIndexes }
+    ).ok
   });
   if (!action) return false;
   const didSummon = await summonMonster(state.ai, state.player, action.handIndex, action.fieldIndex, {
@@ -4058,7 +4066,9 @@ function aiSetTraps() {
   const action = chooseAiSetTrapAction({
     hand: state.ai.hand,
     traps: state.ai.traps,
-    aiStyle: state.aiStyle
+    aiStyle: state.aiStyle,
+    canSetTrap: (_card, handIndex, trapIndex) =>
+      explainSetTrapFromUiState(state, "ai", handIndex, trapIndex).ok
   });
   return action ? setTrap(state.ai, action.handIndex, action.trapIndex) : false;
 }
@@ -4073,7 +4083,9 @@ async function aiAttack() {
       rivalField: state.player.field,
       rivalLp: state.player.lp,
       aiStyle: state.aiStyle,
-      skippedAttackers
+      skippedAttackers,
+      canAttackMonster: (_card, fieldIndex) =>
+        explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex).ok
     });
     if (action.type === "none") return;
     const { card, attackerIndex, targetIndex, target } = action;
