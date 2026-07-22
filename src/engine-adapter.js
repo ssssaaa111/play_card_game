@@ -931,6 +931,7 @@ function localizeEngineRuleReason(message = "", actionLabel = "操作") {
   if (/has no legal target/.test(message)) return "这张卡没有可指定的合法目标。";
   if (/requires at least|requires elements/.test(message)) return "场上属性或数量条件不足。";
   if (/requires no .*spellTrapZone/.test(message)) return "必须先清除指定压制卡。";
+  if (/requires no active continuous effect/.test(message)) return "必须先解除对我方怪兽生效的对手持续效果。";
   if (/cannot be the source card/.test(message)) return "不能选择这张卡自己作为目标。";
   return `规则引擎判定不能${actionLabel}：${message}`;
 }

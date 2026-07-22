@@ -22,6 +22,7 @@ function trioState(overrides = {}) {
       field: [],
       traps: []
     },
+    gameEvents: [],
     ...overrides
   };
 }
@@ -57,9 +58,45 @@ test("guides the trio route through defense and moon pressure", () => {
     ai: {
       field: [card("trio-moon-warden")],
       traps: [card("trio-moon-dominion")]
-    }
+    },
+    gameEvents: [{
+      type: "CONTINUOUS_EFFECT_REGISTERED",
+      id: "continuous:moon",
+      playerId: "ai",
+      effectId: "lunarDominion"
+    }]
   };
   assert.match(scenarioTacticalGoal(counterattack), /反击窗口.*碎月解幕/);
+});
+
+test("does not describe an orphaned lunar dominion card as active pressure", () => {
+  const registered = {
+    type: "CONTINUOUS_EFFECT_REGISTERED",
+    id: "continuous:moon",
+    playerId: "ai",
+    effectId: "lunarDominion"
+  };
+  const released = {
+    ...registered,
+    type: "CONTINUOUS_EFFECT_RELEASED",
+    reason: "target-left-zone"
+  };
+  const state = trioState({
+    player: {
+      hand: [card("trio-ember-recall"), card("trio-final-counter")],
+      field: [],
+      traps: [],
+      grave: [card("trio-ember-pawn")]
+    },
+    ai: {
+      field: [card("trio-moon-warden")],
+      traps: [card("trio-moon-dominion")]
+    },
+    gameEvents: [registered, released]
+  });
+
+  assert.match(scenarioTacticalGoal(state), /回召真正的终局资源/);
+  assert.doesNotMatch(scenarioTacticalGoal(state), /月曜帷幕仍在生效/);
 });
 
 test("recognizes early defense setup before the full-duel sun god arrives", () => {

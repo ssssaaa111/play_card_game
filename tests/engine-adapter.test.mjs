@@ -2150,6 +2150,48 @@ test("explains missing spell targets through the engine adapter", () => {
   assert.deepEqual(state.player.hand, [blade]);
 });
 
+test("explains active rival continuous pressure and allows the spell after that effect is released", () => {
+  const finalCounter = uiSpell("final-counter-pressure", "trioFinalCounter", "trio-final-counter");
+  const pawn = uiMonster("pawn-pressure", "trio-ember-pawn");
+  const moonDominion = uiSpell("moon-pressure", "lunarDominion", "trio-moon-dominion");
+  moonDominion.ownerId = "ai";
+  const registered = {
+    type: "CONTINUOUS_EFFECT_REGISTERED",
+    id: "continuous:moon-pressure",
+    playerId: "ai",
+    sourceCardId: moonDominion.uid,
+    effectId: "lunarDominion",
+    targetCardId: pawn.uid,
+    destroySourceWhenTargetLeaves: false,
+    operations: [
+      { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -900 },
+      { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -900 }
+    ]
+  };
+  const state = appState();
+  state.player.lp = 1300;
+  state.player.hand = [finalCounter];
+  state.player.field[0] = pawn;
+  state.ai.traps[0] = moonDominion;
+  state.gameEvents = [registered];
+
+  const blocked = explainActivateSpellFromUiState(state, "player", "ai", 0);
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.engineReason, /requires no active continuous effect/);
+  assert.equal(blocked.reason, "必须先解除对我方怪兽生效的对手持续效果。");
+
+  state.gameEvents.push({
+    ...registered,
+    type: "CONTINUOUS_EFFECT_RELEASED",
+    reason: "target-left-zone"
+  });
+  const released = explainActivateSpellFromUiState(state, "player", "ai", 0);
+  assert.equal(released.ok, true);
+  assert.equal(released.reason, "");
+  assert.ok(state.ai.traps.includes(moonDominion));
+  assert.ok(state.player.hand.includes(finalCounter));
+});
+
 test("explains monster summon legality from UI state without consuming cards", () => {
   const monster = uiMonster("summon-locked");
   const state = appState();

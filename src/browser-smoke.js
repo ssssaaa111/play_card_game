@@ -2640,6 +2640,14 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
     `${smokeName}：低攻关键怪获得终局突破力`,
     9000
   );
+  await waitForSmoke(() => logCardLink(ctx.els, "trio-final-counter"), `${smokeName}：时间线出现三曜终断详情入口`);
+  clickSmokeElement(logCardLink(ctx.els, "trio-final-counter"), `${smokeName}：打开三曜终断详情`);
+  await assertCardDetailModal(ctx, cloneCardById("trio-final-counter"), `${smokeName}：三曜终断详情`);
+  if (!ctx.els.zoomText.textContent.includes("2100") || !ctx.els.zoomText.textContent.includes("追加攻击")) {
+    throw new Error(`${smokeName}：三曜终断详情必须写明攻击力增量和攻击重置结果。`);
+  }
+  clickSmokeElement(ctx.els.zoomClose, `${smokeName}：关闭三曜终断详情`);
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), `${smokeName}：三曜终断详情关闭`);
 
   clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}：选择余烁小卫第一次攻击`);
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), `${smokeName}：月曜目标高亮`);
@@ -2691,6 +2699,13 @@ async function runLunarDominionPersistenceSmoke(ctx) {
     event.reason === "continuous-target-left-zone"
   )) {
     throw new Error(`${smokeName}：目标离场不应连带破坏月曜帷幕。${smokeDebug(ctx)}`);
+  }
+  if (!(ctx.state.gameEvents || []).some((event) =>
+    event.type === "CONTINUOUS_EFFECT_RELEASED" &&
+    event.effectId === "lunarDominion" &&
+    event.reason === "target-left-zone"
+  )) {
+    throw new Error(`${smokeName}：目标离场后必须释放月曜帷幕的有效压制状态。${smokeDebug(ctx)}`);
   }
   setSmokeStatus("passed", smokeName);
 }
