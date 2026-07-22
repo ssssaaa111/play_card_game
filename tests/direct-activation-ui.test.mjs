@@ -14,6 +14,10 @@ test("hand spells expose a double-click activation callback", () => {
   assert.match(app, /onCardDoubleClick:\s*\(card\)\s*=>/);
 });
 
+test("repeating an active targeted hand spell confirms its selected default target", () => {
+  assert.match(app, /if \(sameCard\) \{[\s\S]*if \(directActivate\) \{[\s\S]*await resolvePendingSpellDefault\(\)/);
+});
+
 test("rapid repeat activation survives a renderer replacing the clicked card node", () => {
   let time = 1000;
   const tracker = createDirectActivationTracker({ now: () => time });
