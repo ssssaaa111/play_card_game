@@ -132,7 +132,7 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
   assert.equal(cardByTemplate("trio-chain-veil").trigger, "attackNegate");
   assert.equal(cardByTemplate("trio-final-counter").effect, "trioFinalCounter");
   assert.match(cardByTemplate("trio-final-counter").text, /2100/);
-  assert.match(cardByTemplate("trio-moon-dominion").text, /失去目标后此卡留场，但不再生效/);
+  assert.match(cardByTemplate("trio-moon-dominion").text, /目标离开怪兽区时.*送入持有者墓地/);
 
   assert.equal(getCardEffectDefinition("lunarDominion").duration, EffectDuration.continuous);
   assert.deepEqual(getCardEffectDefinition("lunarDominion").requirements, [
@@ -178,7 +178,7 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
     assert.ok(setup.gameEvents.some((event) =>
       event.type === "CONTINUOUS_EFFECT_REGISTERED" &&
       event.effectId === "lunarDominion" &&
-      event.destroySourceWhenTargetLeaves === false
+      event.destroySourceWhenTargetLeaves === true
     ));
     assertValidGameState(buildEngineStateFromUiState(scenarioUiState(key)));
   }
@@ -488,7 +488,7 @@ test("trio final counter cannot convert into victory while moon pressure remains
   assert.equal(engine.getState().gameOver, null);
 });
 
-test("trio final counter can activate after lunar dominion loses its target while the source card remains", () => {
+test("trio final counter can activate after lunar dominion loses its target and is sent to grave", () => {
   const pressure = engineWithTurn(
     buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaChallenge")),
     AI,
@@ -508,12 +508,18 @@ test("trio final counter can activate after lunar dominion loses its target whil
   state = pressure.getState();
 
   assert.ok(state.players[PLAYER].grave.includes(decoyId));
-  assert.ok(state.players[AI].spellTrapZone.includes(moonDominionId));
+  assert.ok(!state.players[AI].spellTrapZone.includes(moonDominionId));
+  assert.ok(state.players[AI].grave.includes(moonDominionId));
   assert.deepEqual(state.continuousEffects, []);
   assert.ok(battleEvents.some((event) =>
     event.type === "CONTINUOUS_EFFECT_RELEASED" &&
     event.effectId === "lunarDominion" &&
     event.reason === "target-left-zone"
+  ));
+  assert.ok(battleEvents.some((event) =>
+    event.type === "CARD_DESTROYED" &&
+    event.cardId === moonDominionId &&
+    event.reason === "continuous-target-left-zone"
   ));
 
   const counter = engineWithTurn(state, PLAYER, Phase.main);
@@ -539,7 +545,7 @@ test("trio final counter can activate after lunar dominion loses its target whil
   state = counter.getState();
   const pawnId = findCardId(state, PLAYER, "monsterZone", "trio-ember-pawn");
 
-  assert.ok(state.players[AI].spellTrapZone.includes(moonDominionId));
+  assert.ok(state.players[AI].grave.includes(moonDominionId));
   assert.equal(state.cards[pawnId].tempAtk, 2100);
   assert.ok(events.some((event) =>
     event.type === "ABILITY_GRANTED" &&

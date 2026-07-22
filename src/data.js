@@ -78,7 +78,7 @@ export const library = [
   { id: "trio-star-herald", type: "monster", name: "星坠宣告者", element: "light", stars: 6, atk: 2400, def: 1400, icon: "星", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。以三只祭品成功召唤时，手牌中其余不同名三曜神格会特殊召唤；它们本回合不能攻击。攻击后追加 300 点终局压力，并提升自身攻击力 300。", summary: "三祭品登场并引发三曜共降，攻击后持续累积终局伤害。", tributeCost: 3, rarity: "UR", archetype: "三曜神格", trioConvergence: "trioOmega", afterAttack: "starDoomCharge" },
   { id: "trio-decoy-ward", type: "monster", name: "折光诱标卫", element: "light", stars: 2, atk: 1000, def: 3700, icon: "诱", text: "低星防线。正确路线中用来吸引日曜攻势，为反击回合争取窗口。" },
   { id: "trio-ember-pawn", type: "monster", name: "余烁小卫", element: "fire", stars: 1, atk: 600, def: 600, icon: "烁", text: "表面攻击力很低的终局关键怪兽。只有资源铺垫完成后才能突破三曜阵线。" },
-    { id: "trio-moon-dominion", type: "spell", name: "月曜帷幕", icon: "幕", text: "持续魔法：选择对手 1 只怪兽，攻击力和守备力下降 900。目标离开怪兽区或此卡离开魔陷区时，修正解除；失去目标后此卡留场，但不再生效。", effect: "lunarDominion" },
+    { id: "trio-moon-dominion", type: "spell", name: "月曜帷幕", icon: "幕", text: "持续魔法：选择对手 1 只怪兽，攻击力和守备力下降 900。目标离开怪兽区时，修正解除，此卡送入持有者墓地；此卡先离开魔陷区时，修正同样解除。", effect: "lunarDominion" },
   { id: "trio-solar-snare", type: "trap", name: "日冕诱锁", icon: "锁", text: "盖放后自动触发：对手攻击时，破坏攻击怪兽。用来诱导第一张三曜王牌踏入反制。", trigger: "attackDestroy" },
   { id: "trio-moonbreaker-ray", type: "spell", name: "碎月解幕", icon: "碎", text: "选择对手魔陷区 1 张卡破坏。用于清除持续压制后再展开墓地资源。", effect: "destroySpellTrap" },
   { id: "trio-ember-recall", type: "spell", name: "余烁归轨", icon: "归", text: "选择我方墓地 1 只怪兽，特殊回到怪兽区。终局战中用来让低星关键怪回场。", effect: "graveRevive" },

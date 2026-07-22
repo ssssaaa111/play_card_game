@@ -160,7 +160,6 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -900 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -900 }
   ], {
-    destroySourceWhenTargetLeaves: false,
     target: { player: "rival", zone: "monsterZone" },
     requirements: [{ type: "noSpellTrapTemplate", player: "self", templateId: "trio-moon-dominion" }]
   }),
