@@ -14,13 +14,24 @@ function hasCard(duelist = {}, zones = [], templateId = "") {
   );
 }
 
+function activeContinuousEffects(events = []) {
+  const active = new Map();
+  events.forEach((event) => {
+    if (event.type === "CONTINUOUS_EFFECT_REGISTERED") active.set(event.id, event);
+    if (event.type === "CONTINUOUS_EFFECT_RELEASED") active.delete(event.id);
+  });
+  return [...active.values()];
+}
+
 export function scenarioTacticalGoal(state = {}) {
   if (!state.started || !TRIO_OMEGA_SCENARIOS.has(state.scenarioId)) return "";
 
   const player = state.player || {};
   const ai = state.ai || {};
   const sunOnField = hasCard(ai, ["field"], "trio-sun-judicator");
-  const moonOnField = hasCard(ai, ["traps"], "trio-moon-dominion");
+  const moonPressureActive = activeContinuousEffects(state.gameEvents).some((effect) =>
+    effect.playerId === "ai" && effect.effectId === "lunarDominion"
+  );
   const solarSnareSet = hasCard(player, ["traps"], "trio-solar-snare");
   const solarSnareInHand = hasCard(player, ["hand"], "trio-solar-snare");
   const moonbreakerInHand = hasCard(player, ["hand"], "trio-moonbreaker-ray");
@@ -46,7 +57,7 @@ export function scenarioTacticalGoal(state = {}) {
     return "先守住日曜攻势：寻找防御手段，不要用低星怪正面硬换。";
   }
 
-  if (moonOnField) {
+  if (moonPressureActive) {
     return moonbreakerInHand
       ? "反击窗口：用碎月解幕指定月曜帷幕，先解除持续压制。"
       : "月曜帷幕仍在生效：继续保留低星资源，等待碎月解幕。";

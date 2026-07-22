@@ -160,7 +160,6 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -900 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -900 }
   ], {
-    destroySourceWhenTargetLeaves: false,
     target: { player: "rival", zone: "monsterZone" },
     requirements: [{ type: "noSpellTrapTemplate", player: "self", templateId: "trio-moon-dominion" }]
   }),
@@ -178,7 +177,7 @@ export const defaultCardEffects = Object.freeze({
     requirements: [
       { type: "maxLp", player: "self", amount: 1600 },
       { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
-      { type: "noSpellTrapTemplate", player: "rival", templateId: "trio-moon-dominion" }
+      { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
     ]
   }),
   pierceLine: oneShot([
@@ -3304,6 +3303,29 @@ function validateEffectRequirements(definition, state, action, card) {
       const blocked = player.spellTrapZone.some((cardId) => cardMatchesTemplate(requireCard(state, cardId), templateId));
       if (blocked) {
         throw new GameRuleError(`Effect ${card.effect || card.id} requires no ${templateId} in ${playerId}.spellTrapZone`);
+      }
+      continue;
+    }
+    if (requirement.type === "noActiveContinuousEffect") {
+      const sourcePlayerId = requirement.sourcePlayer
+        ? resolvePlayerRef(requirement.sourcePlayer, action)
+        : null;
+      const targetPlayerId = requirement.targetPlayer
+        ? resolvePlayerRef(requirement.targetPlayer, action)
+        : null;
+      const targetMonsterZone = targetPlayerId
+        ? requirePlayer(state, targetPlayerId).monsterZone
+        : null;
+      const blocked = (state.continuousEffects || []).some((effect) => {
+        if (sourcePlayerId && effect.playerId !== sourcePlayerId) return false;
+        if (requirement.effectId && effect.effectId !== requirement.effectId) return false;
+        if (targetMonsterZone && !targetMonsterZone.includes(effect.targetCardId)) return false;
+        return true;
+      });
+      if (blocked) {
+        const sourceText = sourcePlayerId ? ` from ${sourcePlayerId}` : "";
+        const targetText = targetPlayerId ? ` on ${targetPlayerId} monsters` : "";
+        throw new GameRuleError(`Effect ${card.effect || card.id} requires no active continuous effect${sourceText}${targetText}`);
       }
       continue;
     }

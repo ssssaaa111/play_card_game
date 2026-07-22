@@ -78,12 +78,12 @@ export const library = [
   { id: "trio-star-herald", type: "monster", name: "星坠宣告者", element: "light", stars: 6, atk: 2400, def: 1400, icon: "星", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。以三只祭品成功召唤时，手牌中其余不同名三曜神格会特殊召唤；它们本回合不能攻击。攻击后追加 300 点终局压力，并提升自身攻击力 300。", summary: "三祭品登场并引发三曜共降，攻击后持续累积终局伤害。", tributeCost: 3, rarity: "UR", archetype: "三曜神格", trioConvergence: "trioOmega", afterAttack: "starDoomCharge" },
   { id: "trio-decoy-ward", type: "monster", name: "折光诱标卫", element: "light", stars: 2, atk: 1000, def: 3700, icon: "诱", text: "低星防线。正确路线中用来吸引日曜攻势，为反击回合争取窗口。" },
   { id: "trio-ember-pawn", type: "monster", name: "余烁小卫", element: "fire", stars: 1, atk: 600, def: 600, icon: "烁", text: "表面攻击力很低的终局关键怪兽。只有资源铺垫完成后才能突破三曜阵线。" },
-    { id: "trio-moon-dominion", type: "spell", name: "月曜帷幕", icon: "幕", text: "持续魔法：选择对手 1 只怪兽，攻击力和守备力下降 900。只要此卡留在魔陷区就持续生效；此卡离场时修正才会解除。", effect: "lunarDominion" },
+    { id: "trio-moon-dominion", type: "spell", name: "月曜帷幕", icon: "幕", text: "持续魔法：选择对手 1 只怪兽，攻击力和守备力下降 900。目标离开怪兽区时，修正解除，此卡送入持有者墓地；此卡先离开魔陷区时，修正同样解除。", effect: "lunarDominion" },
   { id: "trio-solar-snare", type: "trap", name: "日冕诱锁", icon: "锁", text: "盖放后自动触发：对手攻击时，破坏攻击怪兽。用来诱导第一张三曜王牌踏入反制。", trigger: "attackDestroy" },
   { id: "trio-moonbreaker-ray", type: "spell", name: "碎月解幕", icon: "碎", text: "选择对手魔陷区 1 张卡破坏。用于清除持续压制后再展开墓地资源。", effect: "destroySpellTrap" },
   { id: "trio-ember-recall", type: "spell", name: "余烁归轨", icon: "归", text: "选择我方墓地 1 只怪兽，特殊回到怪兽区。终局战中用来让低星关键怪回场。", effect: "graveRevive" },
   { id: "trio-chain-veil", type: "trap", name: "星线护续", icon: "续", text: "盖放后自动触发：对手攻击时，无效本次攻击并消耗攻击机会。", trigger: "attackNegate" },
-  { id: "trio-final-counter", type: "spell", name: "三曜终断", icon: "断", text: "生命值 1600 以下、余烁小卫在场，且月曜帷幕不在对手魔陷区时才能发动；强化攻击力最低的我方怪兽并获得一次攻击重置。", effect: "trioFinalCounter" }
+  { id: "trio-final-counter", type: "spell", name: "三曜终断", icon: "断", text: "生命值 1600 以下、余烁小卫在场，且我方怪兽未受到对手持续效果影响时才能发动；使攻击力最低的我方怪兽攻击力提升 2100。若其已经攻击则立即重置为可攻击，否则获得 1 次追加攻击机会。", effect: "trioFinalCounter" }
 ];
 
 export const monsterAssets = {
@@ -967,7 +967,7 @@ export const scenarioSetups = {
     ],
     hints: [
       "折光诱标卫被月曜帷幕压低，清除帷幕后数值会由规则引擎释放。",
-      "三曜终断不能在月曜帷幕仍在场时发动。",
+      "三曜终断不能在我方怪兽仍受月曜帷幕持续压制时发动。",
       "胜利来自余烁小卫的连续攻击，不是高攻怪兽碾压。"
     ],
     recommendedLine: [

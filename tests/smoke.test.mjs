@@ -772,7 +772,12 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /function assertScenarioBrief/);
   assert.match(smoke, /async function clickSmokeElementTwiceAcrossRender/);
   assert.doesNotMatch(smoke, /new MouseEvent\("dblclick"/);
-  assert.match(smoke, /"lunar-dominion-persistence-basic": runLunarDominionPersistenceSmoke/);
+  assert.match(smoke, /"lunar-dominion-target-loss-basic": runLunarDominionTargetLossSmoke/);
+  assert.match(smoke, /"lunar-dominion-persistence-basic": runLunarDominionTargetLossSmoke/);
+  assert.match(smoke, /目标离场后必须释放月曜帷幕的有效压制状态/);
+  assert.match(smoke, /时间线必须说明月曜帷幕因失去目标送墓/);
+  assert.match(smoke, /月曜帷幕详情必须写明失去目标后的送墓规则/);
+  assert.match(smoke, /三曜终断详情必须写明攻击力增量和攻击重置结果/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
   assert.match(smoke, /ctx\.els\.choiceConfirmBtn/);
   assert.match(smoke, /守护刻印挡住直击后消耗攻击机会/);

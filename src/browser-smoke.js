@@ -2640,6 +2640,14 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
     `${smokeName}：低攻关键怪获得终局突破力`,
     9000
   );
+  await waitForSmoke(() => logCardLink(ctx.els, "trio-final-counter"), `${smokeName}：时间线出现三曜终断详情入口`);
+  clickSmokeElement(logCardLink(ctx.els, "trio-final-counter"), `${smokeName}：打开三曜终断详情`);
+  await assertCardDetailModal(ctx, cloneCardById("trio-final-counter"), `${smokeName}：三曜终断详情`);
+  if (!ctx.els.zoomText.textContent.includes("2100") || !ctx.els.zoomText.textContent.includes("追加攻击")) {
+    throw new Error(`${smokeName}：三曜终断详情必须写明攻击力增量和攻击重置结果。`);
+  }
+  clickSmokeElement(ctx.els.zoomClose, `${smokeName}：关闭三曜终断详情`);
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), `${smokeName}：三曜终断详情关闭`);
 
   clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}：选择余烁小卫第一次攻击`);
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), `${smokeName}：月曜目标高亮`);
@@ -2674,24 +2682,48 @@ async function runTrioOmegaDemoSmoke(ctx) {
   setSmokeStatus("passed", "trio-omega-demo");
 }
 
-async function runLunarDominionPersistenceSmoke(ctx) {
-  const smokeName = "lunar-dominion-persistence-basic";
+async function runLunarDominionTargetLossSmoke(ctx) {
+  const smokeName = "lunar-dominion-target-loss-basic";
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "protagonistTrioOmega");
   await finishPlayerTurn(ctx);
   await waitForSmoke(
     () => ctx.state.player.grave.some((card) => card?.id === "trio-decoy-ward") &&
-      ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"),
-    `${smokeName}：目标离场后月曜帷幕仍留场`,
+      ctx.state.ai.grave.some((card) => card?.id === "trio-moon-dominion") &&
+      !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"),
+    `${smokeName}：目标离场后月曜帷幕送墓`,
     30000
   );
-  if ((ctx.state.gameEvents || []).some((event) =>
+  if (!(ctx.state.gameEvents || []).some((event) =>
     event.type === "CARD_DESTROYED" &&
     eventReferencesTemplate(event, "trio-moon-dominion") &&
     event.reason === "continuous-target-left-zone"
   )) {
-    throw new Error(`${smokeName}：目标离场不应连带破坏月曜帷幕。${smokeDebug(ctx)}`);
+    throw new Error(`${smokeName}：目标离场后月曜帷幕必须因失去目标送墓。${smokeDebug(ctx)}`);
   }
+  if (!(ctx.state.gameEvents || []).some((event) =>
+    event.type === "CONTINUOUS_EFFECT_RELEASED" &&
+    event.effectId === "lunarDominion" &&
+    event.reason === "target-left-zone"
+  )) {
+    throw new Error(`${smokeName}：目标离场后必须释放月曜帷幕的有效压制状态。${smokeDebug(ctx)}`);
+  }
+  await waitForSmoke(
+    () => (ctx.state.log || []).some((entry) => {
+      const message = logEntryMessage(entry);
+      return message.includes("月曜帷幕") && message.includes("失去目标") && message.includes("送入墓地");
+    }),
+    `${smokeName}：时间线必须说明月曜帷幕因失去目标送墓`,
+    30000
+  );
+  await waitForSmoke(() => logCardLink(ctx.els, "trio-moon-dominion"), `${smokeName}：时间线出现月曜帷幕详情入口`);
+  clickSmokeElement(logCardLink(ctx.els, "trio-moon-dominion"), `${smokeName}：从时间线打开月曜帷幕详情`);
+  await assertCardDetailModal(ctx, cloneCardById("trio-moon-dominion"), `${smokeName}：月曜帷幕详情`);
+  if (!ctx.els.zoomText.textContent.includes("目标离开怪兽区时") || !ctx.els.zoomText.textContent.includes("送入持有者墓地")) {
+    throw new Error(`${smokeName}：月曜帷幕详情必须写明失去目标后的送墓规则。`);
+  }
+  clickSmokeElement(ctx.els.zoomClose, `${smokeName}：关闭月曜帷幕详情`);
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), `${smokeName}：月曜帷幕详情关闭`);
   setSmokeStatus("passed", smokeName);
 }
 
@@ -4686,7 +4718,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke,
     "protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke,
     "trio-omega-demo": runTrioOmegaDemoSmoke,
-    "lunar-dominion-persistence-basic": runLunarDominionPersistenceSmoke,
+    "lunar-dominion-target-loss-basic": runLunarDominionTargetLossSmoke,
+    "lunar-dominion-persistence-basic": runLunarDominionTargetLossSmoke,
     "trio-omega-challenge": runTrioOmegaChallengeSmoke,
     "trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke,
     "trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke,

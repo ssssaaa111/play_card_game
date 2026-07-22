@@ -700,7 +700,7 @@ test("continuous equip spells release and revert stats when the target leaves pl
   assertValidGameState(next);
 });
 
-test("lunar dominion stays in the spell trap zone after its target leaves play", () => {
+test("lunar dominion is sent to grave after its target leaves play", () => {
   const state = makeState({
     cards: [
       card("moon-1", { templateId: "trio-moon-dominion", effect: "lunarDominion" }),
@@ -742,8 +742,8 @@ test("lunar dominion stays in the spell trap zone after its target leaves play",
   });
   const next = engine.getState();
 
-  assert.deepEqual(next.players[PLAYER].spellTrapZone, ["moon-1"]);
-  assert.deepEqual(next.players[PLAYER].grave, ["remove-1"]);
+  assert.deepEqual(next.players[PLAYER].spellTrapZone, []);
+  assert.deepEqual(next.players[PLAYER].grave, ["remove-1", "moon-1"]);
   assert.deepEqual(next.players[AI].grave, ["target-1"]);
   assert.deepEqual(next.continuousEffects, []);
   assert.ok(events.some((event) =>
@@ -751,9 +751,10 @@ test("lunar dominion stays in the spell trap zone after its target leaves play",
     event.sourceCardId === "moon-1" &&
     event.reason === "target-left-zone"
   ));
-  assert.ok(!events.some((event) =>
+  assert.ok(events.some((event) =>
     event.type === "CARD_DESTROYED" &&
-    event.cardId === "moon-1"
+    event.cardId === "moon-1" &&
+    event.reason === "continuous-target-left-zone"
   ));
   assertValidGameState(next);
 });

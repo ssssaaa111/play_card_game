@@ -66,13 +66,13 @@ test("log card details come from the unified card definition", () => {
   assert.match(view.meta, /类型：魔法/);
 });
 
-test("campaign key card definitions and victory route effects are unchanged", () => {
+test("campaign key card definitions and victory route effects remain rule-backed", () => {
   assert.equal(cardDefinitionById("trio-final-counter").effect, "trioFinalCounter");
   assert.equal(cardDefinitionById("trio-ember-pawn").atk, 600);
   assert.deepEqual(getCardEffectDefinition("trioFinalCounter").requirements, [
     { type: "maxLp", player: "self", amount: 1600 },
     { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
-    { type: "noSpellTrapTemplate", player: "rival", templateId: "trio-moon-dominion" }
+    { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
   ]);
   assert.deepEqual(getCardEffectDefinition("trioFinalCounter").operations, [
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "tempAtk", amount: 2100 },

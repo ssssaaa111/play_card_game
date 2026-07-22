@@ -2603,11 +2603,19 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       const target = findRuntimeCard(event.targetCardId);
       const sourceName = source?.card?.name || "持续卡";
       const targetText = target?.card?.name ? `，${target.card.name} 的持续修正已解除` : "";
+      const lostTargetAndSentToGrave = event.reason === "target-left-zone" && events.some((candidate) =>
+        candidate.type === "CARD_DESTROYED" &&
+        candidate.cardId === event.sourceCardId &&
+        candidate.reason === "continuous-target-left-zone"
+      );
       if (target?.card) {
         result.effectTarget = target.card;
         result.targetOwner = target.owner;
       }
-      addLog(`${sourceName} 的持续效果失效${targetText}。`, {
+      const message = lostTargetAndSentToGrave
+        ? `${sourceName} 因 ${target?.card?.name || "目标"} 离开怪兽区而失去目标，持续效果解除并送入墓地。`
+        : `${sourceName} 的持续效果失效${targetText}。`;
+      addLog(message, {
         actor: owner.owner,
         type: "effect",
         public: true,
@@ -2619,6 +2627,7 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
     if (
       event.type === "CARD_DESTROYED"
       && event.cardId !== runtimeCardId(card)
+      && event.reason !== "continuous-target-left-zone"
       && shouldLogGenericDestroyedEvent(card)
     ) {
       const destroyed = findRuntimeCard(event.cardId);
@@ -3227,6 +3236,27 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
   )) {
     addLog(`${duelistLabel(owner)}消耗 1 次直接攻击许可。`);
   }
+  events
+    .filter((event) =>
+      event.type === "CONTINUOUS_EFFECT_RELEASED" &&
+      event.reason === "target-left-zone" &&
+      events.some((candidate) =>
+        candidate.type === "CARD_DESTROYED" &&
+        candidate.cardId === event.sourceCardId &&
+        candidate.reason === "continuous-target-left-zone"
+      )
+    )
+    .forEach((event) => {
+      const source = findRuntimeCard(event.sourceCardId);
+      const target = findRuntimeCard(event.targetCardId);
+      addLog(`${source?.card?.name || "持续卡"} 因 ${target?.card?.name || "目标"} 离开怪兽区而失去目标，送入墓地。`, {
+        actor: source?.owner || owner.owner,
+        type: "effect",
+        public: true,
+        cardId: source?.card?.id || null,
+        relatedCardIds: relatedCardIds(target?.card)
+      });
+    });
   const growEvent = events.find((event) =>
     event.type === "STAT_MODIFIED" &&
     event.sourceCardId === attackerId &&

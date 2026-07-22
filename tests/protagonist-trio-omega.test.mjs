@@ -131,6 +131,8 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
   assert.equal(cardByTemplate("trio-ember-recall").effect, "graveRevive");
   assert.equal(cardByTemplate("trio-chain-veil").trigger, "attackNegate");
   assert.equal(cardByTemplate("trio-final-counter").effect, "trioFinalCounter");
+  assert.match(cardByTemplate("trio-final-counter").text, /2100/);
+  assert.match(cardByTemplate("trio-moon-dominion").text, /目标离开怪兽区时.*送入持有者墓地/);
 
   assert.equal(getCardEffectDefinition("lunarDominion").duration, EffectDuration.continuous);
   assert.deepEqual(getCardEffectDefinition("lunarDominion").requirements, [
@@ -143,7 +145,7 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
   assert.deepEqual(getCardEffectDefinition("trioFinalCounter").requirements, [
     { type: "maxLp", player: "self", amount: 1600 },
     { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
-    { type: "noSpellTrapTemplate", player: "rival", templateId: "trio-moon-dominion" }
+    { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
   ]);
   assert.deepEqual(getCardEffectDefinition("sunflareSunder").operations, [
     { op: "destroyCard", cardId: { playerId: "$action.rivalId", zone: "spellTrapZone", rule: "first" } }
@@ -176,7 +178,7 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
     assert.ok(setup.gameEvents.some((event) =>
       event.type === "CONTINUOUS_EFFECT_REGISTERED" &&
       event.effectId === "lunarDominion" &&
-      event.destroySourceWhenTargetLeaves === false
+      event.destroySourceWhenTargetLeaves === true
     ));
     assertValidGameState(buildEngineStateFromUiState(scenarioUiState(key)));
   }
@@ -438,7 +440,7 @@ test("trio happy-clicker exposed route cannot win on the first turn", () => {
   const finalCounterId = findCardId(state, PLAYER, "hand", "trio-final-counter");
   assert.throws(
     () => engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: finalCounterId }),
-    /requires no trio-moon-dominion/
+    /requires no active continuous effect/
   );
   assert.equal(engine.getState().gameOver, null);
 });
@@ -481,9 +483,76 @@ test("trio final counter cannot convert into victory while moon pressure remains
   const finalCounterId = findCardId(state, PLAYER, "hand", "trio-final-counter");
   assert.throws(
     () => engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: finalCounterId }),
-    /requires no trio-moon-dominion/
+    /requires no active continuous effect/
   );
   assert.equal(engine.getState().gameOver, null);
+});
+
+test("trio final counter can activate after lunar dominion loses its target and is sent to grave", () => {
+  const pressure = engineWithTurn(
+    buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaChallenge")),
+    AI,
+    Phase.battle
+  );
+  let state = pressure.getState();
+  const sunId = findCardId(state, AI, "monsterZone", "trio-sun-judicator");
+  const decoyId = findCardId(state, PLAYER, "monsterZone", "trio-decoy-ward");
+  const moonDominionId = findCardId(state, AI, "spellTrapZone", "trio-moon-dominion");
+
+  const battleEvents = resolveAttack(pressure, {
+    playerId: AI,
+    rivalId: PLAYER,
+    attackerCardId: sunId,
+    targetCardId: decoyId
+  });
+  state = pressure.getState();
+
+  assert.ok(state.players[PLAYER].grave.includes(decoyId));
+  assert.ok(!state.players[AI].spellTrapZone.includes(moonDominionId));
+  assert.ok(state.players[AI].grave.includes(moonDominionId));
+  assert.deepEqual(state.continuousEffects, []);
+  assert.ok(battleEvents.some((event) =>
+    event.type === "CONTINUOUS_EFFECT_RELEASED" &&
+    event.effectId === "lunarDominion" &&
+    event.reason === "target-left-zone"
+  ));
+  assert.ok(battleEvents.some((event) =>
+    event.type === "CARD_DESTROYED" &&
+    event.cardId === moonDominionId &&
+    event.reason === "continuous-target-left-zone"
+  ));
+
+  const counter = engineWithTurn(state, PLAYER, Phase.main);
+  state = counter.getState();
+  const recallId = findCardId(state, PLAYER, "hand", "trio-ember-recall");
+  const pawnGraveId = findCardId(state, PLAYER, "grave", "trio-ember-pawn");
+  counter.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: recallId,
+    targetCardId: pawnGraveId
+  });
+
+  state = counter.getState();
+  const finalCounterId = findCardId(state, PLAYER, "hand", "trio-final-counter");
+  const events = counter.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: finalCounterId
+  });
+  state = counter.getState();
+  const pawnId = findCardId(state, PLAYER, "monsterZone", "trio-ember-pawn");
+
+  assert.ok(state.players[AI].grave.includes(moonDominionId));
+  assert.equal(state.cards[pawnId].tempAtk, 2100);
+  assert.ok(events.some((event) =>
+    event.type === "ABILITY_GRANTED" &&
+    event.ability === "attackReset" &&
+    event.targetCardId === pawnId
+  ));
+  assertValidGameState(state);
 });
 
 test("wrong trio attack into the high-attack ace carries a real penalty", () => {
