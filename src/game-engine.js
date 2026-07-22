@@ -871,6 +871,10 @@ export class GameEngine {
       throw new GameRuleError("dispatch requires an action type");
     }
 
+    if (this.#state.gameOver) {
+      throw new GameRuleError(`Cannot dispatch ${action.type} after game over`);
+    }
+
     const workingState = clone(this.#state);
     const startIndex = workingState.events.length;
     const emit = createEventEmitter(workingState);

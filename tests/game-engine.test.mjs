@@ -892,6 +892,52 @@ test("lethal damage declares game over through the event log", () => {
   ));
 });
 
+test("game over rejects every subsequent dispatch without mutating state", () => {
+  const state = makeState({
+    cards: [
+      card("burst-lethal", { templateId: "burst-rune", effect: "burn500" }),
+      card("summon-after", { type: "monster" }),
+      card("mode-after", { type: "monster", mode: "attack", used: false, changedMode: false }),
+      card("spell-after", { templateId: "seer-call", effect: "draw2" }),
+      card("set-after", { type: "trap", trigger: "attackNegate" }),
+      card("trap-after", { type: "trap", trigger: "summonBurn" }),
+      card("deck-1", { type: "monster" }),
+      card("deck-2", { type: "monster" })
+    ],
+    player: {
+      hand: ["burst-lethal", "summon-after", "spell-after", "set-after"],
+      deck: ["deck-1", "deck-2"],
+      monsterZone: ["mode-after"],
+      spellTrapZone: ["trap-after"]
+    },
+    ai: { lp: 400 }
+  });
+  const engine = new GameEngine(state);
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "burst-lethal" });
+  const finished = engine.getState();
+  assert.equal(finished.gameOver.winnerId, PLAYER);
+
+  const actions = [
+    { type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "spell-after" },
+    { type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "summon-after", index: 1 },
+    { type: "SET_TRAP", playerId: PLAYER, cardId: "set-after", index: 1 },
+    { type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "trap-after" },
+    { type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "mode-after", mode: "defense" },
+    { type: "CHANGE_PHASE", playerId: PLAYER, phase: Phase.battle },
+    { type: "DRAW_CARDS", playerId: PLAYER, count: 1, reason: "post-game" },
+    { type: "GRANT_ABILITY", playerId: PLAYER, ability: Ability.extraSummon, uses: 1 },
+    { type: "START_TURN", playerId: AI }
+  ];
+
+  for (const action of actions) {
+    assert.throws(
+      () => engine.dispatch(action),
+      /after game over/
+    );
+    assert.deepEqual(engine.getState(), finished);
+  }
+});
+
 test("war-chant modifies only the declared target through dispatch events", () => {
   const state = makeState({
     cards: [

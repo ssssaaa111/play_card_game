@@ -4877,6 +4877,48 @@ async function runPostDuelLogReviewSmoke(ctx) {
     "post-duel-log-review: result closes without resetting duel",
     4000
   );
+  const lockedRulesSnapshot = () => JSON.stringify({
+    turn: ctx.state.turn,
+    phase: ctx.state.phase,
+    actionWindow: ctx.state.actionWindow,
+    gameOver: ctx.state.gameOver,
+    gameOverWinner: ctx.state.gameOverWinner,
+    player: {
+      lp: ctx.state.player.lp,
+      shield: ctx.state.player.shield,
+      hand: cardIds(ctx.state.player.hand),
+      deck: cardIds(ctx.state.player.deck),
+      field: cardIds(ctx.state.player.field),
+      traps: cardIds(ctx.state.player.traps),
+      grave: cardIds(ctx.state.player.grave)
+    },
+    ai: {
+      lp: ctx.state.ai.lp,
+      shield: ctx.state.ai.shield,
+      hand: cardIds(ctx.state.ai.hand),
+      deck: cardIds(ctx.state.ai.deck),
+      field: cardIds(ctx.state.ai.field),
+      traps: cardIds(ctx.state.ai.traps),
+      grave: cardIds(ctx.state.ai.grave)
+    },
+    gameEvents: ctx.state.gameEvents
+  });
+  const lockedBefore = lockedRulesSnapshot();
+  const blockedCard = handCard(ctx.els, "war-chant");
+  if (!blockedCard || blockedCard.classList.contains("action-ready")) {
+    throw new Error(`post-duel-log-review: finished duel should not highlight hand actions. ${smokeDebug(ctx)}`);
+  }
+  if (Object.values(ctx.currentPlayerActions()).some(Boolean)) {
+    throw new Error(`post-duel-log-review: finished duel should expose no player actions. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(blockedCard, "post-duel-log-review: inspect hand card after game over");
+  await waitForSmoke(
+    () => ctx.state.focusedCard?.id === "war-chant",
+    "post-duel-log-review: post-game hand click only updates inspection"
+  );
+  if (lockedRulesSnapshot() !== lockedBefore) {
+    throw new Error(`post-duel-log-review: inspecting a hand card after game over changed rules state. ${smokeDebug(ctx)}`);
+  }
   await waitForSmoke(() => logCardLink(ctx.els, "star-lancer"), "post-duel-log-review: public battle log link", 6000);
   clickSmokeElement(logCardLink(ctx.els, "star-lancer"), "post-duel-log-review: open log card detail");
   await assertCardDetailModal(ctx, attacker, "post-duel-log-review");

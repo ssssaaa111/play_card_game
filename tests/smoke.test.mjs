@@ -868,6 +868,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-scroll-preview"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);
+  assert.match(smoke, /const lockedBefore = lockedRulesSnapshot\(\);[\s\S]*finished duel should expose no player actions[\s\S]*inspecting a hand card after game over changed rules state/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);
   assert.match(smoke, /logCardLink\(ctx\.els, "chain-nullifier"\)/);
   assert.doesNotMatch(smoke, /cardDetailTrigger/);
