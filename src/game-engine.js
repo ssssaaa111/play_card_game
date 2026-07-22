@@ -1666,7 +1666,7 @@ export class GameEngine {
 
   #endTurn(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
-    requirePhase(state, [Phase.main, Phase.battle, Phase.end], action.type);
+    requirePhase(state, [Phase.main, Phase.battle], action.type);
     if (state.machine.responseWindow) {
       throw new GameRuleError("Cannot end a turn while a response window is open");
     }
@@ -1856,6 +1856,13 @@ export class GameEngine {
     }
 
     const before = state.turn.phase;
+    const nextPhase = {
+      [Phase.draw]: Phase.main,
+      [Phase.main]: Phase.battle
+    }[before];
+    if (action.phase !== nextPhase) {
+      throw new GameRuleError(`Cannot change phase from ${before} to ${action.phase}`);
+    }
     emit("PHASE_CHANGED", {
       playerId: action.playerId,
       from: before,

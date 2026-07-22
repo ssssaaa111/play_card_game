@@ -4147,6 +4147,83 @@ test("turn handoff rejects same-player extra turns without changing state", () =
   assert.deepEqual(startEngine.getState(), beforeStart);
 });
 
+test("phase changes progress only from draw to main and main to battle", () => {
+  const engine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.draw },
+    machine: { phase: Phase.draw, timing: Timing.draw }
+  }));
+
+  const mainEvents = engine.dispatch({
+    type: "CHANGE_PHASE",
+    playerId: PLAYER,
+    phase: Phase.main
+  });
+  const battleEvents = engine.dispatch({
+    type: "CHANGE_PHASE",
+    playerId: PLAYER,
+    phase: Phase.battle
+  });
+
+  assert.ok(mainEvents.some((event) =>
+    event.type === "PHASE_CHANGED" &&
+    event.from === Phase.draw &&
+    event.to === Phase.main
+  ));
+  assert.ok(battleEvents.some((event) =>
+    event.type === "PHASE_CHANGED" &&
+    event.from === Phase.main &&
+    event.to === Phase.battle
+  ));
+  assert.equal(engine.getState().turn.phase, Phase.battle);
+});
+
+test("phase changes reject duplicate, rollback, and skipped-end transitions without changing state", () => {
+  const cases = [
+    { from: Phase.main, to: Phase.main },
+    { from: Phase.main, to: Phase.draw },
+    { from: Phase.main, to: Phase.end },
+    { from: Phase.battle, to: Phase.main },
+    { from: Phase.battle, to: Phase.end },
+    { from: Phase.end, to: Phase.draw }
+  ];
+
+  for (const { from, to } of cases) {
+    const engine = new GameEngine(makeState({
+      turn: { playerId: PLAYER, phase: from },
+      machine: {
+        phase: from,
+        timing: from === Phase.main
+          ? Timing.mainOpen
+          : from === Phase.battle
+            ? Timing.battleOpen
+            : Timing.end
+      }
+    }));
+    const before = engine.getState();
+
+    assert.throws(
+      () => engine.dispatch({ type: "CHANGE_PHASE", playerId: PLAYER, phase: to }),
+      new RegExp(`Cannot change phase from ${from} to ${to}`)
+    );
+    assert.deepEqual(engine.getState(), before);
+  }
+});
+
+test("end turn rejects duplicate dispatches from the end phase without changing state", () => {
+  const engine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.end },
+    machine: { phase: Phase.end, timing: Timing.end }
+  }));
+  const before = engine.getState();
+
+  assert.throws(
+    () => engine.dispatch({ type: "END_TURN", playerId: PLAYER }),
+    /not legal during end phase/
+  );
+  assert.deepEqual(engine.getState(), before);
+  assert.equal(getLegalActions(engine.getState(), PLAYER).can.endTurn, false);
+});
+
 test("start turn rejects unresolved response windows", () => {
   const state = makeState({ turn: { playerId: AI, phase: Phase.battle } });
   state.machine.phase = Phase.battle;

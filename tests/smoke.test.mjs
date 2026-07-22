@@ -749,6 +749,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"chain-weaken-resolution": runChainWeakenResolutionSmoke/);
   assert.match(smoke, /"ai-counter-chain": runAiCounterChainSmoke/);
   assert.match(smoke, /"turn-handoff-basic": runTurnHandoffBasicSmoke/);
+  assert.match(smoke, /"phase-progression-basic": runPhaseProgressionBasicSmoke/);
   assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
   assert.match(smoke, /"ai-mode-event": runAiModeEventSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
@@ -860,6 +861,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
   assert.match(smoke, /const smokeName = "turn-handoff-basic";[\s\S]*"TURN_ENDED:ai"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "phase-progression-basic";[\s\S]*event\.from === "main"[\s\S]*event\.to === "battle"[\s\S]*event\.type === "TURN_ENDED"[\s\S]*event\.fromPhase === "battle"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);

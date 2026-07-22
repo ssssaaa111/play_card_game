@@ -4315,6 +4315,48 @@ async function runTurnHandoffBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runPhaseProgressionBasicSmoke(ctx) {
+  const smokeName = "phase-progression-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "direct");
+
+  const eventStart = (ctx.state.gameEvents || []).length;
+  clickSmokeElement(ctx.els.skipAttackBtn, `${smokeName}: enter battle by skipping attacks`);
+  await waitForSmoke(
+    () => ctx.state.phase === "battle" &&
+      (ctx.state.gameEvents || []).slice(eventStart).some((event) =>
+        event.type === "PHASE_CHANGED" &&
+        event.playerId === "player" &&
+        event.from === "main" &&
+        event.to === "battle"
+      ),
+    `${smokeName}: main phase advances to battle through PHASE_CHANGED`
+  );
+
+  const phaseEvents = (ctx.state.gameEvents || []).slice(eventStart)
+    .filter((event) => event.type === "PHASE_CHANGED");
+  if (phaseEvents.length !== 1 || phaseEvents[0].from !== "main" || phaseEvents[0].to !== "battle") {
+    throw new Error(`${smokeName}: unexpected phase sequence ${JSON.stringify(phaseEvents)}. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(ctx.els.endTurnBtn, `${smokeName}: end battle phase turn`);
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).slice(eventStart).some((event) =>
+      event.type === "TURN_ENDED" &&
+      event.playerId === "player" &&
+      event.nextPlayerId === "ai" &&
+      event.fromPhase === "battle"
+    ),
+    `${smokeName}: battle phase ends through TURN_ENDED`
+  );
+
+  const events = (ctx.state.gameEvents || []).slice(eventStart);
+  if (events.some((event) => event.type === "PHASE_CHANGED" && event.to === "end")) {
+    throw new Error(`${smokeName}: end phase must not be entered through PHASE_CHANGED. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("running", "mode-auto-end");
   await startSmokeDuel(ctx, "combo");
@@ -5045,6 +5087,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "triple-counter-chain": runTripleCounterChainSmoke,
     "chain-resolution-review": runChainResolutionReviewSmoke,
     "turn-handoff-basic": runTurnHandoffBasicSmoke,
+    "phase-progression-basic": runPhaseProgressionBasicSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
