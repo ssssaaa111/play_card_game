@@ -876,6 +876,10 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /const smokeName = "spell-legality-highlight-basic";[\s\S]*assertHandCardReady\(ctx\.els, "trio-final-counter"/);
   assert.match(smoke, /const smokeName = "ai-engine-legality-basic";[\s\S]*event\.attackerCardId === ready\.uid/);
   assert.match(smoke, /"ai-engine-legality-basic": runAiEngineLegalityBasicSmoke/);
+  assert.match(smoke, /const smokeName = "ai-extra-summon-basic";[\s\S]*event\.ability === "extraSummon"/);
+  assert.match(smoke, /"ai-extra-summon-basic": runAiExtraSummonBasicSmoke/);
+  assert.match(smoke, /const smokeName = "response-action-lock-basic";[\s\S]*querySelector\("#detailName"\)\?\.textContent === blockedCard\?\.name[\s\S]*event\.type === "CHAIN_RESOLVED"/);
+  assert.match(smoke, /"response-action-lock-basic": runResponseActionLockBasicSmoke/);
 });
 
 test("skipped attack lock is visible on field cards", () => {

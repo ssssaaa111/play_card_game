@@ -718,6 +718,102 @@ async function runAiEngineLegalityBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runAiExtraSummonBasicSmoke(ctx) {
+  const smokeName = "ai-extra-summon-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "chain");
+  const summonEventsBefore = (ctx.state.gameEvents || []).filter((event) =>
+    event.type === "MONSTER_SUMMONED" && event.playerId === "ai"
+  ).length;
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "ai" && ctx.state.actionWindow === "ai" && ctx.state.aiRunning,
+    `${smokeName}：AI 行动窗口`
+  );
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).some((event) =>
+      event.type === "ABILITY_GRANTED" && event.playerId === "ai" && event.ability === "extraSummon"
+    ),
+    `${smokeName}：AI 获得额外召唤机会`,
+    16000
+  );
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).filter((event) =>
+      event.type === "MONSTER_SUMMONED" && event.playerId === "ai"
+    ).length >= summonEventsBefore + 2,
+    `${smokeName}：AI 完成普通召唤和额外召唤`,
+    24000
+  );
+
+  if (!(ctx.state.gameEvents || []).some((event) =>
+    event.type === "ABILITY_SPENT" && event.playerId === "ai" && event.ability === "extraSummon"
+  )) {
+    throw new Error(`${smokeName}：第二次召唤必须消费引擎授予的额外召唤机会`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runResponseActionLockBasicSmoke(ctx) {
+  const smokeName = "response-action-lock-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "chain");
+  clickSmokeElement(handCard(ctx.els, "iron-guardian"), `${smokeName}：选择铁壁守卫`);
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), `${smokeName}：召唤铁壁守卫`);
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "iron-guardian",
+    `${smokeName}：怪兽召唤完成`
+  );
+  clickSmokeElement(handCard(ctx.els, "void-lock"), `${smokeName}：选择虚空封锁`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}：盖放虚空封锁`);
+  await waitForSmoke(
+    () => ctx.state.player.traps.some((card) => card?.id === "void-lock"),
+    `${smokeName}：陷阱盖放完成`
+  );
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") && ctx.state.pendingTrapChoice,
+    `${smokeName}：等待陷阱响应窗口`,
+    24000
+  );
+  const before = JSON.stringify({
+    hand: ctx.state.player.hand.map((card) => card.uid),
+    field: ctx.state.player.field.map((card) => card?.uid || null),
+    traps: ctx.state.player.traps.map((card) => card?.uid || null),
+    eventCount: (ctx.state.gameEvents || []).length,
+    responseEvent: ctx.state.pendingTrapChoice.eventName
+  });
+  const blockedCard = ctx.state.player.hand.find((card) => card?.id === "gale-mage");
+  clickSmokeElement(handCard(ctx.els, "gale-mage"), `${smokeName}：响应期间尝试选择普通手牌`);
+  await waitForSmoke(
+    () => document.querySelector("#detailName")?.textContent === blockedCard?.name &&
+      ctx.els.chainModal.classList.contains("show") &&
+      ctx.state.pendingTrapChoice,
+    `${smokeName}：普通行动被拦截但详情仍可查看`
+  );
+  const after = JSON.stringify({
+    hand: ctx.state.player.hand.map((card) => card.uid),
+    field: ctx.state.player.field.map((card) => card?.uid || null),
+    traps: ctx.state.player.traps.map((card) => card?.uid || null),
+    eventCount: (ctx.state.gameEvents || []).length,
+    responseEvent: ctx.state.pendingTrapChoice.eventName
+  });
+  if (after !== before) {
+    throw new Error(`${smokeName}：被拦截的普通行动改变了决斗状态`);
+  }
+
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}：发动虚空封锁`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTrapChoice &&
+      !ctx.state.player.traps.some((card) => card?.id === "void-lock") &&
+      (ctx.state.gameEvents || []).some((event) => event.type === "CHAIN_RESOLVED"),
+    `${smokeName}：合法陷阱响应继续完成`,
+    9000
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runSummonEffectsSmoke(ctx) {
   setSmokeStatus("running", "summon-effects");
   await startSmokeDuel(ctx, "summonEffects");
@@ -4801,6 +4897,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "guard-counter": runGuardCounterSmoke,
     "ai-guard-skip": runAiGuardSkipSmoke,
     "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
+    "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
+    "response-action-lock-basic": runResponseActionLockBasicSmoke,
     "summon-effects": runSummonEffectsSmoke,
     "summon-fire-buff": runSummonFireBuffSmoke,
     "summon-shield": runSummonShieldSmoke,

@@ -4156,6 +4156,115 @@ test("response windows and unresolved chains block auto-end and turn end", () =>
   );
 });
 
+test("response windows block ordinary main-phase actions without mutating state", () => {
+  const state = makeState({
+    cards: [
+      card("summon-1", { type: "monster" }),
+      card("mode-1", { type: "monster", mode: "attack", used: false, changedMode: false }),
+      card("spell-1", { templateId: "seer-call", effect: "draw2" }),
+      card("trap-1", { type: "trap", trigger: "attackNegate" }),
+      card("deck-1", { type: "monster" }),
+      card("deck-2", { type: "monster" })
+    ],
+    player: {
+      hand: ["summon-1", "spell-1", "trap-1"],
+      deck: ["deck-1", "deck-2"],
+      monsterZone: ["mode-1"]
+    },
+    machine: {
+      responseWindow: {
+        playerId: AI,
+        type: ResponseWindow.optional,
+        timing: Timing.mainOpen,
+        resumeTiming: Timing.mainOpen,
+        triggerEventId: "main-action"
+      },
+      actionWindow: {
+        playerId: AI,
+        window: ActionWindow.response,
+        windowId: "response:main-action",
+        reason: "main-action",
+        openedAt: 1,
+        deadline: 1
+      }
+    }
+  });
+  const actions = [
+    { type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "summon-1", index: 1 },
+    { type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "spell-1" },
+    { type: "SET_TRAP", playerId: PLAYER, cardId: "trap-1", index: 0 },
+    { type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "mode-1", mode: "defense" }
+  ];
+
+  for (const action of actions) {
+    const engine = new GameEngine(state);
+    const before = engine.getState();
+    assert.throws(
+      () => engine.dispatch(action),
+      /response window is open/
+    );
+    assert.deepEqual(engine.getState(), before);
+  }
+});
+
+test("unresolved chains block ordinary main-phase actions without mutating state", () => {
+  const state = makeState({
+    cards: [
+      card("summon-1", { type: "monster" }),
+      card("mode-1", { type: "monster", mode: "attack", used: false, changedMode: false }),
+      card("spell-1", { templateId: "seer-call", effect: "draw2" }),
+      card("trap-1", { type: "trap", trigger: "attackNegate" }),
+      card("deck-1", { type: "monster" }),
+      card("deck-2", { type: "monster" }),
+      card("standalone-trap", { type: "trap", trigger: "summonBurn" }),
+      card("chain-trap", { ownerId: AI, type: "trap", trigger: "attackNegate" })
+    ],
+    player: {
+      hand: ["summon-1", "spell-1", "trap-1"],
+      deck: ["deck-1", "deck-2"],
+      monsterZone: ["mode-1"],
+      spellTrapZone: ["standalone-trap"]
+    },
+    ai: { spellTrapZone: ["chain-trap"] },
+    machine: {
+      timing: Timing.chainResolution,
+      chain: [{
+        linkId: 1,
+        playerId: AI,
+        cardId: "chain-trap",
+        effectId: "attackNegate",
+        targetEffectId: "main-action",
+        committed: true
+      }],
+      actionWindow: {
+        playerId: AI,
+        window: ActionWindow.resolution,
+        windowId: "resolution:main-action",
+        reason: "chain-resolution",
+        openedAt: 1,
+        deadline: 1
+      }
+    }
+  });
+  const actions = [
+    { type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "summon-1", index: 1 },
+    { type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "spell-1" },
+    { type: "SET_TRAP", playerId: PLAYER, cardId: "trap-1", index: 1 },
+    { type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "standalone-trap" },
+    { type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "mode-1", mode: "defense" }
+  ];
+
+  for (const action of actions) {
+    const engine = new GameEngine(state);
+    const before = engine.getState();
+    assert.throws(
+      () => engine.dispatch(action),
+      /chain is unresolved/
+    );
+    assert.deepEqual(engine.getState(), before);
+  }
+});
+
 test("auto-end and turn end resolve through explicit events", () => {
   const state = makeState({ turn: { playerId: PLAYER, phase: Phase.main } });
   const engine = new GameEngine(state);
