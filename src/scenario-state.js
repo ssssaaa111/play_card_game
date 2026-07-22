@@ -126,6 +126,7 @@ function setupContinuousEvents(scenario, setup) {
       sourceCardId,
       effectId: entry.effectId,
       targetCardId,
+      destroySourceWhenTargetLeaves: definition?.destroySourceWhenTargetLeaves !== false,
       operations
     });
     operations.forEach((operation) => {

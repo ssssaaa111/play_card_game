@@ -52,3 +52,18 @@ test("private and plain log entries remain text-only", () => {
     { type: "text", text: "普通提示。" }
   ]);
 });
+
+test("timeline-shaped entries keep public card links", () => {
+  assert.deepEqual(logEntrySegments({
+    text: "你发动战意高扬。",
+    public: true,
+    cardId: "war-chant",
+    relatedCardIds: []
+  }, {
+    findCard: (id) => cards.get(id)
+  }), [
+    { type: "text", text: "你发动" },
+    { type: "card", cardId: "war-chant", name: "战意高扬" },
+    { type: "text", text: "。" }
+  ]);
+});

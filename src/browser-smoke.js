@@ -300,9 +300,13 @@ async function selectAndConfirmSpellTarget(ctx, element, label, options) {
   confirmSpellTarget(ctx, `${label}: confirm activation`);
 }
 
-function doubleClickSmokeElement(element, label) {
-  if (!element) throw new Error(`找不到测试目标：${label}`);
-  element.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }));
+async function clickSmokeElementTwiceAcrossRender(resolveElement, label, afterFirstClick = () => true) {
+  clickSmokeElement(resolveElement(), `${label}：第一次点击`);
+  await waitForSmoke(
+    () => afterFirstClick() && Boolean(resolveElement()),
+    `${label}：第一次点击后仍可继续操作`
+  );
+  clickSmokeElement(resolveElement(), `${label}：第二次点击`);
 }
 
 function selectScenario(els, scenarioId) {
@@ -388,7 +392,7 @@ function chainChoiceButton(els, cardId) {
 }
 
 function logCardLink(els, cardId) {
-  return els.log?.querySelector(`.log-card-link[data-card-id="${cardId}"]`);
+  return els.timeline?.querySelector(`.timeline-card-link[data-card-id="${cardId}"]`);
 }
 
 function aiRevealVisible(els, cardId) {
@@ -2589,7 +2593,11 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
 
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-moonbreaker-ray", `${smokeName}：碎月解幕高亮`), `${smokeName}：选择碎月解幕`);
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}：碎月解幕目标选择`);
-  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}：破坏月曜帷幕`);
+  await clickSmokeElementTwiceAcrossRender(
+    () => ctx.els.aiTraps.querySelector(".trap-slot.targetable"),
+    `${smokeName}：连续点击破坏月曜帷幕`,
+    () => Boolean(ctx.state.pendingTarget?.selectedTarget)
+  );
   await waitForSmoke(
     () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.player.field.some((card) => card?.id === "trio-decoy-ward" && (card.tempAtk || 0) === 0 && (card.tempDef || 0) === 0),
@@ -2599,7 +2607,11 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
 
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-ember-recall", `${smokeName}：余烁归轨高亮`), `${smokeName}：选择余烁归轨`);
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", `${smokeName}：余烁归轨墓地目标`);
-  await selectAndConfirmSpellTarget(ctx, graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}：回召余烁小卫`);
+  await clickSmokeElementTwiceAcrossRender(
+    () => graveTargetCard(ctx.els, "trio-ember-pawn"),
+    `${smokeName}：连续点击回召余烁小卫`,
+    () => Boolean(ctx.state.pendingTarget?.selectedTarget)
+  );
   await waitForSmoke(
     () => ctx.state.player.field.some((card) =>
       card?.id === "trio-ember-pawn" &&
@@ -2614,6 +2626,11 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
     `${smokeName}：余烁小卫以重置后的攻击表示回场`,
     9000
   );
+  await waitForSmoke(() => logCardLink(ctx.els, "trio-ember-pawn"), `${smokeName}：时间线出现余烁小卫详情入口`);
+  clickSmokeElement(logCardLink(ctx.els, "trio-ember-pawn"), `${smokeName}：打开时间线卡牌详情`);
+  await assertCardDetailModal(ctx, cloneCardById("trio-ember-pawn"), `${smokeName}：时间线卡牌详情`);
+  clickSmokeElement(ctx.els.zoomClose, `${smokeName}：关闭时间线卡牌详情`);
+  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), `${smokeName}：时间线详情关闭`);
 
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-final-counter", `${smokeName}：三曜终断高亮`), `${smokeName}：选择三曜终断`);
   await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}：三曜终断确认`);
@@ -2655,6 +2672,27 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
 async function runTrioOmegaDemoSmoke(ctx) {
   await runTrioOmegaDemoCorrectLine(ctx, "protagonistTrioOmega", "trio-omega-demo", "演示版");
   setSmokeStatus("passed", "trio-omega-demo");
+}
+
+async function runLunarDominionPersistenceSmoke(ctx) {
+  const smokeName = "lunar-dominion-persistence-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmega");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.player.grave.some((card) => card?.id === "trio-decoy-ward") &&
+      ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"),
+    `${smokeName}：目标离场后月曜帷幕仍留场`,
+    30000
+  );
+  if ((ctx.state.gameEvents || []).some((event) =>
+    event.type === "CARD_DESTROYED" &&
+    eventReferencesTemplate(event, "trio-moon-dominion") &&
+    event.reason === "continuous-target-left-zone"
+  )) {
+    throw new Error(`${smokeName}：目标离场不应连带破坏月曜帷幕。${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runTrioOmegaChallengeSmoke(ctx) {
@@ -3472,6 +3510,11 @@ async function runDoubleAttackSmoke(ctx) {
 async function runBattleTranceReadySmoke(ctx) {
   setSmokeStatus("running", "battle-trance-ready");
   await startSmokeDuel(ctx, "combo");
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "player", "ember-drake")?.classList.contains("attack-ready") &&
+      fieldCard(ctx.els, "player", "gale-mage")?.classList.contains("attack-ready"),
+    "main-window attack-ready highlights come from legal battle projection"
+  );
   const ember = fieldCard(ctx.els, "player", "ember-drake");
   clickSmokeElement(ember, "select ember for first attack");
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "first attack target");
@@ -3486,11 +3529,22 @@ async function runBattleTranceReadySmoke(ctx) {
   );
   clickSmokeElement(handCard(ctx.els, "battle-trance"), "select battle trance");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "battleTrance", "battle trance target window");
-  await selectAndConfirmSpellTarget(ctx, fieldCard(ctx.els, "player", "ember-drake"), "target used strongest monster");
+  if (ctx.els.playerField.querySelector(".field-monster-card.attack-ready")) {
+    throw new Error("battle-trance-ready: attack highlight must pause during target selection");
+  }
+  if (!fieldCard(ctx.els, "player", "ember-drake")?.dataset.attackReason?.includes("目标选择")) {
+    throw new Error("battle-trance-ready: suspended attack highlight should expose the target-selection reason");
+  }
+  await clickSmokeElementTwiceAcrossRender(
+    () => fieldCard(ctx.els, "player", "ember-drake"),
+    "repeat click used strongest monster",
+    () => Boolean(ctx.state.pendingTarget?.selectedTarget)
+  );
   await waitForSmoke(
     () => ctx.state.player.field[0]?.id === "ember-drake" &&
       ctx.state.player.field[0]?.used === false &&
-      (ctx.state.player.field[0]?.tempAtk || 0) >= 200,
+      (ctx.state.player.field[0]?.tempAtk || 0) >= 200 &&
+      fieldCard(ctx.els, "player", "ember-drake")?.classList.contains("attack-ready"),
     "battle trance readies used target",
     9000
   );
@@ -3578,7 +3632,12 @@ async function runTrapChoiceDoubleSmoke(ctx) {
   await startSmokeDuel(ctx, "trapChoice");
   await finishPlayerTurn(ctx);
   await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "陷阱双击响应窗口", 12000);
-  doubleClickSmokeElement(chainChoiceButton(ctx.els, "void-lock"), "双击星界封锁直接发动");
+  clickSmokeElement(chainChoiceButton(ctx.els, "void-lock"), "双击第一击选择星界封锁");
+  await waitForSmoke(
+    () => ctx.state.pendingTrapChoice?.selectedIndex === 1 && chainChoiceButton(ctx.els, "void-lock")?.classList.contains("selected"),
+    "第一击重渲染后仍保留选中的星界封锁"
+  );
+  clickSmokeElement(chainChoiceButton(ctx.els, "void-lock"), "双击第二击直接发动星界封锁");
   await waitForSmoke(
     () => !ctx.state.player.traps.some((card) => card?.id === "void-lock") &&
       ctx.state.player.traps.some((card) => card?.id === "mirror-snare"),
@@ -3586,6 +3645,28 @@ async function runTrapChoiceDoubleSmoke(ctx) {
     9000
   );
   setSmokeStatus("passed", "trap-choice-double");
+}
+
+async function runTrapChoiceFieldDoubleSmoke(ctx) {
+  const smokeName = "trap-choice-field-double";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trapChoice");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `${smokeName}: response window`, 12000);
+  clickSmokeElement(trapCard(ctx.els, "player", "void-lock"), `${smokeName}: first field click selects void lock`);
+  await waitForSmoke(
+    () => ctx.state.pendingTrapChoice?.selectedIndex === 1 &&
+      trapCard(ctx.els, "player", "void-lock")?.classList.contains("trap-response-selected"),
+    `${smokeName}: field response survives selection rerender`
+  );
+  clickSmokeElement(trapCard(ctx.els, "player", "void-lock"), `${smokeName}: second field click activates void lock`);
+  await waitForSmoke(
+    () => !ctx.state.player.traps.some((card) => card?.id === "void-lock") &&
+      ctx.state.player.traps.some((card) => card?.id === "mirror-snare"),
+    `${smokeName}: field double activation resolves selected trap`,
+    9000
+  );
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runResponseRestartSmoke(ctx) {
@@ -4026,6 +4107,9 @@ async function runModeAutoEndSmoke(ctx) {
       ctx.state.actionWindow === "main",
     "第一只切守备后仍保留主阶段给第二只怪兽"
   );
+  if (!ctx.els.modeBtn.disabled) {
+    throw new Error("已经切换过表示的怪兽不应继续点亮切换表示按钮");
+  }
   clickSmokeElement(fieldCard(ctx.els, "player", "gale-mage"), "选择第二只怪兽");
   clickSmokeElement(ctx.els.modeBtn, "第二只怪兽切换守备");
   await waitForSmoke(
@@ -4414,36 +4498,22 @@ async function runEquipmentSpellSmoke(ctx) {
   });
   ctx.render?.();
   await waitForSmoke(() => ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"] .card'), "敌方魔陷目标入场", 6000);
-  clickSmokeElement(handCard(ctx.els, "dispelling-ray"), "解印射线手牌");
-  await waitForSmoke(
+  await clickSmokeElementTwiceAcrossRender(
+    () => handCard(ctx.els, "dispelling-ray"),
+    "连续点击解印射线确认唯一默认目标",
     () => ctx.state.pendingTarget?.effect === "destroySpellTrap" &&
-      ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"]')?.classList.contains("targetable"),
-    "解印射线选择敌方魔陷目标",
-    6000
+      ctx.state.pendingTarget?.selectedTargetSource === "default" &&
+      ctx.state.pendingTarget?.selectedTarget?.owner === "ai" &&
+      ctx.state.pendingTarget?.selectedTarget?.zone === "traps" &&
+      ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"]')?.classList.contains("targetable")
   );
-  clickSmokeElement(handCard(ctx.els, "dispelling-ray"), "再次点击解印射线仍等待手动选目标");
-  await waitForSmoke(
-    () => ctx.state.pendingTarget?.effect === "destroySpellTrap" &&
-      ctx.state.ai.traps[0]?.id === "blade-sigil",
-    "重复点击目标魔法不应自动破坏第一张魔陷",
-    3000
-  );
-  clickSmokeElement(
-    ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"]'),
-    "手动选择要破坏的敌方魔陷"
-  );
-  await waitForSmoke(
-    () => ctx.state.pendingTarget?.selectedTargetSource === "player" && !ctx.els.choiceConfirmBtn.disabled,
-    "手动选择敌方魔陷后等待确认"
-  );
-  confirmSpellTarget(ctx, "确认破坏所选敌方魔陷");
   await waitForSmoke(
     () => !ctx.state.ai.traps[0] &&
       ctx.state.ai.grave.some((card) => card?.id === "blade-sigil") &&
       countGameEvents(ctx.state, "CARD_DESTROYED") >= 1 &&
       ctx.state.log.some((entry) => entry.includes("解印射线 破坏了")) &&
       ctx.state.log.some((entry) => entry.includes("持续效果失效")),
-    "解印射线破坏敌方魔陷",
+    "连续点击解印射线破坏唯一默认敌方魔陷",
     9000
   );
   setSmokeStatus("passed", "equipment-spell");
@@ -4616,6 +4686,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "protagonist-ace-evolution-demo": runProtagonistAceEvolutionDemoSmoke,
     "protagonist-ace-protection-demo": runProtagonistAceProtectionDemoSmoke,
     "trio-omega-demo": runTrioOmegaDemoSmoke,
+    "lunar-dominion-persistence-basic": runLunarDominionPersistenceSmoke,
     "trio-omega-challenge": runTrioOmegaChallengeSmoke,
     "trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke,
     "trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke,
@@ -4633,6 +4704,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
     "trap-choice-double": runTrapChoiceDoubleSmoke,
+    "trap-choice-field-double": runTrapChoiceFieldDoubleSmoke,
     "response-restart": runResponseRestartSmoke,
     "chain-trap-choice": runChainTrapChoiceSmoke,
     "chain-attack-reentry": runChainAttackReentrySmoke,

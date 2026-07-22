@@ -20,6 +20,7 @@ export function monsterFieldSlotView({
   targetable = false,
   targetSelected = false,
   attackTargetable = false,
+  attackReadiness = null,
   tributeCandidate = false,
   tributeSelected = false,
   fusionCandidate = false,
@@ -47,17 +48,20 @@ export function monsterFieldSlotView({
     && card.type === "monster"
     && card.mode !== "defense"
   );
-  const attackReady = Boolean(
-    card?.type === "monster"
-    && state.started
-    && !state.paused
-    && !state.gameOver
-    && state.turn === owner
-    && state.phase === "battle"
-    && card.mode !== "defense"
-    && !card.used
-    && !attacksLocked
-  );
+  const attackReady = attackReadiness
+    ? Boolean(attackReadiness.ok)
+    : Boolean(
+      card?.type === "monster"
+      && state.started
+      && !state.paused
+      && !state.gameOver
+      && state.turn === owner
+      && state.phase === "battle"
+      && card.mode !== "defense"
+      && !card.used
+      && !attacksLocked
+    );
+  const attackReason = attackReadiness?.reason || "";
   const animationClass = animationKey === `summon-${owner}-${index}`
     ? "summon-flash"
     : animationKey === `hit-${owner}-${index}`
@@ -73,6 +77,7 @@ export function monsterFieldSlotView({
     attackTargetable,
     attacksLocked,
     attackReady,
+    attackReason,
     animationClass,
     materialTarget,
     materialCandidate,
@@ -81,7 +86,7 @@ export function monsterFieldSlotView({
     splitTarget,
     splitCandidate,
     splitUnavailable,
-    title: interactionTarget?.reason || "",
+    title: interactionTarget?.reason || attackReason,
     targetState: splitTarget ? (splitCandidate ? "candidate" : "unavailable") : "",
     targetReason: splitTarget?.reason || "",
     materialState: materialTarget
@@ -191,6 +196,7 @@ export function renderMonsterZones({
   targetableAt = () => false,
   targetSelectedAt = () => false,
   attackTargetableAt = () => false,
+  attackReadinessAt = () => null,
   selectedTributeIndexes = [],
   selectedFusionIndexes = [],
   fusionCandidateAt = () => false,
@@ -198,6 +204,7 @@ export function renderMonsterZones({
   splitTargetAt = () => null,
   effectMarkersAt = () => [],
   onSlotClick = () => {},
+  onSlotDoubleClick = () => {},
   onCardClick = () => {},
   onAttackPreview = () => {},
   onAttackPreviewRestore = () => {}
@@ -207,6 +214,7 @@ export function renderMonsterZones({
     const targetable = targetableAt(index);
     const targetSelected = targetSelectedAt(index);
     const attackTargetable = attackTargetableAt(index);
+    const attackReadiness = attackReadinessAt(index);
     const materialTarget = materialTargetAt(index);
     const splitTarget = splitTargetAt(index);
     const tributeCandidate = owner === "player" && Boolean(state.pendingTribute) && Boolean(card);
@@ -223,6 +231,7 @@ export function renderMonsterZones({
       targetable,
       targetSelected,
       attackTargetable,
+      attackReadiness,
       tributeCandidate,
       tributeSelected: selectedTributeIndexes.includes(index),
       fusionCandidate,
@@ -243,11 +252,19 @@ export function renderMonsterZones({
     if (view.targetState) slot.dataset.targetState = view.targetState;
     if (view.targetReason) slot.dataset.targetReason = view.targetReason;
     if (view.title) slot.title = view.title;
+    if (attackReadiness) {
+      slot.dataset.attackState = view.attackReady ? "ready" : "unavailable";
+      slot.dataset.attackReason = view.attackReason;
+    }
     slot.disabled = view.disabled;
     slot.setAttribute("aria-disabled", view.disabled ? "true" : "false");
     slot.setAttribute("aria-label", view.ariaLabel);
     slot.setAttribute("aria-pressed", String(view.targetSelected));
     slot.addEventListener("click", () => onSlotClick(index));
+    slot.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      onSlotDoubleClick(index);
+    });
 
     if (attackTargetable) {
       slot.addEventListener("pointerenter", () => onAttackPreview(index));
@@ -268,6 +285,10 @@ export function renderMonsterZones({
       cardEl.dataset.zone = `${owner}-field`;
       if (card.type === "monster") cardEl.classList.add("field-monster-card");
       addClasses(cardEl, view.cardClasses);
+      if (attackReadiness) {
+        cardEl.dataset.attackState = view.attackReady ? "ready" : "unavailable";
+        cardEl.dataset.attackReason = view.attackReason;
+      }
       if (view.animationClass) cardEl.classList.add(view.animationClass);
       cardEl.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -290,6 +311,7 @@ export function renderSupportZones({
   targetableAt = () => false,
   targetSelectedAt = () => false,
   onSlotClick = () => {},
+  onSlotDoubleClick = () => {},
   onCardClick = () => {},
   onCardDoubleClick = () => {}
 } = {}) {
@@ -319,6 +341,10 @@ export function renderSupportZones({
     if (view.supportDisplay) slot.dataset.supportState = view.supportDisplay.key;
     slot.setAttribute("aria-label", view.ariaLabel);
     slot.addEventListener("click", () => onSlotClick(index));
+    slot.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      onSlotDoubleClick(index);
+    });
 
     if (card) {
       const cardEl = view.revealed
@@ -354,13 +380,11 @@ export function renderSupportZones({
           else onCardClick(card, index);
         });
       }
-      if (owner === "player") {
-        cardEl.addEventListener("dblclick", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onCardDoubleClick(card, index);
-        });
-      }
+      cardEl.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onCardDoubleClick(card, index);
+      });
       slot.appendChild(cardEl);
     }
     fragment.appendChild(slot);

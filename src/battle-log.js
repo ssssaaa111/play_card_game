@@ -1,7 +1,7 @@
 export function logEntryMessage(entry) {
   if (entry == null) return "";
   if (typeof entry === "string") return entry;
-  return String(entry.message || "");
+  return String(entry.message ?? entry.text ?? "");
 }
 
 function normalizedCardIds(cardId, relatedCardIds = []) {

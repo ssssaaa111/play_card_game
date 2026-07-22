@@ -225,6 +225,7 @@ function projectContinuousEffectsFromEvents(events = []) {
         sourceCardId: event.sourceCardId,
         effectId: event.effectId,
         targetCardId: event.targetCardId || null,
+        destroySourceWhenTargetLeaves: event.destroySourceWhenTargetLeaves !== false,
         operations: (event.operations || []).map((operation) => ({ ...operation }))
       });
     }
@@ -716,6 +717,19 @@ export function explainSummonMonsterFromUiState(uiState, playerId, handIndex, fi
   }, "召唤这只怪兽");
 }
 
+export function explainChangeMonsterModeFromUiState(uiState, playerId, fieldIndex, mode = null) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.field[fieldIndex];
+  if (!card) return { ok: false, reason: "请选择你场上的怪兽。", engineReason: "No monster at index" };
+  const action = {
+    type: "CHANGE_MONSTER_MODE",
+    playerId,
+    cardId: cardKey(card)
+  };
+  if (mode) action.mode = mode;
+  return explainUiAction(buildEngineStateFromUiState(uiState), action, "切换表示");
+}
+
 export function explainSetTrapFromUiState(uiState, playerId, handIndex, trapIndex = null) {
   const duelist = uiDuelist(uiState, playerId);
   const card = duelist.hand[handIndex];
@@ -831,6 +845,51 @@ export function projectBattleFromUiState(uiState, playerId = uiState.turn || "pl
   };
 }
 
+export function explainMonsterAttackReadinessFromUiState(uiState, playerId, fieldIndex) {
+  const duelist = uiDuelist(uiState, playerId);
+  const card = duelist.field[fieldIndex];
+  if (!card || card.type !== "monster") {
+    return { ok: false, reason: "该怪兽区没有可攻击的怪兽。", engineReason: "No attacker at index" };
+  }
+  if (!uiState.started || uiState.gameOver) {
+    return { ok: false, reason: "当前决斗不能进行攻击。", engineReason: "Duel is not active" };
+  }
+  if (uiState.paused) {
+    return { ok: false, reason: "决斗暂停时不能攻击。", engineReason: "Duel is paused" };
+  }
+  if (uiState.turn !== playerId) {
+    return { ok: false, reason: "当前不是这名决斗者的回合。", engineReason: "Not the active player" };
+  }
+  const inAttackIntentWindow = [PHASES.main, PHASES.battle].includes(uiState.phase) &&
+    [ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(uiState.actionWindow);
+  if (!inAttackIntentWindow) {
+    const selecting = uiState.actionWindow === ACTION_WINDOWS.targetSelect;
+    return {
+      ok: false,
+      reason: selecting ? "请先完成当前目标选择，再进行攻击。" : "当前正在结算，暂时不能攻击。",
+      engineReason: `Attack intent is unavailable during ${uiState.actionWindow || uiState.phase || "unknown"}`
+    };
+  }
+  if (card.mode === "defense") {
+    return { ok: false, reason: "守备表示怪兽不能攻击。", engineReason: "Defense position monsters cannot attack" };
+  }
+  if (card.used) {
+    return { ok: false, reason: "这只怪兽本回合已经攻击过。", engineReason: "Monster already attacked" };
+  }
+  if (duelist.attacksSkipped) {
+    return { ok: false, reason: "本回合已经跳过攻击，不能再攻击。", engineReason: "Player skipped attacks" };
+  }
+  if (card.attackLockReason) {
+    return { ok: false, reason: "这只怪兽当前受到攻击限制。", engineReason: card.attackLockReason };
+  }
+
+  const projection = projectBattleFromUiState(uiState, playerId, { attackerIndex: fieldIndex });
+  if (!projection.attackerCanAttack) {
+    return { ok: false, reason: "当前没有这只怪兽的合法攻击行动。", engineReason: "No legal attack action" };
+  }
+  return { ok: true, reason: "", engineReason: "" };
+}
+
 function stripNonEngineSummonEffects(engineState) {
   Object.values(engineState.cards || {}).forEach((card) => {
     if (card?.type === "monster" && card.onSummon && getCardEffectDefinition(card.onSummon)?.duration !== ONE_SHOT_EFFECT) {
@@ -862,6 +921,8 @@ function localizeEngineRuleReason(message = "", actionLabel = "操作") {
   if (/monsterZone is full/.test(message)) return "召唤区已满。";
   if (/spellTrapZone is full/.test(message)) return "魔陷区已满。";
   if (/already attacked/.test(message)) return "这只怪兽已经攻击过。";
+  if (/already changed mode/.test(message)) return "这只怪兽本回合已经切换过表示。";
+  if (/cannot change mode after attacking/.test(message)) return "这只怪兽攻击后不能再切换表示。";
   if (/Defense position monsters cannot attack/.test(message)) return "守备表示怪兽不能攻击。";
   if (/must attack a monster/.test(message)) return "对方场上还有怪兽，不能直接攻击玩家。";
   if (/skipped attacks/.test(message)) return "本回合已经跳过攻击，不能再攻击。";

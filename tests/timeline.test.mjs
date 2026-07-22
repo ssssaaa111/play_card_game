@@ -43,3 +43,23 @@ test("keeps the complete timeline by default", () => {
   assert.equal(timeline[0].step, 30);
   assert.equal(timeline.at(-1).step, 1);
 });
+
+test("preserves public card metadata for inspectable timeline entries", () => {
+  const entry = {
+    message: "你发动战意高扬，强化星轨枪兵。",
+    public: true,
+    cardId: "war-chant",
+    relatedCardIds: ["star-lancer"]
+  };
+
+  const next = nextTimelineState([], entry, 0);
+
+  assert.deepEqual(next.timeline[0], {
+    step: 1,
+    kind: "spell",
+    text: entry.message,
+    public: true,
+    cardId: "war-chant",
+    relatedCardIds: ["star-lancer"]
+  });
+});

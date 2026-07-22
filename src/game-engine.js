@@ -160,6 +160,7 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -900 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -900 }
   ], {
+    destroySourceWhenTargetLeaves: false,
     target: { player: "rival", zone: "monsterZone" },
     requirements: [{ type: "noSpellTrapTemplate", player: "self", templateId: "trio-moon-dominion" }]
   }),
@@ -644,7 +645,7 @@ export class EffectContext {
         });
       }
 
-      if (release.reason === "target-left-zone") {
+      if (release.reason === "target-left-zone" && effect.destroySourceWhenTargetLeaves !== false) {
         const sourceLocation = findCardLocations(this.#state, effect.sourceCardId)
           .find((location) => location.zone === "spellTrapZone");
         if (sourceLocation) {
@@ -1003,6 +1004,7 @@ export class GameEngine {
         sourceCardId: action.cardId,
         effectId: card.effect,
         targetCardId: action.targetCardId || null,
+        destroySourceWhenTargetLeaves: definition.destroySourceWhenTargetLeaves !== false,
         operations: clone(definition.operations || [])
       });
       runContinuousEffectDefinition(definition, ctx, preparedAction, card);
@@ -2962,6 +2964,7 @@ function applyContinuousEffectRegistered(state, event) {
     sourceCardId: event.sourceCardId,
     effectId: event.effectId,
     targetCardId: event.targetCardId || null,
+    destroySourceWhenTargetLeaves: event.destroySourceWhenTargetLeaves !== false,
     operations: clone(event.operations || [])
   });
 }

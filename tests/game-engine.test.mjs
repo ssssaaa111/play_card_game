@@ -524,6 +524,7 @@ test("continuous equip spells stay in the spell trap zone and register effects",
       sourceCardId: "blade-1",
       effectId: "equipBlade",
       targetCardId: "lancer-1",
+      destroySourceWhenTargetLeaves: true,
       operations: [{ op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 300 }]
     }
   ]);
@@ -695,6 +696,64 @@ test("continuous equip spells release and revert stats when the target leaves pl
     event.type === "CARD_DESTROYED" &&
     event.cardId === "blade-1" &&
     event.reason === "continuous-target-left-zone"
+  ));
+  assertValidGameState(next);
+});
+
+test("lunar dominion stays in the spell trap zone after its target leaves play", () => {
+  const state = makeState({
+    cards: [
+      card("moon-1", { templateId: "trio-moon-dominion", effect: "lunarDominion" }),
+      card("remove-1", { templateId: "remove-test", effect: "destroyRivalMonster" }),
+      card("target-1", {
+        ownerId: AI,
+        type: "monster",
+        templateId: "star-lancer",
+        atk: 1800,
+        def: 1000
+      })
+    ],
+    player: { hand: ["moon-1", "remove-1"] },
+    ai: { monsterZone: ["target-1"] }
+  });
+  const engine = new GameEngine(state, {
+    cardEffects: {
+      destroyRivalMonster: {
+        duration: EffectDuration.oneShot,
+        target: { player: "rival", zone: "monsterZone" },
+        operations: [{ op: "destroyCard", cardId: "$action.targetCardId" }]
+      }
+    }
+  });
+
+  engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "moon-1",
+    targetCardId: "target-1"
+  });
+  const events = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "remove-1",
+    targetCardId: "target-1"
+  });
+  const next = engine.getState();
+
+  assert.deepEqual(next.players[PLAYER].spellTrapZone, ["moon-1"]);
+  assert.deepEqual(next.players[PLAYER].grave, ["remove-1"]);
+  assert.deepEqual(next.players[AI].grave, ["target-1"]);
+  assert.deepEqual(next.continuousEffects, []);
+  assert.ok(events.some((event) =>
+    event.type === "CONTINUOUS_EFFECT_RELEASED" &&
+    event.sourceCardId === "moon-1" &&
+    event.reason === "target-left-zone"
+  ));
+  assert.ok(!events.some((event) =>
+    event.type === "CARD_DESTROYED" &&
+    event.cardId === "moon-1"
   ));
   assertValidGameState(next);
 });

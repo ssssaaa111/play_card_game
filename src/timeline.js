@@ -1,3 +1,5 @@
+import { logEntryMessage } from "./battle-log.js";
+
 export const TIMELINE_LIMIT = Number.POSITIVE_INFINITY;
 
 export function timelineKind(text = "") {
@@ -13,11 +15,19 @@ export function timelineKind(text = "") {
   return "event";
 }
 
-export function nextTimelineState(timeline, text, currentStep = 0, limit = TIMELINE_LIMIT) {
+export function nextTimelineState(timeline, input, currentStep = 0, limit = TIMELINE_LIMIT) {
+  const text = logEntryMessage(input);
   if (!text) return { timeline, step: currentStep };
   const step = currentStep + 1;
+  const metadata = input && typeof input === "object" && !Array.isArray(input)
+    ? {
+        public: Boolean(input.public),
+        cardId: input.cardId || null,
+        relatedCardIds: Array.isArray(input.relatedCardIds) ? [...input.relatedCardIds] : []
+      }
+    : {};
   return {
     step,
-    timeline: [{ step, kind: timelineKind(text), text }, ...timeline].slice(0, limit)
+    timeline: [{ step, kind: timelineKind(text), text, ...metadata }, ...timeline].slice(0, limit)
   };
 }

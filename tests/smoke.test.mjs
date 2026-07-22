@@ -770,7 +770,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /preDuelPreview: \{/);
   assert.match(smoke, /aiReveal: \{/);
   assert.match(smoke, /function assertScenarioBrief/);
-  assert.match(smoke, /function doubleClickSmokeElement/);
+  assert.match(smoke, /async function clickSmokeElementTwiceAcrossRender/);
+  assert.doesNotMatch(smoke, /new MouseEvent\("dblclick"/);
+  assert.match(smoke, /"lunar-dominion-persistence-basic": runLunarDominionPersistenceSmoke/);
   assert.match(smoke, /ctx\.els\.modal\?\.classList\.contains\("show"\) \? ctx\.els\.modalRestart : ctx\.els\.startBtn/);
   assert.match(smoke, /ctx\.els\.choiceConfirmBtn/);
   assert.match(smoke, /守护刻印挡住直击后消耗攻击机会/);
@@ -789,7 +791,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /连锁场景应该在弹窗内显示三张可选陷阱/);
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /Blade Sigil continuous effect registered/);
-  assert.match(smoke, /再次点击解印射线仍等待手动选目标/);
+  assert.match(smoke, /连续点击解印射线确认唯一默认目标/);
   assert.match(smoke, /solar snare destruction should be logged once/);
   assert.match(smoke, /continuous release feedback should describe restoration/);
   assert.match(smoke, /low-star follow-up guidance is missing/);
@@ -840,6 +842,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);
+  assert.match(smoke, /const smokeName = "trap-choice-field-double";[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "response-restart"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-attack-reentry"\)/);
@@ -873,7 +876,7 @@ test("skipped attack lock is visible on field cards", () => {
 
   assert.match(fieldRenderer, /const attacksLocked = Boolean\(/);
   assert.match(fieldRenderer, /state\[owner\]\?\.attacksSkipped \|\| card\.attackLockReason/);
-  assert.match(fieldRenderer, /const attackReady = Boolean\(/);
+  assert.match(fieldRenderer, /const attackReady = attackReadiness/);
   assert.match(fieldRenderer, /effectMarkers: effectMarkersAt\(index\)/);
   assert.match(fieldRenderer, /showStateRail: card\.type === "monster"/);
   assert.match(fieldRenderer, /showTributeRequirement: false/);
@@ -903,6 +906,17 @@ test("player action window recovery refreshes action-ready projections after dis
   assert.match(autoEnd, /if \(!force && actions\.hasAny\)[\s\S]*setActionWindow\([\s\S]*render\(\)/);
 });
 
+test("field attack highlights use engine adapter legality instead of renderer phase guesses", () => {
+  const app = readProjectFile("src/app.js");
+  const adapter = readProjectFile("src/engine-adapter.js");
+  const fieldRenderer = readProjectFile("src/field-renderer.js");
+
+  assert.match(adapter, /export function explainMonsterAttackReadinessFromUiState/);
+  assert.match(app, /attackReadinessAt: \(index\) => explainMonsterAttackReadinessFromUiState\(state, owner, index\)/);
+  assert.match(fieldRenderer, /attackReady = attackReadiness/);
+  assert.match(fieldRenderer, /dataset\.attackReason = view\.attackReason/);
+});
+
 test("attack-destroy trap outcome is logged once by shared engine feedback", () => {
   const app = readProjectFile("src/app.js");
   const branchStart = app.indexOf('if (trap.trigger === "attackDestroy")');
@@ -918,7 +932,8 @@ test("public rival support details cannot be intercepted by player trap choices"
   const app = readProjectFile("src/app.js");
   const fieldRenderer = readProjectFile("src/field-renderer.js");
 
-  assert.match(app, /owner === "player" && selectPendingTrapChoice\(index\)/);
+  assert.match(app, /owner === "player" && state\.pendingTrapChoice/);
+  assert.match(app, /return interactWithPendingTrapChoice\(index/);
   assert.match(fieldRenderer, /if \(view\.revealed\)/);
   assert.match(fieldRenderer, /else onCardClick\(card, index\)/);
 });
@@ -976,11 +991,16 @@ test("card faces prioritize full monster art and illustrated spell trap identiti
 test("app uses extracted card details", () => {
   const app = readProjectFile("src/app.js");
   const logRenderer = readProjectFile("src/log-renderer.js");
+  const timelineRenderer = readProjectFile("src/timeline-renderer.js");
+  const html = readProjectFile("index.html");
 
   assert.match(app, /from '\.\/card-detail\.js'/);
   assert.match(app, /cardInspectorViewModel\(card\)/);
   assert.match(app, /cardDetailViewModel\(cardOrId\)/);
-  assert.match(app, /renderCurrentLog\(\{/);
+  assert.doesNotMatch(app, /renderCurrentLog\(\{/);
+  assert.doesNotMatch(html, /id="log"/);
+  assert.match(timelineRenderer, /appendLogEntryContent\(\{/);
+  assert.match(timelineRenderer, /buttonClassName: "log-card-link timeline-card-link"/);
   assert.match(logRenderer, /log\.slice\(0, Math\.max\(0, limit\)\)/);
   assert.match(logRenderer, /appendLogEntryContent\(\{/);
   assert.doesNotMatch(app, /cardTagText\(card\)/);
@@ -1037,7 +1057,7 @@ test("app uses extracted timeline classification", () => {
   const app = readProjectFile("src/app.js");
 
   assert.match(app, /from '\.\/timeline\.js'/);
-  assert.match(app, /nextTimelineState\(state\.timeline, text, state\.timelineStep\)/);
+  assert.match(app, /nextTimelineState\(state\.timeline, entry, state\.timelineStep\)/);
   assert.doesNotMatch(app, /function timelineKind/);
 });
 

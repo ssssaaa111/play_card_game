@@ -173,7 +173,11 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
     assert.equal(setup.player.field[0].id, "trio-decoy-ward");
     assert.equal(setup.player.field[0].tempAtk, -900);
     assert.equal(setup.player.field[0].tempDef, -900);
-    assert.ok(setup.gameEvents.some((event) => event.type === "CONTINUOUS_EFFECT_REGISTERED" && event.effectId === "lunarDominion"));
+    assert.ok(setup.gameEvents.some((event) =>
+      event.type === "CONTINUOUS_EFFECT_REGISTERED" &&
+      event.effectId === "lunarDominion" &&
+      event.destroySourceWhenTargetLeaves === false
+    ));
     assertValidGameState(buildEngineStateFromUiState(scenarioUiState(key)));
   }
 

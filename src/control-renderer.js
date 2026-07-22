@@ -23,6 +23,8 @@ export function buildDuelControlsView({
   confirmLabel = "确认",
   phase = "ready",
   selectedPlayerMonster = false,
+  selectedPlayerMonsterCanChangeMode = selectedPlayerMonster,
+  selectedPlayerMonsterModeReason = "",
   focusedCard = null,
   soundOn = true,
   musicOn = true,
@@ -112,7 +114,8 @@ export function buildDuelControlsView({
       material: hasFusion || hasTribute,
       split: pendingTarget?.effect === "splitToken"
     },
-    modeDisabled: hasPendingSelection || !canAct || phase !== "main" || !selectedPlayerMonster,
+    modeDisabled: hasPendingSelection || !canAct || phase !== "main" || !selectedPlayerMonsterCanChangeMode,
+    modeTitle: selectedPlayerMonsterModeReason || "切换所选怪兽的攻击／守备表示",
     detailDisabled: !focusedCard
   };
 }
@@ -165,6 +168,7 @@ export function renderDuelControls(elements, view) {
   }
 
   elements.modeBtn.disabled = view.modeDisabled;
+  elements.modeBtn.title = view.modeTitle;
   elements.detailBtn.disabled = view.detailDisabled;
   return true;
 }
