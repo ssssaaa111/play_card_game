@@ -1,5 +1,5 @@
 import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
-import { scoreSpellForAi, validateSpellCondition } from './spells.js';
+import { scoreSpellForAi } from './spells.js';
 
 const scriptedPressureMonsterPriority = {
   "trio-sun-judicator": 900,
@@ -88,13 +88,15 @@ export function chooseAiSpellAction({
   owner = null,
   rival = null,
   aiStyle = "balanced",
-  minScore = 40
+  minScore = 40,
+  canActivateSpell = null
 } = {}) {
   const candidates = hand
     .map((card, index) => ({ card, index }))
     .filter(({ card, index }) =>
       card?.type === "spell" &&
-      validateSpellCondition(card.effect, { owner, rival, card, handIndex: index }).ok
+      typeof canActivateSpell === "function" &&
+      canActivateSpell(card, index)
     )
     .map(({ card, index }) => ({
       type: "spell",

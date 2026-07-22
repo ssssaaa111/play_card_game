@@ -125,11 +125,58 @@ test("AI spell planner picks the highest legal scored spell", () => {
   };
   const rival = { lp: 800, field: [], hand: [], deck: [] };
 
-  const action = chooseAiSpellAction({ hand: owner.hand, owner, rival, aiStyle: "aggressive" });
+  const action = chooseAiSpellAction({
+    hand: owner.hand,
+    owner,
+    rival,
+    aiStyle: "aggressive",
+    canActivateSpell: () => true
+  });
 
   assert.equal(action.type, "spell");
   assert.equal(action.handIndex, 1);
   assert.equal(action.card.effect, "burn500");
+});
+
+test("AI spell planner uses the caller's engine legality instead of duplicate spell conditions", () => {
+  const owner = {
+    lp: 4000,
+    shield: 0,
+    field: [],
+    hand: [spell("burn500"), spell("draw2")],
+    deck: [monster(), monster()]
+  };
+  const rival = { lp: 800, field: [], hand: [], deck: [] };
+  const checked = [];
+
+  const action = chooseAiSpellAction({
+    hand: owner.hand,
+    owner,
+    rival,
+    aiStyle: "aggressive",
+    minScore: 0,
+    canActivateSpell: (card, handIndex) => {
+      checked.push([card.effect, handIndex]);
+      return handIndex === 1;
+    }
+  });
+
+  assert.deepEqual(checked, [["burn500", 0], ["draw2", 1]]);
+  assert.equal(action.handIndex, 1);
+  assert.equal(action.card.effect, "draw2");
+});
+
+test("AI spell planner fails closed when engine legality is not provided", () => {
+  const owner = {
+    lp: 4000,
+    shield: 0,
+    field: [],
+    hand: [spell("burn500")],
+    deck: []
+  };
+  const rival = { lp: 800, field: [], hand: [], deck: [] };
+
+  assert.equal(chooseAiSpellAction({ hand: owner.hand, owner, rival, minScore: 0 }), null);
 });
 
 test("AI trap planner returns the first hand trap and first empty trap zone", () => {

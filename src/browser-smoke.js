@@ -4601,6 +4601,63 @@ async function runHandActionHighlightRecoveryBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runSpellLegalityHighlightBasicSmoke(ctx) {
+  const smokeName = "spell-legality-highlight-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmega");
+
+  const finalCounter = cloneCardById("trio-final-counter");
+  const pawn = cloneCardById("trio-ember-pawn");
+  const moonDominion = cloneCardById("trio-moon-dominion");
+  if (!finalCounter || !pawn || !moonDominion) {
+    throw new Error(`${smokeName}: required finale cards are missing`);
+  }
+  const continuousId = `continuous:${moonDominion.uid}`;
+  ctx.state.player.lp = 1300;
+  ctx.state.player.hand = [finalCounter];
+  ctx.state.player.field = [pawn, null, null, null, null];
+  ctx.state.ai.traps = [moonDominion, null, null, null, null];
+  ctx.state.gameEvents = [
+    {
+      id: continuousId,
+      type: "CONTINUOUS_EFFECT_REGISTERED",
+      playerId: "ai",
+      sourceCardId: moonDominion.uid,
+      effectId: "lunarDominion",
+      targetCardId: pawn.uid,
+      operations: []
+    },
+    {
+      id: continuousId,
+      type: "CONTINUOUS_EFFECT_RELEASED",
+      playerId: "ai",
+      sourceCardId: moonDominion.uid,
+      effectId: "lunarDominion",
+      targetCardId: pawn.uid,
+      reason: "target-left-zone"
+    }
+  ];
+  ctx.render?.();
+
+  clickSmokeElement(
+    assertHandCardReady(ctx.els, "trio-final-counter", `${smokeName}: released pressure uses engine highlight`),
+    `${smokeName}: select final counter`
+  );
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: final counter confirm is enabled`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: activate final counter`);
+  await waitForSmoke(
+    () => ctx.state.player.grave.some((card) => card?.id === "trio-final-counter") &&
+      ctx.state.player.field[0]?.id === "trio-ember-pawn" &&
+      (ctx.state.player.field[0]?.tempAtk || 0) >= 2100,
+    `${smokeName}: legal highlighted spell resolves through dispatch`,
+    9000
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runGameOverEventSmoke(ctx) {
   setSmokeStatus("running", "game-over-event");
   await startSmokeDuel(ctx, "combo");
@@ -4758,6 +4815,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "hand-action-highlight-recovery-basic": runHandActionHighlightRecoveryBasicSmoke,
+    "spell-legality-highlight-basic": runSpellLegalityHighlightBasicSmoke,
     "game-over-event": runGameOverEventSmoke,
     "post-duel-log-review": runPostDuelLogReviewSmoke
   };

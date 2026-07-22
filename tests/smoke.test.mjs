@@ -873,6 +873,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.doesNotMatch(smoke, /cardDetailTrigger/);
   assert.match(smoke, /setSmokeStatus\("passed", "equipment-spell"\)/);
   assert.match(smoke, /const smokeName = "hand-action-highlight-recovery-basic";[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "spell-legality-highlight-basic";[\s\S]*assertHandCardReady\(ctx\.els, "trio-final-counter"/);
 });
 
 test("skipped attack lock is visible on field cards", () => {
@@ -1075,14 +1076,16 @@ test("app uses extracted spell metadata", () => {
 
   assert.match(app, /from '\.\/spells\.js'/);
   assert.match(app, /const spellEffects = spellDefinitions/);
-  assert.match(app, /validateSpellCondition\(card\.effect/);
   assert.match(app, /explainActivateSpellFromUiState\(state,/);
   assert.match(app, /explainSummonMonsterFromUiState\(state,/);
   assert.match(app, /explainSetTrapFromUiState\(state,/);
   assert.match(app, /explainDeclareAttackFromUiState\(state,/);
   assert.match(app, /projectBattleFromUiState\(state, "player"\)/);
   assert.match(app, /chooseAiSpellAction\(\{/);
+  assert.match(app, /canActivateSpell: \(card, handIndex\) => validateSpell\(state\.ai, state\.player, card, handIndex\)\.ok/);
   assert.match(ai, /scoreSpellForAi\(card\.effect/);
+  assert.doesNotMatch(app, /validateSpellCondition/);
+  assert.doesNotMatch(ai, /validateSpellCondition/);
   assert.doesNotMatch(spellEffectsSource, /apply:/);
   assert.doesNotMatch(app, /function damage\(/);
   assert.doesNotMatch(app, /function heal\(/);

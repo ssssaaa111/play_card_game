@@ -88,7 +88,7 @@ import {
   projectBattleFromUiState
 } from './engine-adapter.js';
 import { renderChainHistoryPanel, renderTimelinePanel } from './timeline-renderer.js';
-import { spellDefinitions, validateSpellCondition } from './spells.js';
+import { spellDefinitions } from './spells.js';
 import { nextTimelineState } from './timeline.js';
 import { selectRedirectTarget, trapActivationText, trapCanResolve, trapConsumesAttack } from './traps.js';
 import {
@@ -2707,8 +2707,6 @@ function validateSpell(owner, rival, card, handIndex) {
   if (!card || card.type !== "spell") return { ok: false, reason: "请选择魔法卡。" };
   const effect = spellEffects[card.effect];
   if (!effect) return { ok: false, reason: "这个魔法效果还没有实现。" };
-  const condition = validateSpellCondition(card.effect, { owner, rival, card, handIndex });
-  if (!condition.ok) return condition;
   const fusionOptions = fusionDefinitions(card);
   if (fusionOptions.length > 0) {
     const checks = fusionOptions.map((option) => explainFusionSummonFromUiState(
@@ -2719,11 +2717,10 @@ function validateSpell(owner, rival, card, handIndex) {
       { fusionResultTemplateId: option.resultId }
     ));
     const legalOption = checks.find((entry) => entry.ok);
-    return legalOption ? condition : { ok: false, reason: checks[0]?.reason || condition.reason };
+    return legalOption || { ok: false, reason: checks[0]?.reason || "当前不能进行融合召唤。" };
   }
   const engineLegality = explainActivateSpellFromUiState(state, owner.owner, rival.owner, handIndex);
-  if (!engineLegality.ok) return { ok: false, reason: engineLegality.reason };
-  return condition;
+  return engineLegality;
 }
 
 function spellCaption(card) {
@@ -4010,7 +4007,8 @@ async function aiPlaySpells() {
     hand: state.ai.hand,
     owner: state.ai,
     rival: state.player,
-    aiStyle: state.aiStyle
+    aiStyle: state.aiStyle,
+    canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
   });
   while (action && !state.gameOver) {
     const acted = await playSpell(state.ai, state.player, action.handIndex);
@@ -4020,7 +4018,8 @@ async function aiPlaySpells() {
       hand: state.ai.hand,
       owner: state.ai,
       rival: state.player,
-      aiStyle: state.aiStyle
+      aiStyle: state.aiStyle,
+      canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
     });
   }
 }
