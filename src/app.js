@@ -1064,7 +1064,9 @@ function beginSpellTargetSelection(handIndex, card) {
   setActionWindow(ACTION_WINDOWS.targetSelect, { reason: `target:${card.uid}` });
   const display = currentTargetSelectionDisplay(pendingTarget);
   cue(display.text);
-  addLog(`等待确认 ${card.name} 的目标，已默认选择 ${display.selectedName}。`);
+  addLog(display.selectedByDefault
+    ? `等待确认 ${card.name} 的目标，唯一合法目标已自动选择：${display.selectedName}。`
+    : `等待选择 ${card.name} 的目标，共有 ${display.legalCount} 个合法目标。`);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1144,9 +1146,17 @@ function interactWithPendingSpellTarget(ownerName, index, zone = "field", { dire
     : selectPendingSpellTarget(ownerName, index, zone);
 }
 
-async function resolvePendingSpellDefault() {
+async function resolvePendingSpellDefault({ directActivate = false } = {}) {
   if (!state.pendingTarget) return false;
   const cardName = state.pendingTarget.cardName;
+  const duelists = { player: state.player, ai: state.ai };
+  const legalTargets = collectLegalTargetSelections(state.pendingTarget, duelists);
+  if (directActivate && legalTargets.length > 1) {
+    cue(`${cardName} 有 ${legalTargets.length} 个合法目标，请先点击目标，再使用确认按钮发动。`);
+    render();
+    resetPlayerIdleCountdown();
+    return true;
+  }
   let target = resolveSelectedTargetSelection(state.pendingTarget, {
     player: state.player,
     ai: state.ai
@@ -1163,6 +1173,14 @@ async function resolvePendingSpellDefault() {
     if (target) {
       state.pendingTarget = refreshed;
       cue(`原目标已失效，已重新选择 ${targetSelectionTargetLabel(target)}，请再次确认。`);
+      render();
+      resetPlayerIdleCountdown();
+      return true;
+    }
+    const refreshedTargets = collectLegalTargetSelections(refreshed, duelists);
+    if (refreshedTargets.length > 0) {
+      state.pendingTarget = refreshed;
+      cue(`${cardName} 有 ${refreshedTargets.length} 个合法目标，请先点击一个目标。`);
       render();
       resetPlayerIdleCountdown();
       return true;
@@ -1247,7 +1265,7 @@ async function selectHandCard(uid, { directActivate = false } = {}) {
     const sameCard = state.pendingTarget.handUid === uid;
     if (sameCard) {
       if (directActivate) {
-        await resolvePendingSpellDefault();
+        await resolvePendingSpellDefault({ directActivate: true });
         return;
       }
       showDetail(card);

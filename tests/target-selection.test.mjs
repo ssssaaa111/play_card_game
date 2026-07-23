@@ -186,7 +186,7 @@ test("missing selections and invalid owners fail without reading a zone", () => 
   );
 });
 
-test("every targeted spell definition uses a supported default-selection zone", () => {
+test("every targeted spell definition uses a supported zone and defaults only unique legal targets", () => {
   const actualModes = Object.fromEntries(
     Object.entries(spellDefinitions)
       .filter(([, definition]) => Boolean(definition.target))
@@ -205,13 +205,20 @@ test("every targeted spell definition uses a supported default-selection zone", 
       spellDefinitions
     ), state);
     const selected = resolveSelectedTargetSelection(pending, state);
-    assert.ok(selected, `${card.name} should receive a legal default target`);
+    const legalTargets = collectLegalTargetSelections(pending, state);
     assert.equal(pending.mode, expectedTargetedSpellEffects[card.effect]);
-    assert.equal(pending.selectedTargetSource, "default");
+    if (legalTargets.length === 1) {
+      assert.ok(selected, `${card.name} should select its only legal target`);
+      assert.equal(pending.selectedTargetSource, "default");
+    } else {
+      assert.ok(legalTargets.length > 1, `${card.name} should expose multiple legal targets`);
+      assert.equal(selected, null);
+      assert.equal(pending.selectedTargetSource, undefined);
+    }
   });
 });
 
-test("target windows default to the first legal target and expose that selection", () => {
+test("target windows default to the only legal target and expose that selection", () => {
   const state = duelists();
   const pending = targetSelectionForCard(
     { id: "war-chant", uid: "war-chant-1", type: "spell", name: "战意高扬", effect: "buff500" },
@@ -230,8 +237,26 @@ test("target windows default to the first legal target and expose that selection
   assert.equal(display.confirmLabel, "确认发动");
 });
 
-test("default target preparation covers every supported target zone", () => {
+test("target windows stay unselected when more than one legal target exists", () => {
   const state = duelists();
+  const pending = targetSelectionForCard(
+    { id: "dawn-edge", uid: "dawn-edge-multi", type: "spell", name: "破晓锋印", effect: "dawnEdge" },
+    effects
+  );
+  const prepared = prepareDefaultTargetSelection(pending, state);
+  const display = buildTargetSelectionDisplay(prepared, state);
+
+  assert.equal(collectLegalTargetSelections(prepared, state).length, 2);
+  assert.equal(resolveSelectedTargetSelection(prepared, state), null);
+  assert.equal(prepared.selectedTarget, undefined);
+  assert.equal(prepared.selectedTargetSource, undefined);
+  assert.equal(display.complete, false);
+  assert.equal(display.legalCount, 2);
+  assert.equal(display.confirmLabel, "请选择目标");
+  assert.match(display.text, /尚未选择目标/);
+});
+
+test("unique target preparation covers every supported target zone", () => {
   const cases = [
     {
       card: { id: "dawn-edge", uid: "dawn-edge-zone", type: "spell", name: "破晓锋印", effect: "dawnEdge" },
@@ -252,8 +277,10 @@ test("default target preparation covers every supported target zone", () => {
   ];
 
   cases.forEach(({ card, expected }) => {
-    const prepared = prepareDefaultTargetSelection(targetSelectionForCard(card, effects), state);
-    const selected = resolveSelectedTargetSelection(prepared, state);
+    const caseState = duelists();
+    if (card.effect === "dawnEdge") caseState.player.field[1] = null;
+    const prepared = prepareDefaultTargetSelection(targetSelectionForCard(card, effects), caseState);
+    const selected = resolveSelectedTargetSelection(prepared, caseState);
     assert.deepEqual(
       { owner: selected.owner, zone: selected.zone, index: selected.index, name: selected.card.name },
       expected
@@ -272,7 +299,7 @@ test("clicking another legal target changes selection without resolving the spel
   const changed = selectTargetSelection(pending, otherTarget, { source: "player" });
   const display = buildTargetSelectionDisplay(changed, state);
 
-  assert.equal(resolveSelectedTargetSelection(pending, state).card.name, "低攻怪");
+  assert.equal(resolveSelectedTargetSelection(pending, state), null);
   assert.equal(resolveSelectedTargetSelection(changed, state).card.name, "最高怪");
   assert.equal(changed.selectedTargetSource, "player");
   assert.match(display.text, /已选择：最高怪（我方怪兽区 2）/);
@@ -282,14 +309,14 @@ test("clicking another legal target changes selection without resolving the spel
 test("stale selected targets are rejected instead of silently targeting a replacement", () => {
   const state = duelists();
   const pending = prepareDefaultTargetSelection(targetSelectionForCard(
-    { id: "dawn-edge", uid: "dawn-edge-1", type: "spell", name: "破晓锋印", effect: "dawnEdge" },
+    { id: "war-chant", uid: "war-chant-stale", type: "spell", name: "战意高扬", effect: "buff500" },
     effects
   ), state);
-  state.player.field[0] = monster("替补怪兽", 900);
+  state.player.field[1] = monster("替补怪兽", 900);
 
   assert.equal(resolveSelectedTargetSelection(pending, state), null);
   const refreshed = prepareDefaultTargetSelection(pending, state);
-  assert.equal(resolveSelectedTargetSelection(refreshed, state).card.name, "替补怪兽");
+  assert.equal(resolveSelectedTargetSelection(refreshed, state).card.name, "低攻怪");
   assert.equal(refreshed.selectedTargetSource, "default");
 });
 

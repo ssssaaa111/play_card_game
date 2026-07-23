@@ -14,8 +14,9 @@ test("hand spells expose a double-click activation callback", () => {
   assert.match(app, /onCardDoubleClick:\s*\(card\)\s*=>/);
 });
 
-test("repeating an active targeted hand spell confirms its selected default target", () => {
-  assert.match(app, /if \(sameCard\) \{[\s\S]*if \(directActivate\) \{[\s\S]*await resolvePendingSpellDefault\(\)/);
+test("repeating an active targeted hand spell uses the guarded direct activation path", () => {
+  assert.match(app, /if \(sameCard\) \{[\s\S]*if \(directActivate\) \{[\s\S]*await resolvePendingSpellDefault\(\{ directActivate: true \}\)/);
+  assert.match(app, /directActivate && legalTargets\.length > 1/);
 });
 
 test("rapid repeat activation survives a renderer replacing the clicked card node", () => {

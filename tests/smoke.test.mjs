@@ -289,7 +289,7 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /function cancelSelectedHandAction\(\)/);
   assert.match(controls, /targetSelectionStatus\?\.confirmLabel \|\| "确认发动"/);
   assert.match(controls, /confirmDisabled: hasTarget \? !targetSelectionStatus\?\.complete : !selectedHandReady/);
-  assert.match(app, /function resolvePendingSpellDefault\(\)/);
+  assert.match(app, /function resolvePendingSpellDefault\(\{ directActivate = false \} = \{\}\)/);
   assert.match(app, /prepareDefaultTargetSelection\(initialTarget/);
   assert.match(app, /resolveSelectedTargetSelection\(state\.pendingTarget/);
   assert.match(app, /function selectPendingSpellTarget\(ownerName, index, zone = "field"\)/);
@@ -733,6 +733,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"spell-target-default-basic": runSpellTargetDefaultBasicSmoke/);
+  assert.match(smoke, /"spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
@@ -840,6 +841,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "phantom-switch-redirect"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "spell-target-default-basic"\)/);
+  assert.match(smoke, /const smokeName = "spell-multi-target-choice-basic";[\s\S]*!ctx\.state\.pendingTarget\?\.selectedTarget[\s\S]*ctx\.els\.choiceConfirmBtn\.disabled[\s\S]*explicit target receives the equipment effect[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);

@@ -3494,6 +3494,77 @@ async function runSpellTargetDefaultBasicSmoke(ctx) {
   setSmokeStatus("passed", "spell-target-default-basic");
 }
 
+async function runSpellMultiTargetChoiceBasicSmoke(ctx) {
+  const smokeName = "spell-multi-target-choice-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "equipment");
+
+  clickSmokeElement(handCard(ctx.els, "nova-squire"), `${smokeName}: select second monster`);
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), `${smokeName}: choose second monster zone`);
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: summon confirmation enabled`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm second monster summon`);
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "star-lancer" &&
+      ctx.state.player.field[1]?.id === "nova-squire" &&
+      ctx.state.actionWindow === "main",
+    `${smokeName}: two legal equipment targets are on field`,
+    9000
+  );
+
+  const spell = ctx.state.player.hand.find((card) => card?.id === "blade-sigil");
+  const firstTargetAtkBefore = ctx.state.player.field[0]?.tempAtk || 0;
+  const secondTargetAtkBefore = ctx.state.player.field[1]?.tempAtk || 0;
+  const activationsBefore = countGameEvents(ctx.state, "CARD_ACTIVATED");
+  await clickSmokeElementTwiceAcrossRender(
+    () => handCard(ctx.els, "blade-sigil"),
+    `${smokeName}: repeat equipment spell with multiple targets`,
+    () => ctx.state.pendingTarget?.effect === "equipBlade" &&
+      !ctx.state.pendingTarget?.selectedTarget &&
+      !ctx.state.pendingTarget?.selectedTargetSource &&
+      ctx.els.choiceConfirmBtn.disabled
+  );
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "equipBlade" &&
+      !ctx.state.pendingTarget?.selectedTarget &&
+      ctx.els.choiceConfirmBtn.disabled &&
+      ctx.state.player.hand.some((card) => card?.uid === spell?.uid) &&
+      countGameEvents(ctx.state, "CARD_ACTIVATED") === activationsBefore,
+    `${smokeName}: repeated hand activation must wait for an explicit target`
+  );
+  if (!ctx.els.choiceText?.textContent.includes("尚未选择目标") ||
+      fieldCard(ctx.els, "player", "star-lancer")?.classList.contains("target-selected") ||
+      fieldCard(ctx.els, "player", "nova-squire")?.classList.contains("target-selected")) {
+    throw new Error(`${smokeName}: multiple legal targets must not expose a default selection. ${smokeDebug(ctx)}`);
+  }
+
+  await selectAndConfirmSpellTarget(
+    ctx,
+    fieldCard(ctx.els, "player", "nova-squire"),
+    `${smokeName}: explicitly equip the second monster`
+  );
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      !ctx.state.player.hand.some((card) => card?.uid === spell?.uid),
+    `${smokeName}: explicit target activation resolves`,
+    9000
+  );
+  if (ctx.state.player.field[0]?.id !== "star-lancer" ||
+      (ctx.state.player.field[0]?.tempAtk || 0) !== firstTargetAtkBefore ||
+      ctx.state.player.field[1]?.id !== "nova-squire" ||
+      (ctx.state.player.field[1]?.tempAtk || 0) !== secondTargetAtkBefore + 300 ||
+      countGameEvents(ctx.state, "CARD_ACTIVATED") !== activationsBefore + 1) {
+    throw new Error(`${smokeName}: explicit target receives the equipment effect: ${JSON.stringify({
+      field: ctx.state.player.field.map((card) => card ? { id: card.id, tempAtk: card.tempAtk || 0 } : null),
+      activationsBefore,
+      activationsAfter: countGameEvents(ctx.state, "CARD_ACTIVATED")
+    })}. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTargetWindowSmoke(ctx) {
   setSmokeStatus("running", "target-window");
   await startSmokeDuel(ctx, "target");
@@ -5067,6 +5138,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "redirect-prompt": runRedirectPromptSmoke,
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "spell-target-default-basic": runSpellTargetDefaultBasicSmoke,
+    "spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
     "battle-trap": runBattleTrapSmoke,
