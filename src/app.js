@@ -108,6 +108,7 @@ import {
   buildTargetSelectionDisplay,
   collectLegalTargetSelections,
   isSelectedTargetSelection,
+  isSupportTargetSelection,
   pendingTargetForCard,
   prepareDefaultTargetSelection,
   resolveSelectedTargetSelection,
@@ -1102,13 +1103,12 @@ function isPendingTrapTargetSlot(ownerName, index) {
 
 async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
-  notePlayerIntent();
   const targetInfo = validateCurrentTarget(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
-    resetPlayerIdleCountdown();
     return true;
   }
+  notePlayerIntent();
   const handIndex = state.player.hand.findIndex((card) => card.uid === state.pendingTarget.handUid);
   if (handIndex < 0) {
     clearPendingTarget();
@@ -1124,13 +1124,12 @@ async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
 
 function selectPendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
-  notePlayerIntent();
   const targetInfo = validateCurrentTarget(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
-    resetPlayerIdleCountdown();
     return true;
   }
+  notePlayerIntent();
   state.pendingTarget = selectTargetSelection(state.pendingTarget, targetInfo, { source: "player" });
   const display = currentTargetSelectionDisplay();
   playSound("click");
@@ -4592,6 +4591,9 @@ function renderTraps(root, duelist, owner) {
     assetForCard: monsterAsset,
     targetableAt: (index) => isPendingTrapTargetSlot(owner, index),
     targetSelectedAt: (index) => isSelectedTargetSelection(state.pendingTarget, owner, index, "traps"),
+    spellTargetAt: (index) => isSupportTargetSelection(state.pendingTarget)
+      ? validateCurrentTarget(owner, index, "traps")
+      : null,
     onSlotClick: (index) => {
       const interactionKey = owner === "player" && state.pendingTrapChoice
         ? `trap-response:${index}`

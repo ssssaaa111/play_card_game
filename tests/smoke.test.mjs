@@ -422,6 +422,7 @@ test("serve script uses the fixed local port", () => {
   assert.match(browserSmoke, /Unable to create browser smoke profile directory/);
   assert.match(browserSmoke, /BROWSER_BIN/);
   assert.match(browserSmoke, /equipment-spell/);
+  assert.match(browserSmoke, /support-target-readability-basic/);
   assert.match(browserSmoke, /basic-expansion/);
 });
 
@@ -734,6 +735,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"spell-target-default-basic": runSpellTargetDefaultBasicSmoke/);
   assert.match(smoke, /"spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke/);
+  assert.match(smoke, /"support-target-readability-basic": runSupportTargetReadabilityBasicSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
@@ -880,6 +882,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /logCardLink\(ctx\.els, "chain-nullifier"\)/);
   assert.doesNotMatch(smoke, /cardDetailTrigger/);
   assert.match(smoke, /setSmokeStatus\("passed", "equipment-spell"\)/);
+  assert.match(smoke, /const smokeName = "support-target-readability-basic";[\s\S]*不能选择该目标：不是敌方魔陷区的卡。[\s\S]*不能选择该目标：该格为空。[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /const smokeName = "hand-action-highlight-recovery-basic";[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /const smokeName = "spell-legality-highlight-basic";[\s\S]*assertHandCardReady\(ctx\.els, "trio-final-counter"/);
   assert.match(smoke, /const smokeName = "ai-engine-legality-basic";[\s\S]*event\.attackerCardId === ready\.uid/);

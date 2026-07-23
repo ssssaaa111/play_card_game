@@ -1672,12 +1672,22 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   cursor: not-allowed;
 }
 
+.trap-slot.support-target-unavailable {
+  border-color: rgba(239, 71, 111, 0.32);
+  cursor: not-allowed;
+}
+
 .slot.tribute-unavailable .card,
 .card.tribute-unavailable,
 .slot.fusion-unavailable .card,
 .card.fusion-unavailable,
 .slot.split-unavailable .card,
 .card.split-unavailable {
+  filter: saturate(0.55) brightness(0.72);
+}
+
+.trap-slot.support-target-unavailable .card,
+.card.support-target-unavailable {
   filter: saturate(0.55) brightness(0.72);
 }
 
@@ -1695,6 +1705,24 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   padding: 4px 6px;
   border-radius: 999px;
   color: #11151c;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  pointer-events: none;
+}
+
+.trap-slot.support-target-unavailable::after {
+  content: attr(data-effect-target-label);
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 3;
+  padding: 4px 6px;
+  border-radius: 999px;
+  color: #ffd9e2;
+  background: rgba(96, 28, 47, 0.9);
   font-size: 10px;
   font-weight: 900;
   line-height: 1.1;

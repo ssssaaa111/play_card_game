@@ -139,9 +139,20 @@ export function supportFieldSlotView({
   index = 0,
   targetable = false,
   targetSelected = false,
+  spellTarget = null,
   trapChoiceReady = false,
   trapChoiceSelected = false
 } = {}) {
+  const targetInteraction = Boolean(spellTarget);
+  const effectTargetUnavailable = Boolean(spellTarget && !spellTarget.ok);
+  const effectTargetReason = effectTargetUnavailable ? spellTarget.reason || "不能选择该目标。" : "";
+  const effectTargetLabel = effectTargetUnavailable
+    ? !card
+      ? "不可选：空格"
+      : owner !== "ai"
+        ? "不可选：非敌方"
+        : "不可选"
+    : "";
   const revealed = Boolean(card && (owner === "player" || card.type === "spell"));
   const supportDisplay = revealed
     ? buildSupportCardDisplay(card, {
@@ -157,18 +168,24 @@ export function supportFieldSlotView({
     index,
     targetable,
     targetSelected,
+    targetInteraction,
+    effectTargetState: spellTarget ? (spellTarget.ok ? "legal" : "unavailable") : "",
+    effectTargetReason,
+    effectTargetLabel,
+    title: effectTargetReason,
     trapChoiceReady,
     trapChoiceSelected,
     revealed,
     supportDisplay,
     ariaLabel: `${supportDisplay
       ? `${zoneLabel}，${card.name}，${supportDisplay.description}`
-      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为魔法目标" : ""}`,
+      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为魔法目标" : ""}${effectTargetReason ? `，${effectTargetReason}` : ""}`,
     slotClasses: enabledClassEntries({
       "trap-response": trapChoiceReady,
       "trap-response-selected": trapChoiceSelected,
       targetable,
       "target-selected": targetSelected,
+      "support-target-unavailable": effectTargetUnavailable,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     }),
     cardClasses: enabledClassEntries({
@@ -176,6 +193,7 @@ export function supportFieldSlotView({
       "trap-response-selected": trapChoiceSelected,
       targetable,
       "target-selected": targetSelected,
+      "support-target-unavailable": effectTargetUnavailable,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     })
   };
@@ -310,6 +328,7 @@ export function renderSupportZones({
   assetForCard = () => "",
   targetableAt = () => false,
   targetSelectedAt = () => false,
+  spellTargetAt = () => null,
   onSlotClick = () => {},
   onSlotDoubleClick = () => {},
   onCardClick = () => {},
@@ -327,6 +346,7 @@ export function renderSupportZones({
       index,
       targetable: targetableAt(index),
       targetSelected: targetSelectedAt(index),
+      spellTarget: spellTargetAt(index),
       trapChoiceReady,
       trapChoiceSelected
     });
@@ -338,6 +358,10 @@ export function renderSupportZones({
     slot.dataset.testid = `${owner}-trap-${index}`;
     addClasses(slot, view.slotClasses);
     slot.setAttribute("aria-pressed", String(view.targetSelected));
+    if (view.effectTargetState) slot.dataset.effectTargetState = view.effectTargetState;
+    if (view.effectTargetReason) slot.dataset.effectTargetReason = view.effectTargetReason;
+    if (view.effectTargetLabel) slot.dataset.effectTargetLabel = view.effectTargetLabel;
+    if (view.title) slot.title = view.title;
     if (view.supportDisplay) slot.dataset.supportState = view.supportDisplay.key;
     slot.setAttribute("aria-label", view.ariaLabel);
     slot.addEventListener("click", () => onSlotClick(index));
@@ -376,7 +400,7 @@ export function renderSupportZones({
       if (view.revealed) {
         cardEl.addEventListener("click", (event) => {
           event.stopPropagation();
-          if (view.targetable) onSlotClick(index);
+          if (view.targetInteraction) onSlotClick(index);
           else onCardClick(card, index);
         });
       }

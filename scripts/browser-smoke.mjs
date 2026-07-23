@@ -13,7 +13,8 @@ const DEFAULT_SMOKES = [
   "basic-expansion",
   "chain-trap-choice",
   "combo-spell",
-  "equipment-spell"
+  "equipment-spell",
+  "support-target-readability-basic"
 ];
 
 function browserCandidates() {
