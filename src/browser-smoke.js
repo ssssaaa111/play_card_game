@@ -381,6 +381,24 @@ function assertHandCardBlocked(els, cardId, label, reason = "") {
   return card;
 }
 
+function assertCardEffectMarker(card, markerLabel, detail = "") {
+  if (!card) throw new Error(`${markerLabel}: field card is missing`);
+  const marker = [...card.querySelectorAll(".card-state-chip")]
+    .find((entry) => entry.textContent.trim() === markerLabel);
+  if (!marker) throw new Error(`${markerLabel}: effect marker is missing from ${card.textContent}`);
+  if (detail && marker.title !== detail) {
+    throw new Error(`${markerLabel}: expected detail ${detail}, received ${marker.title || "(empty)"}`);
+  }
+  return marker;
+}
+
+function assertCardEffectMarkerMissing(card, markerLabel) {
+  if (!card) throw new Error(`${markerLabel}: field card is missing`);
+  const marker = [...card.querySelectorAll(".card-state-chip")]
+    .find((entry) => entry.textContent.trim() === markerLabel);
+  if (marker) throw new Error(`${markerLabel}: expired effect marker is still visible`);
+}
+
 function preDuelDeckCard(els, cardId) {
   return els.preDuelDeckList?.querySelector(`.pre-duel-card[data-card-id="${cardId}"]`);
 }
@@ -3199,7 +3217,7 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     32000
   );
   const moonPressureCard = fieldCard(ctx.els, "player", "spark-runner");
-  if (!moonPressureCard?.textContent.includes("月幕 -900")) {
+  if (!moonPressureCard?.textContent.includes("月幕 攻守-900")) {
     throw new Error(`trio-omega-full-duel: lunar dominion target marker is missing. ${smokeDebug(ctx)}`);
   }
   for (const cardId of ["trio-moon-warden", "trio-star-herald"]) {
@@ -3935,6 +3953,50 @@ async function runBattleTranceReadySmoke(ctx) {
     throw new Error("battle-trance should ready the used monster through a MONSTER_READIED event");
   }
   setSmokeStatus("passed", "battle-trance-ready");
+}
+
+async function runEffectMarkerLifecycleBasicSmoke(ctx) {
+  const smokeName = "effect-marker-lifecycle-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "target");
+
+  clickSmokeElement(handCard(ctx.els, "battle-trance"), `${smokeName}: activate battle trance`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "battleTrance" &&
+      Boolean(ctx.state.pendingTarget?.selectedTarget) &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: strongest target is ready`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm battle trance`);
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "star-lancer" &&
+      (ctx.state.player.field[0]?.tempAtk || 0) >= 200 &&
+      ctx.state.player.attackResets === 1,
+    `${smokeName}: sourced buff and extra attack resolve through dispatch`,
+    9000
+  );
+  const empowered = fieldCard(ctx.els, "player", "star-lancer");
+  assertCardEffectMarker(empowered, "再攻 ×1", "追加攻击 ×1：战斗狂热");
+  assertCardEffectMarker(empowered, "战斗 攻+200", "战斗狂热生效：攻击力 +200。");
+
+  clickSmokeElement(empowered, `${smokeName}: select empowered attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "sky-raider")?.classList.contains("attack-target"),
+    `${smokeName}: legal attack target highlighted`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "sky-raider"), `${smokeName}: spend extra attack`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "sky-raider") &&
+      ctx.state.player.field[0]?.id === "star-lancer" &&
+      ctx.state.player.field[0]?.used === false &&
+      ctx.state.player.attackResets === 0,
+    `${smokeName}: attack reset is consumed and attacker is readied`,
+    10000
+  );
+  const readied = fieldCard(ctx.els, "player", "star-lancer");
+  assertCardEffectMarkerMissing(readied, "再攻 ×1");
+  assertCardEffectMarker(readied, "战斗 攻+200", "战斗狂热生效：攻击力 +200。");
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runAiDirectTrapSmoke(ctx) {
@@ -4930,6 +4992,11 @@ async function runEquipmentSpellSmoke(ctx) {
     "Blade Sigil continuous effect registered",
     9000
   );
+  assertCardEffectMarker(
+    fieldCard(ctx.els, "player", "star-lancer"),
+    "锋刃 攻+300",
+    "锋刃刻印持续生效：攻击力 +300；来源离场后解除。"
+  );
 
   clickSmokeElement(handCard(ctx.els, "aegis-plate"), "Aegis Plate hand card");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "equipAegis", "Aegis Plate target selection", 6000);
@@ -4940,6 +5007,11 @@ async function runEquipmentSpellSmoke(ctx) {
       countGameEvents(ctx.state, "STAT_MODIFIED") >= 2,
     "Aegis Plate continuous defense boost",
     9000
+  );
+  assertCardEffectMarker(
+    fieldCard(ctx.els, "player", "star-lancer"),
+    "庇护 守+500",
+    "庇护甲片持续生效：防御力 +500；来源离场后解除。"
   );
   if (ctx.state.player.grave.some((card) => ["blade-sigil", "aegis-plate"].includes(card?.id))) {
     throw new Error("equipment spells should not go to grave after activation");
@@ -4963,6 +5035,11 @@ async function runEquipmentSpellSmoke(ctx) {
   });
   ctx.render?.();
   await waitForSmoke(() => ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"] .card'), "敌方魔陷目标入场", 6000);
+  assertCardEffectMarker(
+    fieldCard(ctx.els, "ai", "iron-guardian"),
+    "锋刃 攻+300",
+    "锋刃刻印持续生效：攻击力 +300；来源离场后解除。"
+  );
   await clickSmokeElementTwiceAcrossRender(
     () => handCard(ctx.els, "dispelling-ray"),
     "连续点击解印射线确认唯一默认目标",
@@ -4981,6 +5058,7 @@ async function runEquipmentSpellSmoke(ctx) {
     "连续点击解印射线破坏唯一默认敌方魔陷",
     9000
   );
+  assertCardEffectMarkerMissing(fieldCard(ctx.els, "ai", "iron-guardian"), "锋刃 攻+300");
   setSmokeStatus("passed", "equipment-spell");
 }
 
@@ -5272,6 +5350,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ace-attack": runAceAttackSmoke,
     "double-attack": runDoubleAttackSmoke,
     "battle-trance-ready": runBattleTranceReadySmoke,
+    "effect-marker-lifecycle-basic": runEffectMarkerLifecycleBasicSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
     "trap-choice-double": runTrapChoiceDoubleSmoke,

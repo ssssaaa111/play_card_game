@@ -744,6 +744,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ace-attack": runAceAttackSmoke/);
   assert.match(smoke, /"double-attack": runDoubleAttackSmoke/);
   assert.match(smoke, /"battle-trance-ready": runBattleTranceReadySmoke/);
+  assert.match(smoke, /"effect-marker-lifecycle-basic": runEffectMarkerLifecycleBasicSmoke/);
   assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
   assert.match(smoke, /"trap-choice": runTrapChoiceSmoke/);
   assert.match(smoke, /"trap-choice-double": runTrapChoiceDoubleSmoke/);
@@ -854,6 +855,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ace-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trance-ready"\)/);
+  assert.match(smoke, /const smokeName = "effect-marker-lifecycle-basic";[\s\S]*再攻 ×1[\s\S]*战斗 攻\+200[\s\S]*assertCardEffectMarkerMissing[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);
@@ -910,6 +912,7 @@ test("skipped attack lock is visible on field cards", () => {
   assert.match(css, /\.card\.attack-locked/);
   assert.match(css, /\.card-state-chip\.continuous/);
   assert.match(css, /\.card-state-chip\.ability/);
+  assert.match(css, /\.card-state-chip\.modifier/);
   assert.match(css, /\.slot\.attack-target/);
   assert.match(css, /\.slot\.empty:disabled/);
   assert.doesNotMatch(css, /pending-attack/);
