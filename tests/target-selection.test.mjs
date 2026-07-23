@@ -131,6 +131,7 @@ test("validates strongest own and enemy monster targets", () => {
 
 test("enemy spell trap selection accepts only an occupied rival support slot", () => {
   const state = duelists();
+  const before = structuredClone(state);
   const pending = targetSelectionForCard(
     { id: "dispelling-ray", type: "spell", name: "解印射线", effect: "destroySpellTrap" },
     effects
@@ -141,8 +142,15 @@ test("enemy spell trap selection accepts only an occupied rival support slot", (
   assert.equal(valid.owner, "ai");
   assert.equal(valid.zone, "traps");
   assert.equal(valid.card.name, "敌方装备");
-  assert.match(validateTargetSelection(pending, state, "player", 0, "traps").reason, /敌方魔陷区/);
-  assert.match(validateTargetSelection(pending, state, "ai", 1, "traps").reason, /请选择敌方魔陷区/);
+  assert.equal(
+    validateTargetSelection(pending, state, "player", 0, "traps").reason,
+    "不能选择该目标：不是敌方魔陷区的卡。"
+  );
+  assert.equal(
+    validateTargetSelection(pending, state, "ai", 1, "traps").reason,
+    "不能选择该目标：该格为空。"
+  );
+  assert.deepEqual(state, before);
 });
 
 test("grave target selection accepts only own graveyard monsters", () => {

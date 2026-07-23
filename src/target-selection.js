@@ -30,6 +30,10 @@ export function spellNeedsManualTarget(owner, card, effectDefinitions = {}) {
     Boolean(targetSelectionForCard(card, effectDefinitions));
 }
 
+export function isSupportTargetSelection(pending) {
+  return pending?.mode === "enemySpellTrap";
+}
+
 export function targetSelectionPrompt(selection) {
   return spellTargetPrompt(
     selection?.mode || "",
@@ -65,10 +69,10 @@ export function validateTargetSelection(
 
   if (pending.mode === "enemySpellTrap") {
     if (zone !== "traps" || ownerName !== "ai") {
-      return { ok: false, reason: "这个效果需要选择敌方魔陷区的卡。" };
+      return { ok: false, reason: "不能选择该目标：不是敌方魔陷区的卡。" };
     }
     const target = duelist.traps?.[index];
-    if (!target) return { ok: false, reason: "请选择敌方魔陷区的卡作为目标。" };
+    if (!target) return { ok: false, reason: "不能选择该目标：该格为空。" };
     return targetSuccess(target, ownerName, index, zone);
   }
 

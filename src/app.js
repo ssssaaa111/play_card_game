@@ -108,6 +108,7 @@ import {
   buildTargetSelectionDisplay,
   collectLegalTargetSelections,
   isSelectedTargetSelection,
+  isSupportTargetSelection,
   pendingTargetForCard,
   prepareDefaultTargetSelection,
   resolveSelectedTargetSelection,
@@ -4600,6 +4601,9 @@ function renderTraps(root, duelist, owner) {
     assetForCard: monsterAsset,
     targetableAt: (index) => isPendingTrapTargetSlot(owner, index),
     targetSelectedAt: (index) => isSelectedTargetSelection(state.pendingTarget, owner, index, "traps"),
+    spellTargetAt: (index) => isSupportTargetSelection(state.pendingTarget)
+      ? validateCurrentTarget(owner, index, "traps")
+      : null,
     onSlotClick: (index) => {
       const interactionKey = owner === "player" && state.pendingTrapChoice
         ? `trap-response:${index}`

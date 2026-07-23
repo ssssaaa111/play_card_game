@@ -5136,6 +5136,116 @@ async function runEquipmentSpellSmoke(ctx) {
   setSmokeStatus("passed", "equipment-spell");
 }
 
+async function runSupportTargetReadabilityBasicSmoke(ctx) {
+  const smokeName = "support-target-readability-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmega");
+
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}：选择日冕诱锁`);
+  clickSmokeElement(trapSlot(ctx.els, "player", 0), `${smokeName}：盖放日冕诱锁`);
+  await waitForSmoke(
+    () => trapCard(ctx.els, "player", "trio-solar-snare"),
+    `${smokeName}：己方公开魔陷目标入场`
+  );
+
+  clickSmokeElement(
+    assertHandCardReady(ctx.els, "trio-moonbreaker-ray", `${smokeName}：碎月解幕可发动`),
+    `${smokeName}：打开敌方魔陷目标选择`
+  );
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "destroySpellTrap",
+    `${smokeName}：敌方魔陷目标窗口打开`
+  );
+
+  const legalSlot = trapSlot(ctx.els, "ai", 0);
+  const wrongOwnerSlot = trapSlot(ctx.els, "player", 0);
+  const emptyEnemySlot = trapSlot(ctx.els, "ai", 1);
+  if (!legalSlot?.classList.contains("targetable") ||
+      legalSlot.dataset.effectTargetState !== "legal" ||
+      legalSlot.dataset.effectTargetReason) {
+    throw new Error(`${smokeName}：合法敌方魔陷应仅显示可选状态。`);
+  }
+  if (!wrongOwnerSlot?.classList.contains("support-target-unavailable") ||
+      wrongOwnerSlot.dataset.effectTargetState !== "unavailable" ||
+      wrongOwnerSlot.dataset.effectTargetLabel !== "不可选：非敌方" ||
+      wrongOwnerSlot.dataset.effectTargetReason !== "不能选择该目标：不是敌方魔陷区的卡。") {
+    throw new Error(`${smokeName}：己方魔陷缺少明确的非敌方提示。`);
+  }
+  if (!emptyEnemySlot?.classList.contains("support-target-unavailable") ||
+      emptyEnemySlot.dataset.effectTargetLabel !== "不可选：空格" ||
+      emptyEnemySlot.dataset.effectTargetReason !== "不能选择该目标：该格为空。") {
+    throw new Error(`${smokeName}：敌方空魔陷格缺少明确的空格提示。`);
+  }
+
+  const lockedTargetSnapshot = () => JSON.stringify({
+    actionWindow: ctx.state.actionWindow,
+    actionDeadline: ctx.state.actionDeadline,
+    selected: ctx.state.selected,
+    pendingTarget: ctx.state.pendingTarget,
+    player: {
+      hand: ctx.state.player.hand.map(cardSnapshot),
+      field: ctx.state.player.field.map(cardSnapshot),
+      traps: ctx.state.player.traps.map(cardSnapshot),
+      grave: ctx.state.player.grave.map(cardSnapshot)
+    },
+    ai: {
+      hand: ctx.state.ai.hand.map(cardSnapshot),
+      field: ctx.state.ai.field.map(cardSnapshot),
+      traps: ctx.state.ai.traps.map(cardSnapshot),
+      grave: ctx.state.ai.grave.map(cardSnapshot)
+    },
+    gameEventCount: ctx.state.gameEvents.length,
+    logCount: ctx.state.log.length
+  });
+  const beforeInvalidClicks = lockedTargetSnapshot();
+
+  clickSmokeElement(
+    trapCard(ctx.els, "player", "trio-solar-snare"),
+    `${smokeName}：点击己方公开魔陷非法目标`
+  );
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：不是敌方魔陷区的卡。",
+    `${smokeName}：己方魔陷失败原因可见`
+  );
+  if (ctx.els.cardModal?.classList.contains("show") || lockedTargetSnapshot() !== beforeInvalidClicks) {
+    throw new Error(`${smokeName}：己方非法目标点击打开了详情或改变了规则状态。`);
+  }
+
+  clickSmokeElement(emptyEnemySlot, `${smokeName}：点击敌方空魔陷格`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：该格为空。",
+    `${smokeName}：空格失败原因可见`
+  );
+  if (lockedTargetSnapshot() !== beforeInvalidClicks) {
+    throw new Error(`${smokeName}：空格非法目标点击改变了规则状态。`);
+  }
+
+  await selectSpellTarget(ctx, legalSlot, `${smokeName}：选择月曜帷幕`);
+  confirmSpellTarget(ctx, `${smokeName}：确认发动碎月解幕`);
+  await waitForSmoke(
+    () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
+      ctx.state.ai.grave.some((card) => card?.id === "trio-moon-dominion") &&
+      ctx.state.log.some((entry) =>
+        entry.cardId === "trio-moonbreaker-ray" &&
+        entry.relatedCardIds?.includes("trio-moon-dominion")
+      ),
+    `${smokeName}：合法目标完成破坏并写入关联日志`,
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, smokeName);
+
+  await waitForSmoke(
+    () => logCardLink(ctx.els, "trio-moonbreaker-ray"),
+    `${smokeName}：公开日志卡名可点击`
+  );
+  clickSmokeElement(
+    logCardLink(ctx.els, "trio-moonbreaker-ray"),
+    `${smokeName}：打开碎月解幕详情`
+  );
+  await assertCardDetailModal(ctx, cloneCardById("trio-moonbreaker-ray"), smokeName);
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runHandActionHighlightRecoveryBasicSmoke(ctx) {
   const smokeName = "hand-action-highlight-recovery-basic";
   setSmokeStatus("running", smokeName);
@@ -5451,6 +5561,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
+    "support-target-readability-basic": runSupportTargetReadabilityBasicSmoke,
     "hand-action-highlight-recovery-basic": runHandActionHighlightRecoveryBasicSmoke,
     "spell-legality-highlight-basic": runSpellLegalityHighlightBasicSmoke,
     "game-over-event": runGameOverEventSmoke,
