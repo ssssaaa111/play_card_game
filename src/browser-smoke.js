@@ -369,6 +369,18 @@ function assertHandCardReady(els, cardId, label) {
   return card;
 }
 
+function assertHandCardBlocked(els, cardId, label, reason = "") {
+  const card = handCard(els, cardId);
+  if (!card) throw new Error(`${label}: hand card ${cardId} is missing`);
+  if (card.classList.contains("action-ready") || !card.classList.contains("action-blocked")) {
+    throw new Error(`${label}: ${cardId} should be visibly blocked`);
+  }
+  if (reason && !card.textContent.includes(reason) && !card.title.includes(reason)) {
+    throw new Error(`${label}: ${cardId} should explain ${reason}`);
+  }
+  return card;
+}
+
 function preDuelDeckCard(els, cardId) {
   return els.preDuelDeckList?.querySelector(`.pre-duel-card[data-card-id="${cardId}"]`);
 }
@@ -3565,11 +3577,123 @@ async function runSpellMultiTargetChoiceBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runSpellTargetLegalityAuditBasicSmoke(ctx) {
+  const smokeName = "spell-target-legality-audit-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "equipment");
+
+  assertHandCardReady(ctx.els, "blade-sigil", `${smokeName}: one-target spell readiness`);
+  assertHandCardBlocked(ctx.els, "dispelling-ray", `${smokeName}: zero-target spell readiness`, "没有可指定的合法目标");
+  clickSmokeElement(handCard(ctx.els, "blade-sigil"), `${smokeName}: open unique target selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "equipBlade" &&
+      ctx.state.pendingTarget?.selectedTargetSource === "default" &&
+      Boolean(ctx.state.pendingTarget?.selectedTarget),
+    `${smokeName}: unique target auto-selection`
+  );
+  assertHandCardReady(ctx.els, "nova-squire", `${smokeName}: legal switch remains ready`);
+  assertHandCardBlocked(ctx.els, "dispelling-ray", `${smokeName}: illegal spell switch stays blocked`, "不能切换到这张卡");
+  clickSmokeElement(ctx.els.choiceCancelBtn, `${smokeName}: cancel unique target selection`);
+  await waitForSmoke(() => !ctx.state.pendingTarget, `${smokeName}: unique target selection canceled`);
+
+  clickSmokeElement(handCard(ctx.els, "nova-squire"), `${smokeName}: select second monster`);
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), `${smokeName}: choose second monster zone`);
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: summon confirmation enabled`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: summon second monster`);
+  await waitForSmoke(
+    () => ctx.state.player.field[1]?.id === "nova-squire" && ctx.state.actionWindow === "main",
+    `${smokeName}: second monster summoned`,
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "blade-sigil"), `${smokeName}: open multiple target selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "equipBlade" &&
+      !ctx.state.pendingTarget?.selectedTarget &&
+      ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: multiple targets require explicit choice`
+  );
+  assertHandCardReady(ctx.els, "aegis-plate", `${smokeName}: legal spell switch remains ready`);
+  const blockedMonster = assertHandCardBlocked(
+    ctx.els,
+    "aegis-mender",
+    `${smokeName}: spent normal summon blocks monster switch`,
+    "本回合已经通常召唤过"
+  );
+  assertHandCardBlocked(ctx.els, "dispelling-ray", `${smokeName}: zero-target switch remains blocked`, "不能切换到这张卡");
+
+  clickSmokeElement(blockedMonster, `${smokeName}: inspect blocked switch without canceling target selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "equipBlade" &&
+      !ctx.state.pendingTarget?.selectedTarget &&
+      ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: blocked switch preserves target selection`
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runGraveCardTargetChoiceBasicSmoke(ctx) {
+  const smokeName = "grave-card-target-choice-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "target");
+
+  const spell = ctx.state.player.hand.find((card) => card?.id === "grave-return");
+  const chosen = ctx.state.player.grave.find((card) => card?.id === "star-shield");
+  const activationsBefore = countGameEvents(ctx.state, "CARD_ACTIVATED");
+  if (!spell || !chosen || ctx.state.player.grave.length < 2) {
+    throw new Error(`${smokeName}: fixture requires grave-return and two grave cards`);
+  }
+
+  await clickSmokeElementTwiceAcrossRender(
+    () => handCard(ctx.els, "grave-return"),
+    `${smokeName}: repeat grave-return with multiple targets`,
+    () => ctx.state.pendingTarget?.effect === "graveReturn" &&
+      ctx.state.pendingTarget?.mode === "ownGraveCard" &&
+      !ctx.state.pendingTarget?.selectedTarget &&
+      ctx.els.choiceConfirmBtn.disabled
+  );
+  await waitForSmoke(
+    () => graveTargetCard(ctx.els, "gale-mage") &&
+      graveTargetCard(ctx.els, "star-shield") &&
+      ctx.state.player.hand.some((card) => card?.uid === spell.uid) &&
+      countGameEvents(ctx.state, "CARD_ACTIVATED") === activationsBefore,
+    `${smokeName}: every grave card is selectable without a default`
+  );
+
+  clickSmokeElement(graveTargetCard(ctx.els, "star-shield"), `${smokeName}: choose second grave card`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.selectedTarget?.cardUid === chosen.uid &&
+      ctx.state.pendingTarget?.selectedTargetSource === "player" &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: explicit grave card selected`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm grave-return`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.player.hand.some((card) => card?.uid === chosen.uid) &&
+      !ctx.state.player.grave.some((card) => card?.uid === chosen.uid) &&
+      ctx.state.player.grave.some((card) => card?.uid === spell.uid) &&
+      countGameEvents(ctx.state, "CARD_ACTIVATED") === activationsBefore + 1,
+    `${smokeName}: chosen grave card resolves through dispatch`,
+    9000
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTargetWindowSmoke(ctx) {
   setSmokeStatus("running", "target-window");
   await startSmokeDuel(ctx, "target");
-  clickSmokeElement(handCard(ctx.els, "renewal"), "条件不足的星泉再生手牌");
-  await waitForSmoke(() => ctx.els.choiceActions.hidden, "条件不足魔法不显示中央确认");
+  assertHandCardReady(ctx.els, "renewal", "满 LP 回复卡遵循引擎合法性");
+  clickSmokeElement(handCard(ctx.els, "renewal"), "引擎允许的星泉再生手牌");
+  await waitForSmoke(
+    () => ctx.els.choiceActions.hidden === false &&
+      !ctx.els.choiceConfirmBtn.disabled &&
+      !ctx.state.pendingTarget,
+    "满 LP 回复卡与引擎一样显示可确认"
+  );
   clickSmokeElement(handCard(ctx.els, "war-chant"), "战意高扬手牌");
   await waitForSmoke(
     () => ctx.state.pendingTarget?.effect === "buff500" && ctx.state.actionWindow === "targetSelect",
@@ -5139,6 +5263,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "spell-target-default-basic": runSpellTargetDefaultBasicSmoke,
     "spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke,
+    "spell-target-legality-audit-basic": runSpellTargetLegalityAuditBasicSmoke,
+    "grave-card-target-choice-basic": runGraveCardTargetChoiceBasicSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
     "battle-trap": runBattleTrapSmoke,

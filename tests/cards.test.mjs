@@ -45,6 +45,7 @@ test("builds card display tags and rule summaries", () => {
   assert.equal(cardTagText(monster), "稀有度 N / 流派 光属性");
   assert.equal(spellTargetSummary("buff500"), "我方最高");
   assert.equal(spellTargetSummary("pierceLine"), "敌方最高");
+  assert.equal(spellTargetSummary("graveReturn"), "我方墓地");
   assert.equal(spellTargetSummary("draw2"), "");
   assert.equal(cardRuleText(targetedSpell), "目标:我方最高");
   assert.equal(cardRuleText(ordinarySpell), "N");

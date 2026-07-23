@@ -267,6 +267,10 @@ test("builds spell target prompts from target mode and rule", () => {
     spellTargetPrompt("ownGraveMonster", "醒星回召"),
     "请选择我方墓地中的怪兽作为「醒星回召」的目标。"
   );
+  assert.equal(
+    spellTargetPrompt("ownGraveCard", "星尘回收", "notSource"),
+    "请选择我方墓地中的 1 张非本卡卡牌作为「星尘回收」的目标。"
+  );
 });
 
 test("validates strongest-only spell target rules", () => {

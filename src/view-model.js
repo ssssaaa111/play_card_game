@@ -63,10 +63,36 @@ export function describeHandAction(card, {
   if (!canAct) return { ok: false, label: paused ? "暂停中" : "等待", reason: "当前不是你的可操作窗口。" };
   if (pendingTarget) {
     if (pendingTarget.handUid === card.uid) {
+      if (!spellValidation.ok) {
+        return {
+          ok: false,
+          label: "目标失效",
+          reason: spellValidation.reason || "这张魔法卡已经没有合法目标。"
+        };
+      }
       return { ok: true, label: "选目标", reason: spellTargetPrompt || "选择这张魔法卡的合法目标。" };
     }
-    if (card.type === "spell" && !spellValidation.ok) {
-      return { ok: false, label: "条件不足", reason: `点击会取消当前目标选择；${spellValidation.reason}` };
+    const switchAction = describeHandAction(card, {
+      started,
+      canAct,
+      paused,
+      pendingTarget: null,
+      selected: false,
+      hasMonsterZone,
+      hasTrapZone,
+      summonedThisTurn,
+      extraSummon,
+      monsterValidation,
+      trapValidation,
+      spellValidation,
+      spellNeedsManualTarget,
+      spellTargetPrompt
+    });
+    if (!switchAction.ok) {
+      return {
+        ...switchAction,
+        reason: `不能切换到这张卡：${switchAction.reason}`
+      };
     }
     return { ok: true, label: "切换", reason: "点击会取消当前目标选择，并改选这张卡。" };
   }

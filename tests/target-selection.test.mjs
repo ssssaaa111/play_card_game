@@ -24,6 +24,7 @@ const effects = {
   pierceLine: { target: "enemyMonster", targetRule: "strongest" },
   destroySpellTrap: { target: "enemySpellTrap" },
   graveRevive: { target: "ownGraveMonster" },
+  graveReturn: { target: "ownGraveCard", targetRule: "notSource" },
   draw2: {}
 };
 
@@ -38,6 +39,7 @@ const expectedTargetedSpellEffects = {
   equipOverclock: "ownMonster",
   equipPrism: "ownMonster",
   graveRevive: "ownGraveMonster",
+  graveReturn: "ownGraveCard",
   lastStandSurge: "ownMonster",
   lunarDominion: "enemyMonster",
   pierceLine: "enemyMonster",
@@ -103,6 +105,10 @@ test("builds prompts directly from normalized target selection data", () => {
     targetSelectionPrompt({ mode: "enemySpellTrap", cardName: "碎月解幕" }),
     "请选择敌方魔陷区的卡作为「碎月解幕」的目标。"
   );
+  assert.equal(
+    targetSelectionPrompt({ mode: "ownGraveCard", cardName: "星尘回收", targetRule: "notSource" }),
+    "请选择我方墓地中的 1 张非本卡卡牌作为「星尘回收」的目标。"
+  );
 });
 
 test("validates strongest own and enemy monster targets", () => {
@@ -148,6 +154,25 @@ test("grave target selection accepts only own graveyard monsters", () => {
 
   assert.equal(validateTargetSelection(pending, state, "player", 0, "grave").ok, true);
   assert.match(validateTargetSelection(pending, state, "player", 1, "grave").reason, /墓地中的怪兽/);
+  assert.match(validateTargetSelection(pending, state, "ai", 0, "grave").reason, /我方墓地/);
+});
+
+test("grave card selection accepts every own graveyard card but never another zone", () => {
+  const state = duelists();
+  const pending = targetSelectionForCard(
+    { id: "grave-return", uid: "grave-return-1", type: "spell", name: "星尘回收", effect: "graveReturn" },
+    effects
+  );
+  const prepared = prepareDefaultTargetSelection(pending, state);
+
+  assert.deepEqual(
+    collectLegalTargetSelections(prepared, state).map((target) => target.card.name),
+    ["墓地怪兽", "墓地魔法"]
+  );
+  assert.equal(resolveSelectedTargetSelection(prepared, state), null);
+  assert.equal(validateTargetSelection(pending, state, "player", 0, "grave").ok, true);
+  assert.equal(validateTargetSelection(pending, state, "player", 1, "grave").ok, true);
+  assert.match(validateTargetSelection(pending, state, "player", 0, "field").reason, /我方墓地/);
   assert.match(validateTargetSelection(pending, state, "ai", 0, "grave").reason, /我方墓地/);
 });
 
@@ -273,12 +298,18 @@ test("unique target preparation covers every supported target zone", () => {
     {
       card: { id: "grave-return", uid: "revive-zone", type: "spell", name: "醒星回召", effect: "graveRevive" },
       expected: { owner: "player", zone: "grave", index: 0, name: "墓地怪兽" }
+    },
+    {
+      card: { id: "material-reclaim", uid: "return-zone", type: "spell", name: "星屑返轨", effect: "graveReturn" },
+      expected: { owner: "player", zone: "grave", index: 0, name: "墓地怪兽" },
+      uniqueGraveCard: true
     }
   ];
 
-  cases.forEach(({ card, expected }) => {
+  cases.forEach(({ card, expected, uniqueGraveCard = false }) => {
     const caseState = duelists();
     if (card.effect === "dawnEdge") caseState.player.field[1] = null;
+    if (uniqueGraveCard) caseState.player.grave.splice(1);
     const prepared = prepareDefaultTargetSelection(targetSelectionForCard(card, effects), caseState);
     const selected = resolveSelectedTargetSelection(prepared, caseState);
     assert.deepEqual(

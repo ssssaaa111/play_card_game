@@ -2160,17 +2160,18 @@ test("explains spell activation legality from UI state without consuming cards",
   assert.deepEqual(state.gameEvents, []);
 });
 
-test("explains missing spell targets through the engine adapter", () => {
+test("explains zero legal spell targets through the engine adapter", () => {
   const blade = uiSpell("blade-no-target", "equipBlade", "blade-sigil");
   const state = appState();
   state.player.hand = [blade];
+  const before = snapshotUiState(state);
 
   const result = explainActivateSpellFromUiState(state, "player", "ai", 0);
 
   assert.equal(result.ok, false);
-  assert.match(result.engineReason, /requires action\.targetCardId/);
-  assert.match(result.reason, /目标/);
-  assert.deepEqual(state.player.hand, [blade]);
+  assert.match(result.engineReason, /has no legal target/);
+  assert.equal(result.reason, "这张卡没有可指定的合法目标。");
+  assert.deepEqual(snapshotUiState(state), before);
 });
 
 test("explains active rival continuous pressure and allows the spell after that effect is released", () => {

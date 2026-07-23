@@ -86,6 +86,7 @@ test("app delegates target selection rules to the target selection module", () =
   assert.doesNotMatch(app, /pending\.mode === "enemySpellTrap"/);
   assert.match(targetSelection, /pending\.mode === "enemySpellTrap"/);
   assert.match(targetSelection, /pending\.mode === "ownGraveMonster"/);
+  assert.match(targetSelection, /pending\.mode === "ownGraveCard"/);
   assert.match(targetSelection, /validateSpellTargetRule\(pending, duelist, target\)/);
 });
 
