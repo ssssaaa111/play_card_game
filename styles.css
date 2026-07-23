@@ -1667,7 +1667,8 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .slot.tribute-unavailable,
 .slot.fusion-unavailable,
-.slot.split-unavailable {
+.slot.split-unavailable,
+.slot.effect-target-unavailable {
   border-color: rgba(239, 71, 111, 0.32);
   cursor: not-allowed;
 }
@@ -1682,7 +1683,9 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .slot.fusion-unavailable .card,
 .card.fusion-unavailable,
 .slot.split-unavailable .card,
-.card.split-unavailable {
+.card.split-unavailable,
+.slot.effect-target-unavailable .card,
+.card.effect-target-unavailable {
   filter: saturate(0.55) brightness(0.72);
 }
 
@@ -1696,7 +1699,8 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .slot.fusion-candidate::after,
 .slot.fusion-unavailable::after,
 .slot.split-candidate::after,
-.slot.split-unavailable::after {
+.slot.split-unavailable::after,
+.slot.effect-target-unavailable::after {
   position: absolute;
   left: 8px;
   right: 8px;
@@ -1761,6 +1765,12 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   content: "不可选";
   color: #ffd9e2;
   background: rgba(96, 28, 47, 0.88);
+}
+
+.slot.effect-target-unavailable::after {
+  content: attr(data-effect-target-label);
+  color: #ffd9e2;
+  background: rgba(96, 28, 47, 0.9);
 }
 
 .trap-slot.trap-response,

@@ -3841,6 +3841,93 @@ async function runTargetWindowSmoke(ctx) {
   setSmokeStatus("passed", "target-window");
 }
 
+async function runFieldTargetReadabilityBasicSmoke(ctx) {
+  const smokeName = "field-target-readability-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "target");
+  clickSmokeElement(handCard(ctx.els, "war-chant"), `${smokeName}: open strongest monster target selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "buff500" && ctx.state.actionWindow === "targetSelect",
+    `${smokeName}: target selection is open`
+  );
+
+  const legalSlot = fieldSlot(ctx.els, "player", 0);
+  const lowerAtkSlot = fieldSlot(ctx.els, "player", 1);
+  const emptySlot = fieldSlot(ctx.els, "player", 2);
+  const enemySlot = fieldSlot(ctx.els, "ai", 0);
+  if (legalSlot?.dataset.effectTargetState !== "legal" ||
+      !legalSlot.classList.contains("target-selected") ||
+      lowerAtkSlot?.dataset.effectTargetState !== "unavailable" ||
+      lowerAtkSlot.dataset.effectTargetLabel !== "不可选：非最高攻击" ||
+      emptySlot?.dataset.effectTargetLabel !== "不可选：空格" ||
+      enemySlot?.dataset.effectTargetLabel !== "不可选：非己方") {
+    throw new Error(`${smokeName}: legal and unavailable targets are not clearly projected. ${smokeDebug(ctx)}`);
+  }
+
+  const rulesSnapshot = () => JSON.stringify({
+    player: {
+      hand: ctx.state.player.hand,
+      field: ctx.state.player.field,
+      traps: ctx.state.player.traps,
+      grave: ctx.state.player.grave
+    },
+    ai: {
+      hand: ctx.state.ai.hand,
+      field: ctx.state.ai.field,
+      traps: ctx.state.ai.traps,
+      grave: ctx.state.ai.grave
+    },
+    pendingTarget: ctx.state.pendingTarget,
+    selected: ctx.state.selected,
+    actionWindow: ctx.state.actionWindow,
+    actionDeadline: ctx.state.actionDeadline,
+    gameEvents: ctx.state.gameEvents
+  });
+  const beforeInvalidClicks = rulesSnapshot();
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), `${smokeName}: click lower attack monster`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "战意高扬只能选择我方攻击力最高的怪兽：星轨枪兵。",
+    `${smokeName}: lower attack target explains the strongest rule`
+  );
+  clickSmokeElement(fieldSlot(ctx.els, "player", 2), `${smokeName}: click empty monster slot`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：该格为空。",
+    `${smokeName}: empty target explains the reason`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), `${smokeName}: click enemy monster`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：不是己方怪兽。",
+    `${smokeName}: wrong owner target explains the reason`
+  );
+  if (rulesSnapshot() !== beforeInvalidClicks) {
+    throw new Error(`${smokeName}: invalid field target changed rules state. ${smokeDebug(ctx)}`);
+  }
+
+  const targetUid = ctx.state.player.field[0]?.uid;
+  const atkBefore = ctx.state.player.field[0]?.tempAtk || 0;
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm default legal target`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget,
+    `${smokeName}: legal target selection closes after confirmation`,
+    9000
+  );
+  const targetBuffEvent = ctx.state.gameEvents.find((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === targetUid &&
+    event.amount === 500
+  );
+  if ((ctx.state.player.field[0]?.tempAtk || 0) < atkBefore + 500 || !targetBuffEvent) {
+    throw new Error(`${smokeName}: legal target did not receive its +500 ATK event: ${JSON.stringify({
+      targetUid,
+      atkBefore,
+      atkAfter: ctx.state.player.field[0]?.tempAtk || 0,
+      field: ctx.state.player.field.map((card) => card ? { id: card.id, uid: card.uid, tempAtk: card.tempAtk || 0 } : null),
+      events: ctx.state.gameEvents.slice(-8)
+    })}. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runBattleSpellSmoke(ctx) {
   setSmokeStatus("running", "battle-spell");
   await startSmokeDuel(ctx, "direct");
@@ -5528,6 +5615,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke,
     "spell-target-legality-audit-basic": runSpellTargetLegalityAuditBasicSmoke,
     "grave-card-target-choice-basic": runGraveCardTargetChoiceBasicSmoke,
+    "field-target-readability-basic": runFieldTargetReadabilityBasicSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
     "battle-trap": runBattleTrapSmoke,
