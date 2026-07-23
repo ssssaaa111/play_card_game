@@ -1262,6 +1262,75 @@ async function runGraveyardSummonBasicSmoke(ctx) {
   setSmokeStatus("passed", "graveyard-summon-basic");
 }
 
+async function runGraveTargetReadabilityBasicSmoke(ctx) {
+  const smokeName = "grave-target-readability-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistComeback");
+
+  clickSmokeElement(handCard(ctx.els, "last-spark"), `${smokeName}: select draw spell`);
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: draw spell confirmation is available`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: send public spell to grave`);
+  await waitForSmoke(
+    () => ctx.state.player.grave.some((card) => card?.id === "last-spark") &&
+      ctx.state.player.hand.some((card) => card?.id === "starwake-recall"),
+    `${smokeName}: invalid non-monster grave candidate is prepared`,
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "starwake-recall"), `${smokeName}: open grave revive selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "graveRevive" &&
+      graveTargetCard(ctx.els, "astral-comet-ace") &&
+      graveTargetCard(ctx.els, "last-spark"),
+    `${smokeName}: legal and illegal grave cards remain visible`,
+    9000
+  );
+  const legalTarget = graveTargetCard(ctx.els, "astral-comet-ace");
+  const illegalTarget = graveTargetCard(ctx.els, "last-spark");
+  if (!legalTarget?.classList.contains("targetable") ||
+      legalTarget.dataset.targetState !== "legal" ||
+      !illegalTarget?.classList.contains("grave-target-unavailable") ||
+      illegalTarget.dataset.targetState !== "unavailable" ||
+      illegalTarget.getAttribute("aria-disabled") !== "true" ||
+      !illegalTarget.textContent.includes("非怪兽") ||
+      !ctx.els.graveTargets?.dataset.summary?.includes("可召唤 1 / 墓地 2")) {
+    throw new Error(`${smokeName}: grave target availability is not understandable. ${smokeDebug(ctx)}`);
+  }
+
+  const rulesSnapshot = () => JSON.stringify({
+    hand: ctx.state.player.hand.map((card) => card?.uid || card?.id || null),
+    field: ctx.state.player.field.map((card) => card?.uid || card?.id || null),
+    traps: ctx.state.player.traps.map((card) => card?.uid || card?.id || null),
+    grave: ctx.state.player.grave.map((card) => card?.uid || card?.id || null),
+    pendingTarget: ctx.state.pendingTarget,
+    gameEvents: ctx.state.gameEvents
+  });
+  const beforeInvalidClick = rulesSnapshot();
+  clickSmokeElement(illegalTarget, `${smokeName}: click visible non-monster grave card`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该卡：不是怪兽。",
+    `${smokeName}: invalid grave card explains the exact reason`
+  );
+  if (rulesSnapshot() !== beforeInvalidClick) {
+    throw new Error(`${smokeName}: invalid grave target changed rules state. ${smokeDebug(ctx)}`);
+  }
+
+  await selectAndConfirmSpellTarget(ctx, legalTarget, `${smokeName}: revive legal monster`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace") &&
+      !ctx.state.player.grave.some((card) => card?.id === "astral-comet-ace") &&
+      ctx.state.player.grave.some((card) => card?.id === "last-spark") &&
+      !ctx.state.pendingTarget,
+    `${smokeName}: legal grave summon still completes after invalid click`,
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, smokeName);
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runMechanicsRegressionBasicSmoke(ctx) {
   setSmokeStatus("running", "mechanics-regression-basic");
   await startSmokeDuel(ctx, "splitToken");
@@ -3712,6 +3781,11 @@ async function runTargetWindowSmoke(ctx) {
       !ctx.state.pendingTarget,
     "满 LP 回复卡与引擎一样显示可确认"
   );
+  clickSmokeElement(ctx.els.choiceCancelBtn, "取消星泉再生选择");
+  await waitForSmoke(
+    () => ctx.els.choiceActions.hidden && ctx.state.player.hand.some((card) => card?.id === "renewal"),
+    "取消星泉再生不会消耗卡牌"
+  );
   clickSmokeElement(handCard(ctx.els, "war-chant"), "战意高扬手牌");
   await waitForSmoke(
     () => ctx.state.pendingTarget?.effect === "buff500" && ctx.state.actionWindow === "targetSelect",
@@ -5322,6 +5396,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "token-split-basic": runTokenSplitBasicSmoke,
     "token-readability-basic": runTokenReadabilityBasicSmoke,
     "graveyard-summon-basic": runGraveyardSummonBasicSmoke,
+    "grave-target-readability-basic": runGraveTargetReadabilityBasicSmoke,
     "mechanics-regression-basic": runMechanicsRegressionBasicSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,

@@ -77,9 +77,8 @@ export function validateTargetSelection(
       return { ok: false, reason: "这个效果需要选择我方墓地中的怪兽。" };
     }
     const target = duelist.grave?.[index];
-    if (!target || target.type !== "monster") {
-      return { ok: false, reason: "请选择我方墓地中的怪兽作为目标。" };
-    }
+    if (!target) return { ok: false, reason: "不能选择该卡：目标不在墓地。" };
+    if (target.type !== "monster") return { ok: false, reason: "不能选择该卡：不是怪兽。" };
     return targetSuccess(target, ownerName, index, zone);
   }
 
