@@ -1102,13 +1102,12 @@ function isPendingTrapTargetSlot(ownerName, index) {
 
 async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
-  notePlayerIntent();
   const targetInfo = validateCurrentTarget(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
-    resetPlayerIdleCountdown();
     return true;
   }
+  notePlayerIntent();
   const handIndex = state.player.hand.findIndex((card) => card.uid === state.pendingTarget.handUid);
   if (handIndex < 0) {
     clearPendingTarget();
@@ -1124,13 +1123,12 @@ async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
 
 function selectPendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
-  notePlayerIntent();
   const targetInfo = validateCurrentTarget(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
-    resetPlayerIdleCountdown();
     return true;
   }
+  notePlayerIntent();
   state.pendingTarget = selectTargetSelection(state.pendingTarget, targetInfo, { source: "player" });
   const display = currentTargetSelectionDisplay();
   playSound("click");
@@ -2209,7 +2207,11 @@ async function handleAiSlot(index, interaction = {}) {
     return;
   }
   if (state.pendingTarget?.effect === "splitToken" && canPlayerAct()) {
-    notePlayerIntent();
+    interactWithPendingSpellTarget("ai", index, "field", interaction);
+    return;
+  }
+  if (state.pendingTarget && canPlayerAct()) {
+    if (card) showDetail(card);
     interactWithPendingSpellTarget("ai", index, "field", interaction);
     return;
   }
@@ -2219,11 +2221,6 @@ async function handleAiSlot(index, interaction = {}) {
     return;
   }
   notePlayerIntent();
-  if (state.pendingTarget) {
-    showDetail(card);
-    interactWithPendingSpellTarget("ai", index, "field", interaction);
-    return;
-  }
   if (!canUseBattleActions()) {
     if (state.phase === PHASES.main) {
       if (!enterPlayerBattlePhase("你发动攻击", { preserveSelection: true, quiet: true })) return;
@@ -4535,6 +4532,8 @@ function restoreSelectedAttackPreview() {
 }
 
 function renderField(root, duelist, owner, animationKey) {
+  const fieldSpellTargetActive = ["ownMonster", "enemyMonster"].includes(state.pendingTarget?.mode)
+    && state.pendingTarget?.effect !== "splitToken";
   renderMonsterZones({
     document,
     root,
@@ -4559,6 +4558,9 @@ function renderField(root, duelist, owner, animationKey) {
     },
     splitTargetAt: (index) => state.pendingTarget?.effect === "splitToken"
       ? describeSplitTokenTarget({ owner, card: duelist.field[index] })
+      : null,
+    spellTargetAt: (index) => fieldSpellTargetActive
+      ? validateCurrentTarget(owner, index, "field")
       : null,
     effectMarkersAt: (index) => effectMarkersForCard({
       card: duelist.field[index],

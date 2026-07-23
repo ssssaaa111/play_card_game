@@ -127,6 +127,36 @@ test("mechanics targets expose candidate and failure reasons through field views
   assert.equal(enemySplit.targetReason, "不能选择该来源：不是己方怪兽。");
 });
 
+test("spell targets expose legal and unavailable field choices with exact reasons", () => {
+  const legal = monsterFieldSlotView({
+    card: monster({ name: "星轨枪兵" }),
+    owner: "player",
+    index: 0,
+    targetable: true,
+    spellTarget: { ok: true }
+  });
+  const unavailable = monsterFieldSlotView({
+    card: monster({ name: "赤焰幼龙" }),
+    owner: "player",
+    index: 1,
+    spellTarget: {
+      ok: false,
+      reason: "战意高扬只能选择我方攻击力最高的怪兽：星轨枪兵。"
+    }
+  });
+
+  assert.equal(legal.effectTargetState, "legal");
+  assert.equal(legal.effectTargetLabel, "");
+  assert.ok(legal.slotClasses.includes("targetable"));
+  assert.doesNotMatch(legal.ariaLabel, /undefined/);
+  assert.equal(unavailable.effectTargetState, "unavailable");
+  assert.equal(unavailable.effectTargetReason, "战意高扬只能选择我方攻击力最高的怪兽：星轨枪兵。");
+  assert.equal(unavailable.title, unavailable.effectTargetReason);
+  assert.ok(unavailable.slotClasses.includes("effect-target-unavailable"));
+  assert.ok(unavailable.cardClasses.includes("effect-target-unavailable"));
+  assert.match(unavailable.ariaLabel, /战意高扬只能选择我方攻击力最高的怪兽/);
+});
+
 test("support field view reveals active spells while keeping rival traps concealed", () => {
   const trap = {
     id: "mirror-snare",

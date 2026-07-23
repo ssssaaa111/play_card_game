@@ -85,12 +85,13 @@ export function validateTargetSelection(
 
   if (zone !== "field") return { ok: false, reason: "这个效果需要选择场上的怪兽。" };
   const target = duelist.field?.[index];
-  if (!target) return { ok: false, reason: "请选择场上的怪兽作为目标。" };
+  if (!target) return { ok: false, reason: "不能选择该目标：该格为空。" };
+  if (target.type !== "monster") return { ok: false, reason: "不能选择该目标：不是怪兽。" };
   if (pending.mode === "ownMonster" && ownerName !== "player") {
-    return { ok: false, reason: "这个效果需要选择我方怪兽。" };
+    return { ok: false, reason: "不能选择该目标：不是己方怪兽。" };
   }
   if (pending.mode === "enemyMonster" && ownerName !== "ai") {
-    return { ok: false, reason: "这个效果需要选择敌方怪兽。" };
+    return { ok: false, reason: "不能选择该目标：不是敌方怪兽。" };
   }
   const rule = validateSpellTargetRule(pending, duelist, target);
   if (!rule.ok) return rule;

@@ -118,9 +118,20 @@ test("validates strongest own and enemy monster targets", () => {
 
   assert.equal(validateTargetSelection(ownPending, state, "player", 1).ok, true);
   assert.match(validateTargetSelection(ownPending, state, "player", 0).reason, /最高怪/);
-  assert.match(validateTargetSelection(ownPending, state, "ai", 1).reason, /我方怪兽/);
+  assert.equal(
+    validateTargetSelection(ownPending, state, "ai", 1).reason,
+    "不能选择该目标：不是己方怪兽。"
+  );
+  assert.equal(
+    validateTargetSelection(ownPending, state, "player", 4).reason,
+    "不能选择该目标：该格为空。"
+  );
   assert.equal(validateTargetSelection(enemyPending, state, "ai", 1).ok, true);
   assert.match(validateTargetSelection(enemyPending, state, "ai", 0).reason, /敌方最高/);
+  assert.equal(
+    validateTargetSelection(enemyPending, state, "player", 1).reason,
+    "不能选择该目标：不是敌方怪兽。"
+  );
 });
 
 test("enemy spell trap selection accepts only an occupied rival support slot", () => {

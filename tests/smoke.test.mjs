@@ -734,6 +734,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"spell-target-default-basic": runSpellTargetDefaultBasicSmoke/);
   assert.match(smoke, /"spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke/);
+  assert.match(smoke, /"field-target-readability-basic": runFieldTargetReadabilityBasicSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
@@ -842,6 +843,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "phantom-switch-redirect"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "spell-target-default-basic"\)/);
   assert.match(smoke, /const smokeName = "spell-multi-target-choice-basic";[\s\S]*!ctx\.state\.pendingTarget\?\.selectedTarget[\s\S]*ctx\.els\.choiceConfirmBtn\.disabled[\s\S]*explicit target receives the equipment effect[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "field-target-readability-basic";[\s\S]*不可选：非最高攻击[\s\S]*invalid field target changed rules state[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);
@@ -888,6 +890,20 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-extra-summon-basic": runAiExtraSummonBasicSmoke/);
   assert.match(smoke, /const smokeName = "response-action-lock-basic";[\s\S]*querySelector\("#detailName"\)\?\.textContent === blockedCard\?\.name[\s\S]*event\.type === "CHAIN_RESOLVED"/);
   assert.match(smoke, /"response-action-lock-basic": runResponseActionLockBasicSmoke/);
+});
+
+test("field spell targets expose unavailable reasons without changing rule state", () => {
+  const app = readProjectFile("src/app.js");
+  const renderer = readProjectFile("src/field-renderer.js");
+  const css = readProjectFile("styles.css");
+
+  assert.match(app, /spellTargetAt: \(index\) => fieldSpellTargetActive[\s\S]*validateCurrentTarget\(owner, index, "field"\)/);
+  assert.match(app, /async function resolvePendingSpellTarget[\s\S]*const targetInfo = validateCurrentTarget[\s\S]*if \(!targetInfo\.ok\) \{\s*cue\(targetInfo\.reason\);\s*return true;\s*\}\s*notePlayerIntent\(\)/);
+  assert.match(app, /function selectPendingSpellTarget[\s\S]*const targetInfo = validateCurrentTarget[\s\S]*if \(!targetInfo\.ok\) \{\s*cue\(targetInfo\.reason\);\s*return true;\s*\}\s*notePlayerIntent\(\)/);
+  assert.match(renderer, /effectTargetState = spellTarget \? \(spellTarget\.ok \? "legal" : "unavailable"\)/);
+  assert.match(renderer, /"effect-target-unavailable": effectTargetUnavailable/);
+  assert.match(renderer, /slot\.dataset\.effectTargetReason = view\.effectTargetReason/);
+  assert.match(css, /\.slot\.effect-target-unavailable::after/);
 });
 
 test("skipped attack lock is visible on field cards", () => {
