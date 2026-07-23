@@ -222,6 +222,7 @@ test("app uses extracted turn state machine", () => {
   assert.match(app, /dispatchCancelAutoEndFromUiState\(/);
   assert.match(app, /dispatchCommitAutoEndFromUiState\(/);
   assert.match(app, /dispatchEndTurnFromUiState\(/);
+  assert.match(app, /async function runAiTurn\(\)[\s\S]*dispatchEndTurnFromUiState\(state, "ai", \{[\s\S]*beginTurn\("player"\)/);
   assert.match(app, /dispatchResolveTurnDrawFromUiState\(/);
   assert.match(app, /function autoPlayerDraw\(\)[\s\S]*dispatchResolveTurnDrawFromUiState\(state, "player"\)/);
   assert.match(app, /playerActionWindowDecision\(state, \{[\s\S]*hasMainAction: actions\.hasMain[\s\S]*hasBattleAction: actions\.hasBattle[\s\S]*\}\)/);
@@ -288,7 +289,7 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(app, /function cancelSelectedHandAction\(\)/);
   assert.match(controls, /targetSelectionStatus\?\.confirmLabel \|\| "确认发动"/);
   assert.match(controls, /confirmDisabled: hasTarget \? !targetSelectionStatus\?\.complete : !selectedHandReady/);
-  assert.match(app, /function resolvePendingSpellDefault\(\)/);
+  assert.match(app, /function resolvePendingSpellDefault\(\{ directActivate = false \} = \{\}\)/);
   assert.match(app, /prepareDefaultTargetSelection\(initialTarget/);
   assert.match(app, /resolveSelectedTargetSelection\(state\.pendingTarget/);
   assert.match(app, /function selectPendingSpellTarget\(ownerName, index, zone = "field"\)/);
@@ -732,6 +733,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"redirect-prompt": runRedirectPromptSmoke/);
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"spell-target-default-basic": runSpellTargetDefaultBasicSmoke/);
+  assert.match(smoke, /"spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
@@ -747,6 +749,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"chain-attack-reentry": runChainAttackReentrySmoke/);
   assert.match(smoke, /"chain-weaken-resolution": runChainWeakenResolutionSmoke/);
   assert.match(smoke, /"ai-counter-chain": runAiCounterChainSmoke/);
+  assert.match(smoke, /"turn-handoff-basic": runTurnHandoffBasicSmoke/);
+  assert.match(smoke, /"phase-progression-basic": runPhaseProgressionBasicSmoke/);
   assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
   assert.match(smoke, /"ai-mode-event": runAiModeEventSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
@@ -837,6 +841,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "redirect-prompt"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "phantom-switch-redirect"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "spell-target-default-basic"\)/);
+  assert.match(smoke, /const smokeName = "spell-multi-target-choice-basic";[\s\S]*!ctx\.state\.pendingTarget\?\.selectedTarget[\s\S]*ctx\.els\.choiceConfirmBtn\.disabled[\s\S]*explicit target receives the equipment effect[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);
@@ -857,6 +862,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "player-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
+  assert.match(smoke, /const smokeName = "turn-handoff-basic";[\s\S]*"TURN_ENDED:ai"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "phase-progression-basic";[\s\S]*event\.from === "main"[\s\S]*event\.to === "battle"[\s\S]*event\.type === "TURN_ENDED"[\s\S]*event\.fromPhase === "battle"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
@@ -868,11 +875,19 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-scroll-preview"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);
+  assert.match(smoke, /const lockedBefore = lockedRulesSnapshot\(\);[\s\S]*finished duel should expose no player actions[\s\S]*inspecting a hand card after game over changed rules state/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);
   assert.match(smoke, /logCardLink\(ctx\.els, "chain-nullifier"\)/);
   assert.doesNotMatch(smoke, /cardDetailTrigger/);
   assert.match(smoke, /setSmokeStatus\("passed", "equipment-spell"\)/);
   assert.match(smoke, /const smokeName = "hand-action-highlight-recovery-basic";[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "spell-legality-highlight-basic";[\s\S]*assertHandCardReady\(ctx\.els, "trio-final-counter"/);
+  assert.match(smoke, /const smokeName = "ai-engine-legality-basic";[\s\S]*event\.attackerCardId === ready\.uid/);
+  assert.match(smoke, /"ai-engine-legality-basic": runAiEngineLegalityBasicSmoke/);
+  assert.match(smoke, /const smokeName = "ai-extra-summon-basic";[\s\S]*event\.ability === "extraSummon"/);
+  assert.match(smoke, /"ai-extra-summon-basic": runAiExtraSummonBasicSmoke/);
+  assert.match(smoke, /const smokeName = "response-action-lock-basic";[\s\S]*querySelector\("#detailName"\)\?\.textContent === blockedCard\?\.name[\s\S]*event\.type === "CHAIN_RESOLVED"/);
+  assert.match(smoke, /"response-action-lock-basic": runResponseActionLockBasicSmoke/);
 });
 
 test("skipped attack lock is visible on field cards", () => {
@@ -1075,14 +1090,20 @@ test("app uses extracted spell metadata", () => {
 
   assert.match(app, /from '\.\/spells\.js'/);
   assert.match(app, /const spellEffects = spellDefinitions/);
-  assert.match(app, /validateSpellCondition\(card\.effect/);
   assert.match(app, /explainActivateSpellFromUiState\(state,/);
   assert.match(app, /explainSummonMonsterFromUiState\(state,/);
   assert.match(app, /explainSetTrapFromUiState\(state,/);
   assert.match(app, /explainDeclareAttackFromUiState\(state,/);
   assert.match(app, /projectBattleFromUiState\(state, "player"\)/);
   assert.match(app, /chooseAiSpellAction\(\{/);
+  assert.match(app, /canActivateSpell: \(card, handIndex\) => validateSpell\(state\.ai, state\.player, card, handIndex\)\.ok/);
+  assert.match(app, /canSummon: \(_card, handIndex, options\) => explainSummonMonsterFromUiState\(/);
+  assert.match(app, /canSetTrap: \(_card, handIndex, trapIndex\) =>/);
+  assert.match(app, /canAttackMonster: \(_card, fieldIndex\) =>/);
+  assert.match(app, /setActionWindow\(ACTION_WINDOWS\.ai, \{ playerId: "ai", reason: "ai battle" \}\);\s+dispatchChangePhaseFromUiState\(state, "ai", PHASES\.battle\);\s+await aiAttack\(\);/);
   assert.match(ai, /scoreSpellForAi\(card\.effect/);
+  assert.doesNotMatch(app, /validateSpellCondition/);
+  assert.doesNotMatch(ai, /validateSpellCondition/);
   assert.doesNotMatch(spellEffectsSource, /apply:/);
   assert.doesNotMatch(app, /function damage\(/);
   assert.doesNotMatch(app, /function heal\(/);

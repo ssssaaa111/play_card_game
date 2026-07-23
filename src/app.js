@@ -88,7 +88,7 @@ import {
   projectBattleFromUiState
 } from './engine-adapter.js';
 import { renderChainHistoryPanel, renderTimelinePanel } from './timeline-renderer.js';
-import { spellDefinitions, validateSpellCondition } from './spells.js';
+import { spellDefinitions } from './spells.js';
 import { nextTimelineState } from './timeline.js';
 import { selectRedirectTarget, trapActivationText, trapCanResolve, trapConsumesAttack } from './traps.js';
 import {
@@ -1064,7 +1064,9 @@ function beginSpellTargetSelection(handIndex, card) {
   setActionWindow(ACTION_WINDOWS.targetSelect, { reason: `target:${card.uid}` });
   const display = currentTargetSelectionDisplay(pendingTarget);
   cue(display.text);
-  addLog(`等待确认 ${card.name} 的目标，已默认选择 ${display.selectedName}。`);
+  addLog(display.selectedByDefault
+    ? `等待确认 ${card.name} 的目标，唯一合法目标已自动选择：${display.selectedName}。`
+    : `等待选择 ${card.name} 的目标，共有 ${display.legalCount} 个合法目标。`);
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -1144,9 +1146,17 @@ function interactWithPendingSpellTarget(ownerName, index, zone = "field", { dire
     : selectPendingSpellTarget(ownerName, index, zone);
 }
 
-async function resolvePendingSpellDefault() {
+async function resolvePendingSpellDefault({ directActivate = false } = {}) {
   if (!state.pendingTarget) return false;
   const cardName = state.pendingTarget.cardName;
+  const duelists = { player: state.player, ai: state.ai };
+  const legalTargets = collectLegalTargetSelections(state.pendingTarget, duelists);
+  if (directActivate && legalTargets.length > 1) {
+    cue(`${cardName} 有 ${legalTargets.length} 个合法目标，请先点击目标，再使用确认按钮发动。`);
+    render();
+    resetPlayerIdleCountdown();
+    return true;
+  }
   let target = resolveSelectedTargetSelection(state.pendingTarget, {
     player: state.player,
     ai: state.ai
@@ -1163,6 +1173,14 @@ async function resolvePendingSpellDefault() {
     if (target) {
       state.pendingTarget = refreshed;
       cue(`原目标已失效，已重新选择 ${targetSelectionTargetLabel(target)}，请再次确认。`);
+      render();
+      resetPlayerIdleCountdown();
+      return true;
+    }
+    const refreshedTargets = collectLegalTargetSelections(refreshed, duelists);
+    if (refreshedTargets.length > 0) {
+      state.pendingTarget = refreshed;
+      cue(`${cardName} 有 ${refreshedTargets.length} 个合法目标，请先点击一个目标。`);
       render();
       resetPlayerIdleCountdown();
       return true;
@@ -1247,7 +1265,7 @@ async function selectHandCard(uid, { directActivate = false } = {}) {
     const sameCard = state.pendingTarget.handUid === uid;
     if (sameCard) {
       if (directActivate) {
-        await resolvePendingSpellDefault();
+        await resolvePendingSpellDefault({ directActivate: true });
         return;
       }
       showDetail(card);
@@ -2707,8 +2725,6 @@ function validateSpell(owner, rival, card, handIndex) {
   if (!card || card.type !== "spell") return { ok: false, reason: "请选择魔法卡。" };
   const effect = spellEffects[card.effect];
   if (!effect) return { ok: false, reason: "这个魔法效果还没有实现。" };
-  const condition = validateSpellCondition(card.effect, { owner, rival, card, handIndex });
-  if (!condition.ok) return condition;
   const fusionOptions = fusionDefinitions(card);
   if (fusionOptions.length > 0) {
     const checks = fusionOptions.map((option) => explainFusionSummonFromUiState(
@@ -2719,11 +2735,10 @@ function validateSpell(owner, rival, card, handIndex) {
       { fusionResultTemplateId: option.resultId }
     ));
     const legalOption = checks.find((entry) => entry.ok);
-    return legalOption ? condition : { ok: false, reason: checks[0]?.reason || condition.reason };
+    return legalOption || { ok: false, reason: checks[0]?.reason || "当前不能进行融合召唤。" };
   }
   const engineLegality = explainActivateSpellFromUiState(state, owner.owner, rival.owner, handIndex);
-  if (!engineLegality.ok) return { ok: false, reason: engineLegality.reason };
-  return condition;
+  return engineLegality;
 }
 
 function spellCaption(card) {
@@ -3993,10 +4008,21 @@ async function runAiTurn() {
       await sleep(1850);
     }
     if (state.gameOver) return;
+    setActionWindow(ACTION_WINDOWS.ai, { playerId: "ai", reason: "ai battle" });
     dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
     await aiAttack();
     if (!state.gameOver) {
       await sleep(1150);
+      try {
+        dispatchEndTurnFromUiState(state, "ai", {
+          reason: "ai-complete",
+          endedBy: "system"
+        });
+      } catch (error) {
+        cue(error.message || "AI 回合结束失败。");
+        console.error(error);
+        return;
+      }
       beginTurn("player");
       render();
     }
@@ -4010,7 +4036,8 @@ async function aiPlaySpells() {
     hand: state.ai.hand,
     owner: state.ai,
     rival: state.player,
-    aiStyle: state.aiStyle
+    aiStyle: state.aiStyle,
+    canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
   });
   while (action && !state.gameOver) {
     const acted = await playSpell(state.ai, state.player, action.handIndex);
@@ -4020,7 +4047,8 @@ async function aiPlaySpells() {
       hand: state.ai.hand,
       owner: state.ai,
       rival: state.player,
-      aiStyle: state.aiStyle
+      aiStyle: state.aiStyle,
+      canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
     });
   }
 }
@@ -4029,7 +4057,14 @@ async function aiSummon() {
   const action = chooseAiSummonAction({
     hand: state.ai.hand,
     field: state.ai.field,
-    aiStyle: state.aiStyle
+    aiStyle: state.aiStyle,
+    canSummon: (_card, handIndex, options) => explainSummonMonsterFromUiState(
+      state,
+      "ai",
+      handIndex,
+      options.fieldIndex,
+      { tributeIndexes: options.tributeIndexes }
+    ).ok
   });
   if (!action) return false;
   const didSummon = await summonMonster(state.ai, state.player, action.handIndex, action.fieldIndex, {
@@ -4059,7 +4094,9 @@ function aiSetTraps() {
   const action = chooseAiSetTrapAction({
     hand: state.ai.hand,
     traps: state.ai.traps,
-    aiStyle: state.aiStyle
+    aiStyle: state.aiStyle,
+    canSetTrap: (_card, handIndex, trapIndex) =>
+      explainSetTrapFromUiState(state, "ai", handIndex, trapIndex).ok
   });
   return action ? setTrap(state.ai, action.handIndex, action.trapIndex) : false;
 }
@@ -4074,7 +4111,9 @@ async function aiAttack() {
       rivalField: state.player.field,
       rivalLp: state.player.lp,
       aiStyle: state.aiStyle,
-      skippedAttackers
+      skippedAttackers,
+      canAttackMonster: (_card, fieldIndex) =>
+        explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex).ok
     });
     if (action.type === "none") return;
     const { card, attackerIndex, targetIndex, target } = action;

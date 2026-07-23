@@ -1,5 +1,5 @@
 import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
-import { scoreSpellForAi, validateSpellCondition } from './spells.js';
+import { scoreSpellForAi } from './spells.js';
 
 const scriptedPressureMonsterPriority = {
   "trio-sun-judicator": 900,
@@ -88,13 +88,15 @@ export function chooseAiSpellAction({
   owner = null,
   rival = null,
   aiStyle = "balanced",
-  minScore = 40
+  minScore = 40,
+  canActivateSpell = null
 } = {}) {
   const candidates = hand
     .map((card, index) => ({ card, index }))
     .filter(({ card, index }) =>
       card?.type === "spell" &&
-      validateSpellCondition(card.effect, { owner, rival, card, handIndex: index }).ok
+      typeof canActivateSpell === "function" &&
+      canActivateSpell(card, index)
     )
     .map(({ card, index }) => ({
       type: "spell",
@@ -108,7 +110,12 @@ export function chooseAiSpellAction({
   return candidates[0] || null;
 }
 
-export function chooseAiSetTrapAction({ hand = [], traps = [], aiStyle = "balanced" } = {}) {
+export function chooseAiSetTrapAction({
+  hand = [],
+  traps = [],
+  aiStyle = "balanced",
+  canSetTrap = null
+} = {}) {
   const trapIndex = traps.findIndex((slot) => !slot);
   if (trapIndex < 0) return null;
   const trapCandidates = hand
@@ -118,6 +125,10 @@ export function chooseAiSetTrapAction({ hand = [], traps = [], aiStyle = "balanc
       score: aiStyle === "scriptedPressure" ? (scriptedPressureTrapPriority[templateId(card)] || 0) : 0
     }))
     .filter((entry) => entry.card?.type === "trap")
+    .filter((entry) =>
+      typeof canSetTrap === "function" &&
+      canSetTrap(entry.card, entry.index, trapIndex)
+    )
     .sort((a, b) => b.score - a.score || a.index - b.index);
   const pick = trapCandidates[0];
   if (!pick) return null;
@@ -143,7 +154,12 @@ export function scoreAiMonster(card, aiStyle = "balanced") {
   return totalAtk(card) + stars * 20;
 }
 
-export function chooseAiSummonAction({ hand = [], field = [], aiStyle = "balanced" } = {}) {
+export function chooseAiSummonAction({
+  hand = [],
+  field = [],
+  aiStyle = "balanced",
+  canSummon = null
+} = {}) {
   const emptyFieldIndex = field.findIndex((slot) => !slot);
   const occupiedIndexes = field
     .map((slot, index) => (slot ? index : -1))
@@ -169,6 +185,13 @@ export function chooseAiSummonAction({ hand = [], field = [], aiStyle = "balance
     .filter((entry) => entry.tributeCost <= occupiedIndexes.length)
     .filter((entry) => !entry.wouldSpendTrio)
     .filter((entry) => entry.fieldIndex >= 0)
+    .filter((entry) =>
+      typeof canSummon === "function" &&
+      canSummon(entry.card, entry.index, {
+        fieldIndex: entry.fieldIndex,
+        tributeIndexes: entry.tributeIndexes
+      })
+    )
     .sort((a, b) => b.score - a.score || a.index - b.index);
   const pick = candidates[0];
   if (!pick) return null;
@@ -200,7 +223,8 @@ export function chooseAiAttackAction({
   rivalField = [],
   rivalLp = 0,
   aiStyle = "balanced",
-  skippedAttackers = new Set()
+  skippedAttackers = new Set(),
+  canAttackMonster = null
 } = {}) {
   const skipped = skippedAttackers instanceof Set ? skippedAttackers : new Set(skippedAttackers || []);
   const attackers = field
@@ -209,7 +233,9 @@ export function chooseAiAttackAction({
       entry.card &&
       !entry.card.used &&
       entry.card.mode !== "defense" &&
-      !skipped.has(entry.card.uid)
+      !skipped.has(entry.card.uid) &&
+      typeof canAttackMonster === "function" &&
+      canAttackMonster(entry.card, entry.index)
     )
     .sort((a, b) => totalAtk(b.card) - totalAtk(a.card) || a.index - b.index);
 
@@ -235,6 +261,7 @@ export function chooseAiAttackAction({
   return {
     type: "attack",
     card: pick.card,
+    cardUid: pick.card.uid,
     attackerIndex: pick.index,
     targetIndex,
     target: targetIndex >= 0 ? rivalField[targetIndex] : null

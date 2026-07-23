@@ -1266,6 +1266,28 @@ test("dispatches monster mode changes and replays them into UI state", () => {
   assert.equal(state.gameEvents.length, events.length);
 });
 
+test("projects AI battle legality while the UI is in the AI action window", () => {
+  const attacker = uiMonster("ai-window-attacker", "trio-ember-pawn");
+  attacker.ownerId = "ai";
+  const state = appState({
+    started: true,
+    turn: "ai",
+    phase: PHASES.battle,
+    actionWindow: ACTION_WINDOWS.ai
+  });
+  state.ai.field[0] = attacker;
+  const before = snapshotUiState(state);
+
+  const projection = projectBattleFromUiState(state, "ai", { attackerIndex: 0 });
+  const readiness = explainMonsterAttackReadinessFromUiState(state, "ai", 0);
+
+  assert.equal(projection.inAttackIntentWindow, true);
+  assert.equal(projection.attackerCanAttack, true);
+  assert.equal(projection.canDirectAttack, true);
+  assert.equal(readiness.ok, true);
+  assert.deepEqual(snapshotUiState(state), before);
+});
+
 test("projects monster attack readiness across main, selection, spent, and readied states", () => {
   const attacker = uiMonster("readiness-attacker", "iron-guardian");
   const target = uiMonster("readiness-target", "sky-raider");
@@ -1316,7 +1338,7 @@ test("dispatches turn start and replays rule resets into UI state", () => {
   const second = uiMonster("turn-second", "iron-guardian");
   second.used = false;
   second.changedMode = true;
-  const state = appState({ turn: "ai", phase: PHASES.battle });
+  const state = appState({ turn: "ai", phase: PHASES.end });
   state.player.field[0] = first;
   state.player.field[1] = second;
   state.player.extraSummon = 2;
@@ -1403,6 +1425,7 @@ test("phase events preserve attack response windows after a started turn", () =>
   state.player.traps[0] = trap;
   state.ai.field[0] = attacker;
 
+  dispatchEndTurnFromUiState(state, "player", { reason: "test-handoff" });
   dispatchStartTurnFromUiState(state, "ai");
   dispatchChangePhaseFromUiState(state, "ai", PHASES.main);
   dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);

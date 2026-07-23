@@ -644,7 +644,7 @@ async function runAiGuardSkipSmoke(ctx) {
   if (!ctx.state.ai.field.some((card) => card?.id === "star-lancer")) {
     throw new Error("AI 跳过守备攻击后星轨枪兵应仍在场");
   }
-  if (!ctx.state.log.some((entry) => entry.includes("AI 保留 星轨枪兵"))) {
+  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("对手保留 星轨枪兵"))) {
     throw new Error("AI 应记录保留攻击，避免玩家以为流程卡住");
   }
   if (guardian.used || guardian.changedMode) {
@@ -663,6 +663,155 @@ async function runAiGuardSkipSmoke(ctx) {
     throw new Error("完整回合循环缺少开始回合、怪兽重置或能力过期事件");
   }
   setSmokeStatus("passed", "ai-guard-skip");
+}
+
+async function runAiEngineLegalityBasicSmoke(ctx) {
+  const smokeName = "ai-engine-legality-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "guardSkip");
+  const attackEventsBefore = countGameEvents(ctx.state, "ATTACK_DECLARED");
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "ai" && ctx.state.actionWindow === "ai" && ctx.state.aiRunning,
+    `${smokeName}：AI 行动窗口`
+  );
+
+  const locked = cloneCardById("trio-sun-judicator");
+  const ready = cloneCardById("star-lancer");
+  if (!locked || !ready) throw new Error(`${smokeName}：测试怪兽定义缺失`);
+  locked.attackLockReason = "trioConvergence";
+  locked.mode = "attack";
+  locked.used = false;
+  ready.mode = "attack";
+  ready.used = false;
+  ctx.state.ai.field = [locked, ready, null, null, null];
+  ctx.state.ai.hand = [];
+  ctx.state.ai.deck = [];
+  ctx.state.ai.traps = [null, null, null, null, null];
+  ctx.state.player.field = [null, null, null, null, null];
+  ctx.state.player.traps = [null, null, null, null, null];
+  ctx.render?.();
+
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).some((event) =>
+      event.type === "ATTACK_DECLARED" && event.attackerCardId === ready.uid
+    ),
+    `${smokeName}：AI 改用合法怪兽攻击`,
+    22000
+  );
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.aiRunning,
+    `${smokeName}：完整回合返回玩家`,
+    26000
+  );
+
+  const newAttackEvents = (ctx.state.gameEvents || [])
+    .filter((event) => event.type === "ATTACK_DECLARED")
+    .slice(attackEventsBefore);
+  if (newAttackEvents.some((event) => event.attackerCardId === locked.uid)) {
+    throw new Error(`${smokeName}：受攻击限制的怪兽不应宣言攻击`);
+  }
+  if (!newAttackEvents.some((event) => event.attackerCardId === ready.uid)) {
+    throw new Error(`${smokeName}：AI 应跳过非法候选并使用合法怪兽`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runAiExtraSummonBasicSmoke(ctx) {
+  const smokeName = "ai-extra-summon-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "chain");
+  const summonEventsBefore = (ctx.state.gameEvents || []).filter((event) =>
+    event.type === "MONSTER_SUMMONED" && event.playerId === "ai"
+  ).length;
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "ai" && ctx.state.actionWindow === "ai" && ctx.state.aiRunning,
+    `${smokeName}：AI 行动窗口`
+  );
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).some((event) =>
+      event.type === "ABILITY_GRANTED" && event.playerId === "ai" && event.ability === "extraSummon"
+    ),
+    `${smokeName}：AI 获得额外召唤机会`,
+    16000
+  );
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).filter((event) =>
+      event.type === "MONSTER_SUMMONED" && event.playerId === "ai"
+    ).length >= summonEventsBefore + 2,
+    `${smokeName}：AI 完成普通召唤和额外召唤`,
+    24000
+  );
+
+  if (!(ctx.state.gameEvents || []).some((event) =>
+    event.type === "ABILITY_SPENT" && event.playerId === "ai" && event.ability === "extraSummon"
+  )) {
+    throw new Error(`${smokeName}：第二次召唤必须消费引擎授予的额外召唤机会`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runResponseActionLockBasicSmoke(ctx) {
+  const smokeName = "response-action-lock-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "chain");
+  clickSmokeElement(handCard(ctx.els, "iron-guardian"), `${smokeName}：选择铁壁守卫`);
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), `${smokeName}：召唤铁壁守卫`);
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "iron-guardian",
+    `${smokeName}：怪兽召唤完成`
+  );
+  clickSmokeElement(handCard(ctx.els, "void-lock"), `${smokeName}：选择虚空封锁`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}：盖放虚空封锁`);
+  await waitForSmoke(
+    () => ctx.state.player.traps.some((card) => card?.id === "void-lock"),
+    `${smokeName}：陷阱盖放完成`
+  );
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") && ctx.state.pendingTrapChoice,
+    `${smokeName}：等待陷阱响应窗口`,
+    24000
+  );
+  const before = JSON.stringify({
+    hand: ctx.state.player.hand.map((card) => card.uid),
+    field: ctx.state.player.field.map((card) => card?.uid || null),
+    traps: ctx.state.player.traps.map((card) => card?.uid || null),
+    eventCount: (ctx.state.gameEvents || []).length,
+    responseEvent: ctx.state.pendingTrapChoice.eventName
+  });
+  const blockedCard = ctx.state.player.hand.find((card) => card?.id === "gale-mage");
+  clickSmokeElement(handCard(ctx.els, "gale-mage"), `${smokeName}：响应期间尝试选择普通手牌`);
+  await waitForSmoke(
+    () => document.querySelector("#detailName")?.textContent === blockedCard?.name &&
+      ctx.els.chainModal.classList.contains("show") &&
+      ctx.state.pendingTrapChoice,
+    `${smokeName}：普通行动被拦截但详情仍可查看`
+  );
+  const after = JSON.stringify({
+    hand: ctx.state.player.hand.map((card) => card.uid),
+    field: ctx.state.player.field.map((card) => card?.uid || null),
+    traps: ctx.state.player.traps.map((card) => card?.uid || null),
+    eventCount: (ctx.state.gameEvents || []).length,
+    responseEvent: ctx.state.pendingTrapChoice.eventName
+  });
+  if (after !== before) {
+    throw new Error(`${smokeName}：被拦截的普通行动改变了决斗状态`);
+  }
+
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}：发动虚空封锁`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTrapChoice &&
+      !ctx.state.player.traps.some((card) => card?.id === "void-lock") &&
+      (ctx.state.gameEvents || []).some((event) => event.type === "CHAIN_RESOLVED"),
+    `${smokeName}：合法陷阱响应继续完成`,
+    9000
+  );
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runSummonEffectsSmoke(ctx) {
@@ -3020,6 +3169,13 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
 
   await finishPlayerTurn(ctx);
   await waitForSmoke(
+    () => ctx.state.turn === "ai" && ctx.state.actionWindow === "ai" && ctx.state.aiRunning,
+    `full duel: AI action loop should start. ${smokeDebug(ctx)}`,
+    6000
+  );
+  // Let the production-timed AI sequence reach the player response before virtual-time polling resumes.
+  await new Promise((resolve) => window.setTimeout(resolve, 11000));
+  await waitForSmoke(
     () => ctx.els.chainModal.classList.contains("show") &&
       ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.ai.traps.some((card) => card?.id === "mirror-snare") &&
@@ -3336,6 +3492,77 @@ async function runSpellTargetDefaultBasicSmoke(ctx) {
   clickSmokeElement(logCardLink(ctx.els, "war-chant"), "spell-target-default-basic: open spell detail from log");
   await assertCardDetailModal(ctx, cloneCardById("war-chant"), "spell-target-default-basic");
   setSmokeStatus("passed", "spell-target-default-basic");
+}
+
+async function runSpellMultiTargetChoiceBasicSmoke(ctx) {
+  const smokeName = "spell-multi-target-choice-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "equipment");
+
+  clickSmokeElement(handCard(ctx.els, "nova-squire"), `${smokeName}: select second monster`);
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), `${smokeName}: choose second monster zone`);
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: summon confirmation enabled`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm second monster summon`);
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "star-lancer" &&
+      ctx.state.player.field[1]?.id === "nova-squire" &&
+      ctx.state.actionWindow === "main",
+    `${smokeName}: two legal equipment targets are on field`,
+    9000
+  );
+
+  const spell = ctx.state.player.hand.find((card) => card?.id === "blade-sigil");
+  const firstTargetAtkBefore = ctx.state.player.field[0]?.tempAtk || 0;
+  const secondTargetAtkBefore = ctx.state.player.field[1]?.tempAtk || 0;
+  const activationsBefore = countGameEvents(ctx.state, "CARD_ACTIVATED");
+  await clickSmokeElementTwiceAcrossRender(
+    () => handCard(ctx.els, "blade-sigil"),
+    `${smokeName}: repeat equipment spell with multiple targets`,
+    () => ctx.state.pendingTarget?.effect === "equipBlade" &&
+      !ctx.state.pendingTarget?.selectedTarget &&
+      !ctx.state.pendingTarget?.selectedTargetSource &&
+      ctx.els.choiceConfirmBtn.disabled
+  );
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "equipBlade" &&
+      !ctx.state.pendingTarget?.selectedTarget &&
+      ctx.els.choiceConfirmBtn.disabled &&
+      ctx.state.player.hand.some((card) => card?.uid === spell?.uid) &&
+      countGameEvents(ctx.state, "CARD_ACTIVATED") === activationsBefore,
+    `${smokeName}: repeated hand activation must wait for an explicit target`
+  );
+  if (!ctx.els.choiceText?.textContent.includes("尚未选择目标") ||
+      fieldCard(ctx.els, "player", "star-lancer")?.classList.contains("target-selected") ||
+      fieldCard(ctx.els, "player", "nova-squire")?.classList.contains("target-selected")) {
+    throw new Error(`${smokeName}: multiple legal targets must not expose a default selection. ${smokeDebug(ctx)}`);
+  }
+
+  await selectAndConfirmSpellTarget(
+    ctx,
+    fieldCard(ctx.els, "player", "nova-squire"),
+    `${smokeName}: explicitly equip the second monster`
+  );
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      !ctx.state.player.hand.some((card) => card?.uid === spell?.uid),
+    `${smokeName}: explicit target activation resolves`,
+    9000
+  );
+  if (ctx.state.player.field[0]?.id !== "star-lancer" ||
+      (ctx.state.player.field[0]?.tempAtk || 0) !== firstTargetAtkBefore ||
+      ctx.state.player.field[1]?.id !== "nova-squire" ||
+      (ctx.state.player.field[1]?.tempAtk || 0) !== secondTargetAtkBefore + 300 ||
+      countGameEvents(ctx.state, "CARD_ACTIVATED") !== activationsBefore + 1) {
+    throw new Error(`${smokeName}: explicit target receives the equipment effect: ${JSON.stringify({
+      field: ctx.state.player.field.map((card) => card ? { id: card.id, tempAtk: card.tempAtk || 0 } : null),
+      activationsBefore,
+      activationsAfter: countGameEvents(ctx.state, "CARD_ACTIVATED")
+    })}. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runTargetWindowSmoke(ctx) {
@@ -4119,6 +4346,88 @@ async function runChainResolutionReviewSmoke(ctx) {
   setSmokeStatus("passed", "chain-resolution-review");
 }
 
+async function runTurnHandoffBasicSmoke(ctx) {
+  const smokeName = "turn-handoff-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "direct");
+  ctx.state.ai.hand = [];
+  ctx.state.ai.deck = [];
+  ctx.state.ai.field = ctx.state.ai.field.map(() => null);
+  ctx.state.ai.traps = ctx.state.ai.traps.map(() => null);
+  ctx.render?.();
+
+  const eventStart = (ctx.state.gameEvents || []).length;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => {
+      const events = (ctx.state.gameEvents || []).slice(eventStart);
+      return ctx.state.turn === "player" &&
+        events.some((event) => event.type === "TURN_ENDED" && event.playerId === "player" && event.nextPlayerId === "ai") &&
+        events.some((event) => event.type === "TURN_STARTED" && event.playerId === "ai") &&
+        events.some((event) => event.type === "TURN_ENDED" && event.playerId === "ai" && event.nextPlayerId === "player") &&
+        events.some((event) => event.type === "TURN_STARTED" && event.playerId === "player");
+    },
+    `${smokeName}: player and AI turns complete through paired end/start events`,
+    12000
+  );
+
+  const handoffEvents = (ctx.state.gameEvents || []).slice(eventStart)
+    .filter((event) => ["TURN_ENDED", "TURN_STARTED"].includes(event.type));
+  const sequence = handoffEvents.map((event) => `${event.type}:${event.playerId}`);
+  const expected = [
+    "TURN_ENDED:player",
+    "TURN_STARTED:ai",
+    "TURN_ENDED:ai",
+    "TURN_STARTED:player"
+  ];
+  if (expected.some((entry, index) => sequence[index] !== entry)) {
+    throw new Error(`${smokeName}: invalid turn handoff sequence ${sequence.join(" -> ")}. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runPhaseProgressionBasicSmoke(ctx) {
+  const smokeName = "phase-progression-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "direct");
+
+  const eventStart = (ctx.state.gameEvents || []).length;
+  clickSmokeElement(ctx.els.skipAttackBtn, `${smokeName}: enter battle by skipping attacks`);
+  await waitForSmoke(
+    () => ctx.state.phase === "battle" &&
+      (ctx.state.gameEvents || []).slice(eventStart).some((event) =>
+        event.type === "PHASE_CHANGED" &&
+        event.playerId === "player" &&
+        event.from === "main" &&
+        event.to === "battle"
+      ),
+    `${smokeName}: main phase advances to battle through PHASE_CHANGED`
+  );
+
+  const phaseEvents = (ctx.state.gameEvents || []).slice(eventStart)
+    .filter((event) => event.type === "PHASE_CHANGED");
+  if (phaseEvents.length !== 1 || phaseEvents[0].from !== "main" || phaseEvents[0].to !== "battle") {
+    throw new Error(`${smokeName}: unexpected phase sequence ${JSON.stringify(phaseEvents)}. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(ctx.els.endTurnBtn, `${smokeName}: end battle phase turn`);
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).slice(eventStart).some((event) =>
+      event.type === "TURN_ENDED" &&
+      event.playerId === "player" &&
+      event.nextPlayerId === "ai" &&
+      event.fromPhase === "battle"
+    ),
+    `${smokeName}: battle phase ends through TURN_ENDED`
+  );
+
+  const events = (ctx.state.gameEvents || []).slice(eventStart);
+  if (events.some((event) => event.type === "PHASE_CHANGED" && event.to === "end")) {
+    throw new Error(`${smokeName}: end phase must not be entered through PHASE_CHANGED. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("running", "mode-auto-end");
   await startSmokeDuel(ctx, "combo");
@@ -4601,6 +4910,63 @@ async function runHandActionHighlightRecoveryBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runSpellLegalityHighlightBasicSmoke(ctx) {
+  const smokeName = "spell-legality-highlight-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmega");
+
+  const finalCounter = cloneCardById("trio-final-counter");
+  const pawn = cloneCardById("trio-ember-pawn");
+  const moonDominion = cloneCardById("trio-moon-dominion");
+  if (!finalCounter || !pawn || !moonDominion) {
+    throw new Error(`${smokeName}: required finale cards are missing`);
+  }
+  const continuousId = `continuous:${moonDominion.uid}`;
+  ctx.state.player.lp = 1300;
+  ctx.state.player.hand = [finalCounter];
+  ctx.state.player.field = [pawn, null, null, null, null];
+  ctx.state.ai.traps = [moonDominion, null, null, null, null];
+  ctx.state.gameEvents = [
+    {
+      id: continuousId,
+      type: "CONTINUOUS_EFFECT_REGISTERED",
+      playerId: "ai",
+      sourceCardId: moonDominion.uid,
+      effectId: "lunarDominion",
+      targetCardId: pawn.uid,
+      operations: []
+    },
+    {
+      id: continuousId,
+      type: "CONTINUOUS_EFFECT_RELEASED",
+      playerId: "ai",
+      sourceCardId: moonDominion.uid,
+      effectId: "lunarDominion",
+      targetCardId: pawn.uid,
+      reason: "target-left-zone"
+    }
+  ];
+  ctx.render?.();
+
+  clickSmokeElement(
+    assertHandCardReady(ctx.els, "trio-final-counter", `${smokeName}: released pressure uses engine highlight`),
+    `${smokeName}: select final counter`
+  );
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: final counter confirm is enabled`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: activate final counter`);
+  await waitForSmoke(
+    () => ctx.state.player.grave.some((card) => card?.id === "trio-final-counter") &&
+      ctx.state.player.field[0]?.id === "trio-ember-pawn" &&
+      (ctx.state.player.field[0]?.tempAtk || 0) >= 2100,
+    `${smokeName}: legal highlighted spell resolves through dispatch`,
+    9000
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runGameOverEventSmoke(ctx) {
   setSmokeStatus("running", "game-over-event");
   await startSmokeDuel(ctx, "combo");
@@ -4664,6 +5030,48 @@ async function runPostDuelLogReviewSmoke(ctx) {
     "post-duel-log-review: result closes without resetting duel",
     4000
   );
+  const lockedRulesSnapshot = () => JSON.stringify({
+    turn: ctx.state.turn,
+    phase: ctx.state.phase,
+    actionWindow: ctx.state.actionWindow,
+    gameOver: ctx.state.gameOver,
+    gameOverWinner: ctx.state.gameOverWinner,
+    player: {
+      lp: ctx.state.player.lp,
+      shield: ctx.state.player.shield,
+      hand: cardIds(ctx.state.player.hand),
+      deck: cardIds(ctx.state.player.deck),
+      field: cardIds(ctx.state.player.field),
+      traps: cardIds(ctx.state.player.traps),
+      grave: cardIds(ctx.state.player.grave)
+    },
+    ai: {
+      lp: ctx.state.ai.lp,
+      shield: ctx.state.ai.shield,
+      hand: cardIds(ctx.state.ai.hand),
+      deck: cardIds(ctx.state.ai.deck),
+      field: cardIds(ctx.state.ai.field),
+      traps: cardIds(ctx.state.ai.traps),
+      grave: cardIds(ctx.state.ai.grave)
+    },
+    gameEvents: ctx.state.gameEvents
+  });
+  const lockedBefore = lockedRulesSnapshot();
+  const blockedCard = handCard(ctx.els, "war-chant");
+  if (!blockedCard || blockedCard.classList.contains("action-ready")) {
+    throw new Error(`post-duel-log-review: finished duel should not highlight hand actions. ${smokeDebug(ctx)}`);
+  }
+  if (Object.values(ctx.currentPlayerActions()).some(Boolean)) {
+    throw new Error(`post-duel-log-review: finished duel should expose no player actions. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(blockedCard, "post-duel-log-review: inspect hand card after game over");
+  await waitForSmoke(
+    () => ctx.state.focusedCard?.id === "war-chant",
+    "post-duel-log-review: post-game hand click only updates inspection"
+  );
+  if (lockedRulesSnapshot() !== lockedBefore) {
+    throw new Error(`post-duel-log-review: inspecting a hand card after game over changed rules state. ${smokeDebug(ctx)}`);
+  }
   await waitForSmoke(() => logCardLink(ctx.els, "star-lancer"), "post-duel-log-review: public battle log link", 6000);
   clickSmokeElement(logCardLink(ctx.els, "star-lancer"), "post-duel-log-review: open log card detail");
   await assertCardDetailModal(ctx, attacker, "post-duel-log-review");
@@ -4683,6 +5091,9 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "direct-shield-consume": runDirectShieldConsumeSmoke,
     "guard-counter": runGuardCounterSmoke,
     "ai-guard-skip": runAiGuardSkipSmoke,
+    "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
+    "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
+    "response-action-lock-basic": runResponseActionLockBasicSmoke,
     "summon-effects": runSummonEffectsSmoke,
     "summon-fire-buff": runSummonFireBuffSmoke,
     "summon-shield": runSummonShieldSmoke,
@@ -4727,6 +5138,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "redirect-prompt": runRedirectPromptSmoke,
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "spell-target-default-basic": runSpellTargetDefaultBasicSmoke,
+    "spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
     "battle-trap": runBattleTrapSmoke,
@@ -4746,6 +5158,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "player-counter-chain": runPlayerCounterChainSmoke,
     "triple-counter-chain": runTripleCounterChainSmoke,
     "chain-resolution-review": runChainResolutionReviewSmoke,
+    "turn-handoff-basic": runTurnHandoffBasicSmoke,
+    "phase-progression-basic": runPhaseProgressionBasicSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
@@ -4758,6 +5172,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "hand-action-highlight-recovery-basic": runHandActionHighlightRecoveryBasicSmoke,
+    "spell-legality-highlight-basic": runSpellLegalityHighlightBasicSmoke,
     "game-over-event": runGameOverEventSmoke,
     "post-duel-log-review": runPostDuelLogReviewSmoke
   };

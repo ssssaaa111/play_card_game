@@ -159,11 +159,15 @@ export function resolveSelectedTargetSelection(pending, duelists = {}) {
 
 export function prepareDefaultTargetSelection(pending, duelists = {}) {
   if (!pending) return null;
-  if (resolveSelectedTargetSelection(pending, duelists)) return pending;
-  const recommended = collectLegalTargetSelections(pending, duelists)[0];
-  return recommended
-    ? selectTargetSelection(pending, recommended, { source: "default" })
-    : pending;
+  const selected = resolveSelectedTargetSelection(pending, duelists);
+  if (selected && pending.selectedTargetSource !== "default") return pending;
+  const legalTargets = collectLegalTargetSelections(pending, duelists);
+  if (legalTargets.length === 1) {
+    return selectTargetSelection(pending, legalTargets[0], { source: "default" });
+  }
+  if (!pending.selectedTarget && !pending.selectedTargetSource) return pending;
+  const { selectedTarget, selectedTargetSource, ...unselected } = pending;
+  return unselected;
 }
 
 export function isSelectedTargetSelection(pending, owner, index, zone = "field") {

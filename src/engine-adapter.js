@@ -775,9 +775,14 @@ export function getLegalActionsFromUiState(uiState, playerId = uiState.turn || "
   return getLegalActions(engineState, playerId);
 }
 
+function canProjectBattleWindow(uiState, playerId) {
+  if (![PHASES.main, PHASES.battle].includes(uiState.phase)) return false;
+  if ([ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(uiState.actionWindow)) return true;
+  return uiState.actionWindow === ACTION_WINDOWS.ai && uiState.turn === playerId;
+}
+
 export function getBattleLegalActionsFromUiState(uiState, playerId = uiState.turn || "player") {
-  if (![PHASES.main, PHASES.battle].includes(uiState.phase) ||
-      ![ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(uiState.actionWindow)) {
+  if (!canProjectBattleWindow(uiState, playerId)) {
     return getLegalActionsFromUiState(uiState, playerId);
   }
   return getLegalActionsFromUiState({
@@ -820,8 +825,7 @@ export function projectBattleFromUiState(uiState, playerId = uiState.turn || "pl
     .filter((action) => !action.direct)
     .map((action) => action.targetIndex);
   const inBattleWindow = uiState.phase === PHASES.battle && uiState.actionWindow === ACTION_WINDOWS.battle;
-  const inAttackIntentWindow = [PHASES.main, PHASES.battle].includes(uiState.phase) &&
-    [ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(uiState.actionWindow);
+  const inAttackIntentWindow = canProjectBattleWindow(uiState, playerId);
   const hasBattleAction = Boolean(
     battleLegal.can.declareAttack ||
     battleLegal.can.activateCard ||
@@ -860,8 +864,7 @@ export function explainMonsterAttackReadinessFromUiState(uiState, playerId, fiel
   if (uiState.turn !== playerId) {
     return { ok: false, reason: "当前不是这名决斗者的回合。", engineReason: "Not the active player" };
   }
-  const inAttackIntentWindow = [PHASES.main, PHASES.battle].includes(uiState.phase) &&
-    [ACTION_WINDOWS.main, ACTION_WINDOWS.battle].includes(uiState.actionWindow);
+  const inAttackIntentWindow = canProjectBattleWindow(uiState, playerId);
   if (!inAttackIntentWindow) {
     const selecting = uiState.actionWindow === ACTION_WINDOWS.targetSelect;
     return {

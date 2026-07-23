@@ -892,6 +892,52 @@ test("lethal damage declares game over through the event log", () => {
   ));
 });
 
+test("game over rejects every subsequent dispatch without mutating state", () => {
+  const state = makeState({
+    cards: [
+      card("burst-lethal", { templateId: "burst-rune", effect: "burn500" }),
+      card("summon-after", { type: "monster" }),
+      card("mode-after", { type: "monster", mode: "attack", used: false, changedMode: false }),
+      card("spell-after", { templateId: "seer-call", effect: "draw2" }),
+      card("set-after", { type: "trap", trigger: "attackNegate" }),
+      card("trap-after", { type: "trap", trigger: "summonBurn" }),
+      card("deck-1", { type: "monster" }),
+      card("deck-2", { type: "monster" })
+    ],
+    player: {
+      hand: ["burst-lethal", "summon-after", "spell-after", "set-after"],
+      deck: ["deck-1", "deck-2"],
+      monsterZone: ["mode-after"],
+      spellTrapZone: ["trap-after"]
+    },
+    ai: { lp: 400 }
+  });
+  const engine = new GameEngine(state);
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "burst-lethal" });
+  const finished = engine.getState();
+  assert.equal(finished.gameOver.winnerId, PLAYER);
+
+  const actions = [
+    { type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "spell-after" },
+    { type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "summon-after", index: 1 },
+    { type: "SET_TRAP", playerId: PLAYER, cardId: "set-after", index: 1 },
+    { type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "trap-after" },
+    { type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "mode-after", mode: "defense" },
+    { type: "CHANGE_PHASE", playerId: PLAYER, phase: Phase.battle },
+    { type: "DRAW_CARDS", playerId: PLAYER, count: 1, reason: "post-game" },
+    { type: "GRANT_ABILITY", playerId: PLAYER, ability: Ability.extraSummon, uses: 1 },
+    { type: "START_TURN", playerId: AI }
+  ];
+
+  for (const action of actions) {
+    assert.throws(
+      () => engine.dispatch(action),
+      /after game over/
+    );
+    assert.deepEqual(engine.getState(), finished);
+  }
+});
+
 test("war-chant modifies only the declared target through dispatch events", () => {
   const state = makeState({
     cards: [
@@ -4029,10 +4075,10 @@ test("start turn switches ownership and resets turn-scoped state through events"
       comboThisTurn: true,
       comboFlags: { fireWind: true }
     },
-    turn: { playerId: AI, phase: Phase.battle }
+    turn: { playerId: AI, phase: Phase.end }
   });
-  state.machine.phase = Phase.battle;
-  state.machine.timing = Timing.battleOpen;
+  state.machine.phase = Phase.end;
+  state.machine.timing = Timing.end;
   state.abilities[PLAYER] = [
     { ability: Ability.directAttack, uses: 1, duration: "turn", sourceCardId: "breach-1" },
     { ability: Ability.extraSummon, uses: 2, duration: "turn", sourceCardId: "twin-1" },
@@ -4063,6 +4109,119 @@ test("start turn switches ownership and resets turn-scoped state through events"
     event.playerId === PLAYER &&
     event.abilities.length === 2
   ));
+});
+
+test("start turn rejects skipping the prior end phase without changing state", () => {
+  const engine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.main }
+  }));
+  const before = engine.getState();
+
+  assert.throws(
+    () => engine.dispatch({ type: "START_TURN", playerId: AI }),
+    /end phase/
+  );
+  assert.deepEqual(engine.getState(), before);
+});
+
+test("turn handoff rejects same-player extra turns without changing state", () => {
+  const endEngine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.main }
+  }));
+  const beforeEnd = endEngine.getState();
+  assert.throws(
+    () => endEngine.dispatch({ type: "END_TURN", playerId: PLAYER, nextPlayerId: PLAYER }),
+    /opponent/
+  );
+  assert.deepEqual(endEngine.getState(), beforeEnd);
+
+  const startEngine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.end },
+    machine: { phase: Phase.end, timing: Timing.end }
+  }));
+  const beforeStart = startEngine.getState();
+  assert.throws(
+    () => startEngine.dispatch({ type: "START_TURN", playerId: PLAYER }),
+    /opponent/
+  );
+  assert.deepEqual(startEngine.getState(), beforeStart);
+});
+
+test("phase changes progress only from draw to main and main to battle", () => {
+  const engine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.draw },
+    machine: { phase: Phase.draw, timing: Timing.draw }
+  }));
+
+  const mainEvents = engine.dispatch({
+    type: "CHANGE_PHASE",
+    playerId: PLAYER,
+    phase: Phase.main
+  });
+  const battleEvents = engine.dispatch({
+    type: "CHANGE_PHASE",
+    playerId: PLAYER,
+    phase: Phase.battle
+  });
+
+  assert.ok(mainEvents.some((event) =>
+    event.type === "PHASE_CHANGED" &&
+    event.from === Phase.draw &&
+    event.to === Phase.main
+  ));
+  assert.ok(battleEvents.some((event) =>
+    event.type === "PHASE_CHANGED" &&
+    event.from === Phase.main &&
+    event.to === Phase.battle
+  ));
+  assert.equal(engine.getState().turn.phase, Phase.battle);
+});
+
+test("phase changes reject duplicate, rollback, and skipped-end transitions without changing state", () => {
+  const cases = [
+    { from: Phase.main, to: Phase.main },
+    { from: Phase.main, to: Phase.draw },
+    { from: Phase.main, to: Phase.end },
+    { from: Phase.battle, to: Phase.main },
+    { from: Phase.battle, to: Phase.end },
+    { from: Phase.end, to: Phase.draw }
+  ];
+
+  for (const { from, to } of cases) {
+    const engine = new GameEngine(makeState({
+      turn: { playerId: PLAYER, phase: from },
+      machine: {
+        phase: from,
+        timing: from === Phase.main
+          ? Timing.mainOpen
+          : from === Phase.battle
+            ? Timing.battleOpen
+            : Timing.end
+      }
+    }));
+    const before = engine.getState();
+
+    assert.throws(
+      () => engine.dispatch({ type: "CHANGE_PHASE", playerId: PLAYER, phase: to }),
+      new RegExp(`Cannot change phase from ${from} to ${to}`)
+    );
+    assert.deepEqual(engine.getState(), before);
+  }
+});
+
+test("end turn rejects duplicate dispatches from the end phase without changing state", () => {
+  const engine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.end },
+    machine: { phase: Phase.end, timing: Timing.end }
+  }));
+  const before = engine.getState();
+
+  assert.throws(
+    () => engine.dispatch({ type: "END_TURN", playerId: PLAYER }),
+    /not legal during end phase/
+  );
+  assert.deepEqual(engine.getState(), before);
+  assert.equal(getLegalActions(engine.getState(), PLAYER).can.endTurn, false);
 });
 
 test("start turn rejects unresolved response windows", () => {
@@ -4154,6 +4313,115 @@ test("response windows and unresolved chains block auto-end and turn end", () =>
     () => chainEngine.dispatch({ type: "END_TURN", playerId: PLAYER }),
     /chain is unresolved/
   );
+});
+
+test("response windows block ordinary main-phase actions without mutating state", () => {
+  const state = makeState({
+    cards: [
+      card("summon-1", { type: "monster" }),
+      card("mode-1", { type: "monster", mode: "attack", used: false, changedMode: false }),
+      card("spell-1", { templateId: "seer-call", effect: "draw2" }),
+      card("trap-1", { type: "trap", trigger: "attackNegate" }),
+      card("deck-1", { type: "monster" }),
+      card("deck-2", { type: "monster" })
+    ],
+    player: {
+      hand: ["summon-1", "spell-1", "trap-1"],
+      deck: ["deck-1", "deck-2"],
+      monsterZone: ["mode-1"]
+    },
+    machine: {
+      responseWindow: {
+        playerId: AI,
+        type: ResponseWindow.optional,
+        timing: Timing.mainOpen,
+        resumeTiming: Timing.mainOpen,
+        triggerEventId: "main-action"
+      },
+      actionWindow: {
+        playerId: AI,
+        window: ActionWindow.response,
+        windowId: "response:main-action",
+        reason: "main-action",
+        openedAt: 1,
+        deadline: 1
+      }
+    }
+  });
+  const actions = [
+    { type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "summon-1", index: 1 },
+    { type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "spell-1" },
+    { type: "SET_TRAP", playerId: PLAYER, cardId: "trap-1", index: 0 },
+    { type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "mode-1", mode: "defense" }
+  ];
+
+  for (const action of actions) {
+    const engine = new GameEngine(state);
+    const before = engine.getState();
+    assert.throws(
+      () => engine.dispatch(action),
+      /response window is open/
+    );
+    assert.deepEqual(engine.getState(), before);
+  }
+});
+
+test("unresolved chains block ordinary main-phase actions without mutating state", () => {
+  const state = makeState({
+    cards: [
+      card("summon-1", { type: "monster" }),
+      card("mode-1", { type: "monster", mode: "attack", used: false, changedMode: false }),
+      card("spell-1", { templateId: "seer-call", effect: "draw2" }),
+      card("trap-1", { type: "trap", trigger: "attackNegate" }),
+      card("deck-1", { type: "monster" }),
+      card("deck-2", { type: "monster" }),
+      card("standalone-trap", { type: "trap", trigger: "summonBurn" }),
+      card("chain-trap", { ownerId: AI, type: "trap", trigger: "attackNegate" })
+    ],
+    player: {
+      hand: ["summon-1", "spell-1", "trap-1"],
+      deck: ["deck-1", "deck-2"],
+      monsterZone: ["mode-1"],
+      spellTrapZone: ["standalone-trap"]
+    },
+    ai: { spellTrapZone: ["chain-trap"] },
+    machine: {
+      timing: Timing.chainResolution,
+      chain: [{
+        linkId: 1,
+        playerId: AI,
+        cardId: "chain-trap",
+        effectId: "attackNegate",
+        targetEffectId: "main-action",
+        committed: true
+      }],
+      actionWindow: {
+        playerId: AI,
+        window: ActionWindow.resolution,
+        windowId: "resolution:main-action",
+        reason: "chain-resolution",
+        openedAt: 1,
+        deadline: 1
+      }
+    }
+  });
+  const actions = [
+    { type: "SUMMON_MONSTER", playerId: PLAYER, cardId: "summon-1", index: 1 },
+    { type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "spell-1" },
+    { type: "SET_TRAP", playerId: PLAYER, cardId: "trap-1", index: 1 },
+    { type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "standalone-trap" },
+    { type: "CHANGE_MONSTER_MODE", playerId: PLAYER, cardId: "mode-1", mode: "defense" }
+  ];
+
+  for (const action of actions) {
+    const engine = new GameEngine(state);
+    const before = engine.getState();
+    assert.throws(
+      () => engine.dispatch(action),
+      /chain is unresolved/
+    );
+    assert.deepEqual(engine.getState(), before);
+  }
 });
 
 test("auto-end and turn end resolve through explicit events", () => {

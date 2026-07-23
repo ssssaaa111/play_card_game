@@ -871,6 +871,10 @@ export class GameEngine {
       throw new GameRuleError("dispatch requires an action type");
     }
 
+    if (this.#state.gameOver) {
+      throw new GameRuleError(`Cannot dispatch ${action.type} after game over`);
+    }
+
     const workingState = clone(this.#state);
     const startIndex = workingState.events.length;
     const emit = createEventEmitter(workingState);
@@ -975,6 +979,7 @@ export class GameEngine {
   #activateSpell(state, ctx, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.main, Phase.battle], action.type);
+    requireOrdinaryActionReady(state, action.type);
     const card = requireCardInZone(state, action.playerId, "hand", action.cardId);
     if (card.type !== "spell") {
       throw new GameRuleError(`Card ${action.cardId} is not a spell`);
@@ -1137,6 +1142,9 @@ export class GameEngine {
   #activateTrap(state, ctx, emit, action) {
     requirePlayer(state, action.playerId);
     requirePhase(state, [Phase.main, Phase.battle], action.type);
+    if (!state.machine.responseWindow && (state.machine.chain || []).length > 0) {
+      throw new GameRuleError(`Cannot ${action.type} while a chain is unresolved`);
+    }
     const card = requireCardInZone(state, action.playerId, "spellTrapZone", action.cardId);
     if (card.type !== "trap") {
       throw new GameRuleError(`Card ${action.cardId} is not a trap`);
@@ -1183,6 +1191,7 @@ export class GameEngine {
   #summonMonster(state, ctx, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.main], action.type);
+    requireOrdinaryActionReady(state, action.type);
     const player = requirePlayer(state, action.playerId);
     const card = requireCardInZone(state, action.playerId, "hand", action.cardId);
     if (action.zone && action.zone !== "monsterZone") {
@@ -1286,6 +1295,7 @@ export class GameEngine {
   #setTrap(state, ctx, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.main, Phase.battle], action.type);
+    requireOrdinaryActionReady(state, action.type);
     const card = requireCardInZone(state, action.playerId, "hand", action.cardId);
     if (card.type !== "trap") {
       throw new GameRuleError(`Card ${action.cardId} is not a trap`);
@@ -1554,6 +1564,7 @@ export class GameEngine {
   #changeMonsterMode(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
     requirePhase(state, [Phase.main], action.type);
+    requireOrdinaryActionReady(state, action.type);
     const card = requireCardInZone(state, action.playerId, "monsterZone", action.cardId);
     if (card.type !== "monster") {
       throw new GameRuleError(`Card ${action.cardId} is not a monster`);
@@ -1595,8 +1606,16 @@ export class GameEngine {
     if (state.machine.pendingAttack) {
       throw new GameRuleError("Cannot start a turn while an attack is pending");
     }
+    if (state.turn.phase !== Phase.end) {
+      throw new GameRuleError("Cannot start a turn before the previous turn reaches end phase");
+    }
 
     const previousPlayerId = state.turn.playerId;
+    const expectedPlayerId = otherPlayerId(state, previousPlayerId);
+    if (action.playerId !== expectedPlayerId) {
+      throw new GameRuleError(`Next turn must belong to opponent ${expectedPlayerId}`);
+    }
+
     const player = requirePlayer(state, action.playerId);
     const monsterResets = player.monsterZone
       .map((cardId) => requireCard(state, cardId))
@@ -1647,7 +1666,7 @@ export class GameEngine {
 
   #endTurn(state, emit, action) {
     requireCurrentTurn(state, action.playerId);
-    requirePhase(state, [Phase.main, Phase.battle, Phase.end], action.type);
+    requirePhase(state, [Phase.main, Phase.battle], action.type);
     if (state.machine.responseWindow) {
       throw new GameRuleError("Cannot end a turn while a response window is open");
     }
@@ -1658,8 +1677,12 @@ export class GameEngine {
       throw new GameRuleError("Cannot end a turn while an attack is pending");
     }
 
-    const nextPlayerId = action.nextPlayerId || otherPlayerId(state, action.playerId);
+    const expectedPlayerId = otherPlayerId(state, action.playerId);
+    const nextPlayerId = action.nextPlayerId || expectedPlayerId;
     requirePlayer(state, nextPlayerId);
+    if (nextPlayerId !== expectedPlayerId) {
+      throw new GameRuleError(`Turn must pass to opponent ${expectedPlayerId}`);
+    }
     emit("TURN_ENDED", {
       playerId: action.playerId,
       nextPlayerId,
@@ -1833,6 +1856,13 @@ export class GameEngine {
     }
 
     const before = state.turn.phase;
+    const nextPhase = {
+      [Phase.draw]: Phase.main,
+      [Phase.main]: Phase.battle
+    }[before];
+    if (action.phase !== nextPhase) {
+      throw new GameRuleError(`Cannot change phase from ${before} to ${action.phase}`);
+    }
     emit("PHASE_CHANGED", {
       playerId: action.playerId,
       from: before,
@@ -4332,6 +4362,18 @@ function requireCurrentTurn(state, playerId) {
 function requirePhase(state, allowedPhases, actionType) {
   if (!allowedPhases.includes(state.turn.phase)) {
     throw new GameRuleError(`${actionType} is not legal during ${state.turn.phase} phase`);
+  }
+}
+
+function requireOrdinaryActionReady(state, actionType) {
+  if (state.machine.responseWindow) {
+    throw new GameRuleError(`Cannot ${actionType} while a response window is open`);
+  }
+  if ((state.machine.chain || []).length > 0) {
+    throw new GameRuleError(`Cannot ${actionType} while a chain is unresolved`);
+  }
+  if (state.machine.pendingAttack) {
+    throw new GameRuleError(`Cannot ${actionType} while an attack is pending`);
   }
 }
 
