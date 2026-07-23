@@ -594,6 +594,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-readability-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-readability-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "token-readability-basic"\)/);
+  assert.match(smoke, /const smokeName = "grave-target-readability-basic";[\s\S]*非怪兽[\s\S]*invalid grave target changed rules state[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-challenge"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
@@ -712,6 +713,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"split-token": runSplitTokenSmoke/);
   assert.match(smoke, /"token-split-basic": runTokenSplitBasicSmoke/);
   assert.match(smoke, /"graveyard-summon-basic": runGraveyardSummonBasicSmoke/);
+  assert.match(smoke, /"grave-target-readability-basic": runGraveTargetReadabilityBasicSmoke/);
   assert.match(smoke, /"mechanics-regression-basic": runMechanicsRegressionBasicSmoke/);
   assert.match(smoke, /fusionPreviewName/);
   assert.match(smoke, /fusionPreviewKicker/);
@@ -888,6 +890,20 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-extra-summon-basic": runAiExtraSummonBasicSmoke/);
   assert.match(smoke, /const smokeName = "response-action-lock-basic";[\s\S]*querySelector\("#detailName"\)\?\.textContent === blockedCard\?\.name[\s\S]*event\.type === "CHAIN_RESOLVED"/);
   assert.match(smoke, /"response-action-lock-basic": runResponseActionLockBasicSmoke/);
+});
+
+test("grave summon selection keeps illegal public cards visible with exact feedback", () => {
+  const app = readProjectFile("src/app.js");
+  const css = readProjectFile("styles.css");
+
+  assert.match(app, /dataset\.summary = `可召唤 \$\{legalCount\} \/ 墓地 \$\{candidates\.length\}`/);
+  assert.match(app, /classList\.toggle\("grave-target-unavailable", !targetInfo\.ok\)/);
+  assert.match(app, /cardEl\.title = targetInfo\.ok \? `选择墓地目标：\$\{card\.name\}` : targetInfo\.reason/);
+  assert.doesNotMatch(app, /const targetInfo = validateCurrentTarget\("player", index, "grave"\);\s*if \(!targetInfo\.ok\) return/);
+  assert.match(app, /function selectPendingSpellTarget[\s\S]*const targetInfo = validateCurrentTarget[\s\S]*if \(!targetInfo\.ok\) \{\s*cue\(targetInfo\.reason\);\s*return true;\s*\}\s*notePlayerIntent\(\)/);
+  assert.match(app, /async function resolvePendingSpellTarget[\s\S]*const targetInfo = validateCurrentTarget[\s\S]*if \(!targetInfo\.ok\) \{\s*cue\(targetInfo\.reason\);\s*return true;\s*\}\s*notePlayerIntent\(\)/);
+  assert.match(css, /\.grave-targets \.card\.grave-target-unavailable/);
+  assert.match(css, /\.grave-target-reason/);
 });
 
 test("skipped attack lock is visible on field cards", () => {

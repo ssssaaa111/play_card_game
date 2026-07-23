@@ -1102,13 +1102,12 @@ function isPendingTrapTargetSlot(ownerName, index) {
 
 async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
-  notePlayerIntent();
   const targetInfo = validateCurrentTarget(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
-    resetPlayerIdleCountdown();
     return true;
   }
+  notePlayerIntent();
   const handIndex = state.player.hand.findIndex((card) => card.uid === state.pendingTarget.handUid);
   if (handIndex < 0) {
     clearPendingTarget();
@@ -1124,13 +1123,12 @@ async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
 
 function selectPendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
-  notePlayerIntent();
   const targetInfo = validateCurrentTarget(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
-    resetPlayerIdleCountdown();
     return true;
   }
+  notePlayerIntent();
   state.pendingTarget = selectTargetSelection(state.pendingTarget, targetInfo, { source: "player" });
   const display = currentTargetSelectionDisplay();
   playSound("click");
@@ -4719,20 +4717,40 @@ function renderGraveTargets() {
   const root = els.graveTargets;
   if (!root) return;
   root.innerHTML = "";
+  delete root.dataset.summary;
+  root.removeAttribute("aria-label");
   const active = state.pendingTarget?.mode === "ownGraveMonster";
   root.hidden = !active;
   if (!active) return;
-  state.player.grave.forEach((card, index) => {
-    if (!card) return;
-    const targetInfo = validateCurrentTarget("player", index, "grave");
-    if (!targetInfo.ok) return;
+  const candidates = state.player.grave
+    .map((card, index) => card ? {
+      card,
+      index,
+      targetInfo: validateCurrentTarget("player", index, "grave")
+    } : null)
+    .filter(Boolean);
+  const legalCount = candidates.filter((candidate) => candidate.targetInfo.ok).length;
+  root.dataset.summary = `可召唤 ${legalCount} / 墓地 ${candidates.length}`;
+  root.setAttribute("aria-label", `墓地目标：${legalCount} 张可召唤，墓地共 ${candidates.length} 张卡。`);
+  candidates.forEach(({ card, index, targetInfo }) => {
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
     cardEl.dataset.zone = "player-grave";
-    cardEl.classList.add("grave-target-card", "targetable");
+    cardEl.dataset.targetState = targetInfo.ok ? "legal" : "unavailable";
+    cardEl.classList.add("grave-target-card");
+    cardEl.classList.toggle("targetable", targetInfo.ok);
+    cardEl.classList.toggle("grave-target-unavailable", !targetInfo.ok);
     const selected = isSelectedTargetSelection(state.pendingTarget, "player", index, "grave");
-    cardEl.classList.toggle("target-selected", selected);
-    cardEl.setAttribute("aria-pressed", String(selected));
-    cardEl.title = `选择墓地目标：${card.name}`;
+    cardEl.classList.toggle("target-selected", targetInfo.ok && selected);
+    cardEl.setAttribute("aria-pressed", String(targetInfo.ok && selected));
+    cardEl.setAttribute("aria-disabled", String(!targetInfo.ok));
+    cardEl.title = targetInfo.ok ? `选择墓地目标：${card.name}` : targetInfo.reason;
+    if (!targetInfo.ok) {
+      const reason = document.createElement("span");
+      reason.className = "grave-target-reason";
+      reason.textContent = /不是怪兽/.test(targetInfo.reason) ? "非怪兽" : "不满足条件";
+      reason.title = targetInfo.reason;
+      cardEl.appendChild(reason);
+    }
     cardEl.addEventListener("click", () => {
       interactWithPendingSpellTarget("player", index, "grave", {
         directActivate: directActivationTracker.register(`player:grave:${index}`)

@@ -145,10 +145,19 @@ test("grave target selection accepts only own graveyard monsters", () => {
     { id: "grave-return", type: "spell", name: "醒星回召", effect: "graveRevive" },
     effects
   );
+  const beforeInvalidSelection = structuredClone(state);
 
   assert.equal(validateTargetSelection(pending, state, "player", 0, "grave").ok, true);
-  assert.match(validateTargetSelection(pending, state, "player", 1, "grave").reason, /墓地中的怪兽/);
+  assert.equal(
+    validateTargetSelection(pending, state, "player", 1, "grave").reason,
+    "不能选择该卡：不是怪兽。"
+  );
+  assert.equal(
+    validateTargetSelection(pending, state, "player", 9, "grave").reason,
+    "不能选择该卡：目标不在墓地。"
+  );
   assert.match(validateTargetSelection(pending, state, "ai", 0, "grave").reason, /我方墓地/);
+  assert.deepEqual(state, beforeInvalidSelection);
 });
 
 test("legal target collection is deterministic and respects target resistance", () => {
