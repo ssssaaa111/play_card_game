@@ -83,6 +83,17 @@ export function validateTargetSelection(
     return targetSuccess(target, ownerName, index, zone);
   }
 
+  if (pending.mode === "ownGraveCard") {
+    if (zone !== "grave" || ownerName !== "player") {
+      return { ok: false, reason: "这个效果需要选择我方墓地中的卡牌。" };
+    }
+    const target = duelist.grave?.[index];
+    if (!target) return { ok: false, reason: "请选择我方墓地中的卡牌作为目标。" };
+    const rule = validateSpellTargetRule(pending, duelist, target);
+    if (!rule.ok) return rule;
+    return targetSuccess(target, ownerName, index, zone);
+  }
+
   if (zone !== "field") return { ok: false, reason: "这个效果需要选择场上的怪兽。" };
   const target = duelist.field?.[index];
   if (!target) return { ok: false, reason: "请选择场上的怪兽作为目标。" };
@@ -195,7 +206,7 @@ export function targetSelectionTargetLabel(target) {
     return `${publicName}（${owner}魔陷区 ${position}）`;
   }
   if (target.zone === "grave") {
-    return `${target.card?.name || "墓地怪兽"}（${owner}墓地）`;
+    return `${target.card?.name || "墓地卡牌"}（${owner}墓地）`;
   }
   return `${target.card?.name || "怪兽"}（${owner}怪兽区 ${position}）`;
 }

@@ -149,8 +149,8 @@ test("featured scenario metadata describes difficulty objectives and hints", () 
 test("spell cards are backed by spell metadata", () => {
   const spellCards = library.filter((card) => card.type === "spell");
   const effectsFromCards = new Set(spellCards.map((card) => card.effect));
-  const validTargets = new Set(["ownMonster", "ownGraveMonster", "enemyMonster", "enemySpellTrap"]);
-  const validTargetRules = new Set(["strongest"]);
+  const validTargets = new Set(["ownMonster", "ownGraveMonster", "ownGraveCard", "enemyMonster", "enemySpellTrap"]);
+  const validTargetRules = new Set(["strongest", "notSource"]);
 
   spellCards.forEach((card) => {
     const definition = spellDefinitions[card.effect];
@@ -187,6 +187,44 @@ test("engine-backed targeted spells keep UI and rules targets aligned", () => {
     assert.equal(uiDefinition.targetRule, "strongest", `${effect} UI target rule should stay strongest`);
     assert.deepEqual(engineDefinition.target, expected, `${effect} engine target rule drifted from UI metadata`);
   });
+});
+
+test("every engine-targeted library spell exposes the matching UI target mode", () => {
+  const expectedUiTarget = (target = {}) => {
+    if (target.player === "self" && target.zone === "monsterZone") return "ownMonster";
+    if (target.player === "rival" && target.zone === "monsterZone") return "enemyMonster";
+    if (target.player === "self" && target.zone === "grave") {
+      return target.cardType === "monster" ? "ownGraveMonster" : "ownGraveCard";
+    }
+    if (target.player === "rival" && target.zone === "spellTrapZone") return "enemySpellTrap";
+    return "";
+  };
+  const expectedUiRule = (target = {}) => target.rule === "strongestAtk"
+    ? "strongest"
+    : target.rule === "notSource"
+      ? "notSource"
+      : "";
+  const targetedEffects = new Set(
+    library
+      .filter((card) => card.type === "spell" && getCardEffectDefinition(card.effect)?.target)
+      .map((card) => card.effect)
+  );
+
+  targetedEffects.forEach((effect) => {
+    const engineTarget = getCardEffectDefinition(effect).target;
+    const uiDefinition = spellDefinitions[effect];
+    assert.equal(uiDefinition?.target, expectedUiTarget(engineTarget), `${effect} target mode drifted`);
+    assert.equal(uiDefinition?.targetRule || "", expectedUiRule(engineTarget), `${effect} target rule drifted`);
+  });
+});
+
+test("grave-return exposes its engine target instead of silently choosing the first grave card", () => {
+  const uiDefinition = spellDefinitions.graveReturn;
+  const engineDefinition = getCardEffectDefinition("graveReturn");
+
+  assert.equal(uiDefinition.target, "ownGraveCard");
+  assert.equal(uiDefinition.targetRule, "notSource");
+  assert.deepEqual(engineDefinition.target, { player: "self", zone: "grave", rule: "notSource" });
 });
 
 test("spell/trap removal card is backed by engine and UI metadata", () => {

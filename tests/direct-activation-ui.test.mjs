@@ -19,6 +19,17 @@ test("repeating an active targeted hand spell uses the guarded direct activation
   assert.match(app, /directActivate && legalTargets\.length > 1/);
 });
 
+test("an illegal hand switch does not cancel the active target selection", () => {
+  const handSelectionStart = app.indexOf("async function selectHandCard");
+  const selectionStart = app.indexOf("if (state.pendingTarget) {", handSelectionStart);
+  const selectionEnd = app.indexOf("if (state.pendingTribute", selectionStart);
+  const selectionFlow = app.slice(selectionStart, selectionEnd);
+
+  assert.match(selectionFlow, /const switchAction = handActionInfo\(card, switchHandIndex\)/);
+  assert.match(selectionFlow, /if \(!switchAction\.ok\) \{[\s\S]*cue\(switchAction\.reason\)[\s\S]*return;/);
+  assert.ok(selectionFlow.indexOf("if (!switchAction.ok)") < selectionFlow.indexOf("clearPendingTarget()"));
+});
+
 test("rapid repeat activation survives a renderer replacing the clicked card node", () => {
   let time = 1000;
   const tracker = createDirectActivationTracker({ now: () => time });

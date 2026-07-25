@@ -293,6 +293,7 @@ export function spellTargetPrompt(mode, cardName = "这张卡", targetRule = "")
   if (mode === "ownMonster" && targetRule === "strongest") return `请选择我方攻击力最高的怪兽作为「${cardName}」的目标。`;
   if (mode === "enemyMonster" && targetRule === "strongest") return `请选择敌方攻击力最高的怪兽作为「${cardName}」的目标。`;
   if (mode === "ownGraveMonster") return `请选择我方墓地中的怪兽作为「${cardName}」的目标。`;
+  if (mode === "ownGraveCard") return `请选择我方墓地中的 1 张非本卡卡牌作为「${cardName}」的目标。`;
   if (mode === "ownMonster") return `请选择我方怪兽作为「${cardName}」的目标。`;
   if (mode === "enemyMonster") return `请选择敌方怪兽作为「${cardName}」的目标。`;
   if (mode === "enemySpellTrap") return `请选择敌方魔陷区的卡作为「${cardName}」的目标。`;
@@ -319,6 +320,13 @@ export function validateSpellTargetRule(pending, duelist, target) {
       const scope = pending.mode === "enemyMonster" ? "敌方" : "我方";
       const bestNames = monsters.filter((card) => totalAtk(card) === maxAtk).map((card) => card.name).join("、");
       return { ok: false, reason: `${pending.cardName}只能选择${scope}攻击力最高的怪兽：${bestNames}。` };
+    }
+  }
+  if (pending?.targetRule === "notSource") {
+    const sourceUid = pending?.sourceCard?.uid || pending?.sourceCard?.engineId || pending?.sourceCard?.id || "";
+    const targetUid = target?.uid || target?.engineId || target?.id || "";
+    if (sourceUid && sourceUid === targetUid) {
+      return { ok: false, reason: `${pending.cardName} 不能选择自身作为目标。` };
     }
   }
   return { ok: true };

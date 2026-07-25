@@ -100,7 +100,9 @@ export const spellDefinitions = {
   },
   graveReturn: {
     handSummary: "墓地回卡组顶 · 抽牌 ×1",
-    caption: "墓地回收，抽一张卡"
+    caption: "墓地回收，抽一张卡",
+    target: "ownGraveCard",
+    targetRule: "notSource"
   },
   battleTrance: {
     handSummary: "最高 ATK +200 · 攻击重置 ×1",

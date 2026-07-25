@@ -629,6 +629,15 @@ export function explainActivateSpellFromUiState(uiState, playerId, rivalId, hand
     cardId: cardKey(card)
   };
   const targetCardId = targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo);
+  const definition = spellDefinition(card.effect);
+  if (definition?.target && !targetCardId) {
+    const engineReason = `Effect ${card.effect || card.id} has no legal target`;
+    return {
+      ok: false,
+      reason: localizeEngineRuleReason(engineReason, "发动这张卡"),
+      engineReason
+    };
+  }
   if (targetCardId) action.targetCardId = targetCardId;
   const duration = getCardEffectDefinition(card.effect)?.duration;
   if (duration === CONTINUOUS_EFFECT) {

@@ -83,6 +83,7 @@ test("describes pending target selection", () => {
     started: true,
     canAct: true,
     pendingTarget: { handUid: "s1" },
+    spellValidation: { ok: true },
     spellTargetPrompt: "请选择我方攻击力最高怪兽。"
   });
 
@@ -95,11 +96,63 @@ test("describes pending target selection", () => {
   assert.deepEqual(describeHandAction({ type: "trap", uid: "t1" }, {
     started: true,
     canAct: true,
-    pendingTarget: { handUid: "s1" }
+    pendingTarget: { handUid: "s1" },
+    hasTrapZone: true,
+    trapValidation: { ok: true }
   }), {
     ok: true,
     label: "切换",
     reason: "点击会取消当前目标选择，并改选这张卡。"
+  });
+});
+
+test("pending target switching keeps each alternative card's real legality", () => {
+  const pendingTarget = { handUid: "active-spell" };
+  const base = {
+    started: true,
+    canAct: true,
+    pendingTarget,
+    hasMonsterZone: true,
+    hasTrapZone: true
+  };
+
+  assert.deepEqual(describeHandAction({ type: "monster", uid: "late-monster" }, {
+    ...base,
+    summonedThisTurn: true
+  }), {
+    ok: false,
+    label: "已召唤",
+    reason: "不能切换到这张卡：本回合已经通常召唤过。"
+  });
+  assert.deepEqual(describeHandAction({ type: "trap", uid: "full-trap" }, {
+    ...base,
+    hasTrapZone: false
+  }), {
+    ok: false,
+    label: "陷阱满",
+    reason: "不能切换到这张卡：我方陷阱区已满。"
+  });
+  assert.deepEqual(describeHandAction({ type: "spell", uid: "blocked-spell" }, {
+    ...base,
+    spellValidation: { ok: false, reason: "这张卡没有可指定的合法目标。" }
+  }), {
+    ok: false,
+    label: "条件不足",
+    reason: "不能切换到这张卡：这张卡没有可指定的合法目标。"
+  });
+});
+
+test("an active target spell stops advertising readiness after every target becomes illegal", () => {
+  assert.deepEqual(describeHandAction({ type: "spell", uid: "active-spell" }, {
+    started: true,
+    canAct: true,
+    pendingTarget: { handUid: "active-spell" },
+    spellValidation: { ok: false, reason: "这张卡没有可指定的合法目标。" },
+    spellTargetPrompt: "原目标已经离场。"
+  }), {
+    ok: false,
+    label: "目标失效",
+    reason: "这张卡没有可指定的合法目标。"
   });
 });
 

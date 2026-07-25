@@ -1275,6 +1275,16 @@ async function selectHandCard(uid, { directActivate = false } = {}) {
       resetPlayerIdleCountdown();
       return;
     } else {
+      const switchHandIndex = state.player.hand.findIndex((item) => item.uid === uid);
+      const switchAction = handActionInfo(card, switchHandIndex);
+      if (!switchAction.ok) {
+        cue(switchAction.reason);
+        playSound("click");
+        showDetail(card);
+        render();
+        resetPlayerIdleCountdown();
+        return;
+      }
       const previousCardName = state.pendingTarget.cardName;
       clearPendingTarget();
       state.selected = null;
@@ -4719,7 +4729,7 @@ function renderGraveTargets() {
   const root = els.graveTargets;
   if (!root) return;
   root.innerHTML = "";
-  const active = state.pendingTarget?.mode === "ownGraveMonster";
+  const active = ["ownGraveMonster", "ownGraveCard"].includes(state.pendingTarget?.mode);
   root.hidden = !active;
   if (!active) return;
   state.player.grave.forEach((card, index) => {

@@ -1077,8 +1077,9 @@ export const scenarioSetups = {
     label: "目标选择",
     text: "我方和 AI 场上都有多只怪兽，手牌含强化、削弱和再攻魔法，用来验证指定目标结算。",
     goal: "发动战意高扬只能选择我方攻击力最高怪兽；发动破阵星芒只能选择敌方攻击力最高怪兽。",
-    playerHand: ["war-chant", "pierce-line", "battle-trance", "rally-strike", "seer-call", "renewal"],
+    playerHand: ["war-chant", "pierce-line", "battle-trance", "rally-strike", "seer-call", "renewal", "grave-return"],
     playerField: ["star-lancer", "ember-drake"],
+    playerGrave: ["gale-mage", "star-shield"],
     aiField: ["iron-guardian", "sky-raider"],
     aiHand: ["solar-knight"]
   }

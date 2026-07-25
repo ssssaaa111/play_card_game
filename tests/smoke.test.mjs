@@ -677,6 +677,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(setupRenderer, /onOpenCardDetail\(entry\.id\)/);
   assert.match(app, /scenarioHintsVisible = !scenarioHintsVisible/);
   assert.match(targetSelection, /pending\.mode === "ownGraveMonster"/);
+  assert.match(targetSelection, /pending\.mode === "ownGraveCard"/);
   assert.match(app, /collectLegalTargetSelections\(pending/);
   assert.match(app, /canDispatchSummonEffectFromUiState/);
   assert.doesNotMatch(app, /card\.onSummon === "(burn200|draw1|heal300|fireBuff|shield400|shadowBurn)"/);
@@ -734,6 +735,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"phantom-switch-redirect": runPhantomSwitchRedirectSmoke/);
   assert.match(smoke, /"spell-target-default-basic": runSpellTargetDefaultBasicSmoke/);
   assert.match(smoke, /"spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke/);
+  assert.match(smoke, /"spell-target-legality-audit-basic": runSpellTargetLegalityAuditBasicSmoke/);
+  assert.match(smoke, /"grave-card-target-choice-basic": runGraveCardTargetChoiceBasicSmoke/);
   assert.match(smoke, /"target-window": runTargetWindowSmoke/);
   assert.match(smoke, /"battle-spell": runBattleSpellSmoke/);
   assert.match(smoke, /"battle-trap": runBattleTrapSmoke/);
@@ -842,6 +845,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "phantom-switch-redirect"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "spell-target-default-basic"\)/);
   assert.match(smoke, /const smokeName = "spell-multi-target-choice-basic";[\s\S]*!ctx\.state\.pendingTarget\?\.selectedTarget[\s\S]*ctx\.els\.choiceConfirmBtn\.disabled[\s\S]*explicit target receives the equipment effect[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "spell-target-legality-audit-basic";[\s\S]*zero-target spell readiness[\s\S]*unique target auto-selection[\s\S]*multiple targets require explicit choice[\s\S]*blocked switch preserves target selection[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "grave-card-target-choice-basic";[\s\S]*ownGraveCard[\s\S]*without a default[\s\S]*explicit grave card selected[\s\S]*chosen grave card resolves through dispatch[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "target-window"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-spell"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trap"\)/);

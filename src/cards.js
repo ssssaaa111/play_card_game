@@ -88,6 +88,7 @@ export function spellTargetSummary(effect) {
   const definition = spellDefinition(effect);
   if (!definition?.target) return "";
   if (definition.target === "enemySpellTrap") return "敌方魔陷";
+  if (definition.target === "ownGraveMonster" || definition.target === "ownGraveCard") return "我方墓地";
   const scope = definition.target === "enemyMonster" ? "敌方" : "我方";
   if (definition.targetRule === "strongest") return `${scope}最高`;
   return scope;
