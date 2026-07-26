@@ -579,6 +579,9 @@ export function applyUiGameEvents(uiState, events = []) {
     if (event.type === "ABILITY_SPENT") {
       applyUiAbilityEvent(uiState, event, -1);
     }
+    if (event.type === "ABILITY_EXPIRED") {
+      applyUiAbilityEvent(uiState, event, -1);
+    }
     if (event.type === "TURN_ABILITIES_EXPIRED") {
       const duelist = uiDuelist(uiState, event.playerId);
       duelist.directAttacks = 0;
