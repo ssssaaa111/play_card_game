@@ -864,7 +864,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trance-ready"\)/);
   assert.match(smoke, /const smokeName = "effect-marker-lifecycle-basic";[\s\S]*再攻 ×1[\s\S]*战斗 攻\+200[\s\S]*assertCardEffectMarkerMissing[\s\S]*setSmokeStatus\("passed", smokeName\)/);
-  assert.match(smoke, /const smokeName = "effect-marker-stacking-basic";[\s\S]*更多效果 \+2[\s\S]*更多效果 \+1[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "effect-marker-stacking-basic";[\s\S]*更多效果 \+2[\s\S]*生效中[\s\S]*炎岚追击生效[\s\S]*更多效果 \+1[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);
@@ -1063,7 +1063,7 @@ test("app uses extracted card details", () => {
   const html = readProjectFile("index.html");
 
   assert.match(app, /from '\.\/card-detail\.js'/);
-  assert.match(app, /cardInspectorViewModel\(card\)/);
+  assert.match(app, /cardInspectorViewModel\(card, \{ effectMarkers: focusedCardEffectMarkers\(card\) \}\)/);
   assert.match(app, /cardDetailViewModel\(cardOrId\)/);
   assert.doesNotMatch(app, /renderCurrentLog\(\{/);
   assert.doesNotMatch(html, /id="log"/);

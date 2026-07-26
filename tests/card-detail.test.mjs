@@ -128,3 +128,21 @@ test("describes generated token details from unified card definitions", () => {
   assert.equal(view.defense, 500);
   assert.match(view.effectText, /分裂效果生成/);
 });
+
+test("lists every active effect marker in the selected monster inspector", () => {
+  const definition = cardDetailViewModel("star-lancer").card;
+  const view = cardInspectorViewModel({ ...definition, tempAtk: 800 }, {
+    effectMarkers: [
+      { label: "再攻 ×1", detail: "追加攻击 ×1：战斗狂热" },
+      { label: "战斗 攻+200", detail: "战斗狂热生效：攻击力 +200。" },
+      { label: "炎岚 攻+100", detail: "炎岚追击生效：攻击力 +100。" },
+      { label: "战意 攻+500", detail: "战意高扬生效：攻击力 +500。" }
+    ]
+  });
+
+  assert.deepEqual(view.rows.find((row) => row.label === "生效中"), {
+    label: "生效中",
+    value: "追加攻击 ×1：战斗狂热；战斗狂热生效：攻击力 +200。；炎岚追击生效：攻击力 +100。；战意高扬生效：攻击力 +500。",
+    scrollable: true
+  });
+});

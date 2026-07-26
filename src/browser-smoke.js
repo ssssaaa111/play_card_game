@@ -4207,6 +4207,16 @@ async function runEffectMarkerStackingBasicSmoke(ctx) {
   assertCardEffectMarkerMissing(stacked, "战意 攻+500");
 
   clickSmokeElement(stacked, `${smokeName}: select stacked attacker`);
+  const detailMeta = ctx.els.playerField.ownerDocument.querySelector("#detailMeta");
+  await waitForSmoke(
+    () => detailMeta?.querySelector(".detail-meta-row.scrollable")?.getClientRects().length > 0 &&
+      detailMeta.textContent.includes("生效中") &&
+      detailMeta.textContent.includes("追加攻击 ×1：战斗狂热") &&
+      detailMeta.textContent.includes("战斗狂热生效：攻击力 +200。") &&
+      detailMeta.textContent.includes("炎岚追击生效：攻击力 +100。") &&
+      detailMeta.textContent.includes("战意高扬生效：攻击力 +500。"),
+    `${smokeName}: selected card inspector lists every active effect`
+  );
   await waitForSmoke(
     () => fieldCard(ctx.els, "ai", "sky-raider")?.classList.contains("attack-target"),
     `${smokeName}: attack target is ready`

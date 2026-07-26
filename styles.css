@@ -3087,6 +3087,14 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   overflow-wrap: anywhere;
 }
 
+.detail-meta-row.scrollable dd {
+  max-height: 76px;
+  padding-right: 3px;
+  overflow-y: auto;
+  scrollbar-color: rgba(var(--detail-accent), 0.48) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+}
+
 .detail-actions {
   position: relative;
   z-index: 9;
@@ -3131,6 +3139,14 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .detail-card:has(.battle-preview:not(.empty)) .detail-effect-block,
 .detail-card:has(.battle-preview:not(.empty)) .detail-meta {
+  display: none;
+}
+
+.detail-card:has(.battle-preview:not(.empty)) .detail-meta:has(.detail-meta-row.scrollable) {
+  display: grid;
+}
+
+.detail-card:has(.battle-preview:not(.empty)) .detail-meta:has(.detail-meta-row.scrollable) .detail-meta-row:not(.scrollable) {
   display: none;
 }
 

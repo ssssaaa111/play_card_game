@@ -15,10 +15,15 @@ export function bindCardInspector(doc) {
 function createMetaRow(doc, row) {
   const group = doc.createElement("div");
   group.className = "detail-meta-row";
+  group.classList.toggle("scrollable", Boolean(row.scrollable));
   const label = doc.createElement("dt");
   label.textContent = row.label;
   const value = doc.createElement("dd");
   value.textContent = row.value;
+  if (row.scrollable) {
+    value.tabIndex = 0;
+    value.setAttribute("aria-label", `${row.label}：${row.value}`);
+  }
   group.appendChild(label);
   group.appendChild(value);
   return group;
