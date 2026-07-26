@@ -1667,7 +1667,13 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .slot.tribute-unavailable,
 .slot.fusion-unavailable,
-.slot.split-unavailable {
+.slot.split-unavailable,
+.slot.effect-target-unavailable {
+  border-color: rgba(239, 71, 111, 0.32);
+  cursor: not-allowed;
+}
+
+.trap-slot.support-target-unavailable {
   border-color: rgba(239, 71, 111, 0.32);
   cursor: not-allowed;
 }
@@ -1677,7 +1683,14 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .slot.fusion-unavailable .card,
 .card.fusion-unavailable,
 .slot.split-unavailable .card,
-.card.split-unavailable {
+.card.split-unavailable,
+.slot.effect-target-unavailable .card,
+.card.effect-target-unavailable {
+  filter: saturate(0.55) brightness(0.72);
+}
+
+.trap-slot.support-target-unavailable .card,
+.card.support-target-unavailable {
   filter: saturate(0.55) brightness(0.72);
 }
 
@@ -1686,7 +1699,8 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .slot.fusion-candidate::after,
 .slot.fusion-unavailable::after,
 .slot.split-candidate::after,
-.slot.split-unavailable::after {
+.slot.split-unavailable::after,
+.slot.effect-target-unavailable::after {
   position: absolute;
   left: 8px;
   right: 8px;
@@ -1695,6 +1709,24 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   padding: 4px 6px;
   border-radius: 999px;
   color: #11151c;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  pointer-events: none;
+}
+
+.trap-slot.support-target-unavailable::after {
+  content: attr(data-effect-target-label);
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 3;
+  padding: 4px 6px;
+  border-radius: 999px;
+  color: #ffd9e2;
+  background: rgba(96, 28, 47, 0.9);
   font-size: 10px;
   font-weight: 900;
   line-height: 1.1;
@@ -1733,6 +1765,12 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   content: "不可选";
   color: #ffd9e2;
   background: rgba(96, 28, 47, 0.88);
+}
+
+.slot.effect-target-unavailable::after {
+  content: attr(data-effect-target-label);
+  color: #ffd9e2;
+  background: rgba(96, 28, 47, 0.9);
 }
 
 .trap-slot.trap-response,
@@ -2122,6 +2160,11 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .card-state-chip.ability {
   border-color: rgba(246, 189, 96, 0.58);
   color: #ffe3a0;
+}
+
+.card-state-chip.modifier {
+  border-color: rgba(199, 164, 255, 0.52);
+  color: #eadcff;
 }
 
 .monster-projection {
@@ -2623,7 +2666,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 }
 
 .grave-targets::before {
-  content: "墓地目标";
+  content: "墓地目标\A" attr(data-summary);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -2631,6 +2674,9 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   color: #d9c7ff;
   font-size: 11px;
   font-weight: 900;
+  line-height: 1.55;
+  text-align: center;
+  white-space: pre-line;
 }
 
 .grave-targets .card {
@@ -2653,6 +2699,31 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   border-radius: 999px;
   background: rgba(10, 45, 48, 0.94);
   color: #c9ffff;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+  pointer-events: none;
+}
+
+.grave-targets .card.grave-target-unavailable {
+  border-color: rgba(225, 108, 133, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(225, 108, 133, 0.16);
+  cursor: not-allowed;
+  filter: saturate(0.72);
+  opacity: 0.78;
+}
+
+.grave-target-reason {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 7px;
+  z-index: 5;
+  padding: 4px 5px;
+  border: 1px solid rgba(255, 176, 193, 0.36);
+  border-radius: 999px;
+  background: rgba(96, 28, 47, 0.92);
+  color: #ffd9e2;
   font-size: 10px;
   font-weight: 900;
   text-align: center;

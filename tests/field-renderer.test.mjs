@@ -127,6 +127,36 @@ test("mechanics targets expose candidate and failure reasons through field views
   assert.equal(enemySplit.targetReason, "不能选择该来源：不是己方怪兽。");
 });
 
+test("spell targets expose legal and unavailable field choices with exact reasons", () => {
+  const legal = monsterFieldSlotView({
+    card: monster({ name: "星轨枪兵" }),
+    owner: "player",
+    index: 0,
+    targetable: true,
+    spellTarget: { ok: true }
+  });
+  const unavailable = monsterFieldSlotView({
+    card: monster({ name: "赤焰幼龙" }),
+    owner: "player",
+    index: 1,
+    spellTarget: {
+      ok: false,
+      reason: "战意高扬只能选择我方攻击力最高的怪兽：星轨枪兵。"
+    }
+  });
+
+  assert.equal(legal.effectTargetState, "legal");
+  assert.equal(legal.effectTargetLabel, "");
+  assert.ok(legal.slotClasses.includes("targetable"));
+  assert.doesNotMatch(legal.ariaLabel, /undefined/);
+  assert.equal(unavailable.effectTargetState, "unavailable");
+  assert.equal(unavailable.effectTargetReason, "战意高扬只能选择我方攻击力最高的怪兽：星轨枪兵。");
+  assert.equal(unavailable.title, unavailable.effectTargetReason);
+  assert.ok(unavailable.slotClasses.includes("effect-target-unavailable"));
+  assert.ok(unavailable.cardClasses.includes("effect-target-unavailable"));
+  assert.match(unavailable.ariaLabel, /战意高扬只能选择我方攻击力最高的怪兽/);
+});
+
 test("support field view reveals active spells while keeping rival traps concealed", () => {
   const trap = {
     id: "mirror-snare",
@@ -187,6 +217,54 @@ test("support field view reveals active spells while keeping rival traps conceal
   assert.ok(selectedRivalSpell.slotClasses.includes("target-selected"));
   assert.ok(selectedRivalSpell.cardClasses.includes("target-selected"));
   assert.match(selectedRivalSpell.ariaLabel, /已选择为魔法目标/);
+});
+
+test("support field view exposes target legality without revealing a rival face-down card", () => {
+  const hiddenTrap = {
+    id: "mirror-snare",
+    type: "trap",
+    name: "镜光反制",
+    text: "破坏攻击怪兽。",
+    trigger: "destroyAttacker"
+  };
+  const legalHidden = supportFieldSlotView({
+    card: hiddenTrap,
+    owner: "ai",
+    index: 0,
+    targetable: true,
+    spellTarget: { ok: true, card: hiddenTrap }
+  });
+  const wrongOwner = supportFieldSlotView({
+    card: { id: "own-spell", type: "spell", name: "己方持续魔法" },
+    owner: "player",
+    index: 1,
+    spellTarget: { ok: false, reason: "不能选择该目标：不是敌方魔陷区的卡。" }
+  });
+  const emptyEnemy = supportFieldSlotView({
+    owner: "ai",
+    index: 2,
+    spellTarget: { ok: false, reason: "不能选择该目标：该格为空。" }
+  });
+
+  assert.equal(legalHidden.revealed, false);
+  assert.equal(legalHidden.supportDisplay, null);
+  assert.equal(legalHidden.targetInteraction, true);
+  assert.equal(legalHidden.effectTargetState, "legal");
+  assert.equal(legalHidden.effectTargetReason, "");
+  assert.doesNotMatch(JSON.stringify(legalHidden), /镜光反制|mirror-snare|destroyAttacker/);
+
+  assert.equal(wrongOwner.targetInteraction, true);
+  assert.equal(wrongOwner.effectTargetState, "unavailable");
+  assert.equal(wrongOwner.effectTargetReason, "不能选择该目标：不是敌方魔陷区的卡。");
+  assert.equal(wrongOwner.effectTargetLabel, "不可选：非敌方");
+  assert.equal(wrongOwner.title, wrongOwner.effectTargetReason);
+  assert.ok(wrongOwner.slotClasses.includes("support-target-unavailable"));
+  assert.ok(wrongOwner.cardClasses.includes("support-target-unavailable"));
+  assert.match(wrongOwner.ariaLabel, /不能选择该目标：不是敌方魔陷区的卡/);
+
+  assert.equal(emptyEnemy.effectTargetState, "unavailable");
+  assert.equal(emptyEnemy.effectTargetLabel, "不可选：空格");
+  assert.ok(emptyEnemy.slotClasses.includes("support-target-unavailable"));
 });
 
 test("monster field view follows projected attack legality instead of guessing from phase", () => {

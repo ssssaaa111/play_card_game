@@ -381,6 +381,24 @@ function assertHandCardBlocked(els, cardId, label, reason = "") {
   return card;
 }
 
+function assertCardEffectMarker(card, markerLabel, detail = "") {
+  if (!card) throw new Error(`${markerLabel}: field card is missing`);
+  const marker = [...card.querySelectorAll(".card-state-chip")]
+    .find((entry) => entry.textContent.trim() === markerLabel);
+  if (!marker) throw new Error(`${markerLabel}: effect marker is missing from ${card.textContent}`);
+  if (detail && marker.title !== detail) {
+    throw new Error(`${markerLabel}: expected detail ${detail}, received ${marker.title || "(empty)"}`);
+  }
+  return marker;
+}
+
+function assertCardEffectMarkerMissing(card, markerLabel) {
+  if (!card) throw new Error(`${markerLabel}: field card is missing`);
+  const marker = [...card.querySelectorAll(".card-state-chip")]
+    .find((entry) => entry.textContent.trim() === markerLabel);
+  if (marker) throw new Error(`${markerLabel}: expired effect marker is still visible`);
+}
+
 function preDuelDeckCard(els, cardId) {
   return els.preDuelDeckList?.querySelector(`.pre-duel-card[data-card-id="${cardId}"]`);
 }
@@ -1242,6 +1260,75 @@ async function runGraveyardSummonBasicSmoke(ctx) {
   );
   assertUniqueRuntimeCards(ctx.state, "graveyard-summon-basic");
   setSmokeStatus("passed", "graveyard-summon-basic");
+}
+
+async function runGraveTargetReadabilityBasicSmoke(ctx) {
+  const smokeName = "grave-target-readability-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistComeback");
+
+  clickSmokeElement(handCard(ctx.els, "last-spark"), `${smokeName}: select draw spell`);
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: draw spell confirmation is available`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: send public spell to grave`);
+  await waitForSmoke(
+    () => ctx.state.player.grave.some((card) => card?.id === "last-spark") &&
+      ctx.state.player.hand.some((card) => card?.id === "starwake-recall"),
+    `${smokeName}: invalid non-monster grave candidate is prepared`,
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "starwake-recall"), `${smokeName}: open grave revive selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "graveRevive" &&
+      graveTargetCard(ctx.els, "astral-comet-ace") &&
+      graveTargetCard(ctx.els, "last-spark"),
+    `${smokeName}: legal and illegal grave cards remain visible`,
+    9000
+  );
+  const legalTarget = graveTargetCard(ctx.els, "astral-comet-ace");
+  const illegalTarget = graveTargetCard(ctx.els, "last-spark");
+  if (!legalTarget?.classList.contains("targetable") ||
+      legalTarget.dataset.targetState !== "legal" ||
+      !illegalTarget?.classList.contains("grave-target-unavailable") ||
+      illegalTarget.dataset.targetState !== "unavailable" ||
+      illegalTarget.getAttribute("aria-disabled") !== "true" ||
+      !illegalTarget.textContent.includes("非怪兽") ||
+      !ctx.els.graveTargets?.dataset.summary?.includes("可召唤 1 / 墓地 2")) {
+    throw new Error(`${smokeName}: grave target availability is not understandable. ${smokeDebug(ctx)}`);
+  }
+
+  const rulesSnapshot = () => JSON.stringify({
+    hand: ctx.state.player.hand.map((card) => card?.uid || card?.id || null),
+    field: ctx.state.player.field.map((card) => card?.uid || card?.id || null),
+    traps: ctx.state.player.traps.map((card) => card?.uid || card?.id || null),
+    grave: ctx.state.player.grave.map((card) => card?.uid || card?.id || null),
+    pendingTarget: ctx.state.pendingTarget,
+    gameEvents: ctx.state.gameEvents
+  });
+  const beforeInvalidClick = rulesSnapshot();
+  clickSmokeElement(illegalTarget, `${smokeName}: click visible non-monster grave card`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该卡：不是怪兽。",
+    `${smokeName}: invalid grave card explains the exact reason`
+  );
+  if (rulesSnapshot() !== beforeInvalidClick) {
+    throw new Error(`${smokeName}: invalid grave target changed rules state. ${smokeDebug(ctx)}`);
+  }
+
+  await selectAndConfirmSpellTarget(ctx, legalTarget, `${smokeName}: revive legal monster`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace") &&
+      !ctx.state.player.grave.some((card) => card?.id === "astral-comet-ace") &&
+      ctx.state.player.grave.some((card) => card?.id === "last-spark") &&
+      !ctx.state.pendingTarget,
+    `${smokeName}: legal grave summon still completes after invalid click`,
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, smokeName);
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runMechanicsRegressionBasicSmoke(ctx) {
@@ -3199,7 +3286,7 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     32000
   );
   const moonPressureCard = fieldCard(ctx.els, "player", "spark-runner");
-  if (!moonPressureCard?.textContent.includes("月幕 -900")) {
+  if (!moonPressureCard?.textContent.includes("月幕 攻守-900")) {
     throw new Error(`trio-omega-full-duel: lunar dominion target marker is missing. ${smokeDebug(ctx)}`);
   }
   for (const cardId of ["trio-moon-warden", "trio-star-herald"]) {
@@ -3694,6 +3781,11 @@ async function runTargetWindowSmoke(ctx) {
       !ctx.state.pendingTarget,
     "满 LP 回复卡与引擎一样显示可确认"
   );
+  clickSmokeElement(ctx.els.choiceCancelBtn, "取消星泉再生选择");
+  await waitForSmoke(
+    () => ctx.els.choiceActions.hidden && ctx.state.player.hand.some((card) => card?.id === "renewal"),
+    "取消星泉再生不会消耗卡牌"
+  );
   clickSmokeElement(handCard(ctx.els, "war-chant"), "战意高扬手牌");
   await waitForSmoke(
     () => ctx.state.pendingTarget?.effect === "buff500" && ctx.state.actionWindow === "targetSelect",
@@ -3747,6 +3839,93 @@ async function runTargetWindowSmoke(ctx) {
     throw new Error("War chant must resolve through engine spell events");
   }
   setSmokeStatus("passed", "target-window");
+}
+
+async function runFieldTargetReadabilityBasicSmoke(ctx) {
+  const smokeName = "field-target-readability-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "target");
+  clickSmokeElement(handCard(ctx.els, "war-chant"), `${smokeName}: open strongest monster target selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "buff500" && ctx.state.actionWindow === "targetSelect",
+    `${smokeName}: target selection is open`
+  );
+
+  const legalSlot = fieldSlot(ctx.els, "player", 0);
+  const lowerAtkSlot = fieldSlot(ctx.els, "player", 1);
+  const emptySlot = fieldSlot(ctx.els, "player", 2);
+  const enemySlot = fieldSlot(ctx.els, "ai", 0);
+  if (legalSlot?.dataset.effectTargetState !== "legal" ||
+      !legalSlot.classList.contains("target-selected") ||
+      lowerAtkSlot?.dataset.effectTargetState !== "unavailable" ||
+      lowerAtkSlot.dataset.effectTargetLabel !== "不可选：非最高攻击" ||
+      emptySlot?.dataset.effectTargetLabel !== "不可选：空格" ||
+      enemySlot?.dataset.effectTargetLabel !== "不可选：非己方") {
+    throw new Error(`${smokeName}: legal and unavailable targets are not clearly projected. ${smokeDebug(ctx)}`);
+  }
+
+  const rulesSnapshot = () => JSON.stringify({
+    player: {
+      hand: ctx.state.player.hand,
+      field: ctx.state.player.field,
+      traps: ctx.state.player.traps,
+      grave: ctx.state.player.grave
+    },
+    ai: {
+      hand: ctx.state.ai.hand,
+      field: ctx.state.ai.field,
+      traps: ctx.state.ai.traps,
+      grave: ctx.state.ai.grave
+    },
+    pendingTarget: ctx.state.pendingTarget,
+    selected: ctx.state.selected,
+    actionWindow: ctx.state.actionWindow,
+    actionDeadline: ctx.state.actionDeadline,
+    gameEvents: ctx.state.gameEvents
+  });
+  const beforeInvalidClicks = rulesSnapshot();
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), `${smokeName}: click lower attack monster`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "战意高扬只能选择我方攻击力最高的怪兽：星轨枪兵。",
+    `${smokeName}: lower attack target explains the strongest rule`
+  );
+  clickSmokeElement(fieldSlot(ctx.els, "player", 2), `${smokeName}: click empty monster slot`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：该格为空。",
+    `${smokeName}: empty target explains the reason`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), `${smokeName}: click enemy monster`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：不是己方怪兽。",
+    `${smokeName}: wrong owner target explains the reason`
+  );
+  if (rulesSnapshot() !== beforeInvalidClicks) {
+    throw new Error(`${smokeName}: invalid field target changed rules state. ${smokeDebug(ctx)}`);
+  }
+
+  const targetUid = ctx.state.player.field[0]?.uid;
+  const atkBefore = ctx.state.player.field[0]?.tempAtk || 0;
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm default legal target`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget,
+    `${smokeName}: legal target selection closes after confirmation`,
+    9000
+  );
+  const targetBuffEvent = ctx.state.gameEvents.find((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.cardId === targetUid &&
+    event.amount === 500
+  );
+  if ((ctx.state.player.field[0]?.tempAtk || 0) < atkBefore + 500 || !targetBuffEvent) {
+    throw new Error(`${smokeName}: legal target did not receive its +500 ATK event: ${JSON.stringify({
+      targetUid,
+      atkBefore,
+      atkAfter: ctx.state.player.field[0]?.tempAtk || 0,
+      field: ctx.state.player.field.map((card) => card ? { id: card.id, uid: card.uid, tempAtk: card.tempAtk || 0 } : null),
+      events: ctx.state.gameEvents.slice(-8)
+    })}. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runBattleSpellSmoke(ctx) {
@@ -3935,6 +4114,50 @@ async function runBattleTranceReadySmoke(ctx) {
     throw new Error("battle-trance should ready the used monster through a MONSTER_READIED event");
   }
   setSmokeStatus("passed", "battle-trance-ready");
+}
+
+async function runEffectMarkerLifecycleBasicSmoke(ctx) {
+  const smokeName = "effect-marker-lifecycle-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "target");
+
+  clickSmokeElement(handCard(ctx.els, "battle-trance"), `${smokeName}: activate battle trance`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "battleTrance" &&
+      Boolean(ctx.state.pendingTarget?.selectedTarget) &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: strongest target is ready`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm battle trance`);
+  await waitForSmoke(
+    () => ctx.state.player.field[0]?.id === "star-lancer" &&
+      (ctx.state.player.field[0]?.tempAtk || 0) >= 200 &&
+      ctx.state.player.attackResets === 1,
+    `${smokeName}: sourced buff and extra attack resolve through dispatch`,
+    9000
+  );
+  const empowered = fieldCard(ctx.els, "player", "star-lancer");
+  assertCardEffectMarker(empowered, "再攻 ×1", "追加攻击 ×1：战斗狂热");
+  assertCardEffectMarker(empowered, "战斗 攻+200", "战斗狂热生效：攻击力 +200。");
+
+  clickSmokeElement(empowered, `${smokeName}: select empowered attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "sky-raider")?.classList.contains("attack-target"),
+    `${smokeName}: legal attack target highlighted`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "sky-raider"), `${smokeName}: spend extra attack`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "sky-raider") &&
+      ctx.state.player.field[0]?.id === "star-lancer" &&
+      ctx.state.player.field[0]?.used === false &&
+      ctx.state.player.attackResets === 0,
+    `${smokeName}: attack reset is consumed and attacker is readied`,
+    10000
+  );
+  const readied = fieldCard(ctx.els, "player", "star-lancer");
+  assertCardEffectMarkerMissing(readied, "再攻 ×1");
+  assertCardEffectMarker(readied, "战斗 攻+200", "战斗狂热生效：攻击力 +200。");
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runAiDirectTrapSmoke(ctx) {
@@ -4930,6 +5153,11 @@ async function runEquipmentSpellSmoke(ctx) {
     "Blade Sigil continuous effect registered",
     9000
   );
+  assertCardEffectMarker(
+    fieldCard(ctx.els, "player", "star-lancer"),
+    "锋刃 攻+300",
+    "锋刃刻印持续生效：攻击力 +300；来源离场后解除。"
+  );
 
   clickSmokeElement(handCard(ctx.els, "aegis-plate"), "Aegis Plate hand card");
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "equipAegis", "Aegis Plate target selection", 6000);
@@ -4940,6 +5168,11 @@ async function runEquipmentSpellSmoke(ctx) {
       countGameEvents(ctx.state, "STAT_MODIFIED") >= 2,
     "Aegis Plate continuous defense boost",
     9000
+  );
+  assertCardEffectMarker(
+    fieldCard(ctx.els, "player", "star-lancer"),
+    "庇护 守+500",
+    "庇护甲片持续生效：防御力 +500；来源离场后解除。"
   );
   if (ctx.state.player.grave.some((card) => ["blade-sigil", "aegis-plate"].includes(card?.id))) {
     throw new Error("equipment spells should not go to grave after activation");
@@ -4963,6 +5196,11 @@ async function runEquipmentSpellSmoke(ctx) {
   });
   ctx.render?.();
   await waitForSmoke(() => ctx.els.aiTraps.querySelector('[data-testid="ai-trap-0"] .card'), "敌方魔陷目标入场", 6000);
+  assertCardEffectMarker(
+    fieldCard(ctx.els, "ai", "iron-guardian"),
+    "锋刃 攻+300",
+    "锋刃刻印持续生效：攻击力 +300；来源离场后解除。"
+  );
   await clickSmokeElementTwiceAcrossRender(
     () => handCard(ctx.els, "dispelling-ray"),
     "连续点击解印射线确认唯一默认目标",
@@ -4981,7 +5219,118 @@ async function runEquipmentSpellSmoke(ctx) {
     "连续点击解印射线破坏唯一默认敌方魔陷",
     9000
   );
+  assertCardEffectMarkerMissing(fieldCard(ctx.els, "ai", "iron-guardian"), "锋刃 攻+300");
   setSmokeStatus("passed", "equipment-spell");
+}
+
+async function runSupportTargetReadabilityBasicSmoke(ctx) {
+  const smokeName = "support-target-readability-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmega");
+
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}：选择日冕诱锁`);
+  clickSmokeElement(trapSlot(ctx.els, "player", 0), `${smokeName}：盖放日冕诱锁`);
+  await waitForSmoke(
+    () => trapCard(ctx.els, "player", "trio-solar-snare"),
+    `${smokeName}：己方公开魔陷目标入场`
+  );
+
+  clickSmokeElement(
+    assertHandCardReady(ctx.els, "trio-moonbreaker-ray", `${smokeName}：碎月解幕可发动`),
+    `${smokeName}：打开敌方魔陷目标选择`
+  );
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "destroySpellTrap",
+    `${smokeName}：敌方魔陷目标窗口打开`
+  );
+
+  const legalSlot = trapSlot(ctx.els, "ai", 0);
+  const wrongOwnerSlot = trapSlot(ctx.els, "player", 0);
+  const emptyEnemySlot = trapSlot(ctx.els, "ai", 1);
+  if (!legalSlot?.classList.contains("targetable") ||
+      legalSlot.dataset.effectTargetState !== "legal" ||
+      legalSlot.dataset.effectTargetReason) {
+    throw new Error(`${smokeName}：合法敌方魔陷应仅显示可选状态。`);
+  }
+  if (!wrongOwnerSlot?.classList.contains("support-target-unavailable") ||
+      wrongOwnerSlot.dataset.effectTargetState !== "unavailable" ||
+      wrongOwnerSlot.dataset.effectTargetLabel !== "不可选：非敌方" ||
+      wrongOwnerSlot.dataset.effectTargetReason !== "不能选择该目标：不是敌方魔陷区的卡。") {
+    throw new Error(`${smokeName}：己方魔陷缺少明确的非敌方提示。`);
+  }
+  if (!emptyEnemySlot?.classList.contains("support-target-unavailable") ||
+      emptyEnemySlot.dataset.effectTargetLabel !== "不可选：空格" ||
+      emptyEnemySlot.dataset.effectTargetReason !== "不能选择该目标：该格为空。") {
+    throw new Error(`${smokeName}：敌方空魔陷格缺少明确的空格提示。`);
+  }
+
+  const lockedTargetSnapshot = () => JSON.stringify({
+    actionWindow: ctx.state.actionWindow,
+    actionDeadline: ctx.state.actionDeadline,
+    selected: ctx.state.selected,
+    pendingTarget: ctx.state.pendingTarget,
+    player: {
+      hand: ctx.state.player.hand.map(cardSnapshot),
+      field: ctx.state.player.field.map(cardSnapshot),
+      traps: ctx.state.player.traps.map(cardSnapshot),
+      grave: ctx.state.player.grave.map(cardSnapshot)
+    },
+    ai: {
+      hand: ctx.state.ai.hand.map(cardSnapshot),
+      field: ctx.state.ai.field.map(cardSnapshot),
+      traps: ctx.state.ai.traps.map(cardSnapshot),
+      grave: ctx.state.ai.grave.map(cardSnapshot)
+    },
+    gameEventCount: ctx.state.gameEvents.length,
+    logCount: ctx.state.log.length
+  });
+  const beforeInvalidClicks = lockedTargetSnapshot();
+
+  clickSmokeElement(
+    trapCard(ctx.els, "player", "trio-solar-snare"),
+    `${smokeName}：点击己方公开魔陷非法目标`
+  );
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：不是敌方魔陷区的卡。",
+    `${smokeName}：己方魔陷失败原因可见`
+  );
+  if (ctx.els.cardModal?.classList.contains("show") || lockedTargetSnapshot() !== beforeInvalidClicks) {
+    throw new Error(`${smokeName}：己方非法目标点击打开了详情或改变了规则状态。`);
+  }
+
+  clickSmokeElement(emptyEnemySlot, `${smokeName}：点击敌方空魔陷格`);
+  await waitForSmoke(
+    () => ctx.els.toast?.textContent === "不能选择该目标：该格为空。",
+    `${smokeName}：空格失败原因可见`
+  );
+  if (lockedTargetSnapshot() !== beforeInvalidClicks) {
+    throw new Error(`${smokeName}：空格非法目标点击改变了规则状态。`);
+  }
+
+  await selectSpellTarget(ctx, legalSlot, `${smokeName}：选择月曜帷幕`);
+  confirmSpellTarget(ctx, `${smokeName}：确认发动碎月解幕`);
+  await waitForSmoke(
+    () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
+      ctx.state.ai.grave.some((card) => card?.id === "trio-moon-dominion") &&
+      ctx.state.log.some((entry) =>
+        entry.cardId === "trio-moonbreaker-ray" &&
+        entry.relatedCardIds?.includes("trio-moon-dominion")
+      ),
+    `${smokeName}：合法目标完成破坏并写入关联日志`,
+    9000
+  );
+  assertUniqueRuntimeCards(ctx.state, smokeName);
+
+  await waitForSmoke(
+    () => logCardLink(ctx.els, "trio-moonbreaker-ray"),
+    `${smokeName}：公开日志卡名可点击`
+  );
+  clickSmokeElement(
+    logCardLink(ctx.els, "trio-moonbreaker-ray"),
+    `${smokeName}：打开碎月解幕详情`
+  );
+  await assertCardDetailModal(ctx, cloneCardById("trio-moonbreaker-ray"), smokeName);
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runHandActionHighlightRecoveryBasicSmoke(ctx) {
@@ -5244,6 +5593,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "token-split-basic": runTokenSplitBasicSmoke,
     "token-readability-basic": runTokenReadabilityBasicSmoke,
     "graveyard-summon-basic": runGraveyardSummonBasicSmoke,
+    "grave-target-readability-basic": runGraveTargetReadabilityBasicSmoke,
     "mechanics-regression-basic": runMechanicsRegressionBasicSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
@@ -5265,6 +5615,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "spell-multi-target-choice-basic": runSpellMultiTargetChoiceBasicSmoke,
     "spell-target-legality-audit-basic": runSpellTargetLegalityAuditBasicSmoke,
     "grave-card-target-choice-basic": runGraveCardTargetChoiceBasicSmoke,
+    "field-target-readability-basic": runFieldTargetReadabilityBasicSmoke,
     "target-window": runTargetWindowSmoke,
     "battle-spell": runBattleSpellSmoke,
     "battle-trap": runBattleTrapSmoke,
@@ -5272,6 +5623,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ace-attack": runAceAttackSmoke,
     "double-attack": runDoubleAttackSmoke,
     "battle-trance-ready": runBattleTranceReadySmoke,
+    "effect-marker-lifecycle-basic": runEffectMarkerLifecycleBasicSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
     "trap-choice-double": runTrapChoiceDoubleSmoke,
@@ -5297,6 +5649,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
+    "support-target-readability-basic": runSupportTargetReadabilityBasicSmoke,
     "hand-action-highlight-recovery-basic": runHandActionHighlightRecoveryBasicSmoke,
     "spell-legality-highlight-basic": runSpellLegalityHighlightBasicSmoke,
     "game-over-event": runGameOverEventSmoke,

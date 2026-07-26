@@ -11,6 +11,15 @@ function enabledClassEntries(entries = {}) {
     .map(([className]) => className);
 }
 
+function unavailableEffectTargetLabel(reason = "") {
+  if (/该格为空/.test(reason)) return "不可选：空格";
+  if (/不是己方怪兽/.test(reason)) return "不可选：非己方";
+  if (/不是敌方怪兽/.test(reason)) return "不可选：非敌方";
+  if (/攻击力最高/.test(reason)) return "不可选：非最高攻击";
+  if (/目标抗性/.test(reason)) return "不可选：目标抗性";
+  return "不可选";
+}
+
 export function monsterFieldSlotView({
   card = null,
   owner = "player",
@@ -27,7 +36,8 @@ export function monsterFieldSlotView({
   fusionSelected = false,
   materialTarget = null,
   materialKind = "",
-  splitTarget = null
+  splitTarget = null,
+  spellTarget = null
 } = {}) {
   const materialCandidate = materialTarget
     ? Boolean(materialTarget.ok)
@@ -36,7 +46,11 @@ export function monsterFieldSlotView({
   const materialUnavailable = Boolean(materialTarget && !materialTarget.ok);
   const splitCandidate = Boolean(splitTarget?.ok);
   const splitUnavailable = Boolean(splitTarget && !splitTarget.ok);
-  const interactionTarget = materialTarget || splitTarget;
+  const effectTargetState = spellTarget ? (spellTarget.ok ? "legal" : "unavailable") : "";
+  const effectTargetReason = spellTarget && !spellTarget.ok ? spellTarget.reason || "不能选择该目标。" : "";
+  const effectTargetUnavailable = effectTargetState === "unavailable";
+  const effectTargetLabel = effectTargetUnavailable ? unavailableEffectTargetLabel(effectTargetReason) : "";
+  const interactionTarget = materialTarget || splitTarget || spellTarget;
   const disabled = owner === "ai"
     && !card
     && !targetable
@@ -86,14 +100,17 @@ export function monsterFieldSlotView({
     splitTarget,
     splitCandidate,
     splitUnavailable,
-    title: interactionTarget?.reason || attackReason,
+    title: effectTargetReason || interactionTarget?.reason || attackReason,
+    effectTargetState,
+    effectTargetReason,
+    effectTargetLabel,
     targetState: splitTarget ? (splitCandidate ? "candidate" : "unavailable") : "",
     targetReason: splitTarget?.reason || "",
     materialState: materialTarget
       ? (materialCandidate ? (materialSelected ? "selected" : "candidate") : "unavailable")
       : "",
     materialReason: materialTarget?.reason || "",
-    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${targetSelected ? "，已选择为魔法目标" : ""}${interactionTarget ? `，${interactionTarget.reason}` : ""}`,
+    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${targetSelected ? "，已选择为魔法目标" : ""}${interactionTarget?.reason ? `，${interactionTarget.reason}` : ""}`,
     slotClasses: enabledClassEntries({
       targetable,
       "target-selected": targetSelected,
@@ -105,7 +122,8 @@ export function monsterFieldSlotView({
       "fusion-selected": materialKind === "fusion" && materialSelected,
       "fusion-unavailable": materialKind === "fusion" && materialUnavailable,
       "split-candidate": splitCandidate,
-      "split-unavailable": splitUnavailable
+      "split-unavailable": splitUnavailable,
+      "effect-target-unavailable": effectTargetUnavailable
     }),
     cardClasses: enabledClassEntries({
       selected: owner === "player"
@@ -128,7 +146,8 @@ export function monsterFieldSlotView({
       "fusion-selected": materialKind === "fusion" && materialSelected,
       "fusion-unavailable": materialKind === "fusion" && materialUnavailable,
       "split-candidate": splitCandidate,
-      "split-unavailable": splitUnavailable
+      "split-unavailable": splitUnavailable,
+      "effect-target-unavailable": effectTargetUnavailable
     })
   };
 }
@@ -139,9 +158,20 @@ export function supportFieldSlotView({
   index = 0,
   targetable = false,
   targetSelected = false,
+  spellTarget = null,
   trapChoiceReady = false,
   trapChoiceSelected = false
 } = {}) {
+  const targetInteraction = Boolean(spellTarget);
+  const effectTargetUnavailable = Boolean(spellTarget && !spellTarget.ok);
+  const effectTargetReason = effectTargetUnavailable ? spellTarget.reason || "不能选择该目标。" : "";
+  const effectTargetLabel = effectTargetUnavailable
+    ? !card
+      ? "不可选：空格"
+      : owner !== "ai"
+        ? "不可选：非敌方"
+        : "不可选"
+    : "";
   const revealed = Boolean(card && (owner === "player" || card.type === "spell"));
   const supportDisplay = revealed
     ? buildSupportCardDisplay(card, {
@@ -157,18 +187,24 @@ export function supportFieldSlotView({
     index,
     targetable,
     targetSelected,
+    targetInteraction,
+    effectTargetState: spellTarget ? (spellTarget.ok ? "legal" : "unavailable") : "",
+    effectTargetReason,
+    effectTargetLabel,
+    title: effectTargetReason,
     trapChoiceReady,
     trapChoiceSelected,
     revealed,
     supportDisplay,
     ariaLabel: `${supportDisplay
       ? `${zoneLabel}，${card.name}，${supportDisplay.description}`
-      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为魔法目标" : ""}`,
+      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为魔法目标" : ""}${effectTargetReason ? `，${effectTargetReason}` : ""}`,
     slotClasses: enabledClassEntries({
       "trap-response": trapChoiceReady,
       "trap-response-selected": trapChoiceSelected,
       targetable,
       "target-selected": targetSelected,
+      "support-target-unavailable": effectTargetUnavailable,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     }),
     cardClasses: enabledClassEntries({
@@ -176,6 +212,7 @@ export function supportFieldSlotView({
       "trap-response-selected": trapChoiceSelected,
       targetable,
       "target-selected": targetSelected,
+      "support-target-unavailable": effectTargetUnavailable,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     })
   };
@@ -202,6 +239,7 @@ export function renderMonsterZones({
   fusionCandidateAt = () => false,
   materialTargetAt = () => null,
   splitTargetAt = () => null,
+  spellTargetAt = () => null,
   effectMarkersAt = () => [],
   onSlotClick = () => {},
   onSlotDoubleClick = () => {},
@@ -217,6 +255,7 @@ export function renderMonsterZones({
     const attackReadiness = attackReadinessAt(index);
     const materialTarget = materialTargetAt(index);
     const splitTarget = splitTargetAt(index);
+    const spellTarget = spellTargetAt(index);
     const tributeCandidate = owner === "player" && Boolean(state.pendingTribute) && Boolean(card);
     const fusionCandidate = owner === "player"
       && Boolean(state.pendingFusion)
@@ -238,7 +277,8 @@ export function renderMonsterZones({
       fusionSelected: selectedFusionIndexes.includes(index),
       materialTarget,
       materialKind: state.pendingTribute ? "tribute" : state.pendingFusion ? "fusion" : "",
-      splitTarget
+      splitTarget,
+      spellTarget
     });
     const slot = document.createElement("button");
     slot.type = "button";
@@ -251,6 +291,9 @@ export function renderMonsterZones({
     if (view.materialReason) slot.dataset.materialReason = view.materialReason;
     if (view.targetState) slot.dataset.targetState = view.targetState;
     if (view.targetReason) slot.dataset.targetReason = view.targetReason;
+    if (view.effectTargetState) slot.dataset.effectTargetState = view.effectTargetState;
+    if (view.effectTargetReason) slot.dataset.effectTargetReason = view.effectTargetReason;
+    if (view.effectTargetLabel) slot.dataset.effectTargetLabel = view.effectTargetLabel;
     if (view.title) slot.title = view.title;
     if (attackReadiness) {
       slot.dataset.attackState = view.attackReady ? "ready" : "unavailable";
@@ -310,6 +353,7 @@ export function renderSupportZones({
   assetForCard = () => "",
   targetableAt = () => false,
   targetSelectedAt = () => false,
+  spellTargetAt = () => null,
   onSlotClick = () => {},
   onSlotDoubleClick = () => {},
   onCardClick = () => {},
@@ -327,6 +371,7 @@ export function renderSupportZones({
       index,
       targetable: targetableAt(index),
       targetSelected: targetSelectedAt(index),
+      spellTarget: spellTargetAt(index),
       trapChoiceReady,
       trapChoiceSelected
     });
@@ -338,6 +383,10 @@ export function renderSupportZones({
     slot.dataset.testid = `${owner}-trap-${index}`;
     addClasses(slot, view.slotClasses);
     slot.setAttribute("aria-pressed", String(view.targetSelected));
+    if (view.effectTargetState) slot.dataset.effectTargetState = view.effectTargetState;
+    if (view.effectTargetReason) slot.dataset.effectTargetReason = view.effectTargetReason;
+    if (view.effectTargetLabel) slot.dataset.effectTargetLabel = view.effectTargetLabel;
+    if (view.title) slot.title = view.title;
     if (view.supportDisplay) slot.dataset.supportState = view.supportDisplay.key;
     slot.setAttribute("aria-label", view.ariaLabel);
     slot.addEventListener("click", () => onSlotClick(index));
@@ -376,7 +425,7 @@ export function renderSupportZones({
       if (view.revealed) {
         cardEl.addEventListener("click", (event) => {
           event.stopPropagation();
-          if (view.targetable) onSlotClick(index);
+          if (view.targetInteraction) onSlotClick(index);
           else onCardClick(card, index);
         });
       }

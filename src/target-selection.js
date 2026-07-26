@@ -30,6 +30,10 @@ export function spellNeedsManualTarget(owner, card, effectDefinitions = {}) {
     Boolean(targetSelectionForCard(card, effectDefinitions));
 }
 
+export function isSupportTargetSelection(pending) {
+  return pending?.mode === "enemySpellTrap";
+}
+
 export function targetSelectionPrompt(selection) {
   return spellTargetPrompt(
     selection?.mode || "",
@@ -65,10 +69,10 @@ export function validateTargetSelection(
 
   if (pending.mode === "enemySpellTrap") {
     if (zone !== "traps" || ownerName !== "ai") {
-      return { ok: false, reason: "这个效果需要选择敌方魔陷区的卡。" };
+      return { ok: false, reason: "不能选择该目标：不是敌方魔陷区的卡。" };
     }
     const target = duelist.traps?.[index];
-    if (!target) return { ok: false, reason: "请选择敌方魔陷区的卡作为目标。" };
+    if (!target) return { ok: false, reason: "不能选择该目标：该格为空。" };
     return targetSuccess(target, ownerName, index, zone);
   }
 
@@ -77,9 +81,8 @@ export function validateTargetSelection(
       return { ok: false, reason: "这个效果需要选择我方墓地中的怪兽。" };
     }
     const target = duelist.grave?.[index];
-    if (!target || target.type !== "monster") {
-      return { ok: false, reason: "请选择我方墓地中的怪兽作为目标。" };
-    }
+    if (!target) return { ok: false, reason: "不能选择该卡：目标不在墓地。" };
+    if (target.type !== "monster") return { ok: false, reason: "不能选择该卡：不是怪兽。" };
     return targetSuccess(target, ownerName, index, zone);
   }
 
@@ -96,12 +99,13 @@ export function validateTargetSelection(
 
   if (zone !== "field") return { ok: false, reason: "这个效果需要选择场上的怪兽。" };
   const target = duelist.field?.[index];
-  if (!target) return { ok: false, reason: "请选择场上的怪兽作为目标。" };
+  if (!target) return { ok: false, reason: "不能选择该目标：该格为空。" };
+  if (target.type !== "monster") return { ok: false, reason: "不能选择该目标：不是怪兽。" };
   if (pending.mode === "ownMonster" && ownerName !== "player") {
-    return { ok: false, reason: "这个效果需要选择我方怪兽。" };
+    return { ok: false, reason: "不能选择该目标：不是己方怪兽。" };
   }
   if (pending.mode === "enemyMonster" && ownerName !== "ai") {
-    return { ok: false, reason: "这个效果需要选择敌方怪兽。" };
+    return { ok: false, reason: "不能选择该目标：不是敌方怪兽。" };
   }
   const rule = validateSpellTargetRule(pending, duelist, target);
   if (!rule.ok) return rule;

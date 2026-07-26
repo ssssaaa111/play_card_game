@@ -108,6 +108,7 @@ import {
   buildTargetSelectionDisplay,
   collectLegalTargetSelections,
   isSelectedTargetSelection,
+  isSupportTargetSelection,
   pendingTargetForCard,
   prepareDefaultTargetSelection,
   resolveSelectedTargetSelection,
@@ -1102,13 +1103,12 @@ function isPendingTrapTargetSlot(ownerName, index) {
 
 async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
-  notePlayerIntent();
   const targetInfo = validateCurrentTarget(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
-    resetPlayerIdleCountdown();
     return true;
   }
+  notePlayerIntent();
   const handIndex = state.player.hand.findIndex((card) => card.uid === state.pendingTarget.handUid);
   if (handIndex < 0) {
     clearPendingTarget();
@@ -1124,13 +1124,12 @@ async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
 
 function selectPendingSpellTarget(ownerName, index, zone = "field") {
   if (!state.pendingTarget) return false;
-  notePlayerIntent();
   const targetInfo = validateCurrentTarget(ownerName, index, zone);
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
-    resetPlayerIdleCountdown();
     return true;
   }
+  notePlayerIntent();
   state.pendingTarget = selectTargetSelection(state.pendingTarget, targetInfo, { source: "player" });
   const display = currentTargetSelectionDisplay();
   playSound("click");
@@ -2219,7 +2218,11 @@ async function handleAiSlot(index, interaction = {}) {
     return;
   }
   if (state.pendingTarget?.effect === "splitToken" && canPlayerAct()) {
-    notePlayerIntent();
+    interactWithPendingSpellTarget("ai", index, "field", interaction);
+    return;
+  }
+  if (state.pendingTarget && canPlayerAct()) {
+    if (card) showDetail(card);
     interactWithPendingSpellTarget("ai", index, "field", interaction);
     return;
   }
@@ -2229,11 +2232,6 @@ async function handleAiSlot(index, interaction = {}) {
     return;
   }
   notePlayerIntent();
-  if (state.pendingTarget) {
-    showDetail(card);
-    interactWithPendingSpellTarget("ai", index, "field", interaction);
-    return;
-  }
   if (!canUseBattleActions()) {
     if (state.phase === PHASES.main) {
       if (!enterPlayerBattlePhase("你发动攻击", { preserveSelection: true, quiet: true })) return;
@@ -4545,6 +4543,8 @@ function restoreSelectedAttackPreview() {
 }
 
 function renderField(root, duelist, owner, animationKey) {
+  const fieldSpellTargetActive = ["ownMonster", "enemyMonster"].includes(state.pendingTarget?.mode)
+    && state.pendingTarget?.effect !== "splitToken";
   renderMonsterZones({
     document,
     root,
@@ -4569,6 +4569,9 @@ function renderField(root, duelist, owner, animationKey) {
     },
     splitTargetAt: (index) => state.pendingTarget?.effect === "splitToken"
       ? describeSplitTokenTarget({ owner, card: duelist.field[index] })
+      : null,
+    spellTargetAt: (index) => fieldSpellTargetActive
+      ? validateCurrentTarget(owner, index, "field")
       : null,
     effectMarkersAt: (index) => effectMarkersForCard({
       card: duelist.field[index],
@@ -4602,6 +4605,9 @@ function renderTraps(root, duelist, owner) {
     assetForCard: monsterAsset,
     targetableAt: (index) => isPendingTrapTargetSlot(owner, index),
     targetSelectedAt: (index) => isSelectedTargetSelection(state.pendingTarget, owner, index, "traps"),
+    spellTargetAt: (index) => isSupportTargetSelection(state.pendingTarget)
+      ? validateCurrentTarget(owner, index, "traps")
+      : null,
     onSlotClick: (index) => {
       const interactionKey = owner === "player" && state.pendingTrapChoice
         ? `trap-response:${index}`
@@ -4729,20 +4735,42 @@ function renderGraveTargets() {
   const root = els.graveTargets;
   if (!root) return;
   root.innerHTML = "";
-  const active = ["ownGraveMonster", "ownGraveCard"].includes(state.pendingTarget?.mode);
+  delete root.dataset.summary;
+  root.removeAttribute("aria-label");
+  const targetMode = state.pendingTarget?.mode || "";
+  const active = ["ownGraveMonster", "ownGraveCard"].includes(targetMode);
   root.hidden = !active;
   if (!active) return;
-  state.player.grave.forEach((card, index) => {
-    if (!card) return;
-    const targetInfo = validateCurrentTarget("player", index, "grave");
-    if (!targetInfo.ok) return;
+  const candidates = state.player.grave
+    .map((card, index) => card ? {
+      card,
+      index,
+      targetInfo: validateCurrentTarget("player", index, "grave")
+    } : null)
+    .filter(Boolean);
+  const legalCount = candidates.filter((candidate) => candidate.targetInfo.ok).length;
+  const legalAction = targetMode === "ownGraveMonster" ? "可召唤" : "可选择";
+  root.dataset.summary = `${legalAction} ${legalCount} / 墓地 ${candidates.length}`;
+  root.setAttribute("aria-label", `墓地目标：${legalCount} 张${legalAction}，墓地共 ${candidates.length} 张卡。`);
+  candidates.forEach(({ card, index, targetInfo }) => {
     const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
     cardEl.dataset.zone = "player-grave";
-    cardEl.classList.add("grave-target-card", "targetable");
+    cardEl.dataset.targetState = targetInfo.ok ? "legal" : "unavailable";
+    cardEl.classList.add("grave-target-card");
+    cardEl.classList.toggle("targetable", targetInfo.ok);
+    cardEl.classList.toggle("grave-target-unavailable", !targetInfo.ok);
     const selected = isSelectedTargetSelection(state.pendingTarget, "player", index, "grave");
-    cardEl.classList.toggle("target-selected", selected);
-    cardEl.setAttribute("aria-pressed", String(selected));
-    cardEl.title = `选择墓地目标：${card.name}`;
+    cardEl.classList.toggle("target-selected", targetInfo.ok && selected);
+    cardEl.setAttribute("aria-pressed", String(targetInfo.ok && selected));
+    cardEl.setAttribute("aria-disabled", String(!targetInfo.ok));
+    cardEl.title = targetInfo.ok ? `选择墓地目标：${card.name}` : targetInfo.reason;
+    if (!targetInfo.ok) {
+      const reason = document.createElement("span");
+      reason.className = "grave-target-reason";
+      reason.textContent = /不是怪兽/.test(targetInfo.reason) ? "非怪兽" : "不满足条件";
+      reason.title = targetInfo.reason;
+      cardEl.appendChild(reason);
+    }
     cardEl.addEventListener("click", () => {
       interactWithPendingSpellTarget("player", index, "grave", {
         directActivate: directActivationTracker.register(`player:grave:${index}`)

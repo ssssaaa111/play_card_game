@@ -124,13 +124,25 @@ test("validates strongest own and enemy monster targets", () => {
 
   assert.equal(validateTargetSelection(ownPending, state, "player", 1).ok, true);
   assert.match(validateTargetSelection(ownPending, state, "player", 0).reason, /最高怪/);
-  assert.match(validateTargetSelection(ownPending, state, "ai", 1).reason, /我方怪兽/);
+  assert.equal(
+    validateTargetSelection(ownPending, state, "ai", 1).reason,
+    "不能选择该目标：不是己方怪兽。"
+  );
+  assert.equal(
+    validateTargetSelection(ownPending, state, "player", 4).reason,
+    "不能选择该目标：该格为空。"
+  );
   assert.equal(validateTargetSelection(enemyPending, state, "ai", 1).ok, true);
   assert.match(validateTargetSelection(enemyPending, state, "ai", 0).reason, /敌方最高/);
+  assert.equal(
+    validateTargetSelection(enemyPending, state, "player", 1).reason,
+    "不能选择该目标：不是敌方怪兽。"
+  );
 });
 
 test("enemy spell trap selection accepts only an occupied rival support slot", () => {
   const state = duelists();
+  const before = structuredClone(state);
   const pending = targetSelectionForCard(
     { id: "dispelling-ray", type: "spell", name: "解印射线", effect: "destroySpellTrap" },
     effects
@@ -141,8 +153,15 @@ test("enemy spell trap selection accepts only an occupied rival support slot", (
   assert.equal(valid.owner, "ai");
   assert.equal(valid.zone, "traps");
   assert.equal(valid.card.name, "敌方装备");
-  assert.match(validateTargetSelection(pending, state, "player", 0, "traps").reason, /敌方魔陷区/);
-  assert.match(validateTargetSelection(pending, state, "ai", 1, "traps").reason, /请选择敌方魔陷区/);
+  assert.equal(
+    validateTargetSelection(pending, state, "player", 0, "traps").reason,
+    "不能选择该目标：不是敌方魔陷区的卡。"
+  );
+  assert.equal(
+    validateTargetSelection(pending, state, "ai", 1, "traps").reason,
+    "不能选择该目标：该格为空。"
+  );
+  assert.deepEqual(state, before);
 });
 
 test("grave target selection accepts only own graveyard monsters", () => {
@@ -151,10 +170,19 @@ test("grave target selection accepts only own graveyard monsters", () => {
     { id: "grave-return", type: "spell", name: "醒星回召", effect: "graveRevive" },
     effects
   );
+  const beforeInvalidSelection = structuredClone(state);
 
   assert.equal(validateTargetSelection(pending, state, "player", 0, "grave").ok, true);
-  assert.match(validateTargetSelection(pending, state, "player", 1, "grave").reason, /墓地中的怪兽/);
+  assert.equal(
+    validateTargetSelection(pending, state, "player", 1, "grave").reason,
+    "不能选择该卡：不是怪兽。"
+  );
+  assert.equal(
+    validateTargetSelection(pending, state, "player", 9, "grave").reason,
+    "不能选择该卡：目标不在墓地。"
+  );
   assert.match(validateTargetSelection(pending, state, "ai", 0, "grave").reason, /我方墓地/);
+  assert.deepEqual(state, beforeInvalidSelection);
 });
 
 test("grave card selection accepts every own graveyard card but never another zone", () => {
