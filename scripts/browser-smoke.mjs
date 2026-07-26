@@ -14,6 +14,7 @@ const DEFAULT_SMOKES = [
   "chain-trap-choice",
   "combo-spell",
   "equipment-spell",
+  "effect-marker-stacking-basic",
   "support-target-readability-basic"
 ];
 

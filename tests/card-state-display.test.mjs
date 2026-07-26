@@ -58,3 +58,32 @@ test("explains convergence attack locks and sourced effect markers before generi
     ]
   );
 });
+
+test("keeps the newest sourced modifier visible and summarizes hidden effects", () => {
+  assert.deepEqual(
+    cardStateChips({
+      type: "monster",
+      mode: "attack",
+      used: false,
+      tempAtk: 800
+    }, {
+      attackReady: true,
+      effectMarkers: [
+        { label: "再攻 ×1", tone: "ability", detail: "追加攻击 ×1：战斗狂热" },
+        { label: "战斗 攻+200", tone: "buff", detail: "战斗狂热生效：攻击力 +200。" },
+        { label: "炎岚 攻+100", tone: "buff", detail: "炎岚追击生效：攻击力 +100。" },
+        { label: "战意 攻+500", tone: "buff", detail: "战意高扬生效：攻击力 +500。" }
+      ]
+    }),
+    [
+      { label: "可攻击", tone: "ready" },
+      { label: "再攻 ×1", tone: "ability", detail: "追加攻击 ×1：战斗狂热" },
+      { label: "战斗 攻+200", tone: "buff", detail: "战斗狂热生效：攻击力 +200。" },
+      {
+        label: "更多效果 +2",
+        tone: "overflow",
+        detail: "另有 2 项效果：炎岚 攻+100、战意 攻+500"
+      }
+    ]
+  );
+});

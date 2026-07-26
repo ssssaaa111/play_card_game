@@ -138,16 +138,16 @@ test("one-shot stat markers retain public sources only for the monster's current
 
   assert.deepEqual(effectMarkersForCard({ ...input, gameEvents: beforeResummon }), [
     {
-      label: "战意 攻+500",
-      tone: "buff",
-      detail: "战意高扬生效：攻击力 +500。",
-      sourceCardId: "chant-source"
-    },
-    {
       label: "星魂 攻守+200",
       tone: "buff",
       detail: "星魂共鸣生效：攻击力 / 防御力 +200。",
       sourceCardId: "resonance-source"
+    },
+    {
+      label: "战意 攻+500",
+      tone: "buff",
+      detail: "战意高扬生效：攻击力 +500。",
+      sourceCardId: "chant-source"
     }
   ]);
   assert.deepEqual(effectMarkersForCard({
@@ -207,4 +207,56 @@ test("aggregates target-bound attack resets while retaining every public source"
     detail: "追加攻击 ×2：三曜终断、战斗狂热",
     sourceCardIds: ["counter-source", "trance-source"]
   }]);
+});
+
+test("keeps lifecycle markers stable while showing newest one-shot sources first", () => {
+  const markers = effectMarkersForCard({
+    card: { uid: "target-monster", type: "monster" },
+    duelist: {
+      attackResetEntries: [
+        { uses: 1, sourceCardId: "trance-source", targetCardId: "target-monster" }
+      ]
+    },
+    gameEvents: [
+      { id: 1, type: "MONSTER_SUMMONED", cardId: "target-monster" },
+      {
+        id: 2,
+        type: "STAT_MODIFIED",
+        cardId: "target-monster",
+        stat: "tempAtk",
+        amount: 500,
+        sourceCardId: "chant-source"
+      },
+      {
+        id: 3,
+        type: "STAT_MODIFIED",
+        cardId: "target-monster",
+        stat: "tempAtk",
+        amount: 200,
+        sourceCardId: "trance-source"
+      },
+      {
+        id: 4,
+        type: "COMBO_TRIGGERED",
+        comboId: "fireWindFirst",
+        title: "炎岚追击"
+      },
+      {
+        id: 5,
+        type: "STAT_MODIFIED",
+        cardId: "target-monster",
+        stat: "tempAtk",
+        amount: 100,
+        sourceCardId: "combo:fireWindFirst"
+      }
+    ],
+    findCard: (id) => cards.get(id) || null
+  });
+
+  assert.deepEqual(markers.map((marker) => marker.label), [
+    "再攻 ×1",
+    "战斗 攻+200",
+    "炎岚 攻+100",
+    "战意 攻+500"
+  ]);
 });

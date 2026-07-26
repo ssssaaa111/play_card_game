@@ -2167,6 +2167,11 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   color: #eadcff;
 }
 
+.card-state-chip.overflow {
+  border-color: rgba(199, 213, 232, 0.42);
+  color: #dce8f7;
+}
+
 .monster-projection {
   display: none;
   position: absolute;
