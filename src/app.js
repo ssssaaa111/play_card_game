@@ -4169,8 +4169,29 @@ function checkGameOver() {
   }
 }
 
+function fieldEffectMarkers(card, duelist) {
+  return effectMarkersForCard({
+    card,
+    duelist,
+    gameEvents: state.gameEvents,
+    findCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId)
+  });
+}
+
+function focusedCardEffectMarkers(card) {
+  const cardId = runtimeCardId(card);
+  if (!cardId) return [];
+  for (const duelist of [state.player, state.ai]) {
+    const fieldCard = duelist.field.find((candidate) =>
+      candidate && (candidate === card || runtimeCardId(candidate) === cardId)
+    );
+    if (fieldCard) return fieldEffectMarkers(fieldCard, duelist);
+  }
+  return [];
+}
+
 function showDetail(card) {
-  const view = cardInspectorViewModel(card);
+  const view = cardInspectorViewModel(card, { effectMarkers: focusedCardEffectMarkers(card) });
   if (!view) return;
   state.focusedCard = card;
   renderCardInspector(document, cardInspectorElements, view);
@@ -4573,12 +4594,7 @@ function renderField(root, duelist, owner, animationKey) {
     spellTargetAt: (index) => fieldSpellTargetActive
       ? validateCurrentTarget(owner, index, "field")
       : null,
-    effectMarkersAt: (index) => effectMarkersForCard({
-      card: duelist.field[index],
-      duelist,
-      gameEvents: state.gameEvents,
-      findCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId)
-    }),
+    effectMarkersAt: (index) => fieldEffectMarkers(duelist.field[index], duelist),
     onSlotClick: (index) => {
       const interaction = { directActivate: directActivationTracker.register(`${owner}:field:${index}`) };
       return owner === "player" ? handlePlayerSlot(index, interaction) : handleAiSlot(index, interaction);

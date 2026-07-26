@@ -78,7 +78,7 @@ function supportRuleValue(card, rule) {
   return rule.startsWith(prefix) ? rule.slice(prefix.length) : rule;
 }
 
-export function cardInspectorViewModel(cardOrId) {
+export function cardInspectorViewModel(cardOrId, { effectMarkers = [] } = {}) {
   const card = typeof cardOrId === "string" ? resolveCardDetailSource(cardOrId) : cardOrId;
   const view = buildCardDetailViewModel(card);
   if (!view) return null;
@@ -95,13 +95,19 @@ export function cardInspectorViewModel(cardOrId) {
   }
 
   if (card.type === "monster") {
+    const activeEffects = effectMarkers
+      .map((marker) => marker?.detail || marker?.label || "")
+      .filter(Boolean);
     return {
       ...view,
       tacticalSummary: card.summary || `${view.attribute || "怪兽"} · ATK ${view.attack} / DEF ${view.defense}`,
       rows: [
         { label: "属性", value: view.attribute || "无属性" },
         { label: "战力", value: `ATK ${view.attack} / DEF ${view.defense}` },
-        { label: "状态", value: view.rule }
+        { label: "状态", value: view.rule },
+        ...(activeEffects.length > 0
+          ? [{ label: "生效中", value: activeEffects.join("；"), scrollable: true }]
+          : [])
       ]
     };
   }
