@@ -4160,6 +4160,73 @@ async function runEffectMarkerLifecycleBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runEffectMarkerStackingBasicSmoke(ctx) {
+  const smokeName = "effect-marker-stacking-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "target");
+
+  clickSmokeElement(handCard(ctx.els, "war-chant"), `${smokeName}: activate war chant`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "buff500" &&
+      Boolean(ctx.state.pendingTarget?.selectedTarget) &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: war chant target is ready`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm war chant`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.player.field[0]?.id === "star-lancer" &&
+      (ctx.state.player.field[0]?.tempAtk || 0) >= 600,
+    `${smokeName}: war chant and fire wind combo resolve`,
+    9000
+  );
+  const firstBuffed = fieldCard(ctx.els, "player", "star-lancer");
+  assertCardEffectMarker(firstBuffed, "炎岚 攻+100", "炎岚追击生效：攻击力 +100。");
+  assertCardEffectMarker(firstBuffed, "战意 攻+500", "战意高扬生效：攻击力 +500。");
+
+  clickSmokeElement(handCard(ctx.els, "battle-trance"), `${smokeName}: activate battle trance`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "battleTrance" &&
+      Boolean(ctx.state.pendingTarget?.selectedTarget) &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: battle trance target is ready`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm battle trance`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.player.attackResets === 1 &&
+      (ctx.state.player.field[0]?.tempAtk || 0) >= 800,
+    `${smokeName}: newest modifier and extra attack resolve`,
+    9000
+  );
+  const stacked = fieldCard(ctx.els, "player", "star-lancer");
+  assertCardEffectMarker(stacked, "再攻 ×1", "追加攻击 ×1：战斗狂热");
+  assertCardEffectMarker(stacked, "战斗 攻+200", "战斗狂热生效：攻击力 +200。");
+  assertCardEffectMarker(stacked, "更多效果 +2", "另有 2 项效果：炎岚 攻+100、战意 攻+500");
+  assertCardEffectMarkerMissing(stacked, "炎岚 攻+100");
+  assertCardEffectMarkerMissing(stacked, "战意 攻+500");
+
+  clickSmokeElement(stacked, `${smokeName}: select stacked attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "sky-raider")?.classList.contains("attack-target"),
+    `${smokeName}: attack target is ready`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "sky-raider"), `${smokeName}: consume extra attack`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "sky-raider") &&
+      ctx.state.player.field[0]?.used === false &&
+      ctx.state.player.attackResets === 0,
+    `${smokeName}: extra attack is consumed`,
+    10000
+  );
+  const afterReset = fieldCard(ctx.els, "player", "star-lancer");
+  assertCardEffectMarkerMissing(afterReset, "再攻 ×1");
+  assertCardEffectMarker(afterReset, "战斗 攻+200", "战斗狂热生效：攻击力 +200。");
+  assertCardEffectMarker(afterReset, "炎岚 攻+100", "炎岚追击生效：攻击力 +100。");
+  assertCardEffectMarker(afterReset, "更多效果 +1", "另有 1 项效果：战意 攻+500");
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiDirectTrapSmoke(ctx) {
   setSmokeStatus("running", "ai-direct-trap");
   await startSmokeDuel(ctx, "directTrap");
@@ -5624,6 +5691,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "double-attack": runDoubleAttackSmoke,
     "battle-trance-ready": runBattleTranceReadySmoke,
     "effect-marker-lifecycle-basic": runEffectMarkerLifecycleBasicSmoke,
+    "effect-marker-stacking-basic": runEffectMarkerStackingBasicSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,
     "trap-choice-double": runTrapChoiceDoubleSmoke,

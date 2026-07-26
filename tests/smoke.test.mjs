@@ -422,6 +422,7 @@ test("serve script uses the fixed local port", () => {
   assert.match(browserSmoke, /Unable to create browser smoke profile directory/);
   assert.match(browserSmoke, /BROWSER_BIN/);
   assert.match(browserSmoke, /equipment-spell/);
+  assert.match(browserSmoke, /effect-marker-stacking-basic/);
   assert.match(browserSmoke, /support-target-readability-basic/);
   assert.match(browserSmoke, /basic-expansion/);
 });
@@ -750,6 +751,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"double-attack": runDoubleAttackSmoke/);
   assert.match(smoke, /"battle-trance-ready": runBattleTranceReadySmoke/);
   assert.match(smoke, /"effect-marker-lifecycle-basic": runEffectMarkerLifecycleBasicSmoke/);
+  assert.match(smoke, /"effect-marker-stacking-basic": runEffectMarkerStackingBasicSmoke/);
   assert.match(smoke, /"ai-direct-trap": runAiDirectTrapSmoke/);
   assert.match(smoke, /"trap-choice": runTrapChoiceSmoke/);
   assert.match(smoke, /"trap-choice-double": runTrapChoiceDoubleSmoke/);
@@ -862,6 +864,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "double-attack"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-trance-ready"\)/);
   assert.match(smoke, /const smokeName = "effect-marker-lifecycle-basic";[\s\S]*再攻 ×1[\s\S]*战斗 攻\+200[\s\S]*assertCardEffectMarkerMissing[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "effect-marker-stacking-basic";[\s\S]*更多效果 \+2[\s\S]*更多效果 \+1[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-direct-trap"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trap-choice-double"\)/);

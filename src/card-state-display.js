@@ -35,7 +35,16 @@ export function cardStateChips(card, { attacksLocked = false, attackReady = fals
   else if (attackReady) chips.push({ label: "可攻击", tone: "ready" });
   else chips.push({ label: "待命", tone: "idle" });
 
-  chips.push(...effectMarkers.map((marker) => ({ ...marker })));
+  const visibleEffectMarkers = effectMarkers.slice(0, 2);
+  const hiddenEffectMarkers = effectMarkers.slice(visibleEffectMarkers.length);
+  chips.push(...visibleEffectMarkers.map((marker) => ({ ...marker })));
+  if (hiddenEffectMarkers.length > 0) {
+    chips.push({
+      label: `更多效果 +${hiddenEffectMarkers.length}`,
+      tone: "overflow",
+      detail: `另有 ${hiddenEffectMarkers.length} 项效果：${hiddenEffectMarkers.map((marker) => marker.label).join("、")}`
+    });
+  }
 
   if (card.tempAtk > 0) chips.push({ label: `攻 +${card.tempAtk}`, tone: "buff" });
   else if (card.tempDef > 0) chips.push({ label: `守 +${card.tempDef}`, tone: "buff" });
@@ -50,5 +59,5 @@ export function cardStateChips(card, { attacksLocked = false, attackReady = fals
       tone: card.destructionProtectionUsed ? "spent" : "guard"
     });
   }
-  return chips.slice(0, 3);
+  return chips.slice(0, hiddenEffectMarkers.length > 0 ? 4 : 3);
 }

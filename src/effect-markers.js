@@ -66,7 +66,7 @@ function shortSourceName(name = "未知来源") {
   return [...String(name)].slice(0, 2).join("") || "效果";
 }
 
-function sourcedStatModifiers(events = [], cardId) {
+function sourcedStatModifiers(events = [], cardId, prioritySourceIds = new Set()) {
   let latestSummonIndex = -1;
   events.forEach((event, index) => {
     if (event.type === "MONSTER_SUMMONED" && event.cardId === cardId) {
@@ -74,7 +74,7 @@ function sourcedStatModifiers(events = [], cardId) {
     }
   });
   const modifiers = new Map();
-  events.slice(latestSummonIndex + 1).forEach((event) => {
+  events.slice(latestSummonIndex + 1).forEach((event, relativeIndex) => {
     if (
       event.type !== "STAT_MODIFIED" ||
       event.cardId !== cardId ||
@@ -87,13 +87,21 @@ function sourcedStatModifiers(events = [], cardId) {
     const modifier = modifiers.get(event.sourceCardId) || {
       sourceCardId: event.sourceCardId,
       atk: 0,
-      def: 0
+      def: 0,
+      latestEventIndex: -1
     };
     if (event.stat === "tempAtk") modifier.atk += Number(event.amount) || 0;
     if (event.stat === "tempDef") modifier.def += Number(event.amount) || 0;
+    modifier.latestEventIndex = latestSummonIndex + 1 + relativeIndex;
     modifiers.set(event.sourceCardId, modifier);
   });
-  return [...modifiers.values()].filter((modifier) => modifier.atk || modifier.def);
+  return [...modifiers.values()]
+    .filter((modifier) => modifier.atk || modifier.def)
+    .sort((left, right) => {
+      const priorityDelta = Number(prioritySourceIds.has(right.sourceCardId)) -
+        Number(prioritySourceIds.has(left.sourceCardId));
+      return priorityDelta || right.latestEventIndex - left.latestEventIndex;
+    });
 }
 
 function modifierTone({ atk = 0, def = 0 } = {}) {
@@ -133,6 +141,7 @@ export function effectMarkersForCard({
 
   const attackResets = (duelist?.attackResetEntries || [])
     .filter((entry) => entry.targetCardId === cardId && Number(entry.uses) > 0);
+  const attackResetSourceIds = new Set(attackResets.map((entry) => entry.sourceCardId).filter(Boolean));
   const resetUses = attackResets.reduce((total, entry) => total + Number(entry.uses), 0);
   if (resetUses > 0) {
     const sources = [...new Set(attackResets.map((entry) => sourceName(entry.sourceCardId, findCard, gameEvents)))];
@@ -144,7 +153,7 @@ export function effectMarkersForCard({
     });
   }
 
-  sourcedStatModifiers(gameEvents, cardId).forEach((modifier) => {
+  sourcedStatModifiers(gameEvents, cardId, attackResetSourceIds).forEach((modifier) => {
     const source = sourceName(modifier.sourceCardId, findCard, gameEvents);
     const compactStats = statDeltaSummary(modifier.atk, modifier.def, { compact: true });
     const detailStats = statDeltaSummary(modifier.atk, modifier.def);
