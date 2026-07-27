@@ -306,6 +306,33 @@ test("dispatches tribute summon through engine and fixed UI slots", () => {
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === vanguard.uid));
 });
 
+test("tribute departure expires target-bound attack resets in projected UI state", () => {
+  const material = uiMonster("bound-tribute-material", "spark-runner");
+  const vanguard = uiMonster("bound-tribute-vanguard", "solar-vanguard");
+  vanguard.tributeCost = 1;
+  const state = appState();
+  state.player.field[0] = material;
+  state.player.hand = [vanguard];
+  state.player.attackResets = 2;
+  state.player.attackResetEntries = [{
+    uses: 2,
+    duration: "turn",
+    sourceCardId: "battle-trance-source",
+    targetCardId: material.uid
+  }];
+
+  const events = dispatchSummonMonsterFromUiState(state, "player", 0, 0, { tributeIndexes: [0] });
+
+  assert.equal(state.player.attackResets, 0);
+  assert.deepEqual(state.player.attackResetEntries, []);
+  assert.ok(events.some((event) =>
+    event.type === "ABILITY_EXPIRED"
+    && event.ability === "attackReset"
+    && event.uses === 2
+    && event.targetCardId === material.uid
+  ));
+});
+
 test("dispatches three-tribute divine summon through engine and fixed UI slots", () => {
   const materialA = uiMonster("divine-material-a", "spark-runner");
   const materialB = uiMonster("divine-material-b", "lumen-gearlet");

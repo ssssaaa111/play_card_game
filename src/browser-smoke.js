@@ -4160,6 +4160,109 @@ async function runEffectMarkerLifecycleBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runEffectTargetDepartureBasicSmoke(ctx) {
+  const smokeName = "effect-target-departure-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "target");
+
+  const target = ctx.state.player.field.find((card) => card?.id === "star-lancer");
+  const vanguard = cloneCardById("solar-vanguard");
+  const recall = cloneCardById("starwake-recall");
+  if (!target || !vanguard || !recall) {
+    throw new Error(`${smokeName}: required lifecycle cards are missing`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "battle-trance"), `${smokeName}: activate battle trance`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "battleTrance" && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: battle trance target is ready`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm battle trance`);
+  await waitForSmoke(
+    () => ctx.state.player.attackResets === 1 &&
+      (ctx.state.player.attackResetEntries || []).some((entry) => entry.targetCardId === target.uid),
+    `${smokeName}: target-bound attack reset is active`,
+    9000
+  );
+  assertCardEffectMarker(
+    fieldCard(ctx.els, "player", "star-lancer"),
+    "再攻 ×1",
+    "追加攻击 ×1：战斗狂热"
+  );
+
+  ctx.state.player.hand.push(vanguard, recall);
+  ctx.render?.();
+  clickSmokeElement(handCard(ctx.els, "solar-vanguard"), `${smokeName}: select tribute monster`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: enter tribute selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.cost === 1 &&
+      fieldCard(ctx.els, "player", "star-lancer")?.classList.contains("tribute-candidate"),
+    `${smokeName}: bound monster is a legal tribute`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select bound monster as tribute`);
+  await waitForSmoke(
+    () => ctx.state.pendingTribute?.selectedIndexes?.length === 1 && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: tribute is selected`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm tribute summon`);
+  await waitForSmoke(
+    () => ctx.state.player.grave.some((card) => card?.uid === target.uid) &&
+      ctx.state.player.attackResets === 0 &&
+      (ctx.state.player.attackResetEntries || []).length === 0,
+    `${smokeName}: target departure expires its attack reset`,
+    9000
+  );
+  if (!ctx.state.gameEvents.some((event) =>
+    event.type === "ABILITY_EXPIRED" &&
+    event.ability === "attackReset" &&
+    event.targetCardId === target.uid &&
+    event.reason === "target-left-zone"
+  )) {
+    throw new Error(`${smokeName}: target departure must emit ABILITY_EXPIRED`);
+  }
+
+  await waitForSmoke(
+    () => ctx.state.actionWindow === "main" &&
+      !ctx.state.aiRunning &&
+      !ctx.els.chainModal?.classList.contains("show") &&
+      handCard(ctx.els, "starwake-recall")?.classList.contains("action-ready"),
+    `${smokeName}: summon responses settle before grave revival`,
+    9000
+  );
+
+  const recallCard = handCard(ctx.els, "starwake-recall");
+  if (!recallCard?.classList.contains("action-ready")) {
+    throw new Error(`${smokeName}: grave revival is not action-ready: ${recallCard?.dataset.actionReason || "no reason"}. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(recallCard, `${smokeName}: open grave revival`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "graveRevive",
+    `${smokeName}: grave revival target window opens`,
+    9000
+  );
+  const departedTarget = graveTargetCard(ctx.els, "star-lancer");
+  if (!departedTarget) {
+    const graveText = ctx.els.graveTargets?.textContent?.replace(/\s+/g, " ").trim() || "(empty)";
+    throw new Error(`${smokeName}: departed target is missing from grave selection: ${graveText}. ${smokeDebug(ctx)}`);
+  }
+  await selectAndConfirmSpellTarget(
+    ctx,
+    departedTarget,
+    `${smokeName}: revive departed target`
+  );
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.uid === target.uid) &&
+      !ctx.state.player.grave.some((card) => card?.uid === target.uid) &&
+      ctx.state.player.attackResets === 0,
+    `${smokeName}: revived card does not inherit expired attack reset`,
+    9000
+  );
+  const revived = fieldCard(ctx.els, "player", "star-lancer");
+  assertCardEffectMarkerMissing(revived, "再攻 ×1");
+  assertCardEffectMarkerMissing(revived, "战斗 攻+200");
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runEffectMarkerStackingBasicSmoke(ctx) {
   const smokeName = "effect-marker-stacking-basic";
   setSmokeStatus("running", smokeName);
@@ -5701,6 +5804,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "double-attack": runDoubleAttackSmoke,
     "battle-trance-ready": runBattleTranceReadySmoke,
     "effect-marker-lifecycle-basic": runEffectMarkerLifecycleBasicSmoke,
+    "effect-target-departure-basic": runEffectTargetDepartureBasicSmoke,
     "effect-marker-stacking-basic": runEffectMarkerStackingBasicSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
     "trap-choice": runTrapChoiceSmoke,

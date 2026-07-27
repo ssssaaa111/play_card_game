@@ -387,6 +387,7 @@ export class EffectContext {
     const destinationPlayer = requirePlayer(this.#state, to.playerId);
     const destinationZone = requireZone(destinationPlayer, to.zone);
     const source = from || currentLocations[0] || null;
+    this.#expireTargetAbilitiesForMove(cardId, source, to);
     if (isTokenCard(requireCard(this.#state, cardId)) && source?.zone === "monsterZone" && to.zone !== "monsterZone") {
       this.#releaseContinuousEffectsForMove(cardId, source, { playerId: to.playerId, zone: "removed", index: null });
       this.#emit("TOKEN_REMOVED", {
@@ -415,6 +416,33 @@ export class EffectContext {
       from: source,
       to: destination
     });
+  }
+
+  #expireTargetAbilitiesForMove(cardId, from, to) {
+    if (
+      !from ||
+      !to ||
+      from.zone !== "monsterZone" ||
+      (to.zone === "monsterZone" && to.playerId === from.playerId)
+    ) {
+      return;
+    }
+
+    for (const [playerId, abilities] of Object.entries(this.#state.abilities || {})) {
+      abilities
+        .filter((entry) => entry.targetCardId === cardId)
+        .forEach((entry) => {
+          this.#emit("ABILITY_EXPIRED", {
+            playerId,
+            ability: entry.ability,
+            uses: entry.uses,
+            duration: entry.duration || "turn",
+            sourceCardId: entry.sourceCardId || null,
+            targetCardId: cardId,
+            reason: "target-left-zone"
+          });
+        });
+    }
   }
 
   sendCardToGrave(cardId, from, options = {}) {
@@ -2518,6 +2546,14 @@ export function assertValidGameState(state) {
       if (!Number.isFinite(abilityEntry.uses) || abilityEntry.uses < 0) {
         throw new GameStateValidationError(`Invalid ability uses for ${abilityEntry.ability}`);
       }
+      if (abilityEntry.targetCardId) {
+        if (!state.cards[abilityEntry.targetCardId]) {
+          throw new GameStateValidationError(`Ability target ${abilityEntry.targetCardId} must exist`);
+        }
+        if (!player.monsterZone.includes(abilityEntry.targetCardId)) {
+          throw new GameStateValidationError(`Ability target ${abilityEntry.targetCardId} must stay in ${player.id}.monsterZone`);
+        }
+      }
     }
   }
 
@@ -2616,6 +2652,9 @@ export function applyGameEvent(state, event, options = {}) {
       break;
     case "ABILITY_SPENT":
       applyAbilitySpent(state, event);
+      break;
+    case "ABILITY_EXPIRED":
+      applyAbilityExpired(state, event);
       break;
     case "TURN_ABILITIES_EXPIRED":
       applyTurnAbilitiesExpired(state, event);
@@ -3234,6 +3273,21 @@ function applyAbilitySpent(state, event) {
   if (abilities[index].uses <= 0) {
     abilities.splice(index, 1);
   }
+}
+
+function applyAbilityExpired(state, event) {
+  requirePlayer(state, event.playerId);
+  requireAbility(event.ability);
+  const abilities = state.abilities[event.playerId];
+  const index = abilities.findIndex((entry) =>
+    entry.ability === event.ability
+    && entry.targetCardId === event.targetCardId
+    && (!event.sourceCardId || entry.sourceCardId === event.sourceCardId)
+  );
+  if (index === -1) {
+    throw new GameRuleError(`${event.playerId} does not have expiring ability ${event.ability}`);
+  }
+  abilities.splice(index, 1);
 }
 
 function applyTurnAbilitiesExpired(state, event) {

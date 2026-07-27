@@ -3872,6 +3872,78 @@ test("attack reset stays bound to its target and preserves the granting source",
   assert.equal(spent?.targetCardId, "bound-attacker");
 });
 
+test("target-bound attack resets expire when their monster leaves and do not return after revival", () => {
+  const state = makeState({
+    cards: [
+      card("bound-material", { type: "monster", templateId: "spark-runner", atk: 800, def: 1200 }),
+      card("vanguard-1", { type: "monster", templateId: "solar-vanguard", atk: 2300, def: 1700, tributeCost: 1 }),
+      card("recall-1", { type: "spell", templateId: "starwake-recall", effect: "graveRevive" })
+    ],
+    player: {
+      monsterZone: ["bound-material"],
+      hand: ["vanguard-1", "recall-1"]
+    }
+  });
+  state.abilities[PLAYER] = [{
+    ability: Ability.attackReset,
+    uses: 2,
+    duration: "turn",
+    sourceCardId: "battle-trance",
+    targetCardId: "bound-material"
+  }];
+  const engine = new GameEngine(state);
+
+  const tributeEvents = engine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "vanguard-1",
+    index: 0,
+    tributeCardIds: ["bound-material"]
+  });
+
+  assert.deepEqual(engine.getState().abilities[PLAYER], []);
+  assert.ok(tributeEvents.some((event) =>
+    event.type === "ABILITY_EXPIRED"
+    && event.ability === Ability.attackReset
+    && event.uses === 2
+    && event.targetCardId === "bound-material"
+    && event.reason === "target-left-zone"
+  ));
+
+  engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "recall-1",
+    targetCardId: "bound-material",
+    index: 1
+  });
+
+  assert.ok(engine.getState().players[PLAYER].monsterZone.includes("bound-material"));
+  assert.deepEqual(engine.getState().abilities[PLAYER], []);
+  assertValidGameState(engine.getState());
+});
+
+test("state validation rejects a target-bound ability whose monster already left the field", () => {
+  const state = makeState({
+    cards: [card("departed-target", { type: "monster" })],
+    player: { grave: ["departed-target"] }
+  });
+  state.abilities[PLAYER] = [{
+    ability: Ability.attackReset,
+    uses: 1,
+    duration: "turn",
+    sourceCardId: "battle-trance",
+    targetCardId: "departed-target"
+  }];
+
+  assert.throws(
+    () => assertValidGameState(state),
+    /target departed-target must stay in player\.monsterZone/
+  );
+});
+
 test("stacked attack resets keep both sources and give only their target two extra attacks", () => {
   const state = makeState({
     cards: [
