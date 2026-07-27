@@ -689,6 +689,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"direct-shield-consume": runDirectShieldConsumeSmoke/);
   assert.match(smoke, /"guard-counter": runGuardCounterSmoke/);
   assert.match(smoke, /"ai-guard-skip": runAiGuardSkipSmoke/);
+  assert.match(smoke, /"ai-mirror-restraint-basic": runAiMirrorRestraintBasicSmoke/);
+  assert.match(smoke, /"ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke/);
   assert.match(smoke, /"summon-effects": runSummonEffectsSmoke/);
   assert.match(smoke, /"summon-fire-buff": runSummonFireBuffSmoke/);
   assert.match(smoke, /"summon-shield": runSummonShieldSmoke/);
@@ -710,6 +712,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"fusion-mixed-materials": runFusionMixedMaterialsSmoke/);
   assert.match(smoke, /"fusion-result-choice": runFusionResultChoiceSmoke/);
   assert.match(smoke, /"player-counter-chain": runPlayerCounterChainSmoke/);
+  assert.match(smoke, /"mirror-destroy-no-damage-basic": runMirrorDestroyNoDamageBasicSmoke/);
   assert.match(smoke, /"triple-counter-chain": runTripleCounterChainSmoke/);
   assert.match(smoke, /"chain-resolution-review": runChainResolutionReviewSmoke/);
   assert.match(smoke, /chainStatus\?\.textContent\.includes\("将加入 CL3"\)/);

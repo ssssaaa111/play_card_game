@@ -54,6 +54,48 @@ function isUsefulAttackTarget(entry) {
   return false;
 }
 
+function attackThreatScore({ owner = null, rival = null, context = {} } = {}) {
+  const attacker = rival?.field?.[context.attackerIndex];
+  if (!attacker) return 0;
+  const attackerAtk = totalAtk(attacker);
+  const target = context.targetIndex >= 0 ? owner?.field?.[context.targetIndex] : null;
+  if (!target) return attackerAtk > 0 ? 120 + Math.min(80, Math.floor(attackerAtk / 100)) : 0;
+
+  const targetValue = battleValue(target);
+  if (attackerAtk > targetValue) {
+    return 140 + Math.min(60, Math.floor((attackerAtk - targetValue) / 100));
+  }
+  if (attackerAtk === targetValue && target.mode !== "defense") return 120;
+  return 0;
+}
+
+function scoreAiTrapResponse(card, details = {}) {
+  if (!card) return 0;
+  if (details.eventName === "attack" && card.trigger === "attackDestroy") {
+    return attackThreatScore(details);
+  }
+  return 60;
+}
+
+export function chooseAiTrapResponseAction({
+  candidates = [],
+  owner = null,
+  rival = null,
+  eventName = "",
+  context = {}
+} = {}) {
+  const pick = candidates
+    .map(({ card, index }) => ({
+      type: "activateTrap",
+      card,
+      trapIndex: index,
+      score: scoreAiTrapResponse(card, { owner, rival, eventName, context })
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.trapIndex - b.trapIndex)[0];
+  return pick || null;
+}
+
 export function chooseAiAttackTarget({
   attacker,
   targets = [],

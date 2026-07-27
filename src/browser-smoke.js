@@ -218,6 +218,11 @@ function smokeDebug(ctx) {
     responseWindow: machine.responseWindow,
     chainLength: machine.chain?.length || 0,
     playerMonsters: activeMonsterSnapshots({ ...ctx.state, turn: "player" }),
+    aiMonsters: activeMonsterSnapshots({ ...ctx.state, turn: "ai" }),
+    attacksSkipped: {
+      player: Boolean(ctx.state.player.attacksSkipped),
+      ai: Boolean(ctx.state.ai.attacksSkipped)
+    },
     actions: ctx.currentPlayerActions(),
     skipAttackButtonDisabled: Boolean(ctx.els.skipAttackBtn?.disabled),
     chainOpen: Boolean(ctx.els.chainModal?.classList.contains("show")),
@@ -693,6 +698,71 @@ async function runAiGuardSkipSmoke(ctx) {
     throw new Error("完整回合循环缺少开始回合、怪兽重置或能力过期事件");
   }
   setSmokeStatus("passed", "ai-guard-skip");
+}
+
+async function runAiMirrorRestraintBasicSmoke(ctx) {
+  const smokeName = "ai-mirror-restraint-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistComebackChallenge");
+  const mirror = ctx.state.ai.traps.find((card) => card?.id === "mirror-snare");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "spark-runner");
+  if (!mirror || !attacker || !ctx.state.ai.field.some((card) => card?.id === "flare-titan")) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+  const activatedBefore = (ctx.state.gameEvents || []).filter((event) =>
+    event.type === "CARD_ACTIVATED" && event.cardId === mirror.uid
+  ).length;
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), `${smokeName}: select low-attack monster`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "flare-titan")?.classList.contains("attack-target"),
+    `${smokeName}: stronger target becomes attackable`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "flare-titan"), `${smokeName}: attack stronger monster`);
+  await waitForSmoke(
+    () => ctx.state.player.grave.some((card) => card?.uid === attacker.uid) &&
+      (ctx.state.gameEvents || []).some((event) => event.type === "BATTLE_RESOLVED" && event.attackerCardId === attacker.uid),
+    `${smokeName}: unfavorable battle resolves without trap waste`,
+    14000
+  );
+
+  const activatedAfter = (ctx.state.gameEvents || []).filter((event) =>
+    event.type === "CARD_ACTIVATED" && event.cardId === mirror.uid
+  ).length;
+  if (activatedAfter !== activatedBefore || !ctx.state.ai.traps.some((card) => card?.uid === mirror.uid)) {
+    throw new Error(`${smokeName}: AI should preserve mirror snare when battle already favors it. ${smokeDebug(ctx)}`);
+  }
+  if (ctx.state.ai.grave.some((card) => card?.uid === mirror.uid)) {
+    throw new Error(`${smokeName}: preserved mirror snare must not enter the graveyard.`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runAiMultiAttackReentryBasicSmoke(ctx) {
+  const smokeName = "ai-multi-attack-reentry-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmega");
+  const attackEventsBefore = countGameEvents(ctx.state, "ATTACK_DECLARED");
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => countGameEvents(ctx.state, "ATTACK_DECLARED") >= attackEventsBefore + 2 ||
+      (ctx.state.turn === "player" && !ctx.state.aiRunning),
+    `${smokeName}: AI battle phase completes or reaches a second attack`,
+    30000
+  );
+
+  const attacks = (ctx.state.gameEvents || [])
+    .filter((event) => event.type === "ATTACK_DECLARED" && event.playerId === "ai")
+    .slice(attackEventsBefore);
+  const attackerIds = new Set(attacks.map((event) => event.attackerCardId));
+  if (attackerIds.size < 2) {
+    throw new Error(`${smokeName}: battle window did not reopen for a second AI attacker. ${smokeDebug(ctx)}`);
+  }
+  if (!attacks.some((event) => eventReferencesTemplate(event, "trio-sun-judicator"))) {
+    throw new Error(`${smokeName}: expected the sun god to make the first pressure attack.`);
+  }
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runAiEngineLegalityBasicSmoke(ctx) {
@@ -1529,9 +1599,12 @@ async function runDivineGuardSmoke(ctx) {
   }
   clickSmokeElement(ctx.els.zoomClose, "divine-guard: close divine detail");
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "divine-guard: detail closes");
-  if (!ctx.currentPlayerActions().endTurn && !ctx.currentPlayerActions().attack && !ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap) {
-    throw new Error("divine-guard: duel should continue after guard resolves");
-  }
+  await waitForSmoke(
+    () => ctx.currentPlayerActions().endTurn || ctx.currentPlayerActions().attack ||
+      ctx.currentPlayerActions().spell || ctx.currentPlayerActions().trap,
+    "divine-guard: duel should continue after guard resolves",
+    8000
+  );
   setSmokeStatus("passed", "divine-guard");
 }
 
@@ -2838,6 +2911,12 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
     `${smokeName}：回到玩家反击回合。${smokeDebug(ctx)}`,
     32000
   );
+  for (const cardId of ["trio-star-herald", "trio-moon-warden"]) {
+    const card = cloneCardById(cardId);
+    if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes(`对手保留 ${card.name} 的攻击机会`))) {
+      throw new Error(`${smokeName}: ${card.name} should receive an explicit post-chain attack decision. ${smokeDebug(ctx)}`);
+    }
+  }
 
   clickSmokeElement(assertHandCardReady(ctx.els, "trio-moonbreaker-ray", `${smokeName}：碎月解幕高亮`), `${smokeName}：选择碎月解幕`);
   await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}：碎月解幕目标选择`);
@@ -4806,6 +4885,75 @@ async function runPlayerCounterChainSmoke(ctx) {
   setSmokeStatus("passed", "player-counter-chain");
 }
 
+async function runMirrorDestroyNoDamageBasicSmoke(ctx) {
+  const smokeName = "mirror-destroy-no-damage-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "playerCounterChain");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "star-lancer");
+  const mirror = ctx.state.ai.traps.find((card) => card?.id === "mirror-snare");
+  if (!attacker || !mirror || !ctx.state.ai.field.some((card) => card?.id === "gale-mage")) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+  const playerLpBefore = ctx.state.player.lp;
+  const aiLpBefore = ctx.state.ai.lp;
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "gale-mage")?.classList.contains("attack-target"),
+    `${smokeName}: defender becomes attackable`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "gale-mage"), `${smokeName}: declare attack`);
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") && ctx.state.pendingTrapChoice,
+    `${smokeName}: counter response opens`,
+    12000
+  );
+  const declaration = [...(ctx.state.gameEvents || [])].reverse().find((event) => event.type === "ATTACK_DECLARED");
+  if (!declaration) throw new Error(`${smokeName}: attack declaration event is missing.`);
+
+  clickSmokeElement(ctx.els.chainNo, `${smokeName}: decline chain nullifier`);
+  await waitForSmoke(
+    () => !ctx.els.chainModal.classList.contains("show") && !ctx.state.pendingTrapChoice,
+    `${smokeName}: response closes`,
+    16000
+  );
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "mirror-snare"),
+    `${smokeName}: mirror reveal opens`,
+    16000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue mirror reveal`);
+  await waitForSmoke(
+    () => !ctx.els.aiRevealModal.classList.contains("show") &&
+      ctx.state.player.grave.some((card) => card?.uid === attacker.uid) &&
+      ctx.state.ai.grave.some((card) => card?.uid === mirror.uid) &&
+      !["response", "resolution"].includes(ctx.state.actionWindow),
+    `${smokeName}: mirror resolves and response window clears`,
+    16000
+  );
+
+  if (!ctx.state.player.grave.some((card) => card?.uid === attacker.uid) ||
+      !ctx.state.ai.grave.some((card) => card?.uid === mirror.uid) ||
+      ["response", "resolution"].includes(ctx.state.actionWindow)) {
+    throw new Error(`${smokeName}: mirror must destroy the attacker and leave the response flow. ${smokeDebug(ctx)}`);
+  }
+
+  if (ctx.state.player.lp !== playerLpBefore || ctx.state.ai.lp !== aiLpBefore) {
+    throw new Error(`${smokeName}: a destroyed attacker must not reach battle damage. ${smokeDebug(ctx)}`);
+  }
+  if ((ctx.state.gameEvents || []).some((event) =>
+    event.type === "BATTLE_RESOLVED" && String(event.declarationEventId) === String(declaration.id)
+  )) {
+    throw new Error(`${smokeName}: canceled attack must not emit BATTLE_RESOLVED.`);
+  }
+  if (!(ctx.state.gameEvents || []).some((event) =>
+    event.type === "ATTACK_CANCELED" && String(event.declarationEventId) === String(declaration.id)
+  )) {
+    throw new Error(`${smokeName}: mirror destruction must emit ATTACK_CANCELED.`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTripleCounterChainSmoke(ctx) {
   setSmokeStatus("running", "triple-counter-chain");
   await startSmokeDuel(ctx, "tripleCounterChain");
@@ -5811,6 +5959,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "direct-shield-consume": runDirectShieldConsumeSmoke,
     "guard-counter": runGuardCounterSmoke,
     "ai-guard-skip": runAiGuardSkipSmoke,
+    "ai-mirror-restraint-basic": runAiMirrorRestraintBasicSmoke,
+    "ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke,
     "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
     "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
     "response-action-lock-basic": runResponseActionLockBasicSmoke,
@@ -5884,6 +6034,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "chain-weaken-resolution": runChainWeakenResolutionSmoke,
     "ai-counter-chain": runAiCounterChainSmoke,
     "player-counter-chain": runPlayerCounterChainSmoke,
+    "mirror-destroy-no-damage-basic": runMirrorDestroyNoDamageBasicSmoke,
     "triple-counter-chain": runTripleCounterChainSmoke,
     "chain-resolution-review": runChainResolutionReviewSmoke,
     "turn-handoff-basic": runTurnHandoffBasicSmoke,

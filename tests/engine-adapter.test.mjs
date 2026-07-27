@@ -38,6 +38,7 @@ import {
   dispatchRequestAutoEndFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
+  dispatchResumeBattleActionWindowFromUiState,
   dispatchResolveElementCombosFromUiState,
   dispatchResolveTurnDrawFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
@@ -304,6 +305,28 @@ test("dispatches tribute summon through engine and fixed UI slots", () => {
   assert.equal(state.player.normalSummonsUsed, 1);
   assert.ok(events.some((event) => event.type === "CARD_TRIBUTED" && event.cardId === material.uid && event.summonCardId === vanguard.uid));
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === vanguard.uid));
+});
+
+test("restores player and AI battle action windows through dispatch after resolution", () => {
+  const playerState = appState({ phase: PHASES.battle, actionWindow: null });
+  const playerEvents = dispatchResumeBattleActionWindowFromUiState(playerState, "player", {
+    reason: "attack-resolved",
+    now: 3000
+  });
+
+  assert.equal(playerState.actionWindow, ACTION_WINDOWS.battle);
+  assert.equal(playerState.actionWindowReason, "attack-resolved");
+  assert.ok(playerEvents.some((event) => event.type === "ACTION_WINDOW_OPENED" && event.window === ACTION_WINDOWS.battle));
+
+  const aiState = appState({ turn: "ai", phase: PHASES.battle, actionWindow: null });
+  const aiEvents = dispatchResumeBattleActionWindowFromUiState(aiState, "ai", {
+    reason: "attack-resolved",
+    now: 4000
+  });
+
+  assert.equal(aiState.actionWindow, ACTION_WINDOWS.ai);
+  assert.equal(aiState.actionWindowReason, "attack-resolved");
+  assert.ok(aiEvents.some((event) => event.type === "ACTION_WINDOW_OPENED" && event.window === ACTION_WINDOWS.ai));
 });
 
 test("tribute departure expires target-bound attack resets in projected UI state", () => {
@@ -1303,6 +1326,16 @@ test("projects AI battle legality while the UI is in the AI action window", () =
     actionWindow: ACTION_WINDOWS.ai
   });
   state.ai.field[0] = attacker;
+  state.gameEvents = [{
+    id: 1,
+    type: "ACTION_WINDOW_OPENED",
+    playerId: "ai",
+    window: ACTION_WINDOWS.ai,
+    windowId: "ai:1",
+    reason: "attack resolved",
+    openedAt: 1,
+    deadline: 0
+  }];
   const before = snapshotUiState(state);
 
   const projection = projectBattleFromUiState(state, "ai", { attackerIndex: 0 });

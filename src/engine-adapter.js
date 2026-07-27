@@ -793,16 +793,21 @@ export function getBattleLegalActionsFromUiState(uiState, playerId = uiState.tur
   if (!canProjectBattleWindow(uiState, playerId)) {
     return getLegalActionsFromUiState(uiState, playerId);
   }
-  return getLegalActionsFromUiState({
-    ...uiState,
-    phase: PHASES.battle,
-    timing: TIMINGS.battleOpen,
-    actionWindow: ACTION_WINDOWS.battle,
-    actionWindowId: null,
-    actionWindowReason: "battle projection",
-    actionDeadline: 0,
-    autoEnding: false
-  }, playerId);
+  const engineState = buildEngineStateFromUiState(uiState);
+  stripNonEngineSummonEffects(engineState);
+  engineState.turn.phase = Phase.battle;
+  engineState.machine.phase = Phase.battle;
+  engineState.machine.timing = TIMINGS.battleOpen;
+  engineState.machine.actionWindow = {
+    playerId,
+    window: ACTION_WINDOWS.battle,
+    windowId: "battle:projection",
+    reason: "battle projection",
+    openedAt: 0,
+    deadline: 0
+  };
+  engineState.machine.autoEnd = null;
+  return getLegalActions(engineState, playerId);
 }
 
 function otherUiPlayerId(playerId) {
@@ -1137,6 +1142,17 @@ export function dispatchOpenActionWindowFromUiState(uiState, playerId, window, {
     timeoutSeconds
   });
   return applyUiGameEvents(uiState, events);
+}
+
+export function dispatchResumeBattleActionWindowFromUiState(uiState, playerId, {
+  reason = "battle resolution complete",
+  now = Date.now()
+} = {}) {
+  if (uiState.phase !== PHASES.battle) {
+    throw new Error(`Cannot resume a battle action window during ${uiState.phase || "unknown"} phase`);
+  }
+  const window = playerId === "ai" ? ACTION_WINDOWS.ai : ACTION_WINDOWS.battle;
+  return dispatchOpenActionWindowFromUiState(uiState, playerId, window, { reason, now });
 }
 
 export function dispatchRequestAutoEndFromUiState(uiState, playerId, {

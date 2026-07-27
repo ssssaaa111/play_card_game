@@ -3536,6 +3536,10 @@ test("chain resolution cancels pending attack when the attacker leaves the monst
   assert.equal(next.machine.responseWindow, null);
   assert.deepEqual(next.players[PLAYER].grave, ["attacker-1"]);
   assert.deepEqual(next.players[AI].grave, ["mirror-1"]);
+  assert.equal(next.players[PLAYER].lp, 4000);
+  assert.equal(next.players[AI].lp, 4000);
+  assert.equal(chainEvents.some((event) => event.type === "BATTLE_RESOLVED"), false);
+  assert.equal(chainEvents.some((event) => event.type === "DAMAGE_APPLIED"), false);
   assert.ok(chainEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "attacker-1"));
   assert.ok(chainEvents.some((event) =>
     event.type === "ATTACK_CANCELED" &&

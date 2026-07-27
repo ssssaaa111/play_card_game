@@ -42,7 +42,7 @@ export const library = [
   { id: "overclock-core", type: "spell", name: "超频核心", icon: "核", text: "装备给我方 1 只怪兽。目标攻击力 +600、守备力 -300。", effect: "equipOverclock" },
   { id: "dispelling-ray", type: "spell", name: "解印射线", icon: "解", text: "选择对手魔陷区 1 张卡破坏。若破坏装备魔法，持续加成会立刻失效。", effect: "destroySpellTrap" },
   { id: "soul-resonance", type: "spell", name: "星魂共鸣", icon: "鸣", text: "我方攻击力最高的怪兽攻击力和守备力提升 200。", effect: "soulResonance" },
-  { id: "mirror-snare", type: "trap", name: "镜光反制", icon: "镜", text: "盖放后自动触发：对手攻击时，破坏攻击怪兽。", trigger: "attackDestroy" },
+  { id: "mirror-snare", type: "trap", name: "镜光反制", icon: "镜", text: "盖放后可发动：对手攻击时，破坏攻击怪兽。", trigger: "attackDestroy" },
   { id: "guard-sigil", type: "trap", name: "守护刻印", icon: "印", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并抽 1 张卡。", trigger: "directShield" },
   { id: "summon-flare", type: "trap", name: "召雷陷阵", icon: "雷", text: "盖放后自动触发：对手召唤怪兽时，对其造成 400 点伤害。", trigger: "summonBurn" },
   { id: "counter-array", type: "trap", name: "反击阵列", icon: "阵", text: "盖放后自动触发：对手攻击时，取消攻击并让我方攻击力最低怪兽提升 400。", trigger: "counterBoost" },
