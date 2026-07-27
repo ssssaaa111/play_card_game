@@ -1396,6 +1396,55 @@ test("dispatches turn start and replays rule resets into UI state", () => {
   assert.ok(events.some((event) => event.type === "TURN_ABILITIES_EXPIRED"));
 });
 
+test("turn expiry projection preserves non-turn attack resets and their target marker data", () => {
+  const target = uiMonster("durable-reset-target", "star-lancer");
+  const state = appState({ turn: "ai", phase: PHASES.end });
+  state.player.field[0] = target;
+  state.player.attackResets = 3;
+  state.player.attackResetEntries = [
+    {
+      uses: 1,
+      duration: "duel",
+      sourceCardId: "shared-reset-source",
+      targetCardId: target.uid
+    },
+    {
+      uses: 1,
+      duration: "turn",
+      sourceCardId: "shared-reset-source",
+      targetCardId: target.uid
+    }
+  ];
+
+  const events = dispatchStartTurnFromUiState(state, "player");
+
+  assert.deepEqual(
+    events.find((event) => event.type === "TURN_ABILITIES_EXPIRED")?.abilities,
+    [
+      {
+        ability: "attackReset",
+        uses: 1,
+        duration: "turn",
+        sourceCardId: "shared-reset-source",
+        targetCardId: target.uid
+      },
+      {
+        ability: "attackReset",
+        uses: 1,
+        duration: "turn",
+        sourceCardId: null
+      }
+    ]
+  );
+  assert.equal(state.player.attackResets, 1);
+  assert.deepEqual(state.player.attackResetEntries, [{
+    uses: 1,
+    duration: "duel",
+    sourceCardId: "shared-reset-source",
+    targetCardId: target.uid
+  }]);
+});
+
 test("auto-end and turn-end events project into UI state", () => {
   const state = appState({ turn: "player", phase: PHASES.main });
 

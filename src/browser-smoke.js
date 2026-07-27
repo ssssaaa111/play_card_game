@@ -4160,6 +4160,73 @@ async function runEffectMarkerLifecycleBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runEffectMarkerTurnExpiryBasicSmoke(ctx) {
+  const smokeName = "effect-marker-turn-expiry-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "guardSkip");
+
+  const target = ctx.state.player.field.find((card) => card?.id === "iron-guardian");
+  if (!target) throw new Error(`${smokeName}: durable marker target is missing`);
+  ctx.state.player.attackResets = 2;
+  ctx.state.player.attackResetEntries = [
+    {
+      uses: 1,
+      duration: "duel",
+      sourceCardId: target.uid,
+      targetCardId: target.uid
+    },
+    {
+      uses: 1,
+      duration: "turn",
+      sourceCardId: target.uid,
+      targetCardId: target.uid
+    }
+  ];
+  ctx.render?.();
+  assertCardEffectMarker(
+    fieldCard(ctx.els, "player", "iron-guardian"),
+    "再攻 ×2",
+    "追加攻击 ×2：铁壁守卫"
+  );
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.aiRunning,
+    `${smokeName}: complete turn cycle returns to player`,
+    22000
+  );
+
+  const expiry = [...ctx.state.gameEvents]
+    .reverse()
+    .find((event) => event.type === "TURN_ABILITIES_EXPIRED" && event.playerId === "player");
+  if (!expiry?.abilities?.some((entry) =>
+    entry.ability === "attackReset" &&
+    entry.duration === "turn" &&
+    entry.sourceCardId === target.uid &&
+    entry.targetCardId === target.uid
+  )) {
+    throw new Error(`${smokeName}: turn-scoped attack reset did not expire through its engine event`);
+  }
+  if (
+    ctx.state.player.attackResets !== 1 ||
+    ctx.state.player.attackResetEntries?.length !== 1 ||
+    ctx.state.player.attackResetEntries[0]?.duration !== "duel"
+  ) {
+    throw new Error(`${smokeName}: durable attack reset was lost during turn expiry`);
+  }
+  const preserved = fieldCard(ctx.els, "player", "iron-guardian");
+  assertCardEffectMarkerMissing(preserved, "再攻 ×2");
+  assertCardEffectMarker(preserved, "再攻 ×1", "追加攻击 ×1：铁壁守卫");
+  clickSmokeElement(preserved, `${smokeName}: inspect preserved effect`);
+  const detailMeta = ctx.els.playerField.ownerDocument.querySelector("#detailMeta");
+  await waitForSmoke(
+    () => detailMeta?.textContent?.includes("生效中") &&
+      detailMeta.textContent.includes("追加攻击 ×1"),
+    `${smokeName}: inspector keeps the durable active effect`
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runEffectTargetDepartureBasicSmoke(ctx) {
   const smokeName = "effect-target-departure-basic";
   setSmokeStatus("running", smokeName);
@@ -5804,6 +5871,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "double-attack": runDoubleAttackSmoke,
     "battle-trance-ready": runBattleTranceReadySmoke,
     "effect-marker-lifecycle-basic": runEffectMarkerLifecycleBasicSmoke,
+    "effect-marker-turn-expiry-basic": runEffectMarkerTurnExpiryBasicSmoke,
     "effect-target-departure-basic": runEffectTargetDepartureBasicSmoke,
     "effect-marker-stacking-basic": runEffectMarkerStackingBasicSmoke,
     "ai-direct-trap": runAiDirectTrapSmoke,
