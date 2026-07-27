@@ -5084,6 +5084,34 @@ test("action window commands reject unknown windows and invalid timeout data", (
   );
 });
 
+test("action window commands reject phase, owner, and response-window mismatches without mutation", () => {
+  const invalidActions = [
+    {
+      action: { type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: ActionWindow.battle, openedAt: 1000 },
+      reason: /battle action window requires battle phase/
+    },
+    {
+      action: { type: "OPEN_ACTION_WINDOW", playerId: AI, window: ActionWindow.main, openedAt: 1000 },
+      reason: /main action window belongs to the current turn player/
+    },
+    {
+      action: { type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: ActionWindow.ai, openedAt: 1000 },
+      reason: /AI action window belongs to ai/
+    },
+    {
+      action: { type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: ActionWindow.response, openedAt: 1000 },
+      reason: /response action window requires an open response window/
+    }
+  ];
+
+  for (const { action, reason } of invalidActions) {
+    const engine = new GameEngine(makeState());
+    const before = engine.getState();
+    assert.throws(() => engine.dispatch(action), reason);
+    assert.deepEqual(engine.getState(), before);
+  }
+});
+
 test("trap chain effects wait for resolution and resolve in last-in-first-out order", () => {
   const state = makeState({
     cards: [
@@ -5183,6 +5211,14 @@ test("response priority can pass to the rival before they add another chain link
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-88"
   };
+  state.machine.actionWindow = {
+    playerId: PLAYER,
+    window: ActionWindow.response,
+    windowId: "response:attack-88",
+    reason: "attack",
+    openedAt: 1,
+    deadline: 1
+  };
   const engine = new GameEngine(state, {
     cardEffects: {
       chainHeal: {
@@ -5215,6 +5251,7 @@ test("response priority can pass to the rival before they add another chain link
   });
 
   assert.equal(engine.getState().machine.responseWindow.playerId, AI);
+  assert.equal(engine.getState().machine.actionWindow.playerId, AI);
   assert.ok(passEvents.some((event) =>
     event.type === "RESPONSE_PRIORITY_PASSED" && event.fromPlayerId === PLAYER && event.toPlayerId === AI
   ));
@@ -5948,6 +5985,60 @@ test("assertValidGameState catches unresolved attack and chain state machine dri
     })),
     /Pending attack target must be a monster/
   );
+});
+
+test("assertValidGameState rejects action windows that contradict phase or control ownership", () => {
+  const invalidWindows = [
+    {
+      state: makeState({
+        machine: {
+          actionWindow: {
+            playerId: PLAYER,
+            window: ActionWindow.battle,
+            windowId: "battle:bad-phase",
+            reason: "bad",
+            openedAt: 1,
+            deadline: 0
+          }
+        }
+      }),
+      reason: /battle action window requires battle phase/
+    },
+    {
+      state: makeState({
+        machine: {
+          actionWindow: {
+            playerId: AI,
+            window: ActionWindow.main,
+            windowId: "main:bad-owner",
+            reason: "bad",
+            openedAt: 1,
+            deadline: 0
+          }
+        }
+      }),
+      reason: /main action window belongs to the current turn player/
+    },
+    {
+      state: makeState({
+        machine: {
+          actionWindow: {
+            playerId: PLAYER,
+            window: ActionWindow.response,
+            windowId: "response:missing",
+            reason: "bad",
+            openedAt: 1,
+            deadline: 0
+          }
+        }
+      }),
+      reason: /response action window requires an open response window/
+    }
+  ];
+
+  for (const entry of invalidWindows) {
+    assert.throws(() => assertValidGameState(entry.state), entry.reason);
+  }
 });
 
 test("assertValidGameState rejects non-declarative character passives", () => {

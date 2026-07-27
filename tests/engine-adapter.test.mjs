@@ -1063,7 +1063,13 @@ test("queues opposing trap responses before resolving the shared chain in revers
   assert.ok(playerEvents.some((event) => event.type === "CHAIN_LINK_COMMITTED" && event.cardId === playerTrap.uid));
   assert.equal(buildEngineStateFromUiState(state).machine.chain.length, 1);
 
-  dispatchPassResponsePriorityFromUiState(state, "player", "ai");
+  const priorityEvents = dispatchPassResponsePriorityFromUiState(state, "player", "ai");
+  const passedMachine = buildEngineStateFromUiState(state).machine;
+  assert.equal(passedMachine.responseWindow.playerId, "ai");
+  assert.equal(passedMachine.actionWindow.playerId, "ai");
+  assert.ok(priorityEvents.some((event) =>
+    event.type === "RESPONSE_PRIORITY_PASSED" && event.fromPlayerId === "player" && event.toPlayerId === "ai"
+  ));
   dispatchQueueTrapResponseFromUiState(state, "ai", "player", 0, {
     targetEffectId: playerTrap.uid
   });

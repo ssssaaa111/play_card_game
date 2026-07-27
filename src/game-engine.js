@@ -1931,6 +1931,10 @@ export class GameEngine {
         throw new GameRuleError(`Cannot open ${action.window} action window while attack or chain resolution is pending`);
       }
     }
+    const compatibilityIssue = actionWindowCompatibilityIssue(state, action.playerId, action.window);
+    if (compatibilityIssue) {
+      throw new GameRuleError(compatibilityIssue);
+    }
     const openedAt = Number(action.openedAt);
     const timeoutSeconds = Math.max(0, Number(action.timeoutSeconds) || 0);
     if (!Number.isFinite(openedAt)) {
@@ -2276,6 +2280,71 @@ function normalActionsBlocked(state) {
   ].includes(windowName);
 }
 
+function actionWindowCompatibilityIssue(state, playerId, window) {
+  const phase = state.turn?.phase;
+  const currentPlayerId = state.turn?.playerId;
+  const belongsToCurrentPlayer = () => playerId === currentPlayerId;
+
+  if (window === ActionWindow.gameOver) {
+    return state.gameOver ? "" : "game-over action window requires a finished game";
+  }
+  if (state.gameOver) {
+    return `${window} action window cannot open after game over`;
+  }
+  if (window === ActionWindow.response) {
+    if (!state.machine?.responseWindow) {
+      return "response action window requires an open response window";
+    }
+    if (state.machine.responseWindow.playerId !== playerId) {
+      return "response action window belongs to the current response player";
+    }
+    return "";
+  }
+  if (window === ActionWindow.resolution) {
+    if (![Phase.main, Phase.battle].includes(phase)) {
+      return "resolution action window requires main or battle phase";
+    }
+    const resolvingSharedFlow = Boolean(
+      state.machine?.responseWindow ||
+      (state.machine?.chain || []).length > 0
+    );
+    if (!resolvingSharedFlow && !belongsToCurrentPlayer()) {
+      return "resolution action window belongs to the current turn player";
+    }
+    return "";
+  }
+  if (window === ActionWindow.ai) {
+    if (playerId !== "ai") return "AI action window belongs to ai";
+    if (!belongsToCurrentPlayer()) return "AI action window belongs to the current turn player";
+    if (![Phase.draw, Phase.main, Phase.battle].includes(phase)) {
+      return "AI action window requires draw, main, or battle phase";
+    }
+    return "";
+  }
+  if (!belongsToCurrentPlayer()) {
+    return `${window} action window belongs to the current turn player`;
+  }
+  if (window === ActionWindow.setup && phase !== Phase.setup) {
+    return "setup action window requires setup phase";
+  }
+  if (window === ActionWindow.draw && phase !== Phase.draw) {
+    return "draw action window requires draw phase";
+  }
+  if (window === ActionWindow.main && phase !== Phase.main) {
+    return "main action window requires main phase";
+  }
+  if (window === ActionWindow.battle && phase !== Phase.battle) {
+    return "battle action window requires battle phase";
+  }
+  if (window === ActionWindow.targetSelect && ![Phase.main, Phase.battle].includes(phase)) {
+    return "target-select action window requires main or battle phase";
+  }
+  if (window === ActionWindow.autoEnd && ![Phase.main, Phase.battle].includes(phase)) {
+    return "auto-end action window requires main or battle phase";
+  }
+  return "";
+}
+
 function summarizeLegalActions(state, playerId, rivalId, actions) {
   const can = {
     summon: actions.summon.length > 0,
@@ -2330,6 +2399,14 @@ export function assertValidGameState(state) {
     }
     if (!Number.isFinite(state.machine.actionWindow.openedAt) || !Number.isFinite(state.machine.actionWindow.deadline)) {
       throw new GameStateValidationError("Action window timing must be finite");
+    }
+    const compatibilityIssue = actionWindowCompatibilityIssue(
+      state,
+      state.machine.actionWindow.playerId,
+      state.machine.actionWindow.window
+    );
+    if (compatibilityIssue) {
+      throw new GameStateValidationError(compatibilityIssue);
     }
   }
   if (state.machine.autoEnd) {
@@ -3204,6 +3281,9 @@ function applyResponsePriorityPassed(state, event) {
     throw new GameRuleError(`Current response window belongs to ${state.machine.responseWindow.playerId}`);
   }
   state.machine.responseWindow.playerId = event.toPlayerId;
+  if (state.machine.actionWindow?.window === ActionWindow.response) {
+    state.machine.actionWindow.playerId = event.toPlayerId;
+  }
 }
 
 function applyChainLinkAdded(state, event) {
@@ -4789,6 +4869,9 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
     }
     if (event.type === "RESPONSE_PRIORITY_PASSED" && machine.responseWindow) {
       machine.responseWindow.playerId = event.toPlayerId;
+      if (machine.actionWindow?.window === ActionWindow.response) {
+        machine.actionWindow.playerId = event.toPlayerId;
+      }
     }
     if (event.type === "CHAIN_LINK_ADDED") {
       machine.chain.push({
