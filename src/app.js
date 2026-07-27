@@ -11,6 +11,7 @@ import {
 import { actionsForPhase, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import {
   chooseAiAttackAction,
+  chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
   chooseAiSpellAction,
   chooseAiSummonAction,
@@ -71,6 +72,7 @@ import {
   dispatchRequestAutoEndFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
+  dispatchResumeBattleActionWindowFromUiState,
   dispatchResolveElementCombosFromUiState,
   dispatchResolveTurnDrawFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
@@ -2764,7 +2766,8 @@ async function chooseTrapIndex(owner, rival, eventName, context) {
   const candidates = trapCandidates(owner, eventName, context);
   if (candidates.length === 0) return { trapIndex: -1, candidates, declined: false };
   if (owner.owner !== "player") {
-    return { trapIndex: candidates[0].index, candidates, declined: false };
+    const action = chooseAiTrapResponseAction({ candidates, owner, rival, eventName, context });
+    return { trapIndex: action?.trapIndex ?? -1, candidates, declined: false };
   }
   const choice = await promptTrapChoice(candidates, eventName, { owner, rival, context });
   return { ...choice, candidates, declined: choice.trapIndex < 0 };
@@ -3356,6 +3359,21 @@ function consumeCancelledAttackWithEngine(owner, attacker, options = {}) {
   }
 }
 
+function resumeBattleActionWindow(owner, reason = "attack resolved") {
+  if (state.gameOver || state.turn !== owner.owner || state.phase !== PHASES.battle) return false;
+  const machine = currentEngineMachine();
+  if (machine?.pendingAttack || machine?.responseWindow || (machine?.chain || []).length > 0) return false;
+  try {
+    dispatchResumeBattleActionWindowFromUiState(state, owner.owner, { reason });
+    return true;
+  } catch (error) {
+    state.ruleCheckIssue = error.message || "Battle action window could not resume.";
+    addLog(`${duelistLabel(owner)}的战斗行动窗口恢复失败：${state.ruleCheckIssue}`);
+    console.error(error);
+    return false;
+  }
+}
+
 function playAttackResetFeedback(owner, attacker, events = []) {
   const spent = events.find((event) =>
     event.type === "ABILITY_SPENT"
@@ -3417,6 +3435,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       reason: "attack-trap"
     })) return false;
     checkGameOver();
+    resumeBattleActionWindow(owner, "attack canceled");
     return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
   }
   const resolvedTargetIndex = pendingAttackTargetIndex(rival, attackContext.targetIndex);
@@ -3477,6 +3496,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
         reason: "direct-trap"
       })) return false;
       checkGameOver();
+      resumeBattleActionWindow(owner, "direct attack canceled");
       return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的直接攻击`);
     }
     battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex, {
@@ -3577,6 +3597,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     await afterAttackFeedback;
   }
   checkGameOver();
+  resumeBattleActionWindow(owner, "attack resolved");
   return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
 }
 
@@ -4123,7 +4144,15 @@ async function aiAttack() {
       canAttackMonster: (_card, fieldIndex) =>
         explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex).ok
     });
-    if (action.type === "none") return;
+    if (action.type === "none") {
+      const blocked = state.ai.field
+        .map((card, fieldIndex) => ({ card, readiness: explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex) }))
+        .filter(({ card }) => card && !card.used && card.mode !== "defense");
+      if (blocked.length > 0) {
+        addLog(`对手没有可执行的攻击：${blocked.map(({ card, readiness }) => `${card.name}（${readiness.reason}）`).join("、")}。`);
+      }
+      return;
+    }
     const { card, attackerIndex, targetIndex, target } = action;
     if (state.gameOver || !state.ai.field[attackerIndex]) return;
     if (action.type === "skipAttack") {

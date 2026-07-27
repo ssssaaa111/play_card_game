@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   chooseAiAttackAction,
   chooseAiAttackTarget,
+  chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
   chooseAiSpellAction,
   chooseAiSummonAction,
@@ -109,6 +110,56 @@ test("AI attacks directly when there are no defending monsters", () => {
     targets: [],
     playerLp: 4000
   }), -1);
+});
+
+test("AI preserves mirror snare when the attacking monster already loses the battle", () => {
+  const mirror = trap({ id: "mirror-snare", trigger: "attackDestroy" });
+  const defender = monster({ uid: "defender", atk: 2400 });
+  const attacker = monster({ uid: "attacker", atk: 900 });
+
+  const action = chooseAiTrapResponseAction({
+    candidates: [{ card: mirror, index: 2 }],
+    eventName: "attack",
+    owner: { field: [defender], lp: 4000 },
+    rival: { field: [attacker], lp: 4000 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action, null);
+});
+
+test("AI uses mirror snare when it prevents its monster from being destroyed", () => {
+  const mirror = trap({ id: "mirror-snare", trigger: "attackDestroy" });
+  const defender = monster({ uid: "defender", atk: 1200 });
+  const attacker = monster({ uid: "attacker", atk: 2200 });
+
+  const action = chooseAiTrapResponseAction({
+    candidates: [{ card: mirror, index: 3 }],
+    eventName: "attack",
+    owner: { field: [defender], lp: 4000 },
+    rival: { field: [attacker], lp: 4000 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action?.type, "activateTrap");
+  assert.equal(action?.trapIndex, 3);
+  assert.equal(action?.card, mirror);
+});
+
+test("AI uses mirror snare against a direct attack", () => {
+  const mirror = trap({ id: "mirror-snare", trigger: "attackDestroy" });
+  const attacker = monster({ uid: "attacker", atk: 1800 });
+
+  const action = chooseAiTrapResponseAction({
+    candidates: [{ card: mirror, index: 1 }],
+    eventName: "attack",
+    owner: { field: [], lp: 1200 },
+    rival: { field: [attacker], lp: 4000 },
+    context: { attackerIndex: 0, targetIndex: -1 }
+  });
+
+  assert.equal(action?.trapIndex, 1);
+  assert.ok(action?.score > 0);
 });
 
 test("AI spell planner picks the highest legal scored spell", () => {
