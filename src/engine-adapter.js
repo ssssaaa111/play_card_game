@@ -379,8 +379,9 @@ function applyUiAbilityEvent(uiState, event, direction) {
     } else {
       const index = duelist.attackResetEntries.findIndex((entry) =>
         entry.uses > 0
-        && (!event.sourceCardId || entry.sourceCardId === event.sourceCardId)
-        && (!event.targetCardId || entry.targetCardId === event.targetCardId)
+        && (entry.sourceCardId || null) === (event.sourceCardId || null)
+        && (entry.targetCardId || null) === (event.targetCardId || null)
+        && (!event.duration || (entry.duration || "turn") === event.duration)
       );
       if (index >= 0) {
         duelist.attackResetEntries[index].uses -= Math.max(1, Number(event.uses) || 1);
@@ -583,14 +584,9 @@ export function applyUiGameEvents(uiState, events = []) {
       applyUiAbilityEvent(uiState, event, -1);
     }
     if (event.type === "TURN_ABILITIES_EXPIRED") {
-      const duelist = uiDuelist(uiState, event.playerId);
-      duelist.directAttacks = 0;
-      duelist.extraSummon = 0;
-      duelist.attackResets = 0;
-      duelist.attackResetEntries = [];
-      if ((event.abilities || []).some((entry) => entry.ability === Ability.skipAttackLock)) {
-        duelist.attacksSkipped = false;
-      }
+      (event.abilities || []).forEach((ability) => {
+        applyUiAbilityEvent(uiState, { playerId: event.playerId, ...ability }, -1);
+      });
     }
   });
   uiState.gameEvents = Array.isArray(uiState.gameEvents) ? uiState.gameEvents : [];
