@@ -529,8 +529,16 @@ test("dispatches turn draw resolution and advances surviving turns to main", () 
   assert.deepEqual(state.player.deck, []);
   assert.equal(state.phase, PHASES.main);
   assert.equal(state.timing, "mainOpen");
+  assert.equal(state.actionWindow, ACTION_WINDOWS.main);
+  assert.equal(buildEngineStateFromUiState(state).machine.actionWindow.playerId, "player");
   assert.ok(events.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === true));
   assert.ok(events.some((event) => event.type === "PHASE_CHANGED" && event.to === PHASES.main));
+  assert.ok(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === ACTION_WINDOWS.main &&
+    event.reason === "phase-entered:main"
+  ));
 
   const fatal = appState({ phase: PHASES.draw, turn: "player" });
   fatal.player.lp = 300;

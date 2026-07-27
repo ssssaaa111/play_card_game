@@ -4260,6 +4260,8 @@ test("start turn switches ownership and resets turn-scoped state through events"
   assert.equal(next.turn.phase, Phase.draw);
   assert.equal(next.machine.phase, Phase.draw);
   assert.equal(next.machine.timing, Timing.draw);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.draw);
   assert.equal(next.cards["ready-1"].used, false);
   assert.equal(next.cards["ready-1"].changedMode, false);
   assert.equal(next.cards["ready-2"].changedMode, false);
@@ -4275,6 +4277,12 @@ test("start turn switches ownership and resets turn-scoped state through events"
     event.type === "TURN_ABILITIES_EXPIRED" &&
     event.playerId === PLAYER &&
     event.abilities.length === 2
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.draw &&
+    event.reason === "turn-started"
   ));
 });
 
@@ -4336,12 +4344,66 @@ test("phase changes progress only from draw to main and main to battle", () => {
     event.from === Phase.draw &&
     event.to === Phase.main
   ));
+  assert.ok(mainEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.main &&
+    event.reason === "phase-entered:main"
+  ));
   assert.ok(battleEvents.some((event) =>
     event.type === "PHASE_CHANGED" &&
     event.from === Phase.main &&
     event.to === Phase.battle
   ));
+  assert.ok(battleEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "phase-entered:battle"
+  ));
   assert.equal(engine.getState().turn.phase, Phase.battle);
+  assert.equal(engine.getState().machine.actionWindow?.window, ActionWindow.battle);
+});
+
+test("AI turn and phase transitions keep the AI-owned action window", () => {
+  const engine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.end },
+    machine: { phase: Phase.end, timing: Timing.end }
+  }));
+
+  const startEvents = engine.dispatch({ type: "START_TURN", playerId: AI });
+  let next = engine.getState();
+  assert.equal(next.machine.actionWindow?.playerId, AI);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.ai);
+  assert.ok(startEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === AI &&
+    event.window === ActionWindow.ai &&
+    event.reason === "turn-started"
+  ));
+
+  const drawEvents = engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: AI });
+  next = engine.getState();
+  assert.equal(next.turn.phase, Phase.main);
+  assert.equal(next.machine.actionWindow?.playerId, AI);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.ai);
+  assert.ok(drawEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === AI &&
+    event.window === ActionWindow.ai &&
+    event.reason === "phase-entered:main"
+  ));
+
+  const battleEvents = engine.dispatch({ type: "CHANGE_PHASE", playerId: AI, phase: Phase.battle });
+  next = engine.getState();
+  assert.equal(next.machine.actionWindow?.playerId, AI);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.ai);
+  assert.ok(battleEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === AI &&
+    event.window === ActionWindow.ai &&
+    event.reason === "phase-entered:battle"
+  ));
 });
 
 test("phase changes reject duplicate, rollback, and skipped-end transitions without changing state", () => {
@@ -4773,9 +4835,17 @@ test("resolve turn draw advances to main only when the player survives", () => {
   assert.deepEqual(next.players[PLAYER].hand, ["turn-draw-1"]);
   assert.equal(next.turn.phase, Phase.main);
   assert.equal(next.machine.timing, Timing.mainOpen);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.main);
   assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.count === 1));
   assert.ok(events.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === true));
   assert.ok(events.some((event) => event.type === "PHASE_CHANGED" && event.from === Phase.draw && event.to === Phase.main));
+  assert.ok(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.main &&
+    event.reason === "phase-entered:main"
+  ));
 
   const survivedDeckOut = makeState({
     player: { lp: 700, shield: 300, deck: [] },
@@ -5843,6 +5913,40 @@ test("lists main-phase legal actions without mutating the source state", () => {
   assert.deepEqual(legal.actions.changeMode.map((action) => action.cardId), ["field-1"]);
   assert.deepEqual(state.players[PLAYER].hand, ["summon-1", "trap-1", "burn-1"]);
   assert.deepEqual(state.events, []);
+});
+
+test("AI action windows expose legal actions only to their owner", () => {
+  const state = makeState({
+    cards: [card("ai-summon-1", {
+      ownerId: AI,
+      type: "monster",
+      templateId: "ember-drake",
+      atk: 1200,
+      def: 900
+    })],
+    ai: { hand: ["ai-summon-1"] },
+    turn: { playerId: AI, phase: Phase.main },
+    machine: {
+      phase: Phase.main,
+      timing: Timing.mainOpen,
+      actionWindow: {
+        playerId: AI,
+        window: ActionWindow.ai,
+        windowId: "ai:main-test",
+        reason: "phase-entered:main",
+        openedAt: 1,
+        deadline: 0
+      }
+    }
+  });
+
+  const aiLegal = getLegalActions(state, AI);
+  const playerLegal = getLegalActions(state, PLAYER);
+
+  assert.equal(aiLegal.can.summon, true);
+  assert.deepEqual(aiLegal.actions.summon.map((action) => action.cardId), ["ai-summon-1"]);
+  assert.equal(playerLegal.hasAny, false);
+  assert.equal(playerLegal.can.endTurn, false);
 });
 
 test("lists battle-phase attacks and excludes illegal direct attacks while monsters remain", () => {

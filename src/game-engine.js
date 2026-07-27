@@ -1687,6 +1687,7 @@ export class GameEngine {
         abilities: expiredAbilities
       });
     }
+    openPhaseActionWindow(state, emit, action.playerId, "turn-started");
   }
 
   #endTurn(state, emit, action) {
@@ -1893,6 +1894,7 @@ export class GameEngine {
       from: before,
       to: action.phase
     });
+    openPhaseActionWindow(state, emit, action.playerId, `phase-entered:${action.phase}`);
   }
 
   #openResponseWindow(state, emit, action) {
@@ -2166,7 +2168,7 @@ export function getLegalActions(initialState, playerId = initialState?.turn?.pla
     endTurn: []
   };
 
-  if (normalActionsBlocked(state)) {
+  if (normalActionsBlocked(state, playerId)) {
     return summarizeLegalActions(state, playerId, rivalId, actions);
   }
 
@@ -2273,18 +2275,20 @@ function candidateTargetCardIds(state, definition, action) {
   }
 }
 
-function normalActionsBlocked(state) {
+function normalActionsBlocked(state, playerId) {
   if (state.gameOver) return true;
   if (state.machine.responseWindow) return true;
   if ((state.machine.chain || []).length > 0) return true;
   if (state.machine.pendingAttack) return true;
-  const windowName = state.machine.actionWindow?.window;
+  const actionWindow = state.machine.actionWindow;
+  if (!actionWindow) return false;
+  if (actionWindow.playerId !== playerId) return true;
+  const windowName = actionWindow.window;
   return [
     ActionWindow.targetSelect,
     ActionWindow.response,
     ActionWindow.resolution,
     ActionWindow.autoEnd,
-    ActionWindow.ai,
     ActionWindow.gameOver
   ].includes(windowName);
 }
@@ -3929,6 +3933,32 @@ function pendingAttackContextLossReason(state) {
 
 function battleActionWindowForPlayer(playerId) {
   return playerId === "ai" ? ActionWindow.ai : ActionWindow.battle;
+}
+
+function phaseActionWindowForPlayer(playerId, phase) {
+  if (playerId === "ai" && [Phase.draw, Phase.main, Phase.battle].includes(phase)) {
+    return ActionWindow.ai;
+  }
+  return {
+    [Phase.draw]: ActionWindow.draw,
+    [Phase.main]: ActionWindow.main,
+    [Phase.battle]: ActionWindow.battle
+  }[phase] || null;
+}
+
+function openPhaseActionWindow(state, emit, playerId, reason) {
+  if (state.gameOver || state.turn.playerId !== playerId) return null;
+  const window = phaseActionWindowForPlayer(playerId, state.turn.phase);
+  if (!window) return null;
+  const openedAt = Number(state.nextEventId) || state.events.length + 1;
+  return emit("ACTION_WINDOW_OPENED", {
+    playerId,
+    window,
+    windowId: `${window}:phase-flow:${openedAt}`,
+    reason,
+    openedAt,
+    deadline: 0
+  });
 }
 
 function restoreActionWindowAfterResponse(state, emit, reason) {

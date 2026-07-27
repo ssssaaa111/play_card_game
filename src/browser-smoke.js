@@ -5249,6 +5249,59 @@ async function runPhaseProgressionBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runPhaseWindowOwnershipBasicSmoke(ctx) {
+  const smokeName = "phase-window-ownership-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "direct");
+
+  const openingEvents = ctx.state.gameEvents || [];
+  const mainPhaseIndex = openingEvents.findIndex((event) =>
+    event.type === "PHASE_CHANGED" &&
+    event.playerId === "player" &&
+    event.from === "draw" &&
+    event.to === "main"
+  );
+  const mainWindowIndex = openingEvents.findIndex((event, index) =>
+    index > mainPhaseIndex &&
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === "main" &&
+    event.reason === "phase-entered:main"
+  );
+  if (mainPhaseIndex < 0 || mainWindowIndex !== mainPhaseIndex + 1 || ctx.state.actionWindow !== "main") {
+    throw new Error(`${smokeName}: draw-to-main transition left an engine action-window gap. ${smokeDebug(ctx)}`);
+  }
+
+  const eventStart = openingEvents.length;
+  clickSmokeElement(ctx.els.skipAttackBtn, `${smokeName}: enter battle phase`);
+  await waitForSmoke(
+    () => ctx.state.phase === "battle" && ctx.state.actionWindow === "battle",
+    `${smokeName}: engine opens battle window with phase transition`
+  );
+
+  const battleEvents = (ctx.state.gameEvents || []).slice(eventStart);
+  const battlePhaseIndex = battleEvents.findIndex((event) =>
+    event.type === "PHASE_CHANGED" &&
+    event.playerId === "player" &&
+    event.from === "main" &&
+    event.to === "battle"
+  );
+  const battleWindowIndex = battleEvents.findIndex((event, index) =>
+    index > battlePhaseIndex &&
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === "battle" &&
+    event.reason === "phase-entered:battle"
+  );
+  if (battlePhaseIndex < 0 || battleWindowIndex !== battlePhaseIndex + 1) {
+    throw new Error(`${smokeName}: main-to-battle transition did not atomically open its action window. ${smokeDebug(ctx)}`);
+  }
+  if (ctx.state.ruleCheckIssue) {
+    throw new Error(`${smokeName}: rule engine reported ${ctx.state.ruleCheckIssue}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("running", "mode-auto-end");
   await startSmokeDuel(ctx, "combo");
@@ -6120,6 +6173,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "chain-resolution-review": runChainResolutionReviewSmoke,
     "turn-handoff-basic": runTurnHandoffBasicSmoke,
     "phase-progression-basic": runPhaseProgressionBasicSmoke,
+    "phase-window-ownership-basic": runPhaseWindowOwnershipBasicSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,

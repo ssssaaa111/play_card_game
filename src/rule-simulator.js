@@ -1,4 +1,5 @@
 import {
+  ActionWindow,
   Ability,
   GameEngine,
   GameRuleError,
@@ -1070,7 +1071,19 @@ function battleActionsAvailable(state, playerId) {
   const battleState = {
     ...state,
     turn: { ...state.turn, phase: Phase.battle },
-    machine: { ...state.machine, phase: Phase.battle }
+    machine: {
+      ...state.machine,
+      phase: Phase.battle,
+      timing: Timing.battleOpen,
+      actionWindow: {
+        playerId,
+        window: playerId === AI ? ActionWindow.ai : ActionWindow.battle,
+        windowId: `${playerId}:simulator-battle-projection`,
+        reason: "simulator-battle-projection",
+        openedAt: 0,
+        deadline: 0
+      }
+    }
   };
   return declareAttackActions(battleState, playerId).length > 0 ||
     spellActions(battleState, playerId).length > 0 ||

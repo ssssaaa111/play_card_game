@@ -3747,7 +3747,6 @@ function enterPlayerBattlePhase(reason = "战斗时点", { preserveSelection = f
     return false;
   }
   Object.assign(state, mainToBattlePatch());
-  setActionWindow(ACTION_WINDOWS.battle, { reason });
   if (!quiet) {
     playSound("click");
     addLog(`${reason}，进入战斗时点。`);
@@ -3895,10 +3894,6 @@ function beginTurn(owner) {
     return false;
   }
   Object.assign(state, turnStartPatch(owner));
-  setActionWindow(owner === "player" ? ACTION_WINDOWS.draw : ACTION_WINDOWS.ai, {
-    playerId: owner,
-    reason: "turn started"
-  });
   clearBattlePreview();
   cancelAutoEnd();
   clearPlayerIdleTimers();
@@ -3967,7 +3962,6 @@ function autoPlayerDraw() {
     return;
   }
   Object.assign(state, drawToMainPatch());
-  setActionWindow(ACTION_WINDOWS.main, { reason: "draw completed" });
   render("draw-player");
   resetPlayerIdleCountdown();
 }
@@ -3987,7 +3981,6 @@ async function runAiTurn() {
   state.aiRunning = true;
   cue("对手开始行动。");
   try {
-    setActionWindow("ai");
     await sleep(950);
     const drawEvents = dispatchResolveTurnDrawFromUiState(state, "ai");
     applyDrawEventFeedback(state.ai, drawEvents, true);
@@ -4018,7 +4011,6 @@ async function runAiTurn() {
       await sleep(1850);
     }
     if (state.gameOver) return;
-    setActionWindow(ACTION_WINDOWS.ai, { playerId: "ai", reason: "ai battle" });
     dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
     await aiAttack();
     if (!state.gameOver) {
