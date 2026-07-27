@@ -2966,6 +2966,42 @@ test("battle resolution deals direct damage and marks the attacker through event
   assertValidGameState(next);
 });
 
+test("lethal battle resolution keeps the game-over window instead of reopening battle actions", () => {
+  const state = makeState({
+    cards: [
+      card("lethal-attacker", { templateId: "star-lancer", type: "monster", atk: 1500, def: 1000 })
+    ],
+    player: {
+      monsterZone: ["lethal-attacker"]
+    },
+    ai: {
+      lp: 1000
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "lethal-attacker"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.players[AI].lp, 0);
+  assert.equal(next.gameOver?.winnerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.gameOver);
+  assert.equal(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" && event.reason === "battle-resolved"
+  ), false);
+  assertValidGameState(next);
+});
+
 test("battle resolution destroys attack-position targets and applies battle damage through events", () => {
   const state = makeState({
     cards: [
@@ -3425,7 +3461,7 @@ test("pending attack blocks auto-end and turn handoff until battle resolves or i
   assert.equal(legal.hasAny, false);
   assert.equal(legal.can.endTurn, false);
 
-  engine.dispatch({
+  const resolutionEvents = engine.dispatch({
     type: "RESOLVE_BATTLE",
     playerId: PLAYER,
     rivalId: AI,
@@ -3437,6 +3473,15 @@ test("pending attack blocks auto-end and turn handoff until battle resolves or i
   assert.equal(next.machine.pendingAttack, null);
   assert.equal(next.turn.phase, Phase.battle);
   assert.equal(next.cards["attacker-1"].used, true);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.battle);
+  assert.equal(next.machine.timing, Timing.battleOpen);
+  assert.ok(resolutionEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "battle-resolved"
+  ));
 });
 
 test("canceling a responded attack clears pending attack and optionally consumes the attacker", () => {
@@ -3479,8 +3524,17 @@ test("canceling a responded attack clears pending attack and optionally consumes
   assert.equal(next.machine.pendingAttack, null);
   assert.equal(next.turn.phase, Phase.battle);
   assert.equal(next.cards["attacker-1"].used, true);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.battle);
+  assert.equal(next.machine.timing, Timing.battleOpen);
   assert.ok(cancelEvents.some((event) => event.type === "MONSTER_USED" && event.reason === "attackCanceled"));
   assert.ok(cancelEvents.some((event) => event.type === "ATTACK_CANCELED" && event.declarationEventId === declaration.id));
+  assert.ok(cancelEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "attack-canceled"
+  ));
   assertValidGameState(next);
 });
 
@@ -3534,6 +3588,9 @@ test("chain resolution cancels pending attack when the attacker leaves the monst
 
   assert.equal(next.machine.pendingAttack, null);
   assert.equal(next.machine.responseWindow, null);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.battle);
+  assert.equal(next.machine.timing, Timing.battleOpen);
   assert.deepEqual(next.players[PLAYER].grave, ["attacker-1"]);
   assert.deepEqual(next.players[AI].grave, ["mirror-1"]);
   assert.equal(next.players[PLAYER].lp, 4000);
@@ -3546,6 +3603,12 @@ test("chain resolution cancels pending attack when the attacker leaves the monst
     event.declarationEventId === declaration.id &&
     event.reason === "attacker-left-field" &&
     event.consumeAttack === false
+  ));
+  assert.ok(chainEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "chain-canceled-attack"
   ));
   assertValidGameState(next);
 });
@@ -3608,6 +3671,9 @@ test("chain resolution cancels pending attack when the declared target leaves th
 
   assert.equal(next.machine.pendingAttack, null);
   assert.equal(next.machine.responseWindow, null);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.battle);
+  assert.equal(next.machine.timing, Timing.battleOpen);
   assert.deepEqual(next.players[AI].grave, ["target-break-1", "target-1"]);
   assert.equal(next.cards["attacker-1"].used, undefined);
   assert.ok(chainEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "target-1"));
@@ -3616,6 +3682,12 @@ test("chain resolution cancels pending attack when the declared target leaves th
     event.declarationEventId === declaration.id &&
     event.reason === "target-left-field" &&
     event.consumeAttack === false
+  ));
+  assert.ok(chainEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "chain-canceled-attack"
   ));
   assertValidGameState(next);
 });

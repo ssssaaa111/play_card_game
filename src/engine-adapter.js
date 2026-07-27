@@ -1144,17 +1144,6 @@ export function dispatchOpenActionWindowFromUiState(uiState, playerId, window, {
   return applyUiGameEvents(uiState, events);
 }
 
-export function dispatchResumeBattleActionWindowFromUiState(uiState, playerId, {
-  reason = "battle resolution complete",
-  now = Date.now()
-} = {}) {
-  if (uiState.phase !== PHASES.battle) {
-    throw new Error(`Cannot resume a battle action window during ${uiState.phase || "unknown"} phase`);
-  }
-  const window = playerId === "ai" ? ACTION_WINDOWS.ai : ACTION_WINDOWS.battle;
-  return dispatchOpenActionWindowFromUiState(uiState, playerId, window, { reason, now });
-}
-
 export function dispatchRequestAutoEndFromUiState(uiState, playerId, {
   reason = "",
   now = Date.now(),

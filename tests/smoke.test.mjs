@@ -713,6 +713,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"fusion-result-choice": runFusionResultChoiceSmoke/);
   assert.match(smoke, /"player-counter-chain": runPlayerCounterChainSmoke/);
   assert.match(smoke, /"mirror-destroy-no-damage-basic": runMirrorDestroyNoDamageBasicSmoke/);
+  assert.match(smoke, /"battle-flow-regression-basic": runBattleFlowRegressionBasicSmoke/);
   assert.match(smoke, /"triple-counter-chain": runTripleCounterChainSmoke/);
   assert.match(smoke, /"chain-resolution-review": runChainResolutionReviewSmoke/);
   assert.match(smoke, /chainStatus\?\.textContent\.includes\("将加入 CL3"\)/);

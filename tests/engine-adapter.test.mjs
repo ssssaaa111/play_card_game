@@ -38,7 +38,6 @@ import {
   dispatchRequestAutoEndFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
-  dispatchResumeBattleActionWindowFromUiState,
   dispatchResolveElementCombosFromUiState,
   dispatchResolveTurnDrawFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
@@ -305,28 +304,6 @@ test("dispatches tribute summon through engine and fixed UI slots", () => {
   assert.equal(state.player.normalSummonsUsed, 1);
   assert.ok(events.some((event) => event.type === "CARD_TRIBUTED" && event.cardId === material.uid && event.summonCardId === vanguard.uid));
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === vanguard.uid));
-});
-
-test("restores player and AI battle action windows through dispatch after resolution", () => {
-  const playerState = appState({ phase: PHASES.battle, actionWindow: null });
-  const playerEvents = dispatchResumeBattleActionWindowFromUiState(playerState, "player", {
-    reason: "attack-resolved",
-    now: 3000
-  });
-
-  assert.equal(playerState.actionWindow, ACTION_WINDOWS.battle);
-  assert.equal(playerState.actionWindowReason, "attack-resolved");
-  assert.ok(playerEvents.some((event) => event.type === "ACTION_WINDOW_OPENED" && event.window === ACTION_WINDOWS.battle));
-
-  const aiState = appState({ turn: "ai", phase: PHASES.battle, actionWindow: null });
-  const aiEvents = dispatchResumeBattleActionWindowFromUiState(aiState, "ai", {
-    reason: "attack-resolved",
-    now: 4000
-  });
-
-  assert.equal(aiState.actionWindow, ACTION_WINDOWS.ai);
-  assert.equal(aiState.actionWindowReason, "attack-resolved");
-  assert.ok(aiEvents.some((event) => event.type === "ACTION_WINDOW_OPENED" && event.window === ACTION_WINDOWS.ai));
 });
 
 test("tribute departure expires target-bound attack resets in projected UI state", () => {
@@ -848,6 +825,8 @@ test("dispatches battle resolution and applies direct damage to UI state", () =>
   assert.equal(attacker.used, true);
   assert.equal(state.ai.shield, 0);
   assert.equal(state.ai.lp, 3000);
+  assert.equal(state.actionWindow, ACTION_WINDOWS.battle);
+  assert.equal(state.actionWindowReason, "battle-resolved");
   assert.ok(events.some((event) => event.type === "ATTACK_DECLARED" && event.direct === true));
   assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === attacker.uid));
   assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 1000));
@@ -917,6 +896,8 @@ test("pending attack blocks UI auto-end until response is declined and attack is
   });
   assert.equal(buildEngineStateFromUiState(state).machine.pendingAttack, null);
   assert.equal(attacker.used, true);
+  assert.equal(state.actionWindow, ACTION_WINDOWS.battle);
+  assert.equal(state.actionWindowReason, "attack-canceled");
   assert.ok(cancelEvents.some((event) => event.type === "ATTACK_CANCELED"));
 });
 
@@ -1051,6 +1032,8 @@ test("redirect trap response updates pending attack before UI battle resolution"
   assert.equal(state.player.field[1], guard);
   assert.equal(state.player.shield, 550);
   assert.equal(state.ai.lp, 3850);
+  assert.equal(state.actionWindow, ACTION_WINDOWS.ai);
+  assert.equal(state.actionWindowReason, "battle-resolved");
   assert.ok(!battleEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "player" && event.requested === 550));
 });
 

@@ -1470,11 +1470,7 @@ export class GameEngine {
       declarationEventId,
       outcome
     });
-    emit("TIMING_CHANGED", {
-      playerId: action.playerId,
-      from: state.machine.timing,
-      to: Timing.battleOpen
-    });
+    completeBattleFlow(state, emit, action.playerId, "battle-resolved");
   }
 
   #markMonsterUsed(state, emit, action) {
@@ -1534,6 +1530,7 @@ export class GameEngine {
       reason: action.reason || "canceled",
       consumeAttack: Boolean(action.consumeAttack)
     });
+    completeBattleFlow(state, emit, pending.playerId, "attack-canceled");
   }
 
   #skipRemainingAttacks(state, emit, action) {
@@ -2062,7 +2059,7 @@ export class GameEngine {
       playerId: action.playerId,
       resolvedLinks: resolutionOrder.map((link) => ({ ...link }))
     });
-    cancelPendingAttackIfContextLost(state, emit);
+    const attackCanceled = cancelPendingAttackIfContextLost(state, emit);
     if (state.machine.responseWindow) {
       emit("RESPONSE_WINDOW_CLOSED", {
         playerId: action.playerId,
@@ -2074,6 +2071,9 @@ export class GameEngine {
       from: state.machine.timing,
       to: resumeTiming
     });
+    if (attackCanceled) {
+      completeBattleFlow(state, emit, state.turn.playerId, "chain-canceled-attack");
+    }
   }
 
   #grantAbility(state, emit, action) {
@@ -3829,6 +3829,41 @@ function pendingAttackContextLossReason(state) {
     return "target-left-field";
   }
   return "";
+}
+
+function battleActionWindowForPlayer(playerId) {
+  return playerId === "ai" ? ActionWindow.ai : ActionWindow.battle;
+}
+
+function completeBattleFlow(state, emit, playerId, reason) {
+  if (
+    state.gameOver ||
+    state.turn.playerId !== playerId ||
+    state.turn.phase !== Phase.battle ||
+    state.machine.phase !== Phase.battle ||
+    state.machine.pendingAttack ||
+    state.machine.responseWindow ||
+    (state.machine.chain || []).length > 0
+  ) {
+    return null;
+  }
+  if (state.machine.timing !== Timing.battleOpen) {
+    emit("TIMING_CHANGED", {
+      playerId,
+      from: state.machine.timing,
+      to: Timing.battleOpen
+    });
+  }
+  const window = battleActionWindowForPlayer(playerId);
+  const openedAt = Number(state.nextEventId) || state.events.length + 1;
+  return emit("ACTION_WINDOW_OPENED", {
+    playerId,
+    window,
+    windowId: `${window}:battle-flow:${openedAt}`,
+    reason,
+    openedAt,
+    deadline: 0
+  });
 }
 
 function cancelPendingAttackIfContextLost(state, emit) {
