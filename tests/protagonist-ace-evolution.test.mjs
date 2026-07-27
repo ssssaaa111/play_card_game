@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { deckPresets, library, scenarioSetups } from "../src/data.js";
 import { createDuelist } from "../src/deck.js";
 import { buildEngineStateFromUiState, canDispatchSpellFromUiState, canDispatchTrapFromUiState } from "../src/engine-adapter.js";
-import { EffectDuration, GameEngine, Phase, ResponseWindow, Timing, assertValidGameState, getCardEffectDefinition } from "../src/game-engine.js";
+import { ActionWindow, EffectDuration, GameEngine, Phase, ResponseWindow, Timing, assertValidGameState, getCardEffectDefinition } from "../src/game-engine.js";
 import { buildScenarioState } from "../src/scenario-state.js";
 
 const PLAYER = "player";
@@ -262,6 +262,14 @@ test("ace guard can only resolve in an attack response window", () => {
         triggerEventId: "attack-1",
         prompt: "attack",
         context: { attackerCardId: "attacker-1", targetCardId: "ace-1" }
+      },
+      actionWindow: {
+        playerId: PLAYER,
+        window: ActionWindow.response,
+        windowId: "response:attack-1",
+        reason: "attack",
+        openedAt: 1,
+        deadline: 1
       }
     }
   });

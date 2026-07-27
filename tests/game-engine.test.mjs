@@ -92,6 +92,17 @@ function makeState({ cards = [], player = {}, ai = {}, turn = {}, machine = {}, 
   };
 }
 
+function responseActionWindow(playerId, reason = "test-response") {
+  return {
+    playerId,
+    window: ActionWindow.response,
+    windowId: `response:${playerId}`,
+    reason,
+    openedAt: 1,
+    deadline: 1
+  };
+}
+
 test("seer-call draws two cards only through dispatch and logs events", () => {
   const state = makeState({
     cards: [
@@ -2792,6 +2803,14 @@ test("attack traps resolve destruction boost shield weaken and empty redirect th
         direct: false,
         declarationEventId: 42,
         timing: Timing.attackDeclaration
+      },
+      actionWindow: {
+        playerId: AI,
+        window: ActionWindow.resolution,
+        windowId: "resolution:redirect-test",
+        reason: "redirect-test",
+        openedAt: 1,
+        deadline: 1
       }
     }
   });
@@ -4383,6 +4402,7 @@ test("start turn rejects unresolved response windows", () => {
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-open"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-open");
   const engine = new GameEngine(state);
 
   assert.throws(
@@ -5133,6 +5153,7 @@ test("trap chain effects wait for resolution and resolve in last-in-first-out or
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
   const engine = new GameEngine(state, {
     cardEffects: {
       chainHeal: {
@@ -5299,6 +5320,7 @@ test("a chain negate trap skips the targeted earlier link during reverse resolut
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-99"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-99");
   const engine = new GameEngine(state);
 
   engine.dispatch({
@@ -5367,6 +5389,7 @@ test("a third chain link can negate the counter and restore the first effect", (
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-100"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-100");
   const engine = new GameEngine(state);
 
   engine.dispatch({ type: "ADD_CHAIN_LINK", playerId: PLAYER, cardId: "player-flare", effectId: "summonBurn" });
@@ -5433,6 +5456,7 @@ test("only the designated responder can add a trap chain link", () => {
     timing: Timing.attackDeclaration,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
 
   const engine = new GameEngine(state);
 
@@ -5462,6 +5486,7 @@ test("trap chain links must reference a trap in the responder spell trap zone", 
     timing: Timing.attackDeclaration,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
 
   const engine = new GameEngine(state);
 
@@ -5487,6 +5512,7 @@ test("declining a response closes the window through an explicit event", () => {
     timing: Timing.attackDeclaration,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
 
   const engine = new GameEngine(state);
   const events = engine.dispatch({
@@ -5497,6 +5523,116 @@ test("declining a response closes the window through an explicit event", () => {
 
   assert.equal(engine.getState().machine.responseWindow, null);
   assert.ok(events.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "declined"));
+});
+
+test("closing response windows restores the engine-owned continuation window", () => {
+  const attackState = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("target-1", { templateId: "gale-mage", ownerId: AI, type: "monster", atk: 1200, def: 1400 })
+    ],
+    player: { monsterZone: ["attacker-1"] },
+    ai: { monsterZone: ["target-1"] },
+    turn: { phase: Phase.battle },
+    machine: { phase: Phase.battle, timing: Timing.battleOpen }
+  });
+  const attackEngine = new GameEngine(attackState);
+  attackEngine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1"
+  });
+
+  const attackCloseEvents = attackEngine.dispatch({
+    type: "CLOSE_RESPONSE_WINDOW",
+    playerId: AI,
+    reason: "no-legal-trap"
+  });
+  const attackNext = attackEngine.getState();
+
+  assert.equal(attackNext.machine.pendingAttack?.attackerCardId, "attacker-1");
+  assert.equal(attackNext.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(attackNext.machine.actionWindow?.window, ActionWindow.resolution);
+  assert.ok(attackCloseEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.resolution &&
+    event.reason === "response-closed"
+  ));
+
+  const summonEngine = new GameEngine(makeState());
+  summonEngine.dispatch({
+    type: "OPEN_RESPONSE_WINDOW",
+    playerId: AI,
+    timing: Timing.summon,
+    resumeTiming: Timing.mainOpen,
+    windowType: ResponseWindow.optional,
+    triggerEventId: "summon-1"
+  });
+  const summonCloseEvents = summonEngine.dispatch({
+    type: "CLOSE_RESPONSE_WINDOW",
+    playerId: AI,
+    reason: "declined"
+  });
+  const summonNext = summonEngine.getState();
+
+  assert.equal(summonNext.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(summonNext.machine.actionWindow?.window, ActionWindow.main);
+  assert.ok(summonCloseEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.main &&
+    event.reason === "response-closed"
+  ));
+});
+
+test("response commands reject closing a live chain or resolving an empty one without mutation", () => {
+  const state = makeState({
+    cards: [card("trap-1", { type: "trap", trigger: "attackNegate" })],
+    player: { spellTrapZone: ["trap-1"] },
+    turn: { phase: Phase.battle },
+    machine: { phase: Phase.battle, timing: Timing.attackDeclaration }
+  });
+  const engine = new GameEngine(state);
+  engine.dispatch({
+    type: "OPEN_RESPONSE_WINDOW",
+    playerId: PLAYER,
+    timing: Timing.attackDeclaration,
+    resumeTiming: Timing.battleOpen,
+    windowType: ResponseWindow.optional,
+    triggerEventId: "attack-1"
+  });
+  const emptyChainState = engine.getState();
+
+  assert.throws(
+    () => engine.dispatch({ type: "RESOLVE_CHAIN", playerId: PLAYER }),
+    /Cannot resolve an empty chain/
+  );
+  assert.deepEqual(engine.getState(), emptyChainState);
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "trap-1",
+    effectId: "attackNegate",
+    targetEffectId: "attack-1"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "trap-1",
+    targetEffectId: "attack-1"
+  });
+  const liveChainState = engine.getState();
+
+  assert.throws(
+    () => engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: PLAYER, reason: "invalid-close" }),
+    /Cannot close a response window while a chain is unresolved/
+  );
+  assert.deepEqual(engine.getState(), liveChainState);
 });
 
 test("response windows preserve trigger context and cannot be nested", () => {
@@ -5544,6 +5680,7 @@ test("an open response window requires traps to join the chain before activation
     timing: Timing.damageStep,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
   const engine = new GameEngine(state);
 
   assert.throws(
@@ -5785,7 +5922,8 @@ test("does not list normal actions while a response window is open", () => {
         triggerEventId: 99,
         prompt: "attack",
         context: {}
-      }
+      },
+      actionWindow: responseActionWindow(PLAYER, "attack")
     }
   });
 
@@ -6039,6 +6177,47 @@ test("assertValidGameState rejects action windows that contradict phase or contr
   for (const entry of invalidWindows) {
     assert.throws(() => assertValidGameState(entry.state), entry.reason);
   }
+});
+
+test("assertValidGameState rejects response and pending-attack states without continuation windows", () => {
+  assert.throws(
+    () => assertValidGameState(makeState({
+      machine: {
+        responseWindow: {
+          playerId: AI,
+          type: ResponseWindow.optional,
+          timing: Timing.summon,
+          resumeTiming: Timing.mainOpen,
+          triggerEventId: "summon-1"
+        }
+      }
+    })),
+    /Response window requires a response action window/
+  );
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      cards: [
+        card("attacker-1", { type: "monster" }),
+        card("target-1", { ownerId: AI, type: "monster" })
+      ],
+      player: { monsterZone: ["attacker-1"] },
+      ai: { monsterZone: ["target-1"] },
+      turn: { phase: Phase.battle },
+      machine: {
+        phase: Phase.battle,
+        timing: Timing.attackDeclaration,
+        pendingAttack: {
+          playerId: PLAYER,
+          rivalId: AI,
+          attackerCardId: "attacker-1",
+          targetCardId: "target-1",
+          declarationEventId: 7
+        }
+      }
+    })),
+    /Pending attack requires a response, chain, or resolution action window/
+  );
 });
 
 test("assertValidGameState rejects non-declarative character passives", () => {

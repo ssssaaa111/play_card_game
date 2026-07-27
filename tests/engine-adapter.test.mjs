@@ -1099,7 +1099,15 @@ test("declining an attack response closes the restored engine response window", 
   const events = dispatchCloseResponseWindowFromUiState(state, "player", "declined");
 
   assert.ok(events.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "declined"));
-  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
+  const machine = buildEngineStateFromUiState(state).machine;
+  assert.equal(machine.responseWindow, null);
+  assert.equal(machine.actionWindow.playerId, "ai");
+  assert.equal(machine.actionWindow.window, ACTION_WINDOWS.resolution);
+  assert.ok(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "ai" &&
+    event.window === ACTION_WINDOWS.resolution
+  ));
 });
 
 test("resolves a direct-attack trap through a dedicated damage-step response window", () => {
@@ -1161,8 +1169,17 @@ test("resolves a summon trap through a summon timing response window", () => {
   assert.ok(responseEvents.some((event) => event.type === "CHAIN_LINK_ADDED" && event.cardId === flare.uid));
   assert.ok(responseEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 400));
   assert.ok(responseEvents.some((event) => event.type === "RESPONSE_WINDOW_CLOSED"));
-  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
-  assert.equal(buildEngineStateFromUiState(state).machine.timing, "mainOpen");
+  const machine = buildEngineStateFromUiState(state).machine;
+  assert.equal(machine.responseWindow, null);
+  assert.equal(machine.timing, "mainOpen");
+  assert.equal(machine.actionWindow.playerId, "ai");
+  assert.equal(machine.actionWindow.window, ACTION_WINDOWS.ai);
+  assert.ok(responseEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "ai" &&
+    event.window === ACTION_WINDOWS.ai &&
+    event.reason === "chain-resolved"
+  ));
 });
 
 test("dispatches battle resolution and applies target destruction to fixed UI zones", () => {

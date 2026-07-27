@@ -714,6 +714,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"player-counter-chain": runPlayerCounterChainSmoke/);
   assert.match(smoke, /"mirror-destroy-no-damage-basic": runMirrorDestroyNoDamageBasicSmoke/);
   assert.match(smoke, /"battle-flow-regression-basic": runBattleFlowRegressionBasicSmoke/);
+  assert.match(smoke, /"response-window-resume-basic": runResponseWindowResumeBasicSmoke/);
   assert.match(smoke, /"triple-counter-chain": runTripleCounterChainSmoke/);
   assert.match(smoke, /"chain-resolution-review": runChainResolutionReviewSmoke/);
   assert.match(smoke, /chainStatus\?\.textContent\.includes\("将加入 CL3"\)/);
@@ -882,6 +883,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "player-counter-chain"\)/);
+  assert.match(smoke, /async function runResponseWindowResumeBasicSmoke\(ctx\)[\s\S]*?setSmokeStatus\("passed", smokeName\);\n}/);
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
   assert.match(smoke, /const smokeName = "turn-handoff-basic";[\s\S]*"TURN_ENDED:ai"[\s\S]*setSmokeStatus\("passed", smokeName\)/);

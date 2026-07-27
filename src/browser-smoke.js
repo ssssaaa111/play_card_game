@@ -4999,6 +4999,40 @@ async function runBattleFlowRegressionBasicSmoke(ctx) {
   await runMirrorDestroyNoDamageBasicSmoke(ctx, "battle-flow-regression-basic");
 }
 
+async function runResponseWindowResumeBasicSmoke(ctx) {
+  const smokeName = "response-window-resume-basic";
+  setSmokeStatus("running", smokeName);
+  await runPlayerCounterChainSmoke(ctx);
+
+  const events = ctx.state.gameEvents || [];
+  const chainResolvedIndex = events.findIndex((event) => event.type === "CHAIN_RESOLVED");
+  const continuationIndex = events.findIndex((event, index) =>
+    index > chainResolvedIndex &&
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === "resolution" &&
+    event.reason === "chain-resolved"
+  );
+  const battleResolvedIndex = events.findIndex((event, index) =>
+    index > continuationIndex && event.type === "BATTLE_RESOLVED"
+  );
+  const battleWindowIndex = events.findIndex((event, index) =>
+    index > battleResolvedIndex &&
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === "battle" &&
+    event.reason === "battle-resolved"
+  );
+  if (!(chainResolvedIndex >= 0 && continuationIndex > chainResolvedIndex &&
+      battleResolvedIndex > continuationIndex && battleWindowIndex > battleResolvedIndex)) {
+    throw new Error(`${smokeName}: response continuation event order is incomplete. ${smokeDebug(ctx)}`);
+  }
+  if (ctx.state.ruleCheckIssue) {
+    throw new Error(`${smokeName}: rule engine reported ${ctx.state.ruleCheckIssue}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTripleCounterChainSmoke(ctx) {
   setSmokeStatus("running", "triple-counter-chain");
   await startSmokeDuel(ctx, "tripleCounterChain");
@@ -6081,6 +6115,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "player-counter-chain": runPlayerCounterChainSmoke,
     "mirror-destroy-no-damage-basic": runMirrorDestroyNoDamageBasicSmoke,
     "battle-flow-regression-basic": runBattleFlowRegressionBasicSmoke,
+    "response-window-resume-basic": runResponseWindowResumeBasicSmoke,
     "triple-counter-chain": runTripleCounterChainSmoke,
     "chain-resolution-review": runChainResolutionReviewSmoke,
     "turn-handoff-basic": runTurnHandoffBasicSmoke,
