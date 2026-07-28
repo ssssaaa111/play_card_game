@@ -12,7 +12,7 @@ import {
   simulateRandomDuels
 } from "../src/rule-simulator.js";
 import { library } from "../src/data.js";
-import { GameEngine, Phase, Timing } from "../src/game-engine.js";
+import { ActionWindow, GameEngine, Phase, Timing } from "../src/game-engine.js";
 import { FIELD_SIZE, MAX_LP } from "../src/rules.js";
 
 test("random duel simulator exercises core rules through dispatch", () => {
@@ -301,6 +301,27 @@ test("simulator strategy entries remain legal dispatch candidates", () => {
   for (const { action } of entries) {
     assert.doesNotThrow(() => new GameEngine(cloneState(state)).dispatch(action));
   }
+});
+
+test("simulator battle projection keeps an engine-owned main window compatible", () => {
+  const state = simulatorTestState({
+    playerCards: [runtimeCard("attacker", "star-lancer", "player")],
+    monsterZone: ["attacker"]
+  });
+  state.machine.actionWindow = {
+    playerId: "player",
+    window: ActionWindow.main,
+    windowId: "main:simulator-test",
+    reason: "phase-entered:main",
+    openedAt: 1,
+    deadline: 0
+  };
+
+  const entries = createSimulatorActionEntries(state, "player");
+
+  assert.ok(entries.some((entry) =>
+    entry.action.type === "CHANGE_PHASE" && entry.action.phase === Phase.battle
+  ));
 });
 
 test("simulator avoids normal summon projection noise after summon is spent", () => {

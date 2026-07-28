@@ -1470,11 +1470,7 @@ export class GameEngine {
       declarationEventId,
       outcome
     });
-    emit("TIMING_CHANGED", {
-      playerId: action.playerId,
-      from: state.machine.timing,
-      to: Timing.battleOpen
-    });
+    completeBattleFlow(state, emit, action.playerId, "battle-resolved");
   }
 
   #markMonsterUsed(state, emit, action) {
@@ -1534,6 +1530,7 @@ export class GameEngine {
       reason: action.reason || "canceled",
       consumeAttack: Boolean(action.consumeAttack)
     });
+    completeBattleFlow(state, emit, pending.playerId, "attack-canceled");
   }
 
   #skipRemainingAttacks(state, emit, action) {
@@ -1690,6 +1687,7 @@ export class GameEngine {
         abilities: expiredAbilities
       });
     }
+    openPhaseActionWindow(state, emit, action.playerId, "turn-started");
   }
 
   #endTurn(state, emit, action) {
@@ -1896,6 +1894,7 @@ export class GameEngine {
       from: before,
       to: action.phase
     });
+    openPhaseActionWindow(state, emit, action.playerId, `phase-entered:${action.phase}`);
   }
 
   #openResponseWindow(state, emit, action) {
@@ -1934,6 +1933,10 @@ export class GameEngine {
         throw new GameRuleError(`Cannot open ${action.window} action window while attack or chain resolution is pending`);
       }
     }
+    const compatibilityIssue = actionWindowCompatibilityIssue(state, action.playerId, action.window);
+    if (compatibilityIssue) {
+      throw new GameRuleError(compatibilityIssue);
+    }
     const openedAt = Number(action.openedAt);
     const timeoutSeconds = Math.max(0, Number(action.timeoutSeconds) || 0);
     if (!Number.isFinite(openedAt)) {
@@ -1971,6 +1974,9 @@ export class GameEngine {
 
   #closeResponseWindow(state, emit, action) {
     const responseWindow = requireOpenResponseWindow(state, action.playerId);
+    if (state.machine.chain.length > 0) {
+      throw new GameRuleError("Cannot close a response window while a chain is unresolved");
+    }
     const resumeTiming = responseWindow.resumeTiming || responseWindow.timing || timingForPhase(state.turn.phase);
     emit("RESPONSE_WINDOW_CLOSED", {
       playerId: action.playerId,
@@ -1985,6 +1991,7 @@ export class GameEngine {
         to: resumeTiming
       });
     }
+    restoreActionWindowAfterResponse(state, emit, "response-closed");
   }
 
   #passResponsePriority(state, emit, action) {
@@ -2004,6 +2011,9 @@ export class GameEngine {
 
   #resolveChain(state, ctx, emit, action) {
     const responseWindow = requireOpenResponseWindow(state, action.playerId);
+    if (state.machine.chain.length === 0) {
+      throw new GameRuleError("Cannot resolve an empty chain");
+    }
     const resumeTiming = action.resumeTiming || responseWindow.resumeTiming || responseWindow.timing || timingForPhase(state.turn.phase);
     const resolutionOrder = state.machine.chain.slice().reverse();
     const resolutionEventStart = state.events.length;
@@ -2062,7 +2072,7 @@ export class GameEngine {
       playerId: action.playerId,
       resolvedLinks: resolutionOrder.map((link) => ({ ...link }))
     });
-    cancelPendingAttackIfContextLost(state, emit);
+    const attackCanceled = cancelPendingAttackIfContextLost(state, emit);
     if (state.machine.responseWindow) {
       emit("RESPONSE_WINDOW_CLOSED", {
         playerId: action.playerId,
@@ -2074,6 +2084,11 @@ export class GameEngine {
       from: state.machine.timing,
       to: resumeTiming
     });
+    if (attackCanceled) {
+      completeBattleFlow(state, emit, state.turn.playerId, "chain-canceled-attack");
+    } else {
+      restoreActionWindowAfterResponse(state, emit, "chain-resolved");
+    }
   }
 
   #grantAbility(state, emit, action) {
@@ -2153,7 +2168,7 @@ export function getLegalActions(initialState, playerId = initialState?.turn?.pla
     endTurn: []
   };
 
-  if (normalActionsBlocked(state)) {
+  if (normalActionsBlocked(state, playerId)) {
     return summarizeLegalActions(state, playerId, rivalId, actions);
   }
 
@@ -2260,20 +2275,87 @@ function candidateTargetCardIds(state, definition, action) {
   }
 }
 
-function normalActionsBlocked(state) {
+function normalActionsBlocked(state, playerId) {
   if (state.gameOver) return true;
   if (state.machine.responseWindow) return true;
   if ((state.machine.chain || []).length > 0) return true;
   if (state.machine.pendingAttack) return true;
-  const windowName = state.machine.actionWindow?.window;
+  const actionWindow = state.machine.actionWindow;
+  if (!actionWindow) return false;
+  if (actionWindow.playerId !== playerId) return true;
+  const windowName = actionWindow.window;
   return [
     ActionWindow.targetSelect,
     ActionWindow.response,
     ActionWindow.resolution,
     ActionWindow.autoEnd,
-    ActionWindow.ai,
     ActionWindow.gameOver
   ].includes(windowName);
+}
+
+function actionWindowCompatibilityIssue(state, playerId, window) {
+  const phase = state.turn?.phase;
+  const currentPlayerId = state.turn?.playerId;
+  const belongsToCurrentPlayer = () => playerId === currentPlayerId;
+
+  if (window === ActionWindow.gameOver) {
+    return state.gameOver ? "" : "game-over action window requires a finished game";
+  }
+  if (state.gameOver) {
+    return `${window} action window cannot open after game over`;
+  }
+  if (window === ActionWindow.response) {
+    if (!state.machine?.responseWindow) {
+      return "response action window requires an open response window";
+    }
+    if (state.machine.responseWindow.playerId !== playerId) {
+      return "response action window belongs to the current response player";
+    }
+    return "";
+  }
+  if (window === ActionWindow.resolution) {
+    if (![Phase.main, Phase.battle].includes(phase)) {
+      return "resolution action window requires main or battle phase";
+    }
+    const resolvingSharedFlow = Boolean(
+      state.machine?.responseWindow ||
+      (state.machine?.chain || []).length > 0
+    );
+    if (!resolvingSharedFlow && !belongsToCurrentPlayer()) {
+      return "resolution action window belongs to the current turn player";
+    }
+    return "";
+  }
+  if (window === ActionWindow.ai) {
+    if (playerId !== "ai") return "AI action window belongs to ai";
+    if (!belongsToCurrentPlayer()) return "AI action window belongs to the current turn player";
+    if (![Phase.draw, Phase.main, Phase.battle].includes(phase)) {
+      return "AI action window requires draw, main, or battle phase";
+    }
+    return "";
+  }
+  if (!belongsToCurrentPlayer()) {
+    return `${window} action window belongs to the current turn player`;
+  }
+  if (window === ActionWindow.setup && phase !== Phase.setup) {
+    return "setup action window requires setup phase";
+  }
+  if (window === ActionWindow.draw && phase !== Phase.draw) {
+    return "draw action window requires draw phase";
+  }
+  if (window === ActionWindow.main && phase !== Phase.main) {
+    return "main action window requires main phase";
+  }
+  if (window === ActionWindow.battle && phase !== Phase.battle) {
+    return "battle action window requires battle phase";
+  }
+  if (window === ActionWindow.targetSelect && ![Phase.main, Phase.battle].includes(phase)) {
+    return "target-select action window requires main or battle phase";
+  }
+  if (window === ActionWindow.autoEnd && ![Phase.main, Phase.battle].includes(phase)) {
+    return "auto-end action window requires main or battle phase";
+  }
+  return "";
 }
 
 function summarizeLegalActions(state, playerId, rivalId, actions) {
@@ -2331,6 +2413,14 @@ export function assertValidGameState(state) {
     if (!Number.isFinite(state.machine.actionWindow.openedAt) || !Number.isFinite(state.machine.actionWindow.deadline)) {
       throw new GameStateValidationError("Action window timing must be finite");
     }
+    const compatibilityIssue = actionWindowCompatibilityIssue(
+      state,
+      state.machine.actionWindow.playerId,
+      state.machine.actionWindow.window
+    );
+    if (compatibilityIssue) {
+      throw new GameStateValidationError(compatibilityIssue);
+    }
   }
   if (state.machine.autoEnd) {
     if (!state.players[state.machine.autoEnd.playerId]) {
@@ -2349,7 +2439,7 @@ export function assertValidGameState(state) {
   if (state.machine.responseWindow && state.machine.autoEnd) {
     throw new GameStateValidationError("Response window cannot coexist with auto-end");
   }
-  if (state.machine.responseWindow && state.machine.actionWindow && state.machine.actionWindow.window !== ActionWindow.response) {
+  if (state.machine.responseWindow && state.machine.actionWindow?.window !== ActionWindow.response) {
     throw new GameStateValidationError("Response window requires a response action window");
   }
   if (state.machine.chain.length > 0) {
@@ -2399,6 +2489,13 @@ export function assertValidGameState(state) {
       if (target.type !== "monster") {
         throw new GameStateValidationError("Pending attack target must be a monster");
       }
+    }
+    if (
+      !state.machine.responseWindow &&
+      state.machine.chain.length === 0 &&
+      state.machine.actionWindow?.window !== ActionWindow.resolution
+    ) {
+      throw new GameStateValidationError("Pending attack requires a response, chain, or resolution action window");
     }
   }
   if (state.gameOver) {
@@ -3204,6 +3301,9 @@ function applyResponsePriorityPassed(state, event) {
     throw new GameRuleError(`Current response window belongs to ${state.machine.responseWindow.playerId}`);
   }
   state.machine.responseWindow.playerId = event.toPlayerId;
+  if (state.machine.actionWindow?.window === ActionWindow.response) {
+    state.machine.actionWindow.playerId = event.toPlayerId;
+  }
 }
 
 function applyChainLinkAdded(state, event) {
@@ -3829,6 +3929,98 @@ function pendingAttackContextLossReason(state) {
     return "target-left-field";
   }
   return "";
+}
+
+function battleActionWindowForPlayer(playerId) {
+  return playerId === "ai" ? ActionWindow.ai : ActionWindow.battle;
+}
+
+function phaseActionWindowForPlayer(playerId, phase) {
+  if (playerId === "ai" && [Phase.draw, Phase.main, Phase.battle].includes(phase)) {
+    return ActionWindow.ai;
+  }
+  return {
+    [Phase.draw]: ActionWindow.draw,
+    [Phase.main]: ActionWindow.main,
+    [Phase.battle]: ActionWindow.battle
+  }[phase] || null;
+}
+
+function openPhaseActionWindow(state, emit, playerId, reason) {
+  if (state.gameOver || state.turn.playerId !== playerId) return null;
+  const window = phaseActionWindowForPlayer(playerId, state.turn.phase);
+  if (!window) return null;
+  const openedAt = Number(state.nextEventId) || state.events.length + 1;
+  return emit("ACTION_WINDOW_OPENED", {
+    playerId,
+    window,
+    windowId: `${window}:phase-flow:${openedAt}`,
+    reason,
+    openedAt,
+    deadline: 0
+  });
+}
+
+function restoreActionWindowAfterResponse(state, emit, reason) {
+  if (
+    state.gameOver ||
+    state.machine.responseWindow ||
+    (state.machine.chain || []).length > 0
+  ) {
+    return null;
+  }
+
+  const playerId = state.turn.playerId;
+  let window = null;
+  if (state.machine.pendingAttack) {
+    window = ActionWindow.resolution;
+  } else if (state.turn.phase === Phase.main) {
+    window = playerId === "ai" ? ActionWindow.ai : ActionWindow.main;
+  } else if (state.turn.phase === Phase.battle) {
+    window = battleActionWindowForPlayer(playerId);
+  }
+  if (!window) return null;
+
+  const openedAt = Number(state.nextEventId) || state.events.length + 1;
+  return emit("ACTION_WINDOW_OPENED", {
+    playerId,
+    window,
+    windowId: `${window}:response-flow:${openedAt}`,
+    reason,
+    openedAt,
+    deadline: 0
+  });
+}
+
+function completeBattleFlow(state, emit, playerId, reason) {
+  if (
+    state.gameOver ||
+    state.turn.playerId !== playerId ||
+    state.turn.phase !== Phase.battle ||
+    state.machine.phase !== Phase.battle ||
+    state.machine.pendingAttack ||
+    state.machine.responseWindow ||
+    (state.machine.chain || []).length > 0
+  ) {
+    return null;
+  }
+  if (state.machine.timing !== Timing.battleOpen) {
+    emit("TIMING_CHANGED", {
+      playerId,
+      from: state.machine.timing,
+      to: Timing.battleOpen
+    });
+  }
+  const window = battleActionWindowForPlayer(playerId);
+  const openedAt = Number(state.nextEventId) || state.events.length + 1;
+  return emit("ACTION_WINDOW_OPENED", {
+    playerId,
+    window,
+    windowId: `${window}:battle-flow:${openedAt}`,
+    reason,
+    openedAt,
+    deadline: 0
+  });
 }
 
 function cancelPendingAttackIfContextLost(state, emit) {
@@ -4754,6 +4946,9 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
     }
     if (event.type === "RESPONSE_PRIORITY_PASSED" && machine.responseWindow) {
       machine.responseWindow.playerId = event.toPlayerId;
+      if (machine.actionWindow?.window === ActionWindow.response) {
+        machine.actionWindow.playerId = event.toPlayerId;
+      }
     }
     if (event.type === "CHAIN_LINK_ADDED") {
       machine.chain.push({

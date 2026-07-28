@@ -72,7 +72,6 @@ import {
   dispatchRequestAutoEndFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
-  dispatchResumeBattleActionWindowFromUiState,
   dispatchResolveElementCombosFromUiState,
   dispatchResolveTurnDrawFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
@@ -3359,21 +3358,6 @@ function consumeCancelledAttackWithEngine(owner, attacker, options = {}) {
   }
 }
 
-function resumeBattleActionWindow(owner, reason = "attack resolved") {
-  if (state.gameOver || state.turn !== owner.owner || state.phase !== PHASES.battle) return false;
-  const machine = currentEngineMachine();
-  if (machine?.pendingAttack || machine?.responseWindow || (machine?.chain || []).length > 0) return false;
-  try {
-    dispatchResumeBattleActionWindowFromUiState(state, owner.owner, { reason });
-    return true;
-  } catch (error) {
-    state.ruleCheckIssue = error.message || "Battle action window could not resume.";
-    addLog(`${duelistLabel(owner)}的战斗行动窗口恢复失败：${state.ruleCheckIssue}`);
-    console.error(error);
-    return false;
-  }
-}
-
 function playAttackResetFeedback(owner, attacker, events = []) {
   const spent = events.find((event) =>
     event.type === "ABILITY_SPENT"
@@ -3435,7 +3419,6 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       reason: "attack-trap"
     })) return false;
     checkGameOver();
-    resumeBattleActionWindow(owner, "attack canceled");
     return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
   }
   const resolvedTargetIndex = pendingAttackTargetIndex(rival, attackContext.targetIndex);
@@ -3496,7 +3479,6 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
         reason: "direct-trap"
       })) return false;
       checkGameOver();
-      resumeBattleActionWindow(owner, "direct attack canceled");
       return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的直接攻击`);
     }
     battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex, {
@@ -3597,7 +3579,6 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
     await afterAttackFeedback;
   }
   checkGameOver();
-  resumeBattleActionWindow(owner, "attack resolved");
   return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的攻击`);
 }
 
@@ -3766,7 +3747,6 @@ function enterPlayerBattlePhase(reason = "战斗时点", { preserveSelection = f
     return false;
   }
   Object.assign(state, mainToBattlePatch());
-  setActionWindow(ACTION_WINDOWS.battle, { reason });
   if (!quiet) {
     playSound("click");
     addLog(`${reason}，进入战斗时点。`);
@@ -3914,10 +3894,6 @@ function beginTurn(owner) {
     return false;
   }
   Object.assign(state, turnStartPatch(owner));
-  setActionWindow(owner === "player" ? ACTION_WINDOWS.draw : ACTION_WINDOWS.ai, {
-    playerId: owner,
-    reason: "turn started"
-  });
   clearBattlePreview();
   cancelAutoEnd();
   clearPlayerIdleTimers();
@@ -3986,7 +3962,6 @@ function autoPlayerDraw() {
     return;
   }
   Object.assign(state, drawToMainPatch());
-  setActionWindow(ACTION_WINDOWS.main, { reason: "draw completed" });
   render("draw-player");
   resetPlayerIdleCountdown();
 }
@@ -4006,7 +3981,6 @@ async function runAiTurn() {
   state.aiRunning = true;
   cue("对手开始行动。");
   try {
-    setActionWindow("ai");
     await sleep(950);
     const drawEvents = dispatchResolveTurnDrawFromUiState(state, "ai");
     applyDrawEventFeedback(state.ai, drawEvents, true);
@@ -4037,7 +4011,6 @@ async function runAiTurn() {
       await sleep(1850);
     }
     if (state.gameOver) return;
-    setActionWindow(ACTION_WINDOWS.ai, { playerId: "ai", reason: "ai battle" });
     dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
     await aiAttack();
     if (!state.gameOver) {

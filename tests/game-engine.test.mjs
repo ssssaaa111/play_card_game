@@ -92,6 +92,17 @@ function makeState({ cards = [], player = {}, ai = {}, turn = {}, machine = {}, 
   };
 }
 
+function responseActionWindow(playerId, reason = "test-response") {
+  return {
+    playerId,
+    window: ActionWindow.response,
+    windowId: `response:${playerId}`,
+    reason,
+    openedAt: 1,
+    deadline: 1
+  };
+}
+
 test("seer-call draws two cards only through dispatch and logs events", () => {
   const state = makeState({
     cards: [
@@ -2792,6 +2803,14 @@ test("attack traps resolve destruction boost shield weaken and empty redirect th
         direct: false,
         declarationEventId: 42,
         timing: Timing.attackDeclaration
+      },
+      actionWindow: {
+        playerId: AI,
+        window: ActionWindow.resolution,
+        windowId: "resolution:redirect-test",
+        reason: "redirect-test",
+        openedAt: 1,
+        deadline: 1
       }
     }
   });
@@ -2963,6 +2982,42 @@ test("battle resolution deals direct damage and marks the attacker through event
   assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === "attacker-1"));
   assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 1500 && event.blocked === 500 && event.amount === 1000));
   assert.ok(events.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "direct"));
+  assertValidGameState(next);
+});
+
+test("lethal battle resolution keeps the game-over window instead of reopening battle actions", () => {
+  const state = makeState({
+    cards: [
+      card("lethal-attacker", { templateId: "star-lancer", type: "monster", atk: 1500, def: 1000 })
+    ],
+    player: {
+      monsterZone: ["lethal-attacker"]
+    },
+    ai: {
+      lp: 1000
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "lethal-attacker"
+  });
+  const next = engine.getState();
+
+  assert.equal(next.players[AI].lp, 0);
+  assert.equal(next.gameOver?.winnerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.gameOver);
+  assert.equal(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" && event.reason === "battle-resolved"
+  ), false);
   assertValidGameState(next);
 });
 
@@ -3425,7 +3480,7 @@ test("pending attack blocks auto-end and turn handoff until battle resolves or i
   assert.equal(legal.hasAny, false);
   assert.equal(legal.can.endTurn, false);
 
-  engine.dispatch({
+  const resolutionEvents = engine.dispatch({
     type: "RESOLVE_BATTLE",
     playerId: PLAYER,
     rivalId: AI,
@@ -3437,6 +3492,15 @@ test("pending attack blocks auto-end and turn handoff until battle resolves or i
   assert.equal(next.machine.pendingAttack, null);
   assert.equal(next.turn.phase, Phase.battle);
   assert.equal(next.cards["attacker-1"].used, true);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.battle);
+  assert.equal(next.machine.timing, Timing.battleOpen);
+  assert.ok(resolutionEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "battle-resolved"
+  ));
 });
 
 test("canceling a responded attack clears pending attack and optionally consumes the attacker", () => {
@@ -3479,8 +3543,17 @@ test("canceling a responded attack clears pending attack and optionally consumes
   assert.equal(next.machine.pendingAttack, null);
   assert.equal(next.turn.phase, Phase.battle);
   assert.equal(next.cards["attacker-1"].used, true);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.battle);
+  assert.equal(next.machine.timing, Timing.battleOpen);
   assert.ok(cancelEvents.some((event) => event.type === "MONSTER_USED" && event.reason === "attackCanceled"));
   assert.ok(cancelEvents.some((event) => event.type === "ATTACK_CANCELED" && event.declarationEventId === declaration.id));
+  assert.ok(cancelEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "attack-canceled"
+  ));
   assertValidGameState(next);
 });
 
@@ -3534,6 +3607,9 @@ test("chain resolution cancels pending attack when the attacker leaves the monst
 
   assert.equal(next.machine.pendingAttack, null);
   assert.equal(next.machine.responseWindow, null);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.battle);
+  assert.equal(next.machine.timing, Timing.battleOpen);
   assert.deepEqual(next.players[PLAYER].grave, ["attacker-1"]);
   assert.deepEqual(next.players[AI].grave, ["mirror-1"]);
   assert.equal(next.players[PLAYER].lp, 4000);
@@ -3546,6 +3622,12 @@ test("chain resolution cancels pending attack when the attacker leaves the monst
     event.declarationEventId === declaration.id &&
     event.reason === "attacker-left-field" &&
     event.consumeAttack === false
+  ));
+  assert.ok(chainEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "chain-canceled-attack"
   ));
   assertValidGameState(next);
 });
@@ -3608,6 +3690,9 @@ test("chain resolution cancels pending attack when the declared target leaves th
 
   assert.equal(next.machine.pendingAttack, null);
   assert.equal(next.machine.responseWindow, null);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.battle);
+  assert.equal(next.machine.timing, Timing.battleOpen);
   assert.deepEqual(next.players[AI].grave, ["target-break-1", "target-1"]);
   assert.equal(next.cards["attacker-1"].used, undefined);
   assert.ok(chainEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "target-1"));
@@ -3616,6 +3701,12 @@ test("chain resolution cancels pending attack when the declared target leaves th
     event.declarationEventId === declaration.id &&
     event.reason === "target-left-field" &&
     event.consumeAttack === false
+  ));
+  assert.ok(chainEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "chain-canceled-attack"
   ));
   assertValidGameState(next);
 });
@@ -4169,6 +4260,8 @@ test("start turn switches ownership and resets turn-scoped state through events"
   assert.equal(next.turn.phase, Phase.draw);
   assert.equal(next.machine.phase, Phase.draw);
   assert.equal(next.machine.timing, Timing.draw);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.draw);
   assert.equal(next.cards["ready-1"].used, false);
   assert.equal(next.cards["ready-1"].changedMode, false);
   assert.equal(next.cards["ready-2"].changedMode, false);
@@ -4184,6 +4277,12 @@ test("start turn switches ownership and resets turn-scoped state through events"
     event.type === "TURN_ABILITIES_EXPIRED" &&
     event.playerId === PLAYER &&
     event.abilities.length === 2
+  ));
+  assert.ok(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.draw &&
+    event.reason === "turn-started"
   ));
 });
 
@@ -4245,12 +4344,66 @@ test("phase changes progress only from draw to main and main to battle", () => {
     event.from === Phase.draw &&
     event.to === Phase.main
   ));
+  assert.ok(mainEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.main &&
+    event.reason === "phase-entered:main"
+  ));
   assert.ok(battleEvents.some((event) =>
     event.type === "PHASE_CHANGED" &&
     event.from === Phase.main &&
     event.to === Phase.battle
   ));
+  assert.ok(battleEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.battle &&
+    event.reason === "phase-entered:battle"
+  ));
   assert.equal(engine.getState().turn.phase, Phase.battle);
+  assert.equal(engine.getState().machine.actionWindow?.window, ActionWindow.battle);
+});
+
+test("AI turn and phase transitions keep the AI-owned action window", () => {
+  const engine = new GameEngine(makeState({
+    turn: { playerId: PLAYER, phase: Phase.end },
+    machine: { phase: Phase.end, timing: Timing.end }
+  }));
+
+  const startEvents = engine.dispatch({ type: "START_TURN", playerId: AI });
+  let next = engine.getState();
+  assert.equal(next.machine.actionWindow?.playerId, AI);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.ai);
+  assert.ok(startEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === AI &&
+    event.window === ActionWindow.ai &&
+    event.reason === "turn-started"
+  ));
+
+  const drawEvents = engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: AI });
+  next = engine.getState();
+  assert.equal(next.turn.phase, Phase.main);
+  assert.equal(next.machine.actionWindow?.playerId, AI);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.ai);
+  assert.ok(drawEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === AI &&
+    event.window === ActionWindow.ai &&
+    event.reason === "phase-entered:main"
+  ));
+
+  const battleEvents = engine.dispatch({ type: "CHANGE_PHASE", playerId: AI, phase: Phase.battle });
+  next = engine.getState();
+  assert.equal(next.machine.actionWindow?.playerId, AI);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.ai);
+  assert.ok(battleEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === AI &&
+    event.window === ActionWindow.ai &&
+    event.reason === "phase-entered:battle"
+  ));
 });
 
 test("phase changes reject duplicate, rollback, and skipped-end transitions without changing state", () => {
@@ -4311,6 +4464,7 @@ test("start turn rejects unresolved response windows", () => {
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-open"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-open");
   const engine = new GameEngine(state);
 
   assert.throws(
@@ -4681,9 +4835,17 @@ test("resolve turn draw advances to main only when the player survives", () => {
   assert.deepEqual(next.players[PLAYER].hand, ["turn-draw-1"]);
   assert.equal(next.turn.phase, Phase.main);
   assert.equal(next.machine.timing, Timing.mainOpen);
+  assert.equal(next.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(next.machine.actionWindow?.window, ActionWindow.main);
   assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.count === 1));
   assert.ok(events.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === true));
   assert.ok(events.some((event) => event.type === "PHASE_CHANGED" && event.from === Phase.draw && event.to === Phase.main));
+  assert.ok(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.main &&
+    event.reason === "phase-entered:main"
+  ));
 
   const survivedDeckOut = makeState({
     player: { lp: 700, shield: 300, deck: [] },
@@ -5012,6 +5174,34 @@ test("action window commands reject unknown windows and invalid timeout data", (
   );
 });
 
+test("action window commands reject phase, owner, and response-window mismatches without mutation", () => {
+  const invalidActions = [
+    {
+      action: { type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: ActionWindow.battle, openedAt: 1000 },
+      reason: /battle action window requires battle phase/
+    },
+    {
+      action: { type: "OPEN_ACTION_WINDOW", playerId: AI, window: ActionWindow.main, openedAt: 1000 },
+      reason: /main action window belongs to the current turn player/
+    },
+    {
+      action: { type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: ActionWindow.ai, openedAt: 1000 },
+      reason: /AI action window belongs to ai/
+    },
+    {
+      action: { type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: ActionWindow.response, openedAt: 1000 },
+      reason: /response action window requires an open response window/
+    }
+  ];
+
+  for (const { action, reason } of invalidActions) {
+    const engine = new GameEngine(makeState());
+    const before = engine.getState();
+    assert.throws(() => engine.dispatch(action), reason);
+    assert.deepEqual(engine.getState(), before);
+  }
+});
+
 test("trap chain effects wait for resolution and resolve in last-in-first-out order", () => {
   const state = makeState({
     cards: [
@@ -5033,6 +5223,7 @@ test("trap chain effects wait for resolution and resolve in last-in-first-out or
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
   const engine = new GameEngine(state, {
     cardEffects: {
       chainHeal: {
@@ -5111,6 +5302,14 @@ test("response priority can pass to the rival before they add another chain link
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-88"
   };
+  state.machine.actionWindow = {
+    playerId: PLAYER,
+    window: ActionWindow.response,
+    windowId: "response:attack-88",
+    reason: "attack",
+    openedAt: 1,
+    deadline: 1
+  };
   const engine = new GameEngine(state, {
     cardEffects: {
       chainHeal: {
@@ -5143,6 +5342,7 @@ test("response priority can pass to the rival before they add another chain link
   });
 
   assert.equal(engine.getState().machine.responseWindow.playerId, AI);
+  assert.equal(engine.getState().machine.actionWindow.playerId, AI);
   assert.ok(passEvents.some((event) =>
     event.type === "RESPONSE_PRIORITY_PASSED" && event.fromPlayerId === PLAYER && event.toPlayerId === AI
   ));
@@ -5190,6 +5390,7 @@ test("a chain negate trap skips the targeted earlier link during reverse resolut
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-99"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-99");
   const engine = new GameEngine(state);
 
   engine.dispatch({
@@ -5258,6 +5459,7 @@ test("a third chain link can negate the counter and restore the first effect", (
     resumeTiming: Timing.battleOpen,
     triggerEventId: "attack-100"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-100");
   const engine = new GameEngine(state);
 
   engine.dispatch({ type: "ADD_CHAIN_LINK", playerId: PLAYER, cardId: "player-flare", effectId: "summonBurn" });
@@ -5324,6 +5526,7 @@ test("only the designated responder can add a trap chain link", () => {
     timing: Timing.attackDeclaration,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
 
   const engine = new GameEngine(state);
 
@@ -5353,6 +5556,7 @@ test("trap chain links must reference a trap in the responder spell trap zone", 
     timing: Timing.attackDeclaration,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
 
   const engine = new GameEngine(state);
 
@@ -5378,6 +5582,7 @@ test("declining a response closes the window through an explicit event", () => {
     timing: Timing.attackDeclaration,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
 
   const engine = new GameEngine(state);
   const events = engine.dispatch({
@@ -5388,6 +5593,116 @@ test("declining a response closes the window through an explicit event", () => {
 
   assert.equal(engine.getState().machine.responseWindow, null);
   assert.ok(events.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "declined"));
+});
+
+test("closing response windows restores the engine-owned continuation window", () => {
+  const attackState = makeState({
+    cards: [
+      card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 }),
+      card("target-1", { templateId: "gale-mage", ownerId: AI, type: "monster", atk: 1200, def: 1400 })
+    ],
+    player: { monsterZone: ["attacker-1"] },
+    ai: { monsterZone: ["target-1"] },
+    turn: { phase: Phase.battle },
+    machine: { phase: Phase.battle, timing: Timing.battleOpen }
+  });
+  const attackEngine = new GameEngine(attackState);
+  attackEngine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "attacker-1",
+    targetCardId: "target-1"
+  });
+
+  const attackCloseEvents = attackEngine.dispatch({
+    type: "CLOSE_RESPONSE_WINDOW",
+    playerId: AI,
+    reason: "no-legal-trap"
+  });
+  const attackNext = attackEngine.getState();
+
+  assert.equal(attackNext.machine.pendingAttack?.attackerCardId, "attacker-1");
+  assert.equal(attackNext.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(attackNext.machine.actionWindow?.window, ActionWindow.resolution);
+  assert.ok(attackCloseEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.resolution &&
+    event.reason === "response-closed"
+  ));
+
+  const summonEngine = new GameEngine(makeState());
+  summonEngine.dispatch({
+    type: "OPEN_RESPONSE_WINDOW",
+    playerId: AI,
+    timing: Timing.summon,
+    resumeTiming: Timing.mainOpen,
+    windowType: ResponseWindow.optional,
+    triggerEventId: "summon-1"
+  });
+  const summonCloseEvents = summonEngine.dispatch({
+    type: "CLOSE_RESPONSE_WINDOW",
+    playerId: AI,
+    reason: "declined"
+  });
+  const summonNext = summonEngine.getState();
+
+  assert.equal(summonNext.machine.actionWindow?.playerId, PLAYER);
+  assert.equal(summonNext.machine.actionWindow?.window, ActionWindow.main);
+  assert.ok(summonCloseEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === PLAYER &&
+    event.window === ActionWindow.main &&
+    event.reason === "response-closed"
+  ));
+});
+
+test("response commands reject closing a live chain or resolving an empty one without mutation", () => {
+  const state = makeState({
+    cards: [card("trap-1", { type: "trap", trigger: "attackNegate" })],
+    player: { spellTrapZone: ["trap-1"] },
+    turn: { phase: Phase.battle },
+    machine: { phase: Phase.battle, timing: Timing.attackDeclaration }
+  });
+  const engine = new GameEngine(state);
+  engine.dispatch({
+    type: "OPEN_RESPONSE_WINDOW",
+    playerId: PLAYER,
+    timing: Timing.attackDeclaration,
+    resumeTiming: Timing.battleOpen,
+    windowType: ResponseWindow.optional,
+    triggerEventId: "attack-1"
+  });
+  const emptyChainState = engine.getState();
+
+  assert.throws(
+    () => engine.dispatch({ type: "RESOLVE_CHAIN", playerId: PLAYER }),
+    /Cannot resolve an empty chain/
+  );
+  assert.deepEqual(engine.getState(), emptyChainState);
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "trap-1",
+    effectId: "attackNegate",
+    targetEffectId: "attack-1"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "trap-1",
+    targetEffectId: "attack-1"
+  });
+  const liveChainState = engine.getState();
+
+  assert.throws(
+    () => engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: PLAYER, reason: "invalid-close" }),
+    /Cannot close a response window while a chain is unresolved/
+  );
+  assert.deepEqual(engine.getState(), liveChainState);
 });
 
 test("response windows preserve trigger context and cannot be nested", () => {
@@ -5435,6 +5750,7 @@ test("an open response window requires traps to join the chain before activation
     timing: Timing.damageStep,
     triggerEventId: "attack-42"
   };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-42");
   const engine = new GameEngine(state);
 
   assert.throws(
@@ -5599,6 +5915,40 @@ test("lists main-phase legal actions without mutating the source state", () => {
   assert.deepEqual(state.events, []);
 });
 
+test("AI action windows expose legal actions only to their owner", () => {
+  const state = makeState({
+    cards: [card("ai-summon-1", {
+      ownerId: AI,
+      type: "monster",
+      templateId: "ember-drake",
+      atk: 1200,
+      def: 900
+    })],
+    ai: { hand: ["ai-summon-1"] },
+    turn: { playerId: AI, phase: Phase.main },
+    machine: {
+      phase: Phase.main,
+      timing: Timing.mainOpen,
+      actionWindow: {
+        playerId: AI,
+        window: ActionWindow.ai,
+        windowId: "ai:main-test",
+        reason: "phase-entered:main",
+        openedAt: 1,
+        deadline: 0
+      }
+    }
+  });
+
+  const aiLegal = getLegalActions(state, AI);
+  const playerLegal = getLegalActions(state, PLAYER);
+
+  assert.equal(aiLegal.can.summon, true);
+  assert.deepEqual(aiLegal.actions.summon.map((action) => action.cardId), ["ai-summon-1"]);
+  assert.equal(playerLegal.hasAny, false);
+  assert.equal(playerLegal.can.endTurn, false);
+});
+
 test("lists battle-phase attacks and excludes illegal direct attacks while monsters remain", () => {
   const state = makeState({
     cards: [
@@ -5676,7 +6026,8 @@ test("does not list normal actions while a response window is open", () => {
         triggerEventId: 99,
         prompt: "attack",
         context: {}
-      }
+      },
+      actionWindow: responseActionWindow(PLAYER, "attack")
     }
   });
 
@@ -5875,6 +6226,101 @@ test("assertValidGameState catches unresolved attack and chain state machine dri
       ]
     })),
     /Pending attack target must be a monster/
+  );
+});
+
+test("assertValidGameState rejects action windows that contradict phase or control ownership", () => {
+  const invalidWindows = [
+    {
+      state: makeState({
+        machine: {
+          actionWindow: {
+            playerId: PLAYER,
+            window: ActionWindow.battle,
+            windowId: "battle:bad-phase",
+            reason: "bad",
+            openedAt: 1,
+            deadline: 0
+          }
+        }
+      }),
+      reason: /battle action window requires battle phase/
+    },
+    {
+      state: makeState({
+        machine: {
+          actionWindow: {
+            playerId: AI,
+            window: ActionWindow.main,
+            windowId: "main:bad-owner",
+            reason: "bad",
+            openedAt: 1,
+            deadline: 0
+          }
+        }
+      }),
+      reason: /main action window belongs to the current turn player/
+    },
+    {
+      state: makeState({
+        machine: {
+          actionWindow: {
+            playerId: PLAYER,
+            window: ActionWindow.response,
+            windowId: "response:missing",
+            reason: "bad",
+            openedAt: 1,
+            deadline: 0
+          }
+        }
+      }),
+      reason: /response action window requires an open response window/
+    }
+  ];
+
+  for (const entry of invalidWindows) {
+    assert.throws(() => assertValidGameState(entry.state), entry.reason);
+  }
+});
+
+test("assertValidGameState rejects response and pending-attack states without continuation windows", () => {
+  assert.throws(
+    () => assertValidGameState(makeState({
+      machine: {
+        responseWindow: {
+          playerId: AI,
+          type: ResponseWindow.optional,
+          timing: Timing.summon,
+          resumeTiming: Timing.mainOpen,
+          triggerEventId: "summon-1"
+        }
+      }
+    })),
+    /Response window requires a response action window/
+  );
+
+  assert.throws(
+    () => assertValidGameState(makeState({
+      cards: [
+        card("attacker-1", { type: "monster" }),
+        card("target-1", { ownerId: AI, type: "monster" })
+      ],
+      player: { monsterZone: ["attacker-1"] },
+      ai: { monsterZone: ["target-1"] },
+      turn: { phase: Phase.battle },
+      machine: {
+        phase: Phase.battle,
+        timing: Timing.attackDeclaration,
+        pendingAttack: {
+          playerId: PLAYER,
+          rivalId: AI,
+          attackerCardId: "attacker-1",
+          targetCardId: "target-1",
+          declarationEventId: 7
+        }
+      }
+    })),
+    /Pending attack requires a response, chain, or resolution action window/
   );
 });
 

@@ -232,6 +232,9 @@ test("app uses extracted turn state machine", () => {
   assert.match(app, /Object\.assign\(state, turnStartPatch\(owner\)\)/);
   assert.match(app, /Object\.assign\(state, drawToMainPatch\(\)\)/);
   assert.match(app, /Object\.assign\(state, mainToBattlePatch\(\)\)/);
+  assert.doesNotMatch(app, /Object\.assign\(state, turnStartPatch\(owner\)\);\s*setActionWindow/);
+  assert.doesNotMatch(app, /Object\.assign\(state, drawToMainPatch\(\)\);\s*setActionWindow/);
+  assert.doesNotMatch(app, /Object\.assign\(state, mainToBattlePatch\(\)\);\s*setActionWindow/);
   assert.doesNotMatch(app, /^\s*state\.actionWindow\s*=(?!=)/m);
   assert.doesNotMatch(app, /^\s*state\.actionWindowId\s*=(?!=)/m);
   assert.doesNotMatch(app, /^\s*state\.actionDeadline\s*=(?!=)/m);
@@ -713,6 +716,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"fusion-result-choice": runFusionResultChoiceSmoke/);
   assert.match(smoke, /"player-counter-chain": runPlayerCounterChainSmoke/);
   assert.match(smoke, /"mirror-destroy-no-damage-basic": runMirrorDestroyNoDamageBasicSmoke/);
+  assert.match(smoke, /"battle-flow-regression-basic": runBattleFlowRegressionBasicSmoke/);
+  assert.match(smoke, /"response-window-resume-basic": runResponseWindowResumeBasicSmoke/);
   assert.match(smoke, /"triple-counter-chain": runTripleCounterChainSmoke/);
   assert.match(smoke, /"chain-resolution-review": runChainResolutionReviewSmoke/);
   assert.match(smoke, /chainStatus\?\.textContent\.includes\("将加入 CL3"\)/);
@@ -766,6 +771,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-counter-chain": runAiCounterChainSmoke/);
   assert.match(smoke, /"turn-handoff-basic": runTurnHandoffBasicSmoke/);
   assert.match(smoke, /"phase-progression-basic": runPhaseProgressionBasicSmoke/);
+  assert.match(smoke, /"phase-window-ownership-basic": runPhaseWindowOwnershipBasicSmoke/);
   assert.match(smoke, /"mode-auto-end": runModeAutoEndSmoke/);
   assert.match(smoke, /"ai-mode-event": runAiModeEventSmoke/);
   assert.match(smoke, /"invalid-spell-auto-end": runInvalidSpellAutoEndSmoke/);
@@ -881,10 +887,12 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "player-counter-chain"\)/);
+  assert.match(smoke, /async function runResponseWindowResumeBasicSmoke\(ctx\)[\s\S]*?setSmokeStatus\("passed", smokeName\);\n}/);
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
   assert.match(smoke, /const smokeName = "turn-handoff-basic";[\s\S]*"TURN_ENDED:ai"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /const smokeName = "phase-progression-basic";[\s\S]*event\.from === "main"[\s\S]*event\.to === "battle"[\s\S]*event\.type === "TURN_ENDED"[\s\S]*event\.fromPhase === "battle"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "phase-window-ownership-basic";[\s\S]*event\.reason === "phase-entered:main"[\s\S]*event\.reason === "phase-entered:battle"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
@@ -1153,7 +1161,8 @@ test("app uses extracted spell metadata", () => {
   assert.match(app, /canSummon: \(_card, handIndex, options\) => explainSummonMonsterFromUiState\(/);
   assert.match(app, /canSetTrap: \(_card, handIndex, trapIndex\) =>/);
   assert.match(app, /canAttackMonster: \(_card, fieldIndex\) =>/);
-  assert.match(app, /setActionWindow\(ACTION_WINDOWS\.ai, \{ playerId: "ai", reason: "ai battle" \}\);\s+dispatchChangePhaseFromUiState\(state, "ai", PHASES\.battle\);\s+await aiAttack\(\);/);
+  assert.match(app, /dispatchChangePhaseFromUiState\(state, "ai", PHASES\.battle\);\s+await aiAttack\(\);/);
+  assert.doesNotMatch(app, /setActionWindow\(ACTION_WINDOWS\.ai, \{ playerId: "ai", reason: "ai battle" \}\)/);
   assert.match(ai, /scoreSpellForAi\(card\.effect/);
   assert.doesNotMatch(app, /validateSpellCondition/);
   assert.doesNotMatch(ai, /validateSpellCondition/);

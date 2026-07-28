@@ -743,6 +743,7 @@ async function runAiMultiAttackReentryBasicSmoke(ctx) {
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "protagonistTrioOmega");
   const attackEventsBefore = countGameEvents(ctx.state, "ATTACK_DECLARED");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
 
   await finishPlayerTurn(ctx);
   await waitForSmoke(
@@ -761,6 +762,31 @@ async function runAiMultiAttackReentryBasicSmoke(ctx) {
   }
   if (!attacks.some((event) => eventReferencesTemplate(event, "trio-sun-judicator"))) {
     throw new Error(`${smokeName}: expected the sun god to make the first pressure attack.`);
+  }
+  const newEvents = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const firstAttackIndex = newEvents.findIndex((event) =>
+    event.type === "ATTACK_DECLARED" && event.playerId === "ai"
+  );
+  const secondAttackIndex = newEvents.findIndex((event, index) =>
+    index > firstAttackIndex && event.type === "ATTACK_DECLARED" && event.playerId === "ai"
+  );
+  const firstResolutionIndex = newEvents.findIndex((event, index) =>
+    index > firstAttackIndex && index < secondAttackIndex && event.type === "BATTLE_RESOLVED"
+  );
+  const reentryEvents = newEvents.slice(firstResolutionIndex + 1, secondAttackIndex);
+  if (firstAttackIndex < 0 || firstResolutionIndex < 0 || secondAttackIndex < 0 ||
+      !reentryEvents.some((event) =>
+        event.type === "ACTION_WINDOW_OPENED" &&
+        event.playerId === "ai" &&
+        event.window === "ai" &&
+        event.reason === "battle-resolved"
+      )) {
+    throw new Error(`${smokeName}: engine did not reopen the AI battle window between attacks. ${smokeDebug(ctx)}`);
+  }
+  if (reentryEvents.some((event) =>
+    event.type === "COMMAND_DISPATCHED" && event.commandType === "OPEN_ACTION_WINDOW"
+  )) {
+    throw new Error(`${smokeName}: UI must not dispatch a second action-window command after battle resolution.`);
   }
   setSmokeStatus("passed", smokeName);
 }
@@ -4634,6 +4660,14 @@ async function runChainTrapChoiceSmoke(ctx) {
   }
   await finishPlayerTurn(ctx);
   await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "连锁测试多陷阱响应窗口", 24000);
+  const aiAttackerIds = ctx.state.ai.field.filter(Boolean).map((card) => card.id);
+  if (aiAttackerIds.length !== 1 || aiAttackerIds[0] !== "sky-raider") {
+    throw new Error(`连锁选择 smoke 必须由唯一的天岚突袭者触发，实际 ${aiAttackerIds.join(",") || "空场"}`);
+  }
+  if (!ctx.state.player.traps.some((card) => card?.id === "weakening-web") ||
+      countGameEvents(ctx.state, "CHAIN_LINK_ADDED") !== 0) {
+    throw new Error("检查三陷阱响应窗口前不应已有陷阱被发动或离场");
+  }
   if (countGameEvents(ctx.state, "TRAP_SET") < 3 || countGameEvents(ctx.state, "CARD_MOVED") < 3) {
     throw new Error("Multi-trap setup must record every set trap through engine events");
   }
@@ -4885,8 +4919,7 @@ async function runPlayerCounterChainSmoke(ctx) {
   setSmokeStatus("passed", "player-counter-chain");
 }
 
-async function runMirrorDestroyNoDamageBasicSmoke(ctx) {
-  const smokeName = "mirror-destroy-no-damage-basic";
+async function runMirrorDestroyNoDamageBasicSmoke(ctx, smokeName = "mirror-destroy-no-damage-basic") {
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "playerCounterChain");
   const attacker = ctx.state.player.field.find((card) => card?.id === "star-lancer");
@@ -4946,10 +4979,64 @@ async function runMirrorDestroyNoDamageBasicSmoke(ctx) {
   )) {
     throw new Error(`${smokeName}: canceled attack must not emit BATTLE_RESOLVED.`);
   }
-  if (!(ctx.state.gameEvents || []).some((event) =>
+  const cancelEvent = (ctx.state.gameEvents || []).find((event) =>
     event.type === "ATTACK_CANCELED" && String(event.declarationEventId) === String(declaration.id)
-  )) {
+  );
+  if (!cancelEvent) {
     throw new Error(`${smokeName}: mirror destruction must emit ATTACK_CANCELED.`);
+  }
+  const terminalEvents = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > Number(cancelEvent.id));
+  const restoredWindows = terminalEvents.filter((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === "battle" &&
+    event.reason === "chain-canceled-attack"
+  );
+  if (restoredWindows.length !== 1 || ctx.state.actionWindow !== "battle") {
+    throw new Error(`${smokeName}: engine must restore exactly one player battle window after chain cancellation. ${smokeDebug(ctx)}`);
+  }
+  if (terminalEvents.some((event) =>
+    event.type === "COMMAND_DISPATCHED" && event.commandType === "OPEN_ACTION_WINDOW"
+  )) {
+    throw new Error(`${smokeName}: UI must not dispatch a duplicate action-window command after chain cancellation.`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runBattleFlowRegressionBasicSmoke(ctx) {
+  await runMirrorDestroyNoDamageBasicSmoke(ctx, "battle-flow-regression-basic");
+}
+
+async function runResponseWindowResumeBasicSmoke(ctx) {
+  const smokeName = "response-window-resume-basic";
+  setSmokeStatus("running", smokeName);
+  await runPlayerCounterChainSmoke(ctx);
+
+  const events = ctx.state.gameEvents || [];
+  const chainResolvedIndex = events.findIndex((event) => event.type === "CHAIN_RESOLVED");
+  const continuationIndex = events.findIndex((event, index) =>
+    index > chainResolvedIndex &&
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === "resolution" &&
+    event.reason === "chain-resolved"
+  );
+  const battleResolvedIndex = events.findIndex((event, index) =>
+    index > continuationIndex && event.type === "BATTLE_RESOLVED"
+  );
+  const battleWindowIndex = events.findIndex((event, index) =>
+    index > battleResolvedIndex &&
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === "battle" &&
+    event.reason === "battle-resolved"
+  );
+  if (!(chainResolvedIndex >= 0 && continuationIndex > chainResolvedIndex &&
+      battleResolvedIndex > continuationIndex && battleWindowIndex > battleResolvedIndex)) {
+    throw new Error(`${smokeName}: response continuation event order is incomplete. ${smokeDebug(ctx)}`);
+  }
+  if (ctx.state.ruleCheckIssue) {
+    throw new Error(`${smokeName}: rule engine reported ${ctx.state.ruleCheckIssue}`);
   }
   setSmokeStatus("passed", smokeName);
 }
@@ -5166,6 +5253,59 @@ async function runPhaseProgressionBasicSmoke(ctx) {
   const events = (ctx.state.gameEvents || []).slice(eventStart);
   if (events.some((event) => event.type === "PHASE_CHANGED" && event.to === "end")) {
     throw new Error(`${smokeName}: end phase must not be entered through PHASE_CHANGED. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runPhaseWindowOwnershipBasicSmoke(ctx) {
+  const smokeName = "phase-window-ownership-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "direct");
+
+  const openingEvents = ctx.state.gameEvents || [];
+  const mainPhaseIndex = openingEvents.findIndex((event) =>
+    event.type === "PHASE_CHANGED" &&
+    event.playerId === "player" &&
+    event.from === "draw" &&
+    event.to === "main"
+  );
+  const mainWindowIndex = openingEvents.findIndex((event, index) =>
+    index > mainPhaseIndex &&
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === "main" &&
+    event.reason === "phase-entered:main"
+  );
+  if (mainPhaseIndex < 0 || mainWindowIndex !== mainPhaseIndex + 1 || ctx.state.actionWindow !== "main") {
+    throw new Error(`${smokeName}: draw-to-main transition left an engine action-window gap. ${smokeDebug(ctx)}`);
+  }
+
+  const eventStart = openingEvents.length;
+  clickSmokeElement(ctx.els.skipAttackBtn, `${smokeName}: enter battle phase`);
+  await waitForSmoke(
+    () => ctx.state.phase === "battle" && ctx.state.actionWindow === "battle",
+    `${smokeName}: engine opens battle window with phase transition`
+  );
+
+  const battleEvents = (ctx.state.gameEvents || []).slice(eventStart);
+  const battlePhaseIndex = battleEvents.findIndex((event) =>
+    event.type === "PHASE_CHANGED" &&
+    event.playerId === "player" &&
+    event.from === "main" &&
+    event.to === "battle"
+  );
+  const battleWindowIndex = battleEvents.findIndex((event, index) =>
+    index > battlePhaseIndex &&
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === "battle" &&
+    event.reason === "phase-entered:battle"
+  );
+  if (battlePhaseIndex < 0 || battleWindowIndex !== battlePhaseIndex + 1) {
+    throw new Error(`${smokeName}: main-to-battle transition did not atomically open its action window. ${smokeDebug(ctx)}`);
+  }
+  if (ctx.state.ruleCheckIssue) {
+    throw new Error(`${smokeName}: rule engine reported ${ctx.state.ruleCheckIssue}`);
   }
   setSmokeStatus("passed", smokeName);
 }
@@ -6035,10 +6175,13 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-counter-chain": runAiCounterChainSmoke,
     "player-counter-chain": runPlayerCounterChainSmoke,
     "mirror-destroy-no-damage-basic": runMirrorDestroyNoDamageBasicSmoke,
+    "battle-flow-regression-basic": runBattleFlowRegressionBasicSmoke,
+    "response-window-resume-basic": runResponseWindowResumeBasicSmoke,
     "triple-counter-chain": runTripleCounterChainSmoke,
     "chain-resolution-review": runChainResolutionReviewSmoke,
     "turn-handoff-basic": runTurnHandoffBasicSmoke,
     "phase-progression-basic": runPhaseProgressionBasicSmoke,
+    "phase-window-ownership-basic": runPhaseWindowOwnershipBasicSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,

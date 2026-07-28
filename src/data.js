@@ -608,11 +608,12 @@ export const scenarioSetups = {
   },
   chain: {
     label: "连锁测试",
-    text: "起手包含弱化力场、反击阵列和怪兽，AI 场上有攻击怪兽，方便验证连续陷阱。",
-    goal: "盖放两张陷阱并召唤怪兽，让 AI 攻击时连续发动陷阱。",
+    text: "起手包含三张攻击响应陷阱和怪兽，AI 场上只有一只攻击怪兽，方便稳定验证多陷阱选择。",
+    goal: "盖放三张陷阱并召唤怪兽，让 AI 攻击时从同一响应窗口选择一张发动。",
     playerHand: ["weakening-web", "counter-array", "void-lock", "iron-guardian", "gale-mage", "storm-shift", "dusk-alchemist"],
-    aiHand: ["war-chant", "twin-summon", "star-lancer", "solar-knight"],
-    aiField: ["sky-raider"]
+    aiHand: [],
+    aiField: ["sky-raider"],
+    aiDeck: []
   },
   counterChain: {
     label: "AI 反制连锁",

@@ -38,7 +38,6 @@ import {
   dispatchRequestAutoEndFromUiState,
   dispatchResolveBattleFromUiState,
   dispatchResolveChainFromUiState,
-  dispatchResumeBattleActionWindowFromUiState,
   dispatchResolveElementCombosFromUiState,
   dispatchResolveTurnDrawFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
@@ -307,28 +306,6 @@ test("dispatches tribute summon through engine and fixed UI slots", () => {
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === vanguard.uid));
 });
 
-test("restores player and AI battle action windows through dispatch after resolution", () => {
-  const playerState = appState({ phase: PHASES.battle, actionWindow: null });
-  const playerEvents = dispatchResumeBattleActionWindowFromUiState(playerState, "player", {
-    reason: "attack-resolved",
-    now: 3000
-  });
-
-  assert.equal(playerState.actionWindow, ACTION_WINDOWS.battle);
-  assert.equal(playerState.actionWindowReason, "attack-resolved");
-  assert.ok(playerEvents.some((event) => event.type === "ACTION_WINDOW_OPENED" && event.window === ACTION_WINDOWS.battle));
-
-  const aiState = appState({ turn: "ai", phase: PHASES.battle, actionWindow: null });
-  const aiEvents = dispatchResumeBattleActionWindowFromUiState(aiState, "ai", {
-    reason: "attack-resolved",
-    now: 4000
-  });
-
-  assert.equal(aiState.actionWindow, ACTION_WINDOWS.ai);
-  assert.equal(aiState.actionWindowReason, "attack-resolved");
-  assert.ok(aiEvents.some((event) => event.type === "ACTION_WINDOW_OPENED" && event.window === ACTION_WINDOWS.ai));
-});
-
 test("tribute departure expires target-bound attack resets in projected UI state", () => {
   const material = uiMonster("bound-tribute-material", "spark-runner");
   const vanguard = uiMonster("bound-tribute-vanguard", "solar-vanguard");
@@ -552,8 +529,16 @@ test("dispatches turn draw resolution and advances surviving turns to main", () 
   assert.deepEqual(state.player.deck, []);
   assert.equal(state.phase, PHASES.main);
   assert.equal(state.timing, "mainOpen");
+  assert.equal(state.actionWindow, ACTION_WINDOWS.main);
+  assert.equal(buildEngineStateFromUiState(state).machine.actionWindow.playerId, "player");
   assert.ok(events.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === true));
   assert.ok(events.some((event) => event.type === "PHASE_CHANGED" && event.to === PHASES.main));
+  assert.ok(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "player" &&
+    event.window === ACTION_WINDOWS.main &&
+    event.reason === "phase-entered:main"
+  ));
 
   const fatal = appState({ phase: PHASES.draw, turn: "player" });
   fatal.player.lp = 300;
@@ -848,6 +833,8 @@ test("dispatches battle resolution and applies direct damage to UI state", () =>
   assert.equal(attacker.used, true);
   assert.equal(state.ai.shield, 0);
   assert.equal(state.ai.lp, 3000);
+  assert.equal(state.actionWindow, ACTION_WINDOWS.battle);
+  assert.equal(state.actionWindowReason, "battle-resolved");
   assert.ok(events.some((event) => event.type === "ATTACK_DECLARED" && event.direct === true));
   assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === attacker.uid));
   assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 1000));
@@ -917,6 +904,8 @@ test("pending attack blocks UI auto-end until response is declined and attack is
   });
   assert.equal(buildEngineStateFromUiState(state).machine.pendingAttack, null);
   assert.equal(attacker.used, true);
+  assert.equal(state.actionWindow, ACTION_WINDOWS.battle);
+  assert.equal(state.actionWindowReason, "attack-canceled");
   assert.ok(cancelEvents.some((event) => event.type === "ATTACK_CANCELED"));
 });
 
@@ -1051,6 +1040,8 @@ test("redirect trap response updates pending attack before UI battle resolution"
   assert.equal(state.player.field[1], guard);
   assert.equal(state.player.shield, 550);
   assert.equal(state.ai.lp, 3850);
+  assert.equal(state.actionWindow, ACTION_WINDOWS.ai);
+  assert.equal(state.actionWindowReason, "battle-resolved");
   assert.ok(!battleEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "player" && event.requested === 550));
 });
 
@@ -1080,7 +1071,13 @@ test("queues opposing trap responses before resolving the shared chain in revers
   assert.ok(playerEvents.some((event) => event.type === "CHAIN_LINK_COMMITTED" && event.cardId === playerTrap.uid));
   assert.equal(buildEngineStateFromUiState(state).machine.chain.length, 1);
 
-  dispatchPassResponsePriorityFromUiState(state, "player", "ai");
+  const priorityEvents = dispatchPassResponsePriorityFromUiState(state, "player", "ai");
+  const passedMachine = buildEngineStateFromUiState(state).machine;
+  assert.equal(passedMachine.responseWindow.playerId, "ai");
+  assert.equal(passedMachine.actionWindow.playerId, "ai");
+  assert.ok(priorityEvents.some((event) =>
+    event.type === "RESPONSE_PRIORITY_PASSED" && event.fromPlayerId === "player" && event.toPlayerId === "ai"
+  ));
   dispatchQueueTrapResponseFromUiState(state, "ai", "player", 0, {
     targetEffectId: playerTrap.uid
   });
@@ -1110,7 +1107,15 @@ test("declining an attack response closes the restored engine response window", 
   const events = dispatchCloseResponseWindowFromUiState(state, "player", "declined");
 
   assert.ok(events.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "declined"));
-  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
+  const machine = buildEngineStateFromUiState(state).machine;
+  assert.equal(machine.responseWindow, null);
+  assert.equal(machine.actionWindow.playerId, "ai");
+  assert.equal(machine.actionWindow.window, ACTION_WINDOWS.resolution);
+  assert.ok(events.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "ai" &&
+    event.window === ACTION_WINDOWS.resolution
+  ));
 });
 
 test("resolves a direct-attack trap through a dedicated damage-step response window", () => {
@@ -1172,8 +1177,17 @@ test("resolves a summon trap through a summon timing response window", () => {
   assert.ok(responseEvents.some((event) => event.type === "CHAIN_LINK_ADDED" && event.cardId === flare.uid));
   assert.ok(responseEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 400));
   assert.ok(responseEvents.some((event) => event.type === "RESPONSE_WINDOW_CLOSED"));
-  assert.equal(buildEngineStateFromUiState(state).machine.responseWindow, null);
-  assert.equal(buildEngineStateFromUiState(state).machine.timing, "mainOpen");
+  const machine = buildEngineStateFromUiState(state).machine;
+  assert.equal(machine.responseWindow, null);
+  assert.equal(machine.timing, "mainOpen");
+  assert.equal(machine.actionWindow.playerId, "ai");
+  assert.equal(machine.actionWindow.window, ACTION_WINDOWS.ai);
+  assert.ok(responseEvents.some((event) =>
+    event.type === "ACTION_WINDOW_OPENED" &&
+    event.playerId === "ai" &&
+    event.window === ACTION_WINDOWS.ai &&
+    event.reason === "chain-resolved"
+  ));
 });
 
 test("dispatches battle resolution and applies target destruction to fixed UI zones", () => {
