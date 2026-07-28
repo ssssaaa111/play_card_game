@@ -11,6 +11,7 @@ import {
 import { actionsForPhase, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import {
   aiTrapSetLimit,
+  collectAiAttackBlockers,
   chooseAiAttackAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
@@ -152,6 +153,7 @@ import {
   pauseResumeStep,
   playerActionWindowDecision,
   shouldRunPlayerIdleCountdownForState,
+  turnStartAttackLockReleases,
   turnStartPatch
 } from './turn-state.js';
 import {
@@ -3887,8 +3889,9 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
 }
 
 function beginTurn(owner) {
+  let turnEvents = [];
   try {
-    dispatchStartTurnFromUiState(state, owner);
+    turnEvents = dispatchStartTurnFromUiState(state, owner);
   } catch (error) {
     cue(error.message || "回合开始失败。");
     console.error(error);
@@ -3900,6 +3903,21 @@ function beginTurn(owner) {
   clearPlayerIdleTimers();
   playSound("turn");
   addLog(`${owner === "player" ? "你的" : "AI 的"}回合开始。`);
+  const releasedCards = turnStartAttackLockReleases(turnEvents)
+    .map((release) => ({ ...release, card: findRuntimeCard(release.cardId)?.card || null }))
+    .filter((release) => release.card);
+  if (releasedCards.length > 0) {
+    const cards = releasedCards.map((release) => release.card);
+    const convergenceReleased = releasedCards.every((release) => release.reason === "trioConvergence");
+    addLog(
+      `${cards.map((card) => `「${card.name}」`).join("、")}的${convergenceReleased ? "三曜共降" : "临时"}攻击限制已解除，本回合可以攻击。`,
+      cardLogMeta(cards[0], {
+        actor: owner,
+        type: "status",
+        relatedCardIds: relatedCardIds(...cards.slice(1))
+      })
+    );
+  }
   playVoice(owner, "turn", owner === "player" ? "轮到你了。抽卡。" : "对手回合。");
   if (owner === "player") {
     window.setTimeout(() => {
@@ -4125,11 +4143,36 @@ async function aiAttack() {
         explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex).ok
     });
     if (action.type === "none") {
-      const blocked = state.ai.field
-        .map((card, fieldIndex) => ({ card, readiness: explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex) }))
-        .filter(({ card }) => card && !card.used && card.mode !== "defense");
+      const blocked = collectAiAttackBlockers({
+        field: state.ai.field,
+        skippedAttackers,
+        explainReadiness: (_card, fieldIndex) => explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex)
+      });
       if (blocked.length > 0) {
-        addLog(`对手没有可执行的攻击：${blocked.map(({ card, readiness }) => `${card.name}（${readiness.reason}）`).join("、")}。`);
+        const convergenceLocked = blocked.filter(({ card, readiness }) =>
+          card.attackLockReason === "trioConvergence" || readiness.engineReason === "trioConvergence"
+        );
+        if (convergenceLocked.length > 0) {
+          const cards = convergenceLocked.map(({ card }) => card);
+          addLog(
+            `${cards.map((card) => `「${card.name}」`).join("、")}受三曜共降限制，本回合不能攻击；会在 AI 的下一个回合开始时解除。`,
+            cardLogMeta(cards[0], {
+              actor: "ai",
+              type: "status",
+              relatedCardIds: relatedCardIds(...cards.slice(1))
+            })
+          );
+        } else {
+          const cards = blocked.map(({ card }) => card);
+          addLog(
+            `对手没有可执行的攻击：${blocked.map(({ card, readiness }) => `${card.name}（${readiness.reason}）`).join("、")}。`,
+            cardLogMeta(cards[0], {
+              actor: "ai",
+              type: "status",
+              relatedCardIds: relatedCardIds(...cards.slice(1))
+            })
+          );
+        }
       }
       return;
     }
@@ -4137,7 +4180,7 @@ async function aiAttack() {
     if (state.gameOver || !state.ai.field[attackerIndex]) return;
     if (action.type === "skipAttack") {
       skippedAttackers.add(action.cardUid);
-      addLog(`对手保留 ${card.name} 的攻击机会，避免不利战斗。`);
+      addLog(`对手保留 ${card.name} 的攻击机会，避免不利战斗。`, cardLogMeta(card, { actor: "ai", type: "battle" }));
       continue;
     }
     cue(`对手用 ${card.name} 发起攻击。`);

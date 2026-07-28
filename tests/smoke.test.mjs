@@ -825,6 +825,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /one opening body should be destroyed while three tributes remain/);
   assert.match(smoke, /chain protection should preserve sun while the player survives the first god attack/);
   assert.match(smoke, /the public log should explain why solar snare failed/);
+  assert.match(smoke, /the public log should explain why only sun attacks this turn/);
   assert.match(smoke, /normal summon should not be described as self-triggered special summon/);
   assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
   assert.match(smoke, /targetChangedEvents/);

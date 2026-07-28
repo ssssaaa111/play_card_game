@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   aiTrapSetLimit,
+  collectAiAttackBlockers,
   chooseAiAttackAction,
   chooseAiAttackTarget,
   chooseAiTrapResponseAction,
@@ -478,6 +479,54 @@ test("AI attack planner ignores a stronger attacker rejected by engine legality"
   assert.equal(action.cardUid, "ready");
   assert.equal(action.attackerIndex, 1);
   assert.equal(action.targetIndex, -1);
+});
+
+test("scripted pressure AI uses every unlocked trio attacker in pressure order", () => {
+  const field = [
+    monster({ uid: "sun", id: "trio-sun-judicator", atk: 3000 }),
+    monster({ uid: "moon", id: "trio-moon-warden", atk: 2100 }),
+    monster({ uid: "star", id: "trio-star-herald", atk: 2400 })
+  ];
+  const attackerOrder = [];
+
+  for (let step = 0; step < field.length; step += 1) {
+    const action = chooseAiAttackAction({
+      field,
+      rivalField: [],
+      rivalLp: 9000,
+      aiStyle: "scriptedPressure",
+      canAttackMonster: (card) => !card.used && !card.attackLockReason
+    });
+    assert.equal(action.type, "attack");
+    attackerOrder.push(action.cardUid);
+    action.card.used = true;
+  }
+
+  assert.deepEqual(attackerOrder, ["sun", "star", "moon"]);
+  assert.equal(chooseAiAttackAction({
+    field,
+    rivalField: [],
+    rivalLp: 9000,
+    aiStyle: "scriptedPressure",
+    canAttackMonster: (card) => !card.used && !card.attackLockReason
+  }).type, "none");
+});
+
+test("AI attack blockers keep convergence locks visible even when summons are marked used", () => {
+  const blockers = collectAiAttackBlockers({
+    field: [
+      monster({ uid: "sun", id: "trio-sun-judicator", used: true }),
+      monster({ uid: "moon", id: "trio-moon-warden", used: true, attackLockReason: "trioConvergence" }),
+      monster({ uid: "star", id: "trio-star-herald", used: true, attackLockReason: "trioConvergence" }),
+      monster({ uid: "held", used: false })
+    ],
+    skippedAttackers: new Set(["held"]),
+    explainReadiness: (card) => card.used
+      ? { ok: false, reason: "already used", engineReason: "Monster already attacked" }
+      : { ok: true, reason: "", engineReason: "" }
+  });
+
+  assert.deepEqual(blockers.map(({ card }) => card.uid), ["moon", "star"]);
 });
 
 test("AI non-spell planners fail closed without engine legality", () => {

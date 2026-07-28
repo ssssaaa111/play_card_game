@@ -16,6 +16,7 @@ import {
   pauseResumeStep,
   playerActionWindowDecision,
   shouldRunPlayerIdleCountdownForState,
+  turnStartAttackLockReleases,
   turnStartPatch
 } from "../src/turn-state.js";
 
@@ -125,4 +126,37 @@ test("builds transition patches for turn flow", () => {
   assert.deepEqual(mainToBattlePatch(), {
     pendingTarget: null
   });
+});
+
+test("collects unique attack locks released at turn start", () => {
+  assert.deepEqual(turnStartAttackLockReleases([
+    { type: "TURN_STARTED", playerId: "ai" },
+    {
+      type: "MONSTER_TURN_RESET",
+      cardId: "moon-runtime",
+      beforeAttackLockReason: "trioConvergence",
+      afterAttackLockReason: null
+    },
+    {
+      type: "MONSTER_TURN_RESET",
+      cardId: "star-runtime",
+      beforeAttackLockReason: "trioConvergence",
+      afterAttackLockReason: null
+    },
+    {
+      type: "MONSTER_TURN_RESET",
+      cardId: "moon-runtime",
+      beforeAttackLockReason: "trioConvergence",
+      afterAttackLockReason: null
+    },
+    {
+      type: "MONSTER_TURN_RESET",
+      cardId: "still-locked",
+      beforeAttackLockReason: "otherLock",
+      afterAttackLockReason: "otherLock"
+    }
+  ]), [
+    { cardId: "moon-runtime", reason: "trioConvergence" },
+    { cardId: "star-runtime", reason: "trioConvergence" }
+  ]);
 });

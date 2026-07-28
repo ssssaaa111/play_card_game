@@ -3476,6 +3476,20 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     `full duel: the public log should explain why solar snare failed. ${smokeDebug(ctx)}`,
     9000
   );
+  const convergenceLockLog = (ctx.state.log || []).find((entry) => {
+    const message = logEntryMessage(entry);
+    return message.includes("月蚀守密者") &&
+      message.includes("星坠宣告者") &&
+      message.includes("三曜共降限制") &&
+      message.includes("下一个回合开始时解除");
+  });
+  if (!convergenceLockLog ||
+      convergenceLockLog.cardId !== "trio-moon-warden" ||
+      !convergenceLockLog.relatedCardIds?.includes("trio-star-herald") ||
+      !logCardLink(ctx.els, "trio-moon-warden") ||
+      !logCardLink(ctx.els, "trio-star-herald")) {
+    throw new Error(`trio-omega-full-duel: the public log should explain why only sun attacks this turn and keep both locked gods inspectable. ${smokeDebug(ctx)}`);
+  }
   const remainingTrio = ctx.state.ai.field.filter((card) =>
     card?.id === "trio-sun-judicator" || card?.id === "trio-moon-warden" || card?.id === "trio-star-herald"
   );

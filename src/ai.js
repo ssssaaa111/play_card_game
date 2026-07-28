@@ -318,3 +318,26 @@ export function chooseAiAttackAction({
     target: targetIndex >= 0 ? rivalField[targetIndex] : null
   };
 }
+
+export function collectAiAttackBlockers({
+  field = [],
+  skippedAttackers = new Set(),
+  explainReadiness = null
+} = {}) {
+  const skipped = skippedAttackers instanceof Set ? skippedAttackers : new Set(skippedAttackers || []);
+  return field
+    .map((card, fieldIndex) => ({
+      card,
+      fieldIndex,
+      readiness: typeof explainReadiness === "function"
+        ? explainReadiness(card, fieldIndex)
+        : { ok: false, reason: "", engineReason: "" }
+    }))
+    .filter(({ card }) =>
+      card &&
+      card.mode !== "defense" &&
+      !skipped.has(card.uid) &&
+      (Boolean(card.attackLockReason) || (!card.used))
+    )
+    .filter(({ card, readiness }) => Boolean(card.attackLockReason) || readiness.ok === false);
+}
