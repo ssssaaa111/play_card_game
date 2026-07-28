@@ -214,6 +214,12 @@ test("trio omega full duel starts from full decks and does not reveal the puzzle
   assert.equal(setup.ai.hand.length, 0);
   assert.equal(setup.player.deck.length, 40);
   assert.equal(setup.ai.deck.length, 40);
+  assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), [
+    "iron-guardian",
+    "rift-bulwark",
+    "void-hound",
+    "nova-squire"
+  ]);
   assertValidGameState(buildEngineStateFromUiState(fullScenarioUiState()));
 
   const opened = fullScenarioUiState({ opening: true });
@@ -239,6 +245,41 @@ test("trio omega full duel starts from full decks and does not reveal the puzzle
   assertValidGameState(buildEngineStateFromUiState(opened));
 });
 
+test("trio omega full duel can still pay three tributes after one opening body is destroyed", () => {
+  const uiState = fullScenarioUiState({ opening: true });
+  uiState.player.field = [cloneCardById("flare-titan"), null, null, null, null];
+  const playerBattle = engineWithTurn(buildEngineStateFromUiState(uiState), PLAYER, Phase.battle);
+  let state = playerBattle.getState();
+  const attackerCardId = findCardId(state, PLAYER, "monsterZone", "flare-titan");
+  const targetCardId = findCardId(state, AI, "monsterZone", "iron-guardian");
+
+  resolveAttack(playerBattle, { playerId: PLAYER, rivalId: AI, attackerCardId, targetCardId });
+  state = playerBattle.getState();
+  assert.equal(state.players[AI].monsterZone.filter(Boolean).length, 3);
+
+  const aiMain = engineWithTurn(state, AI, Phase.main);
+  state = aiMain.getState();
+  const sunCardId = findCardId(state, AI, "hand", "trio-sun-judicator");
+  const tributeCardIds = state.players[AI].monsterZone.filter(Boolean);
+  const summonEvents = aiMain.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: sunCardId,
+    tributeCardIds,
+    index: 0
+  });
+  state = aiMain.getState();
+
+  assert.equal(summonEvents.filter((event) => event.type === "CARD_TRIBUTED").length, 3);
+  assert.ok(summonEvents.some((event) => event.type === "TRIO_CONVERGENCE_RESOLVED"));
+  assert.deepEqual(
+    state.players[AI].monsterZone.filter(Boolean).map((cardId) => state.cards[cardId].templateId).sort(),
+    ["trio-moon-warden", "trio-star-herald", "trio-sun-judicator"]
+  );
+  assertValidGameState(state);
+});
+
 test("trio omega full duel does not deck-out in the first two AI draw steps", () => {
   const engine = new GameEngine(buildEngineStateFromUiState(fullScenarioUiState({ opening: true })));
   engine.dispatch({ type: "END_TURN", playerId: PLAYER });
@@ -262,7 +303,7 @@ test("first legal trio tribute summon establishes all three gods through summon 
   const engine = engineWithTurn(buildEngineStateFromUiState(fullScenarioUiState({ opening: true })), AI, Phase.main);
   const before = engine.getState();
   const sunId = findCardId(before, AI, "hand", "trio-sun-judicator");
-  const tributeCardIds = before.players[AI].monsterZone.filter(Boolean);
+  const tributeCardIds = before.players[AI].monsterZone.filter(Boolean).slice(0, 3);
 
   const events = engine.dispatch({
     type: "SUMMON_MONSTER",
@@ -282,11 +323,12 @@ test("first legal trio tribute summon establishes all three gods through summon 
     .filter((card) => card.trioConvergence === "trioOmega");
   const summonEvents = events.filter((event) => event.type === "MONSTER_SUMMONED");
 
-  assert.deepEqual(new Set(fieldTemplates), new Set([
+  assert.deepEqual(new Set(trioPressureCards.map((card) => card.templateId)), new Set([
     "trio-sun-judicator",
     "trio-moon-warden",
     "trio-star-herald"
   ]));
+  assert.equal(fieldTemplates.includes("nova-squire"), true);
   assert.equal(state.players[AI].hand.some((cardId) => state.cards[cardId].templateId === "trio-moon-warden"), false);
   assert.equal(state.players[AI].hand.some((cardId) => state.cards[cardId].templateId === "trio-star-herald"), false);
   assert.equal(summonEvents.length, 3);

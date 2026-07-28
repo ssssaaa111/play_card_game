@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  aiTrapSetLimit,
   chooseAiAttackAction,
   chooseAiAttackTarget,
   chooseAiTrapResponseAction,
@@ -285,6 +286,14 @@ test("scripted pressure AI protects trio pressure before generic traps", () => {
   assert.equal(action.type, "setTrap");
   assert.equal(action.handIndex, 1);
   assert.equal(action.card.id, "mirror-snare");
+});
+
+test("scripted pressure AI can fill its available backrow while other styles set once", () => {
+  const traps = [null, trap({ id: "set-card" }), null, null, null];
+
+  assert.equal(aiTrapSetLimit({ traps, aiStyle: "scriptedPressure" }), 4);
+  assert.equal(aiTrapSetLimit({ traps, aiStyle: "balanced" }), 1);
+  assert.equal(aiTrapSetLimit({ traps: traps.map(() => trap()), aiStyle: "scriptedPressure" }), 0);
 });
 
 test("AI summon planner chooses the best monster for its style", () => {

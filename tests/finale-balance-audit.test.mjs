@@ -30,10 +30,23 @@ test("authored finale opening guarantees a legal three-tribute full trio deploym
   assert.equal(report.authored.deployment.totalPrintedAtkOnField, 7500);
 });
 
-test("losing one opening tribute blocks the authored trio deployment without a partial summon", () => {
+test("losing one of four opening tribute bodies still permits the authored trio deployment", () => {
+  const report = simulateFinaleDeployment({
+    tributeBodies: 3,
+    sampleId: "tribute-disruption"
+  });
+
+  assert.equal(report.legal, true);
+  assert.equal(report.reason, null);
+  assert.equal(report.tributeCount, 3);
+  assert.equal(report.convergenceCount, 2);
+  assert.equal(report.fullTrioEstablished, true);
+});
+
+test("losing two opening tribute bodies blocks the authored trio deployment without a partial summon", () => {
   const report = simulateFinaleDeployment({
     tributeBodies: 2,
-    sampleId: "tribute-disruption"
+    sampleId: "double-tribute-disruption"
   });
 
   assert.equal(report.legal, false);

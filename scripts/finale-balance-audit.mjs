@@ -8,6 +8,8 @@ console.log(JSON.stringify(report, null, 2));
 if (
   !report.authored.deployment.fullTrioEstablished
   || report.authored.deployment.tributeCount !== 3
+  || !report.disruption.oneTributeLost.fullTrioEstablished
+  || report.disruption.twoTributesLost.legal
   || !report.disruption.attackDestroyTrap.trapResult?.sourceGodDestroyed
 ) {
   process.exitCode = 1;

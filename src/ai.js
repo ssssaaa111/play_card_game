@@ -182,6 +182,15 @@ export function chooseAiSetTrapAction({
   };
 }
 
+export function aiTrapSetLimit({
+  traps = [],
+  aiStyle = "balanced"
+} = {}) {
+  const emptyZones = traps.filter((slot) => !slot).length;
+  if (emptyZones <= 0) return 0;
+  return aiStyle === "scriptedPressure" ? emptyZones : 1;
+}
+
 export function scoreAiMonster(card, aiStyle = "balanced") {
   if (!card) return 0;
   const stars = Number(card.stars) || 0;

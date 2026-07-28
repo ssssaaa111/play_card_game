@@ -1043,22 +1043,25 @@ export const scenarioSetups = {
   protagonistTrioOmegaFull: {
     label: "终局三曜完整对局",
     setupVisibility: "player",
-    text: "从 4000 生命值和完整牌堆开始的三曜主题对局。对手会优先建立三曜压制，玩家需要用低星资源、抽滤、防御陷阱和墓地回收逐步换取反击窗口。",
-    goal: "在正常起手和长牌堆中识别三曜压制核心；先守住关键资源，再清理持续压制并利用保留下来的低星资源建立优势。",
+    text: "从 4000 生命值和完整牌堆开始的三曜主题对局。对手准备了备用祭品与断链保护；击破一只前线怪兽只能削弱展开，玩家仍要面对三曜共降。",
+    goal: "先削减对手的祭品余量并布置防御，再穿过断链保护、清理持续压制，利用保留下来的低星资源建立反击窗口。",
     difficulty: "challenge",
     aiStyle: "scriptedPressure",
     objectives: [
       "在完整对局中识别三曜压制核心。",
+      "首回合击破一只祭品候选，确认对手仍能以剩余三只怪兽完成合法共降。",
       "不要把回召资源浪费在看似更直观的高攻诱饵上。",
       "保留防御手段，等待反击窗口。"
     ],
     hints: [
-      "对手场上最亮眼的攻击力不一定是第一优先目标。",
+      "对手拥有一只备用祭品；只击破一只怪兽不足以阻止三曜，但会让共降后不再留下额外攻击者。",
+      "第一张攻击陷阱可能遭到断链保护，不要把全部防线押在一次反制上。",
       "先铺资源或防御通常比立刻打出所有手牌更稳。",
       "持续压制不清掉时，墓地资源和终局反击都很难转化成胜势。"
     ],
     recommendedLine: [
-      "用低星怪和防御陷阱撑过第一轮压制。",
+      "用低星怪击破一只祭品候选并盖下防御，让对手无法在共降后保留额外前线。",
+      "观察断链保护如何处理第一张攻击陷阱，保留后续反制资源。",
       "等对手三曜压力落地后，再选择清后场或保留墓地回收。",
       "反击窗口来自前面留下的低星资源和防御交换，而不是起手高攻碾压。"
     ],
@@ -1068,7 +1071,7 @@ export const scenarioSetups = {
     playerHand: [],
     aiHand: [],
     playerField: [],
-    aiField: ["iron-guardian", "rift-bulwark", "void-hound"],
+    aiField: ["iron-guardian", "rift-bulwark", "void-hound", "nova-squire"],
     playerGrave: [],
     aiGrave: [],
     playerDeck: deckPresets.protagonistTrioOmegaFull.ids,

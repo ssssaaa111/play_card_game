@@ -45,14 +45,15 @@ test("trio tribute fixture and full duel preserve the established campaign route
   assert.equal(fixture.playerField.length, 3);
 
   const full = scenarioSetups.protagonistTrioOmegaFull;
-  assert.equal(full.aiField.length, 3);
+  assert.equal(full.aiField.length, 4);
   full.aiField.forEach((cardId) => {
     const card = cardsById.get(typeof cardId === "string" ? cardId : cardId.id);
     assert.equal(card?.type, "monster");
     assert.equal(card?.tributeCost, undefined);
   });
   assert.deepEqual(full.recommendedLine, [
-    "用低星怪和防御陷阱撑过第一轮压制。",
+    "用低星怪击破一只祭品候选并盖下防御，让对手无法在共降后保留额外前线。",
+    "观察断链保护如何处理第一张攻击陷阱，保留后续反制资源。",
     "等对手三曜压力落地后，再选择清后场或保留墓地回收。",
     "反击窗口来自前面留下的低星资源和防御交换，而不是起手高攻碾压。"
   ]);

@@ -10,6 +10,7 @@ import {
 } from './setup-options.js';
 import { actionsForPhase, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import {
+  aiTrapSetLimit,
   chooseAiAttackAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
@@ -3991,7 +3992,7 @@ async function runAiTurn() {
     await aiPlaySpells();
     if (state.gameOver) return;
     await sleep(850);
-    if (aiSetTraps()) {
+    if (aiSetTraps() > 0) {
       render();
       await sleep(1300);
     }
@@ -4093,14 +4094,20 @@ async function aiSummon() {
 }
 
 function aiSetTraps() {
-  const action = chooseAiSetTrapAction({
-    hand: state.ai.hand,
-    traps: state.ai.traps,
-    aiStyle: state.aiStyle,
-    canSetTrap: (_card, handIndex, trapIndex) =>
-      explainSetTrapFromUiState(state, "ai", handIndex, trapIndex).ok
-  });
-  return action ? setTrap(state.ai, action.handIndex, action.trapIndex) : false;
+  const limit = aiTrapSetLimit({ traps: state.ai.traps, aiStyle: state.aiStyle });
+  let setCount = 0;
+  while (setCount < limit) {
+    const action = chooseAiSetTrapAction({
+      hand: state.ai.hand,
+      traps: state.ai.traps,
+      aiStyle: state.aiStyle,
+      canSetTrap: (_card, handIndex, trapIndex) =>
+        explainSetTrapFromUiState(state, "ai", handIndex, trapIndex).ok
+    });
+    if (!action || !setTrap(state.ai, action.handIndex, action.trapIndex)) break;
+    setCount += 1;
+  }
+  return setCount;
 }
 
 async function aiAttack() {
