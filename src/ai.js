@@ -54,6 +54,40 @@ function isUsefulAttackTarget(entry) {
   return false;
 }
 
+function comparePressureAttackMatchups(a, b) {
+  if (a.targetCoverage !== b.targetCoverage) return a.targetCoverage - b.targetCoverage;
+  if (a.target.mode !== b.target.mode) return a.target.mode === "attack" ? -1 : 1;
+  if (a.targetValue !== b.targetValue) return b.targetValue - a.targetValue;
+  if (a.attackerAtk !== b.attackerAtk) return a.attackerAtk - b.attackerAtk;
+  if (a.diff !== b.diff) return a.diff - b.diff;
+  if (a.attackerIndex !== b.attackerIndex) return a.attackerIndex - b.attackerIndex;
+  return a.targetIndex - b.targetIndex;
+}
+
+function choosePressureAttackMatchup(attackers, targets) {
+  const matchups = [];
+  targets.forEach((target, targetIndex) => {
+    if (!target) return;
+    const targetMatchups = attackers
+      .map(({ card, index: attackerIndex }) => {
+        const attackerAtk = totalAtk(card);
+        const targetEntry = attackTargetEntry(target, targetIndex, attackerAtk);
+        if (!targetEntry || !isUsefulAttackTarget(targetEntry)) return null;
+        return {
+          card,
+          attackerIndex,
+          attackerAtk,
+          ...targetEntry
+        };
+      })
+      .filter(Boolean);
+    targetMatchups.forEach((matchup) => {
+      matchups.push({ ...matchup, targetCoverage: targetMatchups.length });
+    });
+  });
+  return matchups.sort(comparePressureAttackMatchups)[0] || null;
+}
+
 function attackThreatScore({ owner = null, rival = null, context = {} } = {}) {
   const attacker = rival?.field?.[context.attackerIndex];
   if (!attacker) return 0;
@@ -299,6 +333,20 @@ export function chooseAiAttackAction({
     aiStyle,
     canUseDirect: owner ? canDirectAttack(owner, pick.card) : false
   });
+
+  if (aiStyle === "scriptedPressure" && targetIndex !== -1) {
+    const matchup = choosePressureAttackMatchup(attackers, rivalField);
+    if (matchup) {
+      return {
+        type: "attack",
+        card: matchup.card,
+        cardUid: matchup.card.uid,
+        attackerIndex: matchup.attackerIndex,
+        targetIndex: matchup.targetIndex,
+        target: matchup.target
+      };
+    }
+  }
 
   if (targetIndex === null) {
     return {

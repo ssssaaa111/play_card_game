@@ -791,6 +791,41 @@ async function runAiMultiAttackReentryBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioAttackPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-attack-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioAttackPlanning");
+  const attackEventsBefore = countGameEvents(ctx.state, "ATTACK_DECLARED");
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && !ctx.state.aiRunning,
+    `${smokeName}: AI completes the planned three-attack turn. ${smokeDebug(ctx)}`,
+    42000
+  );
+
+  const attacks = (ctx.state.gameEvents || [])
+    .filter((event) => event.type === "ATTACK_DECLARED" && event.playerId === "ai")
+    .slice(attackEventsBefore);
+  const referencesTemplate = (cardId, templateId) => eventReferencesTemplate({ cardId }, templateId);
+  const [firstAttack, secondAttack, thirdAttack] = attacks;
+  if (attacks.length !== 3 ||
+      !referencesTemplate(firstAttack?.attackerCardId, "trio-sun-judicator") ||
+      !referencesTemplate(firstAttack?.targetCardId, "void-siege-breaker") ||
+      !referencesTemplate(secondAttack?.attackerCardId, "trio-moon-warden") ||
+      !referencesTemplate(secondAttack?.targetCardId, "prism-saint") ||
+      !referencesTemplate(thirdAttack?.attackerCardId, "trio-star-herald") ||
+      thirdAttack?.targetCardId) {
+    throw new Error(`${smokeName}: trio should assign sun to the exclusive high threat, moon to the weak target, then let star attack directly. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.player.grave.some((card) => card?.id === "void-siege-breaker") ||
+      !ctx.state.player.grave.some((card) => card?.id === "prism-saint") ||
+      ctx.state.gameOver) {
+    throw new Error(`${smokeName}: planned attacks should clear both targets and leave the duel running. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiEngineLegalityBasicSmoke(ctx) {
   const smokeName = "ai-engine-legality-basic";
   setSmokeStatus("running", smokeName);
@@ -6103,6 +6138,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-guard-skip": runAiGuardSkipSmoke,
     "ai-mirror-restraint-basic": runAiMirrorRestraintBasicSmoke,
     "ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke,
+    "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
     "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
     "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
     "response-action-lock-basic": runResponseActionLockBasicSmoke,

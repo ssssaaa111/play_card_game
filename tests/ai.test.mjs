@@ -481,6 +481,28 @@ test("AI attack planner ignores a stronger attacker rejected by engine legality"
   assert.equal(action.targetIndex, -1);
 });
 
+test("AI attack planner preserves lower attackers by assigning the exclusive high threat first", () => {
+  const action = chooseAiAttackAction({
+    field: [
+      monster({ uid: "sun", id: "trio-sun-judicator", atk: 3000 }),
+      monster({ uid: "star", id: "trio-star-herald", atk: 2400 }),
+      monster({ uid: "moon", id: "trio-moon-warden", atk: 2100 })
+    ],
+    rivalField: [
+      monster({ uid: "weak", atk: 1000 }),
+      monster({ uid: "high-threat", atk: 2800 })
+    ],
+    rivalLp: 9000,
+    aiStyle: "scriptedPressure",
+    canAttackMonster: () => true
+  });
+
+  assert.equal(action.type, "attack");
+  assert.equal(action.cardUid, "sun");
+  assert.equal(action.target?.uid, "high-threat");
+  assert.equal(action.targetIndex, 1);
+});
+
 test("scripted pressure AI uses every unlocked trio attacker in pressure order", () => {
   const field = [
     monster({ uid: "sun", id: "trio-sun-judicator", atk: 3000 }),

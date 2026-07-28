@@ -245,6 +245,32 @@ test("trio omega full duel starts from full decks and does not reveal the puzzle
   assertValidGameState(buildEngineStateFromUiState(opened));
 });
 
+test("trio attack planning scenario isolates an exclusive high-threat matchup", () => {
+  const setup = buildScenarioState(scenarioSetups.trioAttackPlanning, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.equal(scenarioSetups.trioAttackPlanning.aiStyle, "scriptedPressure");
+  assert.equal(setup.player.lp, 9000);
+  assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), [
+    "prism-saint",
+    "void-siege-breaker"
+  ]);
+  assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), [
+    "trio-sun-judicator",
+    "trio-moon-warden",
+    "trio-star-herald"
+  ]);
+  assertValidGameState(buildEngineStateFromUiState({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai },
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+});
+
 test("trio omega full duel can still pay three tributes after one opening body is destroyed", () => {
   const uiState = fullScenarioUiState({ opening: true });
   uiState.player.field = [cloneCardById("flare-titan"), null, null, null, null];

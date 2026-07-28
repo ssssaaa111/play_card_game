@@ -699,6 +699,20 @@ export const scenarioSetups = {
     aiHand: [],
     aiDeck: ["guard-sigil"]
   },
+  trioAttackPlanning: {
+    label: "三曜攻击分配",
+    text: "规则测试场景：三曜已经解除攻击限制，对手场上同时存在弱怪和只有日曜能够击破的高攻怪。",
+    goal: "结束回合，观察 AI 先用日曜处理高攻威胁，再让月曜处理弱怪，最后由星曜直接攻击。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["prism-saint", "void-siege-breaker"],
+    aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trapChoice: {
     label: "陷阱选择",
     text: "我方预置两张可响应攻击的陷阱，AI 场上有攻击怪兽，用来验证响应窗口多选一。",

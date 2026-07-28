@@ -694,6 +694,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-guard-skip": runAiGuardSkipSmoke/);
   assert.match(smoke, /"ai-mirror-restraint-basic": runAiMirrorRestraintBasicSmoke/);
   assert.match(smoke, /"ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke/);
+  assert.match(smoke, /"trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke/);
   assert.match(smoke, /"summon-effects": runSummonEffectsSmoke/);
   assert.match(smoke, /"summon-fire-buff": runSummonFireBuffSmoke/);
   assert.match(smoke, /"summon-shield": runSummonShieldSmoke/);
@@ -826,6 +827,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /chain protection should preserve sun while the player survives the first god attack/);
   assert.match(smoke, /the public log should explain why solar snare failed/);
   assert.match(smoke, /the public log should explain why only sun attacks this turn/);
+  assert.match(smoke, /trio should assign sun to the exclusive high threat/);
   assert.match(smoke, /normal summon should not be described as self-triggered special summon/);
   assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
   assert.match(smoke, /targetChangedEvents/);
