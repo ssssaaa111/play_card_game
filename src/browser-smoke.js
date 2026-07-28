@@ -4660,6 +4660,14 @@ async function runChainTrapChoiceSmoke(ctx) {
   }
   await finishPlayerTurn(ctx);
   await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "连锁测试多陷阱响应窗口", 24000);
+  const aiAttackerIds = ctx.state.ai.field.filter(Boolean).map((card) => card.id);
+  if (aiAttackerIds.length !== 1 || aiAttackerIds[0] !== "sky-raider") {
+    throw new Error(`连锁选择 smoke 必须由唯一的天岚突袭者触发，实际 ${aiAttackerIds.join(",") || "空场"}`);
+  }
+  if (!ctx.state.player.traps.some((card) => card?.id === "weakening-web") ||
+      countGameEvents(ctx.state, "CHAIN_LINK_ADDED") !== 0) {
+    throw new Error("检查三陷阱响应窗口前不应已有陷阱被发动或离场");
+  }
   if (countGameEvents(ctx.state, "TRAP_SET") < 3 || countGameEvents(ctx.state, "CARD_MOVED") < 3) {
     throw new Error("Multi-trap setup must record every set trap through engine events");
   }

@@ -99,6 +99,17 @@ test("counter chain scenario starts with opposing response traps", () => {
   assert.deepEqual(ids(setup.ai.traps).slice(0, 1), ["chain-nullifier"]);
 });
 
+test("chain trap choice scenario keeps a single deterministic AI attacker", () => {
+  const setup = buildScenarioState(scenarioSetups.chain, {
+    playerPreset: "balanced",
+    aiPreset: "control"
+  });
+
+  assert.deepEqual(ids(setup.ai.field).filter(Boolean), ["sky-raider"]);
+  assert.deepEqual(ids(setup.ai.hand), []);
+  assert.deepEqual(ids(setup.ai.deck), []);
+});
+
 test("summon effects scenario exposes basic engine-backed summon triggers", () => {
   const setup = buildScenarioState(scenarioSetups.summonEffects, {
     playerPreset: "balanced",
