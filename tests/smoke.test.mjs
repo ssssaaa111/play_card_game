@@ -405,7 +405,7 @@ test("app resolves element combos through engine commands", () => {
   assert.doesNotMatch(app, /elements\.has\("fire"\) && elements\.has\("wind"\)/);
 });
 
-test("serve script uses the fixed local port", () => {
+test("serve script defaults to the project port and accepts an isolated worktree port", () => {
   const pkg = JSON.parse(readProjectFile("package.json"));
   const server = readProjectFile("scripts/dev-server.mjs");
   const browserSmoke = readProjectFile("scripts/browser-smoke.mjs");
@@ -413,7 +413,10 @@ test("serve script uses the fixed local port", () => {
   assert.equal(pkg.scripts.serve, "node scripts/dev-server.mjs");
   assert.equal(pkg.scripts.dev, "npm run serve");
   assert.equal(pkg.scripts["smoke:browser"], "node scripts/browser-smoke.mjs");
-  assert.match(server, /const port = 5177/);
+  assert.match(server, /argument\.startsWith\("--port="\)/);
+  assert.match(server, /\|\| "5177"/);
+  assert.match(server, /requestedPort > 0 && requestedPort <= 65535/);
+  assert.match(server, /: 5177/);
   assert.match(server, /const host = "127\.0\.0\.1"/);
   assert.match(server, /Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"/);
   assert.match(server, /charset=utf-8/);
@@ -891,7 +894,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "player-counter-chain"\)/);
-  assert.match(smoke, /async function runResponseWindowResumeBasicSmoke\(ctx\)[\s\S]*?setSmokeStatus\("passed", smokeName\);\n}/);
+  assert.match(smoke, /async function runResponseWindowResumeBasicSmoke\(ctx\)[\s\S]*?setSmokeStatus\("passed", smokeName\);\r?\n}/);
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
   assert.match(smoke, /const smokeName = "turn-handoff-basic";[\s\S]*"TURN_ENDED:ai"[\s\S]*setSmokeStatus\("passed", smokeName\)/);

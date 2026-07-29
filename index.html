@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
   <link rel="stylesheet" href="styles.css?v=20260706-ai-card-reveal" />
+  <link rel="stylesheet" href="duel-table.css?v=20260730-duel-table-2" />
 </head>
 <body>
   <div id="app">
@@ -21,25 +22,37 @@
         <span id="turnText">你的回合</span>
         <span id="timerText"></span>
       </div>
-      <div class="actions">
-        <button class="btn" id="guideBtn" title="查看规则和操作说明">规则</button>
+      <div class="actions" aria-label="回合操作">
         <button class="btn primary" id="startBtn" title="开始决斗">开始</button>
-        <button class="btn" id="pauseBtn" title="暂停或继续决斗">暂停</button>
         <button class="btn turn-control" id="skipAttackBtn" title="放弃本回合剩余攻击机会">跳过攻击</button>
         <button class="btn turn-control" id="endTurnBtn" title="放弃后续操作并结束你的回合">结束回合</button>
-        <button class="btn" id="soundBtn" title="开启或关闭音效">音效 开</button>
-        <button class="btn" id="musicBtn" title="开启或关闭背景音乐">音乐 开</button>
-        <label class="music-volume-control" for="musicVolume" title="调整背景音乐音量">
-          <span>BGM</span>
-          <input id="musicVolume" type="range" min="0" max="100" step="1" value="42" aria-label="背景音乐音量">
-        </label>
-        <button class="btn" id="voiceBtn" title="开启或关闭语音提示">语音 开</button>
-        <button class="btn" id="restartBtn" title="重新开始本局">重开</button>
+      </div>
+      <div class="header-utility">
+        <button class="btn utility-toggle" id="utilityMenuToggle" type="button" aria-controls="utilityMenu" aria-expanded="false">
+          <span class="utility-toggle-icon" aria-hidden="true">⋯</span>
+          <span>设置</span>
+        </button>
+        <div class="utility-menu" id="utilityMenu" aria-label="决斗设置" hidden>
+          <div class="utility-menu-head">
+            <span>决斗设置</span>
+            <small>规则、声音与本局控制</small>
+          </div>
+          <button class="btn" id="guideBtn" title="查看规则和操作说明">规则说明</button>
+          <button class="btn" id="pauseBtn" title="暂停或继续决斗">暂停</button>
+          <button class="btn" id="soundBtn" title="开启或关闭音效">音效 开</button>
+          <button class="btn" id="musicBtn" title="开启或关闭背景音乐">音乐 开</button>
+          <label class="music-volume-control" for="musicVolume" title="调整背景音乐音量">
+            <span>BGM</span>
+            <input id="musicVolume" type="range" min="0" max="100" step="1" value="42" aria-label="背景音乐音量">
+          </label>
+          <button class="btn" id="voiceBtn" title="开启或关闭语音提示">语音 开</button>
+          <button class="btn utility-danger" id="restartBtn" title="重新开始本局">重新开始</button>
+        </div>
       </div>
     </header>
 
-    <main class="arena">
-      <aside class="side enemy">
+    <main class="arena duel-table">
+      <aside class="side enemy duel-hud" aria-label="对手状态">
         <section class="player-card" id="aiPanel">
           <div class="duelist-face">
             <div class="duelist-figure ai" id="aiFigure" aria-hidden="true">
@@ -63,31 +76,9 @@
           <div class="pile"><span><strong id="aiDeckCount">0</strong>卡组</span></div>
           <div class="pile"><span><strong id="aiGraveCount">0</strong>墓地</span></div>
         </section>
-        <section class="detail">
-          <div class="detail-card">
-            <h2 id="detailName">选择一张卡</h2>
-            <p id="detailText">点击手牌可以查看效果。选择怪兽后点自己的空召唤区召唤，选择场上怪兽后点敌方怪兽攻击；可直击时点敌方角色发动直接攻击。</p>
-            <div class="detail-inspector" id="detailInspector" hidden>
-              <div class="detail-summary" id="detailSummary"></div>
-              <div class="detail-effect-block">
-                <span class="detail-section-label">完整效果</span>
-                <p class="detail-effect" id="detailEffect"></p>
-              </div>
-              <dl class="detail-meta" id="detailMeta"></dl>
-            </div>
-            <div class="detail-actions">
-              <button class="btn small-action primary" id="handConfirmBtn" type="button" hidden>确认</button>
-              <button class="btn small-action" id="handCancelBtn" type="button" hidden>取消</button>
-              <button class="btn small-action" id="modeBtn" type="button">切换表示</button>
-              <button class="btn small-action" id="detailBtn" type="button">查看详情</button>
-            </div>
-            <div class="battle-preview empty" id="battlePreview" aria-live="polite"></div>
-          </div>
-          <p class="tip">当前规则：每回合可通常召唤 1 只怪兽。怪兽召唤当回合即可攻击。魔法卡直接从手牌发动。</p>
-        </section>
       </aside>
 
-      <section class="field">
+      <section class="field" aria-label="决斗场地">
         <div class="zone-row" id="aiField"></div>
         <div class="trap-row" id="aiTraps"></div>
         <div class="center-line"><span id="duelHint">决斗场</span></div>
@@ -95,7 +86,7 @@
         <div class="zone-row" id="playerField"></div>
       </section>
 
-      <aside class="side">
+      <aside class="side duel-hud" aria-label="玩家状态">
         <section class="player-card" id="playerPanel">
           <div class="duelist-face">
             <div class="duelist-figure player" id="playerFigure" aria-hidden="true">
@@ -120,26 +111,76 @@
           <div class="pile"><span><strong id="playerDeckCount">0</strong>卡组</span></div>
           <div class="pile"><span><strong id="playerGraveCount">0</strong>墓地</span></div>
         </section>
-        <section class="timeline">
-          <div class="timeline-head">
-            <span>结算时间线</span>
-            <span class="timeline-meta">
-              <span class="timeline-audit ok" id="timelineAudit">审计 OK</span>
-              <span id="timelineCount">0</span>
-            </span>
-          </div>
-          <button class="chain-history-toggle" id="chainHistoryToggle" type="button" aria-expanded="false" hidden>
-            <span>连锁复盘</span>
-            <span class="chain-history-count" id="chainHistoryCount">0</span>
-          </button>
-          <div class="chain-history-list" id="chainHistoryList" hidden></div>
-          <div class="timeline-list" id="timeline"></div>
-        </section>
       </aside>
+
+      <section class="detail workspace-drawer detail-drawer" id="detailDrawer" aria-label="卡牌与战斗详情">
+        <div class="workspace-drawer-head">
+          <div>
+            <span class="workspace-drawer-kicker">战术面板</span>
+            <strong id="detailDrawerTitle">卡牌详情</strong>
+          </div>
+          <button class="drawer-close" id="detailDrawerClose" type="button" aria-label="收起卡牌详情">×</button>
+        </div>
+        <div class="detail-card">
+          <h2 id="detailName">选择一张卡</h2>
+          <p id="detailText">点击手牌可以查看效果。选择怪兽后点自己的空召唤区召唤，选择场上怪兽后点敌方怪兽攻击；可直击时点敌方角色发动直接攻击。</p>
+          <div class="detail-inspector" id="detailInspector" hidden>
+            <div class="detail-summary" id="detailSummary"></div>
+            <div class="detail-effect-block">
+              <span class="detail-section-label">完整效果</span>
+              <p class="detail-effect" id="detailEffect"></p>
+            </div>
+            <dl class="detail-meta" id="detailMeta"></dl>
+          </div>
+          <div class="detail-actions">
+            <button class="btn small-action primary" id="handConfirmBtn" type="button" hidden>确认</button>
+            <button class="btn small-action" id="handCancelBtn" type="button" hidden>取消</button>
+            <button class="btn small-action" id="modeBtn" type="button">切换表示</button>
+            <button class="btn small-action" id="detailBtn" type="button">查看详情</button>
+          </div>
+          <div class="battle-preview empty" id="battlePreview" aria-live="polite"></div>
+        </div>
+        <p class="tip">每回合可通常召唤 1 只怪兽。怪兽召唤当回合即可攻击，魔法卡可从手牌发动。</p>
+      </section>
+
+      <section class="timeline workspace-drawer timeline-drawer" id="timelineDrawer" aria-label="战斗记录">
+        <div class="timeline-head workspace-drawer-head">
+          <div>
+            <span class="workspace-drawer-kicker">战局记录</span>
+            <strong>结算时间线</strong>
+          </div>
+          <span class="timeline-meta">
+            <span class="timeline-audit ok" id="timelineAudit">审计 OK</span>
+            <span id="timelineCount">0</span>
+          </span>
+          <button class="drawer-close" id="timelineDrawerClose" type="button" aria-label="收起战斗记录">×</button>
+        </div>
+        <button class="chain-history-toggle" id="chainHistoryToggle" type="button" aria-expanded="false" hidden>
+          <span>连锁复盘</span>
+          <span class="chain-history-count" id="chainHistoryCount">0</span>
+        </button>
+        <div class="chain-history-list" id="chainHistoryList" hidden></div>
+        <div class="timeline-list" id="timeline"></div>
+      </section>
+
+      <nav class="workspace-tabs" aria-label="战术面板">
+        <button class="workspace-tab" id="detailDrawerToggle" type="button" aria-controls="detailDrawer" aria-expanded="false">
+          <span class="workspace-tab-icon" aria-hidden="true">◇</span>
+          <span>详情</span>
+        </button>
+        <button class="workspace-tab" id="timelineDrawerToggle" type="button" aria-controls="timelineDrawer" aria-expanded="false">
+          <span class="workspace-tab-icon" aria-hidden="true">≡</span>
+          <span>记录</span>
+          <span class="workspace-tab-badge" id="timelineDrawerBadge">0</span>
+        </button>
+      </nav>
     </main>
 
-    <section class="hand-panel">
-      <div class="hand-title">手牌</div>
+    <section class="hand-panel" aria-label="玩家手牌">
+      <div class="hand-title">
+        <strong>手牌</strong>
+        <span>选择卡牌 · 再选择落点或目标</span>
+      </div>
       <div class="hand-stack">
         <div class="hand" id="hand"></div>
         <div class="grave-targets" id="graveTargets" hidden></div>
@@ -306,6 +347,7 @@
     </div>
   </div>
 
+  <script type="module" src="src/duel-table.js?v=20260730-duel-table-2"></script>
   <script type="module" src="src/app.js?v=20260706-ai-card-reveal-confirm"></script>
 </body>
 </html>
