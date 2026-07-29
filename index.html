@@ -229,62 +229,96 @@
   </div>
   <div class="modal" id="modal">
     <div class="modal-box">
-      <h2 id="modalTitle">决斗结束</h2>
-      <p id="modalText"></p>
+      <div class="modal-header">
+        <div class="modal-heading">
+          <span class="setup-kicker">DUEL DEPLOYMENT</span>
+          <h2 id="modalTitle">决斗结束</h2>
+          <p id="modalText"></p>
+        </div>
+        <div class="setup-live-summary" aria-live="polite">
+          <span class="setup-live-dot" aria-hidden="true"></span>
+          <div>
+            <small>当前配置</small>
+            <strong id="setupReadySummary">等待载入配置</strong>
+            <span id="setupReadyMode">玩法待选择</span>
+          </div>
+        </div>
+      </div>
       <div class="setup-panel" id="setupPanel">
-        <div class="setup-grid">
-          <label class="setup-field">
-            <span>角色</span>
-            <select id="roleSelect"></select>
-          </label>
-          <label class="setup-field">
-            <span>卡组</span>
-            <select id="deckSelect"></select>
-          </label>
-          <label class="setup-field">
-            <span>AI</span>
-            <select id="aiSelect"></select>
-          </label>
-          <label class="setup-field">
-            <span id="scenarioSelectLabel">玩法模式</span>
-            <select id="scenarioSelect"></select>
-          </label>
-        </div>
-        <div class="scenario-brief" id="scenarioBrief" hidden>
-          <div class="scenario-brief-head">
-            <strong id="scenarioBriefTitle"></strong>
-            <span class="scenario-difficulty" id="scenarioDifficulty"></span>
-          </div>
-          <ul class="scenario-objectives" id="scenarioObjectives"></ul>
-          <button class="btn ghost scenario-hint-toggle" id="scenarioHintToggle" type="button">显示提示</button>
-          <ul class="scenario-hints" id="scenarioHints" hidden></ul>
-        </div>
-        <div class="pre-duel-preview" id="preDuelPreview">
-          <div class="pre-duel-summary">
-            <div class="pre-duel-stat">
-              <span>生命值</span>
-              <strong id="preDuelLp"></strong>
+        <div class="setup-cockpit">
+          <section class="setup-loadout" aria-label="出战配置">
+            <div class="setup-section-head">
+              <span>01</span>
+              <div>
+                <strong>出战配置</strong>
+                <small>选择你的身份、牌组与对手风格</small>
+              </div>
             </div>
-            <div class="pre-duel-stat pre-duel-skill">
-              <span>己方技能</span>
-              <strong id="preDuelSkillName"></strong>
-              <small id="preDuelSkillText"></small>
+            <div class="setup-grid">
+              <label class="setup-field" data-setup-kind="role">
+                <span class="setup-field-label"><strong>角色</strong><small>DUELIST</small></span>
+                <select id="roleSelect"></select>
+              </label>
+              <label class="setup-field" data-setup-kind="deck">
+                <span class="setup-field-label"><strong>卡组</strong><small>DECK</small></span>
+                <select id="deckSelect"></select>
+              </label>
+              <label class="setup-field" data-setup-kind="ai">
+                <span class="setup-field-label"><strong>AI</strong><small>RIVAL</small></span>
+                <select id="aiSelect"></select>
+              </label>
+              <label class="setup-field" data-setup-kind="scenario">
+                <span class="setup-field-label"><strong id="scenarioSelectLabel">玩法模式</strong><small>MISSION</small></span>
+                <select id="scenarioSelect"></select>
+              </label>
             </div>
-          </div>
-          <div class="pre-duel-route" id="preDuelRecommended" hidden>
-            <strong>推荐路线</strong>
-            <ul id="preDuelRecommendedList"></ul>
-          </div>
-          <div class="pre-duel-deck">
-            <div class="pre-duel-deck-head">
-              <strong>己方卡组预览</strong>
-              <span id="preDuelDeckCount"></span>
-              <button class="btn ghost pre-duel-deck-toggle" id="preDuelDeckToggle" type="button">查看牌组</button>
+            <div class="setup-stats" id="setupStats"></div>
+          </section>
+
+          <section class="setup-intel" aria-label="战术情报">
+            <div class="setup-section-head">
+              <span>02</span>
+              <div>
+                <strong>战术情报</strong>
+                <small>开战前确认目标、技能与牌组结构</small>
+              </div>
             </div>
-            <div class="pre-duel-deck-list" id="preDuelDeckList"></div>
-          </div>
+            <div class="scenario-brief" id="scenarioBrief" hidden>
+              <div class="scenario-brief-head">
+                <strong id="scenarioBriefTitle"></strong>
+                <span class="scenario-difficulty" id="scenarioDifficulty"></span>
+              </div>
+              <ul class="scenario-objectives" id="scenarioObjectives"></ul>
+              <button class="btn ghost scenario-hint-toggle" id="scenarioHintToggle" type="button">显示提示</button>
+              <ul class="scenario-hints" id="scenarioHints" hidden></ul>
+            </div>
+            <div class="pre-duel-preview" id="preDuelPreview">
+              <div class="pre-duel-summary">
+                <div class="pre-duel-stat">
+                  <span>生命值</span>
+                  <strong id="preDuelLp"></strong>
+                </div>
+                <div class="pre-duel-stat pre-duel-skill">
+                  <span>己方技能</span>
+                  <strong id="preDuelSkillName"></strong>
+                  <small id="preDuelSkillText"></small>
+                </div>
+              </div>
+              <div class="pre-duel-route" id="preDuelRecommended" hidden>
+                <strong>推荐路线</strong>
+                <ul id="preDuelRecommendedList"></ul>
+              </div>
+              <div class="pre-duel-deck">
+                <div class="pre-duel-deck-head">
+                  <strong>己方卡组预览</strong>
+                  <span id="preDuelDeckCount"></span>
+                  <button class="btn ghost pre-duel-deck-toggle" id="preDuelDeckToggle" type="button">查看牌组</button>
+                </div>
+                <div class="pre-duel-deck-list" id="preDuelDeckList"></div>
+              </div>
+            </div>
+          </section>
         </div>
-        <div class="setup-stats" id="setupStats"></div>
       </div>
       <div class="modal-actions">
         <button class="btn ghost" id="modalReviewLog" type="button" hidden>查看战斗日志</button>

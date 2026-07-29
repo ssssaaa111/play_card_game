@@ -76,3 +76,19 @@ test("combat attention system exposes phase progress and hand readiness", () => 
   assert.match(app, /document\.body\.dataset\.duelSelection/);
   assert.match(app, /document\.body\.dataset\.duelCanAct/);
 });
+
+test("pre-duel setup uses a responsive loadout and tactical intelligence cockpit", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+
+  assert.match(html, /class="modal-header"[\s\S]*id="setupReadySummary"[\s\S]*id="setupReadyMode"/);
+  assert.match(html, /class="setup-cockpit"[\s\S]*class="setup-loadout"[\s\S]*class="setup-intel"/);
+  assert.match(html, /data-setup-kind="role"[\s\S]*data-setup-kind="deck"[\s\S]*data-setup-kind="ai"[\s\S]*data-setup-kind="scenario"/);
+  assert.match(css, /\.modal\.setup-modal \.modal-box\s*\{[\s\S]*width: min\(1040px, 100%\)/);
+  assert.match(css, /\.setup-cockpit\s*\{[\s\S]*grid-template-columns: minmax\(330px, 0\.88fr\) minmax\(0, 1\.12fr\)/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.setup-modal \.setup-grid,[\s\S]*\.setup-modal \.pre-duel-summary\s*\{[\s\S]*grid-template-columns: 1fr/);
+  assert.match(controller, /function syncSetupSummary\(\)/);
+  assert.match(controller, /setupReadySummary\.textContent = `\$\{role\} · \$\{deck\}`/);
+  assert.match(controller, /select\.addEventListener\("change", setupChangeHandler\)/);
+});

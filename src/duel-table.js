@@ -29,6 +29,13 @@ export function createDuelTableController(documentRef = document) {
   const handReadyCount = documentRef.querySelector("#handReadyCount");
   const handReadyLabel = documentRef.querySelector("#handReadyLabel");
   const phaseSteps = [...documentRef.querySelectorAll("[data-phase-step]")];
+  const roleSelect = documentRef.querySelector("#roleSelect");
+  const deckSelect = documentRef.querySelector("#deckSelect");
+  const aiSelect = documentRef.querySelector("#aiSelect");
+  const scenarioSelect = documentRef.querySelector("#scenarioSelect");
+  const setupSelects = [roleSelect, deckSelect, aiSelect, scenarioSelect].filter(Boolean);
+  const setupReadySummary = documentRef.querySelector("#setupReadySummary");
+  const setupReadyMode = documentRef.querySelector("#setupReadyMode");
   const compactWorkspace = window.matchMedia(COMPACT_WORKSPACE_QUERY);
   const drawers = {
     detail: { root: detailDrawer, toggle: detailToggle },
@@ -129,6 +136,20 @@ export function createDuelTableController(documentRef = document) {
                   : "等待当前行动窗口";
   }
 
+  function selectedOptionLabel(select, fallback) {
+    return select?.selectedOptions?.[0]?.textContent?.trim() || fallback;
+  }
+
+  function syncSetupSummary() {
+    if (!setupReadySummary || !setupReadyMode) return;
+    const role = selectedOptionLabel(roleSelect, "角色待选择");
+    const deck = selectedOptionLabel(deckSelect, "卡组待选择");
+    const rival = selectedOptionLabel(aiSelect, "对手待选择");
+    const scenario = selectedOptionLabel(scenarioSelect, "玩法待选择");
+    setupReadySummary.textContent = `${role} · ${deck}`;
+    setupReadyMode.textContent = `对手：${rival} · ${scenario}`;
+  }
+
   function detailRequiresAttention() {
     const confirmVisible = Boolean(handConfirm && !handConfirm.hidden && !handConfirm.disabled);
     const hasBattlePreview = Boolean(battlePreview && !battlePreview.classList.contains("empty"));
@@ -223,6 +244,13 @@ export function createDuelTableController(documentRef = document) {
     });
   }
 
+  const setupObserver = new MutationObserver(() => requestAnimationFrame(syncSetupSummary));
+  const setupChangeHandler = () => syncSetupSummary();
+  for (const select of setupSelects) {
+    setupObserver.observe(select, { childList: true, subtree: true });
+    select.addEventListener("change", setupChangeHandler);
+  }
+
   compactWorkspace.addEventListener("change", () => {
     if (openDrawer) setDrawer(openDrawer, false);
     setUtilityMenu(false);
@@ -234,6 +262,7 @@ export function createDuelTableController(documentRef = document) {
   syncTimelineBadge();
   syncDetailDrawer();
   syncCombatAttention();
+  syncSetupSummary();
 
   return {
     closeAll() {
@@ -244,6 +273,8 @@ export function createDuelTableController(documentRef = document) {
       detailObserver.disconnect();
       timelineObserver.disconnect();
       attentionObserver.disconnect();
+      setupObserver.disconnect();
+      for (const select of setupSelects) select.removeEventListener("change", setupChangeHandler);
     },
     openDrawer(name) {
       return setDrawer(name, true);
@@ -253,6 +284,7 @@ export function createDuelTableController(documentRef = document) {
       syncDetailDrawer();
       syncTimelineBadge();
       syncCombatAttention();
+      syncSetupSummary();
     }
   };
 }

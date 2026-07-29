@@ -845,6 +845,385 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   backdrop-filter: blur(16px);
 }
 
+.setup-live-summary,
+.setup-kicker {
+  display: none;
+}
+
+.modal.setup-modal {
+  z-index: 120;
+  padding:
+    max(12px, var(--safe-area-top))
+    max(12px, var(--safe-area-right))
+    max(12px, var(--safe-area-bottom))
+    max(12px, var(--safe-area-left));
+  background:
+    radial-gradient(circle at 16% 8%, rgba(84, 210, 210, 0.13), transparent 31%),
+    radial-gradient(circle at 86% 14%, rgba(246, 189, 96, 0.11), transparent 28%),
+    rgba(3, 6, 11, 0.82);
+  backdrop-filter: blur(13px);
+}
+
+.modal.setup-modal .modal-box {
+  width: min(1040px, 100%);
+  max-height: calc(100dvh - max(24px, var(--safe-area-top)) - max(24px, var(--safe-area-bottom)));
+  padding: 0;
+  overflow-x: hidden;
+  border: 1px solid rgba(84, 210, 210, 0.3);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(84, 210, 210, 0.045), transparent 36%),
+    linear-gradient(315deg, rgba(246, 189, 96, 0.04), transparent 34%),
+    #0b1019;
+  box-shadow: 0 32px 100px rgba(0, 0, 0, 0.62), inset 0 0 0 1px rgba(255, 255, 255, 0.022);
+}
+
+.setup-modal .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.62fr);
+  align-items: center;
+  gap: 24px;
+  padding: 20px 22px 18px;
+  border-bottom: 1px solid rgba(84, 210, 210, 0.18);
+  background:
+    linear-gradient(100deg, rgba(84, 210, 210, 0.08), rgba(246, 189, 96, 0.035)),
+    rgba(8, 12, 20, 0.96);
+  backdrop-filter: blur(16px);
+}
+
+.setup-modal .modal-heading {
+  min-width: 0;
+}
+
+.setup-modal .setup-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: rgba(84, 210, 210, 0.82);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+}
+
+.setup-modal .modal-heading h2 {
+  margin: 0;
+  color: #fff1bd;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.08;
+  letter-spacing: 0.02em;
+}
+
+.setup-modal .modal-heading p {
+  max-width: 620px;
+  margin: 7px 0 0;
+  color: rgba(214, 226, 239, 0.74);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.setup-modal .setup-live-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(84, 210, 210, 0.28);
+  border-radius: 12px;
+  background: rgba(10, 35, 40, 0.62);
+  box-shadow: inset 3px 0 0 rgba(84, 210, 210, 0.48);
+}
+
+.setup-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 14px rgba(84, 210, 210, 0.76);
+  animation: table-attention-pulse 1.8s ease-in-out infinite;
+}
+
+.setup-live-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.setup-live-summary small {
+  color: rgba(174, 238, 232, 0.62);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.setup-live-summary strong,
+.setup-live-summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-live-summary strong {
+  color: #eaffff;
+  font-size: 12px;
+}
+
+.setup-live-summary span {
+  color: rgba(214, 226, 239, 0.66);
+  font-size: 9px;
+}
+
+.setup-modal .setup-panel {
+  margin: 0;
+  padding: 16px 18px 18px;
+}
+
+.setup-cockpit {
+  display: grid;
+  grid-template-columns: minmax(330px, 0.88fr) minmax(0, 1.12fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.setup-loadout,
+.setup-intel {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.035), transparent 52%),
+    rgba(6, 10, 17, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.014);
+}
+
+.setup-loadout {
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-section-head {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.setup-section-head > span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(84, 210, 210, 0.34);
+  border-radius: 9px;
+  background: rgba(84, 210, 210, 0.09);
+  color: #aef3ef;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.setup-section-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.setup-section-head strong {
+  color: #f2f7ff;
+  font-size: 14px;
+}
+
+.setup-section-head small {
+  color: rgba(203, 214, 229, 0.56);
+  font-size: 9px;
+}
+
+.setup-modal .setup-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.setup-modal .setup-field {
+  position: relative;
+  gap: 8px;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(84, 210, 210, 0.035), transparent 50%),
+    rgba(15, 21, 31, 0.86);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.setup-modal .setup-field:focus-within {
+  border-color: rgba(84, 210, 210, 0.54);
+  box-shadow: 0 0 0 3px rgba(84, 210, 210, 0.08), inset 0 -2px 0 rgba(84, 210, 210, 0.36);
+  transform: translateY(-1px);
+}
+
+.setup-modal .setup-field[data-setup-kind="deck"],
+.setup-modal .setup-field[data-setup-kind="scenario"] {
+  border-color: rgba(246, 189, 96, 0.16);
+}
+
+.setup-field-label {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.setup-field-label strong {
+  color: #dfe9f5;
+  font-size: 11px;
+}
+
+.setup-field-label small {
+  color: rgba(84, 210, 210, 0.55);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.setup-modal .setup-field select {
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  background: rgba(4, 8, 14, 0.82);
+  color: #f0f6ff;
+  padding: 8px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  outline: none;
+}
+
+.setup-modal .setup-field select:focus {
+  border-color: rgba(84, 210, 210, 0.48);
+}
+
+.setup-modal .setup-stats {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-color: rgba(246, 189, 96, 0.18);
+  border-radius: 9px;
+  background: rgba(5, 8, 14, 0.58);
+  color: rgba(203, 214, 229, 0.58);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.setup-modal .setup-intel .scenario-brief {
+  margin: 0 0 10px;
+  border-color: rgba(246, 189, 96, 0.22);
+  border-radius: 10px;
+  background:
+    linear-gradient(110deg, rgba(246, 189, 96, 0.06), transparent 55%),
+    rgba(11, 16, 28, 0.68);
+}
+
+.setup-modal .scenario-objectives,
+.setup-modal .scenario-hints {
+  margin-left: 0;
+  list-style: none;
+  counter-reset: setup-objective;
+}
+
+.setup-modal .scenario-objectives li,
+.setup-modal .scenario-hints li {
+  position: relative;
+  padding-left: 20px;
+}
+
+.setup-modal .scenario-objectives li::before,
+.setup-modal .scenario-hints li::before {
+  content: "◇";
+  position: absolute;
+  left: 0;
+  color: var(--cyan);
+  font-weight: 900;
+}
+
+.setup-modal .pre-duel-preview {
+  gap: 9px;
+  margin-top: 0;
+}
+
+.setup-modal .pre-duel-summary {
+  grid-template-columns: minmax(130px, 0.62fr) minmax(0, 1fr);
+  gap: 9px;
+}
+
+.setup-modal .pre-duel-stat,
+.setup-modal .pre-duel-route,
+.setup-modal .pre-duel-deck {
+  border-color: rgba(84, 210, 210, 0.16);
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(84, 210, 210, 0.035), transparent 52%),
+    rgba(11, 16, 28, 0.62);
+}
+
+.setup-modal .pre-duel-stat {
+  min-height: 68px;
+  align-content: center;
+}
+
+.setup-modal .pre-duel-deck-head {
+  margin-bottom: 0;
+}
+
+.setup-modal .pre-duel-deck:has(.pre-duel-deck-list:not([hidden])) .pre-duel-deck-head {
+  margin-bottom: 8px;
+}
+
+.setup-modal .pre-duel-deck-toggle {
+  border-radius: 7px;
+}
+
+.setup-modal .pre-duel-card {
+  border-radius: 9px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent 58%),
+    rgba(11, 16, 28, 0.92);
+}
+
+.setup-modal .modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin: 0;
+  padding: 12px 18px 16px;
+  border-top: 1px solid rgba(246, 189, 96, 0.16);
+  background: linear-gradient(180deg, rgba(8, 12, 20, 0.9), rgba(8, 12, 20, 0.99));
+  backdrop-filter: blur(16px);
+}
+
+.setup-modal .modal-actions #modalRestart {
+  min-height: 46px;
+  border-radius: 10px;
+  color: #171109;
+  font-size: 15px;
+  font-weight: 950;
+  letter-spacing: 0.05em;
+  box-shadow: 0 10px 28px rgba(246, 189, 96, 0.16);
+}
+
+@media (max-width: 900px) {
+  .setup-modal .modal-header {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.75fr);
+  }
+
+  .setup-cockpit {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1040px) {
   :root {
     --table-hud-width: 0px;
@@ -990,7 +1369,7 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
     font-size: 15px;
   }
 
-  .hand-title span {
+  .hand-title-copy > span {
     display: none;
   }
 }
@@ -1004,6 +1383,60 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
       max(6px, var(--safe-area-right))
       max(6px, var(--safe-area-bottom))
       max(6px, var(--safe-area-left));
+  }
+
+  .modal.setup-modal {
+    padding:
+      max(6px, var(--safe-area-top))
+      max(6px, var(--safe-area-right))
+      max(6px, var(--safe-area-bottom))
+      max(6px, var(--safe-area-left));
+  }
+
+  .modal.setup-modal .modal-box {
+    max-height: calc(100dvh - max(12px, var(--safe-area-top)) - max(12px, var(--safe-area-bottom)));
+    border-radius: 12px;
+  }
+
+  .setup-modal .modal-header {
+    position: relative;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 14px 14px 12px;
+  }
+
+  .setup-modal .modal-heading h2 {
+    font-size: 25px;
+  }
+
+  .setup-modal .modal-heading p {
+    font-size: 11px;
+  }
+
+  .setup-modal .setup-live-summary {
+    padding: 8px 10px;
+  }
+
+  .setup-modal .setup-panel {
+    padding: 10px;
+  }
+
+  .setup-loadout,
+  .setup-intel {
+    padding: 11px;
+  }
+
+  .setup-modal .setup-grid,
+  .setup-modal .pre-duel-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-modal .modal-actions {
+    padding: 9px 10px 10px;
+  }
+
+  .setup-modal .modal-actions #modalRestart {
+    min-height: 44px;
   }
 
   .topbar {
@@ -1294,7 +1727,8 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hand-panel:not([data-ready-count="0"]) .hand-readiness-dot {
+  .hand-panel:not([data-ready-count="0"]) .hand-readiness-dot,
+  .setup-live-dot {
     animation: none;
   }
 }
