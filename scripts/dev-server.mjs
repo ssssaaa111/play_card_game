@@ -6,7 +6,11 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const host = "127.0.0.1";
-const port = 5177;
+const portArgument = process.argv.find((argument) => argument.startsWith("--port="));
+const requestedPort = Number.parseInt(portArgument?.slice("--port=".length) || "5177", 10);
+const port = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort <= 65535
+  ? requestedPort
+  : 5177;
 
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
