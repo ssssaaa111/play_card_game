@@ -22,6 +22,8 @@ export function createDuelTableController(documentRef = document) {
   const battlePreview = documentRef.querySelector("#battlePreview");
   const timelineCount = documentRef.querySelector("#timelineCount");
   const timelineBadge = documentRef.querySelector("#timelineDrawerBadge");
+  const timelineFilters = [...documentRef.querySelectorAll("[data-timeline-filter]")];
+  const chainHistoryToggle = documentRef.querySelector("#chainHistoryToggle");
   const field = documentRef.querySelector(".duel-table .field");
   const hand = documentRef.querySelector("#hand");
   const handPanel = documentRef.querySelector(".hand-panel");
@@ -48,6 +50,7 @@ export function createDuelTableController(documentRef = document) {
   };
   let openDrawer = "";
   let lastDetailName = "";
+  let chainHistoryVisible = Boolean(chainHistoryToggle && !chainHistoryToggle.hidden);
 
   function setUtilityMenu(open) {
     const expanded = Boolean(open);
@@ -87,6 +90,21 @@ export function createDuelTableController(documentRef = document) {
   function syncTimelineBadge() {
     if (!timelineBadge || !timelineCount) return;
     timelineBadge.textContent = timelineCount.textContent?.trim() || "0";
+  }
+
+  function setTimelineFilter(filter = "all") {
+    const valid = timelineFilters.some((button) => button.dataset.timelineFilter === filter);
+    const nextFilter = valid ? filter : "all";
+    if (timelineDrawer) timelineDrawer.dataset.timelineView = nextFilter;
+    for (const button of timelineFilters) {
+      button.setAttribute("aria-pressed", String(button.dataset.timelineFilter === nextFilter));
+    }
+  }
+
+  function syncChainHistoryAttention() {
+    const visible = Boolean(chainHistoryToggle && !chainHistoryToggle.hidden);
+    if (visible && !chainHistoryVisible) setDrawer("timeline", true);
+    chainHistoryVisible = visible;
   }
 
   function syncCombatAttention() {
@@ -233,6 +251,8 @@ export function createDuelTableController(documentRef = document) {
   timelineToggle?.addEventListener("click", () => toggleDrawer("timeline"));
   detailClose?.addEventListener("click", () => setDrawer("detail", false));
   timelineClose?.addEventListener("click", () => setDrawer("timeline", false));
+  const timelineFilterHandler = (event) => setTimelineFilter(event.currentTarget.dataset.timelineFilter);
+  for (const button of timelineFilters) button.addEventListener("click", timelineFilterHandler);
   field?.addEventListener("click", closeCompactDrawer);
   hand?.addEventListener("click", closeCompactDrawer);
 
@@ -268,6 +288,14 @@ export function createDuelTableController(documentRef = document) {
 
   const timelineObserver = new MutationObserver(syncTimelineBadge);
   if (timelineCount) timelineObserver.observe(timelineCount, { childList: true, subtree: true });
+
+  const chainHistoryObserver = new MutationObserver(syncChainHistoryAttention);
+  if (chainHistoryToggle) {
+    chainHistoryObserver.observe(chainHistoryToggle, {
+      attributes: true,
+      attributeFilter: ["hidden"]
+    });
+  }
 
   const attentionObserver = new MutationObserver(() => requestAnimationFrame(syncCombatAttention));
   if (hand) {
@@ -315,6 +343,7 @@ export function createDuelTableController(documentRef = document) {
   setDrawer("detail", false);
   setDrawer("timeline", false);
   syncTimelineBadge();
+  setTimelineFilter("all");
   syncDetailDrawer();
   syncCombatAttention();
   syncSetupSummary();
@@ -327,9 +356,11 @@ export function createDuelTableController(documentRef = document) {
     destroy() {
       detailObserver.disconnect();
       timelineObserver.disconnect();
+      chainHistoryObserver.disconnect();
       attentionObserver.disconnect();
       setupObserver.disconnect();
       for (const select of setupSelects) select.removeEventListener("change", setupChangeHandler);
+      for (const button of timelineFilters) button.removeEventListener("click", timelineFilterHandler);
     },
     openDrawer(name) {
       return setDrawer(name, true);

@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import {
   auditIssueLabel,
   chainHistoryPanelView,
-  timelineAuditView
+  timelineAuditView,
+  timelineKindGroup,
+  timelineKindLabel,
+  timelineOverviewView
 } from "../src/timeline-renderer.js";
 
 test("timeline audit view exposes healthy status and localized issue labels", () => {
@@ -32,6 +35,25 @@ test("timeline audit view prioritizes error severity and detailed diagnostics", 
   assert.match(view.text, /直击规则矛盾/);
   assert.match(view.detail, /直击规则矛盾/);
   assert.match(view.title, /ERROR direct-after-block/);
+});
+
+test("timeline overview summarizes the latest node and key actions", () => {
+  const view = timelineOverviewView([
+    { step: 7, kind: "attack", text: "星轨枪兵发动攻击。" },
+    { step: 6, kind: "turn", text: "你的回合开始。" },
+    { step: 5, kind: "summon", text: "召唤星轨枪兵。" }
+  ]);
+
+  assert.deepEqual(view, {
+    latestStep: "#7",
+    latestKind: "攻击",
+    actionCount: 2
+  });
+  assert.equal(timelineKindLabel("trap"), "陷阱");
+  assert.equal(timelineKindLabel("unknown"), "记录");
+  assert.equal(timelineKindGroup("damage"), "battle");
+  assert.equal(timelineKindGroup("draw"), "cards");
+  assert.equal(timelineKindGroup("turn"), "system");
 });
 
 test("chain history panel stays hidden until a completed chain is expanded", () => {

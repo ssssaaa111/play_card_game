@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
   <link rel="stylesheet" href="styles.css?v=20260706-ai-card-reveal" />
-  <link rel="stylesheet" href="duel-table.css?v=20260730-command-deck-3" />
+  <link rel="stylesheet" href="duel-table.css?v=20260730-battle-chronicle-4" />
 </head>
 <body>
   <div id="app">
@@ -151,17 +151,40 @@
       <section class="timeline workspace-drawer timeline-drawer" id="timelineDrawer" aria-label="战斗记录">
         <div class="timeline-head workspace-drawer-head">
           <div>
-            <span class="workspace-drawer-kicker">战局记录</span>
-            <strong>结算时间线</strong>
+            <span class="workspace-drawer-kicker">BATTLE CHRONICLE</span>
+            <strong>战局时间线</strong>
           </div>
           <span class="timeline-meta">
             <span class="timeline-audit ok" id="timelineAudit">审计 OK</span>
-            <span id="timelineCount">0</span>
+            <span class="timeline-total"><strong id="timelineCount">0</strong> 条</span>
           </span>
           <button class="drawer-close" id="timelineDrawerClose" type="button" aria-label="收起战斗记录">×</button>
         </div>
+        <div class="timeline-overview" aria-label="战局摘要">
+          <div>
+            <span>最新节点</span>
+            <strong id="timelineLatestStep">—</strong>
+          </div>
+          <div>
+            <span>最近事件</span>
+            <strong id="timelineLatestKind">等待开局</strong>
+          </div>
+          <div>
+            <span>关键行动</span>
+            <strong id="timelineActionCount">0</strong>
+          </div>
+        </div>
+        <div class="timeline-filters" aria-label="筛选战斗记录">
+          <button type="button" data-timeline-filter="all" aria-pressed="true">全部</button>
+          <button type="button" data-timeline-filter="battle" aria-pressed="false">战斗</button>
+          <button type="button" data-timeline-filter="cards" aria-pressed="false">卡牌</button>
+          <button type="button" data-timeline-filter="system" aria-pressed="false">系统</button>
+        </div>
         <button class="chain-history-toggle" id="chainHistoryToggle" type="button" aria-expanded="false" hidden>
-          <span>连锁复盘</span>
+          <span class="chain-history-toggle-copy">
+            <strong>连锁复盘</strong>
+            <small>查看发动顺序与逆序结算</small>
+          </span>
           <span class="chain-history-count" id="chainHistoryCount">0</span>
         </button>
         <div class="chain-history-list" id="chainHistoryList" hidden></div>
@@ -411,7 +434,7 @@
     </div>
   </div>
 
-  <script type="module" src="src/duel-table.js?v=20260730-command-deck-3"></script>
+  <script type="module" src="src/duel-table.js?v=20260730-battle-chronicle-4"></script>
   <script type="module" src="src/app.js?v=20260706-ai-card-reveal-confirm"></script>
 </body>
 </html>

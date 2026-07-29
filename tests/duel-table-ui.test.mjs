@@ -10,14 +10,14 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260730-command-deck-3"/);
+  assert.match(html, /href="duel-table\.css\?v=20260730-battle-chronicle-4"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
   assert.match(html, /id="detailDrawerToggle"[\s\S]*aria-controls="detailDrawer"/);
   assert.match(html, /id="timelineDrawerToggle"[\s\S]*aria-controls="timelineDrawer"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260730-command-deck-3"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260730-battle-chronicle-4"/);
 });
 
 test("low-frequency media and session controls live behind one utility menu", () => {
@@ -106,4 +106,23 @@ test("desktop hand actions use a tactical command dock without covering the fiel
   assert.match(controller, /handCommand\.dataset\.active = String\(commandActive\)/);
   assert.match(controller, /handCommand\.dataset\.step = locating/);
   assert.match(controller, /attentionObserver\.observe\(choiceActions/);
+});
+
+test("battle chronicle uses full-height summaries filters and structured event nodes", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+  const renderer = read("src/timeline-renderer.js");
+
+  assert.match(html, /BATTLE CHRONICLE[\s\S]*id="timelineLatestStep"[\s\S]*id="timelineLatestKind"[\s\S]*id="timelineActionCount"/);
+  assert.match(html, /data-timeline-filter="all"[\s\S]*data-timeline-filter="battle"[\s\S]*data-timeline-filter="cards"[\s\S]*data-timeline-filter="system"/);
+  assert.match(css, /\.timeline-drawer\s*\{[\s\S]*width: min\(390px,[\s\S]*max-height: none;[\s\S]*grid-template-rows:/);
+  assert.match(css, /\.timeline-drawer \.chain-history-list\s*\{[\s\S]*position: static;/);
+  assert.match(css, /\.timeline-node::after\s*\{[\s\S]*linear-gradient/);
+  assert.match(controller, /function setTimelineFilter\(filter = "all"\)/);
+  assert.match(controller, /timelineDrawer\.dataset\.timelineView = nextFilter/);
+  assert.match(controller, /function syncChainHistoryAttention\(\)[\s\S]*setDrawer\("timeline", true\)/);
+  assert.match(controller, /chainHistoryObserver\.observe\(chainHistoryToggle/);
+  assert.match(renderer, /item\.dataset\.timelineGroup = timelineKindGroup\(entry\.kind\)/);
+  assert.match(renderer, /kind\.textContent = timelineKindLabel\(entry\.kind\)/);
 });
