@@ -1,4 +1,4 @@
-import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
+import { battleValue, canDirectAttack, shieldPreview, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
 import { scoreSpellForAi } from './spells.js';
 import { selectRedirectTarget } from './traps.js';
@@ -273,6 +273,7 @@ export function chooseAiAttackTarget({
   attacker,
   targets = [],
   playerLp = 0,
+  playerShield = 0,
   aiStyle = "balanced",
   canUseDirect = false
 } = {}) {
@@ -287,8 +288,11 @@ export function chooseAiAttackTarget({
 
   const usefulTargets = targetEntries.filter(isUsefulAttackTarget);
   const blockedByBoard = usefulTargets.length === 0;
+  const directDamage = aiStyle === "scriptedPressure"
+    ? shieldPreview(attackerAtk, playerShield, attacker).finalDamage
+    : attackerAtk;
   const shouldDirect = canUseDirect && (
-    attackerAtk >= playerLp ||
+    directDamage >= playerLp ||
     blockedByBoard ||
     (aiStyle === "aggressive" && targetEntries.length > 0)
   );
@@ -469,6 +473,7 @@ export function chooseAiAttackAction({
   field = [],
   rivalField = [],
   rivalLp = 0,
+  rivalShield = 0,
   aiStyle = "balanced",
   skippedAttackers = new Set(),
   canAttackMonster = null
@@ -492,6 +497,7 @@ export function chooseAiAttackAction({
     attacker: pick.card,
     targets: rivalField,
     playerLp: rivalLp,
+    playerShield: rivalShield,
     aiStyle,
     canUseDirect: owner ? canDirectAttack(owner, pick.card) : false
   });

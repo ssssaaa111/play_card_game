@@ -1,4 +1,4 @@
-import { MAX_LP, battleValue, fieldCards, fieldElements, totalAtk } from './rules.js';
+import { MAX_LP, battleValue, fieldCards, fieldElements, shieldPreview, totalAtk } from './rules.js';
 import { fusionOptionsForCard } from './fusion.js';
 
 export const spellDefinitions = {
@@ -406,7 +406,10 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       const bestAtk = Math.max(...attackers.map(totalAtk));
       const targets = fieldCards(rival);
       const blocked = targets.length > 0 && attackers.every((attacker) => targets.every((target) => totalAtk(attacker) < battleValue(target)));
-      if (bestAtk >= rival.lp) return 94;
+      const bestDirectDamage = aiStyle === "scriptedPressure"
+        ? Math.max(...attackers.map((attacker) => shieldPreview(totalAtk(attacker), rival.shield, attacker).finalDamage))
+        : bestAtk;
+      if (bestDirectDamage >= rival.lp) return 94;
       if (blocked) return 76;
       return aiStyle === "aggressive" ? 58 : 0;
     }

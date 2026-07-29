@@ -919,6 +919,46 @@ async function runTrioTrapPlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-shield-lethal-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioShieldLethalPlanning");
+  const breach = ctx.state.ai.hand.find((card) => card?.id === "star-breach");
+  const sun = ctx.state.ai.field.find((card) => card?.id === "trio-sun-judicator");
+  const saint = ctx.state.player.field.find((card) => card?.id === "prism-saint");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!breach || !sun || !saint || ctx.state.player.lp !== 2000 || ctx.state.player.shield !== 2000) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" &&
+      ctx.state.phase === "main" &&
+      ctx.state.actionWindow === "main" &&
+      !ctx.state.aiRunning,
+    `${smokeName}: AI completes the shield-aware attack turn. ${smokeDebug(ctx)}`,
+    30000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const attack = events.find((event) =>
+    event.type === "ATTACK_DECLARED" && event.attackerCardId === sun.uid
+  );
+  const breachActivated = events.some((event) =>
+    event.type === "CARD_ACTIVATED" && event.cardId === breach.uid
+  );
+  if (!attack || attack.targetCardId !== saint.uid || breachActivated) {
+    throw new Error(`${smokeName}: shielded false lethal must not spend direct strike or bypass the monster. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.player.grave.some((card) => card?.uid === saint.uid) ||
+      !ctx.state.ai.hand.some((card) => card?.uid === breach.uid) ||
+      ctx.state.player.lp !== 2000 || ctx.state.player.shield !== 0 || ctx.state.gameOver) {
+    throw new Error(`${smokeName}: sun should clear the monster into shield without dealing LP damage. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiEngineLegalityBasicSmoke(ctx) {
   const smokeName = "ai-engine-legality-basic";
   setSmokeStatus("running", smokeName);
@@ -6234,6 +6274,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
     "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
+    "trio-shield-lethal-planning-basic": runTrioShieldLethalPlanningBasicSmoke,
     "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
     "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
     "response-action-lock-basic": runResponseActionLockBasicSmoke,

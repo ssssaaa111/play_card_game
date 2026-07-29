@@ -742,6 +742,21 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioShieldLethalPlanning: {
+    label: "三曜护盾斩杀",
+    text: "规则测试场景：玩家生命值看似进入日曜直击斩杀线，但现有护盾足以让直击无法终结对局。",
+    goal: "结束回合，观察 AI 不为伪斩杀发动星隙穿透，而是先用日曜清理辉棱圣徒。",
+    playerLp: 2000,
+    playerShield: 2000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil", "mirror-snare"],
+    playerField: ["prism-saint"],
+    aiField: ["trio-sun-judicator"],
+    aiHand: ["star-breach"],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trapChoice: {
     label: "陷阱选择",
     text: "我方预置两张可响应攻击的陷阱，AI 场上有攻击怪兽，用来验证响应窗口多选一。",

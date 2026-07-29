@@ -349,6 +349,14 @@ test("scores AI direct strike and combo spells", () => {
     94
   );
   assert.equal(
+    scoreSpellForAi("directStrike", {
+      owner: duelist({ field: [monster({ atk: 3000 }), null, null] }),
+      rival: duelist({ owner: "player", lp: 2000, shield: 2000, field: [monster({ atk: 1000 }), null, null] }),
+      aiStyle: "scriptedPressure"
+    }),
+    0
+  );
+  assert.equal(
     scoreSpellForAi("fireWindCombo", {
       owner: duelist({ field: [monster({ element: "fire" }), monster({ element: "wind" }), null] }),
       rival: duelist({ owner: "player", lp: 1000 }),

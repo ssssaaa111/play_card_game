@@ -108,6 +108,22 @@ test("AI uses direct attack permission when the board blocks normal attacks", ()
   assert.equal(target, -1);
 });
 
+test("scripted pressure AI does not mistake shielded direct damage for lethal", () => {
+  const action = chooseAiAttackAction({
+    owner: { directAttacks: 1 },
+    field: [monster({ uid: "attacker", atk: 3000 })],
+    rivalField: [monster({ uid: "target", atk: 1000 })],
+    rivalLp: 2000,
+    rivalShield: 2000,
+    aiStyle: "scriptedPressure",
+    canAttackMonster: () => true
+  });
+
+  assert.equal(action.type, "attack");
+  assert.equal(action.targetIndex, 0);
+  assert.equal(action.target?.uid, "target");
+});
+
 test("AI attacks directly when there are no defending monsters", () => {
   assert.equal(chooseAiAttackTarget({
     attacker: monster({ name: "lancer", atk: 1800 }),

@@ -4180,6 +4180,7 @@ async function aiAttack() {
       field: state.ai.field,
       rivalField: state.player.field,
       rivalLp: state.player.lp,
+      rivalShield: state.player.shield,
       aiStyle: state.aiStyle,
       skippedAttackers,
       canAttackMonster: (_card, fieldIndex) =>
