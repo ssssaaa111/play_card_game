@@ -10,6 +10,7 @@ import {
 } from './setup-options.js';
 import { actionsForPhase, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import {
+  aiSupportZoneReserve,
   aiTrapSetLimit,
   collectAiAttackBlockers,
   chooseAiAttackAction,
@@ -17,6 +18,7 @@ import {
   chooseAiSetTrapAction,
   chooseAiSpellAction,
   chooseAiSummonAction,
+  chooseAiTurnGoal,
   shouldSwitchSummonedMonsterToDefense
 } from './ai.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
@@ -4007,15 +4009,28 @@ async function runAiTurn() {
     if (state.phase !== PHASES.main) return;
     render();
     await sleep(1500);
-    await aiPlaySpells();
+    const turnGoal = chooseAiTurnGoal({
+      hand: state.ai.hand,
+      field: state.ai.field,
+      aiStyle: state.aiStyle,
+      canSummon: (_card, handIndex, options) => explainSummonMonsterFromUiState(
+        state,
+        "ai",
+        handIndex,
+        options.fieldIndex,
+        { tributeIndexes: options.tributeIndexes }
+      ).ok
+    });
+    await aiPlaySpells({ turnGoal, timing: "beforeSummon" });
     if (state.gameOver) return;
     await sleep(850);
-    if (aiSetTraps() > 0) {
+    if (aiSetTraps({ turnGoal }) > 0) {
       render();
       await sleep(1300);
     }
     if (state.gameOver) return;
-    if (await aiSummon()) {
+    let summonedThisTurn = await aiSummon();
+    if (summonedThisTurn) {
       render();
       await sleep(1700);
     }
@@ -4026,8 +4041,13 @@ async function runAiTurn() {
       await sleep(950);
       const summoned = await aiSummon();
       if (!summoned) break;
+      summonedThisTurn = true;
       render();
       await sleep(1850);
+    }
+    if (state.gameOver) return;
+    if (turnGoal === "deployTrio" && summonedThisTurn) {
+      await aiPlaySpells({ turnGoal, timing: "afterSummon" });
     }
     if (state.gameOver) return;
     dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
@@ -4052,23 +4072,34 @@ async function runAiTurn() {
   }
 }
 
-async function aiPlaySpells() {
+async function aiPlaySpells({ turnGoal = "pressure", timing = "beforeSummon" } = {}) {
   let action = chooseAiSpellAction({
     hand: state.ai.hand,
     owner: state.ai,
     rival: state.player,
     aiStyle: state.aiStyle,
+    turnGoal,
+    timing,
     canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
   });
   while (action && !state.gameOver) {
+    const playedCard = action.card;
     const acted = await playSpell(state.ai, state.player, action.handIndex);
     if (!acted) return;
+    if (action.reason === "trioDeploymentFirst") {
+      addLog(
+        `对手在三曜部署完成后才发动「${playedCard.name}」，避免把强化浪费在祭品上。`,
+        cardLogMeta(playedCard, { actor: "ai", type: "decision" })
+      );
+    }
     await sleep(1650);
     action = chooseAiSpellAction({
       hand: state.ai.hand,
       owner: state.ai,
       rival: state.player,
       aiStyle: state.aiStyle,
+      turnGoal,
+      timing,
       canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
     });
   }
@@ -4111,8 +4142,20 @@ async function aiSummon() {
   return true;
 }
 
-function aiSetTraps() {
-  const limit = aiTrapSetLimit({ traps: state.ai.traps, aiStyle: state.aiStyle });
+function aiSetTraps({ turnGoal = "pressure" } = {}) {
+  const reservedZones = aiSupportZoneReserve({
+    hand: state.ai.hand,
+    owner: state.ai,
+    rival: state.player,
+    aiStyle: state.aiStyle,
+    turnGoal,
+    canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
+  });
+  const limit = aiTrapSetLimit({
+    traps: state.ai.traps,
+    aiStyle: state.aiStyle,
+    reservedZones
+  });
   let setCount = 0;
   while (setCount < limit) {
     const action = chooseAiSetTrapAction({

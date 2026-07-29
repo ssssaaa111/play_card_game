@@ -20,6 +20,26 @@ const scriptedPressureTrapPriority = {
   "void-lock": 70
 };
 
+const summonSensitiveSpellEffects = new Set([
+  "dawnEdge",
+  "lastStandSurge",
+  "buff500",
+  "soulResonance",
+  "rallyAttack",
+  "battleTrance",
+  "equipBlade",
+  "equipAegis",
+  "equipPrism",
+  "equipOverclock"
+]);
+
+const supportZoneInvestmentSpellEffects = new Set([
+  "equipBlade",
+  "equipAegis",
+  "equipPrism",
+  "equipOverclock"
+]);
+
 function templateId(card) {
   return card?.id || card?.templateId || "";
 }
@@ -164,9 +184,17 @@ export function chooseAiSpellAction({
   owner = null,
   rival = null,
   aiStyle = "balanced",
+  turnGoal = "pressure",
+  timing = "beforeSummon",
   minScore = 40,
   canActivateSpell = null
 } = {}) {
+  const shouldDeferMonsterInvestment = aiStyle === "scriptedPressure" &&
+    turnGoal === "deployTrio" &&
+    timing === "beforeSummon";
+  const shouldResumeMonsterInvestment = aiStyle === "scriptedPressure" &&
+    turnGoal === "deployTrio" &&
+    timing === "afterSummon";
   const candidates = hand
     .map((card, index) => ({ card, index }))
     .filter(({ card, index }) =>
@@ -174,11 +202,23 @@ export function chooseAiSpellAction({
       typeof canActivateSpell === "function" &&
       canActivateSpell(card, index)
     )
+    .filter(({ card }) =>
+      !shouldDeferMonsterInvestment || !summonSensitiveSpellEffects.has(card.effect)
+    )
+    .filter(({ card }) =>
+      !shouldResumeMonsterInvestment || summonSensitiveSpellEffects.has(card.effect)
+    )
     .map(({ card, index }) => ({
       type: "spell",
       card,
       handIndex: index,
-      score: scoreSpellForAi(card.effect, { owner, rival, aiStyle })
+      score: scoreSpellForAi(card.effect, { owner, rival, aiStyle }),
+      reason: aiStyle === "scriptedPressure" &&
+        turnGoal === "deployTrio" &&
+        timing === "afterSummon" &&
+        summonSensitiveSpellEffects.has(card.effect)
+        ? "trioDeploymentFirst"
+        : ""
     }))
     .filter((entry) => entry.score >= minScore)
     .sort((a, b) => b.score - a.score || a.handIndex - b.handIndex);
@@ -218,11 +258,14 @@ export function chooseAiSetTrapAction({
 
 export function aiTrapSetLimit({
   traps = [],
-  aiStyle = "balanced"
+  aiStyle = "balanced",
+  reservedZones = 0
 } = {}) {
   const emptyZones = traps.filter((slot) => !slot).length;
   if (emptyZones <= 0) return 0;
-  return aiStyle === "scriptedPressure" ? emptyZones : 1;
+  return aiStyle === "scriptedPressure"
+    ? Math.max(0, emptyZones - Math.max(0, Number(reservedZones) || 0))
+    : 1;
 }
 
 export function scoreAiMonster(card, aiStyle = "balanced") {
@@ -365,6 +408,39 @@ export function chooseAiAttackAction({
     targetIndex,
     target: targetIndex >= 0 ? rivalField[targetIndex] : null
   };
+}
+
+export function chooseAiTurnGoal({
+  hand = [],
+  field = [],
+  aiStyle = "balanced",
+  canSummon = null
+} = {}) {
+  if (aiStyle !== "scriptedPressure") return "pressure";
+  const summon = chooseAiSummonAction({ hand, field, aiStyle, canSummon });
+  return summon?.tributeCost === 3 && isTrioPressureMonster(summon.card)
+    ? "deployTrio"
+    : "pressure";
+}
+
+export function aiSupportZoneReserve({
+  hand = [],
+  owner = null,
+  rival = null,
+  aiStyle = "balanced",
+  turnGoal = "pressure",
+  minScore = 40,
+  canActivateSpell = null
+} = {}) {
+  if (aiStyle !== "scriptedPressure" || turnGoal !== "deployTrio") return 0;
+  const hasDeferredSupport = hand.some((card, handIndex) =>
+    card?.type === "spell" &&
+    supportZoneInvestmentSpellEffects.has(card.effect) &&
+    scoreSpellForAi(card.effect, { owner, rival, aiStyle }) >= minScore &&
+    typeof canActivateSpell === "function" &&
+    canActivateSpell(card, handIndex)
+  );
+  return hasDeferredSupport ? 1 : 0;
 }
 
 export function collectAiAttackBlockers({

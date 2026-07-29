@@ -695,6 +695,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-mirror-restraint-basic": runAiMirrorRestraintBasicSmoke/);
   assert.match(smoke, /"ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke/);
   assert.match(smoke, /"trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke/);
+  assert.match(smoke, /"trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke/);
   assert.match(smoke, /"summon-effects": runSummonEffectsSmoke/);
   assert.match(smoke, /"summon-fire-buff": runSummonFireBuffSmoke/);
   assert.match(smoke, /"summon-shield": runSummonShieldSmoke/);

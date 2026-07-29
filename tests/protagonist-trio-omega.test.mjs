@@ -271,6 +271,33 @@ test("trio attack planning scenario isolates an exclusive high-threat matchup", 
   }));
 });
 
+test("trio turn planning scenario isolates a summon-sensitive monster investment", () => {
+  const setup = buildScenarioState(scenarioSetups.trioTurnPlanning, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.equal(scenarioSetups.trioTurnPlanning.aiStyle, "scriptedPressure");
+  assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), [
+    "iron-guardian",
+    "rift-bulwark",
+    "void-hound"
+  ]);
+  assert.deepEqual(setup.ai.hand.map((card) => card.id), [
+    "war-chant",
+    "trio-sun-judicator",
+    "trio-moon-warden",
+    "trio-star-herald"
+  ]);
+  assertValidGameState(buildEngineStateFromUiState({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai },
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+});
+
 test("trio omega full duel can still pay three tributes after one opening body is destroyed", () => {
   const uiState = fullScenarioUiState({ opening: true });
   uiState.player.field = [cloneCardById("flare-titan"), null, null, null, null];

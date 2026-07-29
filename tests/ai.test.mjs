@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  aiSupportZoneReserve,
   aiTrapSetLimit,
   collectAiAttackBlockers,
   chooseAiAttackAction,
@@ -10,6 +11,7 @@ import {
   chooseAiSetTrapAction,
   chooseAiSpellAction,
   chooseAiSummonAction,
+  chooseAiTurnGoal,
   shouldSwitchSummonedMonsterToDefense
 } from "../src/ai.js";
 
@@ -232,6 +234,48 @@ test("AI spell planner fails closed when engine legality is not provided", () =>
   assert.equal(chooseAiSpellAction({ hand: owner.hand, owner, rival, minScore: 0 }), null);
 });
 
+test("scripted pressure AI defers monster investment until after planned trio deployment", () => {
+  const chant = spell("buff500", { id: "war-chant" });
+  const owner = {
+    lp: 4000,
+    shield: 0,
+    field: [
+      monster({ id: "tribute-a", atk: 1800 }),
+      monster({ id: "tribute-b", atk: 1400 }),
+      monster({ id: "tribute-c", atk: 1000 }),
+      null,
+      null
+    ],
+    hand: [chant],
+    deck: [],
+    traps: [null, null, null, null, null]
+  };
+  const rival = { lp: 4000, field: [], hand: [], deck: [], traps: [] };
+
+  const beforeSummon = chooseAiSpellAction({
+    hand: owner.hand,
+    owner,
+    rival,
+    aiStyle: "scriptedPressure",
+    turnGoal: "deployTrio",
+    timing: "beforeSummon",
+    canActivateSpell: () => true
+  });
+  const afterSummon = chooseAiSpellAction({
+    hand: owner.hand,
+    owner,
+    rival,
+    aiStyle: "scriptedPressure",
+    turnGoal: "deployTrio",
+    timing: "afterSummon",
+    canActivateSpell: () => true
+  });
+
+  assert.equal(beforeSummon, null);
+  assert.equal(afterSummon?.card, chant);
+  assert.equal(afterSummon?.reason, "trioDeploymentFirst");
+});
+
 test("AI trap planner returns the first hand trap and first empty trap zone", () => {
   const action = chooseAiSetTrapAction({
     hand: [monster(), trap({ id: "mirror" })],
@@ -293,8 +337,35 @@ test("scripted pressure AI can fill its available backrow while other styles set
   const traps = [null, trap({ id: "set-card" }), null, null, null];
 
   assert.equal(aiTrapSetLimit({ traps, aiStyle: "scriptedPressure" }), 4);
+  assert.equal(aiTrapSetLimit({ traps, aiStyle: "scriptedPressure", reservedZones: 1 }), 3);
   assert.equal(aiTrapSetLimit({ traps, aiStyle: "balanced" }), 1);
   assert.equal(aiTrapSetLimit({ traps: traps.map(() => trap()), aiStyle: "scriptedPressure" }), 0);
+});
+
+test("scripted pressure AI reserves a support zone for a deferred trio equipment", () => {
+  const owner = {
+    lp: 4000,
+    field: [monster({ id: "tribute-a" }), monster({ id: "tribute-b" }), monster({ id: "tribute-c" })],
+    hand: [spell("equipPrism", { id: "prism-drive" })],
+    traps: [null, null, null, null, null]
+  };
+
+  assert.equal(aiSupportZoneReserve({
+    hand: owner.hand,
+    owner,
+    rival: { field: [], traps: [] },
+    aiStyle: "scriptedPressure",
+    turnGoal: "deployTrio",
+    canActivateSpell: () => true
+  }), 1);
+  assert.equal(aiSupportZoneReserve({
+    hand: owner.hand,
+    owner,
+    rival: { field: [], traps: [] },
+    aiStyle: "scriptedPressure",
+    turnGoal: "pressure",
+    canActivateSpell: () => true
+  }), 0);
 });
 
 test("AI summon planner chooses the best monster for its style", () => {
@@ -421,6 +492,38 @@ test("scripted pressure AI selects ordinary bodies before trio gods as tribute",
 
   assert.deepEqual(action.tributeIndexes, [1]);
   assert.equal(action.fieldIndex, 2);
+});
+
+test("scripted pressure AI adopts a trio deployment goal only for a legal three-tribute summon", () => {
+  const field = [
+    monster({ id: "material-1" }),
+    monster({ id: "material-2" }),
+    monster({ id: "material-3" }),
+    null,
+    null
+  ];
+  const hand = [
+    monster({ id: "trio-sun-judicator", atk: 3000, stars: 7, tributeCost: 3 })
+  ];
+
+  assert.equal(chooseAiTurnGoal({
+    hand,
+    field,
+    aiStyle: "scriptedPressure",
+    canSummon: () => true
+  }), "deployTrio");
+  assert.equal(chooseAiTurnGoal({
+    hand,
+    field,
+    aiStyle: "balanced",
+    canSummon: () => true
+  }), "pressure");
+  assert.equal(chooseAiTurnGoal({
+    hand,
+    field: [field[0], field[1], null, null, null],
+    aiStyle: "scriptedPressure",
+    canSummon: () => false
+  }), "pressure");
 });
 
 test("AI defense switch policy is explicit", () => {

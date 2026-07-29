@@ -826,6 +826,49 @@ async function runTrioAttackPlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioTurnPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-turn-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioTurnPlanning");
+  const chant = ctx.state.ai.hand.find((card) => card?.id === "war-chant");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!chant) {
+    throw new Error(`${smokeName}: scripted opening is missing war chant. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && !ctx.state.aiRunning,
+    `${smokeName}: AI completes its planned deployment turn. ${smokeDebug(ctx)}`,
+    42000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const trioSummonIndex = events.findIndex((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.playerId === "ai" &&
+    eventReferencesTemplate(event, "trio-sun-judicator")
+  );
+  const chantIndex = events.findIndex((event) =>
+    event.type === "CARD_ACTIVATED" && event.cardId === chant.uid
+  );
+  const sun = ctx.state.ai.field.find((card) => card?.id === "trio-sun-judicator");
+  const decisionLog = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("三曜部署完成后才发动「战意高扬」")
+  );
+
+  if (trioSummonIndex < 0 || chantIndex <= trioSummonIndex) {
+    throw new Error(`${smokeName}: war chant must resolve after the trio tribute summon. ${smokeDebug(ctx)}`);
+  }
+  if (!sun || sun.tempAtk !== 500 || !ctx.state.ai.grave.some((card) => card?.uid === chant.uid)) {
+    throw new Error(`${smokeName}: the delayed investment must strengthen sun and then enter the grave. ${smokeDebug(ctx)}`);
+  }
+  if (!decisionLog || decisionLog.cardId !== "war-chant") {
+    throw new Error(`${smokeName}: the public decision log must explain the delayed visible spell. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiEngineLegalityBasicSmoke(ctx) {
   const smokeName = "ai-engine-legality-basic";
   setSmokeStatus("running", smokeName);
@@ -6139,6 +6182,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-mirror-restraint-basic": runAiMirrorRestraintBasicSmoke,
     "ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke,
     "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
+    "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
     "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
     "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
     "response-action-lock-basic": runResponseActionLockBasicSmoke,

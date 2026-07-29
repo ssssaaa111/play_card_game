@@ -713,6 +713,20 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioTurnPlanning: {
+    label: "三曜回合规划",
+    text: "规则测试场景：AI 同时持有三曜部署、怪兽强化和正好三只祭品，验证强化资源不会先浪费在即将离场的祭品上。",
+    goal: "结束回合，观察 AI 先保留战意高扬，以三只祭品召唤日曜并完成三曜共降，再把强化投入已经登场的日曜。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["void-siege-breaker"],
+    aiField: ["iron-guardian", "rift-bulwark", "void-hound"],
+    aiHand: ["war-chant", "trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trapChoice: {
     label: "陷阱选择",
     text: "我方预置两张可响应攻击的陷阱，AI 场上有攻击怪兽，用来验证响应窗口多选一。",
