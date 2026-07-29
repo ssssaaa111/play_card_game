@@ -10,14 +10,14 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260730-duel-attention-2"/);
+  assert.match(html, /href="duel-table\.css\?v=20260730-command-deck-3"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
   assert.match(html, /id="detailDrawerToggle"[\s\S]*aria-controls="detailDrawer"/);
   assert.match(html, /id="timelineDrawerToggle"[\s\S]*aria-controls="timelineDrawer"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260730-duel-attention-2"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260730-command-deck-3"/);
 });
 
 test("low-frequency media and session controls live behind one utility menu", () => {
@@ -91,4 +91,19 @@ test("pre-duel setup uses a responsive loadout and tactical intelligence cockpit
   assert.match(controller, /function syncSetupSummary\(\)/);
   assert.match(controller, /setupReadySummary\.textContent = `\$\{role\} · \$\{deck\}`/);
   assert.match(controller, /select\.addEventListener\("change", setupChangeHandler\)/);
+});
+
+test("desktop hand actions use a tactical command dock without covering the field", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+
+  assert.match(html, /class="hand-command"[\s\S]*id="handCommandTitle"[\s\S]*id="choiceActions"/);
+  assert.match(html, /class="hand-command-flow"[\s\S]*01[\s\S]*02[\s\S]*03/);
+  assert.match(css, /\.hand-panel\s*\{[\s\S]*grid-template-columns: 102px minmax\(0, 1fr\) clamp\(276px, 25vw, 332px\)/);
+  assert.match(css, /\.hand-command > \.choice-actions\s*\{[\s\S]*position: static;[\s\S]*transform: none/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.hand-command\s*\{[\s\S]*display: contents;[\s\S]*\.hand-command > \.choice-actions\s*\{[\s\S]*position: fixed/);
+  assert.match(controller, /handCommand\.dataset\.active = String\(commandActive\)/);
+  assert.match(controller, /handCommand\.dataset\.step = locating/);
+  assert.match(controller, /attentionObserver\.observe\(choiceActions/);
 });

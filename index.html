@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
   <link rel="stylesheet" href="styles.css?v=20260706-ai-card-reveal" />
-  <link rel="stylesheet" href="duel-table.css?v=20260730-duel-attention-2" />
+  <link rel="stylesheet" href="duel-table.css?v=20260730-command-deck-3" />
 </head>
 <body>
   <div id="app">
@@ -197,29 +197,47 @@
         <div class="hand" id="hand"></div>
         <div class="grave-targets" id="graveTargets" hidden></div>
       </div>
+      <aside class="hand-command" id="handCommand" aria-label="战术指令">
+        <div class="hand-command-head">
+          <span>TACTICAL COMMAND</span>
+          <span class="hand-command-signal">
+            <i aria-hidden="true"></i>
+            <span id="handCommandSignal">待命</span>
+          </span>
+        </div>
+        <div class="hand-command-idle" id="handCommandIdle">
+          <strong id="handCommandTitle">选择一张手牌</strong>
+          <span id="handCommandHint">卡牌的召唤、发动与目标确认会集中显示在这里。</span>
+          <div class="hand-command-flow" aria-hidden="true">
+            <span class="is-current"><b>01</b> 选牌</span>
+            <span><b>02</b> 定位</span>
+            <span><b>03</b> 执行</span>
+          </div>
+        </div>
+        <div class="choice-actions" id="choiceActions" hidden>
+          <div class="timer-progress" id="timerProgress" aria-hidden="true">
+            <div id="timerProgressFill"></div>
+          </div>
+          <div class="fusion-preview" id="fusionPreview" hidden>
+            <div class="fusion-preview-copy">
+              <span class="fusion-preview-kicker" id="fusionPreviewKicker">融合预览</span>
+              <strong id="fusionPreviewName"></strong>
+              <span id="fusionPreviewStats"></span>
+            </div>
+            <div class="fusion-result-choices" id="fusionResultChoices" aria-label="选择融合结果"></div>
+            <div class="fusion-preview-materials" id="fusionPreviewMaterials"></div>
+            <button class="btn small-action" id="fusionPreviewDetail" type="button">查看结果详情</button>
+          </div>
+          <span id="choiceText">选择一张卡</span>
+          <button class="btn primary" id="choiceConfirmBtn" type="button">确认</button>
+          <button class="btn" id="choiceCancelBtn" type="button">取消</button>
+        </div>
+      </aside>
     </section>
   </div>
 
     <div class="toast" id="toast"></div>
     <div class="effect-layer" id="effectLayer"></div>
-    <div class="choice-actions" id="choiceActions" hidden>
-      <div class="timer-progress" id="timerProgress" aria-hidden="true">
-        <div id="timerProgressFill"></div>
-      </div>
-      <div class="fusion-preview" id="fusionPreview" hidden>
-        <div class="fusion-preview-copy">
-          <span class="fusion-preview-kicker" id="fusionPreviewKicker">融合预览</span>
-          <strong id="fusionPreviewName"></strong>
-          <span id="fusionPreviewStats"></span>
-        </div>
-        <div class="fusion-result-choices" id="fusionResultChoices" aria-label="选择融合结果"></div>
-        <div class="fusion-preview-materials" id="fusionPreviewMaterials"></div>
-        <button class="btn small-action" id="fusionPreviewDetail" type="button">查看结果详情</button>
-      </div>
-      <span id="choiceText">选择一张卡</span>
-      <button class="btn primary" id="choiceConfirmBtn" type="button">确认</button>
-      <button class="btn" id="choiceCancelBtn" type="button">取消</button>
-    </div>
     <div class="ace-overlay" id="aceOverlay">
     <div class="ace-card">
       <strong id="aceName">王牌登场</strong>
@@ -393,7 +411,7 @@
     </div>
   </div>
 
-  <script type="module" src="src/duel-table.js?v=20260730-duel-attention-2"></script>
+  <script type="module" src="src/duel-table.js?v=20260730-command-deck-3"></script>
   <script type="module" src="src/app.js?v=20260706-ai-card-reveal-confirm"></script>
 </body>
 </html>

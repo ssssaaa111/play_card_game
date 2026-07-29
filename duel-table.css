@@ -695,7 +695,7 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   z-index: 20;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: 102px minmax(0, 1fr);
+  grid-template-columns: 102px minmax(0, 1fr) clamp(276px, 25vw, 332px);
   gap: 10px;
   padding: 10px;
   overflow: hidden;
@@ -815,6 +815,164 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   background: rgba(64, 43, 12, 0.78);
 }
 
+.hand-command {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 9px;
+  padding: 10px 11px;
+  overflow: hidden;
+  border: 1px solid rgba(84, 210, 210, 0.18);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 92% 4%, rgba(84, 210, 210, 0.1), transparent 34%),
+    linear-gradient(145deg, rgba(84, 210, 210, 0.035), transparent 52%),
+    rgba(7, 12, 20, 0.86);
+  box-shadow: inset 3px 0 0 rgba(84, 210, 210, 0.2);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.hand-command::after {
+  position: absolute;
+  top: 0;
+  right: 10px;
+  left: 10px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(84, 210, 210, 0.48), transparent);
+}
+
+.hand-command[data-active="true"] {
+  border-color: rgba(246, 189, 96, 0.42);
+  background:
+    radial-gradient(circle at 92% 4%, rgba(246, 189, 96, 0.13), transparent 36%),
+    linear-gradient(145deg, rgba(246, 189, 96, 0.045), transparent 54%),
+    rgba(11, 13, 19, 0.94);
+  box-shadow: inset 3px 0 0 rgba(246, 189, 96, 0.54), 0 0 24px rgba(246, 189, 96, 0.06);
+}
+
+.hand-command-head,
+.hand-command-signal {
+  display: flex;
+  align-items: center;
+}
+
+.hand-command-head {
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(84, 210, 210, 0.66);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+}
+
+.hand-command-signal {
+  flex: 0 0 auto;
+  gap: 5px;
+  color: rgba(203, 214, 229, 0.54);
+  letter-spacing: 0.08em;
+}
+
+.hand-command-signal i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.58);
+}
+
+.hand-command[data-signal="ready"] .hand-command-signal {
+  color: #aff8f2;
+}
+
+.hand-command[data-signal="ready"] .hand-command-signal i {
+  background: var(--cyan);
+  box-shadow: 0 0 10px rgba(84, 210, 210, 0.72);
+}
+
+.hand-command[data-signal="active"] .hand-command-signal {
+  color: #ffe9a8;
+}
+
+.hand-command[data-signal="active"] .hand-command-signal i {
+  background: var(--gold);
+  box-shadow: 0 0 10px rgba(246, 189, 96, 0.7);
+  animation: table-attention-pulse 1.4s ease-in-out infinite;
+}
+
+.hand-command-idle {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: center;
+  gap: 6px;
+  padding: 3px 2px 1px;
+}
+
+.hand-command[data-active="true"] .hand-command-idle {
+  display: none;
+}
+
+.hand-command-idle > strong {
+  overflow: hidden;
+  color: #f2f7ff;
+  font-size: 15px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hand-command-idle > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(203, 214, 229, 0.62);
+  font-size: 10px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.hand-command-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.hand-command-flow > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 7px;
+  color: rgba(148, 163, 184, 0.56);
+  background: rgba(5, 8, 14, 0.46);
+  font-size: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hand-command-flow b {
+  color: inherit;
+  font-size: 7px;
+}
+
+.hand-command[data-step="select"] .hand-command-flow > span:nth-child(1),
+.hand-command[data-step="locate"] .hand-command-flow > span:nth-child(2),
+.hand-command[data-step="execute"] .hand-command-flow > span:nth-child(3) {
+  border-color: rgba(84, 210, 210, 0.34);
+  color: #bffafa;
+  background: rgba(16, 55, 59, 0.62);
+}
+
+.hand-command[data-step="execute"] .hand-command-flow > span:nth-child(3) {
+  border-color: rgba(246, 189, 96, 0.4);
+  color: #ffe9a8;
+  background: rgba(68, 46, 13, 0.64);
+}
+
 @keyframes table-attention-pulse {
   0%,
   100% {
@@ -837,11 +995,62 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   padding-bottom: 3px;
 }
 
-.choice-actions {
+.hand-command > .choice-actions {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-content: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  backdrop-filter: none;
+}
+
+.hand-command > .choice-actions .timer-progress {
+  margin-bottom: 2px;
+}
+
+.hand-command > .choice-actions #choiceText {
+  max-height: 3.9em;
+  overflow: hidden;
+  color: #f2f7ff;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.hand-command > .choice-actions #choiceConfirmBtn,
+.hand-command > .choice-actions #choiceCancelBtn {
+  min-width: 68px;
+  min-height: 40px;
+  padding-inline: 10px;
+}
+
+.hand-command > .choice-actions.fusion-choice,
+.hand-command > .choice-actions.material-choice,
+.hand-command > .choice-actions.split-choice {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: 16px;
+  left: 50%;
   z-index: 90;
+  width: min(
+    620px,
+    calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 24px)
+  );
+  align-content: initial;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(246, 189, 96, 0.52);
   border-radius: 12px;
   background: rgba(7, 10, 17, 0.96);
   box-shadow: var(--table-shadow);
+  transform: translateX(-50%);
   backdrop-filter: blur(16px);
 }
 
@@ -1361,6 +1570,43 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
     padding: 8px;
   }
 
+  .hand-command {
+    display: contents;
+  }
+
+  .hand-command-head,
+  .hand-command-idle {
+    display: none;
+  }
+
+  .hand-command > .choice-actions {
+    position: fixed;
+    top: 56%;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    z-index: 90;
+    width: min(
+      520px,
+      calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 24px)
+    );
+    align-content: initial;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgba(246, 189, 96, 0.52);
+    border-radius: 12px;
+    background: rgba(7, 10, 17, 0.96);
+    box-shadow: var(--table-shadow);
+    transform: translate(-50%, -50%);
+    backdrop-filter: blur(16px);
+  }
+
+  .hand-command > .choice-actions.target-choice {
+    top: calc(var(--safe-area-top) + 12px);
+    bottom: auto;
+    transform: translateX(-50%);
+  }
+
   .hand-title {
     padding-inline: 6px;
   }
@@ -1718,11 +1964,38 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
     flex-basis: clamp(142px, 43vw, 166px);
   }
 
-  .choice-actions {
+  .hand-command > .choice-actions {
+    top: auto;
     right: 6px;
     bottom: calc(clamp(242px, 36dvh, 296px) + max(12px, var(--safe-area-bottom)));
     left: 6px;
     width: auto;
+    transform: none;
+  }
+
+  .hand-command > .choice-actions.target-choice {
+    top: calc(var(--safe-area-top) + 12px);
+    right: 6px;
+    bottom: auto;
+    left: 6px;
+    width: auto;
+    transform: none;
+  }
+
+  .hand-command > .choice-actions.fusion-choice,
+  .hand-command > .choice-actions.material-choice,
+  .hand-command > .choice-actions.split-choice {
+    top: 12px;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    width: min(
+      520px,
+      calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 24px)
+    );
+    max-height: calc(48vh - 12px);
+    overflow-y: auto;
+    transform: translateX(-50%);
   }
 }
 
@@ -1820,10 +2093,13 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
     top: 44px;
   }
 
-  .choice-actions {
+  .hand-command > .choice-actions {
+    top: auto;
     right: calc(clamp(226px, 31vw, 300px) + 12px);
     bottom: 8px;
     left: 8px;
+    width: auto;
+    transform: none;
   }
 }
 

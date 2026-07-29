@@ -28,6 +28,11 @@ export function createDuelTableController(documentRef = document) {
   const handGuide = documentRef.querySelector("#handGuide");
   const handReadyCount = documentRef.querySelector("#handReadyCount");
   const handReadyLabel = documentRef.querySelector("#handReadyLabel");
+  const handCommand = documentRef.querySelector("#handCommand");
+  const handCommandTitle = documentRef.querySelector("#handCommandTitle");
+  const handCommandHint = documentRef.querySelector("#handCommandHint");
+  const handCommandSignal = documentRef.querySelector("#handCommandSignal");
+  const choiceActions = documentRef.querySelector("#choiceActions");
   const phaseSteps = [...documentRef.querySelectorAll("[data-phase-step]")];
   const roleSelect = documentRef.querySelector("#roleSelect");
   const deckSelect = documentRef.querySelector("#deckSelect");
@@ -91,6 +96,8 @@ export function createDuelTableController(documentRef = document) {
     const readyCount = hand?.querySelectorAll(".card.action-ready:not(.action-blocked)").length || 0;
     const selectedCard = hand?.querySelector(".card.selected");
     const selectedName = selectedCard?.dataset.cardName || "";
+    const commandActive = Boolean(choiceActions && !choiceActions.hidden);
+    const locating = ["target", "fusion", "tribute"].includes(selection);
 
     for (const step of phaseSteps) {
       const current = step.dataset.phaseStep === phase;
@@ -117,6 +124,46 @@ export function createDuelTableController(documentRef = document) {
               : canAct
                 ? "可操作"
                 : "等待";
+    }
+    if (handCommand) {
+      handCommand.dataset.active = String(commandActive);
+      handCommand.dataset.signal = commandActive
+        ? "active"
+        : canAct && readyCount > 0
+          ? "ready"
+          : "waiting";
+      handCommand.dataset.step = locating
+        ? "locate"
+        : commandActive || Boolean(selectedCard)
+          ? "execute"
+          : "select";
+    }
+    if (handCommandSignal) {
+      handCommandSignal.textContent = commandActive
+        ? "确认中"
+        : canAct && readyCount > 0
+          ? "可行动"
+          : "等待";
+    }
+    if (handCommandTitle) {
+      handCommandTitle.textContent = selectedName
+        ? `准备执行「${selectedName}」`
+        : readyCount > 0
+          ? `${readyCount} 张卡牌等待指令`
+          : phase === "setup"
+            ? "等待决斗部署"
+            : canAct
+              ? "查看场上状态"
+              : "等待行动窗口";
+    }
+    if (handCommandHint) {
+      handCommandHint.textContent = selectedName
+        ? "使用指令区确认当前行动，或继续选择场上的落点与目标。"
+        : readyCount > 0
+          ? "选择手牌后，召唤、发动和目标确认会集中显示在这里。"
+          : canAct
+            ? "当前没有可直接使用的手牌，可以查看场上怪兽或结束回合。"
+            : "对手行动与连锁响应出现时，指令区会自动切换为可操作状态。";
     }
     if (!handGuide) return;
     handGuide.textContent = selection === "target"
@@ -241,6 +288,14 @@ export function createDuelTableController(documentRef = document) {
         "data-duel-selection",
         "data-duel-can-act"
       ]
+    });
+  }
+  if (choiceActions) {
+    attentionObserver.observe(choiceActions, {
+      attributes: true,
+      attributeFilter: ["class", "hidden"],
+      childList: true,
+      subtree: true
     });
   }
 
