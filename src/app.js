@@ -2770,7 +2770,7 @@ async function chooseTrapIndex(owner, rival, eventName, context) {
   const candidates = trapCandidates(owner, eventName, context);
   if (candidates.length === 0) return { trapIndex: -1, candidates, declined: false };
   if (owner.owner !== "player") {
-    const action = chooseAiTrapResponseAction({ candidates, owner, rival, eventName, context });
+    const action = chooseAiTrapResponseAction({ candidates, owner, rival, aiStyle: state.aiStyle, eventName, context });
     return { trapIndex: action?.trapIndex ?? -1, candidates, declined: false };
   }
   const choice = await promptTrapChoice(candidates, eventName, { owner, rival, context });

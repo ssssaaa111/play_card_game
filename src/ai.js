@@ -1,5 +1,7 @@
 import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
+import { describeBattleOutcome } from './battle.js';
 import { scoreSpellForAi } from './spells.js';
+import { selectRedirectTarget } from './traps.js';
 
 const scriptedPressureMonsterPriority = {
   "trio-sun-judicator": 900,
@@ -123,8 +125,124 @@ function attackThreatScore({ owner = null, rival = null, context = {} } = {}) {
   return 0;
 }
 
+function attackOutcome({ owner = null, rival = null, context = {} } = {}, {
+  attacker = rival?.field?.[context.attackerIndex],
+  targetIndex = context.targetIndex,
+  defender = owner
+} = {}) {
+  if (!attacker) return { outcome: null, target: null };
+  const target = targetIndex >= 0 ? owner?.field?.[targetIndex] : null;
+  return {
+    target,
+    outcome: describeBattleOutcome(attacker, target, rival, defender)
+  };
+}
+
+function defenderOutcomeCost(outcome, target) {
+  if (!outcome) return 0;
+  const targetLoss = outcome.destroysTarget
+    ? 10000 + Math.max(totalAtk(target), totalDef(target))
+    : 0;
+  const defenderDamage = ["direct", "attackWin", "pierceDefense"].includes(outcome.kind)
+    ? outcome.finalDamage
+    : 0;
+  return targetLoss + defenderDamage;
+}
+
+function scriptedAttackThreatScore(details) {
+  const { outcome, target } = attackOutcome(details);
+  if (!outcome) return 0;
+  if (!target) {
+    return outcome.finalDamage > 0
+      ? 120 + Math.min(80, Math.floor(outcome.finalDamage / 100))
+      : 0;
+  }
+  if (!outcome.destroysTarget) return 0;
+  const targetValue = Math.max(totalAtk(target), totalDef(target));
+  return 140 +
+    Math.min(60, Math.floor(targetValue / 100)) +
+    Math.min(30, Math.floor(outcome.finalDamage / 100));
+}
+
+function adjustedAttacker(attacker, atkDelta) {
+  return {
+    ...attacker,
+    tempAtk: (attacker?.tempAtk || 0) + atkDelta
+  };
+}
+
+function scoreContinuingAttackTrap(details, { atkDelta = 0, shieldDelta = 0 } = {}) {
+  const attacker = details.rival?.field?.[details.context?.attackerIndex];
+  if (!attacker) return 0;
+  const baseline = attackOutcome(details);
+  const adjustedDefender = {
+    ...details.owner,
+    shield: (details.owner?.shield || 0) + shieldDelta
+  };
+  const adjusted = attackOutcome(details, {
+    attacker: adjustedAttacker(attacker, atkDelta),
+    defender: adjustedDefender
+  });
+  const beforeCost = defenderOutcomeCost(baseline.outcome, baseline.target);
+  const afterCost = defenderOutcomeCost(adjusted.outcome, adjusted.target);
+  if (beforeCost <= afterCost) return 0;
+
+  const ownerLp = Math.max(0, Number(details.owner?.lp) || 0);
+  const preventsLethal = baseline.outcome?.finalDamage >= ownerLp && adjusted.outcome?.finalDamage < ownerLp;
+  const savesTarget = Boolean(baseline.outcome?.destroysTarget && !adjusted.outcome?.destroysTarget);
+  if (!savesTarget && !preventsLethal && baseline.target) return 0;
+  if (!baseline.target && !preventsLethal) {
+    return 100 + Math.min(80, beforeCost - afterCost);
+  }
+  return 280 + Math.min(80, Math.floor((beforeCost - afterCost) / 100));
+}
+
+function scoreRedirectAttack(details) {
+  const currentTargetIndex = details.context?.targetIndex ?? -1;
+  const redirectTargetIndex = selectRedirectTarget(details.owner?.field || [], currentTargetIndex);
+  if (redirectTargetIndex < 0) return 0;
+  const baseline = attackOutcome(details);
+  const redirected = attackOutcome(details, { targetIndex: redirectTargetIndex });
+  const improvement = defenderOutcomeCost(baseline.outcome, baseline.target) -
+    defenderOutcomeCost(redirected.outcome, redirected.target);
+  return improvement > 0 ? 180 + Math.min(100, Math.floor(improvement / 100)) : 0;
+}
+
+function scoreScriptedPressureAttackTrap(card, details) {
+  const threat = scriptedAttackThreatScore(details);
+  if (card.trigger === "attackDestroy") {
+    const attacker = details.rival?.field?.[details.context?.attackerIndex];
+    return threat > 0
+      ? 320 + Math.min(80, Math.floor(totalAtk(attacker) / 100))
+      : 0;
+  }
+  if (["counterBoost", "attackShift", "attackNegate", "aceGuard"].includes(card.trigger)) {
+    if (threat <= 0) return 0;
+    const bonus = {
+      attackNegate: 0,
+      attackShift: 20,
+      counterBoost: 30,
+      aceGuard: 60
+    }[card.trigger] || 0;
+    return 220 + Math.min(40, Math.floor(threat / 5)) + bonus;
+  }
+  if (card.trigger === "weakenAttack") {
+    return scoreContinuingAttackTrap(details, { atkDelta: -500 });
+  }
+  if (card.trigger === "soulParry") {
+    return scoreContinuingAttackTrap(details, { atkDelta: -300, shieldDelta: 300 });
+  }
+  if (card.trigger === "redirectAttack") {
+    return scoreRedirectAttack(details);
+  }
+  return 0;
+}
+
 function scoreAiTrapResponse(card, details = {}) {
   if (!card) return 0;
+  if (details.aiStyle === "scriptedPressure" && details.eventName === "attack") {
+    return scoreScriptedPressureAttackTrap(card, details);
+  }
   if (details.eventName === "attack" && card.trigger === "attackDestroy") {
     return attackThreatScore(details);
   }
@@ -135,6 +253,7 @@ export function chooseAiTrapResponseAction({
   candidates = [],
   owner = null,
   rival = null,
+  aiStyle = "balanced",
   eventName = "",
   context = {}
 } = {}) {
@@ -143,7 +262,7 @@ export function chooseAiTrapResponseAction({
       type: "activateTrap",
       card,
       trapIndex: index,
-      score: scoreAiTrapResponse(card, { owner, rival, eventName, context })
+      score: scoreAiTrapResponse(card, { owner, rival, aiStyle, eventName, context })
     }))
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score || a.trapIndex - b.trapIndex)[0];

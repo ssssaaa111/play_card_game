@@ -298,6 +298,28 @@ test("trio turn planning scenario isolates a summon-sensitive monster investment
   }));
 });
 
+test("trio trap planning scenario isolates an ineffective weaken and a full negate", () => {
+  const setup = buildScenarioState(scenarioSetups.trioTrapPlanning, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.equal(scenarioSetups.trioTrapPlanning.aiStyle, "scriptedPressure");
+  assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), ["solar-vanguard"]);
+  assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), ["gale-mage"]);
+  assert.deepEqual(setup.ai.traps.filter(Boolean).map((card) => card.id), [
+    "weakening-web",
+    "void-lock"
+  ]);
+  assertValidGameState(buildEngineStateFromUiState({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai },
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+});
+
 test("trio omega full duel can still pay three tributes after one opening body is destroyed", () => {
   const uiState = fullScenarioUiState({ opening: true });
   uiState.player.field = [cloneCardById("flare-titan"), null, null, null, null];

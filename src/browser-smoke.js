@@ -869,6 +869,56 @@ async function runTrioTurnPlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioTrapPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-trap-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioTrapPlanning");
+  const weakeningWeb = ctx.state.ai.traps.find((card) => card?.id === "weakening-web");
+  const voidLock = ctx.state.ai.traps.find((card) => card?.id === "void-lock");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "solar-vanguard");
+  const defender = ctx.state.ai.field.find((card) => card?.id === "gale-mage");
+  if (!weakeningWeb || !voidLock || !attacker || !defender) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "solar-vanguard"), `${smokeName}: select attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "gale-mage")?.classList.contains("attack-target"),
+    `${smokeName}: defender becomes attackable`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "gale-mage"), `${smokeName}: declare threatening attack`);
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.classList.contains("show") &&
+      ctx.els.aiRevealTitle?.textContent.includes("星界封锁"),
+    `${smokeName}: AI reveals the full negate instead of weakening`,
+    12000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue trap reveal`);
+  await waitForSmoke(
+    () => ctx.state.ai.grave.some((card) => card?.uid === voidLock.uid) &&
+      ctx.state.ai.traps.some((card) => card?.uid === weakeningWeb.uid) &&
+      ctx.state.player.field.some((card) => card?.uid === attacker.uid) &&
+      ctx.state.ai.field.some((card) => card?.uid === defender.uid) &&
+      !ctx.els.aiRevealModal?.classList.contains("show") &&
+      !ctx.els.chainModal?.classList.contains("show"),
+    `${smokeName}: negate resolves while weakening remains set`,
+    14000
+  );
+  const attackEvents = (ctx.state.gameEvents || []).filter((event) =>
+    event.type === "ATTACK_DECLARED" && event.attackerCardId === attacker.uid
+  );
+  const activatedWeakening = (ctx.state.gameEvents || []).some((event) =>
+    event.type === "CARD_ACTIVATED" && event.cardId === weakeningWeb.uid
+  );
+  if (attackEvents.length !== 1 || activatedWeakening ||
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "BATTLE_RESOLVED" && event.attackerCardId === attacker.uid
+      )) {
+    throw new Error(`${smokeName}: only void lock should answer and the canceled attack must not deal battle damage. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiEngineLegalityBasicSmoke(ctx) {
   const smokeName = "ai-engine-legality-basic";
   setSmokeStatus("running", smokeName);
@@ -6183,6 +6233,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke,
     "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
     "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
+    "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
     "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
     "response-action-lock-basic": runResponseActionLockBasicSmoke,

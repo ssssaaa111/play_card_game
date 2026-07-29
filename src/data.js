@@ -727,6 +727,21 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioTrapPlanning: {
+    label: "三曜陷阱择优",
+    text: "规则测试场景：AI 同时盖放弱化力场和星界封锁，弱化 500 后仍无法保住疾风术士。",
+    goal: "用曜锋先锋攻击疾风术士，观察 AI 保留无法改变战果的弱化力场，改用星界封锁完整挡下攻击。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["solar-vanguard"],
+    aiField: ["gale-mage"],
+    aiTraps: ["weakening-web", "void-lock"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trapChoice: {
     label: "陷阱选择",
     text: "我方预置两张可响应攻击的陷阱，AI 场上有攻击怪兽，用来验证响应窗口多选一。",

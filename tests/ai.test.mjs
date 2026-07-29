@@ -166,6 +166,118 @@ test("AI uses mirror snare against a direct attack", () => {
   assert.ok(action?.score > 0);
 });
 
+test("scripted pressure AI preserves weakening web when the incoming attacker already loses", () => {
+  const weakeningWeb = trap({ id: "weakening-web", trigger: "weakenAttack" });
+  const defender = monster({ uid: "defender", atk: 2400 });
+  const attacker = monster({ uid: "attacker", atk: 900 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: weakeningWeb, index: 0 }],
+    eventName: "attack",
+    owner: { field: [defender], lp: 4000, shield: 0 },
+    rival: { field: [attacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action, null);
+});
+
+test("scripted pressure AI negates an attack when weakening would not save its target", () => {
+  const weakeningWeb = trap({ id: "weakening-web", trigger: "weakenAttack" });
+  const voidLock = trap({ id: "void-lock", trigger: "attackNegate" });
+  const defender = monster({ uid: "defender", atk: 1200 });
+  const attacker = monster({ uid: "attacker", atk: 2200 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [
+      { card: weakeningWeb, index: 0 },
+      { card: voidLock, index: 1 }
+    ],
+    eventName: "attack",
+    owner: { field: [defender], lp: 4000, shield: 0 },
+    rival: { field: [attacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action?.card, voidLock);
+  assert.equal(action?.trapIndex, 1);
+});
+
+test("scripted pressure AI preserves a negate when its shield already absorbs direct damage", () => {
+  const voidLock = trap({ id: "void-lock", trigger: "attackNegate" });
+  const attacker = monster({ uid: "attacker", atk: 1800 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: voidLock, index: 1 }],
+    eventName: "attack",
+    owner: { field: [], lp: 4000, shield: 2000 },
+    rival: { field: [attacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: -1 }
+  });
+
+  assert.equal(action, null);
+});
+
+test("scripted pressure AI uses weakening web when it reverses the battle outcome", () => {
+  const weakeningWeb = trap({ id: "weakening-web", trigger: "weakenAttack" });
+  const defender = monster({ uid: "defender", atk: 1600 });
+  const attacker = monster({ uid: "attacker", atk: 1900 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: weakeningWeb, index: 2 }],
+    eventName: "attack",
+    owner: { field: [defender], lp: 4000, shield: 0 },
+    rival: { field: [attacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action?.card, weakeningWeb);
+  assert.equal(action?.trapIndex, 2);
+  assert.ok(action?.score > 0);
+});
+
+test("scripted pressure AI rejects a redirect that turns a winning defense into a lost monster", () => {
+  const phantomSwitch = trap({ id: "phantom-switch", trigger: "redirectAttack" });
+  const currentTarget = monster({ uid: "current", atk: 2400, def: 1000 });
+  const redirectTarget = monster({ uid: "redirect", atk: 800, def: 1400, mode: "defense" });
+  const attacker = monster({ uid: "attacker", atk: 1900 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: phantomSwitch, index: 0 }],
+    eventName: "attack",
+    owner: { field: [currentTarget, redirectTarget], lp: 4000, shield: 0 },
+    rival: { field: [attacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action, null);
+});
+
+test("scripted pressure AI redirects a lethal matchup into a surviving guard", () => {
+  const phantomSwitch = trap({ id: "phantom-switch", trigger: "redirectAttack" });
+  const currentTarget = monster({ uid: "current", atk: 1200, def: 1000 });
+  const redirectTarget = monster({ uid: "redirect", atk: 800, def: 2500, mode: "defense" });
+  const attacker = monster({ uid: "attacker", atk: 2200 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: phantomSwitch, index: 3 }],
+    eventName: "attack",
+    owner: { field: [currentTarget, redirectTarget], lp: 4000, shield: 0 },
+    rival: { field: [attacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action?.card, phantomSwitch);
+  assert.equal(action?.trapIndex, 3);
+  assert.ok(action?.score > 0);
+});
+
 test("AI spell planner picks the highest legal scored spell", () => {
   const owner = {
     lp: 4000,
