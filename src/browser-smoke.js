@@ -919,6 +919,63 @@ async function runTrioTrapPlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioDirectTrapPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-direct-trap-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioDirectTrapPlanning");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "star-lancer");
+  const guard = ctx.state.ai.traps.find((card) => card?.id === "guard-sigil");
+  const rebound = ctx.state.ai.traps.find((card) => card?.id === "reversal-flare");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!attacker || !guard || !rebound || ctx.state.player.lp !== 500 || ctx.state.ai.lp !== 2400) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "star-breach"), `${smokeName}: select direct strike spell`);
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: direct strike confirmation enabled`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: activate direct strike`);
+  await waitForSmoke(
+    () => ctx.state.player.directAttacks > 0,
+    `${smokeName}: direct attack permission granted`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select attacker`);
+  await waitForSmoke(
+    () => ctx.els.aiPanel.classList.contains("direct-target"),
+    `${smokeName}: direct target highlighted`,
+    6000
+  );
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: declare direct attack`);
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "ai" && !ctx.state.aiRunning,
+    `${smokeName}: rebound ends the duel. ${smokeDebug(ctx)}`,
+    12000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const reboundDamage = events.find((event) =>
+    event.type === "DAMAGE_DEALT" &&
+    event.playerId === "player" &&
+    event.sourceCardId === rebound.uid
+  );
+  const reboundLog = (ctx.state.timeline || []).find((entry) =>
+    logEntryMessage(entry).includes("逆焰护壁")
+  );
+  if (!events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === rebound.uid) ||
+      events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === guard.uid) ||
+      reboundDamage?.amount !== 500 || reboundLog?.cardId !== "reversal-flare") {
+    throw new Error(`${smokeName}: only reversal flare should activate and reflect 500 damage. ${smokeDebug(ctx)}`);
+  }
+  if (ctx.state.player.lp !== 0 || ctx.state.ai.lp !== 2400 ||
+      !ctx.state.ai.grave.some((card) => card?.uid === rebound.uid) ||
+      !ctx.state.ai.traps.some((card) => card?.uid === guard.uid)) {
+    throw new Error(`${smokeName}: rebound must win while guard sigil remains set. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
   const smokeName = "trio-shield-lethal-planning-basic";
   setSmokeStatus("running", smokeName);
@@ -6372,6 +6429,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
     "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
+    "trio-direct-trap-planning-basic": runTrioDirectTrapPlanningBasicSmoke,
     "trio-shield-lethal-planning-basic": runTrioShieldLethalPlanningBasicSmoke,
     "trio-after-attack-lethal-planning-basic": runTrioAfterAttackLethalPlanningBasicSmoke,
     "trio-combined-lethal-planning-basic": runTrioCombinedLethalPlanningBasicSmoke,

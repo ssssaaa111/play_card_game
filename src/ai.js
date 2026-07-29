@@ -2,6 +2,7 @@ import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
 import { findAiDirectLethalAttacker, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
 import { selectRedirectTarget } from './traps.js';
+import { getCardEffectDefinition } from './game-engine.js';
 
 const scriptedPressureMonsterPriority = {
   "trio-sun-judicator": 900,
@@ -238,10 +239,48 @@ function scoreScriptedPressureAttackTrap(card, details) {
   return 0;
 }
 
+function directTrapEffectValue(card, details) {
+  const definition = getCardEffectDefinition(card?.trigger);
+  const operations = Array.isArray(definition?.operations) ? definition.operations : [];
+  const reboundDamage = operations
+    .filter((operation) => operation.op === "dealDamage" && operation.player === "rival")
+    .reduce((total, operation) => total + Math.max(0, Number(operation.amount) || 0), 0);
+  const drawCount = operations
+    .filter((operation) => operation.op === "drawCards" && operation.player === "self")
+    .reduce((total, operation) => total + Math.max(0, Number(operation.count) || 0), 0);
+  const rivalLp = Math.max(0, Number(details.rival?.lp) || 0);
+  const availableDraws = Math.min(drawCount, details.owner?.deck?.length || 0);
+  return {
+    reboundDamage,
+    reboundLethal: rivalLp > 0 && reboundDamage >= rivalLp,
+    availableDraws
+  };
+}
+
+function scoreScriptedPressureDirectTrap(card, details) {
+  const { outcome } = attackOutcome(details);
+  const attacker = details.rival?.field?.[details.context?.attackerIndex];
+  const incomingDamage = previewAiDirectDamage(attacker, details.owner?.shield);
+  if (outcome?.kind !== "direct" || incomingDamage <= 0) return 0;
+
+  const ownerLp = Math.max(0, Number(details.owner?.lp) || 0);
+  const preventsLethal = ownerLp > 0 && incomingDamage >= ownerLp;
+  const effectValue = directTrapEffectValue(card, details);
+  let score = 180 + Math.min(80, Math.floor(incomingDamage / 100));
+  if (preventsLethal) score += 180;
+  if (effectValue.reboundLethal) score += 400;
+  else {
+    score += Math.min(60, Math.floor(effectValue.reboundDamage / 10));
+    score += effectValue.availableDraws * 40;
+  }
+  return score;
+}
+
 function scoreAiTrapResponse(card, details = {}) {
   if (!card) return 0;
-  if (details.aiStyle === "scriptedPressure" && details.eventName === "attack") {
-    return scoreScriptedPressureAttackTrap(card, details);
+  if (details.aiStyle === "scriptedPressure") {
+    if (details.eventName === "attack") return scoreScriptedPressureAttackTrap(card, details);
+    if (details.eventName === "direct") return scoreScriptedPressureDirectTrap(card, details);
   }
   if (details.eventName === "attack" && card.trigger === "attackDestroy") {
     return attackThreatScore(details);

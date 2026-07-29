@@ -285,6 +285,65 @@ test("scripted pressure AI preserves a negate when its shield already absorbs di
   assert.equal(action, null);
 });
 
+test("scripted pressure AI preserves direct traps when its shield already absorbs the hit", () => {
+  const guard = trap({ id: "guard-sigil", trigger: "directShield" });
+  const attacker = monster({ uid: "attacker", atk: 1800 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: guard, index: 0 }],
+    eventName: "direct",
+    owner: { field: [], lp: 4000, shield: 2000, deck: [monster()] },
+    rival: { field: [attacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: -1 }
+  });
+
+  assert.equal(action, null);
+});
+
+test("scripted pressure AI uses a direct trap when after-attack damage pierces the remaining shield", () => {
+  const guard = trap({ id: "guard-sigil", trigger: "directShield" });
+  const attacker = monster({
+    uid: "attacker",
+    id: "trio-star-herald",
+    atk: 2400,
+    afterAttack: "starDoomCharge"
+  });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: guard, index: 0 }],
+    eventName: "direct",
+    owner: { field: [], lp: 4000, shield: 2500, deck: [monster()] },
+    rival: { field: [attacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: -1 }
+  });
+
+  assert.equal(action?.card, guard);
+  assert.equal(action?.trapIndex, 0);
+});
+
+test("scripted pressure AI prefers lethal direct rebound over drawing from guard sigil", () => {
+  const guard = trap({ id: "guard-sigil", trigger: "directShield" });
+  const rebound = trap({ id: "reversal-flare", trigger: "directRebound" });
+  const attacker = monster({ uid: "attacker", atk: 1800 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [
+      { card: guard, index: 0 },
+      { card: rebound, index: 1 }
+    ],
+    eventName: "direct",
+    owner: { field: [], lp: 1200, shield: 0, deck: [monster()] },
+    rival: { field: [attacker], lp: 500, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: -1 }
+  });
+
+  assert.equal(action?.card, rebound);
+  assert.equal(action?.trapIndex, 1);
+});
+
 test("scripted pressure AI uses weakening web when it reverses the battle outcome", () => {
   const weakeningWeb = trap({ id: "weakening-web", trigger: "weakenAttack" });
   const defender = monster({ uid: "defender", atk: 1600 });

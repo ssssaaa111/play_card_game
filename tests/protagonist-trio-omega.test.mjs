@@ -320,6 +320,31 @@ test("trio trap planning scenario isolates an ineffective weaken and a full nega
   }));
 });
 
+test("trio direct trap planning scenario isolates a lethal rebound choice", () => {
+  const setup = buildScenarioState(scenarioSetups.trioDirectTrapPlanning, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.equal(scenarioSetups.trioDirectTrapPlanning.aiStyle, "scriptedPressure");
+  assert.equal(setup.player.lp, 500);
+  assert.equal(setup.ai.lp, 2400);
+  assert.deepEqual(setup.player.hand.map((card) => card.id), ["star-breach"]);
+  assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), ["star-lancer"]);
+  assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), ["gale-mage"]);
+  assert.deepEqual(setup.ai.traps.filter(Boolean).map((card) => card.id), [
+    "guard-sigil",
+    "reversal-flare"
+  ]);
+  assertValidGameState(buildEngineStateFromUiState({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai },
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+});
+
 test("trio shield lethal planning scenario isolates a shielded false lethal", () => {
   const setup = buildScenarioState(scenarioSetups.trioShieldLethalPlanning, {
     playerPreset: "protagonistTrioOmegaFull",

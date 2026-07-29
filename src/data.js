@@ -742,6 +742,21 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioDirectTrapPlanning: {
+    label: "三曜直击反制",
+    text: "规则测试场景：AI 同时盖放守护刻印和逆焰护壁；逆焰护壁的 500 点反弹能够立即终结进攻方。",
+    goal: "发动星隙穿透并直接攻击 AI，观察 AI 保留守护刻印，优先用逆焰护壁反弹 500 点伤害完成反杀。",
+    playerLp: 500,
+    aiLp: 2400,
+    playerHand: ["star-breach"],
+    playerDeck: ["guard-sigil"],
+    playerField: ["star-lancer"],
+    aiField: ["gale-mage"],
+    aiTraps: ["guard-sigil", "reversal-flare"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trioShieldLethalPlanning: {
     label: "三曜护盾斩杀",
     text: "规则测试场景：玩家生命值看似进入日曜直击斩杀线，但现有护盾足以让直击无法终结对局。",
