@@ -757,6 +757,20 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioAfterAttackLethalPlanning: {
+    label: "三曜追加斩杀",
+    text: "规则测试场景：星曜的 2400 点直击加上攻击后 300 点终局压力，正好能够终结 2700 生命值。",
+    goal: "结束回合，观察 AI 发动星隙穿透，由星曜绕过辉棱圣徒直接攻击，并用追加伤害完成斩杀。",
+    playerLp: 2700,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil", "mirror-snare"],
+    playerField: ["prism-saint"],
+    aiField: ["trio-star-herald"],
+    aiHand: ["star-breach"],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trapChoice: {
     label: "陷阱选择",
     text: "我方预置两张可响应攻击的陷阱，AI 场上有攻击怪兽，用来验证响应窗口多选一。",

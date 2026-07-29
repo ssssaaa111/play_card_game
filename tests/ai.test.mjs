@@ -124,6 +124,27 @@ test("scripted pressure AI does not mistake shielded direct damage for lethal", 
   assert.equal(action.target?.uid, "target");
 });
 
+test("scripted pressure AI includes guaranteed after-attack damage in direct lethal planning", () => {
+  const action = chooseAiAttackAction({
+    owner: { directAttacks: 1 },
+    field: [monster({
+      uid: "star",
+      id: "trio-star-herald",
+      atk: 2400,
+      afterAttack: "starDoomCharge"
+    })],
+    rivalField: [monster({ uid: "target", atk: 1000 })],
+    rivalLp: 2700,
+    rivalShield: 0,
+    aiStyle: "scriptedPressure",
+    canAttackMonster: () => true
+  });
+
+  assert.equal(action.type, "attack");
+  assert.equal(action.cardUid, "star");
+  assert.equal(action.targetIndex, -1);
+});
+
 test("AI attacks directly when there are no defending monsters", () => {
   assert.equal(chooseAiAttackTarget({
     attacker: monster({ name: "lancer", atk: 1800 }),

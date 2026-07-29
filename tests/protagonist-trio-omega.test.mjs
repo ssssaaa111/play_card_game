@@ -341,6 +341,27 @@ test("trio shield lethal planning scenario isolates a shielded false lethal", ()
   }));
 });
 
+test("trio after-attack lethal planning scenario isolates star's exact lethal", () => {
+  const setup = buildScenarioState(scenarioSetups.trioAfterAttackLethalPlanning, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.equal(scenarioSetups.trioAfterAttackLethalPlanning.aiStyle, "scriptedPressure");
+  assert.equal(setup.player.lp, 2700);
+  assert.equal(setup.player.shield, undefined);
+  assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), ["prism-saint"]);
+  assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), ["trio-star-herald"]);
+  assert.deepEqual(setup.ai.hand.map((card) => card.id), ["star-breach"]);
+  assertValidGameState(buildEngineStateFromUiState({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai },
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+});
+
 test("trio omega full duel can still pay three tributes after one opening body is destroyed", () => {
   const uiState = fullScenarioUiState({ opening: true });
   uiState.player.field = [cloneCardById("flare-titan"), null, null, null, null];

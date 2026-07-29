@@ -1,5 +1,26 @@
 import { MAX_LP, battleValue, fieldCards, fieldElements, shieldPreview, totalAtk } from './rules.js';
 import { fusionOptionsForCard } from './fusion.js';
+import { getCardEffectDefinition } from './game-engine.js';
+
+function guaranteedAfterAttackDamage(attacker) {
+  const definition = getCardEffectDefinition(attacker?.afterAttack);
+  if (!definition || (definition.requirements?.length || 0) > 0) return [];
+  return (definition.operations || [])
+    .filter((operation) => operation.op === "dealDamage" && operation.player === "rival")
+    .map((operation) => Math.max(0, Number(operation.amount) || 0))
+    .filter((amount) => amount > 0);
+}
+
+export function previewAiDirectDamage(attacker, shield = 0) {
+  let remainingShield = Math.max(0, Number(shield) || 0);
+  let finalDamage = 0;
+  for (const amount of [totalAtk(attacker), ...guaranteedAfterAttackDamage(attacker)]) {
+    const preview = shieldPreview(amount, remainingShield, attacker);
+    finalDamage += preview.finalDamage;
+    remainingShield = preview.shieldAfter;
+  }
+  return finalDamage;
+}
 
 export const spellDefinitions = {
   burn500: {
@@ -407,7 +428,7 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       const targets = fieldCards(rival);
       const blocked = targets.length > 0 && attackers.every((attacker) => targets.every((target) => totalAtk(attacker) < battleValue(target)));
       const bestDirectDamage = aiStyle === "scriptedPressure"
-        ? Math.max(...attackers.map((attacker) => shieldPreview(totalAtk(attacker), rival.shield, attacker).finalDamage))
+        ? Math.max(...attackers.map((attacker) => previewAiDirectDamage(attacker, rival.shield)))
         : bestAtk;
       if (bestDirectDamage >= rival.lp) return 94;
       if (blocked) return 76;

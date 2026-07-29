@@ -959,6 +959,52 @@ async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-after-attack-lethal-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioAfterAttackLethalPlanning");
+  const breach = ctx.state.ai.hand.find((card) => card?.id === "star-breach");
+  const star = ctx.state.ai.field.find((card) => card?.id === "trio-star-herald");
+  const saint = ctx.state.player.field.find((card) => card?.id === "prism-saint");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!breach || !star || !saint || ctx.state.player.lp !== 2700) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "star-breach"),
+    `${smokeName}: AI reveals direct strike for the exact lethal route`,
+    12000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue direct strike reveal`);
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "ai" && !ctx.state.aiRunning,
+    `${smokeName}: direct attack plus after-attack damage ends the duel. ${smokeDebug(ctx)}`,
+    24000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const attack = events.find((event) =>
+    event.type === "ATTACK_DECLARED" && event.attackerCardId === star.uid
+  );
+  const damage = events
+    .filter((event) => event.type === "DAMAGE_DEALT" && event.sourceCardId === star.uid)
+    .map((event) => event.amount);
+  if (!events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === breach.uid) ||
+      !attack || attack.targetCardId || !events.some((event) =>
+        event.type === "ABILITY_SPENT" && event.ability === "directAttack"
+      )) {
+    throw new Error(`${smokeName}: AI must spend direct strike and bypass the monster. ${smokeDebug(ctx)}`);
+  }
+  if (damage.length !== 2 || damage[0] !== 2400 || damage[1] !== 300 ||
+      !ctx.state.player.field.some((card) => card?.uid === saint.uid) ||
+      ctx.state.player.lp !== 0 || star.tempAtk !== 300) {
+    throw new Error(`${smokeName}: star must deal 2400 plus 300 while leaving the bypassed monster in play. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiEngineLegalityBasicSmoke(ctx) {
   const smokeName = "ai-engine-legality-basic";
   setSmokeStatus("running", smokeName);
@@ -6275,6 +6321,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "trio-shield-lethal-planning-basic": runTrioShieldLethalPlanningBasicSmoke,
+    "trio-after-attack-lethal-planning-basic": runTrioAfterAttackLethalPlanningBasicSmoke,
     "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
     "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
     "response-action-lock-basic": runResponseActionLockBasicSmoke,

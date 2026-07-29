@@ -1,6 +1,6 @@
-import { battleValue, canDirectAttack, shieldPreview, totalAtk, totalDef } from './rules.js';
+import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
-import { scoreSpellForAi } from './spells.js';
+import { previewAiDirectDamage, scoreSpellForAi } from './spells.js';
 import { selectRedirectTarget } from './traps.js';
 
 const scriptedPressureMonsterPriority = {
@@ -289,7 +289,7 @@ export function chooseAiAttackTarget({
   const usefulTargets = targetEntries.filter(isUsefulAttackTarget);
   const blockedByBoard = usefulTargets.length === 0;
   const directDamage = aiStyle === "scriptedPressure"
-    ? shieldPreview(attackerAtk, playerShield, attacker).finalDamage
+    ? previewAiDirectDamage(attacker, playerShield)
     : attackerAtk;
   const shouldDirect = canUseDirect && (
     directDamage >= playerLp ||
