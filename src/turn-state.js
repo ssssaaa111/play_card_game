@@ -162,6 +162,26 @@ export function turnStartPatch(owner) {
   };
 }
 
+export function turnStartAttackLockReleases(events = []) {
+  const seen = new Set();
+  return events
+    .filter((event) =>
+      event?.type === "MONSTER_TURN_RESET" &&
+      Boolean(event.beforeAttackLockReason) &&
+      !event.afterAttackLockReason &&
+      event.cardId
+    )
+    .filter((event) => {
+      if (seen.has(event.cardId)) return false;
+      seen.add(event.cardId);
+      return true;
+    })
+    .map((event) => ({
+      cardId: event.cardId,
+      reason: event.beforeAttackLockReason
+    }));
+}
+
 export function drawToMainPatch() {
   return {
     pendingTarget: null

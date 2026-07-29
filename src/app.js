@@ -10,11 +10,15 @@ import {
 } from './setup-options.js';
 import { actionsForPhase, shouldRunPlayerIdleCountdown, summarizePlayerActions } from './actions.js';
 import {
+  aiSupportZoneReserve,
+  aiTrapSetLimit,
+  collectAiAttackBlockers,
   chooseAiAttackAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
   chooseAiSpellAction,
   chooseAiSummonAction,
+  chooseAiTurnGoal,
   shouldSwitchSummonedMonsterToDefense
 } from './ai.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
@@ -151,6 +155,7 @@ import {
   pauseResumeStep,
   playerActionWindowDecision,
   shouldRunPlayerIdleCountdownForState,
+  turnStartAttackLockReleases,
   turnStartPatch
 } from './turn-state.js';
 import {
@@ -2765,7 +2770,7 @@ async function chooseTrapIndex(owner, rival, eventName, context) {
   const candidates = trapCandidates(owner, eventName, context);
   if (candidates.length === 0) return { trapIndex: -1, candidates, declined: false };
   if (owner.owner !== "player") {
-    const action = chooseAiTrapResponseAction({ candidates, owner, rival, eventName, context });
+    const action = chooseAiTrapResponseAction({ candidates, owner, rival, aiStyle: state.aiStyle, eventName, context });
     return { trapIndex: action?.trapIndex ?? -1, candidates, declined: false };
   }
   const choice = await promptTrapChoice(candidates, eventName, { owner, rival, context });
@@ -3886,8 +3891,9 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
 }
 
 function beginTurn(owner) {
+  let turnEvents = [];
   try {
-    dispatchStartTurnFromUiState(state, owner);
+    turnEvents = dispatchStartTurnFromUiState(state, owner);
   } catch (error) {
     cue(error.message || "回合开始失败。");
     console.error(error);
@@ -3899,6 +3905,21 @@ function beginTurn(owner) {
   clearPlayerIdleTimers();
   playSound("turn");
   addLog(`${owner === "player" ? "你的" : "AI 的"}回合开始。`);
+  const releasedCards = turnStartAttackLockReleases(turnEvents)
+    .map((release) => ({ ...release, card: findRuntimeCard(release.cardId)?.card || null }))
+    .filter((release) => release.card);
+  if (releasedCards.length > 0) {
+    const cards = releasedCards.map((release) => release.card);
+    const convergenceReleased = releasedCards.every((release) => release.reason === "trioConvergence");
+    addLog(
+      `${cards.map((card) => `「${card.name}」`).join("、")}的${convergenceReleased ? "三曜共降" : "临时"}攻击限制已解除，本回合可以攻击。`,
+      cardLogMeta(cards[0], {
+        actor: owner,
+        type: "status",
+        relatedCardIds: relatedCardIds(...cards.slice(1))
+      })
+    );
+  }
   playVoice(owner, "turn", owner === "player" ? "轮到你了。抽卡。" : "对手回合。");
   if (owner === "player") {
     window.setTimeout(() => {
@@ -3988,15 +4009,28 @@ async function runAiTurn() {
     if (state.phase !== PHASES.main) return;
     render();
     await sleep(1500);
-    await aiPlaySpells();
+    const turnGoal = chooseAiTurnGoal({
+      hand: state.ai.hand,
+      field: state.ai.field,
+      aiStyle: state.aiStyle,
+      canSummon: (_card, handIndex, options) => explainSummonMonsterFromUiState(
+        state,
+        "ai",
+        handIndex,
+        options.fieldIndex,
+        { tributeIndexes: options.tributeIndexes }
+      ).ok
+    });
+    await aiPlaySpells({ turnGoal, timing: "beforeSummon" });
     if (state.gameOver) return;
     await sleep(850);
-    if (aiSetTraps()) {
+    if (aiSetTraps({ turnGoal }) > 0) {
       render();
       await sleep(1300);
     }
     if (state.gameOver) return;
-    if (await aiSummon()) {
+    let summonedThisTurn = await aiSummon();
+    if (summonedThisTurn) {
       render();
       await sleep(1700);
     }
@@ -4007,8 +4041,13 @@ async function runAiTurn() {
       await sleep(950);
       const summoned = await aiSummon();
       if (!summoned) break;
+      summonedThisTurn = true;
       render();
       await sleep(1850);
+    }
+    if (state.gameOver) return;
+    if (turnGoal === "deployTrio" && summonedThisTurn) {
+      await aiPlaySpells({ turnGoal, timing: "afterSummon" });
     }
     if (state.gameOver) return;
     dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
@@ -4033,23 +4072,34 @@ async function runAiTurn() {
   }
 }
 
-async function aiPlaySpells() {
+async function aiPlaySpells({ turnGoal = "pressure", timing = "beforeSummon" } = {}) {
   let action = chooseAiSpellAction({
     hand: state.ai.hand,
     owner: state.ai,
     rival: state.player,
     aiStyle: state.aiStyle,
+    turnGoal,
+    timing,
     canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
   });
   while (action && !state.gameOver) {
+    const playedCard = action.card;
     const acted = await playSpell(state.ai, state.player, action.handIndex);
     if (!acted) return;
+    if (action.reason === "trioDeploymentFirst") {
+      addLog(
+        `对手在三曜部署完成后才发动「${playedCard.name}」，避免把强化浪费在祭品上。`,
+        cardLogMeta(playedCard, { actor: "ai", type: "decision" })
+      );
+    }
     await sleep(1650);
     action = chooseAiSpellAction({
       hand: state.ai.hand,
       owner: state.ai,
       rival: state.player,
       aiStyle: state.aiStyle,
+      turnGoal,
+      timing,
       canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
     });
   }
@@ -4092,15 +4142,33 @@ async function aiSummon() {
   return true;
 }
 
-function aiSetTraps() {
-  const action = chooseAiSetTrapAction({
+function aiSetTraps({ turnGoal = "pressure" } = {}) {
+  const reservedZones = aiSupportZoneReserve({
     hand: state.ai.hand,
+    owner: state.ai,
+    rival: state.player,
+    aiStyle: state.aiStyle,
+    turnGoal,
+    canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
+  });
+  const limit = aiTrapSetLimit({
     traps: state.ai.traps,
     aiStyle: state.aiStyle,
-    canSetTrap: (_card, handIndex, trapIndex) =>
-      explainSetTrapFromUiState(state, "ai", handIndex, trapIndex).ok
+    reservedZones
   });
-  return action ? setTrap(state.ai, action.handIndex, action.trapIndex) : false;
+  let setCount = 0;
+  while (setCount < limit) {
+    const action = chooseAiSetTrapAction({
+      hand: state.ai.hand,
+      traps: state.ai.traps,
+      aiStyle: state.aiStyle,
+      canSetTrap: (_card, handIndex, trapIndex) =>
+        explainSetTrapFromUiState(state, "ai", handIndex, trapIndex).ok
+    });
+    if (!action || !setTrap(state.ai, action.handIndex, action.trapIndex)) break;
+    setCount += 1;
+  }
+  return setCount;
 }
 
 async function aiAttack() {
@@ -4118,11 +4186,36 @@ async function aiAttack() {
         explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex).ok
     });
     if (action.type === "none") {
-      const blocked = state.ai.field
-        .map((card, fieldIndex) => ({ card, readiness: explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex) }))
-        .filter(({ card }) => card && !card.used && card.mode !== "defense");
+      const blocked = collectAiAttackBlockers({
+        field: state.ai.field,
+        skippedAttackers,
+        explainReadiness: (_card, fieldIndex) => explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex)
+      });
       if (blocked.length > 0) {
-        addLog(`对手没有可执行的攻击：${blocked.map(({ card, readiness }) => `${card.name}（${readiness.reason}）`).join("、")}。`);
+        const convergenceLocked = blocked.filter(({ card, readiness }) =>
+          card.attackLockReason === "trioConvergence" || readiness.engineReason === "trioConvergence"
+        );
+        if (convergenceLocked.length > 0) {
+          const cards = convergenceLocked.map(({ card }) => card);
+          addLog(
+            `${cards.map((card) => `「${card.name}」`).join("、")}受三曜共降限制，本回合不能攻击；会在 AI 的下一个回合开始时解除。`,
+            cardLogMeta(cards[0], {
+              actor: "ai",
+              type: "status",
+              relatedCardIds: relatedCardIds(...cards.slice(1))
+            })
+          );
+        } else {
+          const cards = blocked.map(({ card }) => card);
+          addLog(
+            `对手没有可执行的攻击：${blocked.map(({ card, readiness }) => `${card.name}（${readiness.reason}）`).join("、")}。`,
+            cardLogMeta(cards[0], {
+              actor: "ai",
+              type: "status",
+              relatedCardIds: relatedCardIds(...cards.slice(1))
+            })
+          );
+        }
       }
       return;
     }
@@ -4130,7 +4223,7 @@ async function aiAttack() {
     if (state.gameOver || !state.ai.field[attackerIndex]) return;
     if (action.type === "skipAttack") {
       skippedAttackers.add(action.cardUid);
-      addLog(`对手保留 ${card.name} 的攻击机会，避免不利战斗。`);
+      addLog(`对手保留 ${card.name} 的攻击机会，避免不利战斗。`, cardLogMeta(card, { actor: "ai", type: "battle" }));
       continue;
     }
     cue(`对手用 ${card.name} 发起攻击。`);

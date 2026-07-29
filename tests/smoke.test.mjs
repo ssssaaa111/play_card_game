@@ -405,7 +405,7 @@ test("app resolves element combos through engine commands", () => {
   assert.doesNotMatch(app, /elements\.has\("fire"\) && elements\.has\("wind"\)/);
 });
 
-test("serve script uses the fixed local port", () => {
+test("serve script defaults to the project port and accepts an isolated worktree port", () => {
   const pkg = JSON.parse(readProjectFile("package.json"));
   const server = readProjectFile("scripts/dev-server.mjs");
   const browserSmoke = readProjectFile("scripts/browser-smoke.mjs");
@@ -413,7 +413,10 @@ test("serve script uses the fixed local port", () => {
   assert.equal(pkg.scripts.serve, "node scripts/dev-server.mjs");
   assert.equal(pkg.scripts.dev, "npm run serve");
   assert.equal(pkg.scripts["smoke:browser"], "node scripts/browser-smoke.mjs");
-  assert.match(server, /const port = 5177/);
+  assert.match(server, /argument\.startsWith\("--port="\)/);
+  assert.match(server, /\|\| "5177"/);
+  assert.match(server, /requestedPort > 0 && requestedPort <= 65535/);
+  assert.match(server, /: 5177/);
   assert.match(server, /const host = "127\.0\.0\.1"/);
   assert.match(server, /Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"/);
   assert.match(server, /charset=utf-8/);
@@ -694,6 +697,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-guard-skip": runAiGuardSkipSmoke/);
   assert.match(smoke, /"ai-mirror-restraint-basic": runAiMirrorRestraintBasicSmoke/);
   assert.match(smoke, /"ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke/);
+  assert.match(smoke, /"trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke/);
+  assert.match(smoke, /"trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke/);
   assert.match(smoke, /"summon-effects": runSummonEffectsSmoke/);
   assert.match(smoke, /"summon-fire-buff": runSummonFireBuffSmoke/);
   assert.match(smoke, /"summon-shield": runSummonShieldSmoke/);
@@ -822,9 +827,11 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /暂停时手牌详情切换/);
   assert.match(smoke, /Blade Sigil continuous effect registered/);
   assert.match(smoke, /连续点击解印射线确认唯一默认目标/);
-  assert.match(smoke, /solar snare destruction should be logged once/);
-  assert.match(smoke, /continuous release feedback should describe restoration/);
-  assert.match(smoke, /low-star follow-up guidance is missing/);
+  assert.match(smoke, /one opening body should be destroyed while three tributes remain/);
+  assert.match(smoke, /chain protection should preserve sun while the player survives the first god attack/);
+  assert.match(smoke, /the public log should explain why solar snare failed/);
+  assert.match(smoke, /the public log should explain why only sun attacks this turn/);
+  assert.match(smoke, /trio should assign sun to the exclusive high threat/);
   assert.match(smoke, /normal summon should not be described as self-triggered special summon/);
   assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
   assert.match(smoke, /targetChangedEvents/);
@@ -887,7 +894,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "chain-weaken-resolution"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "player-counter-chain"\)/);
-  assert.match(smoke, /async function runResponseWindowResumeBasicSmoke\(ctx\)[\s\S]*?setSmokeStatus\("passed", smokeName\);\n}/);
+  assert.match(smoke, /async function runResponseWindowResumeBasicSmoke\(ctx\)[\s\S]*?setSmokeStatus\("passed", smokeName\);\r?\n}/);
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
   assert.match(smoke, /const smokeName = "turn-handoff-basic";[\s\S]*"TURN_ENDED:ai"[\s\S]*setSmokeStatus\("passed", smokeName\)/);

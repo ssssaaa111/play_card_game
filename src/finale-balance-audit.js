@@ -35,6 +35,7 @@ export function analyzeFinaleBalance({
   const handSize = positiveInteger(openingHandSize, 5);
   const checkpoints = normalizeCheckpoints(drawCheckpoints, handSize);
   const authoredDeck = finaleDeckIds();
+  const authoredTributeBodies = (scenarioSetups[FINALE_SCENARIO_ID]?.aiField || []).length;
   const rng = createSeededRandom(seed);
   const shuffledStats = createOpeningStats(checkpoints);
 
@@ -46,19 +47,25 @@ export function analyzeFinaleBalance({
   const authoredDeployment = simulateFinaleDeployment({
     deckOrder: authoredDeck,
     openingHandSize: handSize,
-    tributeBodies: 3,
+    tributeBodies: authoredTributeBodies,
     sampleId: "authored"
   });
   const oneTributeLost = simulateFinaleDeployment({
     deckOrder: authoredDeck,
     openingHandSize: handSize,
-    tributeBodies: 2,
+    tributeBodies: Math.max(0, authoredTributeBodies - 1),
     sampleId: "one-tribute-lost"
+  });
+  const twoTributesLost = simulateFinaleDeployment({
+    deckOrder: authoredDeck,
+    openingHandSize: handSize,
+    tributeBodies: Math.max(0, authoredTributeBodies - 2),
+    sampleId: "two-tributes-lost"
   });
   const attackDestroyTrap = simulateFinaleDeployment({
     deckOrder: authoredDeck,
     openingHandSize: handSize,
-    tributeBodies: 3,
+    tributeBodies: authoredTributeBodies,
     includeAttackDestroyTrap: true,
     sampleId: "attack-destroy"
   });
@@ -78,6 +85,7 @@ export function analyzeFinaleBalance({
     shuffled: finalizeOpeningStats(shuffledStats, sampleCount),
     disruption: {
       oneTributeLost,
+      twoTributesLost,
       attackDestroyTrap
     },
     protection: trioProtectionProfiles()
@@ -87,7 +95,7 @@ export function analyzeFinaleBalance({
 export function simulateFinaleDeployment({
   deckOrder = finaleDeckIds(),
   openingHandSize = 5,
-  tributeBodies = 3,
+  tributeBodies = (scenarioSetups[FINALE_SCENARIO_ID]?.aiField || []).length,
   includeAttackDestroyTrap = false,
   sampleId = "deployment"
 } = {}) {

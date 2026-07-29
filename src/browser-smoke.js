@@ -791,6 +791,134 @@ async function runAiMultiAttackReentryBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioAttackPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-attack-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioAttackPlanning");
+  const attackEventsBefore = countGameEvents(ctx.state, "ATTACK_DECLARED");
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && !ctx.state.aiRunning,
+    `${smokeName}: AI completes the planned three-attack turn. ${smokeDebug(ctx)}`,
+    42000
+  );
+
+  const attacks = (ctx.state.gameEvents || [])
+    .filter((event) => event.type === "ATTACK_DECLARED" && event.playerId === "ai")
+    .slice(attackEventsBefore);
+  const referencesTemplate = (cardId, templateId) => eventReferencesTemplate({ cardId }, templateId);
+  const [firstAttack, secondAttack, thirdAttack] = attacks;
+  if (attacks.length !== 3 ||
+      !referencesTemplate(firstAttack?.attackerCardId, "trio-sun-judicator") ||
+      !referencesTemplate(firstAttack?.targetCardId, "void-siege-breaker") ||
+      !referencesTemplate(secondAttack?.attackerCardId, "trio-moon-warden") ||
+      !referencesTemplate(secondAttack?.targetCardId, "prism-saint") ||
+      !referencesTemplate(thirdAttack?.attackerCardId, "trio-star-herald") ||
+      thirdAttack?.targetCardId) {
+    throw new Error(`${smokeName}: trio should assign sun to the exclusive high threat, moon to the weak target, then let star attack directly. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.player.grave.some((card) => card?.id === "void-siege-breaker") ||
+      !ctx.state.player.grave.some((card) => card?.id === "prism-saint") ||
+      ctx.state.gameOver) {
+    throw new Error(`${smokeName}: planned attacks should clear both targets and leave the duel running. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioTurnPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-turn-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioTurnPlanning");
+  const chant = ctx.state.ai.hand.find((card) => card?.id === "war-chant");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!chant) {
+    throw new Error(`${smokeName}: scripted opening is missing war chant. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && !ctx.state.aiRunning,
+    `${smokeName}: AI completes its planned deployment turn. ${smokeDebug(ctx)}`,
+    42000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const trioSummonIndex = events.findIndex((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.playerId === "ai" &&
+    eventReferencesTemplate(event, "trio-sun-judicator")
+  );
+  const chantIndex = events.findIndex((event) =>
+    event.type === "CARD_ACTIVATED" && event.cardId === chant.uid
+  );
+  const sun = ctx.state.ai.field.find((card) => card?.id === "trio-sun-judicator");
+  const decisionLog = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("三曜部署完成后才发动「战意高扬」")
+  );
+
+  if (trioSummonIndex < 0 || chantIndex <= trioSummonIndex) {
+    throw new Error(`${smokeName}: war chant must resolve after the trio tribute summon. ${smokeDebug(ctx)}`);
+  }
+  if (!sun || sun.tempAtk !== 500 || !ctx.state.ai.grave.some((card) => card?.uid === chant.uid)) {
+    throw new Error(`${smokeName}: the delayed investment must strengthen sun and then enter the grave. ${smokeDebug(ctx)}`);
+  }
+  if (!decisionLog || decisionLog.cardId !== "war-chant") {
+    throw new Error(`${smokeName}: the public decision log must explain the delayed visible spell. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioTrapPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-trap-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioTrapPlanning");
+  const weakeningWeb = ctx.state.ai.traps.find((card) => card?.id === "weakening-web");
+  const voidLock = ctx.state.ai.traps.find((card) => card?.id === "void-lock");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "solar-vanguard");
+  const defender = ctx.state.ai.field.find((card) => card?.id === "gale-mage");
+  if (!weakeningWeb || !voidLock || !attacker || !defender) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "solar-vanguard"), `${smokeName}: select attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "gale-mage")?.classList.contains("attack-target"),
+    `${smokeName}: defender becomes attackable`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "gale-mage"), `${smokeName}: declare threatening attack`);
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.classList.contains("show") &&
+      ctx.els.aiRevealTitle?.textContent.includes("星界封锁"),
+    `${smokeName}: AI reveals the full negate instead of weakening`,
+    12000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue trap reveal`);
+  await waitForSmoke(
+    () => ctx.state.ai.grave.some((card) => card?.uid === voidLock.uid) &&
+      ctx.state.ai.traps.some((card) => card?.uid === weakeningWeb.uid) &&
+      ctx.state.player.field.some((card) => card?.uid === attacker.uid) &&
+      ctx.state.ai.field.some((card) => card?.uid === defender.uid) &&
+      !ctx.els.aiRevealModal?.classList.contains("show") &&
+      !ctx.els.chainModal?.classList.contains("show"),
+    `${smokeName}: negate resolves while weakening remains set`,
+    14000
+  );
+  const attackEvents = (ctx.state.gameEvents || []).filter((event) =>
+    event.type === "ATTACK_DECLARED" && event.attackerCardId === attacker.uid
+  );
+  const activatedWeakening = (ctx.state.gameEvents || []).some((event) =>
+    event.type === "CARD_ACTIVATED" && event.cardId === weakeningWeb.uid
+  );
+  if (attackEvents.length !== 1 || activatedWeakening ||
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "BATTLE_RESOLVED" && event.attackerCardId === attacker.uid
+      )) {
+    throw new Error(`${smokeName}: only void lock should answer and the canceled attack must not deal battle damage. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiEngineLegalityBasicSmoke(ctx) {
   const smokeName = "ai-engine-legality-basic";
   setSmokeStatus("running", smokeName);
@@ -3348,17 +3476,56 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     throw new Error(`trio-omega-full-duel: opening guidance should prioritize setup. ${ctx.els.duelHint.textContent}`);
   }
 
+  await clickSmokeElementTwiceAcrossRender(
+    () => handCard(ctx.els, "seer-call"),
+    "full duel: use seer call before committing to battle"
+  );
+  await waitForSmoke(
+    () => handCard(ctx.els, "trio-ember-pawn") && handCard(ctx.els, "trio-final-counter"),
+    `full duel: seer call should expose later low-star resources. ${smokeDebug(ctx)}`,
+    9000
+  );
+
   clickSmokeElement(handCard(ctx.els, "spark-runner"), "full duel: summon spark-runner");
   clickSmokeElement(fieldSlot(ctx.els, "player", 0), "full duel: player monster slot 1");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "spark-runner") &&
-      ctx.state.player.hand.some((card) => card?.id === "trio-ember-pawn"),
-    `full duel: spark-runner should draw a low-star resource. ${smokeDebug(ctx)}`,
+      ctx.state.player.hand.some((card) => card?.id === "battle-trance") &&
+      Boolean(handCard(ctx.els, "battle-trance")),
+    `full duel: spark-runner should draw the battle setup card. ${smokeDebug(ctx)}`,
     9000
   );
   if (ctx.state.log.some((entry) => entry.includes("星火信使 因 星火信使 特殊登场"))) {
     throw new Error("trio-omega-full-duel: normal summon should not be described as self-triggered special summon.");
   }
+
+  clickSmokeElement(handCard(ctx.els, "battle-trance"), "full duel: select battle trance");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "battleTrance" &&
+      Boolean(ctx.state.pendingTarget?.selectedTarget) &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `full duel: battle trance should select the only allied monster. ${smokeDebug(ctx)}`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "full duel: confirm battle trance");
+  await waitForSmoke(
+    () => (ctx.state.player.field[0]?.tempAtk || 0) === 200,
+    `full duel: spark-runner should be strong enough to remove one tribute body. ${smokeDebug(ctx)}`,
+    9000
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "full duel: select spark-runner attacker");
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"),
+    `full duel: iron guardian should be a legal attack target. ${smokeDebug(ctx)}`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "full duel: destroy one tribute body");
+  await waitForSmoke(
+    () => ctx.state.phase === "battle" &&
+      !ctx.state.ai.field.some((card) => card?.id === "iron-guardian") &&
+      ctx.state.ai.field.filter(Boolean).length === 3,
+    `full duel: one opening body should be destroyed while three tributes remain. ${smokeDebug(ctx)}`,
+    12000
+  );
 
   clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), "full duel: select solar snare");
   clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "full duel: set solar snare");
@@ -3367,10 +3534,6 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     `full duel: solar snare set before rival pressure. ${smokeDebug(ctx)}`,
     9000
   );
-  if (!ctx.els.duelHint.textContent.includes("防御准备完成")) {
-    throw new Error(`trio-omega-full-duel: prepared defense guidance is missing. ${ctx.els.duelHint.textContent}`);
-  }
-
   await finishPlayerTurn(ctx);
   await waitForSmoke(
     () => ctx.state.turn === "ai" && ctx.state.actionWindow === "ai" && ctx.state.aiRunning,
@@ -3383,11 +3546,12 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     () => ctx.els.chainModal.classList.contains("show") &&
       ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.ai.traps.some((card) => card?.id === "mirror-snare") &&
+      ctx.state.ai.traps.some((card) => card?.id === "chain-nullifier") &&
       ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
       ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden" && card.used) &&
       ctx.state.ai.field.some((card) => card?.id === "trio-star-herald" && card.used) &&
       ctx.state.player.field.some((card) => card?.id === "spark-runner" && (card.tempAtk || 0) < 0),
-    `full duel: rival should establish all three gods, protect moon pressure, and attack with sun. ${smokeDebug(ctx)}`,
+    `full duel: rival should establish all three gods, set chain protection, and attack with sun. ${smokeDebug(ctx)}`,
     32000
   );
   const moonPressureCard = fieldCard(ctx.els, "player", "spark-runner");
@@ -3421,30 +3585,46 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "full duel: convergence card detail closes");
   clickSmokeElement(ctx.els.chainYes, "full duel: activate prepared solar snare");
   await waitForSmoke(
-    () => ctx.state.ai.grave.some((card) => card?.id === "trio-sun-judicator") &&
+    () => ctx.state.turn === "player" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.aiRunning &&
+      ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
       ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") &&
       ctx.state.ai.field.some((card) => card?.id === "trio-star-herald") &&
+      ctx.state.ai.grave.some((card) => card?.id === "chain-nullifier") &&
       ctx.state.player.grave.some((card) => card?.id === "trio-solar-snare") &&
-      ctx.state.player.field.some((card) => card?.id === "spark-runner"),
-    `full duel: prepared trap should trade for sun without erasing the remaining gods. ${smokeDebug(ctx)}`,
-    12000
+      ctx.state.player.grave.some((card) => card?.id === "spark-runner") &&
+      ctx.state.player.lp > 0,
+    `full duel: chain protection should preserve sun while the player survives the first god attack. ${smokeDebug(ctx)}`,
+    42000
   );
   await waitForSmoke(
-    () => (ctx.state.log || []).some((entry) => logEntryMessage(entry) === "日冕诱锁 破坏了 曜冕裁决者。"),
-    `full duel: solar snare destruction should reach the public log. ${smokeDebug(ctx)}`,
+    () => (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("断链裁决 无效了 日冕诱锁")) &&
+      (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("日冕诱锁 的效果被连锁无效")),
+    `full duel: the public log should explain why solar snare failed. ${smokeDebug(ctx)}`,
     9000
   );
+  const convergenceLockLog = (ctx.state.log || []).find((entry) => {
+    const message = logEntryMessage(entry);
+    return message.includes("月蚀守密者") &&
+      message.includes("星坠宣告者") &&
+      message.includes("三曜共降限制") &&
+      message.includes("下一个回合开始时解除");
+  });
+  if (!convergenceLockLog ||
+      convergenceLockLog.cardId !== "trio-moon-warden" ||
+      !convergenceLockLog.relatedCardIds?.includes("trio-star-herald") ||
+      !logCardLink(ctx.els, "trio-moon-warden") ||
+      !logCardLink(ctx.els, "trio-star-herald")) {
+    throw new Error(`trio-omega-full-duel: the public log should explain why only sun attacks this turn and keep both locked gods inspectable. ${smokeDebug(ctx)}`);
+  }
   const remainingTrio = ctx.state.ai.field.filter((card) =>
-    card?.id === "trio-moon-warden" || card?.id === "trio-star-herald"
-  );
-  const remainingTrioAttack = remainingTrio.reduce((total, card) => total + (card.atk || 0) + (card.tempAtk || 0), 0);
-  const sunDestructionLogs = (ctx.state.log || []).filter((entry) =>
-    logEntryMessage(entry) === "日冕诱锁 破坏了 曜冕裁决者。"
+    card?.id === "trio-sun-judicator" || card?.id === "trio-moon-warden" || card?.id === "trio-star-herald"
   );
   const pressureAudit = auditLogEntries(ctx.state.timeline);
-  if (remainingTrio.length !== 2 || remainingTrioAttack !== 4500 || sunDestructionLogs.length !== 1 ||
+  if (remainingTrio.length !== 3 ||
       pressureAudit.issues.some((issue) => issue.code === "duplicate-log")) {
-    throw new Error(`trio-omega-full-duel: first counter should leave exactly two gods / 4500 ATK pressure and one destruction log. ${smokeDebug(ctx)}`);
+    throw new Error(`trio-omega-full-duel: chain-protected pressure should leave all three gods and clean logs. ${smokeDebug(ctx)}`);
   }
   const aiSunTributes = (ctx.state.gameEvents || []).filter((event) =>
     event.type === "CARD_TRIBUTED" &&
@@ -3454,73 +3634,23 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
   if (aiSunTributes.length !== 3) {
     throw new Error(`trio-omega-full-duel: AI sun god should consume exactly three public tributes. ${smokeDebug(ctx)}`);
   }
-  await waitForSmoke(
-    () => ctx.state.turn === "player" &&
-      ctx.state.phase === "main" &&
-      !ctx.state.aiRunning &&
-      handCard(ctx.els, "trio-final-counter"),
-    `full duel: player should cross the rival turn and draw later resources. ${smokeDebug(ctx)}`,
-    34000
-  );
-  const sunDestroyLogs = ctx.state.log.filter((entry) =>
-    entry.includes("日冕诱锁 破坏了 曜冕裁决者")
-  );
-  if (sunDestroyLogs.length !== 1) {
-    throw new Error(`trio-omega-full-duel: solar snare destruction should be logged once, got ${sunDestroyLogs.length}.`);
-  }
   if (!(ctx.state.gameEvents || []).some((event) => event.type === "TURN_STARTED" && event.playerId === "ai")) {
     throw new Error(`trio-omega-full-duel: route must cross a rival turn. ${smokeDebug(ctx)}`);
   }
-  if (!ctx.els.duelHint.textContent.includes("反击窗口") ||
-      !ctx.els.duelHint.textContent.includes("碎月解幕")) {
-    throw new Error(`trio-omega-full-duel: moonbreaker guidance is missing. ${ctx.els.duelHint.textContent}`);
-  }
-
-  clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), "full duel: select moonbreaker");
-  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", "full duel: moonbreaker target window");
-  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), "full duel: clear moon dominion");
-  await waitForSmoke(
-    () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
-      ctx.state.player.field.some((card) => card?.id === "spark-runner" && (card.tempAtk || 0) === 0) &&
-      (ctx.state.gameEvents || []).some((event) => event.type === "CONTINUOUS_EFFECT_RELEASED" && event.effectId === "lunarDominion"),
-    `full duel: moon pressure should clear and release the modifier. ${smokeDebug(ctx)}`,
-    9000
-  );
-  if (!ctx.state.log.some((entry) => entry.includes("攻击力恢复 900")) ||
-      !ctx.state.log.some((entry) => entry.includes("持续修正已解除"))) {
-    throw new Error(`trio-omega-full-duel: continuous release feedback should describe restoration. ${smokeDebug(ctx)}`);
-  }
-  if (!ctx.els.duelHint.textContent.includes("召唤并保留余烁小卫")) {
-    throw new Error(`trio-omega-full-duel: low-star follow-up guidance is missing. ${ctx.els.duelHint.textContent}`);
-  }
-
-  clickSmokeElement(handCard(ctx.els, "trio-ember-pawn"), "full duel: summon preserved low-star pawn");
-  clickSmokeElement(fieldSlot(ctx.els, "player", 1), "full duel: player monster slot 2");
-  await waitForSmoke(
-    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn"),
-    `full duel: low-star resource should reach the field after setup. ${smokeDebug(ctx)}`,
-    9000
-  );
-
   const events = ctx.state.gameEvents || [];
   const snareSetIndex = events.findIndex((event) => event.type === "TRAP_SET" && eventReferencesTemplate(event, "trio-solar-snare"));
+  const openingBodyDestroyedIndex = events.findIndex((event) => event.type === "CARD_DESTROYED" && eventReferencesTemplate(event, "iron-guardian"));
   const convergenceIndex = events.findIndex((event) => event.type === "TRIO_CONVERGENCE_RESOLVED");
-  const sunDestroyedIndex = events.findIndex((event) => event.type === "CARD_DESTROYED" && eventReferencesTemplate(event, "trio-sun-judicator"));
-  const moonClearedIndex = events.findIndex((event) => event.type === "CONTINUOUS_EFFECT_RELEASED" && event.effectId === "lunarDominion");
-  const pawnSummonedIndex = events.findIndex((event) => event.type === "MONSTER_SUMMONED" && eventReferencesTemplate(event, "trio-ember-pawn"));
-  if (snareSetIndex < 0 || convergenceIndex < 0 || sunDestroyedIndex < 0 || moonClearedIndex < 0 || pawnSummonedIndex < 0 ||
-      !(snareSetIndex < convergenceIndex && convergenceIndex < sunDestroyedIndex && sunDestroyedIndex < moonClearedIndex && moonClearedIndex < pawnSummonedIndex)) {
-    throw new Error(`trio-omega-full-duel: setup, defense exchange, pressure clear, and low-star follow-up must happen in order. ${smokeDebug(ctx)}`);
+  const snareNegatedIndex = events.findIndex((event) =>
+    event.type === "EFFECT_NEGATED" &&
+    (String(event.targetEffectId || "").startsWith("trio-solar-snare-") || event.targetEffectId === "trio-solar-snare")
+  );
+  if (openingBodyDestroyedIndex < 0 || snareSetIndex < 0 || convergenceIndex < 0 || snareNegatedIndex < 0 ||
+      !(openingBodyDestroyedIndex < snareSetIndex && snareSetIndex < convergenceIndex && convergenceIndex < snareNegatedIndex)) {
+    throw new Error(`trio-omega-full-duel: opening disruption, resilient convergence, and chain protection must resolve in order. ${smokeDebug(ctx)}`);
   }
-  const strongestPlayerAtk = Math.max(...ctx.state.player.field.filter(Boolean).map((card) => (card.atk || 0) + (card.tempAtk || 0)));
-  if (ctx.state.gameOver ||
-      ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") ||
-      !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") ||
-      !ctx.state.ai.field.some((card) => card?.id === "trio-star-herald") ||
-      ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") ||
-      strongestPlayerAtk >= 3000 ||
-      events.some((event) => event.type === "CARD_ACTIVATED" && eventReferencesTemplate(event, "trio-final-counter"))) {
-    throw new Error(`trio-omega-full-duel: advantage should come from preserved resources, not high-attack or final-counter shortcut. ${smokeDebug(ctx)}`);
+  if (ctx.state.gameOver || ctx.state.ai.grave.some((card) => card?.id === "trio-sun-judicator")) {
+    throw new Error(`trio-omega-full-duel: one destroyed tribute body and one exposed trap must not collapse the boss opening. ${smokeDebug(ctx)}`);
   }
 
   setSmokeStatus("passed", "trio-omega-full-duel");
@@ -6101,6 +6231,9 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-guard-skip": runAiGuardSkipSmoke,
     "ai-mirror-restraint-basic": runAiMirrorRestraintBasicSmoke,
     "ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke,
+    "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
+    "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
+    "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
     "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
     "response-action-lock-basic": runResponseActionLockBasicSmoke,

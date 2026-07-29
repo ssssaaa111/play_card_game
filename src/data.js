@@ -699,6 +699,49 @@ export const scenarioSetups = {
     aiHand: [],
     aiDeck: ["guard-sigil"]
   },
+  trioAttackPlanning: {
+    label: "三曜攻击分配",
+    text: "规则测试场景：三曜已经解除攻击限制，对手场上同时存在弱怪和只有日曜能够击破的高攻怪。",
+    goal: "结束回合，观察 AI 先用日曜处理高攻威胁，再让月曜处理弱怪，最后由星曜直接攻击。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["prism-saint", "void-siege-breaker"],
+    aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
+  trioTurnPlanning: {
+    label: "三曜回合规划",
+    text: "规则测试场景：AI 同时持有三曜部署、怪兽强化和正好三只祭品，验证强化资源不会先浪费在即将离场的祭品上。",
+    goal: "结束回合，观察 AI 先保留战意高扬，以三只祭品召唤日曜并完成三曜共降，再把强化投入已经登场的日曜。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["void-siege-breaker"],
+    aiField: ["iron-guardian", "rift-bulwark", "void-hound"],
+    aiHand: ["war-chant", "trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
+  trioTrapPlanning: {
+    label: "三曜陷阱择优",
+    text: "规则测试场景：AI 同时盖放弱化力场和星界封锁，弱化 500 后仍无法保住疾风术士。",
+    goal: "用曜锋先锋攻击疾风术士，观察 AI 保留无法改变战果的弱化力场，改用星界封锁完整挡下攻击。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["solar-vanguard"],
+    aiField: ["gale-mage"],
+    aiTraps: ["weakening-web", "void-lock"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trapChoice: {
     label: "陷阱选择",
     text: "我方预置两张可响应攻击的陷阱，AI 场上有攻击怪兽，用来验证响应窗口多选一。",
@@ -1043,22 +1086,25 @@ export const scenarioSetups = {
   protagonistTrioOmegaFull: {
     label: "终局三曜完整对局",
     setupVisibility: "player",
-    text: "从 4000 生命值和完整牌堆开始的三曜主题对局。对手会优先建立三曜压制，玩家需要用低星资源、抽滤、防御陷阱和墓地回收逐步换取反击窗口。",
-    goal: "在正常起手和长牌堆中识别三曜压制核心；先守住关键资源，再清理持续压制并利用保留下来的低星资源建立优势。",
+    text: "从 4000 生命值和完整牌堆开始的三曜主题对局。对手准备了备用祭品与断链保护；击破一只前线怪兽只能削弱展开，玩家仍要面对三曜共降。",
+    goal: "先削减对手的祭品余量并布置防御，再穿过断链保护、清理持续压制，利用保留下来的低星资源建立反击窗口。",
     difficulty: "challenge",
     aiStyle: "scriptedPressure",
     objectives: [
       "在完整对局中识别三曜压制核心。",
+      "首回合击破一只祭品候选，确认对手仍能以剩余三只怪兽完成合法共降。",
       "不要把回召资源浪费在看似更直观的高攻诱饵上。",
       "保留防御手段，等待反击窗口。"
     ],
     hints: [
-      "对手场上最亮眼的攻击力不一定是第一优先目标。",
+      "对手拥有一只备用祭品；只击破一只怪兽不足以阻止三曜，但会让共降后不再留下额外攻击者。",
+      "第一张攻击陷阱可能遭到断链保护，不要把全部防线押在一次反制上。",
       "先铺资源或防御通常比立刻打出所有手牌更稳。",
       "持续压制不清掉时，墓地资源和终局反击都很难转化成胜势。"
     ],
     recommendedLine: [
-      "用低星怪和防御陷阱撑过第一轮压制。",
+      "用低星怪击破一只祭品候选并盖下防御，让对手无法在共降后保留额外前线。",
+      "观察断链保护如何处理第一张攻击陷阱，保留后续反制资源。",
       "等对手三曜压力落地后，再选择清后场或保留墓地回收。",
       "反击窗口来自前面留下的低星资源和防御交换，而不是起手高攻碾压。"
     ],
@@ -1068,7 +1114,7 @@ export const scenarioSetups = {
     playerHand: [],
     aiHand: [],
     playerField: [],
-    aiField: ["iron-guardian", "rift-bulwark", "void-hound"],
+    aiField: ["iron-guardian", "rift-bulwark", "void-hound", "nova-squire"],
     playerGrave: [],
     aiGrave: [],
     playerDeck: deckPresets.protagonistTrioOmegaFull.ids,

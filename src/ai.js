@@ -1,5 +1,7 @@
 import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
+import { describeBattleOutcome } from './battle.js';
 import { scoreSpellForAi } from './spells.js';
+import { selectRedirectTarget } from './traps.js';
 
 const scriptedPressureMonsterPriority = {
   "trio-sun-judicator": 900,
@@ -19,6 +21,26 @@ const scriptedPressureTrapPriority = {
   "chain-nullifier": 100,
   "void-lock": 70
 };
+
+const summonSensitiveSpellEffects = new Set([
+  "dawnEdge",
+  "lastStandSurge",
+  "buff500",
+  "soulResonance",
+  "rallyAttack",
+  "battleTrance",
+  "equipBlade",
+  "equipAegis",
+  "equipPrism",
+  "equipOverclock"
+]);
+
+const supportZoneInvestmentSpellEffects = new Set([
+  "equipBlade",
+  "equipAegis",
+  "equipPrism",
+  "equipOverclock"
+]);
 
 function templateId(card) {
   return card?.id || card?.templateId || "";
@@ -54,6 +76,40 @@ function isUsefulAttackTarget(entry) {
   return false;
 }
 
+function comparePressureAttackMatchups(a, b) {
+  if (a.targetCoverage !== b.targetCoverage) return a.targetCoverage - b.targetCoverage;
+  if (a.target.mode !== b.target.mode) return a.target.mode === "attack" ? -1 : 1;
+  if (a.targetValue !== b.targetValue) return b.targetValue - a.targetValue;
+  if (a.attackerAtk !== b.attackerAtk) return a.attackerAtk - b.attackerAtk;
+  if (a.diff !== b.diff) return a.diff - b.diff;
+  if (a.attackerIndex !== b.attackerIndex) return a.attackerIndex - b.attackerIndex;
+  return a.targetIndex - b.targetIndex;
+}
+
+function choosePressureAttackMatchup(attackers, targets) {
+  const matchups = [];
+  targets.forEach((target, targetIndex) => {
+    if (!target) return;
+    const targetMatchups = attackers
+      .map(({ card, index: attackerIndex }) => {
+        const attackerAtk = totalAtk(card);
+        const targetEntry = attackTargetEntry(target, targetIndex, attackerAtk);
+        if (!targetEntry || !isUsefulAttackTarget(targetEntry)) return null;
+        return {
+          card,
+          attackerIndex,
+          attackerAtk,
+          ...targetEntry
+        };
+      })
+      .filter(Boolean);
+    targetMatchups.forEach((matchup) => {
+      matchups.push({ ...matchup, targetCoverage: targetMatchups.length });
+    });
+  });
+  return matchups.sort(comparePressureAttackMatchups)[0] || null;
+}
+
 function attackThreatScore({ owner = null, rival = null, context = {} } = {}) {
   const attacker = rival?.field?.[context.attackerIndex];
   if (!attacker) return 0;
@@ -69,8 +125,124 @@ function attackThreatScore({ owner = null, rival = null, context = {} } = {}) {
   return 0;
 }
 
+function attackOutcome({ owner = null, rival = null, context = {} } = {}, {
+  attacker = rival?.field?.[context.attackerIndex],
+  targetIndex = context.targetIndex,
+  defender = owner
+} = {}) {
+  if (!attacker) return { outcome: null, target: null };
+  const target = targetIndex >= 0 ? owner?.field?.[targetIndex] : null;
+  return {
+    target,
+    outcome: describeBattleOutcome(attacker, target, rival, defender)
+  };
+}
+
+function defenderOutcomeCost(outcome, target) {
+  if (!outcome) return 0;
+  const targetLoss = outcome.destroysTarget
+    ? 10000 + Math.max(totalAtk(target), totalDef(target))
+    : 0;
+  const defenderDamage = ["direct", "attackWin", "pierceDefense"].includes(outcome.kind)
+    ? outcome.finalDamage
+    : 0;
+  return targetLoss + defenderDamage;
+}
+
+function scriptedAttackThreatScore(details) {
+  const { outcome, target } = attackOutcome(details);
+  if (!outcome) return 0;
+  if (!target) {
+    return outcome.finalDamage > 0
+      ? 120 + Math.min(80, Math.floor(outcome.finalDamage / 100))
+      : 0;
+  }
+  if (!outcome.destroysTarget) return 0;
+  const targetValue = Math.max(totalAtk(target), totalDef(target));
+  return 140 +
+    Math.min(60, Math.floor(targetValue / 100)) +
+    Math.min(30, Math.floor(outcome.finalDamage / 100));
+}
+
+function adjustedAttacker(attacker, atkDelta) {
+  return {
+    ...attacker,
+    tempAtk: (attacker?.tempAtk || 0) + atkDelta
+  };
+}
+
+function scoreContinuingAttackTrap(details, { atkDelta = 0, shieldDelta = 0 } = {}) {
+  const attacker = details.rival?.field?.[details.context?.attackerIndex];
+  if (!attacker) return 0;
+  const baseline = attackOutcome(details);
+  const adjustedDefender = {
+    ...details.owner,
+    shield: (details.owner?.shield || 0) + shieldDelta
+  };
+  const adjusted = attackOutcome(details, {
+    attacker: adjustedAttacker(attacker, atkDelta),
+    defender: adjustedDefender
+  });
+  const beforeCost = defenderOutcomeCost(baseline.outcome, baseline.target);
+  const afterCost = defenderOutcomeCost(adjusted.outcome, adjusted.target);
+  if (beforeCost <= afterCost) return 0;
+
+  const ownerLp = Math.max(0, Number(details.owner?.lp) || 0);
+  const preventsLethal = baseline.outcome?.finalDamage >= ownerLp && adjusted.outcome?.finalDamage < ownerLp;
+  const savesTarget = Boolean(baseline.outcome?.destroysTarget && !adjusted.outcome?.destroysTarget);
+  if (!savesTarget && !preventsLethal && baseline.target) return 0;
+  if (!baseline.target && !preventsLethal) {
+    return 100 + Math.min(80, beforeCost - afterCost);
+  }
+  return 280 + Math.min(80, Math.floor((beforeCost - afterCost) / 100));
+}
+
+function scoreRedirectAttack(details) {
+  const currentTargetIndex = details.context?.targetIndex ?? -1;
+  const redirectTargetIndex = selectRedirectTarget(details.owner?.field || [], currentTargetIndex);
+  if (redirectTargetIndex < 0) return 0;
+  const baseline = attackOutcome(details);
+  const redirected = attackOutcome(details, { targetIndex: redirectTargetIndex });
+  const improvement = defenderOutcomeCost(baseline.outcome, baseline.target) -
+    defenderOutcomeCost(redirected.outcome, redirected.target);
+  return improvement > 0 ? 180 + Math.min(100, Math.floor(improvement / 100)) : 0;
+}
+
+function scoreScriptedPressureAttackTrap(card, details) {
+  const threat = scriptedAttackThreatScore(details);
+  if (card.trigger === "attackDestroy") {
+    const attacker = details.rival?.field?.[details.context?.attackerIndex];
+    return threat > 0
+      ? 320 + Math.min(80, Math.floor(totalAtk(attacker) / 100))
+      : 0;
+  }
+  if (["counterBoost", "attackShift", "attackNegate", "aceGuard"].includes(card.trigger)) {
+    if (threat <= 0) return 0;
+    const bonus = {
+      attackNegate: 0,
+      attackShift: 20,
+      counterBoost: 30,
+      aceGuard: 60
+    }[card.trigger] || 0;
+    return 220 + Math.min(40, Math.floor(threat / 5)) + bonus;
+  }
+  if (card.trigger === "weakenAttack") {
+    return scoreContinuingAttackTrap(details, { atkDelta: -500 });
+  }
+  if (card.trigger === "soulParry") {
+    return scoreContinuingAttackTrap(details, { atkDelta: -300, shieldDelta: 300 });
+  }
+  if (card.trigger === "redirectAttack") {
+    return scoreRedirectAttack(details);
+  }
+  return 0;
+}
+
 function scoreAiTrapResponse(card, details = {}) {
   if (!card) return 0;
+  if (details.aiStyle === "scriptedPressure" && details.eventName === "attack") {
+    return scoreScriptedPressureAttackTrap(card, details);
+  }
   if (details.eventName === "attack" && card.trigger === "attackDestroy") {
     return attackThreatScore(details);
   }
@@ -81,6 +253,7 @@ export function chooseAiTrapResponseAction({
   candidates = [],
   owner = null,
   rival = null,
+  aiStyle = "balanced",
   eventName = "",
   context = {}
 } = {}) {
@@ -89,7 +262,7 @@ export function chooseAiTrapResponseAction({
       type: "activateTrap",
       card,
       trapIndex: index,
-      score: scoreAiTrapResponse(card, { owner, rival, eventName, context })
+      score: scoreAiTrapResponse(card, { owner, rival, aiStyle, eventName, context })
     }))
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score || a.trapIndex - b.trapIndex)[0];
@@ -130,9 +303,17 @@ export function chooseAiSpellAction({
   owner = null,
   rival = null,
   aiStyle = "balanced",
+  turnGoal = "pressure",
+  timing = "beforeSummon",
   minScore = 40,
   canActivateSpell = null
 } = {}) {
+  const shouldDeferMonsterInvestment = aiStyle === "scriptedPressure" &&
+    turnGoal === "deployTrio" &&
+    timing === "beforeSummon";
+  const shouldResumeMonsterInvestment = aiStyle === "scriptedPressure" &&
+    turnGoal === "deployTrio" &&
+    timing === "afterSummon";
   const candidates = hand
     .map((card, index) => ({ card, index }))
     .filter(({ card, index }) =>
@@ -140,11 +321,23 @@ export function chooseAiSpellAction({
       typeof canActivateSpell === "function" &&
       canActivateSpell(card, index)
     )
+    .filter(({ card }) =>
+      !shouldDeferMonsterInvestment || !summonSensitiveSpellEffects.has(card.effect)
+    )
+    .filter(({ card }) =>
+      !shouldResumeMonsterInvestment || summonSensitiveSpellEffects.has(card.effect)
+    )
     .map(({ card, index }) => ({
       type: "spell",
       card,
       handIndex: index,
-      score: scoreSpellForAi(card.effect, { owner, rival, aiStyle })
+      score: scoreSpellForAi(card.effect, { owner, rival, aiStyle }),
+      reason: aiStyle === "scriptedPressure" &&
+        turnGoal === "deployTrio" &&
+        timing === "afterSummon" &&
+        summonSensitiveSpellEffects.has(card.effect)
+        ? "trioDeploymentFirst"
+        : ""
     }))
     .filter((entry) => entry.score >= minScore)
     .sort((a, b) => b.score - a.score || a.handIndex - b.handIndex);
@@ -180,6 +373,18 @@ export function chooseAiSetTrapAction({
     handIndex: pick.index,
     trapIndex
   };
+}
+
+export function aiTrapSetLimit({
+  traps = [],
+  aiStyle = "balanced",
+  reservedZones = 0
+} = {}) {
+  const emptyZones = traps.filter((slot) => !slot).length;
+  if (emptyZones <= 0) return 0;
+  return aiStyle === "scriptedPressure"
+    ? Math.max(0, emptyZones - Math.max(0, Number(reservedZones) || 0))
+    : 1;
 }
 
 export function scoreAiMonster(card, aiStyle = "balanced") {
@@ -291,6 +496,20 @@ export function chooseAiAttackAction({
     canUseDirect: owner ? canDirectAttack(owner, pick.card) : false
   });
 
+  if (aiStyle === "scriptedPressure" && targetIndex !== -1) {
+    const matchup = choosePressureAttackMatchup(attackers, rivalField);
+    if (matchup) {
+      return {
+        type: "attack",
+        card: matchup.card,
+        cardUid: matchup.card.uid,
+        attackerIndex: matchup.attackerIndex,
+        targetIndex: matchup.targetIndex,
+        target: matchup.target
+      };
+    }
+  }
+
   if (targetIndex === null) {
     return {
       type: "skipAttack",
@@ -308,4 +527,60 @@ export function chooseAiAttackAction({
     targetIndex,
     target: targetIndex >= 0 ? rivalField[targetIndex] : null
   };
+}
+
+export function chooseAiTurnGoal({
+  hand = [],
+  field = [],
+  aiStyle = "balanced",
+  canSummon = null
+} = {}) {
+  if (aiStyle !== "scriptedPressure") return "pressure";
+  const summon = chooseAiSummonAction({ hand, field, aiStyle, canSummon });
+  return summon?.tributeCost === 3 && isTrioPressureMonster(summon.card)
+    ? "deployTrio"
+    : "pressure";
+}
+
+export function aiSupportZoneReserve({
+  hand = [],
+  owner = null,
+  rival = null,
+  aiStyle = "balanced",
+  turnGoal = "pressure",
+  minScore = 40,
+  canActivateSpell = null
+} = {}) {
+  if (aiStyle !== "scriptedPressure" || turnGoal !== "deployTrio") return 0;
+  const hasDeferredSupport = hand.some((card, handIndex) =>
+    card?.type === "spell" &&
+    supportZoneInvestmentSpellEffects.has(card.effect) &&
+    scoreSpellForAi(card.effect, { owner, rival, aiStyle }) >= minScore &&
+    typeof canActivateSpell === "function" &&
+    canActivateSpell(card, handIndex)
+  );
+  return hasDeferredSupport ? 1 : 0;
+}
+
+export function collectAiAttackBlockers({
+  field = [],
+  skippedAttackers = new Set(),
+  explainReadiness = null
+} = {}) {
+  const skipped = skippedAttackers instanceof Set ? skippedAttackers : new Set(skippedAttackers || []);
+  return field
+    .map((card, fieldIndex) => ({
+      card,
+      fieldIndex,
+      readiness: typeof explainReadiness === "function"
+        ? explainReadiness(card, fieldIndex)
+        : { ok: false, reason: "", engineReason: "" }
+    }))
+    .filter(({ card }) =>
+      card &&
+      card.mode !== "defense" &&
+      !skipped.has(card.uid) &&
+      (Boolean(card.attackLockReason) || (!card.used))
+    )
+    .filter(({ card, readiness }) => Boolean(card.attackLockReason) || readiness.ok === false);
 }
