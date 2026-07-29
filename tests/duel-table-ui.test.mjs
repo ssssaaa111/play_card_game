@@ -10,14 +10,14 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260730-duel-table-2"/);
+  assert.match(html, /href="duel-table\.css\?v=20260730-duel-attention-2"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
   assert.match(html, /id="detailDrawerToggle"[\s\S]*aria-controls="detailDrawer"/);
   assert.match(html, /id="timelineDrawerToggle"[\s\S]*aria-controls="timelineDrawer"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260730-duel-table-2"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260730-duel-attention-2"/);
 });
 
 test("low-frequency media and session controls live behind one utility menu", () => {
@@ -57,4 +57,22 @@ test("workspace controller synchronizes drawers, timeline badges, and settings",
   assert.match(controller, /timelineBadge\.textContent = timelineCount\.textContent/);
   assert.match(controller, /detailRequiresAttention\(\)/);
   assert.match(controller, /compactWorkspace\.addEventListener\("change"/);
+});
+
+test("combat attention system exposes phase progress and hand readiness", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+  const app = read("src/app.js");
+
+  assert.match(html, /id="phaseRail"[\s\S]*data-phase-step="draw"[\s\S]*data-phase-step="main"[\s\S]*data-phase-step="battle"/);
+  assert.match(html, /id="handGuide"[\s\S]*id="handReadyCount"[\s\S]*id="handReadyLabel"/);
+  assert.match(css, /\.phase-step\.is-current[\s\S]*\.hand-panel:not\(\[data-ready-count="0"\]\)/);
+  assert.match(css, /body\[data-duel-action-window="targetSelect"\][\s\S]*#duelHint/);
+  assert.match(controller, /function syncCombatAttention\(\)/);
+  assert.match(controller, /querySelectorAll\("\.card\.action-ready:not\(\.action-blocked\)"\)/);
+  assert.match(controller, /handPanel\.dataset\.attention = selection/);
+  assert.match(app, /document\.body\.dataset\.duelPhase/);
+  assert.match(app, /document\.body\.dataset\.duelSelection/);
+  assert.match(app, /document\.body\.dataset\.duelCanAct/);
 });

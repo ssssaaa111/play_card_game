@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
   <link rel="stylesheet" href="styles.css?v=20260706-ai-card-reveal" />
-  <link rel="stylesheet" href="duel-table.css?v=20260730-duel-table-2" />
+  <link rel="stylesheet" href="duel-table.css?v=20260730-duel-attention-2" />
 </head>
 <body>
   <div id="app">
@@ -21,6 +21,11 @@
         <strong id="phaseText">准备决斗</strong>
         <span id="turnText">你的回合</span>
         <span id="timerText"></span>
+        <div class="phase-rail" id="phaseRail" aria-label="回合阶段">
+          <span class="phase-step" data-phase-step="draw"><i>1</i><em>抽卡</em></span>
+          <span class="phase-step" data-phase-step="main"><i>2</i><em>主要</em></span>
+          <span class="phase-step" data-phase-step="battle"><i>3</i><em>战斗</em></span>
+        </div>
       </div>
       <div class="actions" aria-label="回合操作">
         <button class="btn primary" id="startBtn" title="开始决斗">开始</button>
@@ -178,8 +183,15 @@
 
     <section class="hand-panel" aria-label="玩家手牌">
       <div class="hand-title">
-        <strong>手牌</strong>
-        <span>选择卡牌 · 再选择落点或目标</span>
+        <div class="hand-title-copy">
+          <strong>手牌</strong>
+          <span id="handGuide">选择卡牌 · 再选择落点或目标</span>
+        </div>
+        <div class="hand-readiness" id="handReadiness" aria-live="polite">
+          <span class="hand-readiness-dot" aria-hidden="true"></span>
+          <strong id="handReadyCount">0</strong>
+          <small id="handReadyLabel">可操作</small>
+        </div>
       </div>
       <div class="hand-stack">
         <div class="hand" id="hand"></div>
@@ -347,7 +359,7 @@
     </div>
   </div>
 
-  <script type="module" src="src/duel-table.js?v=20260730-duel-table-2"></script>
+  <script type="module" src="src/duel-table.js?v=20260730-duel-attention-2"></script>
   <script type="module" src="src/app.js?v=20260706-ai-card-reveal-confirm"></script>
 </body>
 </html>

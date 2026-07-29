@@ -4530,6 +4530,22 @@ function render(animationKey = "") {
   const setupModalOpen = els.modal?.classList.contains("show") && !state.started && !state.gameOver;
   const canUseTurnControls = canUsePlayerTurnControls(state);
   const canAct = canPlayerAct();
+  document.body.dataset.duelPhase = !state.started
+    ? "setup"
+    : state.gameOver
+      ? "end"
+      : state.paused
+        ? "paused"
+        : state.phase || "main";
+  document.body.dataset.duelActionWindow = state.actionWindow || "none";
+  document.body.dataset.duelSelection = state.pendingTarget
+    ? "target"
+    : state.pendingFusion
+      ? "fusion"
+      : state.pendingTribute
+        ? "tribute"
+        : state.selected?.zone || "none";
+  document.body.dataset.duelCanAct = String(canAct);
   const selectedHand = selectedHandInfo();
   const selectedHandAction = selectedHand ? handActionInfo(selectedHand.card, selectedHand.index) : null;
   const fusionStatus = state.pendingFusion ? fusionSelectionStatus() : null;
