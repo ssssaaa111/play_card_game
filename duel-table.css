@@ -21,6 +21,11 @@ body {
     linear-gradient(150deg, #070a11 0%, #101823 44%, #080b12 100%);
 }
 
+/* Keep confirmation and card-detail modals above table drawers and utility menus. */
+.modal {
+  z-index: 200;
+}
+
 #app {
   height: 100dvh;
   grid-template-rows: auto minmax(0, 1fr) clamp(196px, 26dvh, 232px);

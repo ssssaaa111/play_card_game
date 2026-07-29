@@ -583,7 +583,9 @@ function confirmAiRevealContinue() {
 }
 
 function shouldAutoContinueAiReveal() {
-  return Boolean(BROWSER_SMOKE) && !["ai-card-reveal-confirm", "ai-card-reveal-queue"].includes(BROWSER_SMOKE);
+  const revealNeedsManualClick = ["ai-card-reveal-confirm", "ai-card-reveal-queue"].includes(BROWSER_SMOKE) ||
+    BROWSER_SMOKE === "trio-combined-lethal-planning-basic";
+  return Boolean(BROWSER_SMOKE) && !revealNeedsManualClick;
 }
 
 function waitForAiReveal(input) {

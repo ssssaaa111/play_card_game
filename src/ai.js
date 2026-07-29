@@ -1,6 +1,6 @@
 import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
-import { previewAiDirectDamage, scoreSpellForAi } from './spells.js';
+import { findAiDirectLethalAttacker, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
 import { selectRedirectTarget } from './traps.js';
 
 const scriptedPressureMonsterPriority = {
@@ -493,6 +493,26 @@ export function chooseAiAttackAction({
 
   const pick = attackers[0];
   if (!pick) return { type: "none" };
+  if (aiStyle === "scriptedPressure" && rivalField.some(Boolean)) {
+    const lethalDirect = findAiDirectLethalAttacker({
+      attackers: attackers.map((entry) => entry.card),
+      targets: rivalField,
+      rivalLp,
+      shield: rivalShield,
+      directAttacks: owner?.directAttacks || 0
+    });
+    if (lethalDirect) {
+      const directPick = attackers[lethalDirect.attackerIndex];
+      return {
+        type: "attack",
+        card: directPick.card,
+        cardUid: directPick.card.uid,
+        attackerIndex: directPick.index,
+        targetIndex: -1,
+        target: null
+      };
+    }
+  }
   const targetIndex = chooseAiAttackTarget({
     attacker: pick.card,
     targets: rivalField,

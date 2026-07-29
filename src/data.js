@@ -771,6 +771,20 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioCombinedLethalPlanning: {
+    label: "三曜协同斩杀",
+    text: "规则测试场景：单次直击无法终结对局，但日曜直击与星曜后续战斗、追加伤害能够组合成完整斩杀。",
+    goal: "结束回合，观察 AI 发动星隙穿透，先让日曜直击，再由星曜击破疾风术士并追加伤害完成斩杀。",
+    playerLp: 4500,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil", "mirror-snare"],
+    playerField: ["prism-saint", "gale-mage"],
+    aiField: ["trio-sun-judicator", "trio-star-herald"],
+    aiHand: ["star-breach"],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trapChoice: {
     label: "陷阱选择",
     text: "我方预置两张可响应攻击的陷阱，AI 场上有攻击怪兽，用来验证响应窗口多选一。",

@@ -145,6 +145,33 @@ test("scripted pressure AI includes guaranteed after-attack damage in direct let
   assert.equal(action.targetIndex, -1);
 });
 
+test("scripted pressure AI spends direct permission when follow-up attacks complete lethal", () => {
+  const action = chooseAiAttackAction({
+    owner: { directAttacks: 1 },
+    field: [
+      monster({ uid: "sun", id: "trio-sun-judicator", atk: 3000 }),
+      monster({
+        uid: "star",
+        id: "trio-star-herald",
+        atk: 2400,
+        afterAttack: "starDoomCharge"
+      })
+    ],
+    rivalField: [
+      monster({ uid: "target-a", atk: 1000 }),
+      monster({ uid: "target-b", atk: 1000 })
+    ],
+    rivalLp: 4500,
+    rivalShield: 0,
+    aiStyle: "scriptedPressure",
+    canAttackMonster: () => true
+  });
+
+  assert.equal(action.type, "attack");
+  assert.equal(action.cardUid, "sun");
+  assert.equal(action.targetIndex, -1);
+});
+
 test("AI attacks directly when there are no defending monsters", () => {
   assert.equal(chooseAiAttackTarget({
     attacker: monster({ name: "lancer", atk: 1800 }),
