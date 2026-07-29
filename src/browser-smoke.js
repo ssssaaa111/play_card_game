@@ -973,6 +973,13 @@ async function runTrioDirectTrapPlanningBasicSmoke(ctx) {
       !ctx.state.ai.traps.some((card) => card?.uid === guard.uid)) {
     throw new Error(`${smokeName}: rebound must win while guard sigil remains set. ${smokeDebug(ctx)}`);
   }
+  const machine = projectMachineStateFromEvents(ctx.state.gameEvents || [], ctx.state.phase);
+  if (machine.responseWindow || machine.pendingAttack ||
+      machine.actionWindow?.window !== "gameOver" ||
+      ctx.state.actionWindow !== "gameOver" ||
+      ctx.els.toast?.textContent?.includes("Cannot cancel attack while a response window is open")) {
+    throw new Error(`${smokeName}: lethal rebound must clear attack response state without a stale cancel error. ${smokeDebug(ctx)}`);
+  }
   setSmokeStatus("passed", smokeName);
 }
 

@@ -1151,6 +1151,45 @@ test("resolves a direct-attack trap through a dedicated damage-step response win
   assert.equal(buildEngineStateFromUiState(state).machine.timing, "damageStep");
 });
 
+test("lethal direct rebound projects game over without a stale response window or pending attack", () => {
+  const rebound = uiTrap("direct-window-rebound", "reversal-flare");
+  rebound.ownerId = "ai";
+  rebound.trigger = "directRebound";
+  const attacker = uiMonster("direct-window-lethal-attacker", "star-lancer");
+  const state = appState({ phase: PHASES.battle, turn: "player" });
+  state.player.lp = 500;
+  state.player.field[0] = attacker;
+  state.ai.traps[0] = rebound;
+
+  const declarationEvents = dispatchDeclareAttackFromUiState(state, "player", "ai", 0, -1);
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  dispatchCloseResponseWindowFromUiState(state, "ai", "no-legal-trap");
+  dispatchOpenResponseWindowFromUiState(state, "ai", {
+    timing: "damageStep",
+    prompt: "direct",
+    triggerEventId: declaration.id,
+    context: { attackerCardId: attacker.uid, targetPlayerId: "ai" }
+  });
+  const responseEvents = dispatchTrapResponseFromUiState(state, "ai", "player", 0, {
+    attackerIndex: 0,
+    targetEffectId: declaration.id
+  });
+  const projected = buildEngineStateFromUiState(state);
+
+  assert.ok(responseEvents.some((event) =>
+    event.type === "GAME_OVER_DECLARED" &&
+    event.winnerId === "ai" &&
+    event.sourceCardId === rebound.uid
+  ));
+  assert.equal(state.gameOver, true);
+  assert.equal(projected.gameOver?.winnerId, "ai");
+  assert.deepEqual(projected.gameOver?.loserIds, ["player"]);
+  assert.equal(projected.machine.responseWindow, null);
+  assert.deepEqual(projected.machine.chain, []);
+  assert.equal(projected.machine.pendingAttack, null);
+  assert.equal(projected.machine.actionWindow?.window, ACTION_WINDOWS.gameOver);
+});
+
 test("resolves a summon trap through a summon timing response window", () => {
   const flare = uiTrap("summon-window-flare", "summon-flare");
   flare.trigger = "summonBurn";
