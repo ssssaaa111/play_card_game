@@ -320,6 +320,31 @@ test("trio trap planning scenario isolates an ineffective weaken and a full nega
   }));
 });
 
+test("trio trap reserve planning scenario isolates two attackers and one hard negate", () => {
+  const setup = buildScenarioState(scenarioSetups.trioTrapReservePlanning, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.equal(scenarioSetups.trioTrapReservePlanning.aiStyle, "scriptedPressure");
+  assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), [
+    "star-lancer",
+    "trio-sun-judicator"
+  ]);
+  assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), [
+    "gale-mage",
+    "void-siege-breaker"
+  ]);
+  assert.deepEqual(setup.ai.traps.filter(Boolean).map((card) => card.id), ["void-lock"]);
+  assertValidGameState(buildEngineStateFromUiState({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai },
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+});
+
 test("trio direct trap planning scenario isolates a lethal rebound choice", () => {
   const setup = buildScenarioState(scenarioSetups.trioDirectTrapPlanning, {
     playerPreset: "protagonistTrioOmegaFull",

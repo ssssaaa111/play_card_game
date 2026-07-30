@@ -1,4 +1,4 @@
-import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
+import { battleValue, canDirectAttack, shieldPreview, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
 import { findAiDirectLethalAttacker, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
 import { selectRedirectTarget } from './traps.js';
@@ -209,6 +209,99 @@ function scoreRedirectAttack(details) {
   return improvement > 0 ? 180 + Math.min(100, Math.floor(improvement / 100)) : 0;
 }
 
+const defenderDamageKinds = new Set(["direct", "attackWin", "pierceDefense"]);
+const HARD_NEGATE_RESERVE_MARGIN = 1000;
+
+function guaranteedAfterAttackDamage(attacker) {
+  const definition = getCardEffectDefinition(attacker?.afterAttack);
+  if (!definition || (definition.requirements?.length || 0) > 0) return [];
+  return (definition.operations || [])
+    .filter((operation) => operation.op === "dealDamage" && operation.player === "rival")
+    .map((operation) => Math.max(0, Number(operation.amount) || 0))
+    .filter((amount) => amount > 0);
+}
+
+function publicAttackThreat(attacker, target, attackerOwner, defender) {
+  const outcome = describeBattleOutcome(attacker, target, attackerOwner, defender);
+  if (!outcome) return { value: 0, damage: 0, shieldAfter: defender?.shield || 0, lethal: false, outcome: null };
+
+  let remainingShield = Math.max(0, Number(defender?.shield) || 0);
+  let damage = 0;
+  if (defenderDamageKinds.has(outcome.kind)) {
+    damage += Math.max(0, Number(outcome.finalDamage) || 0);
+    remainingShield = Math.max(
+      0,
+      remainingShield - (Number(outcome.shieldPierced) || 0) - (Number(outcome.shieldBlocked) || 0)
+    );
+  }
+  if (!outcome.destroysAttacker) {
+    for (const amount of guaranteedAfterAttackDamage(attacker)) {
+      const preview = shieldPreview(amount, remainingShield, attacker);
+      damage += preview.finalDamage;
+      remainingShield = preview.shieldAfter;
+    }
+  }
+
+  const defenderLp = Math.max(0, Number(defender?.lp) || 0);
+  const lethal = defenderLp > 0 && damage >= defenderLp;
+  const targetLoss = outcome.destroysTarget
+    ? 10000 + Math.max(totalAtk(target), totalDef(target))
+    : 0;
+  return {
+    value: targetLoss + damage + (lethal ? 20000 : 0),
+    damage,
+    shieldAfter: remainingShield,
+    lethal,
+    outcome
+  };
+}
+
+function largestFuturePublicAttackThreat(details, current) {
+  const currentTargetIndex = details.context?.targetIndex ?? -1;
+  const remainingTargets = (details.owner?.field || [])
+    .map((target, index) => current.outcome?.destroysTarget && index === currentTargetIndex ? null : target)
+    .filter(Boolean);
+  const defender = {
+    ...details.owner,
+    field: remainingTargets,
+    lp: Math.max(0, (Number(details.owner?.lp) || 0) - current.damage),
+    shield: current.shieldAfter
+  };
+  const futureAttackers = (details.rival?.field || [])
+    .filter((attacker, index) =>
+      index !== details.context?.attackerIndex &&
+      attacker?.type === "monster" &&
+      !attacker.used &&
+      attacker.mode !== "defense" &&
+      !attacker.attackLockReason
+    );
+
+  let largest = 0;
+  for (const attacker of futureAttackers) {
+    for (const target of remainingTargets) {
+      largest = Math.max(largest, publicAttackThreat(attacker, target, details.rival, defender).value);
+    }
+    if (remainingTargets.length === 0 || attacker.canDirectAttack || (details.rival?.directAttacks || 0) > 0) {
+      largest = Math.max(largest, publicAttackThreat(attacker, null, details.rival, defender).value);
+    }
+  }
+  return largest;
+}
+
+function shouldReserveOnlyHardNegate(card, details) {
+  if (card.trigger !== "attackNegate") return false;
+  const negateCandidates = (details.candidates || []).filter((candidate) => candidate.card?.trigger === "attackNegate");
+  if (negateCandidates.length !== 1) return false;
+
+  const attacker = details.rival?.field?.[details.context?.attackerIndex];
+  if (!attacker) return false;
+  const targetIndex = details.context?.targetIndex ?? -1;
+  const target = targetIndex >= 0 ? details.owner?.field?.[targetIndex] : null;
+  const current = publicAttackThreat(attacker, target, details.rival, details.owner);
+  if (current.lethal) return false;
+  return largestFuturePublicAttackThreat(details, current) >= current.value + HARD_NEGATE_RESERVE_MARGIN;
+}
+
 function scoreScriptedPressureAttackTrap(card, details) {
   const threat = scriptedAttackThreatScore(details);
   if (card.trigger === "attackDestroy") {
@@ -219,6 +312,7 @@ function scoreScriptedPressureAttackTrap(card, details) {
   }
   if (["counterBoost", "attackShift", "attackNegate", "aceGuard"].includes(card.trigger)) {
     if (threat <= 0) return 0;
+    if (shouldReserveOnlyHardNegate(card, details)) return 0;
     const bonus = {
       attackNegate: 0,
       attackShift: 20,
@@ -301,7 +395,7 @@ export function chooseAiTrapResponseAction({
       type: "activateTrap",
       card,
       trapIndex: index,
-      score: scoreAiTrapResponse(card, { owner, rival, aiStyle, eventName, context })
+      score: scoreAiTrapResponse(card, { owner, rival, aiStyle, eventName, context, candidates })
     }))
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score || a.trapIndex - b.trapIndex)[0];
