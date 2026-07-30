@@ -1,7 +1,9 @@
 export function buildLifeDisplay(value, maximum = 4000) {
-  const safeMaximum = Number.isFinite(maximum) && maximum > 0 ? maximum : 4000;
-  const safeValue = Number.isFinite(value)
-    ? Math.max(0, Math.min(safeMaximum, value))
+  const numericMaximum = Number(maximum);
+  const numericValue = Number(value);
+  const safeMaximum = Number.isFinite(numericMaximum) && numericMaximum > 0 ? numericMaximum : 4000;
+  const safeValue = Number.isFinite(numericValue)
+    ? Math.max(0, Math.min(safeMaximum, numericValue))
     : 0;
   const current = Math.round(safeValue);
   const max = Math.round(safeMaximum);

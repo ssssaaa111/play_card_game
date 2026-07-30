@@ -919,6 +919,87 @@ async function runTrioTrapPlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioTrapReservePlanningBasicSmoke(ctx) {
+  const smokeName = "trio-trap-reserve-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioTrapReservePlanning");
+  const firstAttacker = ctx.state.player.field.find((card) => card?.id === "star-lancer");
+  const secondAttacker = ctx.state.player.field.find((card) => card?.id === "trio-sun-judicator");
+  const firstDefender = ctx.state.ai.field.find((card) => card?.id === "gale-mage");
+  const secondDefender = ctx.state.ai.field.find((card) => card?.id === "void-siege-breaker");
+  const voidLock = ctx.state.ai.traps.find((card) => card?.id === "void-lock");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!firstAttacker || !secondAttacker || !firstDefender || !secondDefender || !voidLock) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select first attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "gale-mage")?.classList.contains("attack-target"),
+    `${smokeName}: expendable defender becomes attackable`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "gale-mage"), `${smokeName}: attack expendable defender`);
+  await waitForSmoke(
+    () => ctx.state.ai.grave.some((card) => card?.uid === firstDefender.uid) &&
+      ctx.state.ai.traps.some((card) => card?.uid === voidLock.uid) &&
+      firstAttacker.used &&
+      ctx.state.actionWindow === "battle" &&
+      !ctx.els.aiRevealModal?.classList.contains("show") &&
+      !ctx.els.chainModal?.classList.contains("show"),
+    `${smokeName}: AI accepts the first loss and preserves its negate. ${smokeDebug(ctx)}`,
+    14000
+  );
+  if ((ctx.state.gameEvents || []).some((event) =>
+    Number(event.id) > eventIdBefore &&
+    event.type === "CARD_ACTIVATED" &&
+    event.cardId === voidLock.uid
+  )) {
+    throw new Error(`${smokeName}: the only hard negate must not answer the first attack. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-sun-judicator"), `${smokeName}: select high-threat attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "void-siege-breaker")?.classList.contains("attack-target"),
+    `${smokeName}: protected ace becomes attackable`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "void-siege-breaker"), `${smokeName}: declare high-threat attack`);
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.classList.contains("show") &&
+      ctx.els.aiRevealTitle?.textContent.includes("星界封锁"),
+    `${smokeName}: AI reveals the reserved hard negate`,
+    12000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue reserved trap reveal`);
+  await waitForSmoke(
+    () => ctx.state.ai.grave.some((card) => card?.uid === voidLock.uid) &&
+      ctx.state.ai.field.some((card) => card?.uid === secondDefender.uid) &&
+      secondAttacker.used &&
+      !ctx.els.aiRevealModal?.classList.contains("show") &&
+      !ctx.els.chainModal?.classList.contains("show"),
+    `${smokeName}: reserved negate cancels the high-threat attack. ${smokeDebug(ctx)}`,
+    14000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const firstBattle = events.find((event) =>
+    event.type === "BATTLE_RESOLVED" && event.attackerCardId === firstAttacker.uid
+  );
+  const secondDeclaration = events.find((event) =>
+    event.type === "ATTACK_DECLARED" && event.attackerCardId === secondAttacker.uid
+  );
+  if (!firstBattle || !secondDeclaration ||
+      !events.some((event) =>
+        event.type === "ATTACK_CANCELED" &&
+        event.attackerCardId === secondAttacker.uid &&
+        String(event.declarationEventId) === String(secondDeclaration.id)
+      ) ||
+      events.some((event) => event.type === "BATTLE_RESOLVED" && event.attackerCardId === secondAttacker.uid) ||
+      ctx.state.ai.lp !== 3400) {
+    throw new Error(`${smokeName}: only the first attack should resolve before the reserved negate. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioDirectTrapPlanningBasicSmoke(ctx) {
   const smokeName = "trio-direct-trap-planning-basic";
   setSmokeStatus("running", smokeName);
@@ -980,6 +1061,59 @@ async function runTrioDirectTrapPlanningBasicSmoke(ctx) {
       ctx.els.toast?.textContent?.includes("Cannot cancel attack while a response window is open")) {
     throw new Error(`${smokeName}: lethal rebound must clear attack response state without a stale cancel error. ${smokeDebug(ctx)}`);
   }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioChainLifecycleBasicSmoke(ctx) {
+  const smokeName = "trio-chain-lifecycle-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioChainLifecycle");
+  const sun = ctx.state.ai.field.find((card) => card?.id === "trio-sun-judicator");
+  const solarSnare = ctx.state.player.traps.find((card) => card?.id === "trio-solar-snare");
+  const nullifier = ctx.state.ai.traps.find((card) => card?.id === "chain-nullifier");
+  if (!sun || !solarSnare || !nullifier || ctx.state.player.lp !== 3050) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+  const lpDisplaySamples = [ctx.els.playerLp.textContent.trim()];
+  const lpDisplayObserver = new MutationObserver(() => {
+    lpDisplaySamples.push(ctx.els.playerLp.textContent.trim());
+  });
+  lpDisplayObserver.observe(ctx.els.playerLp, { childList: true, characterData: true, subtree: true });
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show"),
+    `${smokeName}: solar snare response prompt opens. ${smokeDebug(ctx)}`,
+    16000
+  );
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}: activate solar snare`);
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).some((event) =>
+      event.type === "CHAIN_LINK_COMMITTED" && event.cardId === solarSnare.uid
+    ) &&
+      ctx.state.player.traps.some((card) => card?.uid === solarSnare.uid) &&
+      !ctx.state.player.grave.some((card) => card?.uid === solarSnare.uid),
+    `${smokeName}: committed solar snare remains visible before chain resolution. ${smokeDebug(ctx)}`,
+    4000
+  );
+  // The AI chain response and battle animation use production timers; let those complete before virtual polling resumes.
+  await new Promise((resolve) => window.setTimeout(resolve, 7000));
+  await waitForSmoke(
+    () => ctx.state.turn === "player" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.aiRunning &&
+      ctx.state.player.lp === 850,
+    `${smokeName}: protected sun attack resolves to the expected surviving LP. ${smokeDebug(ctx)}`,
+    30000
+  );
+
+  if (!ctx.state.player.grave.some((card) => card?.uid === solarSnare.uid) ||
+      !ctx.state.ai.grave.some((card) => card?.uid === nullifier.uid) ||
+      ctx.els.playerLp.textContent.trim() !== "850 / 4000" ||
+      lpDisplaySamples.some((text) => text.startsWith("0 /"))) {
+    throw new Error(`${smokeName}: resolved chain or LP HUD is inconsistent. ${smokeDebug(ctx)}`);
+  }
+  lpDisplayObserver.disconnect();
   setSmokeStatus("passed", smokeName);
 }
 
@@ -6436,7 +6570,9 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
     "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
+    "trio-trap-reserve-planning-basic": runTrioTrapReservePlanningBasicSmoke,
     "trio-direct-trap-planning-basic": runTrioDirectTrapPlanningBasicSmoke,
+    "trio-chain-lifecycle-basic": runTrioChainLifecycleBasicSmoke,
     "trio-shield-lethal-planning-basic": runTrioShieldLethalPlanningBasicSmoke,
     "trio-after-attack-lethal-planning-basic": runTrioAfterAttackLethalPlanningBasicSmoke,
     "trio-combined-lethal-planning-basic": runTrioCombinedLethalPlanningBasicSmoke,

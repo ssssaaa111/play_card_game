@@ -742,6 +742,21 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioTrapReservePlanning: {
+    label: "三曜陷阱保留",
+    text: "规则测试场景：AI 只有一张星界封锁；前排疾风术士会先受到普通攻击，后排虚痕镇压者随后面对更高威胁。",
+    goal: "先用星轨枪兵攻击疾风术士，再用曜冕裁决者攻击虚痕镇压者，观察 AI 放弃低价值前排并把唯一硬反制留给后续高威胁。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["star-lancer", "trio-sun-judicator"],
+    aiField: ["gale-mage", "void-siege-breaker"],
+    aiTraps: ["void-lock"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trioDirectTrapPlanning: {
     label: "三曜直击反制",
     text: "规则测试场景：AI 同时盖放守护刻印和逆焰护壁；逆焰护壁的 500 点反弹能够立即终结进攻方。",
@@ -755,6 +770,22 @@ export const scenarioSetups = {
     aiTraps: ["guard-sigil", "reversal-flare"],
     aiHand: [],
     aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
+  trioChainLifecycle: {
+    label: "三曜连锁生命周期",
+    text: "规则测试场景：日冕诱锁响应日曜攻击，断链裁决随后反制，用来验证连锁中的盖牌与生命值显示。",
+    goal: "结束回合并发动日冕诱锁；连锁结算前卡牌应留在魔陷区，结算后生命值应稳定显示为 850。",
+    playerLp: 3050,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil", "mirror-snare"],
+    playerField: ["spark-runner"],
+    playerTraps: ["trio-solar-snare"],
+    aiField: ["trio-sun-judicator"],
+    aiTraps: ["chain-nullifier"],
+    aiHand: [],
+    aiDeck: ["mirror-snare"],
     aiStyle: "scriptedPressure"
   },
   trioShieldLethalPlanning: {

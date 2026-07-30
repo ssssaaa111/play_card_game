@@ -269,6 +269,69 @@ test("scripted pressure AI negates an attack when weakening would not save its t
   assert.equal(action?.trapIndex, 1);
 });
 
+test("scripted pressure AI preserves its only hard negate for a larger ready attacker", () => {
+  const voidLock = trap({ id: "void-lock", trigger: "attackNegate" });
+  const expendable = monster({ uid: "expendable", atk: 1000 });
+  const protectedAce = monster({ uid: "protected-ace", atk: 2600 });
+  const currentAttacker = monster({ uid: "current-attacker", atk: 1500 });
+  const futureAttacker = monster({ uid: "future-attacker", atk: 3000 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: voidLock, index: 0 }],
+    eventName: "attack",
+    owner: { field: [expendable, protectedAce], lp: 4000, shield: 0 },
+    rival: { field: [currentAttacker, futureAttacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action, null);
+});
+
+test("scripted pressure AI preserves its only hard negate for a future after-attack lethal", () => {
+  const voidLock = trap({ id: "void-lock", trigger: "attackNegate" });
+  const firstTarget = monster({ uid: "first-target", atk: 1000 });
+  const secondTarget = monster({ uid: "second-target", atk: 1000 });
+  const currentAttacker = monster({ uid: "current-attacker", atk: 1500 });
+  const futureAttacker = monster({
+    uid: "future-attacker",
+    id: "trio-star-herald",
+    atk: 1500,
+    afterAttack: "starDoomCharge"
+  });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: voidLock, index: 0 }],
+    eventName: "attack",
+    owner: { field: [firstTarget, secondTarget], lp: 800, shield: 0 },
+    rival: { field: [currentAttacker, futureAttacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action, null);
+});
+
+test("scripted pressure AI spends its hard negate on a current lethal attack", () => {
+  const voidLock = trap({ id: "void-lock", trigger: "attackNegate" });
+  const currentTarget = monster({ uid: "current-target", atk: 1000 });
+  const futureTarget = monster({ uid: "future-target", atk: 2600 });
+  const currentAttacker = monster({ uid: "current-attacker", atk: 1500 });
+  const futureAttacker = monster({ uid: "future-attacker", atk: 3000 });
+
+  const action = chooseAiTrapResponseAction({
+    aiStyle: "scriptedPressure",
+    candidates: [{ card: voidLock, index: 0 }],
+    eventName: "attack",
+    owner: { field: [currentTarget, futureTarget], lp: 500, shield: 0 },
+    rival: { field: [currentAttacker, futureAttacker], lp: 4000, shield: 0 },
+    context: { attackerIndex: 0, targetIndex: 0 }
+  });
+
+  assert.equal(action?.card, voidLock);
+  assert.equal(action?.trapIndex, 0);
+});
+
 test("scripted pressure AI preserves a negate when its shield already absorbs direct damage", () => {
   const voidLock = trap({ id: "void-lock", trigger: "attackNegate" });
   const attacker = monster({ uid: "attacker", atk: 1800 });

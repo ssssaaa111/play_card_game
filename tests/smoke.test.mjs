@@ -597,6 +597,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke/);
   assert.match(smoke, /"trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke/);
   assert.match(smoke, /"trio-omega-full-duel": runTrioOmegaFullDuelSmoke/);
+  assert.match(smoke, /"trio-chain-lifecycle-basic": runTrioChainLifecycleBasicSmoke/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-evolution-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "protagonist-ace-protection-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-readability-basic"\)/);
@@ -608,6 +609,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-happy-clicker-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-full-duel"\)/);
+  assert.match(smoke, /const smokeName = "trio-chain-lifecycle-basic";[\s\S]*committed solar snare remains visible[\s\S]*"850 \/ 4000"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
 
   assert.match(html, /id="graveTargets"/);
   assert.match(html, /id="scenarioBrief"/);
