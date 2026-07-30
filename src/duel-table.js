@@ -18,8 +18,6 @@ export function createDuelTableController(documentRef = document) {
   const timelineClose = documentRef.querySelector("#timelineDrawerClose");
   const detailName = documentRef.querySelector("#detailName");
   const detailDrawerTitle = documentRef.querySelector("#detailDrawerTitle");
-  const handConfirm = documentRef.querySelector("#handConfirmBtn");
-  const battlePreview = documentRef.querySelector("#battlePreview");
   const timelineCount = documentRef.querySelector("#timelineCount");
   const timelineBadge = documentRef.querySelector("#timelineDrawerBadge");
   const timelineFilters = [...documentRef.querySelectorAll("[data-timeline-filter]")];
@@ -71,6 +69,7 @@ export function createDuelTableController(documentRef = document) {
         setControlExpanded(drawer.toggle, active);
       }
       openDrawer = name;
+      if (name === "detail") detailToggle?.classList.remove("has-update");
     } else {
       next.root.classList.remove("is-open");
       next.root.setAttribute("aria-hidden", "true");
@@ -215,24 +214,21 @@ export function createDuelTableController(documentRef = document) {
     setupReadyMode.textContent = `对手：${rival} · ${scenario}`;
   }
 
-  function detailRequiresAttention() {
-    const confirmVisible = Boolean(handConfirm && !handConfirm.hidden && !handConfirm.disabled);
-    const hasBattlePreview = Boolean(battlePreview && !battlePreview.classList.contains("empty"));
-    return confirmVisible || hasBattlePreview;
-  }
-
   function syncDetailDrawer() {
     const name = detailName?.textContent?.trim() || EMPTY_DETAIL_TITLE;
+    const hasDetail = name !== EMPTY_DETAIL_TITLE;
     if (detailDrawerTitle) {
-      detailDrawerTitle.textContent = name === EMPTY_DETAIL_TITLE ? "卡牌详情" : name;
+      detailDrawerTitle.textContent = hasDetail ? name : "卡牌详情";
     }
 
-    const selectedNewCard = name !== EMPTY_DETAIL_TITLE && name !== lastDetailName;
-    const shouldOpen = compactWorkspace.matches
-      ? detailRequiresAttention()
-      : selectedNewCard;
+    const selectedNewCard = hasDetail && name !== lastDetailName;
+    if (detailToggle) {
+      detailToggle.classList.toggle("has-detail", hasDetail);
+      detailToggle.title = hasDetail ? `查看「${name}」详情` : "选择卡牌后查看详情";
+      if (selectedNewCard && openDrawer !== "detail") detailToggle.classList.add("has-update");
+      if (!hasDetail) detailToggle.classList.remove("has-update");
+    }
     lastDetailName = name;
-    if (shouldOpen) setDrawer("detail", true);
   }
 
   function closeCompactDrawer() {
@@ -277,7 +273,7 @@ export function createDuelTableController(documentRef = document) {
   });
 
   const detailObserver = new MutationObserver(() => requestAnimationFrame(syncDetailDrawer));
-  for (const target of [detailName, handConfirm, battlePreview].filter(Boolean)) {
+  for (const target of [detailName].filter(Boolean)) {
     detailObserver.observe(target, {
       attributes: true,
       attributeFilter: ["class", "hidden", "disabled"],

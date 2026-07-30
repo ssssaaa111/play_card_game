@@ -924,6 +924,29 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   background: rgba(246, 189, 96, 0.11);
 }
 
+#detailDrawerToggle.has-detail:not([aria-expanded="true"]) .workspace-tab-icon {
+  color: #fff0b8;
+}
+
+#detailDrawerToggle::after {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  content: "";
+  background: var(--gold);
+  box-shadow: 0 0 10px rgba(246, 189, 96, 0.78);
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+#detailDrawerToggle.has-update::after {
+  opacity: 1;
+  animation: table-attention-pulse 1.6s ease-in-out infinite;
+}
+
 .workspace-tab-icon {
   color: var(--gold);
   font-size: 16px;
@@ -2257,7 +2280,8 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
 
 @media (prefers-reduced-motion: reduce) {
   .hand-panel:not([data-ready-count="0"]) .hand-readiness-dot,
-  .setup-live-dot {
+  .setup-live-dot,
+  #detailDrawerToggle.has-update::after {
     animation: none;
   }
 }
