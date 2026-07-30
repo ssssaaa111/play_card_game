@@ -10,14 +10,14 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260730-battle-chronicle-4"/);
+  assert.match(html, /href="duel-table\.css\?v=20260730-manual-detail-5"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
   assert.match(html, /id="detailDrawerToggle"[\s\S]*aria-controls="detailDrawer"/);
   assert.match(html, /id="timelineDrawerToggle"[\s\S]*aria-controls="timelineDrawer"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260730-battle-chronicle-4"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260730-manual-detail-5"/);
 });
 
 test("low-frequency media and session controls live behind one utility menu", () => {
@@ -55,7 +55,8 @@ test("workspace controller synchronizes drawers, timeline badges, and settings",
   assert.match(controller, /function setDrawer\(name, open\)/);
   assert.match(controller, /drawer\.root\?\.classList\.toggle\("is-open", active\)/);
   assert.match(controller, /timelineBadge\.textContent = timelineCount\.textContent/);
-  assert.match(controller, /detailRequiresAttention\(\)/);
+  assert.match(controller, /detailToggle\.classList\.add\("has-update"\)/);
+  assert.doesNotMatch(controller, /setDrawer\("detail", true\)/);
   assert.match(controller, /compactWorkspace\.addEventListener\("change"/);
 });
 
