@@ -236,6 +236,23 @@ function projectContinuousEffectsFromEvents(events = []) {
   return [...active.values()];
 }
 
+function projectGameOverFromUiState(uiState, events = []) {
+  const event = events.slice().reverse().find((entry) => entry.type === "GAME_OVER_DECLARED");
+  if (!uiState.gameOver && !event) return null;
+  const loserIds = Array.isArray(uiState.gameOverLosers)
+    ? uiState.gameOverLosers.slice()
+    : Array.isArray(event?.loserIds)
+      ? event.loserIds.slice()
+      : [event?.loserId].filter(Boolean);
+  return {
+    winnerId: uiState.gameOverWinner ?? event?.winnerId ?? null,
+    loserIds,
+    reason: uiState.gameOverReason || event?.reason || "lp-zero",
+    sourceCardId: event?.sourceCardId || null,
+    triggerEventId: event?.triggerEventId || null
+  };
+}
+
 export function buildEngineStateFromUiState(uiState) {
   const cards = {};
   const events = Array.isArray(uiState.gameEvents) ? uiState.gameEvents.map((event) => ({ ...event })) : [];
@@ -270,6 +287,7 @@ export function buildEngineStateFromUiState(uiState) {
     },
     events,
     continuousEffects: projectContinuousEffectsFromEvents(events),
+    gameOver: projectGameOverFromUiState(uiState, events),
     nextEventId
   };
 }

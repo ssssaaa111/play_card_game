@@ -1,5 +1,143 @@
-import { MAX_LP, battleValue, fieldCards, fieldElements, totalAtk } from './rules.js';
+import { MAX_LP, battleValue, fieldCards, fieldElements, shieldPreview, totalAtk } from './rules.js';
+import { describeBattleOutcome } from './battle.js';
 import { fusionOptionsForCard } from './fusion.js';
+import { getCardEffectDefinition } from './game-engine.js';
+
+function guaranteedAfterAttackDamage(attacker) {
+  const definition = getCardEffectDefinition(attacker?.afterAttack);
+  if (!definition || (definition.requirements?.length || 0) > 0) return [];
+  return (definition.operations || [])
+    .filter((operation) => operation.op === "dealDamage" && operation.player === "rival")
+    .map((operation) => Math.max(0, Number(operation.amount) || 0))
+    .filter((amount) => amount > 0);
+}
+
+function previewDamageSequence(attacker, amounts, shield = 0) {
+  let remainingShield = Math.max(0, Number(shield) || 0);
+  let finalDamage = 0;
+  for (const amount of amounts) {
+    const preview = shieldPreview(amount, remainingShield, attacker);
+    finalDamage += preview.finalDamage;
+    remainingShield = preview.shieldAfter;
+  }
+  return { finalDamage, shieldAfter: remainingShield };
+}
+
+export function previewAiDirectDamage(attacker, shield = 0) {
+  return previewDamageSequence(
+    attacker,
+    [totalAtk(attacker), ...guaranteedAfterAttackDamage(attacker)],
+    shield
+  ).finalDamage;
+}
+
+function previewTargetAttackDamage(attacker, target, shield) {
+  const outcome = describeBattleOutcome(attacker, target);
+  if (!outcome?.destroysTarget) return null;
+  const amounts = [outcome.rawDamage];
+  if (!outcome.destroysAttacker) amounts.push(...guaranteedAfterAttackDamage(attacker));
+  return previewDamageSequence(attacker, amounts, shield);
+}
+
+function maximumRemainingAttackDamage(attackers, targets, shield, directAttacks) {
+  const memo = new Map();
+  const allAttackers = (1 << attackers.length) - 1;
+  const allTargets = (1 << targets.length) - 1;
+
+  function search(attackerMask, targetMask, remainingShield, remainingDirectAttacks) {
+    if (attackerMask === 0) return 0;
+    const key = `${attackerMask}:${targetMask}:${remainingShield}:${remainingDirectAttacks}`;
+    if (memo.has(key)) return memo.get(key);
+    let best = 0;
+
+    for (let attackerIndex = 0; attackerIndex < attackers.length; attackerIndex += 1) {
+      const attackerBit = 1 << attackerIndex;
+      if ((attackerMask & attackerBit) === 0) continue;
+      const attacker = attackers[attackerIndex];
+      const nextAttackers = attackerMask & ~attackerBit;
+      best = Math.max(best, search(nextAttackers, targetMask, remainingShield, remainingDirectAttacks));
+
+      const naturalDirect = targetMask === 0 || Boolean(attacker?.canDirectAttack);
+      if (naturalDirect || remainingDirectAttacks > 0) {
+        const direct = previewDamageSequence(
+          attacker,
+          [totalAtk(attacker), ...guaranteedAfterAttackDamage(attacker)],
+          remainingShield
+        );
+        const directCost = naturalDirect ? 0 : 1;
+        best = Math.max(
+          best,
+          direct.finalDamage + search(
+            nextAttackers,
+            targetMask,
+            direct.shieldAfter,
+            remainingDirectAttacks - directCost
+          )
+        );
+      }
+
+      for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
+        const targetBit = 1 << targetIndex;
+        if ((targetMask & targetBit) === 0) continue;
+        const attack = previewTargetAttackDamage(attacker, targets[targetIndex], remainingShield);
+        if (!attack) continue;
+        best = Math.max(
+          best,
+          attack.finalDamage + search(
+            nextAttackers,
+            targetMask & ~targetBit,
+            attack.shieldAfter,
+            remainingDirectAttacks
+          )
+        );
+      }
+    }
+
+    memo.set(key, best);
+    return best;
+  }
+
+  return search(
+    allAttackers,
+    allTargets,
+    Math.max(0, Number(shield) || 0),
+    Math.max(0, Number(directAttacks) || 0)
+  );
+}
+
+export function findAiDirectLethalAttacker({
+  attackers = [],
+  targets = [],
+  rivalLp = 0,
+  shield = 0,
+  directAttacks = 0
+} = {}) {
+  const activeAttackers = attackers.filter(Boolean);
+  const activeTargets = targets.filter(Boolean);
+  if (!activeAttackers.length || !activeTargets.length || rivalLp <= 0) return null;
+
+  for (let attackerIndex = 0; attackerIndex < activeAttackers.length; attackerIndex += 1) {
+    const attacker = activeAttackers[attackerIndex];
+    const usesPermission = !attacker.canDirectAttack;
+    if (usesPermission && directAttacks <= 0) continue;
+    const direct = previewDamageSequence(
+      attacker,
+      [totalAtk(attacker), ...guaranteedAfterAttackDamage(attacker)],
+      shield
+    );
+    const remainingAttackers = activeAttackers.filter((_card, index) => index !== attackerIndex);
+    const followUpDamage = maximumRemainingAttackDamage(
+      remainingAttackers,
+      activeTargets,
+      direct.shieldAfter,
+      Math.max(0, Number(directAttacks) || 0) - Number(usesPermission)
+    );
+    if (direct.finalDamage + followUpDamage >= rivalLp) {
+      return { attacker, attackerIndex, damage: direct.finalDamage + followUpDamage };
+    }
+  }
+  return null;
+}
 
 export const spellDefinitions = {
   burn500: {
@@ -401,12 +539,23 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
       return fieldCards(owner).length > 0 ? (aiStyle === "aggressive" ? 78 : 48) : 0;
     case "directStrike": {
       if (owner.attacksSkipped) return 0;
-      const attackers = owner.field.filter((card) => card && !card.used && card.mode !== "defense");
+      const attackers = owner.field.filter((card) =>
+        card && !card.used && !card.attackLockReason && card.mode !== "defense"
+      );
       if (!attackers.length || fieldCards(rival).length === 0 || owner.directAttacks > 0) return 0;
       const bestAtk = Math.max(...attackers.map(totalAtk));
       const targets = fieldCards(rival);
       const blocked = targets.length > 0 && attackers.every((attacker) => targets.every((target) => totalAtk(attacker) < battleValue(target)));
-      if (bestAtk >= rival.lp) return 94;
+      const hasLethalDirectRoute = aiStyle === "scriptedPressure"
+        ? Boolean(findAiDirectLethalAttacker({
+            attackers,
+            targets,
+            rivalLp: rival.lp,
+            shield: rival.shield,
+            directAttacks: 1
+          }))
+        : bestAtk >= rival.lp;
+      if (hasLethalDirectRoute) return 94;
       if (blocked) return 76;
       return aiStyle === "aggressive" ? 58 : 0;
     }

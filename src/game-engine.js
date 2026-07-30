@@ -4944,6 +4944,25 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
         machine.actionWindow = null;
       }
     }
+    if (event.type === "GAME_OVER_DECLARED") {
+      const loserIds = Array.isArray(event.loserIds)
+        ? event.loserIds
+        : [event.loserId].filter(Boolean);
+      const playerId = event.winnerId || loserIds[0] || event.playerId;
+      const openedAt = Number(event.declaredAt) || Number(event.id) || 0;
+      machine.responseWindow = null;
+      machine.chain = [];
+      machine.autoEnd = null;
+      machine.pendingAttack = null;
+      machine.actionWindow = {
+        playerId,
+        window: ActionWindow.gameOver,
+        windowId: event.windowId || `game-over-${event.id || openedAt}`,
+        reason: event.reason || "game-over",
+        openedAt,
+        deadline: openedAt
+      };
+    }
     if (event.type === "RESPONSE_PRIORITY_PASSED" && machine.responseWindow) {
       machine.responseWindow.playerId = event.toPlayerId;
       if (machine.actionWindow?.window === ActionWindow.response) {

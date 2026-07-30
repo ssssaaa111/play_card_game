@@ -919,6 +919,208 @@ async function runTrioTrapPlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioDirectTrapPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-direct-trap-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioDirectTrapPlanning");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "star-lancer");
+  const guard = ctx.state.ai.traps.find((card) => card?.id === "guard-sigil");
+  const rebound = ctx.state.ai.traps.find((card) => card?.id === "reversal-flare");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!attacker || !guard || !rebound || ctx.state.player.lp !== 500 || ctx.state.ai.lp !== 2400) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "star-breach"), `${smokeName}: select direct strike spell`);
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: direct strike confirmation enabled`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: activate direct strike`);
+  await waitForSmoke(
+    () => ctx.state.player.directAttacks > 0,
+    `${smokeName}: direct attack permission granted`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select attacker`);
+  await waitForSmoke(
+    () => ctx.els.aiPanel.classList.contains("direct-target"),
+    `${smokeName}: direct target highlighted`,
+    6000
+  );
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: declare direct attack`);
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "ai" && !ctx.state.aiRunning,
+    `${smokeName}: rebound ends the duel. ${smokeDebug(ctx)}`,
+    12000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const reboundDamage = events.find((event) =>
+    event.type === "DAMAGE_DEALT" &&
+    event.playerId === "player" &&
+    event.sourceCardId === rebound.uid
+  );
+  const reboundLog = (ctx.state.timeline || []).find((entry) =>
+    logEntryMessage(entry).includes("逆焰护壁")
+  );
+  if (!events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === rebound.uid) ||
+      events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === guard.uid) ||
+      reboundDamage?.amount !== 500 || reboundLog?.cardId !== "reversal-flare") {
+    throw new Error(`${smokeName}: only reversal flare should activate and reflect 500 damage. ${smokeDebug(ctx)}`);
+  }
+  if (ctx.state.player.lp !== 0 || ctx.state.ai.lp !== 2400 ||
+      !ctx.state.ai.grave.some((card) => card?.uid === rebound.uid) ||
+      !ctx.state.ai.traps.some((card) => card?.uid === guard.uid)) {
+    throw new Error(`${smokeName}: rebound must win while guard sigil remains set. ${smokeDebug(ctx)}`);
+  }
+  const machine = projectMachineStateFromEvents(ctx.state.gameEvents || [], ctx.state.phase);
+  if (machine.responseWindow || machine.pendingAttack ||
+      machine.actionWindow?.window !== "gameOver" ||
+      ctx.state.actionWindow !== "gameOver" ||
+      ctx.els.toast?.textContent?.includes("Cannot cancel attack while a response window is open")) {
+    throw new Error(`${smokeName}: lethal rebound must clear attack response state without a stale cancel error. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-shield-lethal-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioShieldLethalPlanning");
+  const breach = ctx.state.ai.hand.find((card) => card?.id === "star-breach");
+  const sun = ctx.state.ai.field.find((card) => card?.id === "trio-sun-judicator");
+  const saint = ctx.state.player.field.find((card) => card?.id === "prism-saint");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!breach || !sun || !saint || ctx.state.player.lp !== 2000 || ctx.state.player.shield !== 2000) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" &&
+      ctx.state.phase === "main" &&
+      ctx.state.actionWindow === "main" &&
+      !ctx.state.aiRunning,
+    `${smokeName}: AI completes the shield-aware attack turn. ${smokeDebug(ctx)}`,
+    30000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const attack = events.find((event) =>
+    event.type === "ATTACK_DECLARED" && event.attackerCardId === sun.uid
+  );
+  const breachActivated = events.some((event) =>
+    event.type === "CARD_ACTIVATED" && event.cardId === breach.uid
+  );
+  if (!attack || attack.targetCardId !== saint.uid || breachActivated) {
+    throw new Error(`${smokeName}: shielded false lethal must not spend direct strike or bypass the monster. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.player.grave.some((card) => card?.uid === saint.uid) ||
+      !ctx.state.ai.hand.some((card) => card?.uid === breach.uid) ||
+      ctx.state.player.lp !== 2000 || ctx.state.player.shield !== 0 || ctx.state.gameOver) {
+    throw new Error(`${smokeName}: sun should clear the monster into shield without dealing LP damage. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-after-attack-lethal-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioAfterAttackLethalPlanning");
+  const breach = ctx.state.ai.hand.find((card) => card?.id === "star-breach");
+  const star = ctx.state.ai.field.find((card) => card?.id === "trio-star-herald");
+  const saint = ctx.state.player.field.find((card) => card?.id === "prism-saint");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!breach || !star || !saint || ctx.state.player.lp !== 2700) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "star-breach"),
+    `${smokeName}: AI reveals direct strike for the exact lethal route`,
+    12000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue direct strike reveal`);
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "ai" && !ctx.state.aiRunning,
+    `${smokeName}: direct attack plus after-attack damage ends the duel. ${smokeDebug(ctx)}`,
+    24000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const attack = events.find((event) =>
+    event.type === "ATTACK_DECLARED" && event.attackerCardId === star.uid
+  );
+  const damage = events
+    .filter((event) => event.type === "DAMAGE_DEALT" && event.sourceCardId === star.uid)
+    .map((event) => event.amount);
+  if (!events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === breach.uid) ||
+      !attack || attack.targetCardId || !events.some((event) =>
+        event.type === "ABILITY_SPENT" && event.ability === "directAttack"
+      )) {
+    throw new Error(`${smokeName}: AI must spend direct strike and bypass the monster. ${smokeDebug(ctx)}`);
+  }
+  if (damage.length !== 2 || damage[0] !== 2400 || damage[1] !== 300 ||
+      !ctx.state.player.field.some((card) => card?.uid === saint.uid) ||
+      ctx.state.player.lp !== 0 || star.tempAtk !== 300) {
+    throw new Error(`${smokeName}: star must deal 2400 plus 300 while leaving the bypassed monster in play. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioCombinedLethalPlanningBasicSmoke(ctx) {
+  const smokeName = "trio-combined-lethal-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioCombinedLethalPlanning");
+  const breach = ctx.state.ai.hand.find((card) => card?.id === "star-breach");
+  const sun = ctx.state.ai.field.find((card) => card?.id === "trio-sun-judicator");
+  const star = ctx.state.ai.field.find((card) => card?.id === "trio-star-herald");
+  const saint = ctx.state.player.field.find((card) => card?.id === "prism-saint");
+  const mage = ctx.state.player.field.find((card) => card?.id === "gale-mage");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!breach || !sun || !star || !saint || !mage || ctx.state.player.lp !== 4500) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "star-breach"),
+    `${smokeName}: AI reveals direct strike for the combined lethal route`,
+    12000
+  );
+  clickSmokeElementCenter(ctx.els.aiRevealContinue, `${smokeName}: continue direct strike reveal`);
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "trio-sun-judicator"),
+    `${smokeName}: AI reveals sun after-attack effect`,
+    12000
+  );
+  clickSmokeElementCenter(ctx.els.aiRevealContinue, `${smokeName}: continue sun effect reveal`);
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "ai" && !ctx.state.aiRunning,
+    `${smokeName}: direct and follow-up attacks end the duel. ${smokeDebug(ctx)}`,
+    30000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const attacks = events.filter((event) => event.type === "ATTACK_DECLARED" && event.playerId === "ai");
+  const damage = events
+    .filter((event) => event.type === "DAMAGE_DEALT" && event.playerId === "player")
+    .map((event) => event.amount);
+  if (!events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === breach.uid) ||
+      attacks.length !== 2 || attacks[0].attackerCardId !== sun.uid || attacks[0].targetCardId ||
+      attacks[1].attackerCardId !== star.uid || attacks[1].targetCardId !== mage.uid) {
+    throw new Error(`${smokeName}: AI must direct with sun before star attacks the higher weak target. ${smokeDebug(ctx)}`);
+  }
+  if (damage.length !== 3 || damage[0] !== 3000 || damage[1] !== 1200 || damage[2] !== 300 ||
+      !ctx.state.player.field.some((card) => card?.uid === saint.uid) ||
+      !ctx.state.player.grave.some((card) => card?.uid === mage.uid) ||
+      ctx.state.player.lp !== 0 || star.tempAtk !== 300) {
+    throw new Error(`${smokeName}: combined lethal must deal 3000, 1200, and 300 while bypassing saint. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiEngineLegalityBasicSmoke(ctx) {
   const smokeName = "ai-engine-legality-basic";
   setSmokeStatus("running", smokeName);
@@ -6234,6 +6436,10 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
     "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
+    "trio-direct-trap-planning-basic": runTrioDirectTrapPlanningBasicSmoke,
+    "trio-shield-lethal-planning-basic": runTrioShieldLethalPlanningBasicSmoke,
+    "trio-after-attack-lethal-planning-basic": runTrioAfterAttackLethalPlanningBasicSmoke,
+    "trio-combined-lethal-planning-basic": runTrioCombinedLethalPlanningBasicSmoke,
     "ai-engine-legality-basic": runAiEngineLegalityBasicSmoke,
     "ai-extra-summon-basic": runAiExtraSummonBasicSmoke,
     "response-action-lock-basic": runResponseActionLockBasicSmoke,

@@ -349,6 +349,73 @@ test("scores AI direct strike and combo spells", () => {
     94
   );
   assert.equal(
+    scoreSpellForAi("directStrike", {
+      owner: duelist({ field: [monster({ atk: 3000 }), null, null] }),
+      rival: duelist({ owner: "player", lp: 2000, shield: 2000, field: [monster({ atk: 1000 }), null, null] }),
+      aiStyle: "scriptedPressure"
+    }),
+    0
+  );
+  assert.equal(
+    scoreSpellForAi("directStrike", {
+      owner: duelist({
+        field: [monster({
+          id: "trio-star-herald",
+          atk: 2400,
+          afterAttack: "starDoomCharge"
+        }), null, null]
+      }),
+      rival: duelist({ owner: "player", lp: 2700, field: [monster({ atk: 1000 }), null, null] }),
+      aiStyle: "scriptedPressure"
+    }),
+    94
+  );
+  assert.equal(
+    scoreSpellForAi("directStrike", {
+      owner: duelist({
+        field: [
+          monster({ id: "trio-sun-judicator", atk: 3000 }),
+          monster({
+            id: "trio-star-herald",
+            atk: 2400,
+            afterAttack: "starDoomCharge"
+          }),
+          null
+        ]
+      }),
+      rival: duelist({
+        owner: "player",
+        lp: 4500,
+        field: [monster({ atk: 1000 }), monster({ atk: 1000 }), null]
+      }),
+      aiStyle: "scriptedPressure"
+    }),
+    94
+  );
+  assert.equal(
+    scoreSpellForAi("directStrike", {
+      owner: duelist({
+        field: [
+          monster({ id: "trio-sun-judicator", atk: 3000 }),
+          monster({
+            id: "trio-star-herald",
+            atk: 2400,
+            afterAttack: "starDoomCharge",
+            attackLockReason: "trioConvergence"
+          }),
+          null
+        ]
+      }),
+      rival: duelist({
+        owner: "player",
+        lp: 4500,
+        field: [monster({ atk: 1000 }), monster({ atk: 1000 }), null]
+      }),
+      aiStyle: "scriptedPressure"
+    }),
+    0
+  );
+  assert.equal(
     scoreSpellForAi("fireWindCombo", {
       owner: duelist({ field: [monster({ element: "fire" }), monster({ element: "wind" }), null] }),
       rival: duelist({ owner: "player", lp: 1000 }),
