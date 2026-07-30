@@ -10,14 +10,14 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260730-duel-table-2"/);
+  assert.match(html, /href="duel-table\.css\?v=20260730-battle-chronicle-4"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
   assert.match(html, /id="detailDrawerToggle"[\s\S]*aria-controls="detailDrawer"/);
   assert.match(html, /id="timelineDrawerToggle"[\s\S]*aria-controls="timelineDrawer"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260730-duel-table-2"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260730-battle-chronicle-4"/);
 });
 
 test("low-frequency media and session controls live behind one utility menu", () => {
@@ -57,4 +57,72 @@ test("workspace controller synchronizes drawers, timeline badges, and settings",
   assert.match(controller, /timelineBadge\.textContent = timelineCount\.textContent/);
   assert.match(controller, /detailRequiresAttention\(\)/);
   assert.match(controller, /compactWorkspace\.addEventListener\("change"/);
+});
+
+test("combat attention system exposes phase progress and hand readiness", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+  const app = read("src/app.js");
+
+  assert.match(html, /id="phaseRail"[\s\S]*data-phase-step="draw"[\s\S]*data-phase-step="main"[\s\S]*data-phase-step="battle"/);
+  assert.match(html, /id="handGuide"[\s\S]*id="handReadyCount"[\s\S]*id="handReadyLabel"/);
+  assert.match(css, /\.phase-step\.is-current[\s\S]*\.hand-panel:not\(\[data-ready-count="0"\]\)/);
+  assert.match(css, /body\[data-duel-action-window="targetSelect"\][\s\S]*#duelHint/);
+  assert.match(controller, /function syncCombatAttention\(\)/);
+  assert.match(controller, /querySelectorAll\("\.card\.action-ready:not\(\.action-blocked\)"\)/);
+  assert.match(controller, /handPanel\.dataset\.attention = selection/);
+  assert.match(app, /document\.body\.dataset\.duelPhase/);
+  assert.match(app, /document\.body\.dataset\.duelSelection/);
+  assert.match(app, /document\.body\.dataset\.duelCanAct/);
+});
+
+test("pre-duel setup uses a responsive loadout and tactical intelligence cockpit", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+
+  assert.match(html, /class="modal-header"[\s\S]*id="setupReadySummary"[\s\S]*id="setupReadyMode"/);
+  assert.match(html, /class="setup-cockpit"[\s\S]*class="setup-loadout"[\s\S]*class="setup-intel"/);
+  assert.match(html, /data-setup-kind="role"[\s\S]*data-setup-kind="deck"[\s\S]*data-setup-kind="ai"[\s\S]*data-setup-kind="scenario"/);
+  assert.match(css, /\.modal\.setup-modal \.modal-box\s*\{[\s\S]*width: min\(1040px, 100%\)/);
+  assert.match(css, /\.setup-cockpit\s*\{[\s\S]*grid-template-columns: minmax\(330px, 0\.88fr\) minmax\(0, 1\.12fr\)/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.setup-modal \.setup-grid,[\s\S]*\.setup-modal \.pre-duel-summary\s*\{[\s\S]*grid-template-columns: 1fr/);
+  assert.match(controller, /function syncSetupSummary\(\)/);
+  assert.match(controller, /setupReadySummary\.textContent = `\$\{role\} · \$\{deck\}`/);
+  assert.match(controller, /select\.addEventListener\("change", setupChangeHandler\)/);
+});
+
+test("desktop hand actions use a tactical command dock without covering the field", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+
+  assert.match(html, /class="hand-command"[\s\S]*id="handCommandTitle"[\s\S]*id="choiceActions"/);
+  assert.match(html, /class="hand-command-flow"[\s\S]*01[\s\S]*02[\s\S]*03/);
+  assert.match(css, /\.hand-panel\s*\{[\s\S]*grid-template-columns: 102px minmax\(0, 1fr\) clamp\(276px, 25vw, 332px\)/);
+  assert.match(css, /\.hand-command > \.choice-actions\s*\{[\s\S]*position: static;[\s\S]*transform: none/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.hand-command\s*\{[\s\S]*display: contents;[\s\S]*\.hand-command > \.choice-actions\s*\{[\s\S]*position: fixed/);
+  assert.match(controller, /handCommand\.dataset\.active = String\(commandActive\)/);
+  assert.match(controller, /handCommand\.dataset\.step = locating/);
+  assert.match(controller, /attentionObserver\.observe\(choiceActions/);
+});
+
+test("battle chronicle uses full-height summaries filters and structured event nodes", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+  const renderer = read("src/timeline-renderer.js");
+
+  assert.match(html, /BATTLE CHRONICLE[\s\S]*id="timelineLatestStep"[\s\S]*id="timelineLatestKind"[\s\S]*id="timelineActionCount"/);
+  assert.match(html, /data-timeline-filter="all"[\s\S]*data-timeline-filter="battle"[\s\S]*data-timeline-filter="cards"[\s\S]*data-timeline-filter="system"/);
+  assert.match(css, /\.timeline-drawer\s*\{[\s\S]*width: min\(390px,[\s\S]*max-height: none;[\s\S]*grid-template-rows:/);
+  assert.match(css, /\.timeline-drawer \.chain-history-list\s*\{[\s\S]*position: static;/);
+  assert.match(css, /\.timeline-node::after\s*\{[\s\S]*linear-gradient/);
+  assert.match(controller, /function setTimelineFilter\(filter = "all"\)/);
+  assert.match(controller, /timelineDrawer\.dataset\.timelineView = nextFilter/);
+  assert.match(controller, /function syncChainHistoryAttention\(\)[\s\S]*setDrawer\("timeline", true\)/);
+  assert.match(controller, /chainHistoryObserver\.observe\(chainHistoryToggle/);
+  assert.match(renderer, /item\.dataset\.timelineGroup = timelineKindGroup\(entry\.kind\)/);
+  assert.match(renderer, /kind\.textContent = timelineKindLabel\(entry\.kind\)/);
 });

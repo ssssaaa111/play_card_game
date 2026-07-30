@@ -36,6 +36,37 @@ export function timelineAuditView(timeline = []) {
   };
 }
 
+export function timelineKindLabel(kind = "") {
+  const labels = {
+    attack: "攻击",
+    damage: "伤害",
+    summon: "召唤",
+    spell: "魔法",
+    trap: "陷阱",
+    draw: "抽卡",
+    guard: "防御",
+    turn: "回合",
+    warning: "提示"
+  };
+  return labels[kind] || "记录";
+}
+
+export function timelineKindGroup(kind = "") {
+  if (["attack", "damage", "trap", "guard"].includes(kind)) return "battle";
+  if (["summon", "spell", "draw"].includes(kind)) return "cards";
+  return "system";
+}
+
+export function timelineOverviewView(timeline = []) {
+  const latest = timeline[0];
+  const actionKinds = new Set(["attack", "damage", "summon", "spell", "trap", "draw", "guard"]);
+  return {
+    latestStep: latest?.step ? `#${latest.step}` : "—",
+    latestKind: latest ? timelineKindLabel(latest.kind) : "等待开局",
+    actionCount: timeline.filter((entry) => actionKinds.has(entry.kind)).length
+  };
+}
+
 export function chainHistoryPanelView({
   events = [],
   findCard = () => null,
@@ -165,6 +196,16 @@ export function renderTimelinePanel({
     elements.timelineAudit.dataset.auditDetail = auditView.detail;
     elements.timelineAudit.title = auditView.title;
   }
+  const overview = timelineOverviewView(timeline);
+  if (elements.timelineLatestStep) {
+    elements.timelineLatestStep.textContent = overview.latestStep;
+  }
+  if (elements.timelineLatestKind) {
+    elements.timelineLatestKind.textContent = overview.latestKind;
+  }
+  if (elements.timelineActionCount) {
+    elements.timelineActionCount.textContent = String(overview.actionCount);
+  }
   renderChainHistoryPanel({
     document,
     elements,
@@ -178,13 +219,31 @@ export function renderTimelinePanel({
   timeline.forEach((entry) => {
     const item = document.createElement("div");
     item.className = `timeline-item ${entry.kind}`;
-    item.innerHTML = `
-      <span class="timeline-step">${entry.step}</span>
-      <span class="timeline-text"></span>
-    `;
+    item.dataset.timelineGroup = timelineKindGroup(entry.kind);
+    item.dataset.timelineKind = entry.kind || "default";
+
+    const node = document.createElement("span");
+    node.className = "timeline-node";
+    const step = document.createElement("span");
+    step.className = "timeline-step";
+    step.textContent = String(entry.step);
+    node.appendChild(step);
+
+    const event = document.createElement("span");
+    event.className = "timeline-event";
+    const kind = document.createElement("span");
+    kind.className = "timeline-kind";
+    kind.textContent = timelineKindLabel(entry.kind);
+    const text = document.createElement("span");
+    text.className = "timeline-text";
+    event.appendChild(kind);
+    event.appendChild(text);
+    item.appendChild(node);
+    item.appendChild(event);
+
     appendLogEntryContent({
       document,
-      root: item.querySelector(".timeline-text"),
+      root: text,
       entry,
       findCard: findTimelineCard,
       onCardClick,

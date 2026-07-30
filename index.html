@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
   <link rel="stylesheet" href="styles.css?v=20260706-ai-card-reveal" />
-  <link rel="stylesheet" href="duel-table.css?v=20260730-duel-table-2" />
+  <link rel="stylesheet" href="duel-table.css?v=20260730-battle-chronicle-4" />
 </head>
 <body>
   <div id="app">
@@ -21,6 +21,11 @@
         <strong id="phaseText">准备决斗</strong>
         <span id="turnText">你的回合</span>
         <span id="timerText"></span>
+        <div class="phase-rail" id="phaseRail" aria-label="回合阶段">
+          <span class="phase-step" data-phase-step="draw"><i>1</i><em>抽卡</em></span>
+          <span class="phase-step" data-phase-step="main"><i>2</i><em>主要</em></span>
+          <span class="phase-step" data-phase-step="battle"><i>3</i><em>战斗</em></span>
+        </div>
       </div>
       <div class="actions" aria-label="回合操作">
         <button class="btn primary" id="startBtn" title="开始决斗">开始</button>
@@ -146,17 +151,40 @@
       <section class="timeline workspace-drawer timeline-drawer" id="timelineDrawer" aria-label="战斗记录">
         <div class="timeline-head workspace-drawer-head">
           <div>
-            <span class="workspace-drawer-kicker">战局记录</span>
-            <strong>结算时间线</strong>
+            <span class="workspace-drawer-kicker">BATTLE CHRONICLE</span>
+            <strong>战局时间线</strong>
           </div>
           <span class="timeline-meta">
             <span class="timeline-audit ok" id="timelineAudit">审计 OK</span>
-            <span id="timelineCount">0</span>
+            <span class="timeline-total"><strong id="timelineCount">0</strong> 条</span>
           </span>
           <button class="drawer-close" id="timelineDrawerClose" type="button" aria-label="收起战斗记录">×</button>
         </div>
+        <div class="timeline-overview" aria-label="战局摘要">
+          <div>
+            <span>最新节点</span>
+            <strong id="timelineLatestStep">—</strong>
+          </div>
+          <div>
+            <span>最近事件</span>
+            <strong id="timelineLatestKind">等待开局</strong>
+          </div>
+          <div>
+            <span>关键行动</span>
+            <strong id="timelineActionCount">0</strong>
+          </div>
+        </div>
+        <div class="timeline-filters" aria-label="筛选战斗记录">
+          <button type="button" data-timeline-filter="all" aria-pressed="true">全部</button>
+          <button type="button" data-timeline-filter="battle" aria-pressed="false">战斗</button>
+          <button type="button" data-timeline-filter="cards" aria-pressed="false">卡牌</button>
+          <button type="button" data-timeline-filter="system" aria-pressed="false">系统</button>
+        </div>
         <button class="chain-history-toggle" id="chainHistoryToggle" type="button" aria-expanded="false" hidden>
-          <span>连锁复盘</span>
+          <span class="chain-history-toggle-copy">
+            <strong>连锁复盘</strong>
+            <small>查看发动顺序与逆序结算</small>
+          </span>
           <span class="chain-history-count" id="chainHistoryCount">0</span>
         </button>
         <div class="chain-history-list" id="chainHistoryList" hidden></div>
@@ -178,36 +206,61 @@
 
     <section class="hand-panel" aria-label="玩家手牌">
       <div class="hand-title">
-        <strong>手牌</strong>
-        <span>选择卡牌 · 再选择落点或目标</span>
+        <div class="hand-title-copy">
+          <strong>手牌</strong>
+          <span id="handGuide">选择卡牌 · 再选择落点或目标</span>
+        </div>
+        <div class="hand-readiness" id="handReadiness" aria-live="polite">
+          <span class="hand-readiness-dot" aria-hidden="true"></span>
+          <strong id="handReadyCount">0</strong>
+          <small id="handReadyLabel">可操作</small>
+        </div>
       </div>
       <div class="hand-stack">
         <div class="hand" id="hand"></div>
         <div class="grave-targets" id="graveTargets" hidden></div>
       </div>
+      <aside class="hand-command" id="handCommand" aria-label="战术指令">
+        <div class="hand-command-head">
+          <span>TACTICAL COMMAND</span>
+          <span class="hand-command-signal">
+            <i aria-hidden="true"></i>
+            <span id="handCommandSignal">待命</span>
+          </span>
+        </div>
+        <div class="hand-command-idle" id="handCommandIdle">
+          <strong id="handCommandTitle">选择一张手牌</strong>
+          <span id="handCommandHint">卡牌的召唤、发动与目标确认会集中显示在这里。</span>
+          <div class="hand-command-flow" aria-hidden="true">
+            <span class="is-current"><b>01</b> 选牌</span>
+            <span><b>02</b> 定位</span>
+            <span><b>03</b> 执行</span>
+          </div>
+        </div>
+        <div class="choice-actions" id="choiceActions" hidden>
+          <div class="timer-progress" id="timerProgress" aria-hidden="true">
+            <div id="timerProgressFill"></div>
+          </div>
+          <div class="fusion-preview" id="fusionPreview" hidden>
+            <div class="fusion-preview-copy">
+              <span class="fusion-preview-kicker" id="fusionPreviewKicker">融合预览</span>
+              <strong id="fusionPreviewName"></strong>
+              <span id="fusionPreviewStats"></span>
+            </div>
+            <div class="fusion-result-choices" id="fusionResultChoices" aria-label="选择融合结果"></div>
+            <div class="fusion-preview-materials" id="fusionPreviewMaterials"></div>
+            <button class="btn small-action" id="fusionPreviewDetail" type="button">查看结果详情</button>
+          </div>
+          <span id="choiceText">选择一张卡</span>
+          <button class="btn primary" id="choiceConfirmBtn" type="button">确认</button>
+          <button class="btn" id="choiceCancelBtn" type="button">取消</button>
+        </div>
+      </aside>
     </section>
   </div>
 
     <div class="toast" id="toast"></div>
     <div class="effect-layer" id="effectLayer"></div>
-    <div class="choice-actions" id="choiceActions" hidden>
-      <div class="timer-progress" id="timerProgress" aria-hidden="true">
-        <div id="timerProgressFill"></div>
-      </div>
-      <div class="fusion-preview" id="fusionPreview" hidden>
-        <div class="fusion-preview-copy">
-          <span class="fusion-preview-kicker" id="fusionPreviewKicker">融合预览</span>
-          <strong id="fusionPreviewName"></strong>
-          <span id="fusionPreviewStats"></span>
-        </div>
-        <div class="fusion-result-choices" id="fusionResultChoices" aria-label="选择融合结果"></div>
-        <div class="fusion-preview-materials" id="fusionPreviewMaterials"></div>
-        <button class="btn small-action" id="fusionPreviewDetail" type="button">查看结果详情</button>
-      </div>
-      <span id="choiceText">选择一张卡</span>
-      <button class="btn primary" id="choiceConfirmBtn" type="button">确认</button>
-      <button class="btn" id="choiceCancelBtn" type="button">取消</button>
-    </div>
     <div class="ace-overlay" id="aceOverlay">
     <div class="ace-card">
       <strong id="aceName">王牌登场</strong>
@@ -217,62 +270,96 @@
   </div>
   <div class="modal" id="modal">
     <div class="modal-box">
-      <h2 id="modalTitle">决斗结束</h2>
-      <p id="modalText"></p>
+      <div class="modal-header">
+        <div class="modal-heading">
+          <span class="setup-kicker">DUEL DEPLOYMENT</span>
+          <h2 id="modalTitle">决斗结束</h2>
+          <p id="modalText"></p>
+        </div>
+        <div class="setup-live-summary" aria-live="polite">
+          <span class="setup-live-dot" aria-hidden="true"></span>
+          <div>
+            <small>当前配置</small>
+            <strong id="setupReadySummary">等待载入配置</strong>
+            <span id="setupReadyMode">玩法待选择</span>
+          </div>
+        </div>
+      </div>
       <div class="setup-panel" id="setupPanel">
-        <div class="setup-grid">
-          <label class="setup-field">
-            <span>角色</span>
-            <select id="roleSelect"></select>
-          </label>
-          <label class="setup-field">
-            <span>卡组</span>
-            <select id="deckSelect"></select>
-          </label>
-          <label class="setup-field">
-            <span>AI</span>
-            <select id="aiSelect"></select>
-          </label>
-          <label class="setup-field">
-            <span id="scenarioSelectLabel">玩法模式</span>
-            <select id="scenarioSelect"></select>
-          </label>
-        </div>
-        <div class="scenario-brief" id="scenarioBrief" hidden>
-          <div class="scenario-brief-head">
-            <strong id="scenarioBriefTitle"></strong>
-            <span class="scenario-difficulty" id="scenarioDifficulty"></span>
-          </div>
-          <ul class="scenario-objectives" id="scenarioObjectives"></ul>
-          <button class="btn ghost scenario-hint-toggle" id="scenarioHintToggle" type="button">显示提示</button>
-          <ul class="scenario-hints" id="scenarioHints" hidden></ul>
-        </div>
-        <div class="pre-duel-preview" id="preDuelPreview">
-          <div class="pre-duel-summary">
-            <div class="pre-duel-stat">
-              <span>生命值</span>
-              <strong id="preDuelLp"></strong>
+        <div class="setup-cockpit">
+          <section class="setup-loadout" aria-label="出战配置">
+            <div class="setup-section-head">
+              <span>01</span>
+              <div>
+                <strong>出战配置</strong>
+                <small>选择你的身份、牌组与对手风格</small>
+              </div>
             </div>
-            <div class="pre-duel-stat pre-duel-skill">
-              <span>己方技能</span>
-              <strong id="preDuelSkillName"></strong>
-              <small id="preDuelSkillText"></small>
+            <div class="setup-grid">
+              <label class="setup-field" data-setup-kind="role">
+                <span class="setup-field-label"><strong>角色</strong><small>DUELIST</small></span>
+                <select id="roleSelect"></select>
+              </label>
+              <label class="setup-field" data-setup-kind="deck">
+                <span class="setup-field-label"><strong>卡组</strong><small>DECK</small></span>
+                <select id="deckSelect"></select>
+              </label>
+              <label class="setup-field" data-setup-kind="ai">
+                <span class="setup-field-label"><strong>AI</strong><small>RIVAL</small></span>
+                <select id="aiSelect"></select>
+              </label>
+              <label class="setup-field" data-setup-kind="scenario">
+                <span class="setup-field-label"><strong id="scenarioSelectLabel">玩法模式</strong><small>MISSION</small></span>
+                <select id="scenarioSelect"></select>
+              </label>
             </div>
-          </div>
-          <div class="pre-duel-route" id="preDuelRecommended" hidden>
-            <strong>推荐路线</strong>
-            <ul id="preDuelRecommendedList"></ul>
-          </div>
-          <div class="pre-duel-deck">
-            <div class="pre-duel-deck-head">
-              <strong>己方卡组预览</strong>
-              <span id="preDuelDeckCount"></span>
-              <button class="btn ghost pre-duel-deck-toggle" id="preDuelDeckToggle" type="button">查看牌组</button>
+            <div class="setup-stats" id="setupStats"></div>
+          </section>
+
+          <section class="setup-intel" aria-label="战术情报">
+            <div class="setup-section-head">
+              <span>02</span>
+              <div>
+                <strong>战术情报</strong>
+                <small>开战前确认目标、技能与牌组结构</small>
+              </div>
             </div>
-            <div class="pre-duel-deck-list" id="preDuelDeckList"></div>
-          </div>
+            <div class="scenario-brief" id="scenarioBrief" hidden>
+              <div class="scenario-brief-head">
+                <strong id="scenarioBriefTitle"></strong>
+                <span class="scenario-difficulty" id="scenarioDifficulty"></span>
+              </div>
+              <ul class="scenario-objectives" id="scenarioObjectives"></ul>
+              <button class="btn ghost scenario-hint-toggle" id="scenarioHintToggle" type="button">显示提示</button>
+              <ul class="scenario-hints" id="scenarioHints" hidden></ul>
+            </div>
+            <div class="pre-duel-preview" id="preDuelPreview">
+              <div class="pre-duel-summary">
+                <div class="pre-duel-stat">
+                  <span>生命值</span>
+                  <strong id="preDuelLp"></strong>
+                </div>
+                <div class="pre-duel-stat pre-duel-skill">
+                  <span>己方技能</span>
+                  <strong id="preDuelSkillName"></strong>
+                  <small id="preDuelSkillText"></small>
+                </div>
+              </div>
+              <div class="pre-duel-route" id="preDuelRecommended" hidden>
+                <strong>推荐路线</strong>
+                <ul id="preDuelRecommendedList"></ul>
+              </div>
+              <div class="pre-duel-deck">
+                <div class="pre-duel-deck-head">
+                  <strong>己方卡组预览</strong>
+                  <span id="preDuelDeckCount"></span>
+                  <button class="btn ghost pre-duel-deck-toggle" id="preDuelDeckToggle" type="button">查看牌组</button>
+                </div>
+                <div class="pre-duel-deck-list" id="preDuelDeckList"></div>
+              </div>
+            </div>
+          </section>
         </div>
-        <div class="setup-stats" id="setupStats"></div>
       </div>
       <div class="modal-actions">
         <button class="btn ghost" id="modalReviewLog" type="button" hidden>查看战斗日志</button>
@@ -347,7 +434,7 @@
     </div>
   </div>
 
-  <script type="module" src="src/duel-table.js?v=20260730-duel-table-2"></script>
+  <script type="module" src="src/duel-table.js?v=20260730-battle-chronicle-4"></script>
   <script type="module" src="src/app.js?v=20260706-ai-card-reveal-confirm"></script>
 </body>
 </html>

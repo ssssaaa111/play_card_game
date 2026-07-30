@@ -22,8 +22,27 @@ export function createDuelTableController(documentRef = document) {
   const battlePreview = documentRef.querySelector("#battlePreview");
   const timelineCount = documentRef.querySelector("#timelineCount");
   const timelineBadge = documentRef.querySelector("#timelineDrawerBadge");
+  const timelineFilters = [...documentRef.querySelectorAll("[data-timeline-filter]")];
+  const chainHistoryToggle = documentRef.querySelector("#chainHistoryToggle");
   const field = documentRef.querySelector(".duel-table .field");
   const hand = documentRef.querySelector("#hand");
+  const handPanel = documentRef.querySelector(".hand-panel");
+  const handGuide = documentRef.querySelector("#handGuide");
+  const handReadyCount = documentRef.querySelector("#handReadyCount");
+  const handReadyLabel = documentRef.querySelector("#handReadyLabel");
+  const handCommand = documentRef.querySelector("#handCommand");
+  const handCommandTitle = documentRef.querySelector("#handCommandTitle");
+  const handCommandHint = documentRef.querySelector("#handCommandHint");
+  const handCommandSignal = documentRef.querySelector("#handCommandSignal");
+  const choiceActions = documentRef.querySelector("#choiceActions");
+  const phaseSteps = [...documentRef.querySelectorAll("[data-phase-step]")];
+  const roleSelect = documentRef.querySelector("#roleSelect");
+  const deckSelect = documentRef.querySelector("#deckSelect");
+  const aiSelect = documentRef.querySelector("#aiSelect");
+  const scenarioSelect = documentRef.querySelector("#scenarioSelect");
+  const setupSelects = [roleSelect, deckSelect, aiSelect, scenarioSelect].filter(Boolean);
+  const setupReadySummary = documentRef.querySelector("#setupReadySummary");
+  const setupReadyMode = documentRef.querySelector("#setupReadyMode");
   const compactWorkspace = window.matchMedia(COMPACT_WORKSPACE_QUERY);
   const drawers = {
     detail: { root: detailDrawer, toggle: detailToggle },
@@ -31,6 +50,7 @@ export function createDuelTableController(documentRef = document) {
   };
   let openDrawer = "";
   let lastDetailName = "";
+  let chainHistoryVisible = Boolean(chainHistoryToggle && !chainHistoryToggle.hidden);
 
   function setUtilityMenu(open) {
     const expanded = Boolean(open);
@@ -72,6 +92,129 @@ export function createDuelTableController(documentRef = document) {
     timelineBadge.textContent = timelineCount.textContent?.trim() || "0";
   }
 
+  function setTimelineFilter(filter = "all") {
+    const valid = timelineFilters.some((button) => button.dataset.timelineFilter === filter);
+    const nextFilter = valid ? filter : "all";
+    if (timelineDrawer) timelineDrawer.dataset.timelineView = nextFilter;
+    for (const button of timelineFilters) {
+      button.setAttribute("aria-pressed", String(button.dataset.timelineFilter === nextFilter));
+    }
+  }
+
+  function syncChainHistoryAttention() {
+    const visible = Boolean(chainHistoryToggle && !chainHistoryToggle.hidden);
+    if (visible && !chainHistoryVisible) setDrawer("timeline", true);
+    chainHistoryVisible = visible;
+  }
+
+  function syncCombatAttention() {
+    const phase = body?.dataset.duelPhase || "setup";
+    const canAct = body?.dataset.duelCanAct === "true";
+    const selection = body?.dataset.duelSelection || "none";
+    const readyCount = hand?.querySelectorAll(".card.action-ready:not(.action-blocked)").length || 0;
+    const selectedCard = hand?.querySelector(".card.selected");
+    const selectedName = selectedCard?.dataset.cardName || "";
+    const commandActive = Boolean(choiceActions && !choiceActions.hidden);
+    const locating = ["target", "fusion", "tribute"].includes(selection);
+
+    for (const step of phaseSteps) {
+      const current = step.dataset.phaseStep === phase;
+      step.classList.toggle("is-current", current);
+      if (current) step.setAttribute("aria-current", "step");
+      else step.removeAttribute("aria-current");
+    }
+
+    if (handPanel) {
+      handPanel.dataset.readyCount = String(readyCount);
+      handPanel.dataset.hasSelection = String(Boolean(selectedCard));
+      handPanel.dataset.attention = selection;
+    }
+    if (handReadyCount) handReadyCount.textContent = String(readyCount);
+    if (handReadyLabel) {
+      handReadyLabel.textContent = phase === "setup"
+        ? "待开局"
+        : selection === "target"
+          ? "选目标"
+          : selection === "fusion"
+            ? "选素材"
+            : selection === "tribute"
+              ? "选解放"
+              : canAct
+                ? "可操作"
+                : "等待";
+    }
+    if (handCommand) {
+      handCommand.dataset.active = String(commandActive);
+      handCommand.dataset.signal = commandActive
+        ? "active"
+        : canAct && readyCount > 0
+          ? "ready"
+          : "waiting";
+      handCommand.dataset.step = locating
+        ? "locate"
+        : commandActive || Boolean(selectedCard)
+          ? "execute"
+          : "select";
+    }
+    if (handCommandSignal) {
+      handCommandSignal.textContent = commandActive
+        ? "确认中"
+        : canAct && readyCount > 0
+          ? "可行动"
+          : "等待";
+    }
+    if (handCommandTitle) {
+      handCommandTitle.textContent = selectedName
+        ? `准备执行「${selectedName}」`
+        : readyCount > 0
+          ? `${readyCount} 张卡牌等待指令`
+          : phase === "setup"
+            ? "等待决斗部署"
+            : canAct
+              ? "查看场上状态"
+              : "等待行动窗口";
+    }
+    if (handCommandHint) {
+      handCommandHint.textContent = selectedName
+        ? "使用指令区确认当前行动，或继续选择场上的落点与目标。"
+        : readyCount > 0
+          ? "选择手牌后，召唤、发动和目标确认会集中显示在这里。"
+          : canAct
+            ? "当前没有可直接使用的手牌，可以查看场上怪兽或结束回合。"
+            : "对手行动与连锁响应出现时，指令区会自动切换为可操作状态。";
+    }
+    if (!handGuide) return;
+    handGuide.textContent = selection === "target"
+      ? "在场上选择高亮目标"
+      : selection === "fusion"
+        ? "选择符合条件的融合素材"
+        : selection === "tribute"
+          ? "选择场上的解放素材"
+          : selectedName
+            ? `已选择「${selectedName}」`
+            : canAct && readyCount > 0
+              ? `${readyCount} 张手牌现在可以行动`
+              : phase === "setup"
+                ? "开局后显示可用行动"
+                : canAct
+                  ? "查看场上怪兽或结束回合"
+                  : "等待当前行动窗口";
+  }
+
+  function selectedOptionLabel(select, fallback) {
+    return select?.selectedOptions?.[0]?.textContent?.trim() || fallback;
+  }
+
+  function syncSetupSummary() {
+    if (!setupReadySummary || !setupReadyMode) return;
+    const role = selectedOptionLabel(roleSelect, "角色待选择");
+    const deck = selectedOptionLabel(deckSelect, "卡组待选择");
+    const rival = selectedOptionLabel(aiSelect, "对手待选择");
+    const scenario = selectedOptionLabel(scenarioSelect, "玩法待选择");
+    setupReadySummary.textContent = `${role} · ${deck}`;
+    setupReadyMode.textContent = `对手：${rival} · ${scenario}`;
+  }
+
   function detailRequiresAttention() {
     const confirmVisible = Boolean(handConfirm && !handConfirm.hidden && !handConfirm.disabled);
     const hasBattlePreview = Boolean(battlePreview && !battlePreview.classList.contains("empty"));
@@ -108,6 +251,8 @@ export function createDuelTableController(documentRef = document) {
   timelineToggle?.addEventListener("click", () => toggleDrawer("timeline"));
   detailClose?.addEventListener("click", () => setDrawer("detail", false));
   timelineClose?.addEventListener("click", () => setDrawer("timeline", false));
+  const timelineFilterHandler = (event) => setTimelineFilter(event.currentTarget.dataset.timelineFilter);
+  for (const button of timelineFilters) button.addEventListener("click", timelineFilterHandler);
   field?.addEventListener("click", closeCompactDrawer);
   hand?.addEventListener("click", closeCompactDrawer);
 
@@ -144,6 +289,51 @@ export function createDuelTableController(documentRef = document) {
   const timelineObserver = new MutationObserver(syncTimelineBadge);
   if (timelineCount) timelineObserver.observe(timelineCount, { childList: true, subtree: true });
 
+  const chainHistoryObserver = new MutationObserver(syncChainHistoryAttention);
+  if (chainHistoryToggle) {
+    chainHistoryObserver.observe(chainHistoryToggle, {
+      attributes: true,
+      attributeFilter: ["hidden"]
+    });
+  }
+
+  const attentionObserver = new MutationObserver(() => requestAnimationFrame(syncCombatAttention));
+  if (hand) {
+    attentionObserver.observe(hand, {
+      attributes: true,
+      attributeFilter: ["class", "data-card-name"],
+      childList: true,
+      subtree: true
+    });
+  }
+  if (body) {
+    attentionObserver.observe(body, {
+      attributes: true,
+      attributeFilter: [
+        "data-duel-phase",
+        "data-duel-turn",
+        "data-duel-action-window",
+        "data-duel-selection",
+        "data-duel-can-act"
+      ]
+    });
+  }
+  if (choiceActions) {
+    attentionObserver.observe(choiceActions, {
+      attributes: true,
+      attributeFilter: ["class", "hidden"],
+      childList: true,
+      subtree: true
+    });
+  }
+
+  const setupObserver = new MutationObserver(() => requestAnimationFrame(syncSetupSummary));
+  const setupChangeHandler = () => syncSetupSummary();
+  for (const select of setupSelects) {
+    setupObserver.observe(select, { childList: true, subtree: true });
+    select.addEventListener("change", setupChangeHandler);
+  }
+
   compactWorkspace.addEventListener("change", () => {
     if (openDrawer) setDrawer(openDrawer, false);
     setUtilityMenu(false);
@@ -153,7 +343,10 @@ export function createDuelTableController(documentRef = document) {
   setDrawer("detail", false);
   setDrawer("timeline", false);
   syncTimelineBadge();
+  setTimelineFilter("all");
   syncDetailDrawer();
+  syncCombatAttention();
+  syncSetupSummary();
 
   return {
     closeAll() {
@@ -163,6 +356,11 @@ export function createDuelTableController(documentRef = document) {
     destroy() {
       detailObserver.disconnect();
       timelineObserver.disconnect();
+      chainHistoryObserver.disconnect();
+      attentionObserver.disconnect();
+      setupObserver.disconnect();
+      for (const select of setupSelects) select.removeEventListener("change", setupChangeHandler);
+      for (const button of timelineFilters) button.removeEventListener("click", timelineFilterHandler);
     },
     openDrawer(name) {
       return setDrawer(name, true);
@@ -171,6 +369,8 @@ export function createDuelTableController(documentRef = document) {
     update() {
       syncDetailDrawer();
       syncTimelineBadge();
+      syncCombatAttention();
+      syncSetupSummary();
     }
   };
 }
