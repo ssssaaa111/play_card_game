@@ -3693,7 +3693,12 @@ test("chain resolution cancels pending attack when the declared target leaves th
   assert.equal(next.machine.actionWindow?.playerId, PLAYER);
   assert.equal(next.machine.actionWindow?.window, ActionWindow.battle);
   assert.equal(next.machine.timing, Timing.battleOpen);
-  assert.deepEqual(next.players[AI].grave, ["target-break-1", "target-1"]);
+  assert.deepEqual(next.players[AI].grave, ["target-1", "target-break-1"]);
+  assert.ok(
+    chainEvents.findIndex((event) => event.type === "CARD_DESTROYED" && event.cardId === "target-1") <
+      chainEvents.findIndex((event) => event.type === "CARD_MOVED" && event.cardId === "target-break-1"),
+    "the resolving trap should enter the grave only after its effect destroys the target"
+  );
   assert.equal(next.cards["attacker-1"].used, undefined);
   assert.ok(chainEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "target-1"));
   assert.ok(chainEvents.some((event) =>
@@ -5777,6 +5782,57 @@ test("an open response window requires traps to join the chain before activation
     cardId: "guard-1"
   });
   assert.ok(activationEvents.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === "guard-1"));
+});
+
+test("a committed trap stays in its spell trap slot until its chain link resolves", () => {
+  const state = makeState({
+    cards: [card("guard-1", { templateId: "guard-sigil", type: "trap", trigger: "directShield" })],
+    player: { spellTrapZone: ["guard-1"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.damageStep;
+  state.machine.responseWindow = {
+    playerId: PLAYER,
+    type: ResponseWindow.optional,
+    timing: Timing.damageStep,
+    resumeTiming: Timing.battleOpen,
+    triggerEventId: "attack-43"
+  };
+  state.machine.actionWindow = responseActionWindow(PLAYER, "attack-43");
+  const engine = new GameEngine(state);
+
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: "guard-1",
+    effectId: "directShield",
+    targetEffectId: "attack-43"
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "guard-1"
+  });
+
+  assert.deepEqual(engine.getState().players[PLAYER].spellTrapZone, ["guard-1"]);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, []);
+  assert.throws(
+    () => engine.dispatch({
+      type: "ADD_CHAIN_LINK",
+      playerId: PLAYER,
+      cardId: "guard-1",
+      effectId: "directShield",
+      targetEffectId: "attack-43"
+    }),
+    /already committed to the current chain/
+  );
+
+  engine.dispatch({ type: "RESOLVE_CHAIN", playerId: PLAYER });
+
+  assert.deepEqual(engine.getState().players[PLAYER].spellTrapZone, []);
+  assert.deepEqual(engine.getState().players[PLAYER].grave, ["guard-1"]);
 });
 
 test("abilities are event-sourced resources for complex restrictions", () => {

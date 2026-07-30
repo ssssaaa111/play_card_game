@@ -1201,7 +1201,6 @@ export class GameEngine {
       if (chainLink.effectId && chainLink.effectId !== effectId) {
         throw new GameRuleError(`Chain link effect ${chainLink.effectId} does not match trap effect ${effectId}`);
       }
-      ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "spellTrapZone" }, { playerId: action.playerId, zone: "grave" });
       emit("CHAIN_LINK_COMMITTED", {
         playerId: action.playerId,
         linkId: chainLink.linkId,
@@ -1960,6 +1959,9 @@ export class GameEngine {
       if (card.type !== "trap") {
         throw new GameRuleError(`Card ${action.cardId} is not a trap`);
       }
+      if (state.machine.chain.some((link) => link.cardId === action.cardId)) {
+        throw new GameRuleError(`Trap ${action.cardId} is already committed to the current chain`);
+      }
     }
 
     emit("CHAIN_LINK_ADDED", {
@@ -2049,6 +2051,11 @@ export class GameEngine {
           reason: "negated",
           sourceCardId: negatingEvent.sourceCardId || null
         });
+        if (findCardLocations(state, link.cardId).some((location) =>
+          location.playerId === link.playerId && location.zone === "spellTrapZone"
+        )) {
+          ctx.moveCard(link.cardId, { playerId: link.playerId, zone: "spellTrapZone" }, { playerId: link.playerId, zone: "grave" });
+        }
         emit("CHAIN_LINK_RESOLVED", {
           playerId: link.playerId,
           linkId: link.linkId,
@@ -2060,6 +2067,11 @@ export class GameEngine {
         continue;
       }
       runEffect(this.#effects, effectId, ctx, preparedAction, card);
+      if (findCardLocations(state, link.cardId).some((location) =>
+        location.playerId === link.playerId && location.zone === "spellTrapZone"
+      )) {
+        ctx.moveCard(link.cardId, { playerId: link.playerId, zone: "spellTrapZone" }, { playerId: link.playerId, zone: "grave" });
+      }
       emit("CHAIN_LINK_RESOLVED", {
         playerId: link.playerId,
         linkId: link.linkId,

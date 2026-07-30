@@ -1064,6 +1064,59 @@ async function runTrioDirectTrapPlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioChainLifecycleBasicSmoke(ctx) {
+  const smokeName = "trio-chain-lifecycle-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioChainLifecycle");
+  const sun = ctx.state.ai.field.find((card) => card?.id === "trio-sun-judicator");
+  const solarSnare = ctx.state.player.traps.find((card) => card?.id === "trio-solar-snare");
+  const nullifier = ctx.state.ai.traps.find((card) => card?.id === "chain-nullifier");
+  if (!sun || !solarSnare || !nullifier || ctx.state.player.lp !== 3050) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+  const lpDisplaySamples = [ctx.els.playerLp.textContent.trim()];
+  const lpDisplayObserver = new MutationObserver(() => {
+    lpDisplaySamples.push(ctx.els.playerLp.textContent.trim());
+  });
+  lpDisplayObserver.observe(ctx.els.playerLp, { childList: true, characterData: true, subtree: true });
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show"),
+    `${smokeName}: solar snare response prompt opens. ${smokeDebug(ctx)}`,
+    16000
+  );
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}: activate solar snare`);
+  await waitForSmoke(
+    () => (ctx.state.gameEvents || []).some((event) =>
+      event.type === "CHAIN_LINK_COMMITTED" && event.cardId === solarSnare.uid
+    ) &&
+      ctx.state.player.traps.some((card) => card?.uid === solarSnare.uid) &&
+      !ctx.state.player.grave.some((card) => card?.uid === solarSnare.uid),
+    `${smokeName}: committed solar snare remains visible before chain resolution. ${smokeDebug(ctx)}`,
+    4000
+  );
+  // The AI chain response and battle animation use production timers; let those complete before virtual polling resumes.
+  await new Promise((resolve) => window.setTimeout(resolve, 7000));
+  await waitForSmoke(
+    () => ctx.state.turn === "player" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.aiRunning &&
+      ctx.state.player.lp === 850,
+    `${smokeName}: protected sun attack resolves to the expected surviving LP. ${smokeDebug(ctx)}`,
+    30000
+  );
+
+  if (!ctx.state.player.grave.some((card) => card?.uid === solarSnare.uid) ||
+      !ctx.state.ai.grave.some((card) => card?.uid === nullifier.uid) ||
+      ctx.els.playerLp.textContent.trim() !== "850 / 4000" ||
+      lpDisplaySamples.some((text) => text.startsWith("0 /"))) {
+    throw new Error(`${smokeName}: resolved chain or LP HUD is inconsistent. ${smokeDebug(ctx)}`);
+  }
+  lpDisplayObserver.disconnect();
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
   const smokeName = "trio-shield-lethal-planning-basic";
   setSmokeStatus("running", smokeName);
@@ -6519,6 +6572,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "trio-trap-reserve-planning-basic": runTrioTrapReservePlanningBasicSmoke,
     "trio-direct-trap-planning-basic": runTrioDirectTrapPlanningBasicSmoke,
+    "trio-chain-lifecycle-basic": runTrioChainLifecycleBasicSmoke,
     "trio-shield-lethal-planning-basic": runTrioShieldLethalPlanningBasicSmoke,
     "trio-after-attack-lethal-planning-basic": runTrioAfterAttackLethalPlanningBasicSmoke,
     "trio-combined-lethal-planning-basic": runTrioCombinedLethalPlanningBasicSmoke,

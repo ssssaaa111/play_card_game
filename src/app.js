@@ -2766,8 +2766,10 @@ function spellCaption(card) {
 }
 
 function trapCandidates(owner, eventName, context) {
+  const committedTrapIds = new Set((currentEngineMachine()?.chain || []).map((link) => link.cardId).filter(Boolean));
   return owner.traps
     .map((card, index) => ({ card, index }))
+    .filter(({ card }) => card && !committedTrapIds.has(runtimeCardId(card)))
     .filter(({ card }) => trapCanResolve(card, eventName, { owner, context }));
 }
 

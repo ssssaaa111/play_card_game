@@ -1602,10 +1602,15 @@ test("phase events preserve attack response windows after a started turn", () =>
     targetEffectId: declaration.id
   });
 
-  assert.equal(state.player.traps[0], null);
-  assert.deepEqual(state.player.grave, [trap]);
+  assert.equal(state.player.traps[0], trap);
+  assert.deepEqual(state.player.grave, []);
   assert.ok(responseEvents.some((event) => event.type === "CHAIN_LINK_COMMITTED" && event.cardId === trap.uid));
   assert.equal(state.gameEvents.filter((event) => event.type === "PHASE_CHANGED").length, 2);
+
+  dispatchResolveChainFromUiState(state, "player");
+
+  assert.equal(state.player.traps[0], null);
+  assert.deepEqual(state.player.grave, [trap]);
 });
 
 test("does not mutate UI state when SUMMON_MONSTER is rejected by the engine", () => {
