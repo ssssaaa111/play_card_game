@@ -2070,7 +2070,8 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 
 @media (max-width: 720px) {
   #app {
-    grid-template-rows: auto minmax(0, 1fr) clamp(242px, 36dvh, 296px);
+    --mobile-hand-height: clamp(242px, 36dvh, 296px);
+    grid-template-rows: auto minmax(0, 1fr) var(--mobile-hand-height);
     gap: 6px;
     padding:
       max(6px, var(--safe-area-top))
@@ -2333,9 +2334,11 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   }
 
   .field-action-bar {
-    right: 159px;
-    bottom: 7px;
-    left: 7px;
+    position: fixed;
+    right: max(7px, var(--safe-area-right));
+    bottom: calc(max(6px, var(--safe-area-bottom)) + var(--mobile-hand-height) - 44px);
+    left: max(7px, var(--safe-area-left));
+    z-index: 25;
     width: auto;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
@@ -2377,6 +2380,15 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     grid-template-rows: 30px minmax(0, 1fr);
     gap: 5px;
     padding: 7px;
+  }
+
+  body[data-duel-selection="playerField"] .hand-panel {
+    grid-template-rows: 44px minmax(0, 1fr);
+  }
+
+  body[data-duel-selection="playerField"] .hand-title {
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .hand-title {
@@ -2481,13 +2493,6 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   }
 }
 
-@media (max-width: 360px) {
-  .field-action-bar {
-    right: 7px;
-    bottom: 57px;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .hand-panel:not([data-ready-count="0"]) .hand-readiness-dot,
   .setup-live-dot,
@@ -2543,6 +2548,43 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     grid-row: 2;
     grid-template-columns: 1fr;
     grid-template-rows: 26px minmax(0, 1fr);
+  }
+
+  body[data-duel-selection="playerField"] .hand-panel {
+    grid-template-rows: 86px minmax(0, 1fr);
+  }
+
+  body[data-duel-selection="playerField"] .hand-title {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .field-action-bar {
+    position: fixed;
+    top: calc(max(8px, var(--safe-area-top)) + 62px);
+    right: max(8px, var(--safe-area-right));
+    bottom: auto;
+    left: auto;
+    z-index: 25;
+    width: calc(clamp(226px, 31vw, 300px) - 16px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, 40px);
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .field-action-context {
+    display: none;
+  }
+
+  .field-action-btn {
+    min-width: 0;
+    min-height: 40px;
+    padding-block: 4px;
   }
 
   .hand {
