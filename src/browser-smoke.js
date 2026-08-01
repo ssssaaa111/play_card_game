@@ -5790,6 +5790,19 @@ async function runModeAutoEndSmoke(ctx) {
   ctx.state.player.normalSummonsUsed = 1;
   clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "选择第一只怪兽");
   await waitForSmoke(
+    () => !ctx.els.fieldActionBar.hidden && ctx.els.fieldActionName.textContent === "赤焰幼龙",
+    "选中怪兽后显示统一战场操作栏"
+  );
+  if (ctx.els.fieldAttackBtn.disabled || ctx.els.fieldDetailBtn.disabled) {
+    throw new Error("可攻击怪兽的快捷攻击和详情操作应当可用");
+  }
+  clickSmokeElement(ctx.els.fieldCancelBtn, "通过操作栏取消怪兽选择");
+  await waitForSmoke(
+    () => !ctx.state.selected && ctx.els.fieldActionBar.hidden,
+    "取消后收起统一战场操作栏"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "重新选择第一只怪兽");
+  await waitForSmoke(
     () => !ctx.els.fieldModeBtn.hidden && !ctx.els.fieldModeBtn.disabled && ctx.els.fieldModeLabel.textContent === "转守备",
     "选中怪兽后场上显示转守备快捷按钮"
   );

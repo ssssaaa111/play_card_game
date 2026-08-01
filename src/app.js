@@ -322,8 +322,15 @@ const els = {
   handConfirmBtn: document.querySelector("#handConfirmBtn"),
   handCancelBtn: document.querySelector("#handCancelBtn"),
   modeBtn: document.querySelector("#modeBtn"),
+  fieldActionBar: document.querySelector("#fieldActionBar"),
+  fieldActionName: document.querySelector("#fieldActionName"),
+  fieldActionStatus: document.querySelector("#fieldActionStatus"),
+  fieldAttackBtn: document.querySelector("#fieldAttackBtn"),
+  fieldAttackLabel: document.querySelector("#fieldAttackLabel"),
   fieldModeBtn: document.querySelector("#fieldModeBtn"),
   fieldModeLabel: document.querySelector("#fieldModeLabel"),
+  fieldDetailBtn: document.querySelector("#fieldDetailBtn"),
+  fieldCancelBtn: document.querySelector("#fieldCancelBtn"),
   detailBtn: document.querySelector("#detailBtn"),
   duelHint: document.querySelector("#duelHint"),
   toast: document.querySelector("#toast"),
@@ -3970,6 +3977,61 @@ function toggleSelectedMode() {
   resolvePlayerActionWindow("切换表示完成");
 }
 
+function prepareSelectedMonsterAttack() {
+  if (!canPlayerAct() || state.selected?.zone !== "playerField") {
+    cue("请选择你场上的怪兽。");
+    return;
+  }
+  const attackerIndex = state.selected.index;
+  const attacker = state.player.field[attackerIndex];
+  const readiness = explainMonsterAttackReadinessFromUiState(state, "player", attackerIndex);
+  if (!attacker || !readiness.ok) {
+    cue(readiness.reason || "这只怪兽当前不能攻击。");
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
+  notePlayerIntent();
+  if (!canUseBattleActions() && !enterPlayerBattlePhase("你准备发动攻击", { preserveSelection: true, quiet: true })) {
+    return;
+  }
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex });
+  clearBattlePreview();
+  playSound("click");
+  const targetHint = projection.canDirectAttack
+    ? projection.targetIndexes.length > 0
+      ? "点击高亮的敌方怪兽，或点击对手头像直接攻击。"
+      : "点击对手头像确认直接攻击。"
+    : "点击高亮的敌方怪兽确认攻击目标。";
+  cue(`${attacker.name} 已准备攻击。${targetHint}`);
+  render();
+  resetPlayerIdleCountdown();
+}
+
+function openSelectedMonsterDetail() {
+  const card = state.selected?.zone === "playerField"
+    ? state.player.field[state.selected.index]
+    : null;
+  if (!card) {
+    cue("请选择你场上的怪兽。");
+    return;
+  }
+  openCardDetail(card);
+}
+
+function cancelSelectedMonsterAction() {
+  if (state.selected?.zone !== "playerField") {
+    cue("当前没有选中的怪兽。");
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
+  state.selected = null;
+  clearBattlePreview();
+  playSound("click");
+  cue("已取消怪兽选择。");
+  render();
+  resumePlayerIdleCountdownAfterPassiveIntent();
+}
+
 function autoPlayerDraw() {
   if (!canPlayerAct()) return;
   if (state.phase !== PHASES.draw) return;
@@ -4566,7 +4628,13 @@ function render(animationKey = "") {
     (!state.pendingTribute || selectedTributeIndexes().length === state.pendingTribute.cost) &&
     (!state.pendingFusion || fusionStatus?.complete)
   );
-  const selectedPlayerMonster = state.selected?.zone === "playerField" && Boolean(state.player.field[state.selected.index]);
+  const selectedPlayerMonsterCard = state.selected?.zone === "playerField"
+    ? state.player.field[state.selected.index]
+    : null;
+  const selectedPlayerMonster = Boolean(selectedPlayerMonsterCard);
+  const selectedPlayerMonsterAttackValidation = selectedPlayerMonster
+    ? explainMonsterAttackReadinessFromUiState(state, "player", state.selected.index)
+    : { ok: false, reason: "请选择你场上的怪兽。" };
   const selectedPlayerMonsterModeValidation = selectedPlayerMonster
     ? explainChangeMonsterModeFromUiState(state, "player", state.selected.index)
     : { ok: false, reason: "请选择你场上的怪兽。" };
@@ -4595,9 +4663,12 @@ function render(animationKey = "") {
     confirmLabel: handConfirmLabel(selectedHand?.card),
     phase: state.phase,
     selectedPlayerMonster,
+    selectedPlayerMonsterName: selectedPlayerMonsterCard?.name || "",
     selectedPlayerMonsterMode: selectedPlayerMonster
-      ? state.player.field[state.selected.index]?.mode || "attack"
+      ? selectedPlayerMonsterCard?.mode || "attack"
       : "attack",
+    selectedPlayerMonsterCanAttack: selectedPlayerMonsterAttackValidation.ok,
+    selectedPlayerMonsterAttackReason: selectedPlayerMonsterAttackValidation.reason,
     selectedPlayerMonsterCanChangeMode: selectedPlayerMonsterModeValidation.ok,
     selectedPlayerMonsterModeReason: selectedPlayerMonsterModeValidation.reason,
     focusedCard: state.focusedCard,
@@ -5046,7 +5117,10 @@ els.choiceConfirmBtn.addEventListener("click", () => {
 });
 els.choiceCancelBtn.addEventListener("click", cancelSelectedHandAction);
 els.modeBtn.addEventListener("click", toggleSelectedMode);
+els.fieldAttackBtn?.addEventListener("click", prepareSelectedMonsterAttack);
 els.fieldModeBtn?.addEventListener("click", toggleSelectedMode);
+els.fieldDetailBtn?.addEventListener("click", openSelectedMonsterDetail);
+els.fieldCancelBtn?.addEventListener("click", cancelSelectedMonsterAction);
 els.detailBtn.addEventListener("click", openFocusedCardDetail);
 if (els.fusionPreviewDetail) {
   els.fusionPreviewDetail.addEventListener("click", () => {
