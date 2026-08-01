@@ -1872,11 +1872,11 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   background: rgba(8, 10, 16, 0.86);
 }
 
-.card.defense {
+.card.defense:not(.field-monster-card) {
   transform: rotate(90deg) scale(0.82);
 }
 
-.card.defense:hover {
+.card.defense:not(.field-monster-card):hover {
   transform: rotate(90deg) scale(0.82) translateX(-4px);
 }
 
@@ -1943,6 +1943,19 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 }
 
 .field-monster-card:hover {
+  transform: translateY(-2px);
+}
+
+.field-monster-card.defense {
+  transform: none;
+  border-color: rgba(116, 174, 232, 0.78);
+  box-shadow:
+    inset 0 -3px 0 rgba(116, 174, 232, 0.66),
+    0 0 0 1px rgba(116, 174, 232, 0.14),
+    0 16px 30px rgba(0, 0, 0, 0.46);
+}
+
+.field-monster-card.defense:hover {
   transform: translateY(-2px);
 }
 

@@ -5852,6 +5852,19 @@ async function runModeAutoEndSmoke(ctx) {
   if (!ctx.els.fieldModeBtn.disabled || ctx.els.fieldModeLabel.textContent !== "守备中") {
     throw new Error("已经切换过表示的怪兽应在场上显示禁用的守备状态");
   }
+  const firstDefenseCard = fieldCard(ctx.els, "player", "ember-drake");
+  const firstDefenseSlot = firstDefenseCard?.closest(".slot");
+  const firstDefenseStats = firstDefenseCard?.querySelector(".stats");
+  const firstDefenseCardRect = firstDefenseCard?.getBoundingClientRect();
+  const firstDefenseSlotRect = firstDefenseSlot?.getBoundingClientRect();
+  const firstDefenseStatsRect = firstDefenseStats?.getBoundingClientRect();
+  if (!firstDefenseCard || !firstDefenseSlot || !firstDefenseStats ||
+      window.getComputedStyle(firstDefenseCard).transform !== "none" ||
+      firstDefenseCardRect.left < firstDefenseSlotRect.left ||
+      firstDefenseCardRect.right > firstDefenseSlotRect.right ||
+      firstDefenseStatsRect.width < firstDefenseCardRect.width * 0.7) {
+    throw new Error("守备怪兽卡必须保持直立并在自己的召唤区内完整显示 ATK/DEF");
+  }
   clickSmokeElement(fieldCard(ctx.els, "player", "gale-mage"), "选择第二只怪兽");
   await waitForSmoke(
     () => !ctx.els.fieldModeBtn.hidden && !ctx.els.fieldModeBtn.disabled && ctx.els.fieldModeLabel.textContent === "转守备",
