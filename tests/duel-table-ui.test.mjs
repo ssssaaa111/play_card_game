@@ -10,7 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260801-mobile-target-feedback"/);
+  assert.match(html, /href="duel-table\.css\?v=20260801-mobile-playable-layout"/);
   assert.match(html, /src="src\/app\.js\?v=20260801-mobile-target-feedback"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
@@ -28,8 +28,10 @@ test("selected field monsters expose a unified contextual action dock", () => {
   const app = read("src/app.js");
 
   assert.match(html, /class="field-action-bar"[\s\S]*id="fieldActionName"[\s\S]*id="fieldAttackLabel">攻击/);
+  assert.match(html, /class="hand-command"[\s\S]*class="field-action-bar"/);
   assert.match(html, /class="field-action-btn field-mode-tab"[\s\S]*id="fieldModeLabel">转守备/);
-  assert.match(css, /\.field-action-bar\s*\{[\s\S]*grid-template-columns: minmax\(132px, 1fr\) repeat\(4, auto\)/);
+  assert.match(css, /\.field-action-bar\s*\{[\s\S]*position: static;[\s\S]*grid-row: 2;[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*body\[data-duel-selection="playerField"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 54px minmax\(0, 1fr\)/);
   assert.match(css, /\.field-mode-tab\.is-defense\s*\{[\s\S]*color: #ffe9a8/);
   assert.match(app, /fieldAttackBtn: document\.querySelector\("#fieldAttackBtn"\)/);
   assert.match(app, /fieldModeBtn: document\.querySelector\("#fieldModeBtn"\)/);
@@ -81,6 +83,18 @@ test("compact workspaces keep field and hand in fixed viewport rows", () => {
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*#app\s*\{[\s\S]*--mobile-hand-height: clamp\(242px, 36dvh, 296px\);[\s\S]*grid-template-rows: auto minmax\(0, 1fr\) var\(--mobile-hand-height\);/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.workspace-drawer\s*\{[\s\S]*transform: translateY/);
   assert.match(css, /@media \(orientation: landscape\) and \(max-height: 540px\) and \(max-width: 1040px\)[\s\S]*grid-template-columns: minmax\(0, 1fr\) clamp\(226px, 31vw, 300px\);/);
+});
+
+test("compact utility controls and effects yield the battlefield to gameplay", () => {
+  const css = read("duel-table.css");
+
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.attack-closeup,[\s\S]*\.attack-cutin,[\s\S]*\.ace-strike\s*\{[\s\S]*display: none;/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.slot\.tribute-candidate::after\s*\{[\s\S]*content: "可解放";/);
+  assert.match(css, /\.slot\.empty\.tribute-unavailable::after,[\s\S]*\.slot\.empty\.effect-target-unavailable::after,[\s\S]*content: none;/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.workspace-tabs\s*\{[\s\S]*position: fixed;[\s\S]*var\(--mobile-hand-height\) - 44px/);
+  assert.match(css, /body:not\(\[data-duel-selection="none"\]\) \.workspace-tabs\s*\{[\s\S]*visibility: hidden;[\s\S]*pointer-events: none;/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.hand-panel\s*\{[\s\S]*grid-template-rows: 44px minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(orientation: landscape\) and \(max-height: 540px\) and \(max-width: 1040px\)[\s\S]*\.workspace-tabs\s*\{[\s\S]*top: calc\(max\(8px, var\(--safe-area-top\)\) \+ 62px\);[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
 
 test("portrait phones place monster actions in the hand title row instead of over the field", () => {
