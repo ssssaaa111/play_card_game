@@ -10,7 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260801-mobile-action-dock"/);
+  assert.match(html, /href="duel-table\.css\?v=20260801-mobile-confirmation-dock"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -92,6 +92,18 @@ test("portrait phones place monster actions in the hand title row instead of ove
   assert.doesNotMatch(css, /@media \(max-width: 360px\)[\s\S]*\.field-action-bar[\s\S]*bottom: 57px/);
   assert.match(css, /@media \(orientation: landscape\)[\s\S]*body\[data-duel-selection="playerField"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 86px minmax\(0, 1fr\)/);
   assert.match(css, /@media \(orientation: landscape\)[\s\S]*\.field-action-bar\s*\{[\s\S]*position: fixed;[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+});
+
+test("phone confirmations occupy the hand command row without covering the battlefield", () => {
+  const css = read("duel-table.css");
+
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*body\[data-duel-selection="hand"\] \.hand-panel,[\s\S]*body\[data-duel-selection="target"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 96px minmax\(0, 1fr\)/);
+  assert.match(css, /body\[data-duel-selection="hand"\] \.hand-title,[\s\S]*body\[data-duel-selection="target"\] \.hand-title\s*\{[\s\S]*visibility: hidden/);
+  assert.match(css, /\.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\)\s*\{[\s\S]*position: fixed;[\s\S]*var\(--mobile-hand-height\) - 96px/);
+  assert.match(css, /\.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\) #choiceText\s*\{[\s\S]*grid-column: 1 \/ -1/);
+  assert.match(css, /\.choice-actions\.fusion-choice,[\s\S]*\.choice-actions\.material-choice,[\s\S]*\.choice-actions\.split-choice\s*\{[\s\S]*top: 12px;[\s\S]*max-height: calc\(48vh - 12px\);[\s\S]*overflow-y: auto/);
+  assert.match(css, /@media \(orientation: landscape\)[\s\S]*body\[data-duel-selection="hand"\] \.hand-panel,[\s\S]*body\[data-duel-selection="target"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 104px minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(orientation: landscape\)[\s\S]*\.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\)\s*\{[\s\S]*top: calc\(max\(8px, var\(--safe-area-top\)\) \+ 62px\);[\s\S]*width: calc\(clamp\(226px, 31vw, 300px\) - 16px\);[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
 
 test("workspace controller synchronizes drawers, timeline badges, and settings", () => {

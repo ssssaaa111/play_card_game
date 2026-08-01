@@ -2458,22 +2458,51 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     flex-basis: clamp(142px, 43vw, 166px);
   }
 
-  .hand-command > .choice-actions {
+  body[data-duel-selection="hand"] .hand-panel,
+  body[data-duel-selection="target"] .hand-panel {
+    grid-template-rows: 96px minmax(0, 1fr);
+  }
+
+  body[data-duel-selection="hand"] .hand-title,
+  body[data-duel-selection="target"] .hand-title {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) {
+    position: fixed;
     top: auto;
-    right: 6px;
-    bottom: calc(clamp(242px, 36dvh, 296px) + max(12px, var(--safe-area-bottom)));
-    left: 6px;
+    right: max(7px, var(--safe-area-right));
+    bottom: calc(max(6px, var(--safe-area-bottom)) + var(--mobile-hand-height) - 96px);
+    left: max(7px, var(--safe-area-left));
     width: auto;
+    height: 90px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr) 40px;
+    gap: 5px;
+    padding: 7px;
     transform: none;
   }
 
-  .hand-command > .choice-actions.target-choice {
-    top: calc(var(--safe-area-top) + 12px);
-    right: 6px;
-    bottom: auto;
-    left: 6px;
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) .timer-progress {
+    position: absolute;
+    top: 3px;
+    right: 7px;
+    left: 7px;
     width: auto;
-    transform: none;
+    margin: 0;
+  }
+
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceText {
+    grid-column: 1 / -1;
+    align-self: center;
+    max-height: 2.6em;
+  }
+
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceConfirmBtn,
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceCancelBtn {
+    width: 100%;
+    min-height: 40px;
   }
 
   .hand-command > .choice-actions.fusion-choice,
@@ -2559,6 +2588,17 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     pointer-events: none;
   }
 
+  body[data-duel-selection="hand"] .hand-panel,
+  body[data-duel-selection="target"] .hand-panel {
+    grid-template-rows: 104px minmax(0, 1fr);
+  }
+
+  body[data-duel-selection="hand"] .hand-title,
+  body[data-duel-selection="target"] .hand-title {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   .field-action-bar {
     position: fixed;
     top: calc(max(8px, var(--safe-area-top)) + 62px);
@@ -2625,7 +2665,46 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     top: 44px;
   }
 
-  .hand-command > .choice-actions {
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) {
+    position: fixed;
+    top: calc(max(8px, var(--safe-area-top)) + 62px);
+    right: max(8px, var(--safe-area-right));
+    bottom: auto;
+    left: auto;
+    width: calc(clamp(226px, 31vw, 300px) - 16px);
+    height: 98px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr) 40px;
+    gap: 5px;
+    padding: 7px;
+    transform: none;
+  }
+
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) .timer-progress {
+    position: absolute;
+    top: 3px;
+    right: 7px;
+    left: 7px;
+    width: auto;
+    margin: 0;
+  }
+
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceText {
+    grid-column: 1 / -1;
+    align-self: center;
+    max-height: 2.6em;
+  }
+
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceConfirmBtn,
+  .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceCancelBtn {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+  }
+
+  .hand-command > .choice-actions.fusion-choice,
+  .hand-command > .choice-actions.material-choice,
+  .hand-command > .choice-actions.split-choice {
     top: auto;
     right: calc(clamp(226px, 31vw, 300px) + 12px);
     bottom: 8px;
