@@ -10,14 +10,27 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260730-manual-detail-5"/);
+  assert.match(html, /href="duel-table\.css\?v=20260801-field-mode-quick"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
   assert.match(html, /id="detailDrawerToggle"[\s\S]*aria-controls="detailDrawer"/);
   assert.match(html, /id="timelineDrawerToggle"[\s\S]*aria-controls="timelineDrawer"/);
+  assert.match(html, /id="fieldModeBtn"[\s\S]*id="fieldModeLabel"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
   assert.match(html, /src="src\/duel-table\.js\?v=20260730-manual-detail-5"/);
+});
+
+test("selected field monsters expose a direct attack defense mode shortcut", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const app = read("src/app.js");
+
+  assert.match(html, /class="workspace-tab field-mode-tab"[\s\S]*id="fieldModeLabel">转守备/);
+  assert.match(css, /\.field-mode-tab\s*\{[\s\S]*border-color: rgba\(84, 210, 210, 0\.34\)/);
+  assert.match(css, /\.field-mode-tab\.is-defense\s*\{[\s\S]*color: #ffe9a8/);
+  assert.match(app, /fieldModeBtn: document\.querySelector\("#fieldModeBtn"\)/);
+  assert.match(app, /els\.fieldModeBtn\?\.addEventListener\("click", toggleSelectedMode\)/);
 });
 
 test("low-frequency media and session controls live behind one utility menu", () => {

@@ -5789,18 +5789,26 @@ async function runModeAutoEndSmoke(ctx) {
   });
   ctx.state.player.normalSummonsUsed = 1;
   clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "选择第一只怪兽");
-  clickSmokeElement(ctx.els.modeBtn, "第一只怪兽切换守备");
+  await waitForSmoke(
+    () => !ctx.els.fieldModeBtn.hidden && !ctx.els.fieldModeBtn.disabled && ctx.els.fieldModeLabel.textContent === "转守备",
+    "选中怪兽后场上显示转守备快捷按钮"
+  );
+  clickSmokeElement(ctx.els.fieldModeBtn, "通过场上快捷按钮将第一只怪兽切换守备");
   await waitForSmoke(
     () => ctx.state.player.field[0]?.mode === "defense" &&
       ctx.state.phase === "main" &&
       ctx.state.actionWindow === "main",
     "第一只切守备后仍保留主阶段给第二只怪兽"
   );
-  if (!ctx.els.modeBtn.disabled) {
-    throw new Error("已经切换过表示的怪兽不应继续点亮切换表示按钮");
+  if (!ctx.els.fieldModeBtn.disabled || ctx.els.fieldModeLabel.textContent !== "守备中") {
+    throw new Error("已经切换过表示的怪兽应在场上显示禁用的守备状态");
   }
   clickSmokeElement(fieldCard(ctx.els, "player", "gale-mage"), "选择第二只怪兽");
-  clickSmokeElement(ctx.els.modeBtn, "第二只怪兽切换守备");
+  await waitForSmoke(
+    () => !ctx.els.fieldModeBtn.hidden && !ctx.els.fieldModeBtn.disabled && ctx.els.fieldModeLabel.textContent === "转守备",
+    "切换所选怪兽后刷新场上表示快捷按钮"
+  );
+  clickSmokeElement(ctx.els.fieldModeBtn, "通过场上快捷按钮将第二只怪兽切换守备");
   await waitForSmoke(
     () => ctx.state.player.field.every((card) => !card || card.mode === "defense") &&
       (ctx.state.actionWindow === "autoEnd" || ctx.state.turn === "ai"),

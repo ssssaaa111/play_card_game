@@ -322,6 +322,8 @@ const els = {
   handConfirmBtn: document.querySelector("#handConfirmBtn"),
   handCancelBtn: document.querySelector("#handCancelBtn"),
   modeBtn: document.querySelector("#modeBtn"),
+  fieldModeBtn: document.querySelector("#fieldModeBtn"),
+  fieldModeLabel: document.querySelector("#fieldModeLabel"),
   detailBtn: document.querySelector("#detailBtn"),
   duelHint: document.querySelector("#duelHint"),
   toast: document.querySelector("#toast"),
@@ -4593,6 +4595,9 @@ function render(animationKey = "") {
     confirmLabel: handConfirmLabel(selectedHand?.card),
     phase: state.phase,
     selectedPlayerMonster,
+    selectedPlayerMonsterMode: selectedPlayerMonster
+      ? state.player.field[state.selected.index]?.mode || "attack"
+      : "attack",
     selectedPlayerMonsterCanChangeMode: selectedPlayerMonsterModeValidation.ok,
     selectedPlayerMonsterModeReason: selectedPlayerMonsterModeValidation.reason,
     focusedCard: state.focusedCard,
@@ -5041,6 +5046,7 @@ els.choiceConfirmBtn.addEventListener("click", () => {
 });
 els.choiceCancelBtn.addEventListener("click", cancelSelectedHandAction);
 els.modeBtn.addEventListener("click", toggleSelectedMode);
+els.fieldModeBtn?.addEventListener("click", toggleSelectedMode);
 els.detailBtn.addEventListener("click", openFocusedCardDetail);
 if (els.fusionPreviewDetail) {
   els.fusionPreviewDetail.addEventListener("click", () => {
