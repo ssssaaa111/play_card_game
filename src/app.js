@@ -305,6 +305,7 @@ const els = {
   aiGraveCount: document.querySelector("#aiGraveCount"),
   playerField: document.querySelector("#playerField"),
   aiField: document.querySelector("#aiField"),
+  duelField: document.querySelector("#duelField"),
   playerTraps: document.querySelector("#playerTraps"),
   aiTraps: document.querySelector("#aiTraps"),
   hand: document.querySelector("#hand"),
@@ -4574,6 +4575,37 @@ function playSpellEffect(owner, rival, card, targetCard = null, targetOwner = ow
   playArrow(source, target, "spell", card.name);
 }
 
+function currentMonsterSelectionHint() {
+  if (!canPlayerAct() || state.selected?.zone !== "playerField") return "";
+  const attackerIndex = state.selected.index;
+  const card = state.player.field[attackerIndex];
+  if (!card) return "";
+  const attackReadiness = explainMonsterAttackReadinessFromUiState(state, "player", attackerIndex);
+  if (!attackReadiness.ok) {
+    const modeReadiness = explainChangeMonsterModeFromUiState(state, "player", attackerIndex);
+    return modeReadiness.ok
+      ? `已选择「${card.name}」：${attackReadiness.reason} 可切换表示。`
+      : `已选择「${card.name}」：${attackReadiness.reason || modeReadiness.reason || "请选择下一步行动。"}`;
+  }
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex });
+  if (projection.targetIndexes.length > 0) {
+    return projection.canDirectAttack
+      ? `已选择「${card.name}」：点红色怪兽攻击，或点对手头像直击。`
+      : `已选择「${card.name}」：点击红色高亮目标发动攻击。`;
+  }
+  if (projection.canDirectAttack) {
+    return `已选择「${card.name}」：点击对手头像发动直接攻击。`;
+  }
+  return `已选择「${card.name}」：点击“攻击”选择目标。`;
+}
+
+function handleDuelFieldBackgroundClick(event) {
+  if (state.selected?.zone !== "playerField") return;
+  if (state.pendingTarget || state.pendingFusion || state.pendingTribute || state.pendingTrapChoice) return;
+  if (event.target.closest?.(".slot, .trap-slot, .card")) return;
+  cancelSelectedMonsterAction();
+}
+
 function render(animationKey = "") {
   const scenario = scenarioSetups[state.scenarioId] || scenarioSetups.normal;
   const targetSelectionDisplay = currentTargetSelectionDisplay();
@@ -4589,6 +4621,7 @@ function render(animationKey = "") {
     started: state.started,
     paused: state.paused,
     pendingPrompt: targetPrompt,
+    selectionHint: currentMonsterSelectionHint(),
     scenarioId: state.scenarioId,
     scenarioGoal: scenarioTacticalGoal(state) || scenario.goal,
     turn: state.turn,
@@ -4617,6 +4650,16 @@ function render(animationKey = "") {
       : state.pendingTribute
         ? "tribute"
         : state.selected?.zone || "none";
+  const selectedAttackProjection = state.selected?.zone === "playerField"
+    ? projectBattleFromUiState(state, "player", { attackerIndex: state.selected.index })
+    : null;
+  document.body.dataset.duelTargeting = state.pendingTarget
+    ? "effect"
+    : state.pendingFusion || state.pendingTribute
+      ? "material"
+      : selectedAttackProjection?.inAttackIntentWindow
+        ? "attack"
+        : "none";
   document.body.dataset.duelCanAct = String(canAct);
   const selectedHand = selectedHandInfo();
   const selectedHandAction = selectedHand ? handActionInfo(selectedHand.card, selectedHand.index) : null;
@@ -5121,6 +5164,7 @@ els.fieldAttackBtn?.addEventListener("click", prepareSelectedMonsterAttack);
 els.fieldModeBtn?.addEventListener("click", toggleSelectedMode);
 els.fieldDetailBtn?.addEventListener("click", openSelectedMonsterDetail);
 els.fieldCancelBtn?.addEventListener("click", cancelSelectedMonsterAction);
+els.duelField?.addEventListener("click", handleDuelFieldBackgroundClick);
 els.detailBtn.addEventListener("click", openFocusedCardDetail);
 if (els.fusionPreviewDetail) {
   els.fusionPreviewDetail.addEventListener("click", () => {

@@ -39,6 +39,9 @@ export function monsterFieldSlotView({
   splitTarget = null,
   spellTarget = null
 } = {}) {
+  const selected = owner === "player"
+    && state.selected?.zone === "playerField"
+    && state.selected?.index === index;
   const materialCandidate = materialTarget
     ? Boolean(materialTarget.ok)
     : Boolean(tributeCandidate || fusionCandidate);
@@ -110,7 +113,7 @@ export function monsterFieldSlotView({
       ? (materialCandidate ? (materialSelected ? "selected" : "candidate") : "unavailable")
       : "",
     materialReason: materialTarget?.reason || "",
-    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${targetSelected ? "，已选择为魔法目标" : ""}${interactionTarget?.reason ? `，${interactionTarget.reason}` : ""}`,
+    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${selected ? "，当前选中" : ""}${targetSelected ? "，已选择为魔法目标" : ""}${interactionTarget?.reason ? `，${interactionTarget.reason}` : ""}`,
     slotClasses: enabledClassEntries({
       targetable,
       "target-selected": targetSelected,
@@ -126,9 +129,7 @@ export function monsterFieldSlotView({
       "effect-target-unavailable": effectTargetUnavailable
     }),
     cardClasses: enabledClassEntries({
-      selected: owner === "player"
-        && state.selected?.zone === "playerField"
-        && state.selected?.index === index,
+      selected,
       used: card?.used,
       "attack-ready": attackReady,
       "attack-locked": attacksLocked,
@@ -338,6 +339,13 @@ export function renderMonsterZones({
         onCardClick(index);
       });
       slot.appendChild(cardEl);
+      if (view.cardClasses.includes("selected")) {
+        const selectionChip = document.createElement("span");
+        selectionChip.className = "field-selection-chip";
+        selectionChip.textContent = "当前操作";
+        selectionChip.setAttribute("aria-hidden", "true");
+        slot.appendChild(selectionChip);
+      }
     }
     fragment.appendChild(slot);
   });

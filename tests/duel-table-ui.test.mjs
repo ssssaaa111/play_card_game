@@ -10,7 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260801-field-action-dock"/);
+  assert.match(html, /href="duel-table\.css\?v=20260801-selection-feedback"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -36,6 +36,22 @@ test("selected field monsters expose a unified contextual action dock", () => {
   assert.match(app, /els\.fieldModeBtn\?\.addEventListener\("click", toggleSelectedMode\)/);
   assert.match(app, /els\.fieldDetailBtn\?\.addEventListener\("click", openSelectedMonsterDetail\)/);
   assert.match(app, /els\.fieldCancelBtn\?\.addEventListener\("click", cancelSelectedMonsterAction\)/);
+});
+
+test("field selection exposes persistent target feedback and blank-area cancellation", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const app = read("src/app.js");
+  const renderer = read("src/field-renderer.js");
+
+  assert.match(html, /class="field" id="duelField"/);
+  assert.match(app, /selectionHint: currentMonsterSelectionHint\(\)/);
+  assert.match(app, /document\.body\.dataset\.duelTargeting/);
+  assert.match(app, /els\.duelField\?\.addEventListener\("click", handleDuelFieldBackgroundClick\)/);
+  assert.match(css, /body\[data-duel-selection="playerField"\][\s\S]*#duelHint/);
+  assert.match(css, /\.field-selection-chip\s*\{/);
+  assert.match(css, /body\[data-duel-targeting="attack"\][\s\S]*\.slot:has\(\.card\):not\(\.attack-target\)/);
+  assert.match(renderer, /selectionChip\.textContent = "当前操作"/);
 });
 
 test("low-frequency media and session controls live behind one utility menu", () => {

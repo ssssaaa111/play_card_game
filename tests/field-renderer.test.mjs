@@ -47,7 +47,7 @@ test("monster field view centralizes attack and selection states", () => {
   assert.equal(ready.materialCandidate, true);
   assert.equal(ready.materialSelected, true);
   assert.equal(ready.animationClass, "summon-flash");
-  assert.equal(ready.ariaLabel, "我方召唤区 3，已选择为魔法目标");
+  assert.equal(ready.ariaLabel, "我方召唤区 3，当前选中，已选择为魔法目标");
   assert.ok(ready.slotClasses.includes("attack-target"));
   assert.ok(ready.slotClasses.includes("target-selected"));
   assert.ok(ready.cardClasses.includes("selected"));

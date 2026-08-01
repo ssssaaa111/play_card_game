@@ -36,6 +36,12 @@ test("builds contextual duel hints", () => {
   assert.equal(duelHintText({ started: false }), "开始后自动抽卡");
   assert.equal(duelHintText({ started: true, paused: true }), "点击继续恢复决斗");
   assert.equal(duelHintText({ started: true, pendingPrompt: "选择我方怪兽" }), "选择我方怪兽");
+  assert.equal(duelHintText({
+    started: true,
+    selectionHint: "已选择「赤焰幼龙」：点击红色高亮目标发动攻击。",
+    scenarioId: "target",
+    scenarioGoal: "验证目标选择"
+  }), "已选择「赤焰幼龙」：点击红色高亮目标发动攻击。");
   assert.equal(duelHintText({ started: true, scenarioId: "target", scenarioGoal: "验证目标选择" }), "当前目标：验证目标选择");
   assert.equal(duelHintText({ started: true, turn: "ai" }), "等待 AI 行动");
   assert.equal(duelHintText({ started: true, canSpell: true }), "可以发动手牌里的魔法卡");

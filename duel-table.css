@@ -924,6 +924,43 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   background: rgba(246, 189, 96, 0.11);
 }
 
+body[data-duel-selection="playerField"] #app .duel-table #duelHint {
+  border-color: rgba(84, 210, 210, 0.7);
+  color: #d9fffc;
+  box-shadow: 0 0 0 3px rgba(84, 210, 210, 0.08), 0 0 30px rgba(84, 210, 210, 0.17);
+}
+
+#app .duel-table .field-selection-chip {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  z-index: 8;
+  max-width: calc(100% - 10px);
+  padding: 3px 8px;
+  overflow: hidden;
+  border: 1px solid rgba(185, 255, 249, 0.72);
+  border-radius: 999px;
+  color: #effffe;
+  background: rgba(8, 54, 59, 0.94);
+  box-shadow: 0 0 16px rgba(84, 210, 210, 0.35);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+body[data-duel-targeting="attack"] #app .duel-table #aiField .slot:has(.card):not(.attack-target) {
+  opacity: 0.58;
+}
+
+body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target {
+  transform: translateY(-2px);
+}
+
 .field-action-bar {
   position: absolute;
   bottom: 14px;
