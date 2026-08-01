@@ -408,10 +408,6 @@ body[data-duel-turn="ai"] .phase span {
   pointer-events: none;
 }
 
-.life-bar[data-shield="true"] .life-value {
-  font-size: 11px;
-}
-
 .duelist-figure::after {
   content: "";
   position: absolute;

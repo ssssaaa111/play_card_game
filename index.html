@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
   <link rel="stylesheet" href="styles.css?v=20260706-ai-card-reveal" />
-  <link rel="stylesheet" href="duel-table.css?v=20260801-mobile-playable-layout" />
+  <link rel="stylesheet" href="duel-table.css?v=20260802-interaction-recovery" />
 </head>
 <body>
   <div id="app">
@@ -257,7 +257,7 @@
           </button>
           <button class="field-action-btn field-cancel-btn" id="fieldCancelBtn" type="button">
             <span class="field-action-icon" aria-hidden="true">×</span>
-            <span>取消</span>
+            <span id="fieldCancelLabel">取消</span>
           </button>
         </nav>
         <div class="choice-actions" id="choiceActions" hidden>
@@ -457,7 +457,7 @@
     </div>
   </div>
 
-  <script type="module" src="src/duel-table.js?v=20260730-manual-detail-5"></script>
-  <script type="module" src="src/app.js?v=20260801-mobile-target-feedback"></script>
+  <script type="module" src="src/duel-table.js?v=20260802-passive-log-attention"></script>
+  <script type="module" src="src/app.js?v=20260802-attack-intent"></script>
 </body>
 </html>

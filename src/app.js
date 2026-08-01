@@ -217,6 +217,7 @@ const state = {
   timing: TIMINGS.draw,
   ...createSelectionState(),
   focusedCard: null,
+  attackIntentIndex: null,
   autoEnding: false,
   autoEndTimer: null,
   actionWindow: ACTION_WINDOWS.setup,
@@ -332,6 +333,7 @@ const els = {
   fieldModeLabel: document.querySelector("#fieldModeLabel"),
   fieldDetailBtn: document.querySelector("#fieldDetailBtn"),
   fieldCancelBtn: document.querySelector("#fieldCancelBtn"),
+  fieldCancelLabel: document.querySelector("#fieldCancelLabel"),
   detailBtn: document.querySelector("#detailBtn"),
   duelHint: document.querySelector("#duelHint"),
   toast: document.querySelector("#toast"),
@@ -488,12 +490,20 @@ function showBattlePreview(attacker, target, owner = null, rival = null) {
   state.battlePreview = makeBattlePreview(attacker, target, owner, rival);
 }
 
-function clearBattlePreview() {
+function clearBattlePreview({ preserveAttackIntent = false } = {}) {
   state.battlePreview = null;
+  if (!preserveAttackIntent) state.attackIntentIndex = null;
+}
+
+function hasSelectedAttackIntent() {
+  return Number.isInteger(state.attackIntentIndex) &&
+    state.selected?.zone === "playerField" &&
+    state.selected.index === state.attackIntentIndex &&
+    Boolean(state.player.field[state.attackIntentIndex]);
 }
 
 function selectedAttackPreview() {
-  if (!canPlayerAct() || state.selected?.zone !== "playerField") return null;
+  if (!canPlayerAct() || !hasSelectedAttackIntent()) return null;
   const attackerIndex = state.selected.index;
   const attacker = state.player.field[attackerIndex];
   if (!attacker) return null;
@@ -2253,6 +2263,12 @@ async function handleAiSlot(index, interaction = {}) {
     return;
   }
   notePlayerIntent();
+  if (!state.selected || state.selected.zone !== "playerField") {
+    showDetail(card);
+    announce("先选择你场上的怪兽");
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
   if (!canUseBattleActions()) {
     if (state.phase === PHASES.main) {
       if (!enterPlayerBattlePhase("你发动攻击", { preserveSelection: true, quiet: true })) return;
@@ -2261,12 +2277,6 @@ async function handleAiSlot(index, interaction = {}) {
       resumePlayerIdleCountdownAfterPassiveIntent();
       return;
     }
-  }
-  if (!state.selected || state.selected.zone !== "playerField") {
-    showDetail(card);
-    announce("先选择你场上的怪兽");
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return;
   }
   await queuePendingAttack(index);
 }
@@ -2279,6 +2289,11 @@ async function handleAiPanelAttack() {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
+  if (!state.selected || state.selected.zone !== "playerField") {
+    cue("先选择你场上的怪兽。");
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
   if (!canUseBattleActions()) {
     if (state.phase === PHASES.main) {
       if (!enterPlayerBattlePhase("你发动攻击", { preserveSelection: true, quiet: true })) return;
@@ -2287,11 +2302,6 @@ async function handleAiPanelAttack() {
       resumePlayerIdleCountdownAfterPassiveIntent();
       return;
     }
-  }
-  if (!state.selected || state.selected.zone !== "playerField") {
-    cue("先选择你场上的怪兽。");
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return;
   }
   await queuePendingAttack(-1);
 }
@@ -3959,10 +3969,12 @@ function toggleSelectedMode() {
   const card = state.player.field[state.selected.index];
   if (!card) {
     state.selected = null;
+    clearBattlePreview();
     render();
     cue("请选择你场上的怪兽。");
     return;
   }
+  clearBattlePreview();
   try {
     dispatchChangeMonsterModeFromUiState(state, "player", state.selected.index);
   } catch (error) {
@@ -3992,11 +4004,9 @@ function prepareSelectedMonsterAttack() {
     return;
   }
   notePlayerIntent();
-  if (!canUseBattleActions() && !enterPlayerBattlePhase("你准备发动攻击", { preserveSelection: true, quiet: true })) {
-    return;
-  }
   const projection = projectBattleFromUiState(state, "player", { attackerIndex });
   clearBattlePreview();
+  state.attackIntentIndex = attackerIndex;
   playSound("click");
   const targetHint = projection.canDirectAttack
     ? projection.targetIndexes.length > 0
@@ -4022,6 +4032,14 @@ function openSelectedMonsterDetail() {
 function cancelSelectedMonsterAction() {
   if (state.selected?.zone !== "playerField") {
     cue("当前没有选中的怪兽。");
+    resumePlayerIdleCountdownAfterPassiveIntent();
+    return;
+  }
+  if (hasSelectedAttackIntent()) {
+    clearBattlePreview();
+    playSound("click");
+    cue("已取消攻击目标选择，仍可切换表示。");
+    render();
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
@@ -4587,6 +4605,9 @@ function currentMonsterSelectionHint() {
       ? `已选择「${card.name}」：${attackReadiness.reason} 可切换表示。`
       : `已选择「${card.name}」：${attackReadiness.reason || modeReadiness.reason || "请选择下一步行动。"}`;
   }
+  if (!hasSelectedAttackIntent()) {
+    return `已选择「${card.name}」：点“攻击”进入选目标模式，也可直接点红色目标快捷攻击，或切换表示。`;
+  }
   const projection = projectBattleFromUiState(state, "player", { attackerIndex });
   if (projection.targetIndexes.length > 0) {
     return projection.canDirectAttack
@@ -4650,14 +4671,11 @@ function render(animationKey = "") {
       : state.pendingTribute
         ? "tribute"
         : state.selected?.zone || "none";
-  const selectedAttackProjection = state.selected?.zone === "playerField"
-    ? projectBattleFromUiState(state, "player", { attackerIndex: state.selected.index })
-    : null;
   document.body.dataset.duelTargeting = state.pendingTarget
     ? "effect"
     : state.pendingFusion || state.pendingTribute
       ? "material"
-      : selectedAttackProjection?.inAttackIntentWindow
+      : hasSelectedAttackIntent()
         ? "attack"
         : "none";
   document.body.dataset.duelCanAct = String(canAct);
@@ -4712,6 +4730,7 @@ function render(animationKey = "") {
       : "attack",
     selectedPlayerMonsterCanAttack: selectedPlayerMonsterAttackValidation.ok,
     selectedPlayerMonsterAttackReason: selectedPlayerMonsterAttackValidation.reason,
+    selectedPlayerMonsterAttackIntent: hasSelectedAttackIntent(),
     selectedPlayerMonsterCanChangeMode: selectedPlayerMonsterModeValidation.ok,
     selectedPlayerMonsterModeReason: selectedPlayerMonsterModeValidation.reason,
     focusedCard: state.focusedCard,
@@ -4785,7 +4804,7 @@ function canPlayerTargetAiPanel() {
 }
 
 function showSelectedAttackTargetPreview(targetIndex) {
-  if (state.selected?.zone !== "playerField" || !canPlayerAct()) return;
+  if (!canPlayerAct() || !hasSelectedAttackIntent()) return;
   const attackerIndex = state.selected.index;
   const attacker = state.player.field[attackerIndex];
   const projection = projectBattleFromUiState(state, "player", { attackerIndex });
@@ -4796,8 +4815,8 @@ function showSelectedAttackTargetPreview(targetIndex) {
 }
 
 function restoreSelectedAttackPreview() {
-  if (!canUseAttackIntentWindow()) return;
-  clearBattlePreview();
+  if (!hasSelectedAttackIntent()) return;
+  clearBattlePreview({ preserveAttackIntent: true });
   renderBattlePreview();
 }
 

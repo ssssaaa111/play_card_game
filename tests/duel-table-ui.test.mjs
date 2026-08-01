@@ -10,8 +10,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260801-mobile-playable-layout"/);
-  assert.match(html, /src="src\/app\.js\?v=20260801-mobile-target-feedback"/);
+  assert.match(html, /href="duel-table\.css\?v=20260802-interaction-recovery"/);
+  assert.match(html, /src="src\/app\.js\?v=20260802-attack-intent"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -19,7 +19,7 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   assert.match(html, /id="timelineDrawerToggle"[\s\S]*aria-controls="timelineDrawer"/);
   assert.match(html, /id="fieldActionBar"[\s\S]*id="fieldAttackBtn"[\s\S]*id="fieldModeBtn"[\s\S]*id="fieldDetailBtn"[\s\S]*id="fieldCancelBtn"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260730-manual-detail-5"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260802-passive-log-attention"/);
 });
 
 test("selected field monsters expose a unified contextual action dock", () => {
@@ -144,6 +144,7 @@ test("workspace controller synchronizes drawers, timeline badges, and settings",
   assert.match(controller, /drawer\.root\?\.classList\.toggle\("is-open", active\)/);
   assert.match(controller, /timelineBadge\.textContent = timelineCount\.textContent/);
   assert.match(controller, /detailToggle\.classList\.add\("has-update"\)/);
+  assert.match(controller, /timelineToggle\?\.classList\.add\("has-update"\)/);
   assert.doesNotMatch(controller, /setDrawer\("detail", true\)/);
   assert.match(controller, /compactWorkspace\.addEventListener\("change"/);
 });
@@ -210,7 +211,8 @@ test("battle chronicle uses full-height summaries filters and structured event n
   assert.match(css, /\.timeline-node::after\s*\{[\s\S]*linear-gradient/);
   assert.match(controller, /function setTimelineFilter\(filter = "all"\)/);
   assert.match(controller, /timelineDrawer\.dataset\.timelineView = nextFilter/);
-  assert.match(controller, /function syncChainHistoryAttention\(\)[\s\S]*setDrawer\("timeline", true\)/);
+  assert.match(controller, /function syncChainHistoryAttention\(\)[\s\S]*timelineToggle\?\.classList\.add\("has-update"\)/);
+  assert.doesNotMatch(controller, /syncChainHistoryAttention\(\)[\s\S]{0,300}setDrawer\("timeline", true\)/);
   assert.match(controller, /chainHistoryObserver\.observe\(chainHistoryToggle/);
   assert.match(renderer, /item\.dataset\.timelineGroup = timelineKindGroup\(entry\.kind\)/);
   assert.match(renderer, /kind\.textContent = timelineKindLabel\(entry\.kind\)/);

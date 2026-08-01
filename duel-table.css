@@ -1063,6 +1063,13 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   color: #ff9188;
 }
 
+.field-attack-btn.is-active:not(:disabled) {
+  border-color: rgba(255, 124, 103, 0.9);
+  color: #fff3eb;
+  background: rgba(112, 31, 29, 0.98);
+  box-shadow: 0 0 0 1px rgba(255, 124, 103, 0.16), 0 0 20px rgba(255, 75, 75, 0.24);
+}
+
 .field-mode-tab:not(:disabled):hover,
 .field-mode-tab:not(:disabled):focus-visible {
   border-color: rgba(84, 210, 210, 0.72);
@@ -1097,7 +1104,8 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   color: #fff0b8;
 }
 
-#detailDrawerToggle::after {
+#detailDrawerToggle::after,
+#timelineDrawerToggle::after {
   position: absolute;
   top: 5px;
   right: 5px;
@@ -1111,7 +1119,8 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   transform: scale(0.6);
 }
 
-#detailDrawerToggle.has-update::after {
+#detailDrawerToggle.has-update::after,
+#timelineDrawerToggle.has-update::after {
   opacity: 1;
   animation: table-attention-pulse 1.6s ease-in-out infinite;
 }
@@ -2821,7 +2830,8 @@ body[data-duel-selection="playerField"] .hand-command-idle {
 @media (prefers-reduced-motion: reduce) {
   .hand-panel:not([data-ready-count="0"]) .hand-readiness-dot,
   .setup-live-dot,
-  #detailDrawerToggle.has-update::after {
+  #detailDrawerToggle.has-update::after,
+  #timelineDrawerToggle.has-update::after {
     animation: none;
   }
 }

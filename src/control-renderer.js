@@ -27,6 +27,7 @@ export function buildDuelControlsView({
   selectedPlayerMonsterMode = "attack",
   selectedPlayerMonsterCanAttack = false,
   selectedPlayerMonsterAttackReason = "",
+  selectedPlayerMonsterAttackIntent = false,
   selectedPlayerMonsterCanChangeMode = selectedPlayerMonster,
   selectedPlayerMonsterModeReason = "",
   focusedCard = null,
@@ -49,10 +50,12 @@ export function buildDuelControlsView({
   const showChoiceActions = canAct && (hasPendingSelection || selectedHandReady);
   const selectedMonsterInDefense = selectedPlayerMonsterMode === "defense";
   const attackDisabled = hasPendingSelection || !canAct || !selectedPlayerMonsterCanAttack;
-  const attackTitle = selectedPlayerMonsterAttackReason || "选择攻击目标";
+  const attackTitle = selectedPlayerMonsterAttackIntent
+    ? "正在选择攻击目标"
+    : selectedPlayerMonsterAttackReason || "选择攻击目标";
   const attackText = attackDisabled
     ? (selectedMonsterInDefense ? "守备中" : "不可攻击")
-    : "攻击";
+    : selectedPlayerMonsterAttackIntent ? "选目标中" : "攻击";
   const modeDisabled = hasPendingSelection || !canAct || phase !== "main" || !selectedPlayerMonsterCanChangeMode;
   const modeTitle = selectedPlayerMonsterModeReason || "切换所选怪兽的攻击／守备表示";
   const modeActionText = selectedMonsterInDefense ? "转攻击" : "转守备";
@@ -133,14 +136,18 @@ export function buildDuelControlsView({
     fieldAction: {
       hidden: !selectedPlayerMonster,
       name: selectedPlayerMonsterName || "所选怪兽",
-      status: selectedPlayerMonsterCanAttack
-        ? "可攻击 · 选择目标"
-        : selectedPlayerMonsterAttackReason || "选择下一步行动",
+      status: selectedPlayerMonsterAttackIntent
+        ? "请选择高亮目标"
+        : selectedPlayerMonsterCanAttack
+          ? "可攻击 · 选择目标"
+          : selectedPlayerMonsterAttackReason || "选择下一步行动",
       attack: {
         disabled: attackDisabled,
         text: attackText,
-        title: attackTitle
+        title: attackTitle,
+        active: selectedPlayerMonsterAttackIntent
       },
+      cancelText: selectedPlayerMonsterAttackIntent ? "取消攻击" : "取消",
       detailDisabled: !focusedCard
     },
     fieldMode: {
@@ -210,7 +217,10 @@ export function renderDuelControls(elements, view) {
     elements.fieldActionStatus.textContent = view.fieldAction.status;
     elements.fieldAttackBtn.disabled = view.fieldAction.attack.disabled;
     elements.fieldAttackBtn.title = view.fieldAction.attack.title;
+    elements.fieldAttackBtn.classList.toggle("is-active", view.fieldAction.attack.active);
+    elements.fieldAttackBtn.setAttribute("aria-pressed", String(view.fieldAction.attack.active));
     elements.fieldAttackLabel.textContent = view.fieldAction.attack.text;
+    if (elements.fieldCancelLabel) elements.fieldCancelLabel.textContent = view.fieldAction.cancelText;
     elements.fieldDetailBtn.disabled = view.fieldAction.detailDisabled;
   }
   if (elements.fieldModeBtn) {

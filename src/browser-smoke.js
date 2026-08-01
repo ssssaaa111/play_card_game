@@ -5821,6 +5821,27 @@ async function runModeAutoEndSmoke(ctx) {
     () => !ctx.els.fieldModeBtn.hidden && !ctx.els.fieldModeBtn.disabled && ctx.els.fieldModeLabel.textContent === "转守备",
     "选中怪兽后场上显示转守备快捷按钮"
   );
+  clickSmokeElement(ctx.els.fieldAttackBtn, "点击攻击但暂不选择目标");
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === 0 &&
+      ctx.state.phase === "main" &&
+      ctx.state.actionWindow === "main" &&
+      !ctx.els.fieldModeBtn.disabled &&
+      ctx.els.fieldAttackBtn.getAttribute("aria-pressed") === "true" &&
+      ctx.els.fieldCancelLabel.textContent === "取消攻击",
+    "准备攻击只进入界面选目标态，不提前离开主要阶段"
+  );
+  clickSmokeElement(ctx.els.fieldCancelBtn, "取消尚未指定目标的攻击");
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === null &&
+      ctx.state.selected?.zone === "playerField" &&
+      ctx.state.selected.index === 0 &&
+      ctx.state.phase === "main" &&
+      ctx.state.actionWindow === "main" &&
+      !ctx.els.fieldModeBtn.disabled &&
+      ctx.els.fieldCancelLabel.textContent === "取消",
+    "取消攻击后保留怪兽选择并恢复切换表示"
+  );
   clickSmokeElement(ctx.els.fieldModeBtn, "通过场上快捷按钮将第一只怪兽切换守备");
   await waitForSmoke(
     () => ctx.state.player.field[0]?.mode === "defense" &&
