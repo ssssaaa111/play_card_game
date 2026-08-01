@@ -5854,16 +5854,28 @@ async function runModeAutoEndSmoke(ctx) {
   }
   const firstDefenseCard = fieldCard(ctx.els, "player", "ember-drake");
   const firstDefenseSlot = firstDefenseCard?.closest(".slot");
+  const firstDefenseFace = firstDefenseCard?.querySelector(".field-card-face");
   const firstDefenseStats = firstDefenseCard?.querySelector(".stats");
   const firstDefenseCardRect = firstDefenseCard?.getBoundingClientRect();
   const firstDefenseSlotRect = firstDefenseSlot?.getBoundingClientRect();
+  const firstDefenseFaceRect = firstDefenseFace?.getBoundingClientRect();
   const firstDefenseStatsRect = firstDefenseStats?.getBoundingClientRect();
-  if (!firstDefenseCard || !firstDefenseSlot || !firstDefenseStats ||
+  const firstDefenseFaceTransform = firstDefenseFace
+    ? window.getComputedStyle(firstDefenseFace).transform
+    : "none";
+  const firstDefenseFaceMatrix = firstDefenseFaceTransform === "none"
+    ? null
+    : new DOMMatrixReadOnly(firstDefenseFaceTransform);
+  if (!firstDefenseCard || !firstDefenseSlot || !firstDefenseFace || !firstDefenseStats ||
       window.getComputedStyle(firstDefenseCard).transform !== "none" ||
+      !firstDefenseFaceMatrix || Math.abs(firstDefenseFaceMatrix.b) < 0.9 ||
       firstDefenseCardRect.left < firstDefenseSlotRect.left ||
       firstDefenseCardRect.right > firstDefenseSlotRect.right ||
+      firstDefenseFaceRect.left < firstDefenseSlotRect.left - 1 ||
+      firstDefenseFaceRect.right > firstDefenseSlotRect.right + 1 ||
+      firstDefenseFaceRect.bottom > firstDefenseStatsRect.top + 1 ||
       firstDefenseStatsRect.width < firstDefenseCardRect.width * 0.7) {
-    throw new Error("守备怪兽卡必须保持直立并在自己的召唤区内完整显示 ATK/DEF");
+    throw new Error("守备怪兽必须横置卡面，并在自己的召唤区内独立直立显示 ATK/DEF");
   }
   clickSmokeElement(fieldCard(ctx.els, "player", "gale-mage"), "选择第二只怪兽");
   await waitForSmoke(

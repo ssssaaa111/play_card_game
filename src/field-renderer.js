@@ -327,7 +327,16 @@ export function renderMonsterZones({
         showTributeRequirement: false
       });
       cardEl.dataset.zone = `${owner}-field`;
-      if (card.type === "monster") cardEl.classList.add("field-monster-card");
+      if (card.type === "monster") {
+        cardEl.classList.add("field-monster-card");
+        const statsEl = cardEl.querySelector(".stats");
+        const faceEl = document.createElement("div");
+        faceEl.className = "field-card-face";
+        Array.from(cardEl.children).forEach((child) => {
+          if (child !== statsEl) faceEl.appendChild(child);
+        });
+        cardEl.insertBefore(faceEl, statsEl);
+      }
       addClasses(cardEl, view.cardClasses);
       if (attackReadiness) {
         cardEl.dataset.attackState = view.attackReady ? "ready" : "unavailable";
