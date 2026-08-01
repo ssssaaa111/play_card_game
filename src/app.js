@@ -1085,7 +1085,7 @@ function beginSpellTargetSelection(handIndex, card) {
   );
   setActionWindow(ACTION_WINDOWS.targetSelect, { reason: `target:${card.uid}` });
   const display = currentTargetSelectionDisplay(pendingTarget);
-  cue(display.text);
+  speak(display.text);
   addLog(display.selectedByDefault
     ? `等待确认 ${card.name} 的目标，唯一合法目标已自动选择：${display.selectedName}。`
     : `等待选择 ${card.name} 的目标，共有 ${display.legalCount} 个合法目标。`);
@@ -1289,7 +1289,7 @@ async function selectHandCard(uid, { directActivate = false } = {}) {
         return;
       }
       showDetail(card);
-      cue(currentTargetSelectionDisplay().text);
+      speak(currentTargetSelectionDisplay().text);
       playSound("click");
       render();
       resetPlayerIdleCountdown();
@@ -1881,7 +1881,7 @@ function canUseAttackIntentWindow() {
 async function quickAttackOnlyTarget(attackerIndex) {
   if (!canPlayerAct()) return false;
   if (state.pendingTarget) {
-    cue(currentTargetSelectionDisplay().text);
+    speak(currentTargetSelectionDisplay().text);
     resetPlayerIdleCountdown();
     return false;
   }
@@ -2275,7 +2275,7 @@ async function handleAiPanelAttack() {
   if (!canPlayerAct()) return;
   notePlayerIntent();
   if (state.pendingTarget) {
-    cue(currentTargetSelectionDisplay().text);
+    speak(currentTargetSelectionDisplay().text);
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
