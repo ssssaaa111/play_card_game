@@ -37,7 +37,7 @@ test("player HUD view combines life resources turn state and pile counts", () =>
 
   assert.equal(view.name, "星辉使者（你）");
   assert.match(view.skillHtml, /<strong>星辉<\/strong>/);
-  assert.equal(view.life.text, "2000 / 4000 · 盾 600");
+  assert.equal(view.life.text, "2000 / 4000");
   assert.equal(view.life.ariaLabel, "生命值 2000 / 4000，护盾 600");
   assert.equal(view.life.tone, "warning");
   assert.equal(view.shield, 600);

@@ -42,7 +42,6 @@ export function buildDuelistHudView({
   const life = shield > 0
     ? {
       ...baseLife,
-      text: `${baseLife.current} / ${baseLife.max} · 盾 ${shield}`,
       ariaLabel: `${baseLife.ariaLabel}，护盾 ${shield}`
     }
     : baseLife;

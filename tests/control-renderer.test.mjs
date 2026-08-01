@@ -65,8 +65,10 @@ test("open battle window enables manual turn controls without a pending selectio
     attack: {
       disabled: false,
       text: "攻击",
-      title: "选择攻击目标"
+      title: "选择攻击目标",
+      active: false
     },
+    cancelText: "取消",
     detailDisabled: false
   });
   assert.deepEqual(view.fieldMode, {
@@ -102,8 +104,10 @@ test("mode button is disabled after the selected monster already changed positio
     attack: {
       disabled: true,
       text: "守备中",
-      title: "守备表示怪兽不能攻击。"
+      title: "守备表示怪兽不能攻击。",
+      active: false
     },
+    cancelText: "取消",
     detailDisabled: true
   });
   assert.deepEqual(view.fieldMode, {
@@ -113,6 +117,29 @@ test("mode button is disabled after the selected monster already changed positio
     title: "这只怪兽本回合已经切换过表示。",
     defense: true
   });
+});
+
+test("attack intent remains cancellable without leaving the main phase", () => {
+  const view = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    phase: "main",
+    selectedPlayerMonster: true,
+    selectedPlayerMonsterName: "赤焰幼龙",
+    selectedPlayerMonsterCanAttack: true,
+    selectedPlayerMonsterCanChangeMode: true,
+    selectedPlayerMonsterAttackIntent: true
+  });
+
+  assert.equal(view.fieldAction.status, "请选择高亮目标");
+  assert.deepEqual(view.fieldAction.attack, {
+    disabled: false,
+    text: "选目标中",
+    title: "正在选择攻击目标",
+    active: true
+  });
+  assert.equal(view.fieldAction.cancelText, "取消攻击");
+  assert.equal(view.fieldMode.disabled, false);
 });
 
 test("field action bar stays hidden until an own monster is selected", () => {

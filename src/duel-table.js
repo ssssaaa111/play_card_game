@@ -69,7 +69,7 @@ export function createDuelTableController(documentRef = document) {
         setControlExpanded(drawer.toggle, active);
       }
       openDrawer = name;
-      if (name === "detail") detailToggle?.classList.remove("has-update");
+      next.toggle?.classList.remove("has-update");
     } else {
       next.root.classList.remove("is-open");
       next.root.setAttribute("aria-hidden", "true");
@@ -102,7 +102,10 @@ export function createDuelTableController(documentRef = document) {
 
   function syncChainHistoryAttention() {
     const visible = Boolean(chainHistoryToggle && !chainHistoryToggle.hidden);
-    if (visible && !chainHistoryVisible) setDrawer("timeline", true);
+    if (visible && !chainHistoryVisible && openDrawer !== "timeline") {
+      timelineToggle?.classList.add("has-update");
+    }
+    if (!visible) timelineToggle?.classList.remove("has-update");
     chainHistoryVisible = visible;
   }
 

@@ -962,22 +962,25 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 }
 
 .field-action-bar {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  z-index: 17;
+  position: static;
+  z-index: 2;
   display: grid;
-  grid-template-columns: minmax(132px, 1fr) repeat(4, auto);
+  grid-column: 1;
+  grid-row: 2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto repeat(2, minmax(44px, 1fr));
   align-items: stretch;
   gap: 6px;
-  width: min(650px, calc(100% - 220px));
-  padding: 6px;
-  border: 1px solid rgba(84, 210, 210, 0.28);
-  border-radius: 13px;
-  background: linear-gradient(180deg, rgba(8, 22, 28, 0.96), rgba(5, 10, 16, 0.96));
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4), 0 0 20px rgba(84, 210, 210, 0.1);
-  transform: translateX(-50%);
-  backdrop-filter: blur(14px);
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  transform: none;
+  backdrop-filter: none;
 }
 
 .field-action-bar[hidden] {
@@ -987,10 +990,11 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 .field-action-context {
   min-width: 0;
   display: grid;
+  grid-column: 1 / -1;
   align-content: center;
   gap: 1px;
-  padding: 3px 9px;
-  border-right: 1px solid rgba(84, 210, 210, 0.18);
+  padding: 2px 4px 5px;
+  border-bottom: 1px solid rgba(84, 210, 210, 0.18);
 }
 
 .field-action-context small {
@@ -1018,7 +1022,7 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 }
 
 .field-action-btn {
-  min-width: 70px;
+  min-width: 0;
   min-height: 44px;
   display: grid;
   grid-template-columns: auto auto;
@@ -1059,6 +1063,13 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   color: #ff9188;
 }
 
+.field-attack-btn.is-active:not(:disabled) {
+  border-color: rgba(255, 124, 103, 0.9);
+  color: #fff3eb;
+  background: rgba(112, 31, 29, 0.98);
+  box-shadow: 0 0 0 1px rgba(255, 124, 103, 0.16), 0 0 20px rgba(255, 75, 75, 0.24);
+}
+
 .field-mode-tab:not(:disabled):hover,
 .field-mode-tab:not(:disabled):focus-visible {
   border-color: rgba(84, 210, 210, 0.72);
@@ -1080,6 +1091,10 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   color: rgba(255, 255, 255, 0.62);
 }
 
+body[data-duel-selection="playerField"] .hand-command-idle {
+  display: none;
+}
+
 .field-action-btn:disabled {
   cursor: not-allowed;
   opacity: 0.56;
@@ -1089,7 +1104,8 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   color: #fff0b8;
 }
 
-#detailDrawerToggle::after {
+#detailDrawerToggle::after,
+#timelineDrawerToggle::after {
   position: absolute;
   top: 5px;
   right: 5px;
@@ -1103,7 +1119,8 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   transform: scale(0.6);
 }
 
-#detailDrawerToggle.has-update::after {
+#detailDrawerToggle.has-update::after,
+#timelineDrawerToggle.has-update::after {
   opacity: 1;
   animation: table-attention-pulse 1.6s ease-in-out infinite;
 }
@@ -1862,6 +1879,46 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   box-shadow: 0 10px 28px rgba(246, 189, 96, 0.16);
 }
 
+/* Keep combat feedback readable without turning it into a temporary modal. */
+.epic-action {
+  top: 48%;
+  min-width: 0;
+  max-width: min(320px, 62vw);
+  padding: 8px 22px;
+  border-block-width: 1px;
+  font-size: clamp(18px, 2.4vw, 30px);
+  text-align: center;
+  text-shadow: 0 0 9px rgba(255, 255, 255, 0.46), 0 2px 0 rgba(0, 0, 0, 0.44);
+}
+
+.center-card-effect {
+  width: min(280px, 34vw);
+  min-height: 126px;
+  gap: 6px;
+  padding: 12px;
+  border-width: 1px;
+}
+
+.draw-card-effect {
+  width: 60px;
+}
+
+.draw-fan-effect {
+  width: 50px;
+}
+
+.slash-burst,
+.impact-explosion,
+.guard-shield {
+  opacity: 0.66;
+}
+
+.attack-closeup,
+.attack-cutin,
+.ace-strike {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .setup-modal .modal-header {
     grid-template-columns: minmax(0, 1fr) minmax(240px, 0.75fr);
@@ -2005,17 +2062,44 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   }
 
   .field-action-bar {
-    right: 96px;
-    bottom: 9px;
-    left: 9px;
+    position: static;
+    grid-column: 1 / -1;
+    grid-row: 1;
     width: auto;
+    min-height: 54px;
     grid-template-columns: minmax(112px, 1fr) repeat(4, minmax(62px, auto));
+    grid-template-rows: 1fr;
+    padding: 4px;
+    border: 1px solid rgba(84, 210, 210, 0.24);
+    border-radius: 10px;
+    background: rgba(7, 16, 23, 0.94);
     transform: none;
+  }
+
+  .field-action-context {
+    grid-column: auto;
+    padding: 3px 8px;
+    border-right: 1px solid rgba(84, 210, 210, 0.18);
+    border-bottom: 0;
   }
 
   .hand-panel {
     grid-template-columns: 76px minmax(0, 1fr);
     padding: 8px;
+  }
+
+  body[data-duel-selection="playerField"] .hand-panel {
+    grid-template-rows: 54px minmax(0, 1fr);
+  }
+
+  body[data-duel-selection="playerField"] .hand-title {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  body[data-duel-selection="playerField"] .hand-stack {
+    grid-column: 2;
+    grid-row: 2;
   }
 
   .hand-command {
@@ -2069,12 +2153,22 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     white-space: pre-line;
   }
 
-  body[data-duel-selection="target"] #app .duel-table .slot.effect-target-unavailable::after,
-  body[data-duel-selection="target"] #app .duel-table .slot.targetable::after,
-  body[data-duel-selection="target"] #app .duel-table .slot.target-selected::after,
-  body[data-duel-selection="target"] #app .duel-table .trap-slot.support-target-unavailable::after,
-  body[data-duel-selection="target"] #app .duel-table .trap-slot.targetable::after,
-  body[data-duel-selection="target"] #app .duel-table .trap-slot.target-selected::after {
+  #app .duel-table .field-selection-chip,
+  #app .duel-table .slot.tribute-candidate::after,
+  #app .duel-table .slot.tribute-selected::after,
+  #app .duel-table .slot.tribute-unavailable::after,
+  #app .duel-table .slot.fusion-candidate::after,
+  #app .duel-table .slot.fusion-selected::after,
+  #app .duel-table .slot.fusion-unavailable::after,
+  #app .duel-table .slot.split-candidate::after,
+  #app .duel-table .slot.split-unavailable::after,
+  #app .duel-table .slot.effect-target-unavailable::after,
+  #app .duel-table .slot.targetable::after,
+  #app .duel-table .slot.target-selected::after,
+  #app .duel-table .slot.attack-target::after,
+  #app .duel-table .trap-slot.support-target-unavailable::after,
+  #app .duel-table .trap-slot.targetable::after,
+  #app .duel-table .trap-slot.target-selected::after {
     top: 50%;
     right: auto;
     bottom: auto;
@@ -2090,24 +2184,124 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     transform: translate(-50%, -50%);
   }
 
-  body[data-duel-selection="target"] #app .duel-table .slot.effect-target-unavailable:not(.empty)::after,
-  body[data-duel-selection="target"] #app .duel-table .trap-slot.support-target-unavailable:has(.card)::after {
+  #app .duel-table .field-selection-chip {
+    width: max-content;
+    max-width: calc(100% - 6px);
+  }
+
+  #app .duel-table .slot.tribute-candidate::after {
+    content: "可解放";
+  }
+
+  #app .duel-table .slot.fusion-candidate::after {
+    content: "可融合";
+  }
+
+  #app .duel-table .slot.split-candidate::after {
+    content: "可分裂";
+  }
+
+  #app .duel-table .slot.tribute-unavailable:not(.empty)::after,
+  #app .duel-table .slot.fusion-unavailable:not(.empty)::after,
+  #app .duel-table .slot.split-unavailable:not(.empty)::after,
+  #app .duel-table .slot.effect-target-unavailable:not(.empty)::after,
+  #app .duel-table .trap-slot.support-target-unavailable:has(.card)::after {
     content: "不可";
   }
 
-  body[data-duel-selection="target"] #app .duel-table .slot.targetable::after,
-  body[data-duel-selection="target"] #app .duel-table .trap-slot.targetable::after {
+  #app .duel-table .slot.targetable::after,
+  #app .duel-table .trap-slot.targetable::after {
     content: "可选";
   }
 
-  body[data-duel-selection="target"] #app .duel-table .slot.target-selected::after,
-  body[data-duel-selection="target"] #app .duel-table .trap-slot.target-selected::after {
+  #app .duel-table .slot.tribute-selected::after,
+  #app .duel-table .slot.fusion-selected::after,
+  #app .duel-table .slot.target-selected::after,
+  #app .duel-table .trap-slot.target-selected::after {
     content: "已选";
   }
 
-  body[data-duel-selection="target"] #app .duel-table .slot.empty.effect-target-unavailable::after,
-  body[data-duel-selection="target"] #app .duel-table .trap-slot.support-target-unavailable:not(:has(.card))::after {
+  #app .duel-table .slot.attack-target::after {
+    content: "可攻";
+  }
+
+  #app .duel-table .slot.empty.tribute-unavailable::after,
+  #app .duel-table .slot.empty.fusion-unavailable::after,
+  #app .duel-table .slot.empty.split-unavailable::after,
+  #app .duel-table .slot.empty.effect-target-unavailable::after,
+  #app .duel-table .trap-slot.support-target-unavailable:not(:has(.card))::after {
     content: none;
+  }
+
+  .epic-action {
+    top: 50%;
+    min-width: 0;
+    max-width: min(260px, 64vw);
+    padding: 6px 16px;
+    border-block-width: 1px;
+    font-size: clamp(16px, 3.8vw, 22px);
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.42), 0 2px 0 rgba(0, 0, 0, 0.42);
+  }
+
+  .duelist-line {
+    max-width: min(220px, 52vw);
+    padding: 6px 8px;
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .duelist-line::before {
+    margin-bottom: 2px;
+    font-size: 8px;
+  }
+
+  .life-delta {
+    padding: 3px 7px;
+    font-size: 16px;
+  }
+
+  .effect-label {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+
+  .draw-card-effect {
+    width: 44px;
+    border-width: 1px;
+  }
+
+  .draw-fan-effect {
+    width: 36px;
+    border-width: 1px;
+  }
+
+  .center-card-effect {
+    width: min(220px, 58vw);
+    min-height: 108px;
+    gap: 5px;
+    padding: 10px;
+    border-width: 1px;
+  }
+
+  .center-card-effect strong {
+    font-size: 16px;
+  }
+
+  .center-card-effect span {
+    font-size: 28px;
+  }
+
+  .center-card-effect p {
+    max-height: 2.6em;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .attack-closeup,
+  .attack-cutin,
+  .ace-strike {
+    display: none;
   }
 
   .hand-title {
@@ -2120,6 +2314,36 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 
   .hand-title-copy > span {
     display: none;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1040px) and (orientation: portrait) {
+  .workspace-tabs {
+    position: fixed;
+    right: auto;
+    bottom: max(16px, calc(var(--safe-area-bottom) + 8px));
+    left: max(16px, calc(var(--safe-area-left) + 8px));
+    z-index: 25;
+    width: 60px;
+    transition: opacity 120ms ease, visibility 120ms ease;
+  }
+
+  body:not([data-duel-selection="none"]) .workspace-tabs {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .workspace-tab {
+    min-width: 60px;
+    min-height: 42px;
+    padding: 5px 6px;
+    font-size: 9px;
+  }
+
+  .hand-title {
+    justify-content: flex-start;
+    padding-bottom: 104px;
   }
 }
 
@@ -2383,9 +2607,21 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   }
 
   .workspace-tabs {
-    right: 7px;
-    bottom: 7px;
+    position: fixed;
+    top: auto;
+    right: max(7px, var(--safe-area-right));
+    bottom: calc(max(6px, var(--safe-area-bottom)) + var(--mobile-hand-height) - 44px);
+    left: auto;
+    z-index: 25;
     grid-auto-flow: column;
+    gap: 4px;
+    transition: opacity 120ms ease, visibility 120ms ease;
+  }
+
+  body:not([data-duel-selection="none"]) .workspace-tabs {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .field-action-bar {
@@ -2395,6 +2631,7 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     left: max(7px, var(--safe-area-left));
     z-index: 25;
     width: auto;
+    min-height: 0;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
     padding: 0;
@@ -2432,7 +2669,7 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 
   .hand-panel {
     grid-template-columns: 1fr;
-    grid-template-rows: 30px minmax(0, 1fr);
+    grid-template-rows: 44px minmax(0, 1fr);
     gap: 5px;
     padding: 7px;
   }
@@ -2442,8 +2679,15 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   }
 
   body[data-duel-selection="playerField"] .hand-title {
+    grid-column: 1;
+    grid-row: 1;
     visibility: hidden;
     pointer-events: none;
+  }
+
+  body[data-duel-selection="playerField"] .hand-stack {
+    grid-column: 1;
+    grid-row: 2;
   }
 
   .hand-title {
@@ -2452,7 +2696,7 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 0 4px 5px;
+    padding: 0 150px 5px 4px;
     border: 0;
     border-bottom: 1px solid rgba(246, 189, 96, 0.16);
   }
@@ -2495,6 +2739,12 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 
   .hand-readiness small {
     font-size: 7px;
+  }
+
+  .slash-burst,
+  .impact-explosion,
+  .guard-shield {
+    opacity: 0.48;
   }
 
   .hand-title::after {
@@ -2580,7 +2830,8 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 @media (prefers-reduced-motion: reduce) {
   .hand-panel:not([data-ready-count="0"]) .hand-readiness-dot,
   .setup-live-dot,
-  #detailDrawerToggle.has-update::after {
+  #detailDrawerToggle.has-update::after,
+  #timelineDrawerToggle.has-update::after {
     animation: none;
   }
 }
@@ -2631,7 +2882,37 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     grid-column: 2;
     grid-row: 2;
     grid-template-columns: 1fr;
-    grid-template-rows: 26px minmax(0, 1fr);
+    grid-template-rows: 44px minmax(0, 1fr);
+  }
+
+  .hand-title {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .workspace-tabs {
+    position: fixed;
+    top: calc(max(8px, var(--safe-area-top)) + 62px);
+    right: max(8px, var(--safe-area-right));
+    bottom: auto;
+    left: auto;
+    z-index: 25;
+    width: calc(clamp(226px, 31vw, 300px) - 16px);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: row;
+    gap: 4px;
+  }
+
+  .workspace-tab {
+    min-width: 0;
+    min-height: 40px;
+    padding: 4px 6px;
+  }
+
+  body:not([data-duel-selection="none"]) .workspace-tabs {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
   }
 
   body[data-duel-selection="playerField"] .hand-panel {

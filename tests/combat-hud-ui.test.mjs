@@ -69,6 +69,14 @@ test("desktop field monsters preserve a bounded card ratio", () => {
   assert.match(css, /\.field-monster-card \.stats\s*\{[\s\S]*overflow: hidden;/);
 });
 
+test("defense mode keeps field cards upright so battle stats remain readable", () => {
+  const css = read("styles.css");
+
+  assert.match(css, /\.card\.defense:not\(\.field-monster-card\)\s*\{[\s\S]*rotate\(90deg\)/);
+  assert.match(css, /\.field-monster-card\.defense\s*\{[\s\S]*transform: none;[\s\S]*border-color: rgba\(116, 174, 232, 0\.78\)/);
+  assert.match(css, /\.field-monster-card\.defense:hover\s*\{[\s\S]*transform: translateY\(-2px\)/);
+});
+
 test("short desktop status columns keep the player life panel on screen", () => {
   const css = read("styles.css");
 
