@@ -924,6 +924,42 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   background: rgba(246, 189, 96, 0.11);
 }
 
+.field-mode-tab {
+  border-color: rgba(84, 210, 210, 0.34);
+  color: #cffffb;
+  background: rgba(10, 37, 43, 0.92);
+}
+
+.field-mode-tab[hidden] {
+  display: none;
+}
+
+.field-mode-tab .workspace-tab-icon {
+  color: var(--cyan);
+}
+
+.field-mode-tab:not(:disabled):hover,
+.field-mode-tab:not(:disabled):focus-visible {
+  border-color: rgba(84, 210, 210, 0.72);
+  background: rgba(18, 66, 72, 0.96);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3), 0 0 18px rgba(84, 210, 210, 0.16);
+}
+
+.field-mode-tab.is-defense {
+  border-color: rgba(246, 189, 96, 0.42);
+  color: #ffe9a8;
+  background: rgba(58, 42, 16, 0.92);
+}
+
+.field-mode-tab.is-defense .workspace-tab-icon {
+  color: var(--gold);
+}
+
+.field-mode-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.66;
+}
+
 #detailDrawerToggle.has-detail:not([aria-expanded="true"]) .workspace-tab-icon {
   color: #fff0b8;
 }

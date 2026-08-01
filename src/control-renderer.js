@@ -23,6 +23,7 @@ export function buildDuelControlsView({
   confirmLabel = "确认",
   phase = "ready",
   selectedPlayerMonster = false,
+  selectedPlayerMonsterMode = "attack",
   selectedPlayerMonsterCanChangeMode = selectedPlayerMonster,
   selectedPlayerMonsterModeReason = "",
   focusedCard = null,
@@ -43,6 +44,10 @@ export function buildDuelControlsView({
     : confirmLabel;
   const cancelLabel = hasTarget ? "取消目标" : "取消选择";
   const showChoiceActions = canAct && (hasPendingSelection || selectedHandReady);
+  const selectedMonsterInDefense = selectedPlayerMonsterMode === "defense";
+  const modeDisabled = hasPendingSelection || !canAct || phase !== "main" || !selectedPlayerMonsterCanChangeMode;
+  const modeTitle = selectedPlayerMonsterModeReason || "切换所选怪兽的攻击／守备表示";
+  const modeActionText = selectedMonsterInDefense ? "转攻击" : "转守备";
   let choiceText = "";
 
   if (hasTarget) {
@@ -114,8 +119,16 @@ export function buildDuelControlsView({
       material: hasFusion || hasTribute,
       split: pendingTarget?.effect === "splitToken"
     },
-    modeDisabled: hasPendingSelection || !canAct || phase !== "main" || !selectedPlayerMonsterCanChangeMode,
-    modeTitle: selectedPlayerMonsterModeReason || "切换所选怪兽的攻击／守备表示",
+    modeDisabled,
+    modeTitle,
+    modeText: modeActionText,
+    fieldMode: {
+      hidden: !selectedPlayerMonster,
+      disabled: modeDisabled,
+      text: modeDisabled ? (selectedMonsterInDefense ? "守备中" : "攻击中") : modeActionText,
+      title: modeTitle,
+      defense: selectedMonsterInDefense
+    },
     detailDisabled: !focusedCard
   };
 }
@@ -169,6 +182,16 @@ export function renderDuelControls(elements, view) {
 
   elements.modeBtn.disabled = view.modeDisabled;
   elements.modeBtn.title = view.modeTitle;
+  elements.modeBtn.textContent = view.modeText;
+  if (elements.fieldModeBtn) {
+    elements.fieldModeBtn.hidden = view.fieldMode.hidden;
+    elements.fieldModeBtn.disabled = view.fieldMode.disabled;
+    elements.fieldModeBtn.title = view.fieldMode.title;
+    elements.fieldModeBtn.dataset.mode = view.fieldMode.defense ? "defense" : "attack";
+    elements.fieldModeBtn.classList.toggle("is-defense", view.fieldMode.defense);
+    elements.fieldModeBtn.setAttribute("aria-pressed", String(view.fieldMode.defense));
+    if (elements.fieldModeLabel) elements.fieldModeLabel.textContent = view.fieldMode.text;
+  }
   elements.detailBtn.disabled = view.detailDisabled;
   return true;
 }

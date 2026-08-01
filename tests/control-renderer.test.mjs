@@ -39,6 +39,7 @@ test("open battle window enables manual turn controls without a pending selectio
     confirmLabel: "发动魔法",
     phase: "main",
     selectedPlayerMonster: true,
+    selectedPlayerMonsterMode: "attack",
     focusedCard: { id: "war-chant" }
   });
 
@@ -55,6 +56,13 @@ test("open battle window enables manual turn controls without a pending selectio
   assert.equal(view.choice.hidden, false);
   assert.equal(view.choice.text, "战意高扬：再次点击即可发动");
   assert.equal(view.modeDisabled, false);
+  assert.deepEqual(view.fieldMode, {
+    hidden: false,
+    disabled: false,
+    text: "转守备",
+    title: "切换所选怪兽的攻击／守备表示",
+    defense: false
+  });
   assert.equal(view.detailDisabled, false);
 });
 
@@ -64,10 +72,31 @@ test("mode button is disabled after the selected monster already changed positio
     canAct: true,
     phase: "main",
     selectedPlayerMonster: true,
-    selectedPlayerMonsterCanChangeMode: false
+    selectedPlayerMonsterMode: "defense",
+    selectedPlayerMonsterCanChangeMode: false,
+    selectedPlayerMonsterModeReason: "这只怪兽本回合已经切换过表示。"
   });
 
   assert.equal(view.modeDisabled, true);
+  assert.equal(view.modeText, "转攻击");
+  assert.deepEqual(view.fieldMode, {
+    hidden: false,
+    disabled: true,
+    text: "守备中",
+    title: "这只怪兽本回合已经切换过表示。",
+    defense: true
+  });
+});
+
+test("field mode shortcut stays hidden until an own monster is selected", () => {
+  const view = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    phase: "main"
+  });
+
+  assert.equal(view.fieldMode.hidden, true);
+  assert.equal(view.fieldMode.disabled, true);
 });
 
 test("target and fusion selections block turn controls and expose the correct prompt", () => {
