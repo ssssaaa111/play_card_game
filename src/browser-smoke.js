@@ -5790,12 +5790,27 @@ async function runModeAutoEndSmoke(ctx) {
   ctx.state.player.normalSummonsUsed = 1;
   clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "选择第一只怪兽");
   await waitForSmoke(
-    () => !ctx.els.fieldActionBar.hidden && ctx.els.fieldActionName.textContent === "赤焰幼龙",
-    "选中怪兽后显示统一战场操作栏"
+    () => !ctx.els.fieldActionBar.hidden &&
+      ctx.els.fieldActionName.textContent === "赤焰幼龙" &&
+      ctx.els.duelHint.textContent.includes("已选择「赤焰幼龙」") &&
+      ctx.els.playerField.querySelector(".field-selection-chip")?.textContent === "当前操作",
+    "选中怪兽后显示统一战场操作栏和持续选择提示"
   );
   if (ctx.els.fieldAttackBtn.disabled || ctx.els.fieldDetailBtn.disabled) {
     throw new Error("可攻击怪兽的快捷攻击和详情操作应当可用");
   }
+  clickSmokeElement(ctx.els.duelField, "点击战场空白区域取消怪兽选择");
+  await waitForSmoke(
+    () => !ctx.state.selected &&
+      ctx.els.fieldActionBar.hidden &&
+      !ctx.els.playerField.querySelector(".field-selection-chip"),
+    "点击战场空白区域后清除选择反馈"
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "再次选择第一只怪兽");
+  await waitForSmoke(
+    () => !ctx.els.fieldActionBar.hidden && ctx.els.fieldActionName.textContent === "赤焰幼龙",
+    "再次选中怪兽后恢复战场操作栏"
+  );
   clickSmokeElement(ctx.els.fieldCancelBtn, "通过操作栏取消怪兽选择");
   await waitForSmoke(
     () => !ctx.state.selected && ctx.els.fieldActionBar.hidden,

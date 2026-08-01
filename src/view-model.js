@@ -19,6 +19,7 @@ export function duelHintText({
   started,
   paused,
   pendingPrompt = "",
+  selectionHint = "",
   scenarioId = "normal",
   scenarioGoal = "",
   turn = "player",
@@ -32,6 +33,7 @@ export function duelHintText({
   if (!started) return "开始后自动抽卡";
   if (paused) return "点击继续恢复决斗";
   if (pendingPrompt) return pendingPrompt;
+  if (selectionHint) return selectionHint;
   if (scenarioId !== "normal" && scenarioGoal) return `当前目标：${scenarioGoal}`;
   if (turn !== "player") return "等待 AI 行动";
   if (autoEnding) return "没有可操作项，回合即将结束";
