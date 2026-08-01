@@ -39,7 +39,9 @@ test("open battle window enables manual turn controls without a pending selectio
     confirmLabel: "发动魔法",
     phase: "main",
     selectedPlayerMonster: true,
+    selectedPlayerMonsterName: "赤焰幼龙",
     selectedPlayerMonsterMode: "attack",
+    selectedPlayerMonsterCanAttack: true,
     focusedCard: { id: "war-chant" }
   });
 
@@ -56,6 +58,17 @@ test("open battle window enables manual turn controls without a pending selectio
   assert.equal(view.choice.hidden, false);
   assert.equal(view.choice.text, "战意高扬：再次点击即可发动");
   assert.equal(view.modeDisabled, false);
+  assert.deepEqual(view.fieldAction, {
+    hidden: false,
+    name: "赤焰幼龙",
+    status: "可攻击 · 选择目标",
+    attack: {
+      disabled: false,
+      text: "攻击",
+      title: "选择攻击目标"
+    },
+    detailDisabled: false
+  });
   assert.deepEqual(view.fieldMode, {
     hidden: false,
     disabled: false,
@@ -72,13 +85,27 @@ test("mode button is disabled after the selected monster already changed positio
     canAct: true,
     phase: "main",
     selectedPlayerMonster: true,
+    selectedPlayerMonsterName: "铁壁守卫",
     selectedPlayerMonsterMode: "defense",
+    selectedPlayerMonsterCanAttack: false,
+    selectedPlayerMonsterAttackReason: "守备表示怪兽不能攻击。",
     selectedPlayerMonsterCanChangeMode: false,
     selectedPlayerMonsterModeReason: "这只怪兽本回合已经切换过表示。"
   });
 
   assert.equal(view.modeDisabled, true);
   assert.equal(view.modeText, "转攻击");
+  assert.deepEqual(view.fieldAction, {
+    hidden: false,
+    name: "铁壁守卫",
+    status: "守备表示怪兽不能攻击。",
+    attack: {
+      disabled: true,
+      text: "守备中",
+      title: "守备表示怪兽不能攻击。"
+    },
+    detailDisabled: true
+  });
   assert.deepEqual(view.fieldMode, {
     hidden: false,
     disabled: true,
@@ -88,14 +115,14 @@ test("mode button is disabled after the selected monster already changed positio
   });
 });
 
-test("field mode shortcut stays hidden until an own monster is selected", () => {
+test("field action bar stays hidden until an own monster is selected", () => {
   const view = buildDuelControlsView({
     started: true,
     canAct: true,
     phase: "main"
   });
 
-  assert.equal(view.fieldMode.hidden, true);
+  assert.equal(view.fieldAction.hidden, true);
   assert.equal(view.fieldMode.disabled, true);
 });
 
