@@ -10,7 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260801-selection-feedback"/);
+  assert.match(html, /href="duel-table\.css\?v=20260801-mobile-action-dock"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -77,9 +77,21 @@ test("compact workspaces keep field and hand in fixed viewport rows", () => {
   const css = read("duel-table.css");
 
   assert.match(css, /@media \(max-width: 1040px\)[\s\S]*#app\s*\{[\s\S]*height: 100dvh;[\s\S]*grid-template-rows: auto minmax\(0, 1fr\) clamp\(226px, 34dvh, 278px\);[\s\S]*overflow: hidden;/);
-  assert.match(css, /@media \(max-width: 720px\)[\s\S]*#app\s*\{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\) clamp\(242px, 36dvh, 296px\);/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*#app\s*\{[\s\S]*--mobile-hand-height: clamp\(242px, 36dvh, 296px\);[\s\S]*grid-template-rows: auto minmax\(0, 1fr\) var\(--mobile-hand-height\);/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.workspace-drawer\s*\{[\s\S]*transform: translateY/);
   assert.match(css, /@media \(orientation: landscape\) and \(max-height: 540px\) and \(max-width: 1040px\)[\s\S]*grid-template-columns: minmax\(0, 1fr\) clamp\(226px, 31vw, 300px\);/);
+});
+
+test("portrait phones place monster actions in the hand title row instead of over the field", () => {
+  const css = read("duel-table.css");
+
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*--mobile-hand-height: clamp\(242px, 36dvh, 296px\)/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field-action-bar\s*\{[\s\S]*position: fixed;[\s\S]*var\(--mobile-hand-height\) - 44px/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 44px minmax\(0, 1fr\)/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-title\s*\{[\s\S]*visibility: hidden/);
+  assert.doesNotMatch(css, /@media \(max-width: 360px\)[\s\S]*\.field-action-bar[\s\S]*bottom: 57px/);
+  assert.match(css, /@media \(orientation: landscape\)[\s\S]*body\[data-duel-selection="playerField"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 86px minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(orientation: landscape\)[\s\S]*\.field-action-bar\s*\{[\s\S]*position: fixed;[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
 
 test("workspace controller synchronizes drawers, timeline badges, and settings", () => {
