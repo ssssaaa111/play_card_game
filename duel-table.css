@@ -2055,6 +2055,61 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
     transform: translateX(-50%);
   }
 
+  body[data-duel-selection="target"] .toast {
+    max-width: min(
+      360px,
+      calc(100vw - var(--safe-area-left) - var(--safe-area-right) - 24px)
+    );
+    max-height: calc(2.6em + 14px);
+    padding: 7px 10px;
+    overflow: hidden;
+    border-radius: 8px;
+    font-size: 10px;
+    line-height: 1.3;
+    white-space: pre-line;
+  }
+
+  body[data-duel-selection="target"] #app .duel-table .slot.effect-target-unavailable::after,
+  body[data-duel-selection="target"] #app .duel-table .slot.targetable::after,
+  body[data-duel-selection="target"] #app .duel-table .slot.target-selected::after,
+  body[data-duel-selection="target"] #app .duel-table .trap-slot.support-target-unavailable::after,
+  body[data-duel-selection="target"] #app .duel-table .trap-slot.targetable::after,
+  body[data-duel-selection="target"] #app .duel-table .trap-slot.target-selected::after {
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    max-width: calc(100% - 6px);
+    padding: 3px 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    font-size: 8px;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+  }
+
+  body[data-duel-selection="target"] #app .duel-table .slot.effect-target-unavailable:not(.empty)::after,
+  body[data-duel-selection="target"] #app .duel-table .trap-slot.support-target-unavailable:has(.card)::after {
+    content: "不可";
+  }
+
+  body[data-duel-selection="target"] #app .duel-table .slot.targetable::after,
+  body[data-duel-selection="target"] #app .duel-table .trap-slot.targetable::after {
+    content: "可选";
+  }
+
+  body[data-duel-selection="target"] #app .duel-table .slot.target-selected::after,
+  body[data-duel-selection="target"] #app .duel-table .trap-slot.target-selected::after {
+    content: "已选";
+  }
+
+  body[data-duel-selection="target"] #app .duel-table .slot.empty.effect-target-unavailable::after,
+  body[data-duel-selection="target"] #app .duel-table .trap-slot.support-target-unavailable:not(:has(.card))::after {
+    content: none;
+  }
+
   .hand-title {
     padding-inline: 6px;
   }
@@ -2663,6 +2718,11 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 
   .workspace-drawer {
     top: 44px;
+  }
+
+  body[data-duel-selection="target"] .toast {
+    top: 50%;
+    left: calc((100vw - clamp(226px, 31vw, 300px)) / 2);
   }
 
   .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) {
