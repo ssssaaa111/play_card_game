@@ -45,6 +45,21 @@ export function duelHintText({
   return "没有可操作项，回合即将结束";
 }
 
+export function duelHintView(options = {}) {
+  const text = duelHintText(options);
+  const kind = options.started && !options.paused && (options.pendingPrompt || options.selectionHint)
+    ? "action"
+    : options.started && !options.paused && options.scenarioId !== "normal" && options.scenarioGoal
+      ? "objective"
+      : "status";
+
+  return {
+    text,
+    kind,
+    title: kind === "objective" ? text : ""
+  };
+}
+
 export function describeHandAction(card, {
   started,
   canAct,

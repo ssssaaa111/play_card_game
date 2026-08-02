@@ -9,6 +9,7 @@ import {
   describeFusionMaterialTarget,
   describeSplitTokenTarget,
   describeTributeTarget,
+  duelHintView,
   duelHintText,
   phaseLabel,
   fusionSummonFailureMessage,
@@ -48,6 +49,25 @@ test("builds contextual duel hints", () => {
   assert.equal(duelHintText({ started: true, canSummon: true }), "可以召唤手牌怪兽");
   assert.equal(duelHintText({ started: true, canSetTrap: true }), "可以盖放陷阱卡");
   assert.equal(duelHintText({ started: true, canChangeMode: true }), "可以切换怪兽表示");
+});
+
+test("classifies persistent scenario goals separately from immediate duel actions", () => {
+  const objective = duelHintView({
+    started: true,
+    scenarioId: "target",
+    scenarioGoal: "clear the board before attacking"
+  });
+  const action = duelHintView({
+    started: true,
+    pendingPrompt: "choose a target",
+    scenarioId: "target",
+    scenarioGoal: "clear the board before attacking"
+  });
+
+  assert.equal(objective.kind, "objective");
+  assert.equal(objective.title, objective.text);
+  assert.equal(action.kind, "action");
+  assert.equal(action.title, "");
 });
 
 test("describes hand actions for common cards", () => {

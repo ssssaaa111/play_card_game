@@ -10,8 +10,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260802-interaction-recovery"/);
-  assert.match(html, /src="src\/app\.js\?v=20260802-attack-intent"/);
+  assert.match(html, /href="duel-table\.css\?v=20260803-objective-readability"/);
+  assert.match(html, /src="src\/app\.js\?v=20260803-objective-readability"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -48,7 +48,8 @@ test("field selection exposes persistent target feedback and blank-area cancella
   const renderer = read("src/field-renderer.js");
 
   assert.match(html, /class="field" id="duelField"/);
-  assert.match(app, /selectionHint: currentMonsterSelectionHint\(\)/);
+  assert.match(app, /const selectionHint = currentMonsterSelectionHint\(\)/);
+  assert.match(app, /duelHintView\([\s\S]*selectionHint,/);
   assert.match(app, /document\.body\.dataset\.duelTargeting/);
   assert.match(app, /els\.duelField\?\.addEventListener\("click", handleDuelFieldBackgroundClick\)/);
   assert.match(css, /body\[data-duel-selection="playerField"\][\s\S]*#duelHint/);
@@ -196,6 +197,16 @@ test("desktop hand actions use a tactical command dock without covering the fiel
   assert.match(controller, /handCommand\.dataset\.active = String\(commandActive\)/);
   assert.match(controller, /handCommand\.dataset\.step = locating/);
   assert.match(controller, /attentionObserver\.observe\(choiceActions/);
+});
+
+test("persistent scenario objectives use a readable battlefield presentation", () => {
+  const css = read("duel-table.css");
+  const app = read("src/app.js");
+
+  assert.match(app, /const duelHint = duelHintView\(/);
+  assert.match(app, /els\.duelHint\.dataset\.kind = duelHint\.kind/);
+  assert.match(css, /#duelHint\[data-kind="objective"\][\s\S]*max-width: min\(760px, calc\(100vw - 48px\)\)/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*#duelHint\[data-kind="objective"\][\s\S]*-webkit-line-clamp: 2/);
 });
 
 test("desktop shell compacts passive chrome until a command needs attention", () => {

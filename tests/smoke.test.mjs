@@ -1146,7 +1146,7 @@ test("app uses extracted view model text", () => {
   const app = readProjectFile("src/app.js");
 
   assert.match(app, /from '\.\/view-model\.js'/);
-  assert.match(app, /duelHintText\(\{/);
+  assert.match(app, /duelHintView\(\{/);
   assert.match(app, /describeHandAction\(card, \{/);
 });
 

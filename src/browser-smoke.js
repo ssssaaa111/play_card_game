@@ -2663,6 +2663,13 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
     "duel-layout-density-basic: passive command state"
   );
 
+  if (ctx.els.duelHint.dataset.kind !== "objective") {
+    throw new Error(`duel-layout-density-basic: scenario goal is not classified as an objective (${ctx.els.duelHint.dataset.kind || "unset"})`);
+  }
+  if (ctx.els.duelHint.scrollWidth > Math.ceil(ctx.els.duelHint.clientWidth) + 1) {
+    throw new Error(`duel-layout-density-basic: scenario objective is clipped (${ctx.els.duelHint.clientWidth}/${ctx.els.duelHint.scrollWidth})`);
+  }
+
   const topbarRect = topbar.getBoundingClientRect();
   const brandRect = brand.getBoundingClientRect();
   const arenaRect = arena.getBoundingClientRect();

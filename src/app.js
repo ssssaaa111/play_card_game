@@ -166,7 +166,7 @@ import {
   describeFusionMaterialTarget,
   describeSplitTokenTarget,
   describeTributeTarget,
-  duelHintText,
+  duelHintView,
   phaseLabel,
   fusionSummonFailureMessage,
   splitTokenFailureMessage,
@@ -4637,6 +4637,8 @@ function render(animationKey = "") {
   const scenario = scenarioSetups[state.scenarioId] || scenarioSetups.normal;
   const targetSelectionDisplay = currentTargetSelectionDisplay();
   const targetPrompt = targetSelectionDisplay.text;
+  const selectionHint = currentMonsterSelectionHint();
+  const scenarioGoal = scenarioTacticalGoal(state) || scenario.goal;
   const actions = currentPlayerActions();
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
   const musicMode = currentMusicMode();
@@ -4644,13 +4646,13 @@ function render(animationKey = "") {
   document.body.dataset.musicMode = musicMode;
   els.phaseText.textContent = phaseLabel(state);
   els.turnText.textContent = turnLabel(state);
-  els.duelHint.textContent = duelHintText({
+  const duelHint = duelHintView({
     started: state.started,
     paused: state.paused,
     pendingPrompt: targetPrompt,
-    selectionHint: currentMonsterSelectionHint(),
+    selectionHint,
     scenarioId: state.scenarioId,
-    scenarioGoal: scenarioTacticalGoal(state) || scenario.goal,
+    scenarioGoal,
     turn: state.turn,
     autoEnding: state.autoEnding,
     canAttack: actions.attack,
@@ -4659,6 +4661,9 @@ function render(animationKey = "") {
     canSetTrap: actions.trap,
     canChangeMode: actions.mode
   });
+  els.duelHint.textContent = duelHint.text;
+  els.duelHint.dataset.kind = duelHint.kind;
+  els.duelHint.title = duelHint.title;
   const setupModalOpen = els.modal?.classList.contains("show") && !state.started && !state.gameOver;
   const canUseTurnControls = canUsePlayerTurnControls(state);
   const canAct = canPlayerAct();
