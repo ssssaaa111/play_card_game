@@ -6,6 +6,9 @@ import { spawn } from "node:child_process";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:5177";
 const DEFAULT_VIRTUAL_TIME_BUDGET_MS = 60000;
+const SMOKE_VIEWPORTS = {
+  "duel-layout-density-basic": { width: 1280, height: 720 }
+};
 const DEFAULT_SMOKES = [
   "game-over-event",
   "mode-auto-end",
@@ -74,7 +77,7 @@ async function assertServerReachable(baseUrl) {
   }
 }
 
-function runBrowser({ browserBin, profileDir, url, timeoutMs }) {
+function runBrowser({ browserBin, profileDir, url, timeoutMs, viewport = null }) {
   const args = [
     "--headless=new",
     "--disable-gpu",
@@ -85,6 +88,9 @@ function runBrowser({ browserBin, profileDir, url, timeoutMs }) {
     "--dump-dom",
     url
   ];
+  if (viewport) {
+    args.splice(3, 0, `--window-size=${viewport.width},${viewport.height}`);
+  }
   return new Promise((resolve, reject) => {
     const child = spawn(browserBin, args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
@@ -138,7 +144,13 @@ async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin }) {
   const profileDir = await createBrowserProfileDir();
   const url = `${baseUrl}/?test=1&smoke=${encodeURIComponent(smoke)}&t=${Date.now()}`;
   try {
-    const result = await runBrowser({ browserBin, profileDir, url, timeoutMs });
+    const result = await runBrowser({
+      browserBin,
+      profileDir,
+      url,
+      timeoutMs,
+      viewport: SMOKE_VIEWPORTS[smoke] || null
+    });
     const { status, detail } = smokeStatusFromDom(result.stdout);
     if (result.code !== 0) {
       throw new Error(`${smoke} browser exited with ${result.code}: ${result.stderr.trim()}`);

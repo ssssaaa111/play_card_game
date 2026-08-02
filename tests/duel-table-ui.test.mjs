@@ -198,6 +198,17 @@ test("desktop hand actions use a tactical command dock without covering the fiel
   assert.match(controller, /attentionObserver\.observe\(choiceActions/);
 });
 
+test("desktop shell compacts passive chrome until a command needs attention", () => {
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.topbar\s*\{[\s\S]*grid-template-columns: minmax\(190px, 240px\) minmax\(320px, 1fr\) auto auto;/);
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.phase\s*\{[\s\S]*grid-template-areas:[\s\S]*"phase turn timer"[\s\S]*"rail rail rail"/);
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.hand-panel\[data-command-active="false"\]\s*\{[\s\S]*grid-template-columns: 90px minmax\(0, 1fr\) 112px;/);
+  assert.match(css, /\.hand-command\[data-active="false"\] \.hand-command-idle > span,[\s\S]*\.hand-command\[data-active="false"\] \.hand-command-flow\s*\{[\s\S]*display: none;/);
+  assert.match(controller, /handPanel\.dataset\.commandActive = String\(commandActive\)/);
+});
+
 test("battle chronicle uses full-height summaries filters and structured event nodes", () => {
   const html = read("index.html");
   const css = read("duel-table.css");

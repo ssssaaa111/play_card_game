@@ -2642,6 +2642,60 @@ async function runSummonTrapResponseSmoke(ctx) {
   setSmokeStatus("passed", "summon-trap-response");
 }
 
+async function runDuelLayoutDensityBasicSmoke(ctx) {
+  setSmokeStatus("running", "duel-layout-density-basic");
+  await startSmokeDuel(ctx, "trioDirectTrapPlanning");
+
+  const topbar = document.querySelector(".topbar");
+  const brand = document.querySelector(".brand");
+  const arena = document.querySelector(".arena.duel-table");
+  const handPanel = document.querySelector(".hand-panel");
+  const handCommand = document.querySelector("#handCommand");
+  if (!topbar || !brand || !arena || !handPanel || !handCommand) {
+    throw new Error("duel-layout-density-basic: required desktop regions are missing");
+  }
+  if (window.innerWidth <= 1040) {
+    throw new Error(`duel-layout-density-basic: expected desktop viewport, received ${window.innerWidth}x${window.innerHeight}`);
+  }
+
+  await waitForSmoke(
+    () => handPanel.dataset.commandActive === "false",
+    "duel-layout-density-basic: passive command state"
+  );
+
+  const topbarRect = topbar.getBoundingClientRect();
+  const brandRect = brand.getBoundingClientRect();
+  const arenaRect = arena.getBoundingClientRect();
+  const handPanelRect = handPanel.getBoundingClientRect();
+  const passiveCommandRect = handCommand.getBoundingClientRect();
+  if (topbarRect.height > window.innerHeight * 0.12) {
+    throw new Error(`duel-layout-density-basic: topbar is too tall (${topbarRect.height}/${window.innerHeight})`);
+  }
+  if (brandRect.width > topbarRect.width * 0.22) {
+    throw new Error(`duel-layout-density-basic: brand column is too wide (${brandRect.width}/${topbarRect.width})`);
+  }
+  if (arenaRect.height < window.innerHeight * 0.55) {
+    throw new Error(`duel-layout-density-basic: battlefield is too short (${arenaRect.height}/${window.innerHeight})`);
+  }
+  if (passiveCommandRect.width > handPanelRect.width * 0.12) {
+    throw new Error(`duel-layout-density-basic: passive command dock is too wide (${passiveCommandRect.width}/${handPanelRect.width})`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "star-breach"), "duel-layout-density-basic: select direct-attack spell");
+  await waitForSmoke(
+    () => handPanel.dataset.commandActive === "true" &&
+      !ctx.els.choiceActions.hidden &&
+      handCommand.getBoundingClientRect().width >= handPanelRect.width * 0.2,
+    "duel-layout-density-basic: active command dock expands"
+  );
+
+  const activeCommandRect = handCommand.getBoundingClientRect();
+  if (activeCommandRect.right > window.innerWidth || activeCommandRect.bottom > window.innerHeight) {
+    throw new Error("duel-layout-density-basic: active command dock leaves the viewport");
+  }
+  setSmokeStatus("passed", "duel-layout-density-basic");
+}
+
 async function runFiveZoneLayoutSmoke(ctx) {
   setSmokeStatus("running", "five-zone-layout");
   await startSmokeDuel(ctx, "expansionParry");
@@ -6689,6 +6743,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "graveyard-summon-basic": runGraveyardSummonBasicSmoke,
     "grave-target-readability-basic": runGraveTargetReadabilityBasicSmoke,
     "mechanics-regression-basic": runMechanicsRegressionBasicSmoke,
+    "duel-layout-density-basic": runDuelLayoutDensityBasicSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,

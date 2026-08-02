@@ -130,6 +130,7 @@ export function createDuelTableController(documentRef = document) {
       handPanel.dataset.readyCount = String(readyCount);
       handPanel.dataset.hasSelection = String(Boolean(selectedCard));
       handPanel.dataset.attention = selection;
+      handPanel.dataset.commandActive = String(commandActive);
     }
     if (handReadyCount) handReadyCount.textContent = String(readyCount);
     if (handReadyLabel) {
