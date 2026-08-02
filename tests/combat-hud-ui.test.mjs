@@ -69,12 +69,17 @@ test("desktop field monsters preserve a bounded card ratio", () => {
   assert.match(css, /\.field-monster-card \.stats\s*\{[\s\S]*overflow: hidden;/);
 });
 
-test("defense mode keeps field cards upright so battle stats remain readable", () => {
+test("defense mode rotates only the field card face while battle stats stay upright", () => {
+  const fieldRenderer = read("src/field-renderer.js");
   const css = read("styles.css");
 
-  assert.match(css, /\.card\.defense:not\(\.field-monster-card\)\s*\{[\s\S]*rotate\(90deg\)/);
-  assert.match(css, /\.field-monster-card\.defense\s*\{[\s\S]*transform: none;[\s\S]*border-color: rgba\(116, 174, 232, 0\.78\)/);
-  assert.match(css, /\.field-monster-card\.defense:hover\s*\{[\s\S]*transform: translateY\(-2px\)/);
+  assert.match(fieldRenderer, /faceEl\.className = "field-card-face"/);
+  assert.match(fieldRenderer, /if \(child !== statsEl\) faceEl\.appendChild\(child\)/);
+  assert.match(css, /\.card\.defense\s*\{[\s\S]*rotate\(90deg\)/);
+  assert.match(css, /\.card\.field-monster-card\.defense\s*\{[\s\S]*transform: none;[\s\S]*background: transparent;/);
+  assert.match(css, /\.field-monster-card\.defense \.field-card-face\s*\{[\s\S]*rotate\(90deg\)/);
+  assert.match(css, /\.field-monster-card\.defense > \.stats\s*\{[\s\S]*z-index: 7;[\s\S]*transform: none;/);
+  assert.match(css, /\.card\.field-monster-card\.defense:hover\s*\{[\s\S]*transform: translateY\(-2px\)/);
 });
 
 test("short desktop status columns keep the player life panel on screen", () => {
