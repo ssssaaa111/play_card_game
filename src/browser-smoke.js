@@ -2715,6 +2715,10 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
     "duel-layout-density-basic: field action dock expands"
   );
 
+  if (ctx.els.toast.classList.contains("show") || ctx.els.toast.textContent.trim()) {
+    throw new Error(`duel-layout-density-basic: stale feedback survived the new field selection (${ctx.els.toast.textContent.trim()})`);
+  }
+
   const fieldActionRect = ctx.els.fieldActionBar.getBoundingClientRect();
   if (fieldActionRect.width < 240 || ctx.els.fieldActionBar.scrollWidth > Math.ceil(fieldActionRect.width)) {
     throw new Error(`duel-layout-density-basic: field actions are clipped (${fieldActionRect.width}/${ctx.els.fieldActionBar.scrollWidth})`);

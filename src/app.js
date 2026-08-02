@@ -981,6 +981,7 @@ function cancelAutoEnd() {
 
 function notePlayerIntent() {
   if (!canPlayerAct()) return;
+  clearAnnouncement();
   cancelAutoEnd();
   clearPlayerIdleTimers();
 }
@@ -4450,6 +4451,11 @@ function announce(text) {
   els.toast.classList.remove("show");
   void els.toast.offsetWidth;
   els.toast.classList.add("show");
+}
+
+function clearAnnouncement() {
+  els.toast.classList.remove("show");
+  els.toast.textContent = "";
 }
 
 function sleep(ms) {

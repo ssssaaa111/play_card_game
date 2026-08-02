@@ -316,6 +316,13 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(viewModel, /点击确认发动，或取消选择。/);
 });
 
+test("new player intent clears stale transient feedback", () => {
+  const app = readProjectFile("src/app.js");
+
+  assert.match(app, /function clearAnnouncement\(\)\s*\{[\s\S]*els\.toast\.classList\.remove\("show"\);[\s\S]*els\.toast\.textContent = "";/);
+  assert.match(app, /function notePlayerIntent\(\)\s*\{[\s\S]*clearAnnouncement\(\);[\s\S]*cancelAutoEnd\(\)/);
+});
+
 test("passive selections restart the player idle countdown", () => {
   const app = readProjectFile("src/app.js");
 
