@@ -1981,6 +1981,25 @@ body[data-duel-selection="playerField"] .hand-command-idle {
     margin-top: 0;
   }
 
+  .hand-command[data-active="true"] .field-action-bar {
+    grid-template-rows: minmax(26px, auto) repeat(2, minmax(38px, 1fr));
+    gap: 4px;
+  }
+
+  .hand-command[data-active="true"] .field-action-context {
+    gap: 0;
+    padding: 0 3px 3px;
+  }
+
+  .hand-command[data-active="true"] .field-action-context small {
+    display: none;
+  }
+
+  .hand-command[data-active="true"] .field-action-btn {
+    min-height: 38px;
+    padding: 4px 8px;
+  }
+
   .hand-panel[data-command-active="false"] {
     grid-template-columns: 90px minmax(0, 1fr) 112px;
   }

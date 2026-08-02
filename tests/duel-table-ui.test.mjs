@@ -10,7 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260803-action-readability"/);
+  assert.match(html, /href="duel-table\.css\?v=20260803-field-dock-fit"/);
   assert.match(html, /src="src\/app\.js\?v=20260803-action-readability"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
@@ -223,8 +223,12 @@ test("desktop shell compacts passive chrome until a command needs attention", ()
 });
 
 test("desktop field actions expand the tactical command dock", () => {
+  const css = read("duel-table.css");
   const controller = read("src/duel-table.js");
 
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.hand-command\[data-active="true"\] \.field-action-bar\s*\{[\s\S]*grid-template-rows: minmax\(26px, auto\) repeat\(2, minmax\(38px, 1fr\)\);[\s\S]*gap: 4px;/);
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.hand-command\[data-active="true"\] \.field-action-context small\s*\{[\s\S]*display: none;/);
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.hand-command\[data-active="true"\] \.field-action-btn\s*\{[\s\S]*min-height: 38px;/);
   assert.match(controller, /const fieldActionBar = documentRef\.querySelector\("#fieldActionBar"\)/);
   assert.match(controller, /const fieldActionActive = Boolean\(fieldActionBar && !fieldActionBar\.hidden\)/);
   assert.match(controller, /const commandActive = choiceActive \|\| fieldActionActive/);

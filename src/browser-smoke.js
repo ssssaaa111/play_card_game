@@ -2736,6 +2736,16 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
   if (fieldActionRect.width < 240 || ctx.els.fieldActionBar.scrollWidth > Math.ceil(fieldActionRect.width)) {
     throw new Error(`duel-layout-density-basic: field actions are clipped (${fieldActionRect.width}/${ctx.els.fieldActionBar.scrollWidth})`);
   }
+  if (ctx.els.fieldActionBar.scrollHeight > Math.ceil(fieldActionRect.height) + 1) {
+    throw new Error(`duel-layout-density-basic: field actions overflow vertically (${fieldActionRect.height}/${ctx.els.fieldActionBar.scrollHeight})`);
+  }
+  const fieldActionBottom = Math.max(
+    ...[ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldDetailBtn, ctx.els.fieldCancelBtn]
+      .map((button) => button.getBoundingClientRect().bottom)
+  );
+  if (fieldActionBottom > handPanel.getBoundingClientRect().bottom + 1) {
+    throw new Error(`duel-layout-density-basic: field action buttons leave the hand panel (${fieldActionBottom}/${handPanel.getBoundingClientRect().bottom})`);
+  }
 
   clickSmokeElement(ctx.els.fieldCancelBtn, "duel-layout-density-basic: cancel field command");
   await waitForSmoke(
