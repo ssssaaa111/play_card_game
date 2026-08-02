@@ -2725,6 +2725,12 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
   if (ctx.els.toast.classList.contains("show") || ctx.els.toast.textContent.trim()) {
     throw new Error(`duel-layout-density-basic: stale feedback survived the new field selection (${ctx.els.toast.textContent.trim()})`);
   }
+  if (ctx.els.duelHint.dataset.kind !== "action") {
+    throw new Error(`duel-layout-density-basic: field selection hint is not classified as an action (${ctx.els.duelHint.dataset.kind || "unset"})`);
+  }
+  if (ctx.els.duelHint.scrollWidth > Math.ceil(ctx.els.duelHint.clientWidth) + 1) {
+    throw new Error(`duel-layout-density-basic: field action hint is clipped (${ctx.els.duelHint.clientWidth}/${ctx.els.duelHint.scrollWidth})`);
+  }
 
   const fieldActionRect = ctx.els.fieldActionBar.getBoundingClientRect();
   if (fieldActionRect.width < 240 || ctx.els.fieldActionBar.scrollWidth > Math.ceil(fieldActionRect.width)) {

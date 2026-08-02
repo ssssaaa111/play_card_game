@@ -56,7 +56,7 @@ export function duelHintView(options = {}) {
   return {
     text,
     kind,
-    title: kind === "objective" ? text : ""
+    title: ["objective", "action"].includes(kind) ? text : ""
   };
 }
 

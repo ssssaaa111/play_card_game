@@ -367,7 +367,8 @@ body[data-duel-phase="end"] .phase-rail {
   box-shadow: 0 0 30px rgba(84, 210, 210, 0.09);
 }
 
-#app .duel-table #duelHint[data-kind="objective"] {
+#app .duel-table #duelHint[data-kind="objective"],
+#app .duel-table #duelHint[data-kind="action"] {
   max-width: min(760px, calc(100vw - 48px));
 }
 
@@ -2080,7 +2081,8 @@ body[data-duel-selection="playerField"] .hand-command-idle {
       minmax(86px, 1fr);
   }
 
-  #app .duel-table #duelHint[data-kind="objective"] {
+  #app .duel-table #duelHint[data-kind="objective"],
+  #app .duel-table #duelHint[data-kind="action"] {
     max-width: min(680px, calc(100vw - 32px));
     display: -webkit-box;
     overflow: hidden;
@@ -2091,7 +2093,8 @@ body[data-duel-selection="playerField"] .hand-command-idle {
     -webkit-line-clamp: 2;
   }
 
-  #app .duel-table #duelHint[data-kind="objective"]::before {
+  #app .duel-table #duelHint[data-kind="objective"]::before,
+  #app .duel-table #duelHint[data-kind="action"]::before {
     display: none;
   }
 
@@ -3112,7 +3115,8 @@ body[data-duel-selection="playerField"] .hand-command-idle {
       minmax(54px, 1fr);
   }
 
-  #app .duel-table #duelHint[data-kind="objective"] {
+  #app .duel-table #duelHint[data-kind="objective"],
+  #app .duel-table #duelHint[data-kind="action"] {
     font-size: 8px;
     line-height: 1.05;
   }

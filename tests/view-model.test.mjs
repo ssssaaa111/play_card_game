@@ -67,7 +67,7 @@ test("classifies persistent scenario goals separately from immediate duel action
   assert.equal(objective.kind, "objective");
   assert.equal(objective.title, objective.text);
   assert.equal(action.kind, "action");
-  assert.equal(action.title, "");
+  assert.equal(action.title, action.text);
 });
 
 test("describes hand actions for common cards", () => {
