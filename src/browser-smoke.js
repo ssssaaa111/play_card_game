@@ -2682,10 +2682,17 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
   }
 
   clickSmokeElement(handCard(ctx.els, "star-breach"), "duel-layout-density-basic: select direct-attack spell");
+  try {
+    await waitForSmoke(
+      () => handPanel.dataset.commandActive === "true" &&
+        !ctx.els.choiceActions.hidden,
+      "duel-layout-density-basic: hand command becomes active"
+    );
+  } catch (error) {
+    throw new Error(`${error.message}; commandActive=${handPanel.dataset.commandActive}; choiceHidden=${ctx.els.choiceActions.hidden}; selected=${ctx.state.selected?.id || "none"}`);
+  }
   await waitForSmoke(
-    () => handPanel.dataset.commandActive === "true" &&
-      !ctx.els.choiceActions.hidden &&
-      handCommand.getBoundingClientRect().width >= handPanelRect.width * 0.2,
+    () => handCommand.getBoundingClientRect().width >= handPanelRect.width * 0.2,
     "duel-layout-density-basic: active command dock expands"
   );
 
@@ -2693,6 +2700,31 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
   if (activeCommandRect.right > window.innerWidth || activeCommandRect.bottom > window.innerHeight) {
     throw new Error("duel-layout-density-basic: active command dock leaves the viewport");
   }
+
+  clickSmokeElement(ctx.els.choiceCancelBtn, "duel-layout-density-basic: cancel hand command");
+  await waitForSmoke(
+    () => handPanel.dataset.commandActive === "false" && ctx.els.choiceActions.hidden,
+    "duel-layout-density-basic: hand command returns to passive width"
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "duel-layout-density-basic: select field monster");
+  await waitForSmoke(
+    () => handPanel.dataset.commandActive === "true" &&
+      !ctx.els.fieldActionBar.hidden &&
+      handCommand.getBoundingClientRect().width >= handPanelRect.width * 0.2,
+    "duel-layout-density-basic: field action dock expands"
+  );
+
+  const fieldActionRect = ctx.els.fieldActionBar.getBoundingClientRect();
+  if (fieldActionRect.width < 240 || ctx.els.fieldActionBar.scrollWidth > Math.ceil(fieldActionRect.width)) {
+    throw new Error(`duel-layout-density-basic: field actions are clipped (${fieldActionRect.width}/${ctx.els.fieldActionBar.scrollWidth})`);
+  }
+
+  clickSmokeElement(ctx.els.fieldCancelBtn, "duel-layout-density-basic: cancel field command");
+  await waitForSmoke(
+    () => handPanel.dataset.commandActive === "false" && ctx.els.fieldActionBar.hidden,
+    "duel-layout-density-basic: field action dock returns to passive width"
+  );
   setSmokeStatus("passed", "duel-layout-density-basic");
 }
 

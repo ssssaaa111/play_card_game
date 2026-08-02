@@ -209,6 +209,16 @@ test("desktop shell compacts passive chrome until a command needs attention", ()
   assert.match(controller, /handPanel\.dataset\.commandActive = String\(commandActive\)/);
 });
 
+test("desktop field actions expand the tactical command dock", () => {
+  const controller = read("src/duel-table.js");
+
+  assert.match(controller, /const fieldActionBar = documentRef\.querySelector\("#fieldActionBar"\)/);
+  assert.match(controller, /const fieldActionActive = Boolean\(fieldActionBar && !fieldActionBar\.hidden\)/);
+  assert.match(controller, /const commandActive = choiceActive \|\| fieldActionActive/);
+  assert.match(controller, /const attentionObserver = new MutationObserver\(syncCombatAttention\)/);
+  assert.match(controller, /attentionObserver\.observe\(fieldActionBar,[\s\S]*attributeFilter: \["class", "hidden"\]/);
+});
+
 test("battle chronicle uses full-height summaries filters and structured event nodes", () => {
   const html = read("index.html");
   const css = read("duel-table.css");

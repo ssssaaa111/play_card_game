@@ -1976,10 +1976,6 @@ body[data-duel-selection="playerField"] .hand-command-idle {
     margin-top: 0;
   }
 
-  .hand-panel {
-    transition: grid-template-columns 160ms ease;
-  }
-
   .hand-panel[data-command-active="false"] {
     grid-template-columns: 90px minmax(0, 1fr) 112px;
   }
