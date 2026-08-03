@@ -7,7 +7,8 @@ import { spawn } from "node:child_process";
 const DEFAULT_BASE_URL = "http://127.0.0.1:5177";
 const DEFAULT_VIRTUAL_TIME_BUDGET_MS = 60000;
 const SMOKE_VIEWPORTS = {
-  "duel-layout-density-basic": { width: 1280, height: 720 }
+  "duel-layout-density-basic": { width: 1280, height: 720 },
+  "mobile-hand-choice-fit-basic": { width: 390, height: 844 }
 };
 const DEFAULT_SMOKES = [
   "game-over-event",

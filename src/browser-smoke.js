@@ -2755,6 +2755,47 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
   setSmokeStatus("passed", "duel-layout-density-basic");
 }
 
+async function runMobileHandChoiceFitBasicSmoke(ctx) {
+  setSmokeStatus("running", "mobile-hand-choice-fit-basic");
+  await startSmokeDuel(ctx, "trioChainLifecycle");
+
+  if (window.innerWidth > 720) {
+    throw new Error(`mobile-hand-choice-fit-basic: expected phone viewport, received ${window.innerWidth}x${window.innerHeight}`);
+  }
+
+  const hand = ctx.els.hand;
+  const handPanel = document.querySelector(".hand-panel");
+  const selectedCard = handCard(ctx.els, "guard-sigil");
+  if (!hand || !handPanel || !selectedCard) {
+    throw new Error("mobile-hand-choice-fit-basic: required hand regions are missing");
+  }
+
+  clickSmokeElement(selectedCard, "mobile-hand-choice-fit-basic: select guard sigil");
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "hand" && !ctx.els.choiceActions.hidden,
+    "mobile-hand-choice-fit-basic: hand choice opens"
+  );
+
+  const selectedCardRect = selectedCard.getBoundingClientRect();
+  const handRect = hand.getBoundingClientRect();
+  if (selectedCard.scrollHeight > Math.ceil(selectedCard.clientHeight) + 1) {
+    throw new Error(`mobile-hand-choice-fit-basic: selected card content is clipped (${selectedCard.clientHeight}/${selectedCard.scrollHeight})`);
+  }
+  if (hand.scrollHeight > Math.ceil(hand.clientHeight) + 1) {
+    throw new Error(`mobile-hand-choice-fit-basic: selected hand needs hidden vertical scrolling (${hand.clientHeight}/${hand.scrollHeight})`);
+  }
+  if (selectedCardRect.bottom > handRect.bottom + 1 || selectedCardRect.bottom > handPanel.getBoundingClientRect().bottom + 1) {
+    throw new Error(`mobile-hand-choice-fit-basic: selected card leaves its hand region (${selectedCardRect.bottom}/${handRect.bottom})`);
+  }
+
+  clickSmokeElement(ctx.els.choiceCancelBtn, "mobile-hand-choice-fit-basic: cancel hand choice");
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "none" && ctx.els.choiceActions.hidden,
+    "mobile-hand-choice-fit-basic: hand choice closes"
+  );
+  setSmokeStatus("passed", "mobile-hand-choice-fit-basic");
+}
+
 async function runFiveZoneLayoutSmoke(ctx) {
   setSmokeStatus("running", "five-zone-layout");
   await startSmokeDuel(ctx, "expansionParry");
@@ -6803,6 +6844,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "grave-target-readability-basic": runGraveTargetReadabilityBasicSmoke,
     "mechanics-regression-basic": runMechanicsRegressionBasicSmoke,
     "duel-layout-density-basic": runDuelLayoutDensityBasicSmoke,
+    "mobile-hand-choice-fit-basic": runMobileHandChoiceFitBasicSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,

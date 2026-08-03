@@ -2908,6 +2908,47 @@ body[data-duel-selection="playerField"] .hand-command-idle {
     flex-basis: clamp(142px, 43vw, 166px);
   }
 
+  body[data-duel-selection="hand"] .hand .card,
+  body[data-duel-selection="target"] .hand .card {
+    grid-template-rows: auto minmax(25px, 1fr) 28px 20px 18px;
+    gap: 3px;
+    padding: 6px;
+  }
+
+  body[data-duel-selection="hand"] .hand .card .card-head,
+  body[data-duel-selection="target"] .hand .card .card-head {
+    min-height: 22px;
+    align-items: center;
+  }
+
+  body[data-duel-selection="hand"] .hand .card .art,
+  body[data-duel-selection="target"] .hand .card .art {
+    min-height: 25px;
+  }
+
+  body[data-duel-selection="hand"] .hand .card .card-text.hand-summary,
+  body[data-duel-selection="target"] .hand .card .card-text.hand-summary {
+    min-height: 28px;
+    padding: 2px 4px;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  body[data-duel-selection="hand"] .hand .card .stats,
+  body[data-duel-selection="target"] .hand .card .stats,
+  body[data-duel-selection="hand"] .hand .card .stat,
+  body[data-duel-selection="target"] .hand .card .stat {
+    min-height: 20px;
+    height: 20px;
+  }
+
+  body[data-duel-selection="hand"] .hand .card .action-reason,
+  body[data-duel-selection="target"] .hand .card .action-reason {
+    height: 18px;
+    min-height: 18px;
+    padding-block: 2px;
+  }
+
   body[data-duel-selection="hand"] .hand-panel,
   body[data-duel-selection="target"] .hand-panel {
     grid-template-rows: 96px minmax(0, 1fr);
