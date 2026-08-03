@@ -367,6 +367,11 @@ body[data-duel-phase="end"] .phase-rail {
   box-shadow: 0 0 30px rgba(84, 210, 210, 0.09);
 }
 
+#app .duel-table #duelHint[data-kind="objective"],
+#app .duel-table #duelHint[data-kind="action"] {
+  max-width: min(760px, calc(100vw - 48px));
+}
+
 #app .duel-table #duelHint::before {
   content: "";
   width: 7px;
@@ -1919,6 +1924,129 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   display: none;
 }
 
+@media (min-width: 1041px) {
+  #app {
+    grid-template-rows: auto minmax(0, 1fr) clamp(184px, 24dvh, 214px);
+  }
+
+  .topbar {
+    grid-template-columns: minmax(190px, 240px) minmax(320px, 1fr) auto auto;
+    min-height: 60px;
+    padding-block: 6px;
+  }
+
+  .brand {
+    max-width: 240px;
+  }
+
+  .brand .subtitle {
+    display: none;
+  }
+
+  .phase {
+    width: min(100%, 460px);
+    min-width: 320px;
+    min-height: 48px;
+    justify-self: center;
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "phase turn timer"
+      "rail rail rail";
+    align-items: center;
+    justify-items: start;
+    gap: 3px 10px;
+    padding: 5px 12px;
+  }
+
+  .phase > strong {
+    grid-area: phase;
+  }
+
+  .phase > #turnText {
+    grid-area: turn;
+    white-space: nowrap;
+  }
+
+  .phase > #timerText {
+    grid-area: timer;
+    justify-self: end;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .phase > .phase-rail {
+    grid-area: rail;
+    margin-top: 0;
+  }
+
+  .hand-command[data-active="true"] .field-action-bar {
+    grid-template-rows: minmax(26px, auto) repeat(2, minmax(38px, 1fr));
+    gap: 4px;
+  }
+
+  .hand-command[data-active="true"] .field-action-context {
+    gap: 0;
+    padding: 0 3px 3px;
+  }
+
+  .hand-command[data-active="true"] .field-action-context small {
+    display: none;
+  }
+
+  .hand-command[data-active="true"] .field-action-btn {
+    min-height: 38px;
+    padding: 4px 8px;
+  }
+
+  .hand-panel[data-command-active="false"] {
+    grid-template-columns: 90px minmax(0, 1fr) 112px;
+  }
+
+  .hand-command[data-active="false"] {
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .hand-command[data-active="false"] .hand-command-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .hand-command[data-active="false"] .hand-command-head > span:first-child {
+    font-size: 7px;
+    letter-spacing: 0.1em;
+  }
+
+  .hand-command[data-active="false"] .hand-command-signal {
+    width: 100%;
+  }
+
+  .hand-command[data-active="false"] .hand-command-idle {
+    display: flex;
+    align-items: center;
+    padding: 0;
+  }
+
+  .hand-command[data-active="false"] .hand-command-idle > strong {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .hand-command[data-active="false"] .hand-command-idle > span,
+  .hand-command[data-active="false"] .hand-command-flow {
+    display: none;
+  }
+}
+
 @media (max-width: 900px) {
   .setup-modal .modal-header {
     grid-template-columns: minmax(0, 1fr) minmax(240px, 0.75fr);
@@ -1970,6 +2098,23 @@ body[data-duel-selection="playerField"] .hand-command-idle {
       24px
       var(--support-track-size)
       minmax(86px, 1fr);
+  }
+
+  #app .duel-table #duelHint[data-kind="objective"],
+  #app .duel-table #duelHint[data-kind="action"] {
+    max-width: min(680px, calc(100vw - 32px));
+    display: -webkit-box;
+    overflow: hidden;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  #app .duel-table #duelHint[data-kind="objective"]::before,
+  #app .duel-table #duelHint[data-kind="action"]::before {
+    display: none;
   }
 
   #app .duel-table .side.duel-hud {
@@ -2987,6 +3132,12 @@ body[data-duel-selection="playerField"] .hand-command-idle {
       18px
       var(--support-track-size)
       minmax(54px, 1fr);
+  }
+
+  #app .duel-table #duelHint[data-kind="objective"],
+  #app .duel-table #duelHint[data-kind="action"] {
+    font-size: 8px;
+    line-height: 1.05;
   }
 
   #app .duel-table .side.duel-hud {

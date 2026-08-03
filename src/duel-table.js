@@ -33,6 +33,7 @@ export function createDuelTableController(documentRef = document) {
   const handCommandHint = documentRef.querySelector("#handCommandHint");
   const handCommandSignal = documentRef.querySelector("#handCommandSignal");
   const choiceActions = documentRef.querySelector("#choiceActions");
+  const fieldActionBar = documentRef.querySelector("#fieldActionBar");
   const phaseSteps = [...documentRef.querySelectorAll("[data-phase-step]")];
   const roleSelect = documentRef.querySelector("#roleSelect");
   const deckSelect = documentRef.querySelector("#deckSelect");
@@ -116,7 +117,9 @@ export function createDuelTableController(documentRef = document) {
     const readyCount = hand?.querySelectorAll(".card.action-ready:not(.action-blocked)").length || 0;
     const selectedCard = hand?.querySelector(".card.selected");
     const selectedName = selectedCard?.dataset.cardName || "";
-    const commandActive = Boolean(choiceActions && !choiceActions.hidden);
+    const choiceActive = Boolean(choiceActions && !choiceActions.hidden);
+    const fieldActionActive = Boolean(fieldActionBar && !fieldActionBar.hidden);
+    const commandActive = choiceActive || fieldActionActive;
     const locating = ["target", "fusion", "tribute"].includes(selection);
 
     for (const step of phaseSteps) {
@@ -130,6 +133,7 @@ export function createDuelTableController(documentRef = document) {
       handPanel.dataset.readyCount = String(readyCount);
       handPanel.dataset.hasSelection = String(Boolean(selectedCard));
       handPanel.dataset.attention = selection;
+      handPanel.dataset.commandActive = String(commandActive);
     }
     if (handReadyCount) handReadyCount.textContent = String(readyCount);
     if (handReadyLabel) {
@@ -296,7 +300,7 @@ export function createDuelTableController(documentRef = document) {
     });
   }
 
-  const attentionObserver = new MutationObserver(() => requestAnimationFrame(syncCombatAttention));
+  const attentionObserver = new MutationObserver(syncCombatAttention);
   if (hand) {
     attentionObserver.observe(hand, {
       attributes: true,
@@ -323,6 +327,12 @@ export function createDuelTableController(documentRef = document) {
       attributeFilter: ["class", "hidden"],
       childList: true,
       subtree: true
+    });
+  }
+  if (fieldActionBar) {
+    attentionObserver.observe(fieldActionBar, {
+      attributes: true,
+      attributeFilter: ["class", "hidden"]
     });
   }
 

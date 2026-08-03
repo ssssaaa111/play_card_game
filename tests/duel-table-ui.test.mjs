@@ -10,8 +10,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260802-interaction-recovery"/);
-  assert.match(html, /src="src\/app\.js\?v=20260802-attack-intent"/);
+  assert.match(html, /href="duel-table\.css\?v=20260803-field-dock-fit"/);
+  assert.match(html, /src="src\/app\.js\?v=20260803-action-readability"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -48,7 +48,8 @@ test("field selection exposes persistent target feedback and blank-area cancella
   const renderer = read("src/field-renderer.js");
 
   assert.match(html, /class="field" id="duelField"/);
-  assert.match(app, /selectionHint: currentMonsterSelectionHint\(\)/);
+  assert.match(app, /const selectionHint = currentMonsterSelectionHint\(\)/);
+  assert.match(app, /duelHintView\([\s\S]*selectionHint,/);
   assert.match(app, /document\.body\.dataset\.duelTargeting/);
   assert.match(app, /els\.duelField\?\.addEventListener\("click", handleDuelFieldBackgroundClick\)/);
   assert.match(css, /body\[data-duel-selection="playerField"\][\s\S]*#duelHint/);
@@ -196,6 +197,43 @@ test("desktop hand actions use a tactical command dock without covering the fiel
   assert.match(controller, /handCommand\.dataset\.active = String\(commandActive\)/);
   assert.match(controller, /handCommand\.dataset\.step = locating/);
   assert.match(controller, /attentionObserver\.observe\(choiceActions/);
+});
+
+test("battlefield objectives and action hints use a readable presentation", () => {
+  const css = read("duel-table.css");
+  const app = read("src/app.js");
+
+  assert.match(app, /const duelHint = duelHintView\(/);
+  assert.match(app, /els\.duelHint\.dataset\.kind = duelHint\.kind/);
+  assert.match(css, /#duelHint\[data-kind="objective"\][\s\S]*max-width: min\(760px, calc\(100vw - 48px\)\)/);
+  assert.match(css, /#duelHint\[data-kind="action"\][\s\S]*max-width: min\(760px, calc\(100vw - 48px\)\)/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*#duelHint\[data-kind="objective"\][\s\S]*-webkit-line-clamp: 2/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*#duelHint\[data-kind="action"\][\s\S]*-webkit-line-clamp: 2/);
+});
+
+test("desktop shell compacts passive chrome until a command needs attention", () => {
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.topbar\s*\{[\s\S]*grid-template-columns: minmax\(190px, 240px\) minmax\(320px, 1fr\) auto auto;/);
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.phase\s*\{[\s\S]*grid-template-areas:[\s\S]*"phase turn timer"[\s\S]*"rail rail rail"/);
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.hand-panel\[data-command-active="false"\]\s*\{[\s\S]*grid-template-columns: 90px minmax\(0, 1fr\) 112px;/);
+  assert.match(css, /\.hand-command\[data-active="false"\] \.hand-command-idle > span,[\s\S]*\.hand-command\[data-active="false"\] \.hand-command-flow\s*\{[\s\S]*display: none;/);
+  assert.match(controller, /handPanel\.dataset\.commandActive = String\(commandActive\)/);
+});
+
+test("desktop field actions expand the tactical command dock", () => {
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.hand-command\[data-active="true"\] \.field-action-bar\s*\{[\s\S]*grid-template-rows: minmax\(26px, auto\) repeat\(2, minmax\(38px, 1fr\)\);[\s\S]*gap: 4px;/);
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.hand-command\[data-active="true"\] \.field-action-context small\s*\{[\s\S]*display: none;/);
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*\.hand-command\[data-active="true"\] \.field-action-btn\s*\{[\s\S]*min-height: 38px;/);
+  assert.match(controller, /const fieldActionBar = documentRef\.querySelector\("#fieldActionBar"\)/);
+  assert.match(controller, /const fieldActionActive = Boolean\(fieldActionBar && !fieldActionBar\.hidden\)/);
+  assert.match(controller, /const commandActive = choiceActive \|\| fieldActionActive/);
+  assert.match(controller, /const attentionObserver = new MutationObserver\(syncCombatAttention\)/);
+  assert.match(controller, /attentionObserver\.observe\(fieldActionBar,[\s\S]*attributeFilter: \["class", "hidden"\]/);
 });
 
 test("battle chronicle uses full-height summaries filters and structured event nodes", () => {

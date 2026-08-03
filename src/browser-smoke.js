@@ -2642,6 +2642,119 @@ async function runSummonTrapResponseSmoke(ctx) {
   setSmokeStatus("passed", "summon-trap-response");
 }
 
+async function runDuelLayoutDensityBasicSmoke(ctx) {
+  setSmokeStatus("running", "duel-layout-density-basic");
+  await startSmokeDuel(ctx, "trioDirectTrapPlanning");
+
+  const topbar = document.querySelector(".topbar");
+  const brand = document.querySelector(".brand");
+  const arena = document.querySelector(".arena.duel-table");
+  const handPanel = document.querySelector(".hand-panel");
+  const handCommand = document.querySelector("#handCommand");
+  if (!topbar || !brand || !arena || !handPanel || !handCommand) {
+    throw new Error("duel-layout-density-basic: required desktop regions are missing");
+  }
+  if (window.innerWidth <= 1040) {
+    throw new Error(`duel-layout-density-basic: expected desktop viewport, received ${window.innerWidth}x${window.innerHeight}`);
+  }
+
+  await waitForSmoke(
+    () => handPanel.dataset.commandActive === "false",
+    "duel-layout-density-basic: passive command state"
+  );
+
+  if (ctx.els.duelHint.dataset.kind !== "objective") {
+    throw new Error(`duel-layout-density-basic: scenario goal is not classified as an objective (${ctx.els.duelHint.dataset.kind || "unset"})`);
+  }
+  if (ctx.els.duelHint.scrollWidth > Math.ceil(ctx.els.duelHint.clientWidth) + 1) {
+    throw new Error(`duel-layout-density-basic: scenario objective is clipped (${ctx.els.duelHint.clientWidth}/${ctx.els.duelHint.scrollWidth})`);
+  }
+
+  const topbarRect = topbar.getBoundingClientRect();
+  const brandRect = brand.getBoundingClientRect();
+  const arenaRect = arena.getBoundingClientRect();
+  const handPanelRect = handPanel.getBoundingClientRect();
+  const passiveCommandRect = handCommand.getBoundingClientRect();
+  if (topbarRect.height > window.innerHeight * 0.12) {
+    throw new Error(`duel-layout-density-basic: topbar is too tall (${topbarRect.height}/${window.innerHeight})`);
+  }
+  if (brandRect.width > topbarRect.width * 0.22) {
+    throw new Error(`duel-layout-density-basic: brand column is too wide (${brandRect.width}/${topbarRect.width})`);
+  }
+  if (arenaRect.height < window.innerHeight * 0.55) {
+    throw new Error(`duel-layout-density-basic: battlefield is too short (${arenaRect.height}/${window.innerHeight})`);
+  }
+  if (passiveCommandRect.width > handPanelRect.width * 0.12) {
+    throw new Error(`duel-layout-density-basic: passive command dock is too wide (${passiveCommandRect.width}/${handPanelRect.width})`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "star-breach"), "duel-layout-density-basic: select direct-attack spell");
+  try {
+    await waitForSmoke(
+      () => handPanel.dataset.commandActive === "true" &&
+        !ctx.els.choiceActions.hidden,
+      "duel-layout-density-basic: hand command becomes active"
+    );
+  } catch (error) {
+    throw new Error(`${error.message}; commandActive=${handPanel.dataset.commandActive}; choiceHidden=${ctx.els.choiceActions.hidden}; selected=${ctx.state.selected?.id || "none"}`);
+  }
+  await waitForSmoke(
+    () => handCommand.getBoundingClientRect().width >= handPanelRect.width * 0.2,
+    "duel-layout-density-basic: active command dock expands"
+  );
+
+  const activeCommandRect = handCommand.getBoundingClientRect();
+  if (activeCommandRect.right > window.innerWidth || activeCommandRect.bottom > window.innerHeight) {
+    throw new Error("duel-layout-density-basic: active command dock leaves the viewport");
+  }
+
+  clickSmokeElement(ctx.els.choiceCancelBtn, "duel-layout-density-basic: cancel hand command");
+  await waitForSmoke(
+    () => handPanel.dataset.commandActive === "false" && ctx.els.choiceActions.hidden,
+    "duel-layout-density-basic: hand command returns to passive width"
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "duel-layout-density-basic: select field monster");
+  await waitForSmoke(
+    () => handPanel.dataset.commandActive === "true" &&
+      !ctx.els.fieldActionBar.hidden &&
+      handCommand.getBoundingClientRect().width >= handPanelRect.width * 0.2,
+    "duel-layout-density-basic: field action dock expands"
+  );
+
+  if (ctx.els.toast.classList.contains("show") || ctx.els.toast.textContent.trim()) {
+    throw new Error(`duel-layout-density-basic: stale feedback survived the new field selection (${ctx.els.toast.textContent.trim()})`);
+  }
+  if (ctx.els.duelHint.dataset.kind !== "action") {
+    throw new Error(`duel-layout-density-basic: field selection hint is not classified as an action (${ctx.els.duelHint.dataset.kind || "unset"})`);
+  }
+  if (ctx.els.duelHint.scrollWidth > Math.ceil(ctx.els.duelHint.clientWidth) + 1) {
+    throw new Error(`duel-layout-density-basic: field action hint is clipped (${ctx.els.duelHint.clientWidth}/${ctx.els.duelHint.scrollWidth})`);
+  }
+
+  const fieldActionRect = ctx.els.fieldActionBar.getBoundingClientRect();
+  if (fieldActionRect.width < 240 || ctx.els.fieldActionBar.scrollWidth > Math.ceil(fieldActionRect.width)) {
+    throw new Error(`duel-layout-density-basic: field actions are clipped (${fieldActionRect.width}/${ctx.els.fieldActionBar.scrollWidth})`);
+  }
+  if (ctx.els.fieldActionBar.scrollHeight > Math.ceil(fieldActionRect.height) + 1) {
+    throw new Error(`duel-layout-density-basic: field actions overflow vertically (${fieldActionRect.height}/${ctx.els.fieldActionBar.scrollHeight})`);
+  }
+  const fieldActionBottom = Math.max(
+    ...[ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldDetailBtn, ctx.els.fieldCancelBtn]
+      .map((button) => button.getBoundingClientRect().bottom)
+  );
+  if (fieldActionBottom > handPanel.getBoundingClientRect().bottom + 1) {
+    throw new Error(`duel-layout-density-basic: field action buttons leave the hand panel (${fieldActionBottom}/${handPanel.getBoundingClientRect().bottom})`);
+  }
+
+  clickSmokeElement(ctx.els.fieldCancelBtn, "duel-layout-density-basic: cancel field command");
+  await waitForSmoke(
+    () => handPanel.dataset.commandActive === "false" && ctx.els.fieldActionBar.hidden,
+    "duel-layout-density-basic: field action dock returns to passive width"
+  );
+  setSmokeStatus("passed", "duel-layout-density-basic");
+}
+
 async function runFiveZoneLayoutSmoke(ctx) {
   setSmokeStatus("running", "five-zone-layout");
   await startSmokeDuel(ctx, "expansionParry");
@@ -6689,6 +6802,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "graveyard-summon-basic": runGraveyardSummonBasicSmoke,
     "grave-target-readability-basic": runGraveTargetReadabilityBasicSmoke,
     "mechanics-regression-basic": runMechanicsRegressionBasicSmoke,
+    "duel-layout-density-basic": runDuelLayoutDensityBasicSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,
