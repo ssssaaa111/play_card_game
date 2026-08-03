@@ -10,7 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260803-mobile-hand-fit"/);
+  assert.match(html, /href="duel-table\.css\?v=20260803-landscape-hand-fit"/);
   assert.match(html, /src="src\/app\.js\?v=20260803-action-readability"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
@@ -128,6 +128,15 @@ test("phone hand choices keep the selected card content in view", () => {
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*body\[data-duel-selection="hand"\] \.hand \.card,[\s\S]*body\[data-duel-selection="target"\] \.hand \.card\s*\{[\s\S]*grid-template-rows: auto minmax\(25px, 1fr\) 28px 20px 18px;[\s\S]*gap: 3px;[\s\S]*padding: 6px;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*body\[data-duel-selection="hand"\] \.hand \.card \.art,[\s\S]*body\[data-duel-selection="target"\] \.hand \.card \.art\s*\{[\s\S]*min-height: 25px;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*body\[data-duel-selection="hand"\] \.hand \.card \.action-reason,[\s\S]*body\[data-duel-selection="target"\] \.hand \.card \.action-reason\s*\{[\s\S]*height: 18px;[\s\S]*min-height: 18px;/);
+});
+
+test("short landscape hand choices keep card content inside the command column", () => {
+  const css = read("duel-table.css");
+
+  assert.match(css, /@media \(orientation: landscape\)[\s\S]*\.hand \.card\s*\{[\s\S]*flex: 0 0 150px;[\s\S]*grid-template-rows: auto minmax\(25px, 1fr\) 28px 20px 18px;[\s\S]*gap: 3px;[\s\S]*padding: 6px;/);
+  assert.match(css, /@media \(orientation: landscape\)[\s\S]*\.hand \.card\.compact-action-state\s*\{[\s\S]*grid-template-rows: auto minmax\(43px, 1fr\) 28px 20px;/);
+  assert.match(css, /@media \(orientation: landscape\)[\s\S]*\.hand \.card \.art\s*\{[\s\S]*min-height: 25px;/);
+  assert.match(css, /@media \(orientation: landscape\)[\s\S]*\.hand \.card \.action-reason\s*\{[\s\S]*height: 18px;[\s\S]*min-height: 18px;/);
 });
 
 test("compact target feedback avoids duplicate prompts and card-covering labels", () => {
