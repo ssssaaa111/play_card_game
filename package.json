@@ -9,7 +9,7 @@
   "scripts": {
     "serve": "node scripts/dev-server.mjs",
     "dev": "npm run serve",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests",
     "test:engine": "node --test tests/game-engine.test.mjs",
     "test:rules": "node --test tests/rules.test.mjs",
     "test:data": "node --test tests/data.test.mjs",
