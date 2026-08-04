@@ -58,7 +58,7 @@ npm test
 - `tests/view-model.test.mjs`：覆盖回合状态、中心提示和手牌行动标签文案。
 - `tests/smoke.test.mjs`：检查模块语法、页面关键挂点和已知兼容性问题。
 
-后续新增规则或卡牌时，先给规则/数据补测试，再跑 `npm test`；如果 Windows 权限拦截 npm 包装命令，可以直接跑 `node --test tests/*.test.mjs`。项目使用 `.node-version` 固定 Node 24 主版本，CI 会运行全量测试、确定性规则模拟和浏览器冒烟回归。
+后续新增规则或卡牌时，先给规则/数据补测试，再跑 `npm test`；如果 Windows 权限拦截 npm 包装命令，可以直接跑 `node --test`。项目使用 `.node-version` 固定 Node 24 主版本，CI 会运行全量测试、确定性规则模拟和浏览器冒烟回归。
 
 真实浏览器点击流程使用 `http://localhost:5177/?test=1` 作为回归入口，这个模式会跳过规则弹窗、默认关闭音效/语音，并显示全部规则测试场景和对手专用卡组。普通入口只展示面向玩家的自由决斗、战役、挑战场景和玩家卡组。
 
