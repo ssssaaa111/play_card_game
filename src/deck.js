@@ -1,6 +1,7 @@
 import { deckPresets, library } from './data.js';
 import { inferArchetype, inferRarity } from './cards.js';
 import { MAX_LP, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from './rules.js';
+import { resolveDeckDefinition } from './custom-decks.js';
 
 export function createDuelist(owner, comboPassive = null) {
   return {
@@ -65,18 +66,22 @@ export function shuffle(cards) {
   return copy;
 }
 
-export function buildDeck(preset = "balanced") {
-  const ids = deckPresets[preset]?.ids || deckPresets.balanced.ids;
+export function buildDeckFromDefinition(definition) {
+  const ids = definition?.ids || deckPresets.balanced.ids;
   return shuffle(ids
     .map((id) => cardById(id))
     .filter(Boolean)
     .map((card) => cloneCard(card)));
 }
 
-export function buildScenarioDeck(preset, reservedIds = []) {
+export function buildDeck(preset = "balanced", customDecks = []) {
+  return buildDeckFromDefinition(resolveDeckDefinition(preset, customDecks, deckPresets));
+}
+
+export function buildScenarioDeckFromDefinition(definition, reservedIds = []) {
   const reserved = new Map();
   reservedIds.forEach((id) => reserved.set(id, (reserved.get(id) || 0) + 1));
-  const ids = deckPresets[preset]?.ids || deckPresets.balanced.ids;
+  const ids = definition?.ids || deckPresets.balanced.ids;
   const deckIds = ids.filter((id) => {
     const count = reserved.get(id) || 0;
     if (count <= 0) return true;
@@ -87,6 +92,10 @@ export function buildScenarioDeck(preset, reservedIds = []) {
     .map((id) => cardById(id))
     .filter(Boolean)
     .map((card) => cloneCard(card)));
+}
+
+export function buildScenarioDeck(preset, reservedIds = [], customDecks = []) {
+  return buildScenarioDeckFromDefinition(resolveDeckDefinition(preset, customDecks, deckPresets), reservedIds);
 }
 
 export function loadCardList(ids = []) {

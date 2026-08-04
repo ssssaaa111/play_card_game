@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { characterProfiles, scenarioSetups } from "../src/data.js";
+import { characterProfiles, deckPresets, scenarioSetups } from "../src/data.js";
 import { cardDefinitionById, cardDetailViewModel } from "../src/card-detail.js";
 import { buildPreDuelPreview, compactPreviewCards, previewDeckIdsForScenario } from "../src/pre-duel-preview.js";
 
@@ -149,4 +149,32 @@ test("pre-duel preview does not edit card effects", () => {
 
   assert.equal(cardDefinitionById("dawn-edge").effect, before.effect);
   assert.equal(cardDefinitionById("dawn-edge").text, before.text);
+});
+
+test("pre-duel preview resolves a custom deck when selected", () => {
+  const customDecks = [
+    { id: "custom:preview", name: "预览卡组", ids: ["ember-drake", "ember-drake", "seer-call"] }
+  ];
+  const preview = buildPreDuelPreview({
+    scenarioId: "normal",
+    scenario: {},
+    playerPreset: "custom:preview",
+    customDecks
+  });
+  const deckIds = preview.deckCards.filter((entry) => entry.zone === "deck").map((entry) => entry.id);
+  assert.deepEqual(deckIds.sort(), ["ember-drake", "ember-drake", "seer-call"].sort());
+  assert.deepEqual(
+    previewDeckIdsForScenario({ scenario: {}, owner: "player", preset: "custom:preview", customDecks }).sort(),
+    ["ember-drake", "ember-drake", "seer-call"].sort()
+  );
+});
+
+test("pre-duel preview falls back to balanced for unknown custom ids", () => {
+  const preview = buildPreDuelPreview({
+    scenarioId: "normal",
+    scenario: {},
+    playerPreset: "custom:missing",
+    customDecks: []
+  });
+  assert.equal(preview.deckCards.filter((entry) => entry.zone === "deck").length, deckPresets.balanced.ids.length);
 });

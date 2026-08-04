@@ -13,10 +13,16 @@ export function aiSetupOptions(aiProfiles = {}) {
   return optionEntries(aiProfiles);
 }
 
-export function deckSetupOptions(deckPresets = {}, { testMode = false } = {}) {
-  return optionEntries(deckPresets).filter(({ id }) =>
+export function deckSetupOptions(deckPresets = {}, { testMode = false, customDecks = [] } = {}) {
+  const presetEntries = optionEntries(deckPresets).filter(({ id }) =>
     testMode || deckPresets[id]?.setupVisibility !== "internal"
   );
+  const customEntries = customDecks.map((deck) => ({
+    id: deck.id,
+    label: deck.name,
+    custom: true
+  }));
+  return [...presetEntries, ...customEntries];
 }
 
 export function scenarioSetupOptions(scenarioSetups = {}, { testMode = false } = {}) {

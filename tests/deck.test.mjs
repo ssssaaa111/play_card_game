@@ -105,3 +105,21 @@ test("shuffle returns a copy without mutating the input", () => {
   assert.notEqual(output, input);
   assert.deepEqual([...output].sort((a, b) => a - b), [1, 2, 3, 4]);
 });
+
+test("builds custom decks from a custom deck list", () => {
+  const customDecks = [
+    { id: "custom:mine", name: "我的卡组", ids: ["ember-drake", "ember-drake", "seer-call", "solar-knight"] }
+  ];
+  const deck = buildDeck("custom:mine", customDecks);
+  assert.deepEqual(deck.map((card) => card.id).sort(), ["ember-drake", "ember-drake", "seer-call", "solar-knight"].sort());
+  assert.ok(deck.every((card) => card.uid && card.mode === "attack"));
+  assert.equal(buildDeck("custom:missing", customDecks).length, deckPresets.balanced.ids.length);
+});
+
+test("builds scenario decks from custom deck lists without reserved cards", () => {
+  const customDecks = [
+    { id: "custom:scenario", name: "场景卡组", ids: ["ember-drake", "ember-drake", "seer-call"] }
+  ];
+  const deck = buildScenarioDeck("custom:scenario", ["ember-drake"], customDecks);
+  assert.deepEqual(deck.map((card) => card.id).sort(), ["ember-drake", "seer-call"].sort());
+});
