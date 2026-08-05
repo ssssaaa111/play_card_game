@@ -4512,6 +4512,69 @@ async function runFinaleAutopilotSmoke(ctx) {
   );
 }
 
+async function runHandSummonBlockProbeSmoke(ctx) {
+  const smokeName = "hand-summon-block-probe";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaFull");
+  if (!ctx.currentPlayerActions().summon) {
+    throw new Error(`${smokeName}: no summon available at start. ${smokeDebug(ctx)}`);
+  }
+  const monster = (ctx.state.player.hand || []).find((card) => card?.type === "monster");
+  if (!monster) {
+    throw new Error(`${smokeName}: no monster in opening hand. ${smokeDebug(ctx)}`);
+  }
+  const cardEl = handCard(ctx.els, monster.id);
+  const slot = emptyPlayerFieldSlotEl(ctx.els);
+  if (!cardEl || !slot) {
+    throw new Error(`${smokeName}: monster or slot element missing. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(cardEl, `${smokeName}: select monster`);
+  clickSmokeElement(slot, `${smokeName}: place monster`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((entry) => entry?.id === monster.id) && ctx.state.player.normalSummonsUsed >= 1,
+    `${smokeName}: monster summoned`,
+    8000
+  );
+  const readLeftovers = () => (ctx.state.player.hand || [])
+    .filter((card) => card?.type === "monster")
+    .map((card) => {
+      const el = handCard(ctx.els, card.id);
+      return {
+        id: card.id,
+        ready: Boolean(el?.classList.contains("action-ready")),
+        blocked: Boolean(el?.classList.contains("action-blocked")),
+        label: el?.querySelector(".action-tag")?.textContent || "",
+        reason: el?.title || ""
+      };
+    });
+  const immediate = readLeftovers();
+  const staleReady = immediate.filter((entry) => entry.ready);
+  if (staleReady.length > 0) {
+    throw new Error(`${smokeName}: hand still marks monsters summonable after summon used: ${JSON.stringify(immediate)}`);
+  }
+  for (let settle = 0; settle < 6; settle += 1) {
+    if (ctx.els.chainModal?.classList.contains("show")) {
+      const button = ctx.els.chainYes && !ctx.els.chainYes.disabled ? ctx.els.chainYes : ctx.els.chainNo;
+      if (button) clickSmokeElement(button, `${smokeName}: settle summon chain`);
+    }
+    await waitForSmoke(
+      () => !ctx.els.chainModal?.classList.contains("show") || ctx.state.gameOver,
+      `${smokeName}: summon chain settles`,
+      6000
+    );
+  }
+  const settled = readLeftovers();
+  setSmokeStatus(
+    "passed",
+    JSON.stringify({
+      normalSummonsUsed: ctx.state.player.normalSummonsUsed,
+      extraSummon: ctx.state.player.extraSummon,
+      immediate,
+      settled
+    })
+  );
+}
+
 async function runRedirectPromptSmoke(ctx) {
   setSmokeStatus("running", "redirect-prompt");
   await startSmokeDuel(ctx, "redirect");
@@ -7304,6 +7367,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke,
     "trio-omega-full-duel": runTrioOmegaFullDuelSmoke,
     "finale-autopilot": runFinaleAutopilotSmoke,
+    "hand-summon-block-probe": runHandSummonBlockProbeSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "spell-target-default-basic": runSpellTargetDefaultBasicSmoke,
