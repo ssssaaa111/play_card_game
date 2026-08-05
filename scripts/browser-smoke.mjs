@@ -69,6 +69,7 @@ function parseArgs(argv) {
   const smokes = [];
   let baseUrl = process.env.SMOKE_BASE_URL || DEFAULT_BASE_URL;
   let timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS) || 45000;
+  let seed = "";
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--base-url") {
@@ -77,11 +78,14 @@ function parseArgs(argv) {
     } else if (arg === "--timeout-ms") {
       timeoutMs = Number(argv[index + 1]) || timeoutMs;
       index += 1;
+    } else if (arg === "--seed") {
+      seed = argv[index + 1] || "";
+      index += 1;
     } else {
       smokes.push(arg);
     }
   }
-  return { baseUrl, timeoutMs, smokes: smokes.length ? smokes : DEFAULT_SMOKES };
+  return { baseUrl, timeoutMs, seed, smokes: smokes.length ? smokes : DEFAULT_SMOKES };
 }
 
 async function assertServerReachable(baseUrl) {
@@ -156,9 +160,9 @@ async function createBrowserProfileDir() {
   throw new Error(`Unable to create browser smoke profile directory. ${errors.join(" | ")}`);
 }
 
-async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin }) {
+async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin, seed = "" }) {
   const profileDir = await createBrowserProfileDir();
-  const url = `${baseUrl}/?test=1&smoke=${encodeURIComponent(smoke)}&t=${Date.now()}`;
+  const url = `${baseUrl}/?test=1&smoke=${encodeURIComponent(smoke)}${seed ? `&seed=${encodeURIComponent(seed)}` : ""}&t=${Date.now()}`;
   try {
     const result = await runBrowser({
       browserBin,
@@ -175,7 +179,7 @@ async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin }) {
       const diagnostic = result.stderr.trim() || result.stdout.slice(0, 500);
       throw new Error(`${smoke} ${status || "missing-status"} ${detail ? `(${detail})` : ""}\n${diagnostic}`);
     }
-    console.log(`${smoke} passed`);
+    console.log(`${smoke} passed ${detail ? `(${detail})` : ""}`);
   } finally {
     await rm(profileDir, { recursive: true, force: true });
   }
