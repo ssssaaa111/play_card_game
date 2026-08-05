@@ -10,7 +10,11 @@ const SMOKE_VIEWPORTS = {
   "duel-layout-density-basic": { width: 1280, height: 720 },
   "mobile-hand-choice-fit-basic": { width: 390, height: 844 },
   // Headless Chrome applies --window-size to the outer window on Windows; this yields an 844x390 content viewport.
-  "landscape-hand-choice-fit-basic": { width: 866, height: 488 }
+  "landscape-hand-choice-fit-basic": { width: 866, height: 488 },
+  "fusion-occlusion-desktop": { width: 1280, height: 720 },
+  "fusion-occlusion-tablet": { width: 768, height: 1024 },
+  "fusion-occlusion-landscape": { width: 1024, height: 600 },
+  "fusion-occlusion-mobile": { width: 390, height: 844 }
 };
 const DEFAULT_SMOKES = [
   "game-over-event",
@@ -22,6 +26,10 @@ const DEFAULT_SMOKES = [
   "equipment-spell",
   "effect-marker-stacking-basic",
   "support-target-readability-basic",
+  "fusion-occlusion-desktop",
+  "fusion-occlusion-tablet",
+  "fusion-occlusion-landscape",
+  "fusion-occlusion-mobile",
   "trio-omega-challenge",
   "trio-omega-autopilot-fails",
   "trio-omega-happy-clicker-fails",

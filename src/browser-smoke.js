@@ -1711,6 +1711,56 @@ async function runFusionReadabilityBasicSmoke(ctx) {
   setSmokeStatus("passed", "fusion-readability-basic");
 }
 
+async function runFusionOcclusionSmoke(ctx) {
+  setSmokeStatus("running", "fusion-occlusion");
+  await startSmokeDuel(ctx, "fusionMixedMaterials");
+  clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-occlusion: select fusion spell");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-occlusion: enter material selection");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.resultId === "flare-gale-archon" &&
+      ctx.els.choiceActions?.classList.contains("fusion-choice") &&
+      !ctx.els.fusionPreview?.hidden,
+    "fusion-occlusion: fusion selection opens"
+  );
+  const rectOf = (element) => {
+    const rect = element.getBoundingClientRect();
+    return [Math.round(rect.left), Math.round(rect.top), Math.round(rect.right), Math.round(rect.bottom)];
+  };
+  const overlaps = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+  const assertClear = (stage) => {
+    const panelRect = rectOf(ctx.els.choiceActions);
+    const fieldRect = rectOf(fieldCard(ctx.els, "player", "ember-drake"));
+    const handRect = rectOf(handCard(ctx.els, "gale-mage"));
+    const fieldCovered = overlaps(panelRect, fieldRect);
+    const handCovered = overlaps(panelRect, handRect);
+    if (fieldCovered || handCovered) {
+      throw new Error(
+        `fusion-occlusion: panel covers materials (${stage}) viewport=${window.innerWidth}x${window.innerHeight} panel=[${panelRect.join(",")}] field=[${fieldRect.join(",")}] hand=[${handRect.join(",")}]`
+      );
+    }
+  };
+  assertClear("initial");
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "fusion-occlusion: select field material");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1,
+    "fusion-occlusion: field material selected"
+  );
+  assertClear("after-field-material");
+  clickSmokeElement(handCard(ctx.els, "gale-mage"), "fusion-occlusion: select hand material");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.selectedHandUids?.length === 1,
+    "fusion-occlusion: hand material selected"
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-occlusion: confirm fusion summon");
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "flare-gale-archon") &&
+      !ctx.state.pendingFusion,
+    "fusion-occlusion: fusion completes",
+    9000
+  );
+  setSmokeStatus("passed", `fusion-occlusion viewport=${window.innerWidth}x${window.innerHeight}`);
+}
+
 async function runTokenSplitBasicSmoke(ctx) {
   setSmokeStatus("running", "token-split-basic");
   await startSmokeDuel(ctx, "splitToken");
@@ -6964,6 +7014,10 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "fusion-summon": runFusionSummonSmoke,
     "fusion-summon-basic": runFusionSummonBasicSmoke,
     "fusion-readability-basic": runFusionReadabilityBasicSmoke,
+    "fusion-occlusion-desktop": runFusionOcclusionSmoke,
+    "fusion-occlusion-tablet": runFusionOcclusionSmoke,
+    "fusion-occlusion-landscape": runFusionOcclusionSmoke,
+    "fusion-occlusion-mobile": runFusionOcclusionSmoke,
     "fusion-mixed-materials": runFusionMixedMaterialsSmoke,
     "fusion-result-choice": runFusionResultChoiceSmoke,
     "split-token": runSplitTokenSmoke,

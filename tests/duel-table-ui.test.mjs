@@ -10,7 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260803-landscape-hand-fit"/);
+  assert.match(html, /href="duel-table\.css\?v=20260805-fusion-occlusion"/);
   assert.match(html, /src="src\/app\.js\?v=20260803-action-readability"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
@@ -120,6 +120,20 @@ test("phone confirmations occupy the hand command row without covering the battl
   assert.match(css, /\.choice-actions\.fusion-choice,[\s\S]*\.choice-actions\.material-choice,[\s\S]*\.choice-actions\.split-choice\s*\{[\s\S]*top: 12px;[\s\S]*max-height: calc\(48vh - 12px\);[\s\S]*overflow-y: auto/);
   assert.match(css, /@media \(orientation: landscape\)[\s\S]*body\[data-duel-selection="hand"\] \.hand-panel,[\s\S]*body\[data-duel-selection="target"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 104px minmax\(0, 1fr\)/);
   assert.match(css, /@media \(orientation: landscape\)[\s\S]*\.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\)\s*\{[\s\S]*top: calc\(max\(8px, var\(--safe-area-top\)\) \+ 62px\);[\s\S]*width: calc\(clamp\(226px, 31vw, 300px\) - 16px\);[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+});
+
+test("fusion chooser stays clear of selectable materials at every breakpoint", () => {
+  const css = read("duel-table.css");
+  const smoke = read("src/browser-smoke.js");
+
+  assert.match(css, /\.hand-command > \.choice-actions\.fusion-choice,[\s\S]*\.choice-actions\.material-choice,[\s\S]*\.choice-actions\.split-choice\s*\{[\s\S]*align-content: start;[\s\S]*max-height: 100%;[\s\S]*overflow-y: auto;/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.hand-command > \.choice-actions\.fusion-choice,[\s\S]*\.choice-actions\.material-choice,[\s\S]*\.choice-actions\.split-choice\s*\{[\s\S]*top: calc\(var\(--safe-area-top\) \+ 12px\);[\s\S]*max-height: calc\(100dvh - clamp\(226px, 34dvh, 278px\) - 40px\);[\s\S]*overflow-y: auto;/);
+  assert.match(css, /@media \(orientation: landscape\) and \(max-height: 540px\) and \(max-width: 1040px\)[\s\S]*\.hand-command > \.choice-actions\.fusion-choice,[\s\S]*\.choice-actions\.material-choice,[\s\S]*\.choice-actions\.split-choice\s*\{[\s\S]*top: calc\(max\(8px, var\(--safe-area-top\)\) \+ 62px\);[\s\S]*max-height: calc\(100dvh - max\(8px, var\(--safe-area-top\)\) - 62px - clamp\(120px, 30dvh, 180px\)\);[\s\S]*overflow-y: auto;/);
+  assert.match(smoke, /fusion-occlusion: panel covers materials/);
+  assert.match(smoke, /"fusion-occlusion-desktop": runFusionOcclusionSmoke/);
+  assert.match(smoke, /"fusion-occlusion-tablet": runFusionOcclusionSmoke/);
+  assert.match(smoke, /"fusion-occlusion-landscape": runFusionOcclusionSmoke/);
+  assert.match(smoke, /"fusion-occlusion-mobile": runFusionOcclusionSmoke/);
 });
 
 test("phone hand choices keep the selected card content in view", () => {
