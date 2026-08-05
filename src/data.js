@@ -1172,6 +1172,77 @@ export const scenarioSetups = {
       effectId: "lunarDominion"
     }]
   },
+  protagonistTrioOmegaStory: {
+    label: "终局三曜 · 逆转篇",
+    setupVisibility: "player",
+    text: "三曜的封印再度苏醒，三尊神格压在你的阵线上。你被逼到残血，但墓地里的低星王牌还在——这是一场有来有回的逆转战：先顶住神的攻击，再逐一瓦解封印。",
+    goal: "先布置防御挡下太阳神的第一击，再清掉月曜帷幕，复活低星王牌，用终局反击击碎三曜。",
+    difficulty: "demo",
+    aiStyle: "scriptedPressure",
+    objectives: [
+      "用日冕诱锁挡下并破坏第一尊神。",
+      "反击前必须清除月曜帷幕，否则三曜终断无法发动。",
+      "把唯一回召留给余烁小卫，而不是攻击力更高的墓地怪兽。",
+      "终局反击后，让余烁小卫连续击破剩余神格。"
+    ],
+    hints: [
+      "墓地里攻击力最高的怪兽并不一定是正确回召目标。",
+      "太阳神攻击时会触发你盖放的陷阱，先撑过这一回合。",
+      "月曜帷幕清除前，三曜终断会被封印。"
+    ],
+    recommendedLine: [
+      "盖下日冕诱锁，等待太阳神踏入反制。",
+      "清掉月曜帷幕后，回召余烁小卫。",
+      "用三曜终断强化小卫，再连续攻击瓦解三曜。"
+    ],
+    playerLp: 1500,
+    aiLp: 900,
+    playerHand: ["trio-solar-snare", "trio-ember-recall", "trio-final-counter"],
+    playerDeck: ["trio-chain-veil", "trio-moonbreaker-ray", "last-spark"],
+    playerField: [{ id: "trio-decoy-ward", mode: "defense", changedMode: true }],
+    playerGrave: ["flare-titan", "trio-ember-pawn"],
+    aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiTraps: ["trio-moon-dominion"],
+    aiHand: [],
+    aiDeck: ["eclipse-barrier"],
+    setupContinuousEffects: [{
+      source: { owner: "ai", zone: "traps", index: 0 },
+      target: { owner: "player", zone: "field", index: 0 },
+      effectId: "lunarDominion"
+    }],
+    storyBeats: [
+      {
+        id: "sun-attack",
+        when: { eventType: "ATTACK_DECLARED", playerId: "ai", cardId: "trio-sun-judicator" },
+        speaker: "ai",
+        line: "曜冕裁决者，让这道攻击碾碎你的防线！"
+      },
+      {
+        id: "sun-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-sun-judicator" },
+        speaker: "player",
+        line: "第一尊神……崩落了！"
+      },
+      {
+        id: "dominion-cleared",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-moon-dominion" },
+        speaker: "player",
+        line: "月曜帷幕解除了，压制消失了。"
+      },
+      {
+        id: "final-counter",
+        when: { eventType: "CARD_ACTIVATED", playerId: "player", cardId: "trio-final-counter" },
+        speaker: "player",
+        line: "这一击，是为了打破封印！"
+      },
+      {
+        id: "victory",
+        when: { eventType: "GAME_OVER_DECLARED" },
+        speaker: "player",
+        line: "三曜的封印，由我来打破！"
+      }
+    ]
+  },
   protagonistTrioOmegaFull: {
     label: "终局三曜完整对局",
     setupVisibility: "player",

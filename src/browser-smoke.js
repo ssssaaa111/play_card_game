@@ -3929,6 +3929,86 @@ async function runTrioOmegaChallengeSmoke(ctx) {
   setSmokeStatus("passed", "trio-omega-challenge");
 }
 
+async function runTrioOmegaStoryDemoSmoke(ctx) {
+  const smokeName = "trio-omega-story-demo";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaStory");
+  assertTrioOmegaInitial(ctx, smokeName);
+  const storyLog = () => (ctx.state.log || []).map(logEntryMessage).join(" ");
+
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}: select solar snare`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}: set solar snare`);
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "trio-solar-snare"), `${smokeName}: solar snare set`);
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `${smokeName}: sun attack response window`, 26000);
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}: activate solar snare`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.state.ai.grave.some((card) => card?.id === "trio-sun-judicator"),
+    `${smokeName}: sun god destroyed by laid trap. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
+  await waitForSmoke(() => storyLog().includes("第一尊神"), `${smokeName}: fallen god story beat`, 8000);
+
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && ctx.state.phase === "main" && handCard(ctx.els, "trio-moonbreaker-ray"),
+    `${smokeName}: returned to player with moonbreaker drawn. ${trioOmegaFailureSnapshot(ctx)}`,
+    32000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}: select moonbreaker`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}: moonbreaker target selection`);
+  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: destroy moon dominion`);
+  await waitForSmoke(
+    () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"),
+    `${smokeName}: moon dominion cleared. ${trioOmegaFailureSnapshot(ctx)}`,
+    9000
+  );
+  await waitForSmoke(() => storyLog().includes("月曜帷幕解除了"), `${smokeName}: dominion cleared story beat`, 8000);
+
+  clickSmokeElement(handCard(ctx.els, "trio-ember-recall"), `${smokeName}: select ember recall`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", `${smokeName}: grave target selection`);
+  await selectAndConfirmSpellTarget(ctx, graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}: revive ember pawn`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) =>
+      card?.id === "trio-ember-pawn" && card.mode === "attack" && !card.used
+    ) && !ctx.state.player.grave.some((card) => card?.id === "trio-ember-pawn"),
+    `${smokeName}: ember pawn revived. ${trioOmegaFailureSnapshot(ctx)}`,
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "trio-final-counter"), `${smokeName}: select final counter`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: final counter confirm`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: activate final counter`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && card.atk === 600 && (card.tempAtk || 0) >= 2100),
+    `${smokeName}: pawn receives finale resource. ${trioOmegaFailureSnapshot(ctx)}`,
+    9000
+  );
+  await waitForSmoke(() => storyLog().includes("打破封印"), `${smokeName}: final counter story beat`, 8000);
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn first attack`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), `${smokeName}: moon target highlighted`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}: pawn breaks moon`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") && ctx.state.ai.lp === 300,
+    `${smokeName}: first attack resolves. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn second attack`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), `${smokeName}: star target highlighted`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}: pawn breaks star`);
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "player",
+    `${smokeName}: story line wins. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
+  await waitForSmoke(() => storyLog().includes("由我来打破"), `${smokeName}: victory story beat`, 8000);
+  setSmokeStatus("passed", "trio-omega-story-demo");
+}
+
 async function runTrioOmegaCasualFailureLine(ctx, smokeName, { continueAfterRival = false } = {}) {
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "protagonistTrioOmegaChallenge");
@@ -7040,6 +7120,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "lunar-dominion-target-loss-basic": runLunarDominionTargetLossSmoke,
     "lunar-dominion-persistence-basic": runLunarDominionTargetLossSmoke,
     "trio-omega-challenge": runTrioOmegaChallengeSmoke,
+    "trio-omega-story-demo": runTrioOmegaStoryDemoSmoke,
     "trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke,
     "trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke,
     "trio-omega-full-duel": runTrioOmegaFullDuelSmoke,

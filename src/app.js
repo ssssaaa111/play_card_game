@@ -858,6 +858,8 @@ function startGame() {
   state.gameOverReason = "";
   state.gameOverAnnounced = false;
   state.statsRecorded = false;
+  state.storyBeatCursor = 0;
+  state.storyBeatsFired = {};
   state.log = [];
   state.logSequence = 0;
   state.timeline = [];
@@ -3091,6 +3093,7 @@ async function resolveEngineTrapChain(owner, rival, eventName, context, trapInde
     if (link === firstLink) originalOutcome = outcome;
   }
 
+  playScenarioStoryBeats();
   return { ...originalOutcome, activated: links.length };
 }
 
@@ -4938,6 +4941,42 @@ function render(animationKey = "") {
   renderTimeline();
   renderBattlePreview();
   renderAiReveal();
+  playScenarioStoryBeats();
+}
+
+function playScenarioStoryBeats() {
+  const scenario = scenarioSetups[state.scenarioId];
+  const beats = Array.isArray(scenario?.storyBeats) ? scenario.storyBeats : [];
+  if (beats.length === 0 || !state.started) return;
+  if (!Number.isFinite(state.storyBeatCursor)) state.storyBeatCursor = 0;
+  if (!state.storyBeatsFired) state.storyBeatsFired = {};
+  const events = state.gameEvents || [];
+  let cursor = state.storyBeatCursor;
+  for (const beat of beats) {
+    if (!beat || !beat.id || !beat.line || state.storyBeatsFired[beat.id]) continue;
+    const matched = events.some((event) =>
+      event.id > cursor && storyEventMatches(event, beat.when || {})
+    );
+    if (!matched) continue;
+    state.storyBeatsFired[beat.id] = true;
+    const speaker = beat.speaker === "player" ? "你" : "对手";
+    addLog(`${speaker}：${beat.line}`, {
+      actor: beat.speaker === "player" ? "player" : "ai",
+      kind: "story"
+    });
+    cue(beat.line);
+    playDuelistLine(beat.speaker === "player" ? "player" : "ai", beat.line, true, "story");
+  }
+  state.storyBeatCursor = events.reduce((max, event) => Math.max(max, Number(event.id) || 0), cursor);
+}
+
+function storyEventMatches(event, when) {
+  if (!event || !when) return false;
+  if (when.eventType && event.type !== when.eventType) return false;
+  if (when.playerId && event.playerId !== when.playerId) return false;
+  if (!when.cardId) return true;
+  const runtime = findRuntimeCard(event.cardId || event.attackerCardId || event.sourceCardId || "");
+  return Boolean(runtime?.card && runtime.card.id === when.cardId);
 }
 
 function renderBattlePreview() {
