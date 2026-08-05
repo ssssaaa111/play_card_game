@@ -180,6 +180,23 @@ export const defaultCardEffects = Object.freeze({
       { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
     ]
   }),
+  trioFinalCounterVow: oneShot([
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "atk", amount: 2100 },
+    {
+      op: "readyMonsterOrGrantAbility",
+      player: "self",
+      cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" },
+      ability: Ability.attackReset,
+      uses: 1,
+      duration: "turn"
+    }
+  ], {
+    requirements: [
+      { type: "maxLp", player: "self", amount: 1600 },
+      { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
+      { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
+    ]
+  }),
   pierceLine: oneShot([
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: -400 },
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -400 },

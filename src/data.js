@@ -83,7 +83,8 @@ export const library = [
   { id: "trio-moonbreaker-ray", type: "spell", name: "碎月解幕", icon: "碎", text: "选择对手魔陷区 1 张卡破坏。用于清除持续压制后再展开墓地资源。", effect: "destroySpellTrap" },
   { id: "trio-ember-recall", type: "spell", name: "余烁归轨", icon: "归", text: "选择我方墓地 1 只怪兽，特殊回到怪兽区。终局战中用来让低星关键怪回场。", effect: "graveRevive" },
   { id: "trio-chain-veil", type: "trap", name: "星线护续", icon: "续", text: "盖放后自动触发：对手攻击时，无效本次攻击并消耗攻击机会。", trigger: "attackNegate" },
-  { id: "trio-final-counter", type: "spell", name: "三曜终断", icon: "断", text: "生命值 1600 以下、余烁小卫在场，且我方怪兽未受到对手持续效果影响时才能发动；使攻击力最低的我方怪兽攻击力提升 2100。若其已经攻击则立即重置为可攻击，否则获得 1 次追加攻击机会。", effect: "trioFinalCounter" }
+  { id: "trio-final-counter", type: "spell", name: "三曜终断", icon: "断", text: "生命值 1600 以下、余烁小卫在场，且我方怪兽未受到对手持续效果影响时才能发动；使攻击力最低的我方怪兽攻击力提升 2100。若其已经攻击则立即重置为可攻击，否则获得 1 次追加攻击机会。", effect: "trioFinalCounter" },
+  { id: "trio-final-counter-vow", type: "spell", name: "终局反击·誓约", icon: "誓", text: "生命值 1600 以下、余烁小卫在场，且我方怪兽未受到对手持续效果影响时才能发动；使攻击力最低的我方怪兽攻击力提升 2100（持续到该怪兽离场），并立即重置其攻击或给予 1 次追加攻击机会。誓约之力不会随回合结束消散，用来逐尊瓦解三曜。", effect: "trioFinalCounterVow" }
 ];
 
 export const monsterAssets = {
@@ -1264,6 +1265,96 @@ export const scenarioSetups = {
         when: { eventType: "GAME_OVER_DECLARED" },
         speaker: "player",
         line: "三曜的封印，由我来打破！"
+      }
+    ]
+  },
+  protagonistTrioOmegaVow: {
+    label: "终局三曜 · 誓约篇",
+    setupVisibility: "player",
+    text: "三曜神格压阵，你被逼到残血。这一次你立下的誓约不会随回合消散——先击落太阳神，再逐一瓦解月曜与星曜，让低星王牌完成逆转。",
+    goal: "盖下日冕诱锁击落太阳神，清掉月曜帷幕，回召余烁小卫并立下终局誓约，逐尊击破剩余神格。",
+    difficulty: "demo",
+    aiStyle: "scriptedPressure",
+    objectives: [
+      "用日冕诱锁挡下并破坏太阳神。",
+      "立誓约前必须清除月曜帷幕。",
+      "誓约之力持续到怪兽离场，可以跨回合逐尊击破。",
+      "神格未全部落位前，不要急着用完追加攻击。"
+    ],
+    hints: [
+      "诱标卫能挡住月曜与星曜的攻击。",
+      "月曜帷幕不清除，誓约无法发动。",
+      "终局反击·誓约的强化不会在回合结束时消失。"
+    ],
+    recommendedLine: [
+      "第一回合先知抽牌并盖下日冕诱锁。",
+      "第二回合清掉月曜帷幕并布防。",
+      "第三回合回召余烁小卫并立下誓约，击破月曜。",
+      "等星曜撞上誓约之力，再直接结束战斗。"
+    ],
+    playerLp: 1500,
+    aiLp: 2000,
+    playerHand: ["seer-call", "trio-solar-snare", "trio-solar-snare", "trio-ember-recall", "trio-decoy-ward"],
+    playerDeck: [
+      "trio-moonbreaker-ray", "last-spark", "trio-chain-veil", "trio-final-counter-vow",
+      "trio-moonbreaker-ray", "battle-trance", "rally-strike", "starwell-runner",
+      "dispelling-ray", "last-light-guard", "star-shield", "gale-mage",
+      "iron-guardian", "prism-saint", "soul-resonance", "star-soul-apprentice",
+      "backlash-mirror", "renewal", "war-chant", "pierce-line"
+    ],
+    playerField: [{ id: "trio-decoy-ward", mode: "defense", changedMode: true }],
+    playerGrave: ["flare-titan", "trio-ember-pawn"],
+    aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiTraps: ["trio-moon-dominion"],
+    aiHand: [],
+    aiDeck: ["eclipse-barrier", "chain-nullifier"],
+    setupContinuousEffects: [{
+      source: { owner: "ai", zone: "traps", index: 0 },
+      target: { owner: "player", zone: "field", index: 0 },
+      effectId: "lunarDominion"
+    }],
+    storyBeats: [
+      {
+        id: "sun-attack",
+        when: { eventType: "ATTACK_DECLARED", playerId: "ai", cardId: "trio-sun-judicator" },
+        speaker: "ai",
+        line: "曜冕裁决者，让这道攻击碾碎你的防线！"
+      },
+      {
+        id: "sun-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-sun-judicator" },
+        speaker: "player",
+        line: "第一尊神……崩落了！"
+      },
+      {
+        id: "dominion-cleared",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-moon-dominion" },
+        speaker: "player",
+        line: "月曜帷幕解除了，誓约的枷锁消失了。"
+      },
+      {
+        id: "vow-cast",
+        when: { eventType: "CARD_ACTIVATED", playerId: "player", cardId: "trio-final-counter-vow" },
+        speaker: "player",
+        line: "我以余烁小卫立下誓约——三曜终将崩落！"
+      },
+      {
+        id: "moon-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-moon-warden" },
+        speaker: "player",
+        line: "第二尊神，倒下了！"
+      },
+      {
+        id: "star-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-star-herald" },
+        speaker: "player",
+        line: "最后一尊神，崩落！"
+      },
+      {
+        id: "victory",
+        when: { eventType: "GAME_OVER_DECLARED" },
+        speaker: "player",
+        line: "誓约完成了——三曜的封印，由我打破！"
       }
     ]
   },

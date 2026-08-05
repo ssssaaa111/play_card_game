@@ -212,6 +212,10 @@ export const spellDefinitions = {
     handSummary: "LP≤1600 · 强化最低攻并重置攻击",
     caption: "终局三曜反击"
   },
+  trioFinalCounterVow: {
+    handSummary: "LP≤1600 · 最低攻 +2100 持续 · 重置攻击",
+    caption: "终局誓约反击"
+  },
   shield800: {
     handSummary: "护盾 +800",
     caption: "展开护盾"
@@ -416,6 +420,15 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       if (owner.lp > 1600) return { ok: false, reason: "生命值还没有进入终局反击条件。" };
       if (!fieldCards(owner).some((card) => cardTemplateId(card) === "trio-ember-pawn")) {
         return { ok: false, reason: "余烁小卫不在场，不能发动终局反击。" };
+      }
+      if ((rival?.traps || []).some((card) => cardTemplateId(card) === "trio-moon-dominion")) {
+        return { ok: false, reason: "月曜帷幕仍在压制，必须先清除。" };
+      }
+      return { ok: true };
+    case "trioFinalCounterVow":
+      if (owner.lp > 1600) return { ok: false, reason: "生命值还没有进入终局誓约的条件。" };
+      if (!fieldCards(owner).some((card) => cardTemplateId(card) === "trio-ember-pawn")) {
+        return { ok: false, reason: "余烁小卫不在场，不能立下终局誓约。" };
       }
       if ((rival?.traps || []).some((card) => cardTemplateId(card) === "trio-moon-dominion")) {
         return { ok: false, reason: "月曜帷幕仍在压制，必须先清除。" };
