@@ -29,7 +29,12 @@ const DEFAULT_SMOKES = [
   "fusion-occlusion-desktop",
   "fusion-occlusion-tablet",
   "fusion-occlusion-landscape",
-  "fusion-occlusion-mobile"
+  "fusion-occlusion-mobile",
+  "trio-omega-challenge",
+  "trio-omega-autopilot-fails",
+  "trio-omega-happy-clicker-fails",
+  "protagonist-comeback-autopilot-fails",
+  "trio-tribute-summon"
 ];
 
 function browserCandidates() {

@@ -2091,6 +2091,10 @@ async function runTrioTributeSummonSmoke(ctx) {
     throw new Error("trio-tribute-summon: exactly three CARD_TRIBUTED events should be emitted");
   }
   await waitForSmoke(() => logCardLink(ctx.els, "trio-sun-judicator"), "trio-tribute-summon: public summon log link");
+  const timelineToggle = document.querySelector("#timelineDrawerToggle");
+  const timelineDrawer = document.querySelector("#timelineDrawer");
+  clickSmokeElement(timelineToggle, "trio-tribute-summon: open timeline drawer");
+  await waitForSmoke(() => timelineDrawer?.classList.contains("is-open"), "trio-tribute-summon: timeline drawer opens");
   clickSmokeElementCenter(logCardLink(ctx.els, "trio-sun-judicator"), "trio-tribute-summon: inspect summoned god");
   await assertCardDetailModal(ctx, trioCard, "trio-tribute-summon");
   if (!ctx.els.cardModal.textContent.includes("召唤需求：3 只祭品")) {
@@ -3325,12 +3329,17 @@ async function runProtagonistComebackAutopilotFailsSmoke(ctx) {
   await waitForSmoke(() => ctx.state.player.hand.some((card) => card?.id === "battle-trance"), "乱点：抽到战斗狂热");
 
   clickSmokeElement(handCard(ctx.els, "starwake-recall"), "乱点：醒星回召");
-  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", "乱点：醒星回召默认目标");
-  clickSmokeElement(ctx.els.choiceConfirmBtn, "乱点：默认复活第一个墓地怪兽");
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "graveRevive" && graveTargetCard(ctx.els, "spark-runner"),
+    "乱点：醒星回召目标选择"
+  );
+  clickSmokeElement(graveTargetCard(ctx.els, "spark-runner"), "乱点：选择墓地星火信使");
+  await waitForSmoke(() => !ctx.els.choiceConfirmBtn.disabled, "乱点：星火信使目标就绪");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, "乱点：错误复活星火信使");
   await waitForSmoke(
     () => ctx.state.player.field.filter((card) => card?.id === "spark-runner").length >= 2 &&
       !ctx.state.player.field.some((card) => card?.id === "astral-comet-ace"),
-    `乱点：默认复活应错过王牌。${smokeDebug(ctx)}`,
+    `乱点：错误复活应错过王牌。${smokeDebug(ctx)}`,
     9000
   );
 
@@ -3927,10 +3936,15 @@ async function runTrioOmegaCasualFailureLine(ctx, smokeName, { continueAfterRiva
 
   clickSmokeElement(handCard(ctx.els, "trio-ember-recall"), `${smokeName}: click available revive spell`);
   await waitForSmoke(
-    () => ctx.state.pendingTarget?.effect === "graveRevive" && !ctx.els.choiceConfirmBtn.disabled,
-    `${smokeName}: default grave target ready`
+    () => ctx.state.pendingTarget?.effect === "graveRevive" && graveTargetCard(ctx.els, "flare-titan"),
+    `${smokeName}: grave revive target selection opens`
   );
-  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm default grave target`);
+  clickSmokeElement(graveTargetCard(ctx.els, "flare-titan"), `${smokeName}: pick strongest grave monster`);
+  await waitForSmoke(
+    () => !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: strongest grave monster selected`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm wrong grave revive`);
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "flare-titan") &&
       !ctx.state.player.hand.some((card) => card?.id === "trio-ember-recall"),
