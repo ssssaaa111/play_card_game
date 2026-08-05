@@ -46,18 +46,19 @@ function scenarioZone(entries = [], size) {
   return zone;
 }
 
-function scenarioDeck(scenario, owner, preset, customDecks = []) {
+function scenarioDeck(scenario, owner, preset, customDecks = [], shuffleSeed = null) {
   const explicitDeck = scenario[`${owner}Deck`];
-  return Array.isArray(explicitDeck)
+  const deck = Array.isArray(explicitDeck)
     ? loadCardList(explicitDeck)
     : buildScenarioDeck(preset, scenarioReservedIds(scenario, owner), customDecks);
+  return shuffleSeed == null ? deck : shuffleWithSeed(deck, shuffleSeed);
 }
 
-function scenarioDuelistState(scenario, owner, preset, customDecks = []) {
+function scenarioDuelistState(scenario, owner, preset, customDecks = [], shuffleSeed = null) {
   const prefix = owner === "ai" ? "ai" : "player";
   const state = {
     hand: scenarioList(scenario[`${owner}Hand`]),
-    deck: scenarioDeck(scenario, owner, preset, customDecks),
+    deck: scenarioDeck(scenario, owner, preset, customDecks, shuffleSeed),
     field: scenarioZone(scenario[`${owner}Field`], MONSTER_ZONE_SIZE),
     traps: scenarioZone(scenario[`${owner}Traps`], SPELL_TRAP_ZONE_SIZE),
     grave: scenarioList(scenario[`${owner}Grave`])
@@ -146,12 +147,34 @@ export function buildScenarioState(scenario = {}, {
   playerPreset = "balanced",
   aiPreset = "balanced",
   playerCustomDecks = [],
-  aiCustomDecks = []
+  aiCustomDecks = [],
+  shuffleSeed = null
 } = {}) {
   const setup = {
-    player: scenarioDuelistState(scenario, "player", playerPreset, playerCustomDecks),
-    ai: scenarioDuelistState(scenario, "ai", aiPreset, aiCustomDecks)
+    player: scenarioDuelistState(scenario, "player", playerPreset, playerCustomDecks, shuffleSeed),
+    ai: scenarioDuelistState(scenario, "ai", aiPreset, aiCustomDecks, shuffleSeed)
   };
   const gameEvents = setupContinuousEvents(scenario, setup);
   return gameEvents.length ? { ...setup, gameEvents } : setup;
+}
+
+function shuffleWithSeed(cards, seed) {
+  const random = seededRandom(seed);
+  const copy = [...cards];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const j = Math.floor(random() * (index + 1));
+    [copy[index], copy[j]] = [copy[j], copy[index]];
+  }
+  return copy;
+}
+
+function seededRandom(seed) {
+  let value = Number(seed) >>> 0 || 1;
+  return function next() {
+    value += 0x6D2B79F5;
+    let t = value;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
