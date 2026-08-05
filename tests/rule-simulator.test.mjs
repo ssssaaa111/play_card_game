@@ -40,6 +40,25 @@ test("random duel simulator exercises core rules through dispatch", () => {
   assert.ok(result.balanceReport.averages.attackDeclarations > 0);
 });
 
+test("finale full-duel matchup completes without stalls or engine failures", () => {
+  const result = simulateRandomDuels({
+    games: 3,
+    seed: "finale-matchup-regression",
+    maxStepsPerGame: 400,
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.equal(result.games, 3);
+  assert.equal(result.completedGames, 3);
+  assert.equal(result.failures.length, 0);
+  assert.equal(result.maxStepsReached, 0);
+  assert.equal(result.balanceReport.totals.maxStepTruncations, 0);
+  assert.deepEqual(result.balanceReport.abnormalEndReasons, {});
+  assert.ok(result.balanceReport.wins.player + result.balanceReport.wins.ai > 0);
+  assert.ok(result.balanceReport.averages.turns > 0);
+});
+
 test("balance stats accumulate base events and redirected defender mismatches", () => {
   const stats = createBalanceStats();
   const state = {
