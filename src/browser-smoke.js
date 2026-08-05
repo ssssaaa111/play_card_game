@@ -3955,8 +3955,9 @@ async function runTrioOmegaCasualFailureLine(ctx, smokeName, { continueAfterRiva
   clickSmokeElement(handCard(ctx.els, "trio-final-counter"), `${smokeName}: click final counter too early`);
   await waitForSmoke(
     () => ctx.state.player.hand.some((card) => card?.id === "trio-final-counter") &&
-      ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"),
-    `${smokeName}: final counter remains blocked by moon dominion`,
+      ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
+      (ctx.els.toast?.textContent || "").includes("余烁小卫"),
+    `${smokeName}: final counter explains the missing pawn while moon dominion blocks`,
     6000
   );
 

@@ -940,6 +940,9 @@ function explainUiAction(engineState, action, actionLabel) {
 }
 
 function localizeEngineRuleReason(message = "", actionLabel = "操作") {
+  if (/requires LP at most 1600/.test(message)) return "生命值还需要降到 1600 以下才能发动三曜终断。";
+  if (/requires field materials trio-ember-pawn/.test(message)) return "余烁小卫不在场，无法发动三曜终断。";
+  if (/requires no active continuous effect/.test(message)) return "月曜帷幕仍在压制我方怪兽，先清除它再发动三曜终断。";
   if (/not legal during/.test(message)) return `当前阶段不能${actionLabel}。`;
   if (/requires action\.targetCardId/.test(message)) return "需要先选择一个合法目标。";
   if (/not in .*monsterZone/.test(message)) return "目标不在合法怪兽区。";
@@ -965,7 +968,6 @@ function localizeEngineRuleReason(message = "", actionLabel = "操作") {
   if (/has no legal target/.test(message)) return "这张卡没有可指定的合法目标。";
   if (/requires at least|requires elements/.test(message)) return "场上属性或数量条件不足。";
   if (/requires no .*spellTrapZone/.test(message)) return "必须先清除指定压制卡。";
-  if (/requires no active continuous effect/.test(message)) return "必须先解除对我方怪兽生效的对手持续效果。";
   if (/cannot be the source card/.test(message)) return "不能选择这张卡自己作为目标。";
   return `规则引擎判定不能${actionLabel}：${message}`;
 }

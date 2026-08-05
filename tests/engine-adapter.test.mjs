@@ -2369,7 +2369,7 @@ test("explains active rival continuous pressure and allows the spell after that 
   const blocked = explainActivateSpellFromUiState(state, "player", "ai", 0);
   assert.equal(blocked.ok, false);
   assert.match(blocked.engineReason, /requires no active continuous effect/);
-  assert.equal(blocked.reason, "必须先解除对我方怪兽生效的对手持续效果。");
+  assert.equal(blocked.reason, "月曜帷幕仍在压制我方怪兽，先清除它再发动三曜终断。");
 
   state.gameEvents.push({
     ...registered,
@@ -2381,6 +2381,26 @@ test("explains active rival continuous pressure and allows the spell after that 
   assert.equal(released.reason, "");
   assert.ok(state.ai.traps.includes(moonDominion));
   assert.ok(state.player.hand.includes(finalCounter));
+});
+
+test("explains each trio final counter blocker with actionable copy", () => {
+  const finalCounter = uiSpell("final-counter-blockers", "trioFinalCounter", "trio-final-counter");
+  const pawn = uiMonster("pawn-blocker", "trio-ember-pawn");
+
+  const highLpState = appState();
+  highLpState.player.lp = 2000;
+  highLpState.player.hand = [finalCounter];
+  highLpState.player.field[0] = pawn;
+  const highLp = explainActivateSpellFromUiState(highLpState, "player", "ai", 0);
+  assert.equal(highLp.ok, false);
+  assert.equal(highLp.reason, "生命值还需要降到 1600 以下才能发动三曜终断。");
+
+  const missingPawnState = appState();
+  missingPawnState.player.lp = 1300;
+  missingPawnState.player.hand = [finalCounter];
+  const missingPawn = explainActivateSpellFromUiState(missingPawnState, "player", "ai", 0);
+  assert.equal(missingPawn.ok, false);
+  assert.equal(missingPawn.reason, "余烁小卫不在场，无法发动三曜终断。");
 });
 
 test("explains monster summon legality from UI state without consuming cards", () => {
