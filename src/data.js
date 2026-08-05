@@ -1224,6 +1224,18 @@ export const scenarioSetups = {
         line: "第一尊神……崩落了！"
       },
       {
+        id: "moon-attack",
+        when: { eventType: "ATTACK_DECLARED", playerId: "ai", cardId: "trio-moon-warden" },
+        speaker: "ai",
+        line: "月蚀守密者，继续压制她的防线！"
+      },
+      {
+        id: "star-attack",
+        when: { eventType: "ATTACK_DECLARED", playerId: "ai", cardId: "trio-star-herald" },
+        speaker: "ai",
+        line: "星坠宣告者，压力不会停止！"
+      },
+      {
         id: "dominion-cleared",
         when: { eventType: "CARD_DESTROYED", cardId: "trio-moon-dominion" },
         speaker: "player",
@@ -1234,6 +1246,18 @@ export const scenarioSetups = {
         when: { eventType: "CARD_ACTIVATED", playerId: "player", cardId: "trio-final-counter" },
         speaker: "player",
         line: "这一击，是为了打破封印！"
+      },
+      {
+        id: "moon-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-moon-warden" },
+        speaker: "player",
+        line: "第二尊神……也倒下了！"
+      },
+      {
+        id: "star-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-star-herald" },
+        speaker: "player",
+        line: "最后一尊神，崩落！"
       },
       {
         id: "victory",

@@ -3996,6 +3996,7 @@ async function runTrioOmegaStoryDemoSmoke(ctx) {
     `${smokeName}: first attack resolves. ${trioOmegaFailureSnapshot(ctx)}`,
     12000
   );
+  await waitForSmoke(() => storyLog().includes("第二尊神"), `${smokeName}: moon falls story beat`, 8000);
 
   clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn second attack`);
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), `${smokeName}: star target highlighted`);
@@ -4005,6 +4006,7 @@ async function runTrioOmegaStoryDemoSmoke(ctx) {
     `${smokeName}: story line wins. ${trioOmegaFailureSnapshot(ctx)}`,
     12000
   );
+  await waitForSmoke(() => storyLog().includes("最后一尊神"), `${smokeName}: star falls story beat`, 8000);
   await waitForSmoke(() => storyLog().includes("由我来打破"), `${smokeName}: victory story beat`, 8000);
   setSmokeStatus("passed", "trio-omega-story-demo");
 }
