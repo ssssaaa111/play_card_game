@@ -4575,6 +4575,71 @@ async function runHandSummonBlockProbeSmoke(ctx) {
   );
 }
 
+async function runSummonClickRaceProbeSmoke(ctx) {
+  const smokeName = "summon-click-race-probe";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaFull");
+  if (!ctx.currentPlayerActions().summon) {
+    throw new Error(`${smokeName}: no summon available at start. ${smokeDebug(ctx)}`);
+  }
+  const monster = (ctx.state.player.hand || []).find((card) => card?.type === "monster");
+  if (!monster) {
+    throw new Error(`${smokeName}: no monster in opening hand. ${smokeDebug(ctx)}`);
+  }
+  const cardEl = handCard(ctx.els, monster.id);
+  const slot = emptyPlayerFieldSlotEl(ctx.els);
+  if (!cardEl || !slot) {
+    throw new Error(`${smokeName}: monster or slot element missing. ${smokeDebug(ctx)}`);
+  }
+  let success = false;
+  let failure = null;
+  for (let attempt = 1; attempt <= 5 && !success; attempt += 1) {
+    if (ctx.state.player.field.some((entry) => entry?.id === monster.id)) {
+      success = true;
+      break;
+    }
+    clickSmokeElement(cardEl, `${smokeName}: select ${monster.id} (attempt ${attempt})`);
+    clickSmokeElement(slot, `${smokeName}: place ${monster.id} (attempt ${attempt})`);
+    try {
+      await waitForSmoke(
+        () => ctx.state.player.field.some((entry) => entry?.id === monster.id) ||
+          ctx.state.pendingTribute ||
+          ctx.state.gameOver,
+        `${smokeName}: summon registers`,
+        2500
+      );
+      if (ctx.state.pendingTribute) {
+        clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm tribute`);
+        await waitForSmoke(
+          () => ctx.state.player.field.some((entry) => entry?.id === monster.id),
+          `${smokeName}: tribute summon registers`,
+          4000
+        );
+      }
+      success = true;
+    } catch (error) {
+      failure = {
+        attempt,
+        selected: ctx.state.selected,
+        phase: ctx.state.phase,
+        actionWindow: ctx.state.actionWindow,
+        normalSummonsUsed: ctx.state.player.normalSummonsUsed
+      };
+    }
+  }
+  if (!success) {
+    throw new Error(`${smokeName}: back-to-back summon click did not register. ${JSON.stringify(failure)} ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus(
+    "passed",
+    JSON.stringify({
+      monster: monster.id,
+      attempts: failure ? failure.attempt + 1 : 1,
+      normalSummonsUsed: ctx.state.player.normalSummonsUsed
+    })
+  );
+}
+
 async function runRedirectPromptSmoke(ctx) {
   setSmokeStatus("running", "redirect-prompt");
   await startSmokeDuel(ctx, "redirect");
@@ -7368,6 +7433,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-full-duel": runTrioOmegaFullDuelSmoke,
     "finale-autopilot": runFinaleAutopilotSmoke,
     "hand-summon-block-probe": runHandSummonBlockProbeSmoke,
+    "summon-click-race-probe": runSummonClickRaceProbeSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "spell-target-default-basic": runSpellTargetDefaultBasicSmoke,
