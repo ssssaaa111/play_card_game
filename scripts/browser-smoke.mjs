@@ -21,7 +21,12 @@ const DEFAULT_SMOKES = [
   "combo-spell",
   "equipment-spell",
   "effect-marker-stacking-basic",
-  "support-target-readability-basic"
+  "support-target-readability-basic",
+  "trio-omega-challenge",
+  "trio-omega-autopilot-fails",
+  "trio-omega-happy-clicker-fails",
+  "protagonist-comeback-autopilot-fails",
+  "trio-tribute-summon"
 ];
 
 function browserCandidates() {
