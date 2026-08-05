@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
   <link rel="stylesheet" href="styles.css?v=20260802-sideways-defense-face-v5" />
-  <link rel="stylesheet" href="duel-table.css?v=20260803-mobile-hand-fit" />
+  <link rel="stylesheet" href="duel-table.css?v=20260803-landscape-hand-fit" />
 </head>
 <body>
   <div id="app">
@@ -326,6 +326,7 @@
               <label class="setup-field" data-setup-kind="deck">
                 <span class="setup-field-label"><strong>卡组</strong><small>DECK</small></span>
                 <select id="deckSelect"></select>
+                <button class="btn ghost deck-editor-open" id="deckEditBtn" type="button">编辑自定义卡组</button>
               </label>
               <label class="setup-field" data-setup-kind="ai">
                 <span class="setup-field-label"><strong>AI</strong><small>RIVAL</small></span>
@@ -387,6 +388,56 @@
       <div class="modal-actions">
         <button class="btn ghost" id="modalReviewLog" type="button" hidden>查看战斗日志</button>
         <button class="btn primary" id="modalRestart">再来一局</button>
+      </div>
+    </div>
+  </div>
+    <div class="modal deck-editor-modal" id="deckEditorModal">
+    <div class="modal-box deck-editor">
+      <div class="modal-header deck-editor-head">
+        <div class="modal-heading">
+          <span class="setup-kicker">DECK LAB</span>
+          <h2>自定义卡组</h2>
+          <p>组建 40-60 张的卡组，同名卡最多 3 张。保存后可在开局配置里选用。</p>
+        </div>
+        <button class="drawer-close" id="deckEditorClose" type="button" aria-label="关闭卡组编辑器">×</button>
+      </div>
+      <div class="deck-editor-toolbar">
+        <div class="deck-editor-deck-controls">
+          <button class="btn primary" id="deckEditorNew" type="button">＋ 新建卡组</button>
+          <label class="deck-editor-preset-import">
+            <span>从预设导入</span>
+            <select id="deckEditorPresetSelect"></select>
+            <button class="btn ghost" id="deckEditorImportPreset" type="button">导入</button>
+          </label>
+        </div>
+        <div class="deck-editor-name-row">
+          <label class="setup-field deck-editor-name-field">
+            <span class="setup-field-label"><strong>卡组名</strong><small>NAME</small></span>
+            <input id="deckEditorName" type="text" maxlength="24" placeholder="我的卡组" autocomplete="off">
+          </label>
+          <div class="deck-editor-status">
+            <span class="deck-editor-size" id="deckEditorSize">0 张</span>
+            <span class="deck-editor-validation" id="deckEditorValidation"></span>
+          </div>
+        </div>
+      </div>
+      <div class="deck-editor-body">
+        <section class="deck-editor-pane deck-editor-saved" aria-label="我的卡组">
+          <h3>我的卡组</h3>
+          <ul class="deck-editor-deck-list" id="deckEditorDeckList"></ul>
+        </section>
+        <section class="deck-editor-pane deck-editor-draft" aria-label="卡组构成">
+          <h3>卡组构成</h3>
+          <ul class="deck-editor-draft-list" id="deckEditorDraftList"></ul>
+        </section>
+        <section class="deck-editor-pane deck-editor-library" aria-label="卡牌库">
+          <h3>卡牌库</h3>
+          <div class="deck-editor-library-groups" id="deckEditorLibrary"></div>
+        </section>
+      </div>
+      <div class="modal-actions deck-editor-actions">
+        <button class="btn utility-danger" id="deckEditorDelete" type="button" disabled>删除卡组</button>
+        <button class="btn primary" id="deckEditorSave" type="button" disabled>保存卡组</button>
       </div>
     </div>
   </div>

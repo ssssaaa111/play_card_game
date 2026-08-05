@@ -42,6 +42,15 @@ import {
 import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
 import { renderHandCards } from './hand-renderer.js';
 import { buildDeck, createDuelist } from './deck.js';
+import {
+  createCustomDeck,
+  deckDefinitionMap,
+  readCustomDecks,
+  removeCustomDeck,
+  upsertCustomDeck
+} from './custom-decks.js';
+import { buildDeckEditorView } from './deck-editor.js';
+import { bindDeckEditorEvents, renderDeckEditor } from './deck-editor-renderer.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import {
   isContinuousReleaseStat,
@@ -361,6 +370,20 @@ const els = {
   setupPanel: document.querySelector("#setupPanel"),
   roleSelect: document.querySelector("#roleSelect"),
   deckSelect: document.querySelector("#deckSelect"),
+  deckEditBtn: document.querySelector("#deckEditBtn"),
+  deckEditorModal: document.querySelector("#deckEditorModal"),
+  deckEditorClose: document.querySelector("#deckEditorClose"),
+  deckEditorDeckList: document.querySelector("#deckEditorDeckList"),
+  deckEditorNew: document.querySelector("#deckEditorNew"),
+  deckEditorPresetSelect: document.querySelector("#deckEditorPresetSelect"),
+  deckEditorImportPreset: document.querySelector("#deckEditorImportPreset"),
+  deckEditorName: document.querySelector("#deckEditorName"),
+  deckEditorSize: document.querySelector("#deckEditorSize"),
+  deckEditorValidation: document.querySelector("#deckEditorValidation"),
+  deckEditorDraftList: document.querySelector("#deckEditorDraftList"),
+  deckEditorLibrary: document.querySelector("#deckEditorLibrary"),
+  deckEditorSave: document.querySelector("#deckEditorSave"),
+  deckEditorDelete: document.querySelector("#deckEditorDelete"),
   aiSelect: document.querySelector("#aiSelect"),
   scenarioSelect: document.querySelector("#scenarioSelect"),
   scenarioSelectLabel: document.querySelector("#scenarioSelectLabel"),
@@ -545,13 +568,132 @@ function saveDuelStats() {
 function initializeSetupControls() {
   initializeSetupControlOptions(document, els, {
     roleOptions: roleSetupOptions(roleProfiles),
-    deckOptions: deckSetupOptions(deckPresets, { testMode: BROWSER_TEST_MODE }),
+    deckOptions: deckSetupOptions(deckPresets, { testMode: BROWSER_TEST_MODE, customDecks: currentCustomDecks() }),
     aiOptions: aiSetupOptions(aiProfiles),
     scenarioOptions: scenarioSetupOptions(scenarioSetups, { testMode: BROWSER_TEST_MODE }),
     testMode: BROWSER_TEST_MODE,
     values: state
   });
 }
+
+const deckEditorState = {
+  open: false,
+  selectedId: null,
+  draftName: "",
+  draftIds: []
+};
+
+function currentCustomDecks() {
+  return readCustomDecks();
+}
+
+function currentDeckDefinitions() {
+  return deckDefinitionMap(deckPresets, currentCustomDecks());
+}
+
+function deckEditorPresetOptions() {
+  return Object.entries(deckPresets)
+    .filter(([, definition]) => definition.setupVisibility !== "internal")
+    .map(([id, definition]) => ({ id, label: definition.label || id }));
+}
+
+function refreshDeckSelect() {
+  initializeSetupControls();
+}
+
+function openDeckEditor() {
+  deckEditorState.open = true;
+  if (!deckEditorState.selectedId) {
+    deckEditorState.draftName = "";
+    deckEditorState.draftIds = [];
+  }
+  els.deckEditorModal?.classList.add("show");
+  renderDeckEditorPanel();
+}
+
+function closeDeckEditor() {
+  deckEditorState.open = false;
+  els.deckEditorModal?.classList.remove("show");
+}
+
+function renderDeckEditorPanel() {
+  const view = buildDeckEditorView({
+    customDecks: currentCustomDecks(),
+    draftIds: deckEditorState.draftIds,
+    selectedId: deckEditorState.selectedId,
+    draftName: deckEditorState.draftName
+  });
+  renderDeckEditor(document, els, view, deckEditorHandlers, {
+    presetOptions: deckEditorPresetOptions()
+  });
+}
+
+const deckEditorHandlers = {
+  onSelectDeck: (id) => {
+    const deck = currentCustomDecks().find((entry) => entry.id === id);
+    if (!deck) return;
+    deckEditorState.selectedId = deck.id;
+    deckEditorState.draftName = deck.name;
+    deckEditorState.draftIds = [...deck.ids];
+    renderDeckEditorPanel();
+  },
+  onNewDeck: () => {
+    deckEditorState.selectedId = null;
+    deckEditorState.draftName = "";
+    deckEditorState.draftIds = [];
+    renderDeckEditorPanel();
+  },
+  onImportPreset: (presetId) => {
+    const preset = deckPresets[presetId];
+    if (!preset) return;
+    deckEditorState.selectedId = null;
+    deckEditorState.draftName = preset.label || "";
+    deckEditorState.draftIds = [...preset.ids];
+    renderDeckEditorPanel();
+  },
+  onAddCard: (id) => {
+    deckEditorState.draftIds.push(id);
+    renderDeckEditorPanel();
+  },
+  onRemoveCard: (id) => {
+    const index = deckEditorState.draftIds.lastIndexOf(id);
+    if (index >= 0) deckEditorState.draftIds.splice(index, 1);
+    renderDeckEditorPanel();
+  },
+  onNameChange: (name) => {
+    deckEditorState.draftName = name;
+    renderDeckEditorPanel();
+  },
+  onSave: () => {
+    const deck = deckEditorState.selectedId
+      ? { id: deckEditorState.selectedId, name: deckEditorState.draftName, ids: deckEditorState.draftIds }
+      : createCustomDeck(deckEditorState.draftName, deckEditorState.draftIds);
+    const saved = upsertCustomDeck(deck);
+    if (!saved) return;
+    deckEditorState.selectedId = deck.id;
+    state.deckPreset = deck.id;
+    refreshDeckSelect();
+    syncSetupControls();
+    render();
+    renderDeckEditorPanel();
+  },
+  onDelete: () => {
+    if (!deckEditorState.selectedId) return;
+    const next = removeCustomDeck(deckEditorState.selectedId);
+    if (!next) return;
+    if (state.deckPreset === deckEditorState.selectedId) {
+      state.deckPreset = "balanced";
+    }
+    deckEditorState.selectedId = null;
+    deckEditorState.draftName = "";
+    deckEditorState.draftIds = [];
+    refreshDeckSelect();
+    syncSetupControls();
+    render();
+    renderDeckEditorPanel();
+  },
+  onClose: closeDeckEditor
+};
 
 function renderAiReveal() {
   renderAiRevealModal(els, pendingAiReveal);
@@ -662,6 +804,7 @@ function applyScenarioSetup() {
   if (scenario.aiStyle) state.aiStyle = scenario.aiStyle;
   const setup = buildScenarioState(scenario, {
     playerPreset: state.deckPreset,
+    playerCustomDecks: currentCustomDecks(),
     aiPreset: aiProfiles[scenarioAiStyle]?.deckPreset || "balanced"
   });
   Object.assign(state.player, setup.player);
@@ -693,7 +836,7 @@ function startGame() {
   applySetupChoices();
   Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
   Object.assign(state.ai, createDuelist("ai", characterProfiles.ai.passive));
-  state.player.deck = buildDeck(state.deckPreset);
+  state.player.deck = buildDeck(state.deckPreset, currentCustomDecks());
   state.ai.deck = buildDeck(aiProfiles[state.aiStyle]?.deckPreset || "balanced");
   state.turn = "player";
   state.phase = "draw";
@@ -734,7 +877,7 @@ function startGame() {
     }
   }
   addLog("决斗开始。你先攻，抽卡后展开第一波攻势。");
-  addLog(`基础扩展已启用：${characterProfiles.player.skill} / ${definitionLabel(deckPresets, state.deckPreset)} / ${characterProfiles.ai.name}。`);
+  addLog(`基础扩展已启用：${characterProfiles.player.skill} / ${definitionLabel(currentDeckDefinitions(), state.deckPreset)} / ${characterProfiles.ai.name}。`);
   addLog("教学目标：召唤怪兽、发动魔法或盖陷阱，然后完成一次攻击。");
   playMusic(currentMusicMode());
   playVoice("player", "start", "决斗开始。轮到你，先抽卡。", true);
@@ -4763,7 +4906,8 @@ function render(animationKey = "") {
     scenario,
     playerProfile: characterProfiles.player,
     aiLabel: aiProfiles[state.aiStyle]?.label || characterProfiles.ai.name,
-    deckDefinitions: deckPresets,
+    deckDefinitions: currentDeckDefinitions(),
+    customDecks: currentCustomDecks(),
     statsText: formatDuelStats(state.stats),
     hintsVisible: scenarioHintsVisible,
     deckExpanded: preDuelDeckExpanded,
@@ -5282,6 +5426,11 @@ document.addEventListener("visibilitychange", () => {
     playMusic(currentMusicMode());
   }
 });
+
+if (els.deckEditBtn) {
+  els.deckEditBtn.addEventListener("click", openDeckEditor);
+}
+bindDeckEditorEvents(els, deckEditorHandlers);
 
 initializeSetupControls();
 prepareGame();

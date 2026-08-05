@@ -3161,7 +3161,43 @@ body[data-duel-selection="playerField"] .hand-command-idle {
     width: 100%;
     min-width: 0;
     flex: 0 0 150px;
+    grid-template-rows: auto minmax(25px, 1fr) 28px 20px 18px;
+    gap: 3px;
+    padding: 6px;
     scroll-snap-align: center;
+  }
+
+  .hand .card.compact-action-state {
+    grid-template-rows: auto minmax(43px, 1fr) 28px 20px;
+  }
+
+  .hand .card .card-head {
+    min-height: 22px;
+    align-items: center;
+  }
+
+  .hand .card .art {
+    min-height: 25px;
+  }
+
+  .hand .card .card-text.hand-summary {
+    min-height: 28px;
+    padding: 2px 4px;
+    font-size: 10px;
+    line-height: 1.2;
+    -webkit-line-clamp: 2;
+  }
+
+  .hand .card .stats,
+  .hand .card .stat {
+    min-height: 20px;
+    height: 20px;
+  }
+
+  .hand .card .action-reason {
+    height: 18px;
+    min-height: 18px;
+    padding-block: 2px;
   }
 
   #app .duel-table .field {

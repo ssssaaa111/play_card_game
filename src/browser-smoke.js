@@ -3,6 +3,7 @@ import { logEntryMessage } from './battle-log.js';
 import { cloneCardById } from './deck.js';
 import { projectMachineStateFromEvents } from './game-engine.js';
 import { selectionStateSnapshot } from './selection-state.js';
+import { deckPresets } from './data.js';
 
 function cardIds(list = []) {
   return list.map((card) => card?.id || null);
@@ -2794,6 +2795,47 @@ async function runMobileHandChoiceFitBasicSmoke(ctx) {
     "mobile-hand-choice-fit-basic: hand choice closes"
   );
   setSmokeStatus("passed", "mobile-hand-choice-fit-basic");
+}
+
+async function runLandscapeHandChoiceFitBasicSmoke(ctx) {
+  setSmokeStatus("running", "landscape-hand-choice-fit-basic");
+  await startSmokeDuel(ctx, "trioChainLifecycle");
+
+  if (window.innerWidth !== 844 || window.innerHeight !== 390) {
+    throw new Error(`landscape-hand-choice-fit-basic: expected 844x390 content viewport, received ${window.innerWidth}x${window.innerHeight}`);
+  }
+
+  const hand = ctx.els.hand;
+  const handPanel = document.querySelector(".hand-panel");
+  const selectedCard = handCard(ctx.els, "guard-sigil");
+  if (!hand || !handPanel || !selectedCard) {
+    throw new Error("landscape-hand-choice-fit-basic: required hand regions are missing");
+  }
+
+  clickSmokeElement(selectedCard, "landscape-hand-choice-fit-basic: select guard sigil");
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "hand" && !ctx.els.choiceActions.hidden,
+    "landscape-hand-choice-fit-basic: hand choice opens"
+  );
+
+  const selectedCardRect = selectedCard.getBoundingClientRect();
+  const handRect = hand.getBoundingClientRect();
+  if (selectedCard.scrollHeight > Math.ceil(selectedCard.clientHeight) + 1) {
+    throw new Error(`landscape-hand-choice-fit-basic: selected card content is clipped (${selectedCard.clientHeight}/${selectedCard.scrollHeight})`);
+  }
+  if (hand.scrollHeight > Math.ceil(hand.clientHeight) + 1) {
+    throw new Error(`landscape-hand-choice-fit-basic: selected hand needs hidden vertical scrolling (${hand.clientHeight}/${hand.scrollHeight})`);
+  }
+  if (selectedCardRect.bottom > handRect.bottom + 1 || selectedCardRect.bottom > handPanel.getBoundingClientRect().bottom + 1) {
+    throw new Error(`landscape-hand-choice-fit-basic: selected card leaves its hand region (${selectedCardRect.bottom}/${handRect.bottom})`);
+  }
+
+  clickSmokeElement(ctx.els.choiceCancelBtn, "landscape-hand-choice-fit-basic: cancel hand choice");
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "none" && ctx.els.choiceActions.hidden,
+    "landscape-hand-choice-fit-basic: hand choice closes"
+  );
+  setSmokeStatus("passed", "landscape-hand-choice-fit-basic");
 }
 
 async function runFiveZoneLayoutSmoke(ctx) {
@@ -6255,6 +6297,79 @@ async function runAiCardRevealQueueSmoke(ctx) {
   setSmokeStatus("passed", "ai-card-reveal-queue");
 }
 
+async function runCustomDeckEditorSmoke(ctx) {
+  const smokeName = "custom-deck-editor-basic";
+  setSmokeStatus("running", smokeName);
+  selectScenario(ctx.els, "normal");
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") && !ctx.els.setupPanel?.hidden && !ctx.state.started,
+    `${smokeName}: setup screen visible`,
+    6000
+  );
+  if (!ctx.els.deckEditBtn) {
+    throw new Error(`${smokeName}: deck editor button should exist`);
+  }
+  clickSmokeElement(ctx.els.deckEditBtn, `${smokeName}: open deck editor`);
+  await waitForSmoke(
+    () => ctx.els.deckEditorModal?.classList.contains("show"),
+    `${smokeName}: deck editor opens`
+  );
+  ctx.els.deckEditorPresetSelect.value = "balanced";
+  clickSmokeElement(ctx.els.deckEditorImportPreset, `${smokeName}: import balanced preset`);
+  const presetSize = deckPresets.balanced.ids.length;
+  await waitForSmoke(
+    () => (ctx.els.deckEditorSize?.textContent || "").includes(`${presetSize} 张`),
+    `${smokeName}: draft imports preset size`
+  );
+  const removeTarget = ctx.els.deckEditorDraftList?.querySelector('[data-card-id="ember-drake"] .deck-editor-remove');
+  if (!removeTarget) {
+    throw new Error(`${smokeName}: ember-drake should be removable from the draft`);
+  }
+  clickSmokeElement(removeTarget, `${smokeName}: remove an ember-drake copy`);
+  const addTarget = ctx.els.deckEditorLibrary?.querySelector('[data-card-id="solar-vanguard"] .deck-editor-library-add');
+  if (!addTarget) {
+    throw new Error(`${smokeName}: solar-vanguard should be available in the library`);
+  }
+  clickSmokeElement(addTarget, `${smokeName}: add solar-vanguard`);
+  ctx.els.deckEditorName.value = "冒烟测试卡组";
+  ctx.els.deckEditorName.dispatchEvent(new Event("input", { bubbles: true }));
+  await waitForSmoke(() => !ctx.els.deckEditorSave.disabled, `${smokeName}: save becomes enabled`);
+  clickSmokeElement(ctx.els.deckEditorSave, `${smokeName}: save deck`);
+  await waitForSmoke(
+    () => (ctx.els.deckEditorDeckList?.textContent || "").includes("冒烟测试卡组"),
+    `${smokeName}: saved deck appears in list`
+  );
+  if (!String(ctx.state.deckPreset).startsWith("custom:")) {
+    throw new Error(`${smokeName}: custom deck should be selected after save: ${ctx.state.deckPreset}`);
+  }
+  if (ctx.els.deckSelect?.value !== ctx.state.deckPreset) {
+    throw new Error(`${smokeName}: deck select should show the saved custom deck`);
+  }
+  if (!(ctx.els.preDuelDeckCount?.textContent || "").includes(`${presetSize} 张`)) {
+    throw new Error(`${smokeName}: pre-duel preview should show the custom deck size`);
+  }
+  clickSmokeElement(ctx.els.deckEditorClose, `${smokeName}: close deck editor`);
+  await waitForSmoke(
+    () => !ctx.els.deckEditorModal.classList.contains("show"),
+    `${smokeName}: editor closes`
+  );
+  clickSmokeElement(ctx.els.modalRestart, `${smokeName}: start duel with custom deck`);
+  await waitForSmoke(
+    () => ctx.state.started && ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.pendingOpeningDraw,
+    `${smokeName}: duel reaches player main phase`,
+    9000
+  );
+  const deckIds = cardIds(ctx.state.player.deck);
+  const expectedRemaining = presetSize - 6;
+  if (deckIds.length !== expectedRemaining) {
+    throw new Error(`${smokeName}: player deck should keep ${expectedRemaining} cards after the opening and turn draws, got ${deckIds.length}`);
+  }
+  if (!deckIds.includes("solar-vanguard")) {
+    throw new Error(`${smokeName}: custom deck should include solar-vanguard`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runPreDuelDeckPreviewSmoke(ctx) {
   setSmokeStatus("running", "pre-duel-deck-preview");
   selectScenario(ctx.els, "protagonistComebackChallenge");
@@ -6845,6 +6960,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "mechanics-regression-basic": runMechanicsRegressionBasicSmoke,
     "duel-layout-density-basic": runDuelLayoutDensityBasicSmoke,
     "mobile-hand-choice-fit-basic": runMobileHandChoiceFitBasicSmoke,
+    "landscape-hand-choice-fit-basic": runLandscapeHandChoiceFitBasicSmoke,
     "five-zone-layout": runFiveZoneLayoutSmoke,
     "basic-expansion": runBasicExpansionSmoke,
     "protagonist-comeback-demo": runProtagonistComebackDemoSmoke,
@@ -6903,6 +7019,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "battle-log-card-detail": runBattleLogCardDetailSmoke,
     "ai-card-reveal-confirm": runAiCardRevealConfirmSmoke,
     "ai-card-reveal-queue": runAiCardRevealQueueSmoke,
+    "custom-deck-editor-basic": runCustomDeckEditorSmoke,
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,

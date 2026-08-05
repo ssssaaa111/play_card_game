@@ -1,6 +1,7 @@
 import { characterProfiles, deckPresets, scenarioSetups } from "./data.js";
 import { cardDefinitionById, cardDetailViewModel } from "./card-detail.js";
 import { MAX_LP } from "./rules.js";
+import { resolveDeckDefinition } from "./custom-decks.js";
 import { scenarioReservedIds } from "./scenario-state.js";
 
 const zoneLabels = {
@@ -38,8 +39,9 @@ function removeReservedDeckIds(ids, scenario, owner) {
   });
 }
 
-function presetDeckIds(presetId) {
-  return [...(deckPresets[presetId]?.ids || deckPresets.balanced.ids)];
+function presetDeckIds(presetId, customDecks = []) {
+  const definition = resolveDeckDefinition(presetId, customDecks, deckPresets) || deckPresets.balanced;
+  return [...definition.ids];
 }
 
 export function scenarioObjectiveList(scenario = {}) {
@@ -63,13 +65,14 @@ export function previewDeckIdsForScenario({
   scenario = {},
   owner = "player",
   preset = "balanced",
+  customDecks = [],
 } = {}) {
   const deckKey = owner === "ai" ? "aiDeck" : "playerDeck";
   const explicitDeck = scenarioList(scenario, deckKey).map(entryId).filter(Boolean);
   if (explicitDeck.length) {
     return explicitDeck;
   }
-  return removeReservedDeckIds(presetDeckIds(preset), scenario, owner);
+  return removeReservedDeckIds(presetDeckIds(preset, customDecks), scenario, owner);
 }
 
 function previewCard(id, zone, index) {
@@ -128,11 +131,13 @@ export function buildPreDuelPreview({
   scenario = scenarioSetups[scenarioId] || {},
   playerPreset = "balanced",
   playerProfile = characterProfiles.player,
+  customDecks = [],
 } = {}) {
   const deckIds = previewDeckIdsForScenario({
     scenario,
     owner: "player",
     preset: playerPreset,
+    customDecks,
   });
   const deckCards = [
     ...scenarioZoneCards(scenario, "hand", "playerHand"),

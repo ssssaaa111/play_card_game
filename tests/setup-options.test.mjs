@@ -50,3 +50,16 @@ test("role and AI options are generated from their definitions", () => {
     "防守控场"
   ]);
 });
+
+test("deck options append custom decks after player presets", () => {
+  const customDecks = [
+    { id: "custom:a", name: "我的第一套" },
+    { id: "custom:b", name: "我的第二套" }
+  ];
+  const options = deckSetupOptions(deckPresets, { customDecks });
+  const customEntries = options.filter((entry) => entry.custom);
+  assert.deepEqual(customEntries.map((entry) => entry.label), ["我的第一套", "我的第二套"]);
+  assert.equal(options[options.length - 1].id, "custom:b");
+  assert.ok(options.some((entry) => entry.id === "balanced"));
+  assert.equal(deckSetupOptions(deckPresets, {}).some((entry) => entry.custom), false);
+});

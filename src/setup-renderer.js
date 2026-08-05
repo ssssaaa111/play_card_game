@@ -207,6 +207,7 @@ export function renderSetupPanel(doc, elements, {
   playerProfile = {},
   aiLabel = "",
   deckDefinitions = {},
+  customDecks = [],
   statsText = "",
   hintsVisible = false,
   deckExpanded = false,
@@ -219,7 +220,8 @@ export function renderSetupPanel(doc, elements, {
     scenarioId: state.scenarioId,
     scenario,
     playerPreset: state.deckPreset,
-    playerProfile
+    playerProfile,
+    customDecks
   });
   renderPreDuelPreview(doc, elements, preview, {
     started: state.started,

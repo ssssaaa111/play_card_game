@@ -46,18 +46,18 @@ function scenarioZone(entries = [], size) {
   return zone;
 }
 
-function scenarioDeck(scenario, owner, preset) {
+function scenarioDeck(scenario, owner, preset, customDecks = []) {
   const explicitDeck = scenario[`${owner}Deck`];
   return Array.isArray(explicitDeck)
     ? loadCardList(explicitDeck)
-    : buildScenarioDeck(preset, scenarioReservedIds(scenario, owner));
+    : buildScenarioDeck(preset, scenarioReservedIds(scenario, owner), customDecks);
 }
 
-function scenarioDuelistState(scenario, owner, preset) {
+function scenarioDuelistState(scenario, owner, preset, customDecks = []) {
   const prefix = owner === "ai" ? "ai" : "player";
   const state = {
     hand: scenarioList(scenario[`${owner}Hand`]),
-    deck: scenarioDeck(scenario, owner, preset),
+    deck: scenarioDeck(scenario, owner, preset, customDecks),
     field: scenarioZone(scenario[`${owner}Field`], MONSTER_ZONE_SIZE),
     traps: scenarioZone(scenario[`${owner}Traps`], SPELL_TRAP_ZONE_SIZE),
     grave: scenarioList(scenario[`${owner}Grave`])
@@ -144,11 +144,13 @@ function setupContinuousEvents(scenario, setup) {
 
 export function buildScenarioState(scenario = {}, {
   playerPreset = "balanced",
-  aiPreset = "balanced"
+  aiPreset = "balanced",
+  playerCustomDecks = [],
+  aiCustomDecks = []
 } = {}) {
   const setup = {
-    player: scenarioDuelistState(scenario, "player", playerPreset),
-    ai: scenarioDuelistState(scenario, "ai", aiPreset)
+    player: scenarioDuelistState(scenario, "player", playerPreset, playerCustomDecks),
+    ai: scenarioDuelistState(scenario, "ai", aiPreset, aiCustomDecks)
   };
   const gameEvents = setupContinuousEvents(scenario, setup);
   return gameEvents.length ? { ...setup, gameEvents } : setup;
