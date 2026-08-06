@@ -75,7 +75,14 @@ export const cardArtById = Object.freeze({
     "ace-vow-guard",
     "trio-solar-snare",
     "trio-chain-veil"
-  ], 4, 4)
+  ], 4, 4),
+  "trio-final-counter-vow": {
+    asset: "assets/card-art-spell-trap-atlas.png",
+    size: "100% 100%",
+    position: "50% 50%",
+    handSize: "100% auto",
+    handPosition: "50% 50%"
+  }
 });
 
 export function applyCardArt(element, cardId) {

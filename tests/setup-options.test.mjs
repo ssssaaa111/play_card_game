@@ -29,6 +29,8 @@ test("production setup exposes curated duel modes", () => {
     "protagonistAceProtection",
     "protagonistTrioOmega",
     "protagonistTrioOmegaChallenge",
+    "protagonistTrioOmegaStory",
+    "protagonistTrioOmegaVow",
     "protagonistTrioOmegaFull"
   ]);
 });
