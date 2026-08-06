@@ -2520,6 +2520,7 @@ async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) 
   if (owner.owner === "ai" && !hasRivalSummonResponse) {
     await waitForAiReveal({ ...summonLog, revealKind: "summon" });
   }
+  render("summon-board-" + owner.owner);
   if (!openTrapResponseWindow(rival.owner, {
     timing: "summon",
     resumeTiming: "mainOpen",
