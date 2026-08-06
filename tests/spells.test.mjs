@@ -465,3 +465,19 @@ test("scores AI spell/trap removal higher against equipment", () => {
     rival: duelist({ owner: "player", traps: [spell({ effect: "equipBlade" }), null, null] })
   }), 78);
 });
+
+test("AI prioritizes a buff that turns the attack line lethal", () => {
+  const lethalScore = scoreSpellForAi("buff500", {
+    owner: duelist({ owner: "ai", field: [monster({ atk: 2600 }), monster({ atk: 1700 }), null, null, null] }),
+    rival: duelist({ field: [monster({ mode: "defense", def: 2800 }), null, null, null, null], lp: 1700 }),
+    aiStyle: "balanced"
+  });
+  assert.equal(lethalScore, 95);
+
+  const normalScore = scoreSpellForAi("buff500", {
+    owner: duelist({ owner: "ai", field: [monster({ atk: 2600 }), monster({ atk: 1700 }), null, null, null] }),
+    rival: duelist({ field: [monster({ mode: "defense", def: 2800 }), null, null, null, null], lp: 4000 }),
+    aiStyle: "balanced"
+  });
+  assert.equal(normalScore, 50);
+});

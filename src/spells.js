@@ -578,6 +578,10 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
 }
 
 export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } = {}) {
+  const buffMeta = aiStyle !== "scriptedPressure" ? buffSpellMeta[effect] : null;
+  if (buffMeta && fieldCards(owner).length > 0 && buffLeadsToLethal({ owner, rival, ...buffMeta })) {
+    return 95;
+  }
   switch (effect) {
     case "burn500":
       return rival.lp <= (aiStyle === "aggressive" ? 1800 : 900) ? 95 : 22;
@@ -679,4 +683,48 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
     default:
       return 0;
   }
+}
+
+const buffSpellMeta = {
+  dawnEdge: { buff: 900, rule: "strongest" },
+  lastStandSurge: { buff: 700, rule: "strongest" },
+  buff500: { buff: 500, rule: "strongest" },
+  soulResonance: { buff: 200, rule: "strongest" },
+  battleTrance: { buff: 200, rule: "strongest", resets: 1 },
+  rallyAttack: { buff: 300, rule: "strongest", resets: 1 }
+};
+
+function buffedAttackers(owner, buff, rule) {
+  const attackers = (owner.field || []).filter((card) => card && card.mode !== "defense" && !card.used);
+  if (!attackers.length) return [];
+  let targetIndex = 0;
+  for (let index = 1; index < attackers.length; index += 1) {
+    const better = rule === "weakest"
+      ? totalAtk(attackers[index]) < totalAtk(attackers[targetIndex])
+      : totalAtk(attackers[index]) > totalAtk(attackers[targetIndex]);
+    if (better) targetIndex = index;
+  }
+  return attackers.map((card, index) =>
+    index === targetIndex ? { ...card, tempAtk: (card.tempAtk || 0) + buff } : card
+  );
+}
+
+function buffLeadsToLethal({ owner, rival, buff = 0, rule = "strongest", resets = 0 } = {}) {
+  const buffed = buffedAttackers(owner, buff, rule);
+  if (!buffed.length) return false;
+  const targets = (rival?.field || []).filter(Boolean);
+  let damage = findAiAttackSequence({
+    attackers: buffed,
+    targets,
+    shield: Number(rival?.shield) || 0,
+    directAttacks: 0
+  }).damage;
+  if (resets > 0) {
+    let strongestIndex = 0;
+    for (let index = 1; index < buffed.length; index += 1) {
+      if (totalAtk(buffed[index]) > totalAtk(buffed[strongestIndex])) strongestIndex = index;
+    }
+    damage += resets * totalAtk(buffed[strongestIndex]);
+  }
+  return damage >= Number(rival?.lp) || 0;
 }
