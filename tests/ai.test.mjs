@@ -16,6 +16,7 @@ import {
   chooseAiTurnGoal,
   shouldSwitchSummonedMonsterToDefense
 } from "../src/ai.js";
+import { findAiAttackSequence } from "../src/spells.js";
 
 function monster(overrides = {}) {
   return {
@@ -81,6 +82,44 @@ test("lookahead estimates the rival lethal threat through a wall", () => {
     ownerShield: 0
   });
   assert.equal(threat, 2000);
+});
+
+test("attack sequence planner finds a through-monster lethal line", () => {
+  const breaker = { atk: 3000, def: 1000, tempAtk: 0, tempDef: 0, mode: "attack" };
+  const raider = { atk: 2000, def: 1000, tempAtk: 0, tempDef: 0, mode: "attack" };
+  const wall = { atk: 0, def: 2600, tempAtk: 0, tempDef: 0, mode: "defense" };
+
+  const plan = findAiAttackSequence({
+    attackers: [breaker, raider],
+    targets: [wall],
+    shield: 0,
+    directAttacks: 0
+  });
+
+  assert.equal(plan.damage, 2000);
+  assert.equal(plan.moves.length, 2);
+  assert.deepEqual(plan.moves[0], { attackerIndex: 0, targetIndex: 0 });
+  assert.deepEqual(plan.moves[1], { attackerIndex: 1, targetIndex: -1 });
+});
+
+test("AI picks the first move of a lethal attack sequence", () => {
+  const breaker = monster({ name: "breaker", atk: 3000, uid: "b1" });
+  const raider = monster({ name: "raider", atk: 2000, uid: "r1" });
+  const wall = monster({ name: "wall", mode: "defense", def: 2600, uid: "w1" });
+
+  const action = chooseAiAttackAction({
+    owner: { directAttacks: 0, lp: 4000, shield: 0 },
+    field: [breaker, raider],
+    rivalField: [wall],
+    rivalLp: 2000,
+    rivalShield: 0,
+    aiStyle: "balanced",
+    canAttackMonster: () => true
+  });
+
+  assert.equal(action.type, "attack");
+  assert.equal(action.card.uid, "b1");
+  assert.equal(action.targetIndex, 0);
 });
 
 test("AI skips attacks that would only cost LP into stronger defense", () => {

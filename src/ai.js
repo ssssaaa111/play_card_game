@@ -1,6 +1,6 @@
 import { battleValue, canDirectAttack, shieldPreview, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
-import { findAiDirectLethalAttacker, maximumRemainingAttackDamage, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
+import { findAiAttackSequence, findAiDirectLethalAttacker, maximumRemainingAttackDamage, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
 import { selectRedirectTarget } from './traps.js';
 import { getCardEffectDefinition } from './game-engine.js';
 
@@ -627,7 +627,7 @@ export function aiMaxDamageThisTurn({ attackers = [], targets = [], shield = 0, 
 export function aiRivalLethalThreat({ rivalField = [], ownerField = [], ownerShield = 0 } = {}) {
   return aiMaxDamageThisTurn({
     attackers: aiAttackersList(rivalField).map((entry) => entry.card),
-    targets: ownerField,
+    targets: ownerField.filter(Boolean),
     shield: ownerShield
   });
 }
@@ -684,6 +684,28 @@ export function chooseAiAttackAction({
   });
   const underLethalThreat = !canKillNow && rivalThreat >= (owner?.lp || 0);
   const threatTarget = underLethalThreat ? chooseThreatTarget(pick.card, rivalField) : null;
+  const targetEntries = rivalField
+    .map((card, index) => card ? { card, index } : null)
+    .filter(Boolean);
+  const sequencePlan = findAiAttackSequence({
+    attackers: attackers.map((entry) => entry.card),
+    targets: targetEntries.map((entry) => entry.card),
+    shield: rivalShield,
+    directAttacks: owner?.directAttacks || 0
+  });
+  if (sequencePlan.damage >= rivalLp && sequencePlan.moves.length > 0) {
+    const first = sequencePlan.moves[0];
+    const fieldAttacker = attackers[first.attackerIndex];
+    const targetFieldIndex = first.targetIndex >= 0 ? targetEntries[first.targetIndex].index : -1;
+    return {
+      type: "attack",
+      card: fieldAttacker.card,
+      cardUid: fieldAttacker.card.uid,
+      attackerIndex: fieldAttacker.index,
+      targetIndex: targetFieldIndex,
+      target: targetFieldIndex >= 0 ? rivalField[targetFieldIndex] : null
+    };
+  }
   if (aiStyle === "scriptedPressure" && rivalField.some(Boolean)) {
     const lethalDirect = findAiDirectLethalAttacker({
       attackers: attackers.map((entry) => entry.card),

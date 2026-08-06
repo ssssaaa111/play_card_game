@@ -105,6 +105,81 @@ export function maximumRemainingAttackDamage(attackers, targets, shield, directA
   );
 }
 
+export function findAiAttackSequence({ attackers = [], targets = [], shield = 0, directAttacks = 0 } = {}) {
+  const activeAttackers = attackers.filter(Boolean);
+  const activeTargets = targets.filter(Boolean);
+  if (!activeAttackers.length) return { moves: [], damage: 0 };
+  const memo = new Map();
+  const allAttackers = (1 << activeAttackers.length) - 1;
+  const allTargets = (1 << activeTargets.length) - 1;
+
+  function search(attackerMask, targetMask, remainingShield, remainingDirectAttacks) {
+    if (attackerMask === 0) return { damage: 0, moves: [] };
+    const key = `${attackerMask}:${targetMask}:${remainingShield}:${remainingDirectAttacks}`;
+    if (memo.has(key)) return memo.get(key);
+    let best = { damage: 0, moves: [] };
+
+    for (let attackerIndex = 0; attackerIndex < activeAttackers.length; attackerIndex += 1) {
+      const attackerBit = 1 << attackerIndex;
+      if ((attackerMask & attackerBit) === 0) continue;
+      const attacker = activeAttackers[attackerIndex];
+      const nextAttackers = attackerMask & ~attackerBit;
+      const skip = search(nextAttackers, targetMask, remainingShield, remainingDirectAttacks);
+      if (skip.damage > best.damage) best = skip;
+
+      const naturalDirect = targetMask === 0 || Boolean(attacker?.canDirectAttack);
+      if (naturalDirect || remainingDirectAttacks > 0) {
+        const direct = previewDamageSequence(
+          attacker,
+          [totalAtk(attacker), ...guaranteedAfterAttackDamage(attacker)],
+          remainingShield
+        );
+        const directCost = naturalDirect ? 0 : 1;
+        const follow = search(
+          nextAttackers,
+          targetMask,
+          direct.shieldAfter,
+          remainingDirectAttacks - directCost
+        );
+        const candidate = {
+          damage: direct.finalDamage + follow.damage,
+          moves: [{ attackerIndex, targetIndex: -1 }, ...follow.moves]
+        };
+        if (candidate.damage > best.damage) best = candidate;
+      }
+
+      for (let targetIndex = 0; targetIndex < activeTargets.length; targetIndex += 1) {
+        const targetBit = 1 << targetIndex;
+        if ((targetMask & targetBit) === 0) continue;
+        const attack = previewTargetAttackDamage(attacker, targets[targetIndex], remainingShield);
+        if (!attack) continue;
+        const follow = search(
+          nextAttackers,
+          targetMask & ~targetBit,
+          attack.shieldAfter,
+          remainingDirectAttacks
+        );
+        const candidate = {
+          damage: attack.finalDamage + follow.damage,
+          moves: [{ attackerIndex, targetIndex }, ...follow.moves]
+        };
+        if (candidate.damage > best.damage) best = candidate;
+      }
+    }
+
+    memo.set(key, best);
+    return best;
+  }
+
+  const result = search(
+    allAttackers,
+    allTargets,
+    Math.max(0, Number(shield) || 0),
+    Math.max(0, Number(directAttacks) || 0)
+  );
+  return { moves: result.moves, damage: result.damage };
+}
+
 export function findAiDirectLethalAttacker({
   attackers = [],
   targets = [],
