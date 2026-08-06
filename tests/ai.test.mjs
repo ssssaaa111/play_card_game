@@ -122,6 +122,27 @@ test("AI picks the first move of a lethal attack sequence", () => {
   assert.equal(action.targetIndex, 0);
 });
 
+test("non-scripted AI baits a live attack trap with its weakest monster", () => {
+  const strong = monster({ name: "god", atk: 3000, uid: "g1" });
+  const weak = monster({ name: "pawn", atk: 600, uid: "p1" });
+  const wall = monster({ name: "wall", mode: "defense", def: 400, uid: "w1" });
+  const snare = { type: "trap", name: "snare", trigger: "attackDestroy", uid: "s1" };
+
+  const action = chooseAiAttackAction({
+    owner: { directAttacks: 0, lp: 4000, shield: 0, traps: [] },
+    field: [strong, weak],
+    rivalField: [wall],
+    rivalTraps: [snare],
+    rivalLp: 4000,
+    rivalShield: 0,
+    aiStyle: "balanced",
+    canAttackMonster: () => true
+  });
+
+  assert.equal(action.type, "attack");
+  assert.equal(action.card.uid, "p1");
+});
+
 test("AI skips attacks that would only cost LP into stronger defense", () => {
   const target = chooseAiAttackTarget({
     attacker: monster({ name: "lancer", atk: 1800 }),

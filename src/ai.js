@@ -1,6 +1,7 @@
 import { battleValue, canDirectAttack, shieldPreview, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
 import { findAiAttackSequence, findAiDirectLethalAttacker, maximumRemainingAttackDamage, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
+import { trapCanResolve } from './traps.js';
 import { selectRedirectTarget } from './traps.js';
 import { getCardEffectDefinition } from './game-engine.js';
 
@@ -645,10 +646,19 @@ function chooseThreatTarget(attacker, targets) {
   return null;
 }
 
+function aiLiveAttackTraps(rivalTraps = [], rivalField = []) {
+  return (rivalTraps || [])
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => card && trapCanResolve(card, "attack", {
+      owner: { traps: rivalTraps, field: rivalField }
+    }));
+}
+
 export function chooseAiAttackAction({
   owner = null,
   field = [],
   rivalField = [],
+  rivalTraps = [],
   rivalLp = 0,
   rivalShield = 0,
   aiStyle = "balanced",
@@ -670,6 +680,35 @@ export function chooseAiAttackAction({
 
   const pick = attackers[0];
   if (!pick) return { type: "none" };
+  if (aiStyle !== "scriptedPressure") {
+    const liveTraps = aiLiveAttackTraps(rivalTraps, rivalField);
+    const canCounter = (owner?.traps || []).some((card) => card?.trigger === "chainNegate");
+    if (liveTraps.length > 0 && !canCounter && attackers.length > 1) {
+      const sorted = [...attackers].sort((a, b) => totalAtk(a.card) - totalAtk(b.card));
+      const bait = sorted[0];
+      const strongest = sorted[sorted.length - 1];
+      if (totalAtk(strongest.card) > totalAtk(bait.card) + 200) {
+        const baitTarget = chooseAiAttackTarget({
+          attacker: bait.card,
+          targets: rivalField,
+          playerLp: rivalLp,
+          playerShield: rivalShield,
+          aiStyle,
+          canUseDirect: owner ? canDirectAttack(owner, bait.card) : false
+        });
+        if (baitTarget !== null) {
+          return {
+            type: "attack",
+            card: bait.card,
+            cardUid: bait.card.uid,
+            attackerIndex: bait.index,
+            targetIndex: baitTarget,
+            target: baitTarget >= 0 ? rivalField[baitTarget] : null
+          };
+        }
+      }
+    }
+  }
   const lethalDamage = aiMaxDamageThisTurn({
     attackers: attackers.map((entry) => entry.card),
     targets: rivalField,

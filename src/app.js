@@ -4422,6 +4422,7 @@ async function aiAttack() {
       owner: state.ai,
       field: state.ai.field,
       rivalField: state.player.field,
+      rivalTraps: state.player.traps,
       rivalLp: state.player.lp,
       rivalShield: state.player.shield,
       aiStyle: state.aiStyle,
