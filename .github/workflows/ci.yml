@@ -19,6 +19,8 @@ jobs:
         run: npm test
       - name: Run deterministic rule simulation
         run: npm run sim:ci
+      - name: Run finale full-duel regression
+        run: npm run sim:finale
 
   browser-smoke:
     name: Browser smoke

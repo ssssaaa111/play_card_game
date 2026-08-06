@@ -4170,8 +4170,9 @@ async function runTrioOmegaCasualFailureLine(ctx, smokeName, { continueAfterRiva
   clickSmokeElement(handCard(ctx.els, "trio-final-counter"), `${smokeName}: click final counter too early`);
   await waitForSmoke(
     () => ctx.state.player.hand.some((card) => card?.id === "trio-final-counter") &&
-      ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"),
-    `${smokeName}: final counter remains blocked by moon dominion`,
+      ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
+      (ctx.els.toast?.textContent || "").includes("余烁小卫"),
+    `${smokeName}: final counter explains the missing pawn while moon dominion blocks`,
     6000
   );
 
@@ -4465,6 +4466,394 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
   }
 
   setSmokeStatus("passed", "trio-omega-full-duel");
+}
+
+function finaleAutopilotSignature(state) {
+  return JSON.stringify([
+    state.turn,
+    state.phase,
+    state.actionWindow,
+    state.player.lp,
+    state.ai.lp,
+    (state.player.hand || []).length,
+    (state.ai.hand || []).length,
+    (state.player.field || []).map((card) => card?.id || null),
+    (state.ai.field || []).map((card) => card?.id || null),
+    state.pendingTarget?.effect || null,
+    state.pendingTribute?.cost || null,
+    state.pendingFusion ? 1 : 0,
+    state.chainOpen ? 1 : 0
+  ]);
+}
+
+function emptyPlayerFieldSlotEl(els) {
+  for (let index = 0; index < 5; index += 1) {
+    const slot = fieldSlot(els, "player", index);
+    if (slot && !slot.querySelector(".card") && !slot.disabled) return slot;
+  }
+  return null;
+}
+
+function emptyPlayerTrapSlotEl(els) {
+  for (let index = 0; index < 5; index += 1) {
+    const slot = trapSlot(els, "player", index);
+    if (slot && !slot.querySelector(".card") && !slot.disabled) return slot;
+  }
+  return null;
+}
+
+function pickSpellTargetElement(els) {
+  const roots = [els.playerField, els.aiField, els.playerTraps, els.aiTraps, els.graveTargets];
+  for (const root of roots) {
+    if (!root) continue;
+    const candidate = root.querySelector('.targetable, [data-target-state="legal"]');
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
+async function respondToOpenChain(ctx, smokeName) {
+  if (!ctx.els.chainModal?.classList.contains("show")) return false;
+  const button = ctx.els.chainYes && !ctx.els.chainYes.disabled ? ctx.els.chainYes : ctx.els.chainNo;
+  if (!button) return false;
+  clickSmokeElement(button, `${smokeName}: respond to chain`);
+  await waitForSmoke(
+    () => !ctx.els.chainModal.classList.contains("show") || ctx.state.gameOver,
+    `${smokeName}: chain closes`,
+    10000
+  );
+  return true;
+}
+
+async function resolveAutopilotTribute(ctx, smokeName) {
+  if (!ctx.state.pendingTribute) return false;
+  if (ctx.els.choiceConfirmBtn?.disabled) {
+    throw new Error(`${smokeName}: tribute window stuck with confirm disabled. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm tributes`);
+  await waitForSmoke(() => !ctx.state.pendingTribute, `${smokeName}: tribute summon resolves`, 10000);
+  return true;
+}
+
+async function resolveAutopilotTarget(ctx, smokeName) {
+  if (!ctx.state.pendingTarget) return false;
+  if (!ctx.els.choiceConfirmBtn?.disabled) {
+    clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm selected target`);
+    await waitForSmoke(() => !ctx.state.pendingTarget, `${smokeName}: target selection closes`, 10000);
+    return true;
+  }
+  const target = pickSpellTargetElement(ctx.els);
+  if (!target) {
+    throw new Error(`${smokeName}: target window without a selectable target. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(target, `${smokeName}: pick spell target`);
+  await waitForSmoke(() => !ctx.els.choiceConfirmBtn?.disabled, `${smokeName}: target ready`, 10000);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm spell target`);
+  await waitForSmoke(() => !ctx.state.pendingTarget, `${smokeName}: spell resolves`, 10000);
+  return true;
+}
+
+async function autopilotPlayHandCard(ctx, smokeName) {
+  const hand = ctx.state.player.hand || [];
+  const actions = ctx.currentPlayerActions();
+  for (const card of hand) {
+    if (!card) continue;
+    const cardEl = handCard(ctx.els, card.id);
+    if (!cardEl || !cardEl.classList.contains("action-ready") || cardEl.classList.contains("action-blocked")) continue;
+    if (card.type === "monster" && !actions.summon) continue;
+    if (card.type === "spell" && !actions.spell) continue;
+    if (card.type === "trap" && !actions.trap) continue;
+    if (card.type === "monster") {
+      const slot = emptyPlayerFieldSlotEl(ctx.els);
+      if (!slot) continue;
+      clickSmokeElement(cardEl, `${smokeName}: select ${card.id}`);
+      if (ctx.state.pendingTribute || ctx.state.pendingFusion) return true;
+      let summoned = false;
+      for (let attempt = 0; attempt < 3 && !summoned; attempt += 1) {
+        clickSmokeElement(slot, `${smokeName}: place ${card.id} (attempt ${attempt + 1})`);
+        try {
+          await waitForSmoke(
+            () => ctx.state.player.field.some((entry) => entry?.id === card.id),
+            `${smokeName}: ${card.id} summoned`,
+            4000
+          );
+          summoned = true;
+        } catch (error) {
+          // The drop may have raced the selection render; retry the same slot.
+        }
+      }
+      if (!summoned) {
+        throw new Error(`${smokeName}: could not summon ${card.id}. ${smokeDebug(ctx)}`);
+      }
+      return true;
+    }
+    if (card.type === "spell") {
+      clickSmokeElement(cardEl, `${smokeName}: play spell ${card.id}`);
+      await waitForSmoke(
+        () => !ctx.els.choiceActions.hidden || ctx.state.pendingTarget || ctx.state.pendingFusion || ctx.state.gameOver,
+        `${smokeName}: spell ${card.id} registers`,
+        8000
+      );
+      if (!ctx.state.pendingTarget && !ctx.state.pendingFusion &&
+          !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled) {
+        clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm spell ${card.id}`);
+        await waitForSmoke(
+          () => ctx.els.choiceActions.hidden || ctx.state.pendingTarget || ctx.state.gameOver,
+          `${smokeName}: spell ${card.id} confirms`,
+          8000
+        );
+      }
+      return true;
+    }
+    if (card.type === "trap") {
+      const slot = emptyPlayerTrapSlotEl(ctx.els);
+      if (!slot) continue;
+      clickSmokeElement(cardEl, `${smokeName}: set trap ${card.id}`);
+      clickSmokeElement(slot, `${smokeName}: trap ${card.id} slot`);
+      await waitForSmoke(
+        () => ctx.state.player.traps.some((entry) => entry?.id === card.id),
+        `${smokeName}: trap ${card.id} set :: ${smokeDebug(ctx)}`,
+        8000
+      );
+      return true;
+    }
+  }
+  return false;
+}
+
+async function autopilotAttack(ctx, smokeName) {
+  if (!ctx.currentPlayerActions().attack) return false;
+  const attacker = (ctx.state.player.field || []).find((card) =>
+    card && !card.used && (card.mode || "attack") !== "defense"
+  );
+  if (!attacker) return false;
+  const attackerEl = fieldCard(ctx.els, "player", attacker.id);
+  if (!attackerEl) return false;
+  const battlesBefore = countGameEvents(ctx.state, "BATTLE_RESOLVED");
+  const cancelsBefore = countGameEvents(ctx.state, "ATTACK_CANCELED");
+  clickSmokeElement(attackerEl, `${smokeName}: select attacker ${attacker.id}`);
+  await waitForSmoke(
+    () => ctx.els.aiField?.querySelector(".attack-target") ||
+      ctx.els.aiPanel?.classList.contains("direct-target") ||
+      ctx.state.gameOver,
+    `${smokeName}: attack targets for ${attacker.id}`,
+    8000
+  );
+  const target = ctx.els.aiField?.querySelector(".attack-target");
+  if (target) {
+    clickSmokeElement(target, `${smokeName}: attack ${target.dataset.cardId || "target"}`);
+  } else if (ctx.els.aiPanel?.classList.contains("direct-target")) {
+    clickSmokeElement(ctx.els.aiPanel, `${smokeName}: direct attack`);
+  } else {
+    return false;
+  }
+  await waitForSmoke(
+    () => ctx.state.gameOver ||
+      countGameEvents(ctx.state, "BATTLE_RESOLVED") > battlesBefore ||
+      countGameEvents(ctx.state, "ATTACK_CANCELED") > cancelsBefore ||
+      !ctx.state.player.field.some((card) => card?.id === attacker.id) ||
+      ctx.els.chainModal?.classList.contains("show"),
+    `${smokeName}: attack resolves`,
+    15000
+  );
+  return true;
+}
+
+async function runFinaleAutopilotSmoke(ctx) {
+  const smokeName = "finale-autopilot";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaFull");
+  const startedAt = Date.now();
+  let idle = 0;
+  let lastSignature = finaleAutopilotSignature(ctx.state);
+  let steps = 0;
+  let playerTurns = 0;
+
+  while (!ctx.state.gameOver) {
+    steps += 1;
+    if (steps > 500) throw new Error(`${smokeName}: step limit. ${smokeDebug(ctx)}`);
+    if (Date.now() - startedAt > 50000) throw new Error(`${smokeName}: time limit. ${smokeDebug(ctx)}`);
+    if (await respondToOpenChain(ctx, smokeName)) continue;
+    if (ctx.state.turn !== "player") {
+      await waitForSmoke(
+        () => ctx.state.turn === "player" || ctx.state.gameOver || ctx.els.chainModal?.classList.contains("show"),
+        `${smokeName}: rival turn resolves :: ${smokeDebug(ctx)}`,
+        25000
+      );
+      continue;
+    }
+    if (ctx.state.phase === "draw") {
+      await waitForSmoke(
+        () => ctx.state.phase === "main" || ctx.state.gameOver,
+        `${smokeName}: player turn draw resolves`,
+        10000
+      );
+      continue;
+    }
+    if (await resolveAutopilotTribute(ctx, smokeName)) continue;
+    if (await resolveAutopilotTarget(ctx, smokeName)) continue;
+    if (await autopilotPlayHandCard(ctx, smokeName)) continue;
+    if (await autopilotAttack(ctx, smokeName)) continue;
+    const signature = finaleAutopilotSignature(ctx.state);
+    if (signature === lastSignature) {
+      idle += 1;
+      if (idle >= 8) {
+        throw new Error(`${smokeName}: player state stalled. ${smokeDebug(ctx)}`);
+      }
+    } else {
+      idle = 0;
+      lastSignature = signature;
+    }
+    if (ctx.state.turn === "player" && (ctx.state.phase === "main" || ctx.state.phase === "battle")) {
+      if (ctx.els.endTurnBtn?.disabled) {
+        throw new Error(`${smokeName}: cannot end turn. ${smokeDebug(ctx)}`);
+      }
+      clickSmokeElement(ctx.els.endTurnBtn, `${smokeName}: end turn`);
+      await waitForSmoke(
+        () => ctx.state.turn === "ai" || ctx.state.gameOver,
+        `${smokeName}: turn passes`,
+        10000
+      );
+      playerTurns += 1;
+      continue;
+    }
+    throw new Error(`${smokeName}: unhandled player state. ${smokeDebug(ctx)}`);
+  }
+
+  const winner = ctx.state.gameOverWinner || "none";
+  const logTail = (ctx.state.log || []).slice(-5).map(logEntryMessage).join(" | ");
+  setSmokeStatus(
+    "passed",
+    `finale-autopilot winner=${winner} playerTurns=${playerTurns} steps=${steps} playerLp=${ctx.state.player.lp} aiLp=${ctx.state.ai.lp} log=${logTail}`
+  );
+}
+
+async function runHandSummonBlockProbeSmoke(ctx) {
+  const smokeName = "hand-summon-block-probe";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaFull");
+  if (!ctx.currentPlayerActions().summon) {
+    throw new Error(`${smokeName}: no summon available at start. ${smokeDebug(ctx)}`);
+  }
+  const monster = (ctx.state.player.hand || []).find((card) => card?.type === "monster");
+  if (!monster) {
+    throw new Error(`${smokeName}: no monster in opening hand. ${smokeDebug(ctx)}`);
+  }
+  const cardEl = handCard(ctx.els, monster.id);
+  const slot = emptyPlayerFieldSlotEl(ctx.els);
+  if (!cardEl || !slot) {
+    throw new Error(`${smokeName}: monster or slot element missing. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(cardEl, `${smokeName}: select monster`);
+  clickSmokeElement(slot, `${smokeName}: place monster`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((entry) => entry?.id === monster.id) && ctx.state.player.normalSummonsUsed >= 1,
+    `${smokeName}: monster summoned`,
+    8000
+  );
+  const readLeftovers = () => (ctx.state.player.hand || [])
+    .filter((card) => card?.type === "monster")
+    .map((card) => {
+      const el = handCard(ctx.els, card.id);
+      return {
+        id: card.id,
+        ready: Boolean(el?.classList.contains("action-ready")),
+        blocked: Boolean(el?.classList.contains("action-blocked")),
+        label: el?.querySelector(".action-tag")?.textContent || "",
+        reason: el?.title || ""
+      };
+    });
+  const immediate = readLeftovers();
+  const staleReady = immediate.filter((entry) => entry.ready);
+  if (staleReady.length > 0) {
+    throw new Error(`${smokeName}: hand still marks monsters summonable after summon used: ${JSON.stringify(immediate)}`);
+  }
+  for (let settle = 0; settle < 6; settle += 1) {
+    if (ctx.els.chainModal?.classList.contains("show")) {
+      const button = ctx.els.chainYes && !ctx.els.chainYes.disabled ? ctx.els.chainYes : ctx.els.chainNo;
+      if (button) clickSmokeElement(button, `${smokeName}: settle summon chain`);
+    }
+    await waitForSmoke(
+      () => !ctx.els.chainModal?.classList.contains("show") || ctx.state.gameOver,
+      `${smokeName}: summon chain settles`,
+      6000
+    );
+  }
+  const settled = readLeftovers();
+  setSmokeStatus(
+    "passed",
+    JSON.stringify({
+      normalSummonsUsed: ctx.state.player.normalSummonsUsed,
+      extraSummon: ctx.state.player.extraSummon,
+      immediate,
+      settled
+    })
+  );
+}
+
+async function runSummonClickRaceProbeSmoke(ctx) {
+  const smokeName = "summon-click-race-probe";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaFull");
+  if (!ctx.currentPlayerActions().summon) {
+    throw new Error(`${smokeName}: no summon available at start. ${smokeDebug(ctx)}`);
+  }
+  const monster = (ctx.state.player.hand || []).find((card) => card?.type === "monster");
+  if (!monster) {
+    throw new Error(`${smokeName}: no monster in opening hand. ${smokeDebug(ctx)}`);
+  }
+  const cardEl = handCard(ctx.els, monster.id);
+  const slot = emptyPlayerFieldSlotEl(ctx.els);
+  if (!cardEl || !slot) {
+    throw new Error(`${smokeName}: monster or slot element missing. ${smokeDebug(ctx)}`);
+  }
+  let success = false;
+  let failure = null;
+  for (let attempt = 1; attempt <= 5 && !success; attempt += 1) {
+    if (ctx.state.player.field.some((entry) => entry?.id === monster.id)) {
+      success = true;
+      break;
+    }
+    clickSmokeElement(cardEl, `${smokeName}: select ${monster.id} (attempt ${attempt})`);
+    clickSmokeElement(slot, `${smokeName}: place ${monster.id} (attempt ${attempt})`);
+    try {
+      await waitForSmoke(
+        () => ctx.state.player.field.some((entry) => entry?.id === monster.id) ||
+          ctx.state.pendingTribute ||
+          ctx.state.gameOver,
+        `${smokeName}: summon registers`,
+        2500
+      );
+      if (ctx.state.pendingTribute) {
+        clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm tribute`);
+        await waitForSmoke(
+          () => ctx.state.player.field.some((entry) => entry?.id === monster.id),
+          `${smokeName}: tribute summon registers`,
+          4000
+        );
+      }
+      success = true;
+    } catch (error) {
+      failure = {
+        attempt,
+        selected: ctx.state.selected,
+        phase: ctx.state.phase,
+        actionWindow: ctx.state.actionWindow,
+        normalSummonsUsed: ctx.state.player.normalSummonsUsed
+      };
+    }
+  }
+  if (!success) {
+    throw new Error(`${smokeName}: back-to-back summon click did not register. ${JSON.stringify(failure)} ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus(
+    "passed",
+    JSON.stringify({
+      monster: monster.id,
+      attempts: failure ? failure.attempt + 1 : 1,
+      normalSummonsUsed: ctx.state.player.normalSummonsUsed
+    })
+  );
 }
 
 async function runRedirectPromptSmoke(ctx) {
@@ -7260,6 +7649,9 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke,
     "trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke,
     "trio-omega-full-duel": runTrioOmegaFullDuelSmoke,
+    "finale-autopilot": runFinaleAutopilotSmoke,
+    "hand-summon-block-probe": runHandSummonBlockProbeSmoke,
+    "summon-click-race-probe": runSummonClickRaceProbeSmoke,
     "redirect-prompt": runRedirectPromptSmoke,
     "phantom-switch-redirect": runPhantomSwitchRedirectSmoke,
     "spell-target-default-basic": runSpellTargetDefaultBasicSmoke,

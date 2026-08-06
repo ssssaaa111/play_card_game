@@ -802,10 +802,15 @@ function applyScenarioSetup() {
   if (!scenario || state.scenarioId === "normal") return;
   const scenarioAiStyle = scenario.aiStyle || state.aiStyle;
   if (scenario.aiStyle) state.aiStyle = scenario.aiStyle;
+  const rawShuffleSeed = BROWSER_PARAMS.get("seed");
+  const shuffleSeed = BROWSER_TEST_MODE && rawShuffleSeed != null && Number.isFinite(Number(rawShuffleSeed))
+    ? Number(rawShuffleSeed)
+    : null;
   const setup = buildScenarioState(scenario, {
     playerPreset: state.deckPreset,
     playerCustomDecks: currentCustomDecks(),
-    aiPreset: aiProfiles[scenarioAiStyle]?.deckPreset || "balanced"
+    aiPreset: aiProfiles[scenarioAiStyle]?.deckPreset || "balanced",
+    shuffleSeed
   });
   Object.assign(state.player, setup.player);
   Object.assign(state.ai, setup.ai);
@@ -2517,6 +2522,7 @@ async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) 
   if (owner.owner === "ai" && !hasRivalSummonResponse) {
     await waitForAiReveal({ ...summonLog, revealKind: "summon" });
   }
+  render("summon-board-" + owner.owner);
   if (!openTrapResponseWindow(rival.owner, {
     timing: "summon",
     resumeTiming: "mainOpen",
