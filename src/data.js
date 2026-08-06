@@ -1293,7 +1293,7 @@ export const scenarioSetups = {
       "等星曜撞上誓约之力，再直接结束战斗。"
     ],
     playerLp: 1500,
-    aiLp: 2000,
+    aiLp: 4000,
     playerHand: ["seer-call", "trio-solar-snare", "trio-solar-snare", "trio-ember-recall", "trio-decoy-ward"],
     playerDeck: [
       "trio-moonbreaker-ray", "last-spark", "trio-chain-veil", "trio-final-counter-vow",
