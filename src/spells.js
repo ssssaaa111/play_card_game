@@ -39,7 +39,7 @@ function previewTargetAttackDamage(attacker, target, shield) {
   return previewDamageSequence(attacker, amounts, shield);
 }
 
-function maximumRemainingAttackDamage(attackers, targets, shield, directAttacks) {
+export function maximumRemainingAttackDamage(attackers, targets, shield, directAttacks) {
   const memo = new Map();
   const allAttackers = (1 << attackers.length) - 1;
   const allTargets = (1 << targets.length) - 1;

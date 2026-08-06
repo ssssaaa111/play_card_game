@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  aiMaxDamageThisTurn,
+  aiRivalLethalThreat,
   aiSupportZoneReserve,
   aiTrapSetLimit,
   collectAiAttackBlockers,
@@ -57,6 +59,28 @@ test("AI attacks a beatable guard instead of a stronger defense target", () => {
   });
 
   assert.equal(target, 0);
+});
+
+test("lookahead computes the AI's maximum damage this turn", () => {
+  assert.equal(aiMaxDamageThisTurn({
+    attackers: [monster({ name: "lancer", atk: 1800 }), monster({ name: "raider", atk: 1600 })],
+    targets: [],
+    shield: 0
+  }), 3400);
+  assert.equal(aiMaxDamageThisTurn({
+    attackers: [monster({ name: "god", atk: 3000 })],
+    targets: [],
+    shield: 800
+  }), 2200);
+});
+
+test("lookahead estimates the rival lethal threat through a wall", () => {
+  const threat = aiRivalLethalThreat({
+    rivalField: [monster({ name: "breaker", atk: 3000 }), monster({ name: "raider", atk: 2000 })],
+    ownerField: [monster({ name: "wall", mode: "defense", def: 2600 })],
+    ownerShield: 0
+  });
+  assert.equal(threat, 2000);
 });
 
 test("AI skips attacks that would only cost LP into stronger defense", () => {

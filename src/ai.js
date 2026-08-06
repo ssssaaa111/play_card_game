@@ -1,6 +1,6 @@
 import { battleValue, canDirectAttack, shieldPreview, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
-import { findAiDirectLethalAttacker, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
+import { findAiDirectLethalAttacker, maximumRemainingAttackDamage, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
 import { selectRedirectTarget } from './traps.js';
 import { getCardEffectDefinition } from './game-engine.js';
 
@@ -379,6 +379,11 @@ function scoreAiTrapResponse(card, details = {}) {
   if (details.eventName === "attack" && card.trigger === "attackDestroy") {
     return attackThreatScore(details);
   }
+  if (details.eventName === "chain") {
+    const sourceTrigger = details.context?.sourceTrap?.trigger || "";
+    const blocksKeyPlay = ["attackDestroy", "attackNegate", "counterBoost", "attackShift", "aceGuard"].includes(sourceTrigger);
+    return blocksKeyPlay ? 90 : 0;
+  }
   return 60;
 }
 
@@ -601,6 +606,45 @@ export function shouldSwitchSummonedMonsterToDefense({
   return totalDef(monster) > totalAtk(monster) + 400 && ownerLp < rivalLp;
 }
 
+function aiAttackersList(field) {
+  return (field || [])
+    .map((card, index) => ({ card, index }))
+    .filter((entry) => entry.card && entry.card.mode !== "defense" && !entry.card.used);
+}
+
+export function aiMaxDamageThisTurn({ attackers = [], targets = [], shield = 0, directAttacks = 0 } = {}) {
+  const activeAttackers = attackers.filter(Boolean);
+  const activeTargets = targets.filter(Boolean);
+  if (!activeAttackers.length) return 0;
+  return maximumRemainingAttackDamage(
+    activeAttackers,
+    activeTargets,
+    Math.max(0, Number(shield) || 0),
+    Math.max(0, Number(directAttacks) || 0)
+  );
+}
+
+export function aiRivalLethalThreat({ rivalField = [], ownerField = [], ownerShield = 0 } = {}) {
+  return aiMaxDamageThisTurn({
+    attackers: aiAttackersList(rivalField).map((entry) => entry.card),
+    targets: ownerField,
+    shield: ownerShield
+  });
+}
+
+function chooseThreatTarget(attacker, targets) {
+  const attackerAtk = totalAtk(attacker);
+  const entries = (targets || [])
+    .map((target, index) => target ? { target, index, atk: totalAtk(target) } : null)
+    .filter(Boolean)
+    .filter((entry) => entry.target.mode === "attack")
+    .sort((a, b) => b.atk - a.atk || a.index - b.index);
+  for (const entry of entries) {
+    if (attackerAtk > entry.atk) return entry.index;
+  }
+  return null;
+}
+
 export function chooseAiAttackAction({
   owner = null,
   field = [],
@@ -626,6 +670,20 @@ export function chooseAiAttackAction({
 
   const pick = attackers[0];
   if (!pick) return { type: "none" };
+  const lethalDamage = aiMaxDamageThisTurn({
+    attackers: attackers.map((entry) => entry.card),
+    targets: rivalField,
+    shield: rivalShield,
+    directAttacks: owner?.directAttacks || 0
+  });
+  const canKillNow = lethalDamage >= rivalLp;
+  const rivalThreat = aiRivalLethalThreat({
+    rivalField,
+    ownerField: field,
+    ownerShield: owner?.shield || 0
+  });
+  const underLethalThreat = !canKillNow && rivalThreat >= (owner?.lp || 0);
+  const threatTarget = underLethalThreat ? chooseThreatTarget(pick.card, rivalField) : null;
   if (aiStyle === "scriptedPressure" && rivalField.some(Boolean)) {
     const lethalDirect = findAiDirectLethalAttacker({
       attackers: attackers.map((entry) => entry.card),
@@ -645,6 +703,16 @@ export function chooseAiAttackAction({
         target: null
       };
     }
+  }
+  if (threatTarget !== null) {
+    return {
+      type: "attack",
+      card: pick.card,
+      cardUid: pick.card.uid,
+      attackerIndex: pick.index,
+      targetIndex: threatTarget,
+      target: rivalField[threatTarget]
+    };
   }
   const targetIndex = chooseAiAttackTarget({
     attacker: pick.card,
