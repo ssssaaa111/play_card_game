@@ -466,6 +466,24 @@ test("scores AI spell/trap removal higher against equipment", () => {
   }), 78);
 });
 
+test("AI prioritizes removing a live attack trap before striking", () => {
+  const snare = { type: "trap", id: "snare", trigger: "attackDestroy", uid: "s1" };
+
+  const liveTrapScore = scoreSpellForAi("destroySpellTrap", {
+    owner: duelist({ owner: "ai" }),
+    rival: duelist({ owner: "player", traps: [snare, null, null, null, null] }),
+    aiStyle: "balanced"
+  });
+  assert.equal(liveTrapScore, 96);
+
+  const scriptedScore = scoreSpellForAi("destroySpellTrap", {
+    owner: duelist({ owner: "ai" }),
+    rival: duelist({ owner: "player", traps: [snare, null, null, null, null] }),
+    aiStyle: "scriptedPressure"
+  });
+  assert.equal(scriptedScore, 52);
+});
+
 test("AI prioritizes a buff that turns the attack line lethal", () => {
   const lethalScore = scoreSpellForAi("buff500", {
     owner: duelist({ owner: "ai", field: [monster({ atk: 2600 }), monster({ atk: 1700 }), null, null, null] }),

@@ -2,6 +2,7 @@ import { MAX_LP, battleValue, fieldCards, fieldElements, shieldPreview, totalAtk
 import { describeBattleOutcome } from './battle.js';
 import { fusionOptionsForCard } from './fusion.js';
 import { getCardEffectDefinition } from './game-engine.js';
+import { trapCanResolve } from './traps.js';
 
 function guaranteedAfterAttackDamage(attacker) {
   const definition = getCardEffectDefinition(attacker?.afterAttack);
@@ -678,6 +679,10 @@ export function scoreSpellForAi(effect, { owner, rival, aiStyle = "balanced" } =
     case "destroySpellTrap": {
       const targets = (rival?.traps || []).filter(Boolean);
       if (!targets.length) return 0;
+      if (aiStyle !== "scriptedPressure" &&
+          targets.some((card) => trapCanResolve(card, "attack", { owner: rival }))) {
+        return 96;
+      }
       return targets.some((card) => ["equipBlade", "equipAegis", "equipPrism", "equipOverclock"].includes(card.effect)) ? 78 : 52;
     }
     default:
