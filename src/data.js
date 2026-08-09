@@ -1358,6 +1358,103 @@ export const scenarioSetups = {
       }
     ]
   },
+  protagonistTrioOmegaFinale: {
+    label: "终局三曜 · 终焉篇",
+    setupVisibility: "player",
+    text: "神殿守门人将断链之力注入三曜阵线：断链裁决会无效你的陷阱，太阳神还会拆毁最前方的陷阱。你必须让第一击白白通过，用诱饵陷阱替日冕诱锁挡拆，再用解印射线拆掉断链——这是破解三幻神的终局一战。",
+    goal: "第一回合盖下星线护续（前）与日冕诱锁（后），太阳神第一击放弃响应，让它拆掉前场诱饵保住日冕诱锁；第二回合重筑防线并用解印射线拆掉断链裁决；太阳神第二击时日冕诱锁将击落它；随后清掉再临的月曜帷幕，回召余烁小卫发动三曜终断，逐尊瓦解神格。",
+    difficulty: "challenge",
+    aiStyle: "scriptedPressure",
+    objectives: [
+      "太阳神第一击不要发动陷阱：断链裁决会无效它，而太阳神还会拆毁最前方的陷阱。",
+      "星线护续是前场诱饵——让它替日冕诱锁挡下太阳神的拆毁。",
+      "第二回合用解印射线拆掉断链裁决，日冕诱锁才能在第二击命中。",
+      "被月曜帷幕压制的防线会被太阳神撕碎，第二回合要重筑防线。",
+      "终局反击要求生命值 1600 以下、余烁小卫在场且场上没有对手的持续效果。"
+    ],
+    hints: [
+      "断链裁决只会在你发动陷阱时响应——第一击放弃响应，陷阱就不会被无效。",
+      "太阳神能击破被月幕压制的 2800 防线，却啃不动 3700 的折光诱标卫。",
+      "太阳神攻击后会拆毁最前方的陷阱：把星线护续放前面，日冕诱锁藏在后面。",
+      "月曜帷幕会随目标一起消失，但神殿会重新展开第二张——反击前必须先清场。",
+      "三曜终断会重置余烁小卫的攻击，让它在同一回合连续击破两尊神。"
+    ],
+    recommendedLine: [
+      "第一回合：盖下星线护续（前）与日冕诱锁（后），太阳神攻击时选择不发动。",
+      "太阳神会撕碎被压制的诱标卫，并拆掉前场的星线护续——日冕诱锁因此保住。",
+      "第二回合：召唤新的诱标卫并转守备，用解印射线拆掉断链裁决。",
+      "太阳神第二击时发动日冕诱锁——失去断链保护的它将被击落。",
+      "第三回合：清掉再临的月曜帷幕，回召余烁小卫并发动三曜终断，连续击破双神后直击收尾。"
+    ],
+    playerLp: 1500,
+    aiLp: 4000,
+    playerHand: ["trio-chain-veil", "trio-solar-snare", "trio-ember-recall", "trio-final-counter", "trio-moonbreaker-ray"],
+    playerDeck: ["trio-decoy-ward", "trio-moonbreaker-ray", "seer-call", "last-spark", "trio-moonbreaker-ray"],
+    playerField: [
+      { id: "trio-decoy-ward", mode: "defense", changedMode: true },
+      { id: "trio-decoy-ward", mode: "defense", changedMode: true }
+    ],
+    playerGrave: ["flare-titan", "trio-ember-pawn"],
+    aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiTraps: ["trio-moon-dominion"],
+    aiHand: ["chain-nullifier"],
+    aiDeck: ["eclipse-barrier", "trio-moon-dominion", "chain-nullifier", "eclipse-barrier", "seer-call"],
+    setupContinuousEffects: [{
+      source: { owner: "ai", zone: "traps", index: 0 },
+      target: { owner: "player", zone: "field", index: 1 },
+      effectId: "lunarDominion"
+    }],
+    storyBeats: [
+      {
+        id: "sun-attack",
+        when: { eventType: "ATTACK_DECLARED", playerId: "ai", cardId: "trio-sun-judicator" },
+        speaker: "ai",
+        line: "曜冕裁决者，碾碎这道防线！"
+      },
+      {
+        id: "nullifier-cleared",
+        when: { eventType: "CARD_DESTROYED", cardId: "chain-nullifier" },
+        speaker: "player",
+        line: "断链保护消失了，陷阱可以命中了！"
+      },
+      {
+        id: "sun-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-sun-judicator" },
+        speaker: "player",
+        line: "太阳神……崩落了！"
+      },
+      {
+        id: "dominion-rearm",
+        when: { eventType: "CARD_ACTIVATED", playerId: "ai", cardId: "trio-moon-dominion" },
+        speaker: "ai",
+        line: "月曜帷幕，再度展开！"
+      },
+      {
+        id: "finale-cast",
+        when: { eventType: "CARD_ACTIVATED", playerId: "player", cardId: "trio-final-counter" },
+        speaker: "player",
+        line: "三曜终断——这一击，为了打破封印！"
+      },
+      {
+        id: "moon-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-moon-warden" },
+        speaker: "player",
+        line: "第二尊神，倒下！"
+      },
+      {
+        id: "star-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-star-herald" },
+        speaker: "player",
+        line: "最后一尊神，崩落！"
+      },
+      {
+        id: "victory",
+        when: { eventType: "GAME_OVER_DECLARED" },
+        speaker: "player",
+        line: "三曜的封印，由我彻底打破！"
+      }
+    ]
+  },
   protagonistTrioOmegaFull: {
     label: "终局三曜完整对局",
     setupVisibility: "player",
