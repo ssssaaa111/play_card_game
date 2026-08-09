@@ -78,7 +78,8 @@ export const library = [
   { id: "trio-star-herald", type: "monster", name: "星坠宣告者", element: "light", stars: 6, atk: 2400, def: 1400, icon: "星", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。以三只祭品成功召唤时，手牌中其余不同名三曜神格会特殊召唤；它们本回合不能攻击。攻击后追加 300 点终局压力，并提升自身攻击力 300。", summary: "三祭品登场并引发三曜共降，攻击后持续累积终局伤害。", tributeCost: 3, rarity: "UR", archetype: "三曜神格", trioConvergence: "trioOmega", afterAttack: "starDoomCharge" },
   { id: "trio-decoy-ward", type: "monster", name: "折光诱标卫", element: "light", stars: 2, atk: 1000, def: 3700, icon: "诱", text: "低星防线。正确路线中用来吸引日曜攻势，为反击回合争取窗口。" },
   { id: "trio-ember-pawn", type: "monster", name: "余烁小卫", element: "fire", stars: 1, atk: 600, def: 600, icon: "烁", text: "表面攻击力很低的终局关键怪兽。只有资源铺垫完成后才能突破三曜阵线。" },
-    { id: "trio-moon-dominion", type: "spell", name: "月曜帷幕", icon: "幕", text: "持续魔法：选择对手 1 只怪兽，攻击力和守备力下降 900。目标离开怪兽区时，修正解除，此卡送入持有者墓地；此卡先离开魔陷区时，修正同样解除。", effect: "lunarDominion" },
+  { id: "temple-revenant", type: "monster", name: "神殿再临守卫", element: "light", stars: 7, atk: 2600, def: 2400, icon: "殿", text: "太阳神崩落时，神殿的意志重新凝聚而成的再临守卫。它挡下直击，并配合月曜帷幕重新压制最强的战线。", summary: "太阳神倒下后由神殿召唤的再临防线，挡住直击并配合月曜帷幕施压。", tributeCost: 2, rarity: "SR", archetype: "神殿守卫" },
+  { id: "trio-moon-dominion", type: "spell", name: "月曜帷幕", icon: "幕", text: "持续魔法：选择对手 1 只怪兽，攻击力和守备力下降 900。目标离开怪兽区时，修正解除，此卡送入持有者墓地；此卡先离开魔陷区时，修正同样解除。", effect: "lunarDominion" },
   { id: "trio-solar-snare", type: "trap", name: "日冕诱锁", icon: "锁", text: "盖放后自动触发：对手攻击时，破坏攻击怪兽。用来诱导第一张三曜王牌踏入反制。", trigger: "attackDestroy" },
   { id: "trio-moonbreaker-ray", type: "spell", name: "碎月解幕", icon: "碎", text: "选择对手魔陷区 1 张卡破坏。用于清除持续压制后再展开墓地资源。", effect: "destroySpellTrap" },
   { id: "trio-ember-recall", type: "spell", name: "余烁归轨", icon: "归", text: "选择我方墓地 1 只怪兽，特殊回到怪兽区。终局战中用来让低星关键怪回场。", effect: "graveRevive" },
@@ -121,7 +122,8 @@ export const monsterAssets = {
   "trio-moon-warden": "assets/monster-trio-moon-warden.png",
   "trio-star-herald": "assets/monster-trio-star-herald.png",
   "trio-decoy-ward": "assets/monster-trio-decoy-ward.png",
-  "trio-ember-pawn": "assets/monster-trio-ember-pawn.png"
+  "trio-ember-pawn": "assets/monster-trio-ember-pawn.png",
+  "temple-revenant": "assets/monster-starfall-colossus.png"
 };
 
 export const roleProfiles = {
@@ -1361,8 +1363,8 @@ export const scenarioSetups = {
   protagonistTrioOmegaFinale: {
     label: "终局三曜 · 终焉篇",
     setupVisibility: "player",
-    text: "神殿守门人将断链之力注入三曜阵线：断链裁决会无效你的陷阱，太阳神还会拆毁最前方的陷阱。你必须让第一击白白通过，用诱饵陷阱替日冕诱锁挡拆，再用解印射线拆掉断链——这是破解三幻神的终局一战。",
-    goal: "第一回合盖下星线护续（前）与日冕诱锁（后），太阳神第一击放弃响应，让它拆掉前场诱饵保住日冕诱锁；第二回合重筑防线并用解印射线拆掉断链裁决；太阳神第二击时日冕诱锁将击落它；随后清掉再临的月曜帷幕，回召余烁小卫发动三曜终断，逐尊瓦解神格。",
+    text: "神殿守门人将断链之力注入三曜阵线：断链裁决会无效你的陷阱，太阳神还会拆毁最前方的陷阱。你必须让第一击白白通过，用诱饵陷阱替日冕诱锁挡拆，再用解印射线拆掉断链——而当太阳神崩落时，神殿还会召出再临守卫，挡下你的直击并重新压制战线。",
+    goal: "第一回合盖下星线护续（前）与日冕诱锁（后），太阳神第一击放弃响应，让它拆掉前场诱饵保住日冕诱锁；第二回合重筑防线并用解印射线拆掉断链裁决；太阳神第二击时日冕诱锁将击落它；随后清掉再临的月曜帷幕，回召余烁小卫发动三曜终断，逐尊瓦解神格，再破神殿的再临守卫收尾。",
     difficulty: "challenge",
     aiStyle: "scriptedPressure",
     objectives: [
@@ -1370,21 +1372,21 @@ export const scenarioSetups = {
       "星线护续是前场诱饵——让它替日冕诱锁挡下太阳神的拆毁。",
       "第二回合用解印射线拆掉断链裁决，日冕诱锁才能在第二击命中。",
       "被月曜帷幕压制的防线会被太阳神撕碎，第二回合要重筑防线。",
-      "终局反击要求生命值 1600 以下、余烁小卫在场且场上没有对手的持续效果。"
+      "太阳神崩落后神殿会召出再临守卫：先拆掉压制余烁小卫的第二张月曜帷幕，再让强化小卫击破守卫。"
     ],
     hints: [
       "断链裁决只会在你发动陷阱时响应——第一击放弃响应，陷阱就不会被无效。",
       "太阳神能击破被月幕压制的 2800 防线，却啃不动 3700 的折光诱标卫。",
       "太阳神攻击后会拆毁最前方的陷阱：把星线护续放前面，日冕诱锁藏在后面。",
-      "月曜帷幕会随目标一起消失，但神殿会重新展开第二张——反击前必须先清场。",
-      "三曜终断会重置余烁小卫的攻击，让它在同一回合连续击破两尊神。"
+      "月曜帷幕会随目标一起消失，但神殿会重新展开——第二张会压制余烁小卫，必须先用解印射线解除。",
+      "三曜终断会重置余烁小卫的攻击，让它在同一回合连续击破两尊神；再临守卫挡直击，需先解除压制再击破。"
     ],
     recommendedLine: [
       "第一回合：盖下星线护续（前）与日冕诱锁（后），太阳神攻击时选择不发动。",
       "太阳神会撕碎被压制的诱标卫，并拆掉前场的星线护续——日冕诱锁因此保住。",
       "第二回合：召唤新的诱标卫并转守备，用解印射线拆掉断链裁决。",
       "太阳神第二击时发动日冕诱锁——失去断链保护的它将被击落。",
-      "第三回合：清掉再临的月曜帷幕，回召余烁小卫并发动三曜终断，连续击破双神后直击收尾。"
+      "第三回合清掉第一张再临帷幕，回召余烁小卫发动三曜终断击破月曜与星曜；第四回合用解印射线解除对余烁小卫的压制，再击破神殿再临守卫，随后直击收尾。"
     ],
     playerLp: 1500,
     aiLp: 4000,
@@ -1398,11 +1400,17 @@ export const scenarioSetups = {
     aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
     aiTraps: ["trio-moon-dominion"],
     aiHand: ["chain-nullifier"],
-    aiDeck: ["eclipse-barrier", "trio-moon-dominion", "chain-nullifier", "eclipse-barrier", "seer-call"],
+    aiDeck: ["eclipse-barrier", "trio-moon-dominion", "trio-moon-dominion", "chain-nullifier", "temple-revenant", "eclipse-barrier", "seer-call"],
     setupContinuousEffects: [{
       source: { owner: "ai", zone: "traps", index: 0 },
       target: { owner: "player", zone: "field", index: 1 },
       effectId: "lunarDominion"
+    }],
+    scriptedSummons: [{
+      id: "temple-revenant",
+      when: { eventType: "CARD_DESTROYED", cardId: "trio-sun-judicator" },
+      delay: "nextAiTurn",
+      summon: { owner: "ai", cardId: "temple-revenant", mode: "attack", attackLock: "templeRevenant" }
     }],
     storyBeats: [
       {
@@ -1422,6 +1430,12 @@ export const scenarioSetups = {
         when: { eventType: "CARD_DESTROYED", cardId: "trio-sun-judicator" },
         speaker: "player",
         line: "太阳神……崩落了！"
+      },
+      {
+        id: "temple-revenant",
+        when: { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "temple-revenant" },
+        speaker: "ai",
+        line: "神殿之力，再临守卫！"
       },
       {
         id: "dominion-rearm",
@@ -1446,6 +1460,12 @@ export const scenarioSetups = {
         when: { eventType: "CARD_DESTROYED", cardId: "trio-star-herald" },
         speaker: "player",
         line: "最后一尊神，崩落！"
+      },
+      {
+        id: "guardian-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "temple-revenant" },
+        speaker: "player",
+        line: "再临的守卫，也崩落了！"
       },
       {
         id: "victory",

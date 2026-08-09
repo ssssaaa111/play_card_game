@@ -89,6 +89,7 @@ import {
   dispatchResolveTurnDrawFromUiState,
   dispatchSkipRemainingAttacksFromUiState,
   dispatchSetTrapFromUiState,
+  dispatchSpecialSummonFromDeckFromUiState,
   dispatchStartTurnFromUiState,
   dispatchSummonMonsterFromUiState,
   dispatchTrapResponseFromUiState,
@@ -865,6 +866,8 @@ function startGame() {
   state.statsRecorded = false;
   state.storyBeatCursor = 0;
   state.storyBeatsFired = {};
+  state.scriptedSummonsFired = {};
+  state.pendingScriptedSummons = [];
   state.log = [];
   state.logSequence = 0;
   state.timeline = [];
@@ -4250,6 +4253,7 @@ async function runAiTurn() {
     applyDrawEventFeedback(state.ai, drawEvents, true);
     if (state.gameOver) return;
     if (state.phase !== PHASES.main) return;
+    dispatchPendingScriptedSummons();
     render();
     await sleep(1500);
     const turnGoal = chooseAiTurnGoal({
@@ -4949,6 +4953,74 @@ function render(animationKey = "") {
   renderBattlePreview();
   renderAiReveal();
   playScenarioStoryBeats();
+  playScenarioScriptedSummons();
+}
+
+function playScenarioScriptedSummons() {
+  const scenario = scenarioSetups[state.scenarioId];
+  const entries = Array.isArray(scenario?.scriptedSummons) ? scenario.scriptedSummons : [];
+  if (entries.length === 0 || !state.started || state.gameOver) return;
+  if (!state.scriptedSummonsFired) state.scriptedSummonsFired = {};
+  if (!Array.isArray(state.pendingScriptedSummons)) state.pendingScriptedSummons = [];
+  const events = state.gameEvents || [];
+  for (const entry of entries) {
+    const key = entry.id || entry.summon?.cardId;
+    if (!key || state.scriptedSummonsFired[key]) continue;
+    if (!events.some((event) => storyEventMatches(event, entry.when || {}))) continue;
+    const summon = entry.summon || {};
+    const owner = summon.owner === "player" ? state.player : state.ai;
+    const alreadyPresent = (owner.field || []).some((card) => card?.id === summon.cardId) ||
+      (owner.grave || []).some((card) => card?.id === summon.cardId);
+    if (alreadyPresent) {
+      state.scriptedSummonsFired[key] = true;
+      continue;
+    }
+    if (entry.delay === "nextAiTurn") {
+      state.scriptedSummonsFired[key] = true;
+      if (!state.pendingScriptedSummons.some((pending) => pending.id === key)) {
+        state.pendingScriptedSummons.push({ id: key, entry });
+      }
+      continue;
+    }
+    state.scriptedSummonsFired[key] = true;
+    performScriptedSummon(entry);
+  }
+}
+
+function performScriptedSummon(entry) {
+  const summon = entry.summon || {};
+  try {
+    const summonEvents = dispatchSpecialSummonFromDeckFromUiState(state, summon.owner, summon.cardId, {
+      mode: summon.mode || "attack",
+      attackLockReason: summon.attackLock || null
+    });
+    const summonedEvent = summonEvents.find((event) => event.type === "MONSTER_SUMMONED");
+    const card = summonedEvent ? findRuntimeCard(summonedEvent.cardId)?.card : null;
+    if (card) {
+      playSound("summon");
+      animateAvatar(summon.owner, "cast");
+      playEpicAction("神威再临", "draw", 1300);
+      playVoice("ai", "summon", `神殿的力量，${card.name}再临！`);
+      addLog(`神殿的意志重新凝聚——${card.name} 降临！`, cardLogMeta(card, { actor: summon.owner, type: "summon" }));
+    }
+  } catch (error) {
+    state.ruleCheckIssue = error.message || "神威再临召唤失败。";
+    addLog(`规则引擎拒绝再临召唤：${state.ruleCheckIssue}`);
+    console.error(error);
+  }
+}
+
+function dispatchPendingScriptedSummons() {
+  const pending = Array.isArray(state.pendingScriptedSummons) ? state.pendingScriptedSummons.splice(0) : [];
+  for (const { entry } of pending) {
+    if (state.gameOver) break;
+    const summon = entry.summon || {};
+    const owner = summon.owner === "player" ? state.player : state.ai;
+    const alreadyPresent = (owner.field || []).some((card) => card?.id === summon.cardId) ||
+      (owner.grave || []).some((card) => card?.id === summon.cardId);
+    if (alreadyPresent) continue;
+    performScriptedSummon(entry);
+  }
 }
 
 function playScenarioStoryBeats() {
