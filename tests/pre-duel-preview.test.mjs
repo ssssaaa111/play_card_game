@@ -178,3 +178,22 @@ test("pre-duel preview falls back to balanced for unknown custom ids", () => {
   });
   assert.equal(preview.deckCards.filter((entry) => entry.zone === "deck").length, deckPresets.balanced.ids.length);
 });
+
+test("gauntlet preview resolves the first chapter's authored life and deck", () => {
+  const gauntlet = scenarioSetups.protagonistTrioGauntlet;
+  const firstChapter = scenarioSetups[gauntlet.gauntletChapters[0]];
+  const preview = buildPreDuelPreview({
+    scenarioId: "protagonistTrioGauntlet",
+    scenario: gauntlet,
+    playerPreset: "balanced"
+  });
+
+  assert.equal(preview.playerLp, firstChapter.playerLp);
+  assert.equal(preview.aiLp, firstChapter.aiLp);
+  assert.deepEqual(
+    preview.deckCards.filter((entry) => entry.zone === "deck").map((entry) => entry.id),
+    firstChapter.playerDeck
+  );
+  assert.match(preview.scenarioName, /连战/);
+  assert.match(preview.scenarioName, /第一战/);
+});

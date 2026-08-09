@@ -4068,7 +4068,9 @@ async function runTrioOmegaVowDemoSmoke(ctx) {
   await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: vow confirm`);
   clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm vow`);
   await waitForSmoke(
-    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && card.atk === 2700),
+    () => ctx.state.player.field.some((card) =>
+      card?.id === "trio-ember-pawn" && card.atk === 600 && card.tempAtk === 2100
+    ),
     `${smokeName}: pawn reaches 2700. ${trioOmegaFailureSnapshot(ctx)}`,
     9000
   );
@@ -4906,7 +4908,9 @@ async function runTrioGauntletSmoke(ctx) {
   await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: c2 vow confirm`);
   clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: c2 confirm vow`);
   await waitForSmoke(
-    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && (card.atk || 0) >= 2700),
+    () => ctx.state.player.field.some((card) =>
+      card?.id === "trio-ember-pawn" && card.atk === 600 && card.tempAtk === 2100
+    ),
     `${smokeName}: c2 pawn 2700. ${trioOmegaFailureSnapshot(ctx)}`,
     9000
   );
@@ -8101,6 +8105,51 @@ async function runPreDuelDeckPreviewSmoke(ctx) {
   setSmokeStatus("passed", "pre-duel-deck-preview");
 }
 
+async function runTrioGauntletPreviewBasicSmoke(ctx) {
+  const smokeName = "trio-gauntlet-preview-basic";
+  setSmokeStatus("running", smokeName);
+  selectScenario(ctx.els, "protagonistTrioGauntlet");
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") &&
+      !ctx.els.setupPanel?.hidden &&
+      !ctx.state.started,
+    `${smokeName}: setup screen visible`,
+    6000
+  );
+  const lifePreview = ctx.els.preDuelLp?.textContent || "";
+  if (!lifePreview.includes("己方 1500") || !lifePreview.includes("对方 900")) {
+    throw new Error(`${smokeName}: first chapter LP preview is inaccurate: ${lifePreview}`);
+  }
+  if (!ctx.els.preDuelDeckList?.hidden) {
+    throw new Error(`${smokeName}: deck list should start collapsed`);
+  }
+  clickSmokeElement(ctx.els.preDuelDeckToggle, `${smokeName}: expand first chapter deck`);
+  await waitForSmoke(() => !ctx.els.preDuelDeckList.hidden, `${smokeName}: deck list expands`);
+  const expectedDeckIds = ["trio-chain-veil", "trio-moonbreaker-ray", "last-spark"];
+  for (const cardId of expectedDeckIds) {
+    const card = preDuelDeckCard(ctx.els, cardId);
+    if (!card || card.dataset.zone !== "deck") {
+      throw new Error(`${smokeName}: missing authored first chapter deck card ${cardId}`);
+    }
+  }
+
+  clickSmokeElement(ctx.els.modalRestart, `${smokeName}: start gauntlet`);
+  await waitForSmoke(
+    () => ctx.state.started &&
+      ctx.state.scenarioId === "protagonistTrioOmegaStory" &&
+      ctx.state.gauntlet?.chapterIndex === 0 &&
+      ctx.state.turn === "player" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.pendingOpeningDraw,
+    `${smokeName}: first chapter starts`,
+    9000
+  );
+  if (ctx.state.player.lp !== 1500 || ctx.state.ai.lp !== 900) {
+    throw new Error(`${smokeName}: preview and first chapter LP diverged: ${ctx.state.player.lp}/${ctx.state.ai.lp}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runPreDuelDeckScrollPreviewSmoke(ctx) {
   setSmokeStatus("running", "pre-duel-deck-scroll-preview");
   selectScenario(ctx.els, "normal");
@@ -8699,6 +8748,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-card-reveal-queue": runAiCardRevealQueueSmoke,
     "custom-deck-editor-basic": runCustomDeckEditorSmoke,
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
+    "trio-gauntlet-preview-basic": runTrioGauntletPreviewBasicSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "support-target-readability-basic": runSupportTargetReadabilityBasicSmoke,

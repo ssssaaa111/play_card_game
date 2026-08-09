@@ -133,29 +133,37 @@ export function buildPreDuelPreview({
   playerProfile = characterProfiles.player,
   customDecks = [],
 } = {}) {
+  const firstChapterId = Array.isArray(scenario.gauntletChapters)
+    ? scenario.gauntletChapters[0]
+    : null;
+  const battleScenario = firstChapterId && scenarioSetups[firstChapterId]
+    ? scenarioSetups[firstChapterId]
+    : scenario;
   const deckIds = previewDeckIdsForScenario({
-    scenario,
+    scenario: battleScenario,
     owner: "player",
     preset: playerPreset,
     customDecks,
   });
   const deckCards = [
-    ...scenarioZoneCards(scenario, "hand", "playerHand"),
-    ...scenarioZoneCards(scenario, "field", "playerField"),
-    ...scenarioZoneCards(scenario, "trap", "playerTraps"),
-    ...scenarioZoneCards(scenario, "grave", "playerGrave"),
+    ...scenarioZoneCards(battleScenario, "hand", "playerHand"),
+    ...scenarioZoneCards(battleScenario, "field", "playerField"),
+    ...scenarioZoneCards(battleScenario, "trap", "playerTraps"),
+    ...scenarioZoneCards(battleScenario, "grave", "playerGrave"),
     ...deckIds.map((id, index) => previewCard(id, "deck", index)).filter(Boolean),
   ];
 
   return {
     scenarioId,
-    scenarioName: scenario.label || "正常决斗",
+    scenarioName: firstChapterId
+      ? `${scenario.label || "连战"} · 第一战：${battleScenario.label || firstChapterId}`
+      : scenario.label || "正常决斗",
     difficulty: scenario.difficulty || "normal",
     objectives: scenarioObjectiveList(scenario),
     hints: scenarioHintList(scenario),
     recommendedLine: scenarioRecommendedLineList(scenario),
-    playerLp: finiteLp(scenario.playerLp),
-    aiLp: finiteLp(scenario.aiLp),
+    playerLp: finiteLp(battleScenario.playerLp),
+    aiLp: finiteLp(battleScenario.aiLp),
     skill: {
       name: playerProfile?.skill || "",
       text: playerProfile?.text || "",
