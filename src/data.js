@@ -1420,6 +1420,18 @@ export const scenarioSetups = {
         line: "曜冕裁决者，碾碎这道防线！"
       },
       {
+        id: "bait-negated-lesson",
+        when: { eventType: "EFFECT_SKIPPED", cardId: "trio-chain-veil" },
+        speaker: "ai",
+        line: "断链裁决封住了你的陷阱——放弃响应，让日冕诱锁留到第二击！"
+      },
+      {
+        id: "snare-negated-lesson",
+        when: { eventType: "EFFECT_SKIPPED", cardId: "trio-solar-snare" },
+        speaker: "ai",
+        line: "日冕诱锁被无效了——它该等太阳神第二击！"
+      },
+      {
         id: "nullifier-cleared",
         when: { eventType: "CARD_DESTROYED", cardId: "chain-nullifier" },
         speaker: "player",
