@@ -9,13 +9,13 @@ export function setupDuelModalView() {
   };
 }
 
-export function gameOverDuelModalView({ win = false, statsText = "" } = {}) {
+export function gameOverDuelModalView({ win = false, statsText = "", title = "", text = "", actionText = "" } = {}) {
   return {
-    title: win ? "你赢了" : "决斗败北",
-    text: win
+    title: title || (win ? "你赢了" : "决斗败北"),
+    text: text || (win
       ? `星魂回应了你的召唤。${statsText}。`
-      : `AI 抢到了节奏。调整卡组顺序或更早展开怪兽试试看。${statsText}。`,
-    actionText: "回到准备",
+      : `AI 抢到了节奏。调整卡组顺序或更早展开怪兽试试看。${statsText}。`),
+    actionText: actionText || "回到准备",
     reviewLog: true
   };
 }

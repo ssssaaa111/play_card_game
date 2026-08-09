@@ -4803,6 +4803,345 @@ async function runTrioOmegaFinaleRushSmoke(ctx) {
   setSmokeStatus("passed", "trio-omega-finale-rush");
 }
 
+async function runTrioGauntletSmoke(ctx) {
+  const smokeName = "trio-gauntlet-demo";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioGauntlet");
+  const storyLog = () => (ctx.state.log || []).map(logEntryMessage).join(" ");
+  const waitChapter = (scenarioId, chapterIndex) => waitForSmoke(
+    () => ctx.state.scenarioId === scenarioId &&
+      ctx.state.gauntlet?.chapterIndex === chapterIndex &&
+      ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.pendingOpeningDraw,
+    `${smokeName}: gauntlet enters chapter ${chapterIndex + 1} (${scenarioId})`,
+    32000
+  );
+
+  // ===== Chapter 1: 逆转篇 =====
+  await waitChapter("protagonistTrioOmegaStory", 0);
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}: c1 select snare`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}: c1 set snare`);
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "trio-solar-snare"), `${smokeName}: c1 snare set`);
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `${smokeName}: c1 sun response`, 26000);
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}: c1 activate snare`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator"),
+    `${smokeName}: c1 sun destroyed. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && ctx.state.phase === "main" && handCard(ctx.els, "trio-moonbreaker-ray"),
+    `${smokeName}: c1 back to player. ${trioOmegaFailureSnapshot(ctx)}`,
+    32000
+  );
+  clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}: c1 moonbreaker`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}: c1 moonbreaker target`);
+  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: c1 destroy dominion`);
+  await waitForSmoke(() => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"), `${smokeName}: c1 dominion cleared`);
+  clickSmokeElement(handCard(ctx.els, "trio-ember-recall"), `${smokeName}: c1 recall`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", `${smokeName}: c1 recall target`);
+  await selectAndConfirmSpellTarget(ctx, graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}: c1 revive pawn`);
+  await waitForSmoke(() => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && !card.used), `${smokeName}: c1 pawn revived`);
+  clickSmokeElement(handCard(ctx.els, "trio-final-counter"), `${smokeName}: c1 final counter`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: c1 counter confirm`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: c1 confirm counter`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && (card.tempAtk || 0) >= 2100),
+    `${smokeName}: c1 pawn buffed. ${trioOmegaFailureSnapshot(ctx)}`,
+    9000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: c1 pawn attack`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), `${smokeName}: c1 moon target`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}: c1 break moon`);
+  await waitForSmoke(() => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden"), `${smokeName}: c1 moon destroyed`);
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: c1 pawn second attack`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), `${smokeName}: c1 star target`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}: c1 break star`);
+  await waitForSmoke(
+    () => ctx.state.gameOver && ctx.state.gameOverWinner === "player",
+    `${smokeName}: c1 won. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
+  await waitForSmoke(() => storyLog().includes("连战推进"), `${smokeName}: c1 advance log`, 8000);
+
+  // ===== Chapter 2: 誓约篇 =====
+  await waitChapter("protagonistTrioOmegaVow", 1);
+  clickSmokeElement(handCard(ctx.els, "seer-call"), `${smokeName}: c2 seer`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: c2 seer confirm`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: c2 confirm seer`);
+  await waitForSmoke(() => ctx.state.player.hand.some((card) => card?.id === "trio-moonbreaker-ray"), `${smokeName}: c2 seer draws moonbreaker`);
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}: c2 select snare`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}: c2 set snare`);
+  await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "trio-solar-snare"), `${smokeName}: c2 snare set`);
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `${smokeName}: c2 sun response`, 26000);
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}: c2 activate snare`);
+  await waitForSmoke(() => !ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator"), `${smokeName}: c2 sun destroyed`, 12000);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && ctx.state.phase === "main",
+    `${smokeName}: c2 back to player. ${trioOmegaFailureSnapshot(ctx)}`,
+    32000
+  );
+  if (ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion")) {
+    clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}: c2 moonbreaker`);
+    await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}: c2 moonbreaker target`);
+    await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: c2 destroy dominion`);
+    await waitForSmoke(() => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"), `${smokeName}: c2 dominion cleared`);
+  }
+  if (handCard(ctx.els, "trio-chain-veil")) {
+    clickSmokeElement(handCard(ctx.els, "trio-chain-veil"), `${smokeName}: c2 set chain veil`);
+    clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}: c2 confirm chain veil`);
+  }
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => (ctx.state.turn === "player" && ctx.state.phase === "main") || ctx.state.gameOver,
+    `${smokeName}: c2 second rival turn passes. ${trioOmegaFailureSnapshot(ctx)}`,
+    32000
+  );
+  clickSmokeElement(handCard(ctx.els, "trio-ember-recall"), `${smokeName}: c2 recall`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", `${smokeName}: c2 recall target`);
+  await selectAndConfirmSpellTarget(ctx, graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}: c2 revive pawn`);
+  await waitForSmoke(() => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn"), `${smokeName}: c2 pawn revived`);
+  clickSmokeElement(handCard(ctx.els, "trio-final-counter-vow"), `${smokeName}: c2 vow`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: c2 vow confirm`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: c2 confirm vow`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && (card.atk || 0) >= 2700),
+    `${smokeName}: c2 pawn 2700. ${trioOmegaFailureSnapshot(ctx)}`,
+    9000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: c2 pawn attack`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target") || ctx.state.gameOver,
+    `${smokeName}: c2 moon target`,
+    8000
+  );
+  if (fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target")) {
+    clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}: c2 break moon`);
+    await waitForSmoke(() => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden"), `${smokeName}: c2 moon destroyed`, 12000);
+  }
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => (ctx.state.turn === "player" && ctx.state.phase === "main") || ctx.state.gameOver,
+    `${smokeName}: c2 third rival turn passes. ${trioOmegaFailureSnapshot(ctx)}`,
+    32000
+  );
+  for (let guard = 0; guard < 8 && !ctx.state.gameOver; guard += 1) {
+    if (ctx.state.turn !== "player" || ctx.state.phase !== "main") {
+      await waitForSmoke(
+        () => (ctx.state.turn === "player" && ctx.state.phase === "main") || ctx.state.gameOver,
+        `${smokeName}: c2 wait player turn ${guard}`,
+        32000
+      );
+      continue;
+    }
+    const battlesBefore = countGameEvents(ctx.state, "BATTLE_RESOLVED");
+    clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: c2 pawn attack ${guard}`);
+    await waitForSmoke(
+      () => ctx.els.aiField?.querySelector(".attack-target") ||
+        ctx.els.aiPanel?.classList.contains("direct-target") ||
+        ctx.state.gameOver,
+      `${smokeName}: c2 attack target ${guard}`,
+      8000
+    );
+    const target = ctx.els.aiField?.querySelector(".attack-target");
+    if (target) {
+      clickSmokeElement(target, `${smokeName}: c2 break target ${guard}`);
+    } else if (ctx.els.aiPanel?.classList.contains("direct-target")) {
+      clickSmokeElement(ctx.els.aiPanel, `${smokeName}: c2 direct ${guard}`);
+    }
+    await waitForSmoke(
+      () => ctx.state.gameOver ||
+        countGameEvents(ctx.state, "BATTLE_RESOLVED") > battlesBefore ||
+        !ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn"),
+      `${smokeName}: c2 attack resolves ${guard}`,
+      15000
+    );
+    if (!ctx.state.gameOver) {
+      await finishPlayerTurn(ctx);
+      await waitForSmoke(
+        () => (ctx.state.turn === "player" && ctx.state.phase === "main") || ctx.state.gameOver,
+        `${smokeName}: c2 rival turn ${guard}`,
+        32000
+      );
+    }
+  }
+  if (!ctx.state.gameOver || ctx.state.gameOverWinner !== "player") {
+    throw new Error(`${smokeName}: chapter 2 did not win. ${smokeDebug(ctx)}`);
+  }
+  await waitForSmoke(() => storyLog().includes("连战推进"), `${smokeName}: c2 advance log`, 8000);
+
+  // ===== Chapter 3: 终焉篇 =====
+  await waitChapter("protagonistTrioOmegaFinale", 2);
+  clickSmokeElement(handCard(ctx.els, "trio-chain-veil"), `${smokeName}: c3 select bait`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}: c3 set bait`);
+  await waitForSmoke(() => ctx.state.player.traps[0]?.id === "trio-chain-veil", `${smokeName}: c3 bait set`);
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}: c3 select snare`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}: c3 set snare`);
+  await waitForSmoke(() => ctx.state.player.traps[1]?.id === "trio-solar-snare", `${smokeName}: c3 snare set`);
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `${smokeName}: c3 sun response`, 26000);
+  clickSmokeElement(ctx.els.chainNo, `${smokeName}: c3 decline first response`);
+  await waitForSmoke(
+    () => !ctx.state.player.field[1] && !ctx.state.player.traps.some((card) => card?.id === "trio-chain-veil"),
+    `${smokeName}: c3 bait torn down. ${trioOmegaFailureSnapshot(ctx)}`,
+    15000
+  );
+  if (!ctx.state.player.traps.some((card) => card?.id === "trio-solar-snare")) {
+    throw new Error(`${smokeName}: c3 snare must survive. ${trioOmegaFailureSnapshot(ctx)}`);
+  }
+  await waitForSmoke(() => ctx.state.turn === "player" && ctx.state.phase === "main", `${smokeName}: c3 back to player`, 32000);
+  clickSmokeElement(handCard(ctx.els, "trio-decoy-ward"), `${smokeName}: c3 select wall`);
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1), `${smokeName}: c3 summon wall`);
+  await waitForSmoke(() => ctx.state.player.field[1]?.id === "trio-decoy-ward", `${smokeName}: c3 wall summoned`);
+  clickSmokeElement(fieldSlot(ctx.els, "player", 1).querySelector('[data-card-id="trio-decoy-ward"]'), `${smokeName}: c3 select wall mode`);
+  clickSmokeElement(ctx.els.fieldModeBtn, `${smokeName}: c3 wall defense`);
+  await waitForSmoke(() => ctx.state.player.field[1]?.mode === "defense", `${smokeName}: c3 wall defense ready`);
+  clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}: c3 moonbreaker`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}: c3 moonbreaker target`);
+  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: c3 destroy nullifier`);
+  await waitForSmoke(() => !ctx.state.ai.traps.some(Boolean), `${smokeName}: c3 nullifier removed`);
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), `${smokeName}: c3 snare response`, 24000);
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}: c3 activate snare`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.state.ai.grave.some((card) => card?.id === "trio-sun-judicator"),
+    `${smokeName}: c3 sun destroyed. ${trioOmegaFailureSnapshot(ctx)}`,
+    18000
+  );
+  await waitForSmoke(() => ctx.state.turn === "player" && ctx.state.phase === "main", `${smokeName}: c3 back after sun`, 32000);
+  if (ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion")) {
+    clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}: c3 moonbreaker 2`);
+    await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}: c3 moonbreaker 2 target`);
+    await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: c3 destroy dominion 2`);
+    await waitForSmoke(() => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion"), `${smokeName}: c3 dominion 2 cleared`);
+  }
+  clickSmokeElement(handCard(ctx.els, "trio-ember-recall"), `${smokeName}: c3 recall`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive", `${smokeName}: c3 recall target`);
+  await selectAndConfirmSpellTarget(ctx, graveTargetCard(ctx.els, "trio-ember-pawn"), `${smokeName}: c3 revive pawn`);
+  await waitForSmoke(() => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn"), `${smokeName}: c3 pawn revived`);
+  clickSmokeElement(handCard(ctx.els, "trio-final-counter"), `${smokeName}: c3 final counter`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: c3 counter confirm`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: c3 confirm counter`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && (card.tempAtk || 0) >= 2100),
+    `${smokeName}: c3 pawn buffed. ${trioOmegaFailureSnapshot(ctx)}`,
+    9000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: c3 pawn attack moon`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), `${smokeName}: c3 moon target`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}: c3 break moon`);
+  await waitForSmoke(() => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden"), `${smokeName}: c3 moon destroyed`);
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: c3 pawn attack star`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), `${smokeName}: c3 star target`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}: c3 break star`);
+  await waitForSmoke(() => !ctx.state.ai.field.some((card) => card?.id === "trio-star-herald"), `${smokeName}: c3 star destroyed`);
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.id === "temple-revenant"),
+    `${smokeName}: c3 guardian re-summoned. ${trioOmegaFailureSnapshot(ctx)}`,
+    16000
+  );
+  await waitForSmoke(
+    () => (ctx.state.turn === "player" && ctx.state.phase === "main") || ctx.state.gameOver,
+    `${smokeName}: c3 rival turn 3 passes. ${trioOmegaFailureSnapshot(ctx)}`,
+    32000
+  );
+  clickSmokeElement(handCard(ctx.els, "seer-call"), `${smokeName}: c3 seer`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: c3 seer confirm`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: c3 confirm seer`);
+  await waitForSmoke(() => ctx.state.player.hand.some((card) => card?.id === "trio-moonbreaker-ray"), `${smokeName}: c3 seer draws moonbreaker`);
+  const c3PawnPressed = () => ctx.state.player.field.some((card) =>
+    card?.id === "trio-ember-pawn" && (card.tempAtk || 0) < 2100);
+  if (c3PawnPressed()) {
+    clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}: c3 clear pawn press`);
+    await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}: c3 moonbreaker target`);
+    await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: c3 clear press`);
+    await waitForSmoke(() => !c3PawnPressed(), `${smokeName}: c3 pawn unpressed. ${trioOmegaFailureSnapshot(ctx)}`, 9000);
+  }
+  clickSmokeElement(handCard(ctx.els, "trio-final-counter"), `${smokeName}: c3 second finale`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: c3 second finale confirm`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: c3 confirm second finale`);
+  const c3DecoyIndex = () => ctx.state.player.field.findIndex((card) =>
+    card?.id === "trio-decoy-ward" && (card.tempAtk || 0) >= 2100);
+  await waitForSmoke(() => c3DecoyIndex() >= 0, `${smokeName}: c3 decoy buffed. ${trioOmegaFailureSnapshot(ctx)}`, 9000);
+  clickSmokeElement(fieldSlot(ctx.els, "player", c3DecoyIndex()).querySelector('[data-card-id="trio-decoy-ward"]'), `${smokeName}: c3 select decoy`);
+  clickSmokeElement(ctx.els.fieldModeBtn, `${smokeName}: c3 decoy attack mode`);
+  await waitForSmoke(() => ctx.state.player.field[c3DecoyIndex()]?.mode === "attack", `${smokeName}: c3 decoy attack ready`);
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: c3 pawn attacks guardian`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "temple-revenant")?.classList.contains("attack-target") || ctx.state.gameOver, `${smokeName}: c3 guardian target`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "temple-revenant"), `${smokeName}: c3 break guardian`);
+  await waitForSmoke(() => !ctx.state.ai.field.some((card) => card?.id === "temple-revenant"), `${smokeName}: c3 guardian destroyed`);
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator"),
+    `${smokeName}: c3 final sun stands. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
+  clickSmokeElement(fieldSlot(ctx.els, "player", c3DecoyIndex()).querySelector('[data-card-id="trio-decoy-ward"]'), `${smokeName}: c3 decoy attacks final sun`);
+  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-sun-judicator")?.classList.contains("attack-target") || ctx.state.gameOver, `${smokeName}: c3 final sun target`);
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-sun-judicator"), `${smokeName}: c3 break final sun`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator"),
+    `${smokeName}: c3 final sun destroyed. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
+  await finishPlayerTurn(ctx);
+  for (let guard = 0; guard < 7 && !ctx.state.gameOver; guard += 1) {
+    if (ctx.state.turn !== "player" || ctx.state.phase !== "main") {
+      await waitForSmoke(
+        () => (ctx.state.turn === "player" && ctx.state.phase === "main") || ctx.state.gameOver,
+        `${smokeName}: c3 wait player turn ${guard}`,
+        32000
+      );
+      continue;
+    }
+    if (c3PawnPressed() && handCard(ctx.els, "trio-moonbreaker-ray")) {
+      clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}: c3 clear late dominion ${guard}`);
+      await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}: c3 late moonbreaker target`);
+      await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: c3 clear late dominion`);
+      await waitForSmoke(() => !c3PawnPressed(), `${smokeName}: c3 pawn unpressed ${guard}`, 9000);
+    }
+    const battlesBefore = countGameEvents(ctx.state, "BATTLE_RESOLVED");
+    clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: c3 pawn direct ${guard}`);
+    await waitForSmoke(
+      () => ctx.els.aiField?.querySelector(".attack-target") ||
+        ctx.els.aiPanel?.classList.contains("direct-target") ||
+        ctx.state.gameOver,
+      `${smokeName}: c3 direct target ${guard}`,
+      8000
+    );
+    const target = ctx.els.aiField?.querySelector(".attack-target");
+    if (target) {
+      clickSmokeElement(target, `${smokeName}: c3 attack target ${guard}`);
+    } else if (ctx.els.aiPanel?.classList.contains("direct-target")) {
+      clickSmokeElement(ctx.els.aiPanel, `${smokeName}: c3 direct attack ${guard}`);
+    }
+    await waitForSmoke(
+      () => ctx.state.gameOver ||
+        countGameEvents(ctx.state, "BATTLE_RESOLVED") > battlesBefore ||
+        !ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn"),
+      `${smokeName}: c3 attack resolves ${guard}`,
+      15000
+    );
+    if (!ctx.state.gameOver) {
+      await finishPlayerTurn(ctx);
+      await waitForSmoke(
+        () => (ctx.state.turn === "player" && ctx.state.phase === "main") || ctx.state.gameOver,
+        `${smokeName}: c3 rival turn ${guard}`,
+        32000
+      );
+    }
+  }
+
+  if (!ctx.state.gameOver || ctx.state.gameOverWinner !== "player") {
+    throw new Error(`${smokeName}: gauntlet final chapter did not win. ${smokeDebug(ctx)}`);
+  }
+  await waitForSmoke(() => ctx.state.gauntlet?.completed === true, `${smokeName}: gauntlet completed`, 8000);
+  await waitForSmoke(() => storyLog().includes("连战完成"), `${smokeName}: gauntlet complete log`, 8000);
+  setSmokeStatus("passed", "trio-gauntlet-demo");
+}
+
 async function runTrioOmegaCasualFailureLine(ctx, smokeName, { continueAfterRival = false } = {}) {
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "protagonistTrioOmegaChallenge");
@@ -8307,6 +8646,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-vow-demo": runTrioOmegaVowDemoSmoke,
     "trio-omega-finale-demo": runTrioOmegaFinaleSmoke,
     "trio-omega-finale-rush": runTrioOmegaFinaleRushSmoke,
+    "trio-gauntlet-demo": runTrioGauntletSmoke,
     "trio-omega-autopilot-fails": runTrioOmegaAutopilotFailsSmoke,
     "trio-omega-happy-clicker-fails": runTrioOmegaHappyClickerFailsSmoke,
     "trio-omega-full-duel": runTrioOmegaFullDuelSmoke,

@@ -1624,6 +1624,14 @@ export const scenarioSetups = {
       }
     ]
   },
+  protagonistTrioGauntlet: {
+    label: "终局三曜 · 连战",
+    setupVisibility: "player",
+    text: "一口气连破三关：逆转篇 → 誓约篇 → 终焉篇。每一战都以完整状态开局，但你的战意会延续——剩余生命越多，下一战的补给越厚。输掉任何一场，连战结束。",
+    goal: "依次赢得三场剧情战。每场胜利按剩余生命结算战意分并发放补给；三战全胜，斩落最后的太阳神。",
+    difficulty: "challenge",
+    gauntletChapters: ["protagonistTrioOmegaStory", "protagonistTrioOmegaVow", "protagonistTrioOmegaFinale"]
+  },
   protagonistTrioOmegaFull: {
     label: "终局三曜完整对局",
     setupVisibility: "player",

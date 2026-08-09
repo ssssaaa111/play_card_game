@@ -33,6 +33,7 @@ test("production setup exposes curated duel modes", () => {
     "protagonistTrioOmegaVow",
     "protagonistTrioOmegaFinale",
     "protagonistTrioOmegaFinaleRush",
+    "protagonistTrioGauntlet",
     "protagonistTrioOmegaFull"
   ]);
 });
