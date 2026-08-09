@@ -6,6 +6,9 @@ import { spawn } from "node:child_process";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:5177";
 const DEFAULT_VIRTUAL_TIME_BUDGET_MS = 60000;
+const SMOKE_VIRTUAL_BUDGETS = {
+  "trio-gauntlet-demo": 240000
+};
 const SMOKE_VIEWPORTS = {
   "duel-layout-density-basic": { width: 1280, height: 720 },
   "mobile-hand-choice-fit-basic": { width: 390, height: 844 },
@@ -33,6 +36,8 @@ const DEFAULT_SMOKES = [
   "trio-omega-story-demo",
   "trio-omega-vow-demo",
   "trio-omega-finale-demo",
+  "trio-omega-finale-rush",
+  "trio-gauntlet-demo",
   "trio-omega-challenge",
   "trio-omega-autopilot-fails",
   "trio-omega-happy-clicker-fails",
@@ -100,14 +105,14 @@ async function assertServerReachable(baseUrl) {
   }
 }
 
-function runBrowser({ browserBin, profileDir, url, timeoutMs, viewport = null }) {
+function runBrowser({ browserBin, profileDir, url, timeoutMs, viewport = null, virtualTimeBudgetMs = DEFAULT_VIRTUAL_TIME_BUDGET_MS }) {
   const args = [
     "--headless=new",
     "--disable-gpu",
     "--mute-audio",
     `--user-data-dir=${profileDir}`,
     "--run-all-compositor-stages-before-draw",
-    `--virtual-time-budget=${DEFAULT_VIRTUAL_TIME_BUDGET_MS}`,
+    `--virtual-time-budget=${virtualTimeBudgetMs}`,
     "--dump-dom",
     url
   ];
@@ -172,7 +177,8 @@ async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin, seed = "" }) {
       profileDir,
       url,
       timeoutMs,
-      viewport: SMOKE_VIEWPORTS[smoke] || null
+      viewport: SMOKE_VIEWPORTS[smoke] || null,
+      virtualTimeBudgetMs: SMOKE_VIRTUAL_BUDGETS[smoke] || DEFAULT_VIRTUAL_TIME_BUDGET_MS
     });
     const { status, detail } = smokeStatusFromDom(result.stdout);
     if (result.code !== 0) {

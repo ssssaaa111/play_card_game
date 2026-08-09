@@ -51,7 +51,21 @@ function scenarioDeck(scenario, owner, preset, customDecks = [], shuffleSeed = n
   const deck = Array.isArray(explicitDeck)
     ? loadCardList(explicitDeck)
     : buildScenarioDeck(preset, scenarioReservedIds(scenario, owner), customDecks);
-  return shuffleSeed == null ? deck : shuffleWithSeed(deck, shuffleSeed);
+  const range = scenario[`${owner}DeckShuffleRange`];
+  const hasRange = Array.isArray(range) && range.length === 2 &&
+    Number.isInteger(range[0]) && Number.isInteger(range[1]) &&
+    range[0] >= 0 && range[1] > range[0];
+  const shuffleOwners = Array.isArray(scenario.deckShuffleOwners) ? scenario.deckShuffleOwners : null;
+  const seedShufflesThisOwner = shuffleOwners
+    ? shuffleOwners.includes(owner)
+    : shuffleSeed != null;
+  if (!seedShufflesThisOwner && !hasRange) return deck;
+  const seed = shuffleSeed ?? Math.floor(Math.random() * 2147483647);
+  if (!hasRange) return shuffleWithSeed(deck, seed);
+  const start = Math.min(range[0], deck.length);
+  const end = Math.min(range[1], deck.length);
+  const shuffledMiddle = shuffleWithSeed(deck.slice(start, end), seed);
+  return [...deck.slice(0, start), ...shuffledMiddle, ...deck.slice(end)];
 }
 
 function scenarioDuelistState(scenario, owner, preset, customDecks = [], shuffleSeed = null) {

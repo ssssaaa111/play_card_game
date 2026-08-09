@@ -246,6 +246,7 @@ const state = {
   deckPreset: "balanced",
   aiStyle: "balanced",
   scenarioId: BROWSER_MANUAL_SCENARIO || "normal",
+  gauntlet: null,
   stats: loadDuelStats(),
   statsRecorded: false,
   ...createAudioSettings({ testMode: BROWSER_TEST_MODE }),
@@ -798,6 +799,25 @@ function syncSetupControls() {
   syncSetupControlValues(els, state);
 }
 
+function currentBattleScenarioId() {
+  const scenario = scenarioSetups[state.scenarioId];
+  if (Array.isArray(scenario?.gauntletChapters) && scenario.gauntletChapters.length > 0) {
+    if (!state.gauntlet?.active) {
+      state.gauntlet = {
+        active: true,
+        chapters: [...scenario.gauntletChapters],
+        chapterIndex: 0,
+        score: 0,
+        supplies: {},
+        completed: false
+      };
+    }
+    return scenario.gauntletChapters[Math.min(state.gauntlet.chapterIndex, scenario.gauntletChapters.length - 1)];
+  }
+  state.gauntlet = null;
+  return state.scenarioId;
+}
+
 function applyScenarioSetup() {
   const scenario = scenarioSetups[state.scenarioId];
   if (!scenario || state.scenarioId === "normal") return;
@@ -815,6 +835,11 @@ function applyScenarioSetup() {
   });
   Object.assign(state.player, setup.player);
   Object.assign(state.ai, setup.ai);
+  const supply = state.gauntlet?.active ? (state.gauntlet.supplies || {})[state.scenarioId] : null;
+  if (supply?.shield) {
+    state.player.shield = Math.max(0, Number(state.player.shield) + Number(supply.shield));
+    addLog(`连战补给：上一战延续的战意化作 ${supply.shield} 点护盾。`);
+  }
   state.gameEvents = Array.isArray(setup.gameEvents) ? setup.gameEvents.map((event) => ({ ...event })) : [];
   const scenarioKind = !BROWSER_TEST_MODE && scenario.setupVisibility === "player" ? "玩法场景" : "规则测试场景";
   addLog(`${scenarioKind}：${scenario.label}。${scenario.text}`);
@@ -840,6 +865,7 @@ function startGame() {
   closeTrapChoicePrompt();
   clearAiReveal(false);
   applySetupChoices();
+  state.scenarioId = currentBattleScenarioId();
   Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
   Object.assign(state.ai, createDuelist("ai", characterProfiles.ai.passive));
   state.player.deck = buildDeck(state.deckPreset, currentCustomDecks());
@@ -911,6 +937,7 @@ function prepareGame() {
     syncSetupControls();
   }
   applySetupChoices();
+  state.gauntlet = null;
   syncSetupControls();
   Object.assign(state.player, createDuelist("player", characterProfiles.player.passive));
   Object.assign(state.ai, createDuelist("ai", characterProfiles.ai.passive));
@@ -4505,12 +4532,68 @@ function checkGameOver() {
     recordGameResult(win);
     playSound(win ? "win" : "lose");
     playVoice(win ? "player" : "ai", "win", win ? "你赢了。" : "决斗败北。", true);
+    if (state.gauntlet?.active && win && handleGauntletChapterWin()) {
+      return;
+    }
     renderGameOverDuelModal(els, {
       win,
-      statsText: formatDuelStats(state.stats)
+      statsText: formatDuelStats(state.stats),
+      ...gauntletGameOverText()
     });
     window.setTimeout(() => showDuelModal(els), 260);
   }
+}
+
+function handleGauntletChapterWin() {
+  const gauntlet = state.gauntlet;
+  if (!gauntlet?.active) return false;
+  const chapter = scenarioSetups[gauntlet.chapters[gauntlet.chapterIndex]];
+  const remaining = Math.max(0, Number(state.player.lp) || 0);
+  const earned = remaining * 10;
+  gauntlet.score = (gauntlet.score || 0) + earned;
+  const nextIndex = gauntlet.chapterIndex + 1;
+  if (nextIndex >= gauntlet.chapters.length) {
+    gauntlet.completed = true;
+    addLog(`连战完成：${chapter.label} 胜利！战意分 +${earned}，累计 ${gauntlet.score}。`);
+    return false;
+  }
+  const supplyShield = remaining >= 1300 ? 600 : remaining >= 1000 ? 300 : 0;
+  if (supplyShield > 0) {
+    gauntlet.supplies = {
+      ...(gauntlet.supplies || {}),
+      [gauntlet.chapters[nextIndex]]: { shield: supplyShield }
+    };
+  }
+  gauntlet.chapterIndex = nextIndex;
+  const nextChapter = scenarioSetups[gauntlet.chapters[nextIndex]];
+  playEpicAction(`连战 · 第 ${nextIndex + 1} 战`, "win", 1500);
+  addLog(`连战推进：${chapter.label} 胜利！战意分 +${earned}${supplyShield > 0 ? `，下一战获得 ${supplyShield} 点护盾补给。` : "。"} 下一战：${nextChapter.label}。`);
+  window.setTimeout(() => advanceGauntletChapter(), 1500);
+  return true;
+}
+
+function advanceGauntletChapter() {
+  if (!state.gauntlet?.active) return;
+  startGame();
+}
+
+function gauntletGameOverText() {
+  const gauntlet = state.gauntlet;
+  if (!gauntlet?.active) return {};
+  const chapter = scenarioSetups[gauntlet.chapters[Math.min(gauntlet.chapterIndex, gauntlet.chapters.length - 1)]];
+  const score = gauntlet.score || 0;
+  if (gauntlet.completed) {
+    return {
+      title: "三曜连战 · 全胜",
+      text: `逆转、誓约、终焉——三战全胜！战意分累计 ${score}。星魂回应了你。`,
+      actionText: "再来连战"
+    };
+  }
+  return {
+    title: "连战中断",
+    text: `在第 ${gauntlet.chapterIndex + 1} 战「${chapter.label}」败北。战意分累计 ${score}。调整思路，重新挑战。`,
+    actionText: "再来连战"
+  };
 }
 
 function fieldEffectMarkers(card, duelist) {
