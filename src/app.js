@@ -4969,8 +4969,7 @@ function playScenarioScriptedSummons() {
     if (!events.some((event) => storyEventMatches(event, entry.when || {}))) continue;
     const summon = entry.summon || {};
     const owner = summon.owner === "player" ? state.player : state.ai;
-    const alreadyPresent = (owner.field || []).some((card) => card?.id === summon.cardId) ||
-      (owner.grave || []).some((card) => card?.id === summon.cardId);
+    const alreadyPresent = (owner.field || []).some((card) => card?.id === summon.cardId);
     if (alreadyPresent) {
       state.scriptedSummonsFired[key] = true;
       continue;
@@ -5016,8 +5015,7 @@ function dispatchPendingScriptedSummons() {
     if (state.gameOver) break;
     const summon = entry.summon || {};
     const owner = summon.owner === "player" ? state.player : state.ai;
-    const alreadyPresent = (owner.field || []).some((card) => card?.id === summon.cardId) ||
-      (owner.grave || []).some((card) => card?.id === summon.cardId);
+    const alreadyPresent = (owner.field || []).some((card) => card?.id === summon.cardId);
     if (alreadyPresent) continue;
     performScriptedSummon(entry);
   }

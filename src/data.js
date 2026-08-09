@@ -1363,35 +1363,35 @@ export const scenarioSetups = {
   protagonistTrioOmegaFinale: {
     label: "终局三曜 · 终焉篇",
     setupVisibility: "player",
-    text: "神殿守门人将断链之力注入三曜阵线：断链裁决会无效你的陷阱，太阳神还会拆毁最前方的陷阱。你必须让第一击白白通过，用诱饵陷阱替日冕诱锁挡拆，再用解印射线拆掉断链——而当太阳神崩落时，神殿还会召出再临守卫，挡下你的直击并重新压制战线。",
-    goal: "第一回合盖下星线护续（前）与日冕诱锁（后），太阳神第一击放弃响应，让它拆掉前场诱饵保住日冕诱锁；第二回合重筑防线并用解印射线拆掉断链裁决；太阳神第二击时日冕诱锁将击落它；随后清掉再临的月曜帷幕，回召余烁小卫发动三曜终断，逐尊瓦解神格，再破神殿的再临守卫收尾。",
+    text: "神殿守门人将断链之力注入三曜阵线：断链裁决会无效你的陷阱，太阳神还会拆毁最前方的陷阱。你必须让第一击白白通过，用诱饵陷阱替日冕诱锁挡拆，再用解印射线拆掉断链——而当太阳神崩落时，神殿会召出再临守卫；守卫倒下后，太阳神还会最后一次站起来。",
+    goal: "第一回合盖下星线护续（前）与日冕诱锁（后），太阳神第一击放弃响应，让它拆掉前场诱饵保住日冕诱锁；第二回合重筑防线并用解印射线拆掉断链裁决；太阳神第二击时日冕诱锁将击落它；随后清掉再临的月曜帷幕，回召余烁小卫发动三曜终断，逐尊瓦解神格，再破再临守卫；当太阳神最后一次站起时，用第二发三曜终断强化防线，让防线击落最终神格。",
     difficulty: "challenge",
     aiStyle: "scriptedPressure",
     objectives: [
       "太阳神第一击不要发动陷阱：断链裁决会无效它，而太阳神还会拆毁最前方的陷阱。",
       "星线护续是前场诱饵——让它替日冕诱锁挡下太阳神的拆毁。",
       "第二回合用解印射线拆掉断链裁决，日冕诱锁才能在第二击命中。",
-      "被月曜帷幕压制的防线会被太阳神撕碎，第二回合要重筑防线。",
-      "太阳神崩落后神殿会召出再临守卫：先拆掉压制余烁小卫的第二张月曜帷幕，再让强化小卫击破守卫。"
+      "太阳神崩落后神殿会召出再临守卫：先拆掉压制余烁小卫的第二张月曜帷幕，再让强化小卫击破守卫。",
+      "守卫倒下后太阳神会最后一次站起来：第二发三曜终断会强化最弱的防线，把它转成攻击即可击落最终神格。"
     ],
     hints: [
       "断链裁决只会在你发动陷阱时响应——第一击放弃响应，陷阱就不会被无效。",
       "太阳神能击破被月幕压制的 2800 防线，却啃不动 3700 的折光诱标卫。",
       "太阳神攻击后会拆毁最前方的陷阱：把星线护续放前面，日冕诱锁藏在后面。",
       "月曜帷幕会随目标一起消失，但神殿会重新展开——第二张会压制余烁小卫，必须先用解印射线解除。",
-      "三曜终断会重置余烁小卫的攻击，让它在同一回合连续击破两尊神；再临守卫挡直击，需先解除压制再击破。"
+      "最终太阳神由防线击落：第二发三曜终断瞄准的是攻击力最低的怪兽——把强化后的诱标卫转成攻击，小卫则负责再临守卫。"
     ],
     recommendedLine: [
       "第一回合：盖下星线护续（前）与日冕诱锁（后），太阳神攻击时选择不发动。",
       "太阳神会撕碎被压制的诱标卫，并拆掉前场的星线护续——日冕诱锁因此保住。",
       "第二回合：召唤新的诱标卫并转守备，用解印射线拆掉断链裁决。",
       "太阳神第二击时发动日冕诱锁——失去断链保护的它将被击落。",
-      "第三回合清掉第一张再临帷幕，回召余烁小卫发动三曜终断击破月曜与星曜；第四回合用解印射线解除对余烁小卫的压制，再击破神殿再临守卫，随后直击收尾。"
+      "第三回合清掉第一张再临帷幕，回召余烁小卫发动三曜终断击破月曜与星曜；第四回合解除压制并发动第二发三曜终断，小卫破守卫、防线斩最终太阳神，随后直击收尾。"
     ],
     playerLp: 1500,
     aiLp: 4000,
     playerHand: ["trio-chain-veil", "trio-solar-snare", "trio-ember-recall", "trio-final-counter", "trio-moonbreaker-ray"],
-    playerDeck: ["trio-decoy-ward", "trio-moonbreaker-ray", "seer-call", "last-spark", "trio-moonbreaker-ray"],
+    playerDeck: ["trio-decoy-ward", "trio-moonbreaker-ray", "seer-call", "trio-final-counter", "trio-moonbreaker-ray", "last-spark"],
     playerField: [
       { id: "trio-decoy-ward", mode: "defense", changedMode: true },
       { id: "trio-decoy-ward", mode: "defense", changedMode: true }
@@ -1400,7 +1400,7 @@ export const scenarioSetups = {
     aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
     aiTraps: ["trio-moon-dominion"],
     aiHand: ["chain-nullifier"],
-    aiDeck: ["eclipse-barrier", "trio-moon-dominion", "trio-moon-dominion", "chain-nullifier", "temple-revenant", "eclipse-barrier", "seer-call"],
+    aiDeck: ["eclipse-barrier", "trio-moon-dominion", "trio-moon-dominion", "chain-nullifier", "temple-revenant", "trio-sun-judicator", "eclipse-barrier", "seer-call"],
     setupContinuousEffects: [{
       source: { owner: "ai", zone: "traps", index: 0 },
       target: { owner: "player", zone: "field", index: 1 },
@@ -1411,6 +1411,10 @@ export const scenarioSetups = {
       when: { eventType: "CARD_DESTROYED", cardId: "trio-sun-judicator" },
       delay: "nextAiTurn",
       summon: { owner: "ai", cardId: "temple-revenant", mode: "attack", attackLock: "templeRevenant" }
+    }, {
+      id: "final-sun",
+      when: { eventType: "CARD_DESTROYED", cardId: "temple-revenant" },
+      summon: { owner: "ai", cardId: "trio-sun-judicator", mode: "attack" }
     }],
     storyBeats: [
       {
@@ -1478,6 +1482,12 @@ export const scenarioSetups = {
         when: { eventType: "CARD_DESTROYED", cardId: "temple-revenant" },
         speaker: "player",
         line: "再临的守卫，也崩落了！"
+      },
+      {
+        id: "final-sun",
+        when: { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "trio-sun-judicator" },
+        speaker: "ai",
+        line: "太阳神……永远不会真正倒下！这是最后一战！"
       },
       {
         id: "victory",

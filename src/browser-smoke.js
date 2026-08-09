@@ -4372,6 +4372,27 @@ async function runTrioOmegaFinaleSmoke(ctx) {
     9000
   );
 
+  clickSmokeElement(handCard(ctx.els, "trio-final-counter"), `${smokeName}: cast second finale`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: second finale confirm`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm second finale`);
+  const finaleDecoyIndex = () => ctx.state.player.field.findIndex((card) =>
+    card?.id === "trio-decoy-ward" && (card.tempAtk || 0) >= 2100);
+  await waitForSmoke(
+    () => finaleDecoyIndex() >= 0,
+    `${smokeName}: decoy receives second finale. ${trioOmegaFailureSnapshot(ctx)}`,
+    9000
+  );
+  clickSmokeElement(
+    fieldSlot(ctx.els, "player", finaleDecoyIndex()).querySelector('[data-card-id="trio-decoy-ward"]'),
+    `${smokeName}: select finale decoy`
+  );
+  clickSmokeElement(ctx.els.fieldModeBtn, `${smokeName}: switch finale decoy to attack`);
+  await waitForSmoke(
+    () => ctx.state.player.field[finaleDecoyIndex()]?.mode === "attack",
+    `${smokeName}: finale decoy attack mode`,
+    8000
+  );
+
   clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn attacks guardian`);
   await waitForSmoke(
     () => fieldCard(ctx.els, "ai", "temple-revenant")?.classList.contains("attack-target") || ctx.state.gameOver,
@@ -4385,6 +4406,28 @@ async function runTrioOmegaFinaleSmoke(ctx) {
     12000
   );
   await waitForSmoke(() => storyLog().includes("再临的守卫"), `${smokeName}: guardian falls beat`, 8000);
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator"),
+    `${smokeName}: final sun god stands. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
+  await waitForSmoke(() => storyLog().includes("永远不会真正倒下"), `${smokeName}: final sun beat`, 8000);
+  clickSmokeElement(
+    fieldSlot(ctx.els, "player", finaleDecoyIndex()).querySelector('[data-card-id="trio-decoy-ward"]'),
+    `${smokeName}: decoy attacks final sun`
+  );
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "trio-sun-judicator")?.classList.contains("attack-target") || ctx.state.gameOver,
+    `${smokeName}: final sun target highlighted`,
+    8000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-sun-judicator"), `${smokeName}: decoy breaks final sun`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.state.ai.grave.some((card) => card?.id === "trio-sun-judicator"),
+    `${smokeName}: final sun destroyed. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
   await finishPlayerTurn(ctx);
 
   // The pawn grinds the remaining LP with direct attacks.
