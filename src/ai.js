@@ -1,6 +1,6 @@
 import { battleValue, canDirectAttack, shieldPreview, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
-import { findAiAttackSequence, findAiDirectLethalAttacker, maximumRemainingAttackDamage, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
+import { findAiAttackSequence, findAiDirectLethalAttacker, findAiNextTurnLethalSetup, maximumRemainingAttackDamage, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
 import { trapCanResolve } from './traps.js';
 import { selectRedirectTarget } from './traps.js';
 import { getCardEffectDefinition } from './game-engine.js';
@@ -741,6 +741,27 @@ export function chooseAiAttackAction({
       card: fieldAttacker.card,
       cardUid: fieldAttacker.card.uid,
       attackerIndex: fieldAttacker.index,
+      targetIndex: targetFieldIndex,
+      target: targetFieldIndex >= 0 ? rivalField[targetFieldIndex] : null
+    };
+  }
+  const nextTurnSetup = findAiNextTurnLethalSetup({
+    attackers: attackers.map((entry) => entry.card),
+    targets: targetEntries.map((entry) => entry.card),
+    shield: rivalShield,
+    directAttacks: owner?.directAttacks || 0,
+    rivalLp
+  });
+  if (nextTurnSetup) {
+    const setupAttacker = attackers[nextTurnSetup.attackerIndex];
+    const targetFieldIndex = nextTurnSetup.targetIndex >= 0
+      ? targetEntries[nextTurnSetup.targetIndex].index
+      : -1;
+    return {
+      type: "attack",
+      card: setupAttacker.card,
+      cardUid: setupAttacker.card.uid,
+      attackerIndex: setupAttacker.index,
       targetIndex: targetFieldIndex,
       target: targetFieldIndex >= 0 ? rivalField[targetFieldIndex] : null
     };
