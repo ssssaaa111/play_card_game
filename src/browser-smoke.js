@@ -4333,7 +4333,61 @@ async function runTrioOmegaFinaleSmoke(ctx) {
   await waitForSmoke(() => storyLog().includes("最后一尊神"), `${smokeName}: star falls beat`, 8000);
   await finishPlayerTurn(ctx);
 
-  // Rival turn 3 re-arms a nullifier, then the pawn grinds the remaining LP with direct attacks.
+  // Rival turn 3 re-arms a second dominion on the pawn; the returned guardian blocks direct attacks.
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.id === "temple-revenant"),
+    `${smokeName}: temple guardian re-summoned. ${trioOmegaFailureSnapshot(ctx)}`,
+    16000
+  );
+  await waitForSmoke(() => storyLog().includes("再临守卫"), `${smokeName}: temple re-summon beat`, 8000);
+  await waitForSmoke(
+    () => (ctx.state.turn === "player" && ctx.state.phase === "main") || ctx.state.gameOver,
+    `${smokeName}: rival turn 3 passes. ${trioOmegaFailureSnapshot(ctx)}`,
+    32000
+  );
+
+  // Turn 4: search the removal, clear the pawn press, then break the returned guardian.
+  if (!ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion")) {
+    throw new Error(`${smokeName}: second dominion should press the pawn. ${trioOmegaFailureSnapshot(ctx)}`);
+  }
+  if (!ctx.state.player.field.some((card) =>
+    card?.id === "trio-ember-pawn" && (card.tempAtk || 0) < 2100)) {
+    throw new Error(`${smokeName}: pawn should be pressed below finale strength. ${trioOmegaFailureSnapshot(ctx)}`);
+  }
+  clickSmokeElement(handCard(ctx.els, "seer-call"), `${smokeName}: play seer call`);
+  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, `${smokeName}: seer confirm`);
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm seer call`);
+  await waitForSmoke(
+    () => ctx.state.player.hand.some((card) => card?.id === "trio-moonbreaker-ray"),
+    `${smokeName}: seer draws moonbreaker. ${trioOmegaFailureSnapshot(ctx)}`,
+    9000
+  );
+  clickSmokeElement(handCard(ctx.els, "trio-moonbreaker-ray"), `${smokeName}: select moonbreaker 3`);
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "destroySpellTrap", `${smokeName}: moonbreaker target`);
+  await selectAndConfirmSpellTarget(ctx, ctx.els.aiTraps.querySelector(".trap-slot.targetable"), `${smokeName}: clear pawn press`);
+  await waitForSmoke(
+    () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
+      ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && (card.tempAtk || 0) >= 2100),
+    `${smokeName}: pawn press cleared. ${trioOmegaFailureSnapshot(ctx)}`,
+    9000
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn attacks guardian`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "temple-revenant")?.classList.contains("attack-target") || ctx.state.gameOver,
+    `${smokeName}: guardian target highlighted`,
+    8000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "temple-revenant"), `${smokeName}: pawn breaks guardian`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "temple-revenant"),
+    `${smokeName}: guardian destroyed. ${trioOmegaFailureSnapshot(ctx)}`,
+    12000
+  );
+  await waitForSmoke(() => storyLog().includes("再临的守卫"), `${smokeName}: guardian falls beat`, 8000);
+  await finishPlayerTurn(ctx);
+
+  // The pawn grinds the remaining LP with direct attacks.
   for (let guard = 0; guard < 6 && !ctx.state.gameOver; guard += 1) {
     if (ctx.state.turn !== "player" || ctx.state.phase !== "main") {
       await waitForSmoke(

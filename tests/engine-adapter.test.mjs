@@ -44,6 +44,7 @@ import {
   dispatchStartTurnFromUiState,
   dispatchTrapResponseFromUiState,
   dispatchSetTrapFromUiState,
+  dispatchSpecialSummonFromDeckFromUiState,
   dispatchSummonMonsterFromUiState,
   explainFusionSummonFromUiState
 } from "../src/engine-adapter.js";
@@ -285,6 +286,32 @@ test("dispatches SUMMON_MONSTER and applies CARD_MOVED to a fixed UI monster slo
     event.to.index === 2
   ));
   assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === lancer.uid));
+  assert.equal(state.gameEvents.length, events.length);
+});
+
+test("dispatches special summon from deck into an empty monster zone", () => {
+  const guardian = uiMonster("deck-guardian", "temple-revenant");
+  const state = appState();
+  state.ai.deck = [guardian];
+  state.ai.hand = [];
+  state.ai.field[0] = null;
+
+  const events = dispatchSpecialSummonFromDeckFromUiState(state, "ai", "temple-revenant", {
+    mode: "attack",
+    attackLockReason: "templeRevenant"
+  });
+
+  assert.deepEqual(state.ai.deck, []);
+  assert.equal(state.ai.field[0], guardian);
+  assert.equal(guardian.mode, "attack");
+  assert.equal(guardian.used, false);
+  assert.equal(guardian.attackLockReason, "templeRevenant");
+  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.cardId === guardian.uid));
+  assert.ok(events.some((event) =>
+    event.type === "CARD_MOVED" &&
+    event.cardId === guardian.uid &&
+    event.to.zone === "monsterZone"
+  ));
   assert.equal(state.gameEvents.length, events.length);
 });
 

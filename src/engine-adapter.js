@@ -1399,6 +1399,21 @@ export function dispatchSummonMonsterFromUiState(uiState, playerId, handIndex, f
   return applyUiGameEvents(uiState, events);
 }
 
+export function dispatchSpecialSummonFromDeckFromUiState(uiState, playerId, templateId, options = {}) {
+  const engine = new GameEngine(buildEngineStateFromUiState(uiState));
+  const events = engine.dispatch({
+    type: "SPECIAL_SUMMON_FROM_DECK_OR_HAND",
+    playerId,
+    templateId,
+    index: Number.isInteger(options.index) ? options.index : undefined,
+    mode: options.mode || "attack",
+    attackLockReason: options.attackLockReason || null,
+    sourceCardId: options.sourceCardId || null,
+    summonType: options.summonType || "special"
+  });
+  return applyUiGameEvents(uiState, events);
+}
+
 export function dispatchActivateSpellFromUiState(uiState, playerId, rivalId, handIndex, targetInfo = null) {
   const duelist = uiDuelist(uiState, playerId);
   const card = duelist.hand[handIndex];

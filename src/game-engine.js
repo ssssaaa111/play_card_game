@@ -532,6 +532,7 @@ export class EffectContext {
       mode: options.mode || "attack",
       used: false,
       changedMode: false,
+      attackLockReason: options.attackLockReason || null,
       tempAtk: 0,
       tempDef: 0,
       battleWear: 0,
@@ -982,6 +983,9 @@ export class GameEngine {
       case "SUMMON_MONSTER":
         this.#summonMonster(workingState, ctx, emit, action);
         break;
+      case "SPECIAL_SUMMON_FROM_DECK_OR_HAND":
+        this.#specialSummonFromDeckOrHand(workingState, ctx, emit, action);
+        break;
       case "SET_TRAP":
         this.#setTrap(workingState, ctx, emit, action);
         break;
@@ -1333,6 +1337,22 @@ export class GameEngine {
       sourceCardId: action.cardId,
       summonedCardIds,
       group
+    });
+  }
+
+  #specialSummonFromDeckOrHand(state, ctx, emit, action) {
+    requirePlayer(state, action.playerId);
+    requirePhase(state, [Phase.main, Phase.battle], action.type);
+    const player = requirePlayer(state, action.playerId);
+    if ((player.monsterZone || []).length >= MONSTER_ZONE_SIZE) {
+      throw new GameRuleError("No empty monster zone is available for the special summon");
+    }
+    ctx.specialSummonFromDeckOrHand(action.playerId, action.templateId, {
+      index: action.index,
+      mode: action.mode || "attack",
+      attackLockReason: action.attackLockReason || null,
+      sourceCardId: action.sourceCardId || null,
+      summonType: action.summonType || "special"
     });
   }
 
