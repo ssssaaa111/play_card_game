@@ -1,6 +1,7 @@
 import { battleValue, canDirectAttack, shieldPreview, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
-import { findAiDirectLethalAttacker, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
+import { findAiAttackSequence, findAiDirectLethalAttacker, maximumRemainingAttackDamage, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
+import { trapCanResolve } from './traps.js';
 import { selectRedirectTarget } from './traps.js';
 import { getCardEffectDefinition } from './game-engine.js';
 
@@ -379,6 +380,11 @@ function scoreAiTrapResponse(card, details = {}) {
   if (details.eventName === "attack" && card.trigger === "attackDestroy") {
     return attackThreatScore(details);
   }
+  if (details.eventName === "chain") {
+    const sourceTrigger = details.context?.sourceTrap?.trigger || "";
+    const blocksKeyPlay = ["attackDestroy", "attackNegate", "counterBoost", "attackShift", "aceGuard"].includes(sourceTrigger);
+    return blocksKeyPlay ? 90 : 0;
+  }
   return 60;
 }
 
@@ -601,10 +607,58 @@ export function shouldSwitchSummonedMonsterToDefense({
   return totalDef(monster) > totalAtk(monster) + 400 && ownerLp < rivalLp;
 }
 
+function aiAttackersList(field) {
+  return (field || [])
+    .map((card, index) => ({ card, index }))
+    .filter((entry) => entry.card && entry.card.mode !== "defense" && !entry.card.used);
+}
+
+export function aiMaxDamageThisTurn({ attackers = [], targets = [], shield = 0, directAttacks = 0 } = {}) {
+  const activeAttackers = attackers.filter(Boolean);
+  const activeTargets = targets.filter(Boolean);
+  if (!activeAttackers.length) return 0;
+  return maximumRemainingAttackDamage(
+    activeAttackers,
+    activeTargets,
+    Math.max(0, Number(shield) || 0),
+    Math.max(0, Number(directAttacks) || 0)
+  );
+}
+
+export function aiRivalLethalThreat({ rivalField = [], ownerField = [], ownerShield = 0 } = {}) {
+  return aiMaxDamageThisTurn({
+    attackers: aiAttackersList(rivalField).map((entry) => entry.card),
+    targets: ownerField.filter(Boolean),
+    shield: ownerShield
+  });
+}
+
+function chooseThreatTarget(attacker, targets) {
+  const attackerAtk = totalAtk(attacker);
+  const entries = (targets || [])
+    .map((target, index) => target ? { target, index, atk: totalAtk(target) } : null)
+    .filter(Boolean)
+    .filter((entry) => entry.target.mode === "attack")
+    .sort((a, b) => b.atk - a.atk || a.index - b.index);
+  for (const entry of entries) {
+    if (attackerAtk > entry.atk) return entry.index;
+  }
+  return null;
+}
+
+function aiLiveAttackTraps(rivalTraps = [], rivalField = []) {
+  return (rivalTraps || [])
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => card && trapCanResolve(card, "attack", {
+      owner: { traps: rivalTraps, field: rivalField }
+    }));
+}
+
 export function chooseAiAttackAction({
   owner = null,
   field = [],
   rivalField = [],
+  rivalTraps = [],
   rivalLp = 0,
   rivalShield = 0,
   aiStyle = "balanced",
@@ -626,6 +680,71 @@ export function chooseAiAttackAction({
 
   const pick = attackers[0];
   if (!pick) return { type: "none" };
+  if (aiStyle !== "scriptedPressure") {
+    const liveTraps = aiLiveAttackTraps(rivalTraps, rivalField);
+    const canCounter = (owner?.traps || []).some((card) => card?.trigger === "chainNegate");
+    if (liveTraps.length > 0 && !canCounter && attackers.length > 1) {
+      const sorted = [...attackers].sort((a, b) => totalAtk(a.card) - totalAtk(b.card));
+      const bait = sorted[0];
+      const strongest = sorted[sorted.length - 1];
+      if (totalAtk(strongest.card) > totalAtk(bait.card) + 200) {
+        const baitTarget = chooseAiAttackTarget({
+          attacker: bait.card,
+          targets: rivalField,
+          playerLp: rivalLp,
+          playerShield: rivalShield,
+          aiStyle,
+          canUseDirect: owner ? canDirectAttack(owner, bait.card) : false
+        });
+        if (baitTarget !== null) {
+          return {
+            type: "attack",
+            card: bait.card,
+            cardUid: bait.card.uid,
+            attackerIndex: bait.index,
+            targetIndex: baitTarget,
+            target: baitTarget >= 0 ? rivalField[baitTarget] : null
+          };
+        }
+      }
+    }
+  }
+  const lethalDamage = aiMaxDamageThisTurn({
+    attackers: attackers.map((entry) => entry.card),
+    targets: rivalField,
+    shield: rivalShield,
+    directAttacks: owner?.directAttacks || 0
+  });
+  const canKillNow = lethalDamage >= rivalLp;
+  const rivalThreat = aiRivalLethalThreat({
+    rivalField,
+    ownerField: field,
+    ownerShield: owner?.shield || 0
+  });
+  const underLethalThreat = !canKillNow && rivalThreat >= (owner?.lp || 0);
+  const threatTarget = underLethalThreat ? chooseThreatTarget(pick.card, rivalField) : null;
+  const targetEntries = rivalField
+    .map((card, index) => card ? { card, index } : null)
+    .filter(Boolean);
+  const sequencePlan = findAiAttackSequence({
+    attackers: attackers.map((entry) => entry.card),
+    targets: targetEntries.map((entry) => entry.card),
+    shield: rivalShield,
+    directAttacks: owner?.directAttacks || 0
+  });
+  if (sequencePlan.damage >= rivalLp && sequencePlan.moves.length > 0) {
+    const first = sequencePlan.moves[0];
+    const fieldAttacker = attackers[first.attackerIndex];
+    const targetFieldIndex = first.targetIndex >= 0 ? targetEntries[first.targetIndex].index : -1;
+    return {
+      type: "attack",
+      card: fieldAttacker.card,
+      cardUid: fieldAttacker.card.uid,
+      attackerIndex: fieldAttacker.index,
+      targetIndex: targetFieldIndex,
+      target: targetFieldIndex >= 0 ? rivalField[targetFieldIndex] : null
+    };
+  }
   if (aiStyle === "scriptedPressure" && rivalField.some(Boolean)) {
     const lethalDirect = findAiDirectLethalAttacker({
       attackers: attackers.map((entry) => entry.card),
@@ -645,6 +764,16 @@ export function chooseAiAttackAction({
         target: null
       };
     }
+  }
+  if (threatTarget !== null) {
+    return {
+      type: "attack",
+      card: pick.card,
+      cardUid: pick.card.uid,
+      attackerIndex: pick.index,
+      targetIndex: threatTarget,
+      target: rivalField[threatTarget]
+    };
   }
   const targetIndex = chooseAiAttackTarget({
     attacker: pick.card,

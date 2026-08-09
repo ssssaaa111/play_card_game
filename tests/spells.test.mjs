@@ -465,3 +465,37 @@ test("scores AI spell/trap removal higher against equipment", () => {
     rival: duelist({ owner: "player", traps: [spell({ effect: "equipBlade" }), null, null] })
   }), 78);
 });
+
+test("AI prioritizes removing a live attack trap before striking", () => {
+  const snare = { type: "trap", id: "snare", trigger: "attackDestroy", uid: "s1" };
+
+  const liveTrapScore = scoreSpellForAi("destroySpellTrap", {
+    owner: duelist({ owner: "ai" }),
+    rival: duelist({ owner: "player", traps: [snare, null, null, null, null] }),
+    aiStyle: "balanced"
+  });
+  assert.equal(liveTrapScore, 96);
+
+  const scriptedScore = scoreSpellForAi("destroySpellTrap", {
+    owner: duelist({ owner: "ai" }),
+    rival: duelist({ owner: "player", traps: [snare, null, null, null, null] }),
+    aiStyle: "scriptedPressure"
+  });
+  assert.equal(scriptedScore, 52);
+});
+
+test("AI prioritizes a buff that turns the attack line lethal", () => {
+  const lethalScore = scoreSpellForAi("buff500", {
+    owner: duelist({ owner: "ai", field: [monster({ atk: 2600 }), monster({ atk: 1700 }), null, null, null] }),
+    rival: duelist({ field: [monster({ mode: "defense", def: 2800 }), null, null, null, null], lp: 1700 }),
+    aiStyle: "balanced"
+  });
+  assert.equal(lethalScore, 95);
+
+  const normalScore = scoreSpellForAi("buff500", {
+    owner: duelist({ owner: "ai", field: [monster({ atk: 2600 }), monster({ atk: 1700 }), null, null, null] }),
+    rival: duelist({ field: [monster({ mode: "defense", def: 2800 }), null, null, null, null], lp: 4000 }),
+    aiStyle: "balanced"
+  });
+  assert.equal(normalScore, 50);
+});
