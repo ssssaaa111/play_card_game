@@ -181,6 +181,81 @@ export function findAiAttackSequence({ attackers = [], targets = [], shield = 0,
   return { moves: result.moves, damage: result.damage };
 }
 
+export function findAiNextTurnLethalSetup({
+  attackers = [],
+  targets = [],
+  shield = 0,
+  directAttacks = 0,
+  rivalLp = 0
+} = {}) {
+  const activeAttackers = attackers.filter(Boolean).map((card, index) => ({ card, index }));
+  const activeTargets = targets.filter(Boolean).map((card, index) => ({ card, index }));
+  if (!activeAttackers.length || rivalLp <= 0) return null;
+  const initialShield = Math.max(0, Number(shield) || 0);
+  const initialDirects = Math.max(0, Number(directAttacks) || 0);
+
+  let best = null;
+  for (const { card: attacker, index: attackerIndex } of activeAttackers) {
+    const remainingAttackers = activeAttackers
+      .filter((entry) => entry.index !== attackerIndex)
+      .map((entry) => entry.card);
+    const remainingTargets = activeTargets.map((entry) => entry.card);
+
+    const naturalDirect = remainingTargets.length === 0 || Boolean(attacker?.canDirectAttack);
+    const canDirectFirst = (naturalDirect || initialDirects > 0) && initialShield <= 0;
+    if (canDirectFirst) {
+      const direct = previewDamageSequence(
+        attacker,
+        [totalAtk(attacker), ...guaranteedAfterAttackDamage(attacker)],
+        initialShield
+      );
+      const directCost = naturalDirect ? 0 : 1;
+      const nextTurnMax = maximumRemainingAttackDamage(
+        [...remainingAttackers, attacker],
+        remainingTargets,
+        direct.shieldAfter,
+        0
+      );
+      const total = direct.finalDamage + nextTurnMax;
+      if (total >= rivalLp && (!best || total > best.total)) {
+        best = {
+          attackerIndex,
+          targetIndex: -1,
+          target: null,
+          total,
+          firstDamage: direct.finalDamage
+        };
+      }
+    }
+
+    for (let targetPosition = 0; targetPosition < activeTargets.length; targetPosition += 1) {
+      const { card: target, index: targetIndex } = activeTargets[targetPosition];
+      const attack = previewTargetAttackDamage(attacker, target, initialShield);
+      if (!attack) continue;
+      const restTargets = activeTargets
+        .filter((entry) => entry.index !== targetIndex)
+        .map((entry) => entry.card);
+      const nextTurnMax = maximumRemainingAttackDamage(
+        [...remainingAttackers, attacker],
+        restTargets,
+        attack.shieldAfter,
+        0
+      );
+      const total = attack.finalDamage + nextTurnMax;
+      if (total >= rivalLp && (!best || total > best.total)) {
+        best = {
+          attackerIndex,
+          targetIndex,
+          target,
+          total,
+          firstDamage: attack.finalDamage
+        };
+      }
+    }
+  }
+  return best;
+}
+
 export function findAiDirectLethalAttacker({
   attackers = [],
   targets = [],

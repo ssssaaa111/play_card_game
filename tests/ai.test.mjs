@@ -16,7 +16,7 @@ import {
   chooseAiTurnGoal,
   shouldSwitchSummonedMonsterToDefense
 } from "../src/ai.js";
-import { findAiAttackSequence } from "../src/spells.js";
+import { findAiAttackSequence, findAiNextTurnLethalSetup } from "../src/spells.js";
 
 function monster(overrides = {}) {
   return {
@@ -676,6 +676,61 @@ test("AI trap planner returns the first hand trap and first empty trap zone", ()
     trapIndex: 1,
     id: "mirror"
   });
+});
+
+test("next-turn lethal setup breaks the blocking wall before the attack target", () => {
+  const breaker = monster({ name: "breaker", atk: 2500, uid: "b1" });
+  const chump = monster({ name: "chump", atk: 800, uid: "c1" });
+  const wall = monster({ name: "wall", mode: "defense", def: 2400, uid: "w1" });
+  const guard = monster({ name: "guard", atk: 1000, uid: "g1" });
+
+  const setup = findAiNextTurnLethalSetup({
+    attackers: [breaker, chump],
+    targets: [wall, guard],
+    shield: 0,
+    directAttacks: 0,
+    rivalLp: 2300
+  });
+
+  assert.ok(setup, "a two-turn lethal line should be recognized");
+  assert.equal(setup.targetIndex, 0, "the blocking wall should be broken first");
+  assert.ok(setup.total >= 2300);
+});
+
+test("next-turn lethal setup stays silent when two turns cannot kill", () => {
+  const breaker = monster({ name: "breaker", atk: 2500, uid: "b1" });
+  const wall = monster({ name: "wall", mode: "defense", def: 4000, uid: "w1" });
+
+  const setup = findAiNextTurnLethalSetup({
+    attackers: [breaker],
+    targets: [wall],
+    shield: 0,
+    directAttacks: 0,
+    rivalLp: 2600
+  });
+
+  assert.equal(setup, null);
+});
+
+test("AI prefers the next-turn lethal setup move over a greedy target trade", () => {
+  const breaker = monster({ name: "breaker", atk: 2500, uid: "b1" });
+  const chump = monster({ name: "chump", atk: 800, uid: "c1" });
+  const wall = monster({ name: "wall", mode: "defense", def: 2400, uid: "w1" });
+  const guard = monster({ name: "guard", atk: 1000, uid: "g1" });
+
+  const action = chooseAiAttackAction({
+    owner: { directAttacks: 0, lp: 4000, shield: 0 },
+    field: [breaker, chump],
+    rivalField: [wall, guard],
+    rivalLp: 2300,
+    rivalShield: 0,
+    aiStyle: "balanced",
+    canAttackMonster: () => true
+  });
+
+  assert.equal(action.type, "attack");
+  assert.equal(action.card.uid, "b1");
+  assert.equal(action.targetIndex, 0, "break the wall to open a two-turn lethal instead of trading the guard");
 });
 
 test("AI trap planner filters candidates through engine legality", () => {
