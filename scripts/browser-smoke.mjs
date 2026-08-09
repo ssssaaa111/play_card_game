@@ -33,6 +33,7 @@ const DEFAULT_SMOKES = [
   "trio-omega-story-demo",
   "trio-omega-vow-demo",
   "trio-omega-finale-demo",
+  "trio-omega-finale-rush",
   "trio-omega-challenge",
   "trio-omega-autopilot-fails",
   "trio-omega-happy-clicker-fails",

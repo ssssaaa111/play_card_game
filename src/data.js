@@ -1497,6 +1497,133 @@ export const scenarioSetups = {
       }
     ]
   },
+  protagonistTrioOmegaFinaleRush: {
+    label: "终局三曜 · 终焉篇 · 乱序",
+    setupVisibility: "player",
+    text: "神殿守门人把防守波次彻底打乱：断链、帷幕与援军出现的时机每一局都不同。背下固定解法没有用——你必须每回合读懂棋盘，见招拆招，才能走到最终的太阳神面前。",
+    goal: "沿用终焉篇的破解框架：放弃第一击保住日冕诱锁，解印射线拆断链，回召小卫发动三曜终断；但月曜帷幕可能在任意回合压制小卫——进攻前先解除压制，再用防线斩落最后一尊太阳神。",
+    difficulty: "challenge",
+    aiStyle: "scriptedPressure",
+    objectives: [
+      "太阳神第一击不要发动陷阱：断链裁决会无效它，太阳神还会拆毁最前方的陷阱。",
+      "星线护续是前场诱饵——让它替日冕诱锁挡下太阳神的拆毁。",
+      "第二回合用解印射线拆掉断链裁决，日冕诱锁才能在第二击命中。",
+      "防守波次每局不同：月曜帷幕可能在任意回合压制余烁小卫，进攻前先检查它是否被压制。",
+      "守卫倒下后太阳神会最后一次站起来：第二发三曜终断强化防线，转攻后由防线击落最终神格。"
+    ],
+    hints: [
+      "断链裁决只会在你发动陷阱时响应——第一击放弃响应，陷阱就不会被无效。",
+      "太阳神攻击后会拆毁最前方的陷阱：把星线护续放前面，日冕诱锁藏在后面。",
+      "每回合开始时先看余烁小卫的攻击力：只要被月曜帷幕压制（低于 2100），就先解除压制再进攻。",
+      "第二发三曜终断瞄准攻击力最低的怪兽——把强化后的诱标卫转成攻击，小卫负责再临守卫。",
+      "两发解印射线足够应付所有波次：不要提前浪费。"
+    ],
+    recommendedLine: [
+      "第一回合盖下星线护续（前）与日冕诱锁（后），太阳神攻击时选择不发动。",
+      "第二回合重筑防线并拆掉断链裁决，让日冕诱锁在第二击击落太阳神。",
+      "第三回合回召余烁小卫发动第一发三曜终断，击破月曜与星曜。",
+      "后续每回合：若小卫被月幕压制就先解除，再破再临守卫、斩最终太阳神。",
+      "防线斩落最终神格后，用强化小卫直击收尾。"
+    ],
+    playerLp: 1500,
+    aiLp: 4000,
+    playerHand: ["trio-chain-veil", "trio-solar-snare", "trio-ember-recall", "trio-final-counter", "trio-moonbreaker-ray"],
+    playerDeck: ["trio-decoy-ward", "trio-moonbreaker-ray", "seer-call", "trio-final-counter", "trio-moonbreaker-ray", "last-spark"],
+    playerField: [
+      { id: "trio-decoy-ward", mode: "defense", changedMode: true },
+      { id: "trio-decoy-ward", mode: "defense", changedMode: true }
+    ],
+    playerGrave: ["flare-titan", "trio-ember-pawn"],
+    aiField: ["trio-sun-judicator", "trio-moon-warden", "trio-star-herald"],
+    aiTraps: ["trio-moon-dominion"],
+    aiHand: ["chain-nullifier"],
+    aiDeck: ["eclipse-barrier", "trio-moon-dominion", "trio-moon-dominion", "chain-nullifier", "eclipse-barrier", "eclipse-barrier", "temple-revenant", "trio-sun-judicator", "seer-call"],
+    aiDeckShuffleRange: [2, 6],
+    deckShuffleOwners: ["ai"],
+    setupContinuousEffects: [{
+      source: { owner: "ai", zone: "traps", index: 0 },
+      target: { owner: "player", zone: "field", index: 1 },
+      effectId: "lunarDominion"
+    }],
+    scriptedSummons: [{
+      id: "temple-revenant",
+      when: { eventType: "CARD_DESTROYED", cardId: "trio-sun-judicator" },
+      delay: "nextAiTurn",
+      summon: { owner: "ai", cardId: "temple-revenant", mode: "attack", attackLock: "templeRevenant" }
+    }, {
+      id: "final-sun",
+      when: { eventType: "CARD_DESTROYED", cardId: "temple-revenant" },
+      summon: { owner: "ai", cardId: "trio-sun-judicator", mode: "attack" }
+    }],
+    storyBeats: [
+      {
+        id: "sun-attack",
+        when: { eventType: "ATTACK_DECLARED", playerId: "ai", cardId: "trio-sun-judicator" },
+        speaker: "ai",
+        line: "曜冕裁决者，碾碎这道防线！"
+      },
+      {
+        id: "nullifier-cleared",
+        when: { eventType: "CARD_DESTROYED", cardId: "chain-nullifier" },
+        speaker: "player",
+        line: "断链保护消失了，陷阱可以命中了！"
+      },
+      {
+        id: "sun-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-sun-judicator" },
+        speaker: "player",
+        line: "太阳神……崩落了！"
+      },
+      {
+        id: "temple-revenant",
+        when: { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "temple-revenant" },
+        speaker: "ai",
+        line: "神殿之力，再临守卫！"
+      },
+      {
+        id: "dominion-rearm",
+        when: { eventType: "CARD_ACTIVATED", playerId: "ai", cardId: "trio-moon-dominion" },
+        speaker: "ai",
+        line: "月曜帷幕，再度展开！"
+      },
+      {
+        id: "finale-cast",
+        when: { eventType: "CARD_ACTIVATED", playerId: "player", cardId: "trio-final-counter" },
+        speaker: "player",
+        line: "三曜终断——这一击，为了打破封印！"
+      },
+      {
+        id: "moon-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-moon-warden" },
+        speaker: "player",
+        line: "第二尊神，倒下！"
+      },
+      {
+        id: "star-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-star-herald" },
+        speaker: "player",
+        line: "最后一尊神，崩落！"
+      },
+      {
+        id: "guardian-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "temple-revenant" },
+        speaker: "player",
+        line: "再临的守卫，也崩落了！"
+      },
+      {
+        id: "final-sun",
+        when: { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "trio-sun-judicator" },
+        speaker: "ai",
+        line: "太阳神……永远不会真正倒下！这是最后一战！"
+      },
+      {
+        id: "victory",
+        when: { eventType: "GAME_OVER_DECLARED" },
+        speaker: "player",
+        line: "三曜的封印，由我彻底打破！"
+      }
+    ]
+  },
   protagonistTrioOmegaFull: {
     label: "终局三曜完整对局",
     setupVisibility: "player",
