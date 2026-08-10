@@ -1178,6 +1178,17 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
   );
   clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue direct strike reveal`);
   await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "trio-star-herald"),
+    `${smokeName}: AI reveals star after-attack effect`,
+    12000
+  );
+  const starEffectSummary = ctx.els.aiRevealSummary?.textContent || "";
+  if (!starEffectSummary.includes("追加造成 300 点伤害") ||
+      !starEffectSummary.includes("攻击力提升 300")) {
+    throw new Error(`${smokeName}: star reveal must explain the exact damage and growth. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue star effect reveal`);
+  await waitForSmoke(
     () => ctx.state.gameOver && ctx.state.gameOverWinner === "ai" && !ctx.state.aiRunning,
     `${smokeName}: direct attack plus after-attack damage ends the duel. ${smokeDebug(ctx)}`,
     24000

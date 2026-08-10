@@ -54,6 +54,7 @@ import { bindDeckEditorEvents, renderDeckEditor } from './deck-editor-renderer.j
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import {
   afterAttackBackrowDestroyedText,
+  afterAttackDamageAndGrowthText,
   afterAttackLockedTargetLostText,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
@@ -754,13 +755,13 @@ function confirmAiRevealContinue() {
 
 function shouldAutoContinueAiReveal() {
   const revealNeedsManualClick = ["ai-card-reveal-confirm", "ai-card-reveal-queue"].includes(BROWSER_SMOKE) ||
-    BROWSER_SMOKE === "trio-combined-lethal-planning-basic";
+    ["trio-after-attack-lethal-planning-basic", "trio-combined-lethal-planning-basic"].includes(BROWSER_SMOKE);
   return Boolean(BROWSER_SMOKE) && !revealNeedsManualClick;
 }
 
 function waitForAiReveal(input) {
   const reveal = buildAiCardReveal(input);
-  if (!reveal || state.gameOver) return Promise.resolve(false);
+  if (!reveal || (state.gameOver && !input?.allowAfterGameOver)) return Promise.resolve(false);
   return new Promise((resolve) => {
     if (!pendingAiReveal && pendingAiRevealQueue.length === 0) {
       pendingAiRevealIndex = 0;
@@ -3494,11 +3495,29 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
           : `魔陷区 ${(Number(event.targetIndex) || 0) + 1} 的盖牌`
       };
     });
+  const growEventIndex = events.findIndex((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.sourceCardId === attackerId &&
+    event.cardId === attackerId &&
+    event.stat === "tempAtk" &&
+    event.amount > 0
+  );
+  const growEvent = growEventIndex >= 0 ? events[growEventIndex] : null;
+  let afterAttackDamageEvent = null;
+  for (let index = growEventIndex - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type === "DAMAGE_DEALT" && event.sourceCardId === attackerId) {
+      afterAttackDamageEvent = event;
+      break;
+    }
+  }
   const publicEffectSummary = lostBackrow[0]
     ? afterAttackLockedTargetLostText(attacker.name, lostBackrow[0].targetName)
     : destroyedBackrow[0]
       ? afterAttackBackrowDestroyedText(attacker.name, destroyedBackrow[0].found.card.name)
-      : "";
+      : growEvent && afterAttackDamageEvent
+        ? afterAttackDamageAndGrowthText(attacker.name, afterAttackDamageEvent.amount, growEvent.amount)
+        : "";
   const hasPublicEffect = attacker.afterAttack && events.some((event) => event.sourceCardId === attackerId);
   if (owner.owner === "ai" && hasPublicEffect) {
     await waitForAiReveal({
@@ -3508,7 +3527,8 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
       type: "effect",
       revealKind: "monster-effect",
       message: `${attacker.name} 的效果触发。`,
-      summary: publicEffectSummary || undefined
+      summary: publicEffectSummary || undefined,
+      allowAfterGameOver: true
     });
   }
   if (events.some((event) =>
@@ -3561,13 +3581,6 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
         relatedCardIds: relatedCardIds(target?.card)
       });
     });
-  const growEvent = events.find((event) =>
-    event.type === "STAT_MODIFIED" &&
-    event.sourceCardId === attackerId &&
-    event.cardId === attackerId &&
-    event.stat === "tempAtk" &&
-    event.amount > 0
-  );
   if (growEvent) {
     addLog(`${attacker.name} 吞噬影子，攻击力提升 ${growEvent.amount}。`, cardLogMeta(attacker, { actor: owner.owner, type: "effect" }));
   }
