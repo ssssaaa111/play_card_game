@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   afterAttackBackrowDestroyedText,
+  afterAttackDamageAndGrowthText,
   afterAttackLockedTargetLostText,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
@@ -61,5 +62,12 @@ test("explains the two distinct graveyard moves around a negated attack trap", (
   assert.equal(
     afterAttackLockedTargetLostText("曜冕裁决者", "星线护续"),
     "曜冕裁决者锁定的魔陷「星线护续」已提前离场，攻击后效果没有转移到其他魔陷。"
+  );
+});
+
+test("explains after-attack damage and self growth with exact public values", () => {
+  assert.equal(
+    afterAttackDamageAndGrowthText("星坠宣告者", 300, 300),
+    "星坠宣告者的攻击后效果追加造成 300 点伤害，并使自身攻击力提升 300。"
   );
 });
