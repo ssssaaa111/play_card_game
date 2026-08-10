@@ -1212,6 +1212,13 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
       ctx.state.player.lp !== 0 || star.tempAtk !== 300) {
     throw new Error(`${smokeName}: star must deal 2400 plus 300 while leaving the bypassed monster in play. ${smokeDebug(ctx)}`);
   }
+  const starEffectLog = (ctx.state.log || []).find((entry) => {
+    const message = logEntryMessage(entry);
+    return message.includes("追加造成 300 点伤害") && message.includes("攻击力提升 300");
+  });
+  if (!starEffectLog || starEffectLog.cardId !== "trio-star-herald") {
+    throw new Error(`${smokeName}: public log must preserve the exact star damage and growth. ${smokeDebug(ctx)}`);
+  }
   setSmokeStatus("passed", smokeName);
 }
 
