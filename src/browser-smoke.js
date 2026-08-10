@@ -8150,6 +8150,35 @@ async function runTrioGauntletPreviewBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runObjectiveHierarchyMobileBasicSmoke(ctx) {
+  const smokeName = "objective-hierarchy-mobile-basic";
+  const fullGoal = "先布置防御挡下太阳神的第一击，再清掉月曜帷幕，复活低星王牌，用终局反击击碎三曜。";
+  const compactGoal = "当前目标：先布置防御挡下太阳神的第一击";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioGauntlet");
+  await waitForSmoke(
+    () => ctx.state.scenarioId === "protagonistTrioOmegaStory" &&
+      ctx.els.duelHint?.dataset.kind === "objective" &&
+      ctx.els.duelHint.textContent === compactGoal,
+    `${smokeName}: first chapter exposes one compact battlefield objective`
+  );
+  if (ctx.els.duelHint.title !== `当前目标：${fullGoal}`) {
+    throw new Error(`${smokeName}: full route should remain available in the objective title`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}: select solar snare`);
+  await waitForSmoke(
+    () => ctx.state.selected?.zone === "hand" &&
+      document.querySelector("#handCommand")?.dataset.active === "true" &&
+      document.querySelector("#handCommandTitle")?.textContent.includes("日冕诱锁"),
+    `${smokeName}: selected card owns the tactical command area`
+  );
+  if (ctx.els.duelHint.textContent !== compactGoal || ctx.els.duelHint.title !== `当前目标：${fullGoal}`) {
+    throw new Error(`${smokeName}: selecting a card should not restore the full route over the battlefield`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runPreDuelDeckScrollPreviewSmoke(ctx) {
   setSmokeStatus("running", "pre-duel-deck-scroll-preview");
   selectScenario(ctx.els, "normal");
@@ -8749,6 +8778,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "custom-deck-editor-basic": runCustomDeckEditorSmoke,
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "trio-gauntlet-preview-basic": runTrioGauntletPreviewBasicSmoke,
+    "objective-hierarchy-mobile-basic": runObjectiveHierarchyMobileBasicSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "support-target-readability-basic": runSupportTargetReadabilityBasicSmoke,

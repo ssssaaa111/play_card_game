@@ -238,7 +238,7 @@ test("battlefield objectives and action hints use a readable presentation", () =
   assert.match(app, /els\.duelHint\.dataset\.kind = duelHint\.kind/);
   assert.match(css, /#duelHint\[data-kind="objective"\][\s\S]*max-width: min\(760px, calc\(100vw - 48px\)\)/);
   assert.match(css, /#duelHint\[data-kind="action"\][\s\S]*max-width: min\(760px, calc\(100vw - 48px\)\)/);
-  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*#duelHint\[data-kind="objective"\][\s\S]*-webkit-line-clamp: 2/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*#duelHint\[data-kind="objective"\][\s\S]*-webkit-line-clamp: 1/);
   assert.match(css, /@media \(max-width: 1040px\)[\s\S]*#duelHint\[data-kind="action"\][\s\S]*-webkit-line-clamp: 2/);
 });
 

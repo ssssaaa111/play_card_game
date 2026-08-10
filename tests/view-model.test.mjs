@@ -9,6 +9,7 @@ import {
   describeFusionMaterialTarget,
   describeSplitTokenTarget,
   describeTributeTarget,
+  compactScenarioGoal,
   duelHintView,
   duelHintText,
   phaseLabel,
@@ -65,9 +66,22 @@ test("classifies persistent scenario goals separately from immediate duel action
   });
 
   assert.equal(objective.kind, "objective");
-  assert.equal(objective.title, objective.text);
+  assert.equal(objective.title, "当前目标：clear the board before attacking");
   assert.equal(action.kind, "action");
   assert.equal(action.title, action.text);
+});
+
+test("keeps battlefield objectives to one actionable step while preserving the full route", () => {
+  const fullGoal = "先布置防御挡下太阳神的第一击，再清掉月曜帷幕，复活低星王牌，用终局反击击碎三曜。";
+  const objective = duelHintView({
+    started: true,
+    scenarioId: "protagonistTrioOmegaStory",
+    scenarioGoal: fullGoal
+  });
+
+  assert.equal(compactScenarioGoal(fullGoal), "先布置防御挡下太阳神的第一击");
+  assert.equal(objective.text, "当前目标：先布置防御挡下太阳神的第一击");
+  assert.equal(objective.title, `当前目标：${fullGoal}`);
 });
 
 test("describes hand actions for common cards", () => {

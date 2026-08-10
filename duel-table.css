@@ -2106,6 +2106,13 @@ body[data-duel-selection="playerField"] .hand-command-idle {
     text-align: center;
     white-space: normal;
     -webkit-box-orient: vertical;
+  }
+
+  #app .duel-table #duelHint[data-kind="objective"] {
+    -webkit-line-clamp: 1;
+  }
+
+  #app .duel-table #duelHint[data-kind="action"] {
     -webkit-line-clamp: 2;
   }
 
