@@ -567,6 +567,24 @@ test("app uses extracted log audit module", () => {
   assert.match(app, /playLifeDelta\(target\.owner, -dealt\)/);
 });
 
+test("resolved battle HUD refreshes before blocking after-attack feedback", () => {
+  const app = readProjectFile("src/app.js");
+  const smoke = readProjectFile("src/browser-smoke.js");
+  const attackStart = app.indexOf("async function attack(owner, rival, attackerIndex, targetIndex)");
+  const attackEnd = app.indexOf("function cardImpactSignature", attackStart);
+  const attackSource = app.slice(attackStart, attackEnd);
+
+  assert.ok(attackStart >= 0 && attackEnd > attackStart);
+  assert.match(
+    attackSource,
+    /renderCurrentCombatHud\(\);\s*const afterAttackFeedback = resolveAfterAttackBattleFeedback/
+  );
+  assert.match(
+    smoke,
+    /aiRevealVisible\(ctx\.els, "trio-star-herald"\)[\s\S]*ctx\.els\.playerLp\?\.textContent\.trim\(\) !== "0 \/ 4000"/
+  );
+});
+
 test("browser smoke runner covers key click regressions", () => {
   const html = readProjectFile("index.html");
   const data = readProjectFile("src/data.js");

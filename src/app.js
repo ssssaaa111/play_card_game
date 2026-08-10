@@ -3879,6 +3879,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   }
 
   playAttackResetFeedback(owner, attacker, battleEvents);
+  renderCurrentCombatHud();
   const afterAttackFeedback = resolveAfterAttackBattleFeedback(owner, attacker, battleEvents);
   if (owner.owner === "ai") {
     await afterAttackFeedback;
@@ -4963,6 +4964,23 @@ function handleDuelFieldBackgroundClick(event) {
   cancelSelectedMonsterAction();
 }
 
+function renderCurrentCombatHud() {
+  const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
+  return renderCombatHud({
+    document,
+    body: document.body,
+    elements: els,
+    player: state.player,
+    ai: state.ai,
+    playerProfile: characterProfiles.player,
+    aiProfile: characterProfiles.ai,
+    activeTurn,
+    paused: state.paused,
+    maxLife: MAX_LP,
+    directTargetReady: canPlayerTargetAiPanel()
+  });
+}
+
 function render(animationKey = "") {
   const scenario = scenarioSetups[state.scenarioId] || scenarioSetups.normal;
   const targetSelectionDisplay = currentTargetSelectionDisplay();
@@ -5101,20 +5119,7 @@ function render(animationKey = "") {
     onOpenCardDetail: openCardDetail
   });
   scenarioHintsVisible = setupView.hintsVisible;
-  const directTargetReady = canPlayerTargetAiPanel();
-  renderCombatHud({
-    document,
-    body: document.body,
-    elements: els,
-    player: state.player,
-    ai: state.ai,
-    playerProfile: characterProfiles.player,
-    aiProfile: characterProfiles.ai,
-    activeTurn,
-    paused: state.paused,
-    maxLife: MAX_LP,
-    directTargetReady
-  });
+  renderCurrentCombatHud();
 
   renderField(els.playerField, state.player, "player", animationKey);
   renderField(els.aiField, state.ai, "ai", animationKey);

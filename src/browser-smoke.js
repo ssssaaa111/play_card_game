@@ -1182,6 +1182,9 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
     `${smokeName}: AI reveals star after-attack effect`,
     12000
   );
+  if (ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "0 / 4000") {
+    throw new Error(`${smokeName}: resolved lethal LP must reach the HUD before the star effect reveal. ${smokeDebug(ctx)}`);
+  }
   const starEffectSummary = ctx.els.aiRevealSummary?.textContent || "";
   if (!starEffectSummary.includes("追加造成 300 点伤害") ||
       !starEffectSummary.includes("攻击力提升 300")) {
