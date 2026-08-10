@@ -29,5 +29,9 @@ export function negatedActivatedTrapText(cardName = "陷阱卡") {
 }
 
 export function afterAttackBackrowDestroyedText(attackerName = "攻击怪兽", destroyedName = "魔陷卡") {
-  return `${attackerName}的攻击后效果破坏了当前最靠前的魔陷「${destroyedName}」。`;
+  return `${attackerName}的攻击后效果破坏了攻击宣言时锁定的魔陷「${destroyedName}」。`;
+}
+
+export function afterAttackLockedTargetLostText(attackerName = "攻击怪兽", targetName = "魔陷卡") {
+  return `${attackerName}锁定的魔陷「${targetName}」已提前离场，攻击后效果没有转移到其他魔陷。`;
 }

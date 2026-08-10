@@ -54,6 +54,7 @@ import { bindDeckEditorEvents, renderDeckEditor } from './deck-editor-renderer.j
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import {
   afterAttackBackrowDestroyedText,
+  afterAttackLockedTargetLostText,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
   shouldLogGenericDestroyedEvent,
@@ -3504,6 +3505,29 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
   });
   events
     .filter((event) =>
+      event.type === "EFFECT_SKIPPED"
+      && event.sourceCardId === attackerId
+      && event.reason === "locked-target-left-zone"
+    )
+    .forEach((event) => {
+      const target = findRuntimeCard(event.targetCardId);
+      const targetInPublicZone = target?.owner === "player"
+        || target?.card?.type === "spell"
+        || state.ai.grave.some((card) => runtimeCardId(card) === event.targetCardId);
+      const targetName = targetInPublicZone && target?.card
+        ? target.card.name
+        : `魔陷区 ${(Number(event.targetIndex) || 0) + 1} 的盖牌`;
+      addLog(
+        afterAttackLockedTargetLostText(attacker.name, targetName),
+        cardLogMeta(attacker, {
+          actor: owner.owner,
+          type: "effect",
+          relatedCardIds: targetInPublicZone ? relatedCardIds(target?.card) : []
+        })
+      );
+    });
+  events
+    .filter((event) =>
       event.type === "CONTINUOUS_EFFECT_RELEASED" &&
       event.reason === "target-left-zone" &&
       events.some((candidate) =>
@@ -3645,6 +3669,22 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   if (attackEvent) {
     attackContext.targetEffectId = attackEvent.id;
     attackContext.attackerCardId = attackEvent.attackerCardId;
+  }
+  const afterAttackLock = declarationEvents.find((event) => event.type === "AFTER_ATTACK_TARGET_LOCKED");
+  if (afterAttackLock) {
+    const locked = findRuntimeCard(afterAttackLock.targetCardId);
+    const targetIsPublic = locked?.owner === "player" || locked?.card?.type === "spell";
+    const targetLabel = targetIsPublic && locked?.card
+      ? `「${locked.card.name}」`
+      : `对手魔陷区 ${(Number(afterAttackLock.targetIndex) || 0) + 1} 的盖牌`;
+    addLog(
+      `${attacker.name} 在攻击宣言时锁定了${targetLabel}；攻击后只处理该目标。`,
+      cardLogMeta(attacker, {
+        actor: owner.owner,
+        type: "effect",
+        relatedCardIds: targetIsPublic ? relatedCardIds(locked?.card) : []
+      })
+    );
   }
   const hasAttackTrapResponse = trapCandidates(rival, "attack", attackContext).length > 0;
   let trapResult = { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
@@ -5249,6 +5289,7 @@ function renderField(root, duelist, owner, animationKey) {
 }
 
 function renderTraps(root, duelist, owner) {
+  const pendingAttack = currentEngineMachine()?.pendingAttack;
   renderSupportZones({
     document,
     root,
@@ -5261,6 +5302,16 @@ function renderTraps(root, duelist, owner) {
     spellTargetAt: (index) => isSupportTargetSelection(state.pendingTarget)
       ? validateCurrentTarget(owner, index, "traps")
       : null,
+    afterAttackLockAt: (index) => {
+      if (!pendingAttack?.afterAttackTargetCardId || pendingAttack.afterAttackTargetPlayerId !== owner) return null;
+      const cardAtIndex = duelist.traps[index];
+      const lockedAtIndex = runtimeCardId(cardAtIndex) === pendingAttack.afterAttackTargetCardId
+        || pendingAttack.afterAttackTargetIndex === index;
+      if (!lockedAtIndex) return null;
+      return {
+        sourceName: findRuntimeCard(pendingAttack.attackerCardId)?.card?.name || "攻击怪兽"
+      };
+    },
     onSlotClick: (index) => {
       const interactionKey = owner === "player" && state.pendingTrapChoice
         ? `trap-response:${index}`

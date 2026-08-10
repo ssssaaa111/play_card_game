@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   afterAttackBackrowDestroyedText,
+  afterAttackLockedTargetLostText,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
   shouldLogGenericDestroyedEvent,
@@ -55,6 +56,10 @@ test("explains the two distinct graveyard moves around a negated attack trap", (
   );
   assert.equal(
     afterAttackBackrowDestroyedText("曜冕裁决者", "日冕诱锁"),
-    "曜冕裁决者的攻击后效果破坏了当前最靠前的魔陷「日冕诱锁」。"
+    "曜冕裁决者的攻击后效果破坏了攻击宣言时锁定的魔陷「日冕诱锁」。"
+  );
+  assert.equal(
+    afterAttackLockedTargetLostText("曜冕裁决者", "星线护续"),
+    "曜冕裁决者锁定的魔陷「星线护续」已提前离场，攻击后效果没有转移到其他魔陷。"
   );
 });

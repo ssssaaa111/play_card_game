@@ -4146,8 +4146,8 @@ async function runTrioOmegaVowDemoSmoke(ctx) {
   setSmokeStatus("passed", "trio-omega-vow-demo");
 }
 
-async function runFinaleNegatedTrapSunderBasicSmoke(ctx) {
-  const smokeName = "finale-negated-trap-sunder-basic";
+async function runFinaleSunflareTargetLockBasicSmoke(ctx) {
+  const smokeName = "finale-sunflare-target-lock-basic";
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "protagonistTrioOmegaFinaleRush");
   const storyLog = () => (ctx.state.log || []).map(logEntryMessage).join(" ");
@@ -4165,8 +4165,9 @@ async function runFinaleNegatedTrapSunderBasicSmoke(ctx) {
   await waitForSmoke(
     () => ctx.els.chainModal.classList.contains("show") &&
       chainChoiceButton(ctx.els, "trio-chain-veil") &&
-      chainChoiceButton(ctx.els, "trio-solar-snare"),
-    `${smokeName}: both attack traps are offered`,
+      chainChoiceButton(ctx.els, "trio-solar-snare") &&
+      ctx.els.playerTraps.querySelector('.trap-slot[data-index="0"].after-attack-locked .after-attack-lock-chip')?.textContent.includes("日曜锁定"),
+    `${smokeName}: both attack traps are offered and the declaration target is marked`,
     26000
   );
   clickSmokeElement(chainChoiceButton(ctx.els, "trio-chain-veil"), `${smokeName}: choose chain veil`);
@@ -4191,22 +4192,33 @@ async function runFinaleNegatedTrapSunderBasicSmoke(ctx) {
 
   await waitForSmoke(
     () => ctx.state.player.grave.some((card) => card?.uid === veil.uid) &&
-      ctx.state.player.grave.some((card) => card?.uid === snare.uid) &&
+      ctx.state.player.traps.some((card) => card?.uid === snare.uid) &&
       storyLog().includes("星线护续的效果被连锁无效；已发动陷阱仍送入墓地") &&
-      storyLog().includes("曜冕裁决者的攻击后效果破坏了当前最靠前的魔陷「日冕诱锁」"),
-    `${smokeName}: distinct graveyard reasons are public. ${trioOmegaFailureSnapshot(ctx)}`,
+      storyLog().includes("曜冕裁决者锁定的魔陷「星线护续」已提前离场，攻击后效果没有转移到其他魔陷"),
+    `${smokeName}: the negated target leaves and the lock does not transfer. ${trioOmegaFailureSnapshot(ctx)}`,
     18000
   );
 
   const skippedEvent = (ctx.state.gameEvents || []).find((event) =>
     event.type === "EFFECT_SKIPPED" && event.cardId === veil.uid && event.reason === "negated"
   );
-  const sunderEvent = (ctx.state.gameEvents || []).find((event) =>
+  const lockedEvent = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "AFTER_ATTACK_TARGET_LOCKED" && event.targetCardId === veil.uid &&
+    eventReferencesTemplate(event, "trio-sun-judicator")
+  );
+  const lostTargetEvent = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "EFFECT_SKIPPED" && event.effectId === "sunflareSunder" &&
+    event.targetCardId === veil.uid && event.reason === "locked-target-left-zone"
+  );
+  const transferredDestruction = (ctx.state.gameEvents || []).find((event) =>
     event.type === "CARD_DESTROYED" && event.cardId === snare.uid &&
     eventReferencesTemplate(event, "trio-sun-judicator")
   );
-  if (!skippedEvent || !sunderEvent || Number(skippedEvent.id) >= Number(sunderEvent.id)) {
-    throw new Error(`${smokeName}: chain cleanup and sun sunder event order is wrong. ${smokeDebug(ctx)}`);
+  if (
+    !lockedEvent || !skippedEvent || !lostTargetEvent || transferredDestruction ||
+    Number(lockedEvent.id) >= Number(skippedEvent.id) || Number(skippedEvent.id) >= Number(lostTargetEvent.id)
+  ) {
+    throw new Error(`${smokeName}: declaration lock, chain cleanup, and no-transfer order is wrong. ${smokeDebug(ctx)}`);
   }
   if (!logCardLink(ctx.els, "trio-chain-veil") || !logCardLink(ctx.els, "trio-solar-snare")) {
     throw new Error(`${smokeName}: both public trap names must remain inspectable in the timeline.`);
@@ -4254,8 +4266,8 @@ async function runTrioOmegaFinaleSmoke(ctx) {
   if (!ctx.state.player.field[1] || ctx.state.player.field[1].id !== "trio-decoy-ward") {
     throw new Error(`${smokeName}: pressed decoy must occupy player field slot 1. ${trioOmegaFailureSnapshot(ctx)}`);
   }
-  // Correct play: decline the first response. The nullifier would negate any trap, and the
-  // sun would then tear down the front-most trap — so let the front bait take the sundering.
+  // Stable route: decline the first response and let the declaration-locked bait take the sundering.
+  // Activating it is also safe now because a departed lock cannot transfer to the rear snare.
   clickSmokeElement(ctx.els.chainNo, `${smokeName}: decline first trap response`);
   await waitForSmoke(
     () => ctx.state.player.lp === 1500 && !ctx.state.player.field[1],
@@ -8798,7 +8810,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-challenge": runTrioOmegaChallengeSmoke,
     "trio-omega-story-demo": runTrioOmegaStoryDemoSmoke,
     "trio-omega-vow-demo": runTrioOmegaVowDemoSmoke,
-    "finale-negated-trap-sunder-basic": runFinaleNegatedTrapSunderBasicSmoke,
+    "finale-sunflare-target-lock-basic": runFinaleSunflareTargetLockBasicSmoke,
     "trio-omega-finale-demo": runTrioOmegaFinaleSmoke,
     "trio-omega-finale-rush": runTrioOmegaFinaleRushSmoke,
     "trio-gauntlet-demo": runTrioGauntletSmoke,

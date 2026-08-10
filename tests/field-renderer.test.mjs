@@ -267,6 +267,29 @@ test("support field view exposes target legality without revealing a rival face-
   assert.ok(emptyEnemy.slotClasses.includes("support-target-unavailable"));
 });
 
+test("after-attack target locks mark a support slot without revealing a rival face-down card", () => {
+  const hiddenTrap = {
+    id: "mirror-snare",
+    type: "trap",
+    name: "镜光反制",
+    text: "破坏攻击怪兽。",
+    trigger: "destroyAttacker"
+  };
+  const locked = supportFieldSlotView({
+    card: hiddenTrap,
+    owner: "ai",
+    index: 0,
+    afterAttackLock: { sourceName: "曜冕裁决者" }
+  });
+
+  assert.equal(locked.revealed, false);
+  assert.equal(locked.afterAttackLocked, true);
+  assert.ok(locked.slotClasses.includes("after-attack-locked"));
+  assert.ok(locked.cardClasses.includes("after-attack-locked"));
+  assert.match(locked.ariaLabel, /曜冕裁决者已锁定此魔陷区/);
+  assert.doesNotMatch(JSON.stringify(locked), /镜光反制|mirror-snare|destroyAttacker/);
+});
+
 test("monster field view follows projected attack legality instead of guessing from phase", () => {
   const mainReady = monsterFieldSlotView({
     card: monster(),

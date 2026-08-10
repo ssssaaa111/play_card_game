@@ -161,7 +161,8 @@ export function supportFieldSlotView({
   targetSelected = false,
   spellTarget = null,
   trapChoiceReady = false,
-  trapChoiceSelected = false
+  trapChoiceSelected = false,
+  afterAttackLock = null
 } = {}) {
   const targetInteraction = Boolean(spellTarget);
   const effectTargetUnavailable = Boolean(spellTarget && !spellTarget.ok);
@@ -182,6 +183,10 @@ export function supportFieldSlotView({
     })
     : null;
   const zoneLabel = `${ownerLabel(owner)}魔陷区 ${index + 1}`;
+  const afterAttackLocked = Boolean(afterAttackLock);
+  const afterAttackLockLabel = afterAttackLocked
+    ? `，${afterAttackLock.sourceName || "攻击怪兽"}已锁定此魔陷区，攻击结算后将破坏该卡`
+    : "";
 
   return {
     owner,
@@ -195,16 +200,18 @@ export function supportFieldSlotView({
     title: effectTargetReason,
     trapChoiceReady,
     trapChoiceSelected,
+    afterAttackLocked,
     revealed,
     supportDisplay,
     ariaLabel: `${supportDisplay
       ? `${zoneLabel}，${card.name}，${supportDisplay.description}`
-      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为魔法目标" : ""}${effectTargetReason ? `，${effectTargetReason}` : ""}`,
+      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为魔法目标" : ""}${effectTargetReason ? `，${effectTargetReason}` : ""}${afterAttackLockLabel}`,
     slotClasses: enabledClassEntries({
       "trap-response": trapChoiceReady,
       "trap-response-selected": trapChoiceSelected,
       targetable,
       "target-selected": targetSelected,
+      "after-attack-locked": afterAttackLocked,
       "support-target-unavailable": effectTargetUnavailable,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     }),
@@ -213,6 +220,7 @@ export function supportFieldSlotView({
       "trap-response-selected": trapChoiceSelected,
       targetable,
       "target-selected": targetSelected,
+      "after-attack-locked": afterAttackLocked,
       "support-target-unavailable": effectTargetUnavailable,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     })
@@ -371,6 +379,7 @@ export function renderSupportZones({
   targetableAt = () => false,
   targetSelectedAt = () => false,
   spellTargetAt = () => null,
+  afterAttackLockAt = () => null,
   onSlotClick = () => {},
   onSlotDoubleClick = () => {},
   onCardClick = () => {},
@@ -390,7 +399,8 @@ export function renderSupportZones({
       targetSelected: targetSelectedAt(index),
       spellTarget: spellTargetAt(index),
       trapChoiceReady,
-      trapChoiceSelected
+      trapChoiceSelected,
+      afterAttackLock: afterAttackLockAt(index)
     });
     const slot = document.createElement("button");
     slot.type = "button";
@@ -452,6 +462,13 @@ export function renderSupportZones({
         onCardDoubleClick(card, index);
       });
       slot.appendChild(cardEl);
+    }
+    if (view.afterAttackLocked) {
+      const lockChip = document.createElement("span");
+      lockChip.className = "after-attack-lock-chip";
+      lockChip.textContent = "日曜锁定";
+      lockChip.setAttribute("aria-hidden", "true");
+      slot.appendChild(lockChip);
     }
     fragment.appendChild(slot);
   });

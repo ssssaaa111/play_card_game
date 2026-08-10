@@ -119,6 +119,7 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
   expectedIds.forEach((id) => cardByTemplate(id));
 
   assert.equal(cardByTemplate("trio-sun-judicator").afterAttack, "sunflareSunder");
+  assert.match(cardByTemplate("trio-sun-judicator").text, /攻击宣言时锁定.*提前离场.*不转移/);
   assert.equal(cardByTemplate("trio-star-herald").afterAttack, "starDoomCharge");
   assert.ok([
     "trio-sun-judicator",
@@ -147,9 +148,11 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
     { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
     { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
   ]);
-  assert.deepEqual(getCardEffectDefinition("sunflareSunder").operations, [
-    { op: "destroyCard", cardId: { playerId: "$action.rivalId", zone: "spellTrapZone", rule: "first" } }
-  ]);
+  assert.deepEqual(getCardEffectDefinition("sunflareSunder"), {
+    duration: EffectDuration.oneShot,
+    attackDeclarationTarget: { playerId: "$action.rivalId", zone: "spellTrapZone", rule: "first" },
+    operations: [{ op: "destroyCard", cardId: "$action.afterAttackTargetCardId" }]
+  });
 
   assert.equal(canDispatchSpellFromUiState(cardByTemplate("trio-moon-dominion")), true);
   assert.equal(canDispatchSpellFromUiState(cardByTemplate("trio-moonbreaker-ray")), true);
@@ -661,7 +664,7 @@ test("sun and star trio ace pressure effects resolve through battle", () => {
   assertValidGameState(state);
 });
 
-test("a negated attack trap leaves untouched backrow in place until the sun after-attack effect resolves", () => {
+test("sun locks its front backrow target at attack declaration and does not transfer after that target leaves", () => {
   const engine = new GameEngine(buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaFinaleRush")));
   let state = engine.getState();
   const veilId = findCardId(state, PLAYER, "hand", "trio-chain-veil");
@@ -688,6 +691,11 @@ test("a negated attack trap leaves untouched backrow in place until the sun afte
     targetCardId: decoyId
   });
   const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  const lockEvent = declarationEvents.find((event) => event.type === "AFTER_ATTACK_TARGET_LOCKED");
+  assert.equal(declaration.afterAttackTargetCardId, veilId);
+  assert.equal(engine.getState().machine.pendingAttack.afterAttackTargetCardId, veilId);
+  assert.equal(lockEvent?.sourceCardId, sunId);
+  assert.equal(lockEvent?.targetCardId, veilId);
   engine.dispatch({
     type: "ADD_CHAIN_LINK",
     playerId: PLAYER,
@@ -737,14 +745,17 @@ test("a negated attack trap leaves untouched backrow in place until the sun afte
     declarationEventId: declaration.id
   });
   state = engine.getState();
-  const sunderEvent = battleEvents.find((event) =>
-    event.type === "CARD_DESTROYED" && event.cardId === snareId && event.sourceCardId === sunId
+  const targetLostEvent = battleEvents.find((event) =>
+    event.type === "EFFECT_SKIPPED" &&
+    event.effectId === "sunflareSunder" &&
+    event.sourceCardId === sunId &&
+    event.targetCardId === veilId &&
+    event.reason === "locked-target-left-zone"
   );
-  const skippedEvent = state.events.find((event) => event.type === "EFFECT_SKIPPED" && event.cardId === veilId);
 
-  assert.ok(sunderEvent, "the sun should destroy only the now-frontmost snare after battle");
-  assert.ok(skippedEvent.id < sunderEvent.id, "the trap negate must resolve before the after-attack destruction");
-  assert.ok(state.players[PLAYER].grave.includes(snareId));
+  assert.ok(targetLostEvent, "the sun should report that its declaration target left before resolution");
+  assert.ok(state.players[PLAYER].spellTrapZone.includes(snareId), "the sun effect must not transfer to the next backrow");
+  assert.equal(battleEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === snareId), false);
   assertValidGameState(state);
 });
 

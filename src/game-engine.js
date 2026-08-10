@@ -149,9 +149,10 @@ export const defaultCardEffects = Object.freeze({
     { op: "negateEffect", targetEffectId: "$action.targetEffectId" },
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "strongestAtk" }, stat: "tempAtk", amount: 900 }
   ], { requirements: [{ type: "responseWindow", prompt: "attack" }] }),
-  sunflareSunder: oneShot([
-    { op: "destroyCard", cardId: { playerId: "$action.rivalId", zone: "spellTrapZone", rule: "first" } }
-  ]),
+  sunflareSunder: oneShot(
+    [{ op: "destroyCard", cardId: "$action.afterAttackTargetCardId" }],
+    { attackDeclarationTarget: { playerId: "$action.rivalId", zone: "spellTrapZone", rule: "first" } }
+  ),
   starDoomCharge: oneShot([
     { op: "dealDamage", player: "rival", amount: 300 },
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: 300 }
@@ -1395,6 +1396,13 @@ export class GameEngine {
     }
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const { target, direct } = validateBattleDeclaration(state, action.playerId, rivalId, action);
+    const afterAttackTarget = resolveAfterAttackDeclarationTarget(
+      this.#effects,
+      state,
+      action.playerId,
+      rivalId,
+      action.attackerCardId
+    );
 
     emit("TIMING_CHANGED", {
       playerId: action.playerId,
@@ -1408,9 +1416,27 @@ export class GameEngine {
       targetCardId: target?.id || null,
       targetPlayerId: direct ? rivalId : null,
       direct,
+      afterAttackEffectId: afterAttackTarget?.effectId || null,
+      afterAttackTargetCardId: afterAttackTarget?.targetCardId || null,
+      afterAttackTargetPlayerId: afterAttackTarget?.targetPlayerId || null,
+      afterAttackTargetZone: afterAttackTarget?.targetZone || null,
+      afterAttackTargetIndex: afterAttackTarget?.targetIndex ?? null,
       phase: state.turn.phase,
       timing: state.machine.timing
     });
+    if (afterAttackTarget?.targetCardId) {
+      emit("AFTER_ATTACK_TARGET_LOCKED", {
+        playerId: action.playerId,
+        rivalId,
+        effectId: afterAttackTarget.effectId,
+        sourceCardId: action.attackerCardId,
+        targetCardId: afterAttackTarget.targetCardId,
+        targetPlayerId: afterAttackTarget.targetPlayerId,
+        targetZone: afterAttackTarget.targetZone,
+        targetIndex: afterAttackTarget.targetIndex,
+        declarationEventId: attackEvent.id
+      });
+    }
     emit("RESPONSE_WINDOW_OPENED", {
       playerId: rivalId,
       timing: Timing.attackDeclaration,
@@ -1443,6 +1469,13 @@ export class GameEngine {
 
     let declarationEventId = action.declarationEventId || state.machine.pendingAttack?.declarationEventId || null;
     if (!declarationEventId) {
+      const afterAttackTarget = resolveAfterAttackDeclarationTarget(
+        this.#effects,
+        state,
+        action.playerId,
+        rivalId,
+        action.attackerCardId
+      );
       emit("TIMING_CHANGED", {
         playerId: action.playerId,
         from: state.machine.timing,
@@ -1455,10 +1488,28 @@ export class GameEngine {
         targetCardId: target?.id || null,
         targetPlayerId: direct ? rivalId : null,
         direct,
+        afterAttackEffectId: afterAttackTarget?.effectId || null,
+        afterAttackTargetCardId: afterAttackTarget?.targetCardId || null,
+        afterAttackTargetPlayerId: afterAttackTarget?.targetPlayerId || null,
+        afterAttackTargetZone: afterAttackTarget?.targetZone || null,
+        afterAttackTargetIndex: afterAttackTarget?.targetIndex ?? null,
         phase: state.turn.phase,
         timing: state.machine.timing
       });
       declarationEventId = attackEvent.id;
+      if (afterAttackTarget?.targetCardId) {
+        emit("AFTER_ATTACK_TARGET_LOCKED", {
+          playerId: action.playerId,
+          rivalId,
+          effectId: afterAttackTarget.effectId,
+          sourceCardId: action.attackerCardId,
+          targetCardId: afterAttackTarget.targetCardId,
+          targetPlayerId: afterAttackTarget.targetPlayerId,
+          targetZone: afterAttackTarget.targetZone,
+          targetIndex: afterAttackTarget.targetIndex,
+          declarationEventId
+        });
+      }
     }
     emit("TIMING_CHANGED", {
       playerId: action.playerId,
@@ -1497,7 +1548,16 @@ export class GameEngine {
       ctx.destroyCard(action.attackerCardId, { reason: "battle", sourceCardId: target?.id || null });
     }
 
-    resolveAfterAttackEffect(this.#effects, state, ctx, action.playerId, rivalId, action.attackerCardId);
+    resolveAfterAttackEffect(
+      this.#effects,
+      state,
+      ctx,
+      emit,
+      action.playerId,
+      rivalId,
+      action.attackerCardId,
+      state.machine.pendingAttack
+    );
     consumeAttackResetForMonster(state, emit, action.playerId, action.attackerCardId);
 
     emit("BATTLE_RESOLVED", {
@@ -2828,6 +2888,7 @@ export function applyGameEvent(state, event, options = {}) {
     case "TRIO_CONVERGENCE_RESOLVED":
     case "EFFECT_NEGATED":
     case "EFFECT_SKIPPED":
+    case "AFTER_ATTACK_TARGET_LOCKED":
     case "DRAW_FAILED":
     case "ATTACKS_SKIPPED":
     case "ABILITY_GRANT_BLOCKED":
@@ -3109,6 +3170,11 @@ function applyAttackDeclared(state, event) {
     targetCardId: event.targetCardId || null,
     targetPlayerId: event.targetPlayerId || null,
     direct: Boolean(event.direct),
+    afterAttackEffectId: event.afterAttackEffectId || null,
+    afterAttackTargetCardId: event.afterAttackTargetCardId || null,
+    afterAttackTargetPlayerId: event.afterAttackTargetPlayerId || null,
+    afterAttackTargetZone: event.afterAttackTargetZone || null,
+    afterAttackTargetIndex: Number.isInteger(event.afterAttackTargetIndex) ? event.afterAttackTargetIndex : null,
     declarationEventId: event.id,
     timing: event.timing || Timing.attackDeclaration
   };
@@ -3877,6 +3943,12 @@ function resolveValue(value, action, card) {
     }
     return action.attackerCardId;
   }
+  if (value === "$action.afterAttackTargetCardId") {
+    if (!action.afterAttackTargetCardId) {
+      throw new GameRuleError("Effect operation requires action.afterAttackTargetCardId");
+    }
+    return action.afterAttackTargetCardId;
+  }
   if (value === "$action.targetCardId") {
     if (!action.targetCardId) {
       throw new GameRuleError("Effect operation requires action.targetCardId");
@@ -4314,7 +4386,34 @@ function cardShieldPierceAmount(card) {
   return 0;
 }
 
-function resolveAfterAttackEffect(effects, state, ctx, playerId, rivalId, attackerCardId) {
+function resolveAfterAttackDeclarationTarget(effects, state, playerId, rivalId, attackerCardId) {
+  const attacker = requireCard(state, attackerCardId);
+  if (!attacker.afterAttack) return null;
+  const definition = effects[attacker.afterAttack];
+  if (!definition?.attackDeclarationTarget) return null;
+
+  const effectAction = {
+    type: "DECLARE_ATTACK",
+    playerId,
+    rivalId,
+    cardId: attackerCardId,
+    attackerCardId
+  };
+  const selector = resolveValue(definition.attackDeclarationTarget, effectAction, attacker);
+  const targetCardId = resolveCardIdInput(state, selector)[0] || null;
+  const targetPlayerId = selector.playerId || rivalId;
+  const targetZone = selector.zone || null;
+  const slots = targetZone ? fixedZoneSlots(requirePlayer(state, targetPlayerId), targetZone) : null;
+  return {
+    effectId: attacker.afterAttack,
+    targetCardId,
+    targetPlayerId,
+    targetZone,
+    targetIndex: targetCardId && slots ? slots.indexOf(targetCardId) : null
+  };
+}
+
+function resolveAfterAttackEffect(effects, state, ctx, emit, playerId, rivalId, attackerCardId, pendingAttack = null) {
   const stillOnField = findCardLocations(state, attackerCardId).some((location) =>
     location.playerId === playerId && location.zone === "monsterZone"
   );
@@ -4322,6 +4421,7 @@ function resolveAfterAttackEffect(effects, state, ctx, playerId, rivalId, attack
 
   const attacker = requireCard(state, attackerCardId);
   if (!attacker.afterAttack) return;
+  const definition = effects[attacker.afterAttack];
   const effectAction = {
     type: "AFTER_ATTACK_EFFECT",
     playerId,
@@ -4329,7 +4429,28 @@ function resolveAfterAttackEffect(effects, state, ctx, playerId, rivalId, attack
     cardId: attackerCardId,
     attackerCardId
   };
-  const skipReason = effectRequirementFailure(effects[attacker.afterAttack], state, effectAction, attacker);
+  if (definition?.attackDeclarationTarget) {
+    const targetCardId = pendingAttack?.afterAttackTargetCardId || null;
+    if (!targetCardId) return;
+    const targetPlayerId = pendingAttack.afterAttackTargetPlayerId || rivalId;
+    const targetZone = pendingAttack.afterAttackTargetZone || "spellTrapZone";
+    if (!cardIsInZone(state, targetPlayerId, targetZone, targetCardId)) {
+      emit("EFFECT_SKIPPED", {
+        playerId,
+        cardId: attackerCardId,
+        effectId: attacker.afterAttack,
+        reason: "locked-target-left-zone",
+        sourceCardId: attackerCardId,
+        targetCardId,
+        targetPlayerId,
+        targetZone,
+        targetIndex: pendingAttack.afterAttackTargetIndex ?? null
+      });
+      return;
+    }
+    effectAction.afterAttackTargetCardId = targetCardId;
+  }
+  const skipReason = effectRequirementFailure(definition, state, effectAction, attacker);
   if (skipReason) return;
   runEffect(effects, attacker.afterAttack, ctx, effectAction, attacker);
 }
@@ -4967,6 +5088,11 @@ export function projectMachineStateFromEvents(events = [], phase = Phase.setup) 
         targetCardId: event.targetCardId || null,
         targetPlayerId: event.targetPlayerId || null,
         direct: Boolean(event.direct),
+        afterAttackEffectId: event.afterAttackEffectId || null,
+        afterAttackTargetCardId: event.afterAttackTargetCardId || null,
+        afterAttackTargetPlayerId: event.afterAttackTargetPlayerId || null,
+        afterAttackTargetZone: event.afterAttackTargetZone || null,
+        afterAttackTargetIndex: Number.isInteger(event.afterAttackTargetIndex) ? event.afterAttackTargetIndex : null,
         declarationEventId: event.id,
         timing: event.timing || Timing.attackDeclaration
       };
