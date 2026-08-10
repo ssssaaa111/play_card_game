@@ -1,6 +1,7 @@
 const TRIO_OMEGA_SCENARIOS = new Set([
   "protagonistTrioOmega",
   "protagonistTrioOmegaChallenge",
+  "protagonistTrioOmegaStory",
   "protagonistTrioOmegaFull"
 ]);
 

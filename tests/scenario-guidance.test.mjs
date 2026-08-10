@@ -69,6 +69,33 @@ test("guides the trio route through defense and moon pressure", () => {
   assert.match(scenarioTacticalGoal(counterattack), /反击窗口.*碎月解幕/);
 });
 
+test("advances the gauntlet story objective after solar snare is set", () => {
+  const opening = trioState({
+    scenarioId: "protagonistTrioOmegaStory",
+    player: {
+      hand: [card("trio-solar-snare")],
+      field: [card("trio-decoy-ward")],
+      traps: [],
+      grave: [card("trio-ember-pawn")]
+    },
+    ai: {
+      field: [card("trio-sun-judicator"), card("trio-moon-warden"), card("trio-star-herald")],
+      traps: [card("trio-moon-dominion")]
+    }
+  });
+  const defended = {
+    ...opening,
+    player: {
+      ...opening.player,
+      hand: [],
+      traps: [card("trio-solar-snare")]
+    }
+  };
+
+  assert.match(scenarioTacticalGoal(opening), /先布防.*日冕诱锁/);
+  assert.match(scenarioTacticalGoal(defended), /防御准备完成.*结束回合/);
+});
+
 test("does not describe an orphaned lunar dominion card as active pressure", () => {
   const registered = {
     type: "CONTINUOUS_EFFECT_REGISTERED",
