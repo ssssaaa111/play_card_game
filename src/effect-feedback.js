@@ -23,3 +23,11 @@ export function statChangeText(event = {}, { continuousReleased = false } = {}) 
 export function shouldLogGenericDestroyedEvent(card = {}) {
   return Boolean(card);
 }
+
+export function negatedActivatedTrapText(cardName = "陷阱卡") {
+  return `${cardName}的效果被连锁无效；已发动陷阱仍送入墓地。`;
+}
+
+export function afterAttackBackrowDestroyedText(attackerName = "攻击怪兽", destroyedName = "魔陷卡") {
+  return `${attackerName}的攻击后效果破坏了当前最靠前的魔陷「${destroyedName}」。`;
+}

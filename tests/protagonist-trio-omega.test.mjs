@@ -661,6 +661,93 @@ test("sun and star trio ace pressure effects resolve through battle", () => {
   assertValidGameState(state);
 });
 
+test("a negated attack trap leaves untouched backrow in place until the sun after-attack effect resolves", () => {
+  const engine = new GameEngine(buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaFinaleRush")));
+  let state = engine.getState();
+  const veilId = findCardId(state, PLAYER, "hand", "trio-chain-veil");
+  const snareId = findCardId(state, PLAYER, "hand", "trio-solar-snare");
+  engine.dispatch({ type: "SET_TRAP", playerId: PLAYER, cardId: veilId, index: 0 });
+  engine.dispatch({ type: "SET_TRAP", playerId: PLAYER, cardId: snareId, index: 1 });
+
+  engine.dispatch({ type: "END_TURN", playerId: PLAYER });
+  engine.dispatch({ type: "START_TURN", playerId: AI });
+  engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: AI });
+  state = engine.getState();
+  const nullifierId = findCardId(state, AI, "hand", "chain-nullifier");
+  engine.dispatch({ type: "SET_TRAP", playerId: AI, cardId: nullifierId, index: 1 });
+  engine.dispatch({ type: "CHANGE_PHASE", playerId: AI, phase: Phase.battle });
+
+  state = engine.getState();
+  const sunId = findCardId(state, AI, "monsterZone", "trio-sun-judicator");
+  const decoyId = state.players[PLAYER].monsterZone[1];
+  const declarationEvents = engine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: AI,
+    rivalId: PLAYER,
+    attackerCardId: sunId,
+    targetCardId: decoyId
+  });
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: PLAYER,
+    cardId: veilId,
+    effectId: "attackNegate",
+    targetEffectId: declaration.id
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: veilId,
+    targetEffectId: declaration.id,
+    attackerCardId: sunId
+  });
+  engine.dispatch({ type: "PASS_RESPONSE_PRIORITY", playerId: PLAYER, nextPlayerId: AI });
+  engine.dispatch({
+    type: "ADD_CHAIN_LINK",
+    playerId: AI,
+    cardId: nullifierId,
+    effectId: "chainNegate",
+    targetEffectId: veilId
+  });
+  engine.dispatch({
+    type: "ACTIVATE_TRAP",
+    playerId: AI,
+    rivalId: PLAYER,
+    cardId: nullifierId,
+    targetEffectId: veilId
+  });
+
+  const chainEvents = engine.dispatch({ type: "RESOLVE_CHAIN", playerId: AI });
+  state = engine.getState();
+  assert.ok(chainEvents.some((event) =>
+    event.type === "EFFECT_SKIPPED" && event.cardId === veilId && event.sourceCardId === nullifierId
+  ));
+  assert.ok(state.players[PLAYER].grave.includes(veilId), "the activated and negated veil should go to grave");
+  assert.ok(state.players[AI].grave.includes(nullifierId), "the activated nullifier should go to grave");
+  assert.ok(state.players[PLAYER].spellTrapZone.includes(snareId), "chain cleanup must not remove the untouched snare");
+
+  const battleEvents = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: AI,
+    rivalId: PLAYER,
+    attackerCardId: sunId,
+    targetCardId: decoyId,
+    declarationEventId: declaration.id
+  });
+  state = engine.getState();
+  const sunderEvent = battleEvents.find((event) =>
+    event.type === "CARD_DESTROYED" && event.cardId === snareId && event.sourceCardId === sunId
+  );
+  const skippedEvent = state.events.find((event) => event.type === "EFFECT_SKIPPED" && event.cardId === veilId);
+
+  assert.ok(sunderEvent, "the sun should destroy only the now-frontmost snare after battle");
+  assert.ok(skippedEvent.id < sunderEvent.id, "the trap negate must resolve before the after-attack destruction");
+  assert.ok(state.players[PLAYER].grave.includes(snareId));
+  assertValidGameState(state);
+});
+
 test("trio happy-clicker exposed route cannot win on the first turn", () => {
   const engine = new GameEngine(buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaChallenge")));
   let state = engine.getState();
