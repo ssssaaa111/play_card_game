@@ -1204,6 +1204,20 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
   const damage = events
     .filter((event) => event.type === "DAMAGE_DEALT" && event.sourceCardId === star.uid)
     .map((event) => event.amount);
+  const baseDamageEvent = events.find((event) =>
+    event.type === "DAMAGE_DEALT" && event.sourceCardId === star.uid && event.amount === 2400
+  );
+  const effectDamageEvent = events.find((event) =>
+    event.type === "DAMAGE_DEALT" && event.sourceCardId === star.uid && event.amount === 300
+  );
+  const growthEvent = events.find((event) =>
+    event.type === "STAT_MODIFIED" && event.sourceCardId === star.uid
+    && event.cardId === star.uid && event.stat === "tempAtk" && event.amount === 300
+  );
+  const resolutionEvent = events.find((event) =>
+    event.type === "AFTER_ATTACK_EFFECT_RESOLVED"
+    && event.cardId === star.uid && event.effectId === "starDoomCharge"
+  );
   if (!events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === breach.uid) ||
       !attack || attack.targetCardId || !events.some((event) =>
         event.type === "ABILITY_SPENT" && event.ability === "directAttack"
@@ -1215,6 +1229,12 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
       ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "0 / 4000" ||
       star.tempAtk !== 300) {
     throw new Error(`${smokeName}: star must deal 2400 plus 300 while leaving the bypassed monster in play. ${smokeDebug(ctx)}`);
+  }
+  if (!baseDamageEvent || !effectDamageEvent || !growthEvent ||
+      !resolutionEvent?.resultEventIds?.includes(effectDamageEvent.id) ||
+      !resolutionEvent.resultEventIds.includes(growthEvent.id) ||
+      resolutionEvent.resultEventIds.includes(baseDamageEvent.id)) {
+    throw new Error(`${smokeName}: star feedback must associate only its explicit after-attack result events. ${smokeDebug(ctx)}`);
   }
   const starEffectLog = (ctx.state.log || []).find((entry) => {
     const message = logEntryMessage(entry);

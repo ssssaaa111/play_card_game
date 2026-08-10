@@ -53,24 +53,30 @@ export function afterAttackDamageAndGrowthText(attackerName = "攻击怪兽", da
 }
 
 export function findAfterAttackDamageAndGrowthEvents(events = [], { attackerId = "", effectId = "" } = {}) {
-  const growEventIndex = events.findIndex((event) =>
+  const resolutionEvent = events.find((event) =>
+    event.type === "AFTER_ATTACK_EFFECT_RESOLVED"
+    && event.cardId === attackerId
+    && event.effectId === effectId
+  );
+  const resultEventIds = new Set(
+    (Array.isArray(resolutionEvent?.resultEventIds) ? resolutionEvent.resultEventIds : [])
+      .map((eventId) => String(eventId))
+  );
+  if (resultEventIds.size === 0) {
+    return { damageEvent: null, growEvent: null };
+  }
+  const resultEvents = events.filter((event) => resultEventIds.has(String(event.id)));
+  const growEvent = resultEvents.find((event) =>
     event.type === "STAT_MODIFIED" &&
     event.sourceCardId === attackerId &&
     event.cardId === attackerId &&
     event.stat === "tempAtk" &&
     event.amount > 0
-  );
-  const growEvent = growEventIndex >= 0 ? events[growEventIndex] : null;
-  if (!growEvent || effectId !== "starDoomCharge") {
-    return { damageEvent: null, growEvent };
-  }
-  for (let index = growEventIndex - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event.type === "DAMAGE_DEALT" && event.sourceCardId === attackerId) {
-      return { damageEvent: event, growEvent };
-    }
-  }
-  return { damageEvent: null, growEvent };
+  ) || null;
+  const damageEvent = resultEvents.find((event) =>
+    event.type === "DAMAGE_DEALT" && event.sourceCardId === attackerId
+  ) || null;
+  return { damageEvent, growEvent };
 }
 
 export function rewindDamageForHud(duelist = {}, event = {}) {
