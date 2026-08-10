@@ -3839,6 +3839,11 @@ test("after-attack monster effects resolve through battle events", () => {
 
   assert.equal(growEngine.getState().cards["hound-1"].tempAtk, 200);
   assert.ok(growEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === "hound-1" && event.stat === "tempAtk" && event.amount === 200));
+  assert.ok(growEvents.some((event) =>
+    event.type === "AFTER_ATTACK_EFFECT_RESOLVED" &&
+    event.cardId === "hound-1" &&
+    event.effectId === "grow200"
+  ));
 
   const drawState = makeState({
     cards: [
@@ -3865,6 +3870,40 @@ test("after-attack monster effects resolve through battle events", () => {
 
   assert.deepEqual(drawEngine.getState().players[PLAYER].hand, ["draw-1"]);
   assert.ok(drawEvents.some((event) => event.type === "CARDS_DRAWN" && event.sourceCardId === "raider-1" && event.cardIds.includes("draw-1")));
+  assert.ok(drawEvents.some((event) =>
+    event.type === "AFTER_ATTACK_EFFECT_RESOLVED" &&
+    event.cardId === "raider-1" &&
+    event.effectId === "windDraw"
+  ));
+});
+
+test("targeted after-attack effects do not report a resolution when no declaration target exists", () => {
+  const state = makeState({
+    cards: [
+      card("sun-1", {
+        templateId: "trio-sun-judicator",
+        type: "monster",
+        atk: 3000,
+        def: 1800,
+        afterAttack: "sunflareSunder"
+      })
+    ],
+    player: { monsterZone: ["sun-1"] },
+    turn: { phase: Phase.battle }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "sun-1"
+  });
+
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.sourceCardId === "sun-1"));
+  assert.equal(events.some((event) => event.type === "AFTER_ATTACK_EFFECT_RESOLVED"), false);
 });
 
 test("after-attack monster effects use the configured effect DSL registry", () => {
@@ -3901,6 +3940,11 @@ test("after-attack monster effects use the configured effect DSL registry", () =
 
   assert.deepEqual(engine.getState().players[PLAYER].hand, ["draw-custom"]);
   assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.sourceCardId === "custom-1"));
+  assert.ok(events.some((event) =>
+    event.type === "AFTER_ATTACK_EFFECT_RESOLVED" &&
+    event.cardId === "custom-1" &&
+    event.effectId === "customAfterAttack"
+  ));
 });
 
 test("mark monster used consumes an attack chance through events only", () => {

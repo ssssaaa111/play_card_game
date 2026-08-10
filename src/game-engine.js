@@ -2888,6 +2888,7 @@ export function applyGameEvent(state, event, options = {}) {
     case "TRIO_CONVERGENCE_RESOLVED":
     case "EFFECT_NEGATED":
     case "EFFECT_SKIPPED":
+    case "AFTER_ATTACK_EFFECT_RESOLVED":
     case "AFTER_ATTACK_TARGET_LOCKED":
     case "DRAW_FAILED":
     case "ATTACKS_SKIPPED":
@@ -4453,6 +4454,14 @@ function resolveAfterAttackEffect(effects, state, ctx, emit, playerId, rivalId, 
   const skipReason = effectRequirementFailure(definition, state, effectAction, attacker);
   if (skipReason) return;
   runEffect(effects, attacker.afterAttack, ctx, effectAction, attacker);
+  emit("AFTER_ATTACK_EFFECT_RESOLVED", {
+    playerId,
+    rivalId,
+    cardId: attackerCardId,
+    effectId: attacker.afterAttack,
+    sourceCardId: attackerCardId,
+    targetCardId: effectAction.afterAttackTargetCardId || null
+  });
 }
 
 function engineShieldPreview(amount, shield = 0, sourceCard = null) {

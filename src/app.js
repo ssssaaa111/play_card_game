@@ -3511,7 +3511,12 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
       : growEvent && afterAttackDamageEvent
         ? afterAttackDamageAndGrowthText(attacker.name, afterAttackDamageEvent.amount, growEvent.amount)
         : "";
-  const hasPublicEffect = attacker.afterAttack && events.some((event) => event.sourceCardId === attackerId);
+  const resolvedAfterAttackEffect = events.some((event) =>
+    event.type === "AFTER_ATTACK_EFFECT_RESOLVED"
+    && event.cardId === attackerId
+    && event.effectId === attacker.afterAttack
+  );
+  const hasPublicEffect = resolvedAfterAttackEffect || lostBackrow.length > 0;
   const hasBlockingReveal = owner.owner === "ai" && hasPublicEffect;
   if (hasBlockingReveal) {
     renderCurrentCombatHud({ rewindDamageEvent: afterAttackDamageEvent });

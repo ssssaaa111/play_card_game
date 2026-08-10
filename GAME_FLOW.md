@@ -226,7 +226,7 @@ flowchart TD
 - 存在 `pendingAttack`、响应窗口或未结算连锁时，不得请求 auto-end、切换阶段或交接回合。
 - `CANCEL_ATTACK` 只有在 `consumeAttack: true` 时消耗攻击次数；攻击怪兽或声明目标在连锁结算中离场时，引擎会以 `consumeAttack: false` 自动取消本次 pending attack。
 - `attackReset` 在攻击次数被消耗后自动消费；攻击怪兽仍在场时产生 `MONSTER_READIED`。
-- 怪兽的 `afterAttack` 效果通过默认或注入的卡牌 DSL 结算，不能在战斗结算中新增硬编码分支。
+- 怪兽的 `afterAttack` 效果通过默认或注入的卡牌 DSL 结算，不能在战斗结算中新增硬编码分支；只有实际执行了 DSL 的效果才产生 `AFTER_ATTACK_EFFECT_RESOLVED`，无声明目标时不会把普通战斗事件误报为效果结算。
 - “跳过攻击”通过 `SKIP_REMAINING_ATTACKS` 将当前可攻击怪兽标记为已行动，清空攻击重置和直击许可，并授予本回合 `skipAttackLock`。新召唤怪兽也不能绕过该锁。
 
 ## 连锁数据

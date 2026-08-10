@@ -1247,12 +1247,22 @@ async function runTrioCombinedLethalPlanningBasicSmoke(ctx) {
     12000
   );
   clickSmokeElementCenter(ctx.els.aiRevealContinue, `${smokeName}: continue direct strike reveal`);
-  await waitForSmoke(
-    () => aiRevealVisible(ctx.els, "trio-sun-judicator"),
-    `${smokeName}: AI reveals sun after-attack effect`,
-    12000
-  );
-  clickSmokeElementCenter(ctx.els.aiRevealContinue, `${smokeName}: continue sun effect reveal`);
+  try {
+    await waitForSmoke(
+      () => aiRevealVisible(ctx.els),
+      `${smokeName}: AI reaches the next real public effect`,
+      30000
+    );
+  } catch (error) {
+    throw new Error(`${error.message}. ${smokeDebug(ctx)}`);
+  }
+  if (aiRevealVisible(ctx.els, "trio-sun-judicator")) {
+    throw new Error(`${smokeName}: sun must not reveal an after-attack effect without a declaration target. ${smokeDebug(ctx)}`);
+  }
+  if (!aiRevealVisible(ctx.els, "trio-star-herald")) {
+    throw new Error(`${smokeName}: star should be the next real public after-attack effect. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElementCenter(ctx.els.aiRevealContinue, `${smokeName}: continue star effect reveal`);
   await waitForSmoke(
     () => ctx.state.gameOver && ctx.state.gameOverWinner === "ai" && !ctx.state.aiRunning,
     `${smokeName}: direct and follow-up attacks end the duel. ${smokeDebug(ctx)}`,

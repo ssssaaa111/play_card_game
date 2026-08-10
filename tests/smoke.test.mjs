@@ -579,10 +579,13 @@ test("after-attack feedback stages base damage before revealing effect damage", 
     feedbackSource,
     /renderCurrentCombatHud\(\{ rewindDamageEvent: afterAttackDamageEvent \}\);[\s\S]*await waitForAiReveal/
   );
+  assert.match(feedbackSource, /event\.type === "AFTER_ATTACK_EFFECT_RESOLVED"/);
+  assert.doesNotMatch(feedbackSource, /attacker\.afterAttack && events\.some\(\(event\) => event\.sourceCardId === attackerId\)/);
   assert.match(
     smoke,
     /aiRevealVisible\(ctx\.els, "trio-star-herald"\)[\s\S]*ctx\.els\.playerLp\?\.textContent\.trim\(\) !== "300 \/ 4000"/
   );
+  assert.match(smoke, /sun must not reveal an after-attack effect without a declaration target/);
 });
 
 test("browser smoke runner covers key click regressions", () => {

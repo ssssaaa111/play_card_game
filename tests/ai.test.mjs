@@ -115,6 +115,28 @@ test("attack sequence planner finds a through-monster lethal line", () => {
   assert.deepEqual(plan.moves[1], { attackerIndex: 1, targetIndex: -1 });
 });
 
+test("attack sequence planner prefers the least-overkill route once the damage goal is reachable", () => {
+  const star = monster({
+    uid: "star",
+    id: "trio-star-herald",
+    atk: 2400,
+    afterAttack: "starDoomCharge"
+  });
+  const plan = findAiAttackSequence({
+    attackers: [star],
+    targets: [
+      monster({ uid: "saint", atk: 1000 }),
+      monster({ uid: "mage", atk: 1200 })
+    ],
+    shield: 0,
+    directAttacks: 0,
+    damageGoal: 1500
+  });
+
+  assert.equal(plan.damage, 1500);
+  assert.deepEqual(plan.moves, [{ attackerIndex: 0, targetIndex: 1 }]);
+});
+
 test("AI picks the first move of a lethal attack sequence", () => {
   const breaker = monster({ name: "breaker", atk: 3000, uid: "b1" });
   const raider = monster({ name: "raider", atk: 2000, uid: "r1" });
@@ -267,6 +289,31 @@ test("scripted pressure AI spends direct permission when follow-up attacks compl
   assert.equal(action.type, "attack");
   assert.equal(action.cardUid, "sun");
   assert.equal(action.targetIndex, -1);
+});
+
+test("scripted pressure AI preserves full after-attack damage when either target completes lethal", () => {
+  const action = chooseAiAttackAction({
+    owner: { directAttacks: 0 },
+    field: [monster({
+      uid: "star",
+      id: "trio-star-herald",
+      atk: 2400,
+      afterAttack: "starDoomCharge"
+    })],
+    rivalField: [
+      monster({ uid: "saint", atk: 1000 }),
+      monster({ uid: "mage", atk: 1200 })
+    ],
+    rivalLp: 1500,
+    rivalShield: 0,
+    aiStyle: "scriptedPressure",
+    canAttackMonster: () => true
+  });
+
+  assert.equal(action.type, "attack");
+  assert.equal(action.cardUid, "star");
+  assert.equal(action.targetIndex, 1);
+  assert.equal(action.target?.uid, "mage");
 });
 
 test("AI attacks directly when there are no defending monsters", () => {
