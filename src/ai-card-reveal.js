@@ -27,7 +27,7 @@ export function buildAiCardReveal(input = {}) {
     title: `${label}「${detail.name}」`,
     name: detail.name,
     type: detail.type,
-    summary: card.summary || card.text || detail.rule || "",
+    summary: input.summary || card.summary || card.text || detail.rule || "",
     card,
   };
 }

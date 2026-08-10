@@ -4188,6 +4188,9 @@ async function runFinaleSunflareTargetLockBasicSmoke(ctx) {
     `${smokeName}: sun after-attack effect reveal`,
     18000
   );
+  if (!ctx.els.aiRevealSummary?.textContent.includes("攻击后效果没有转移到其他魔陷")) {
+    throw new Error(`${smokeName}: sun reveal must explain the exact no-transfer resolution. ${smokeDebug(ctx)}`);
+  }
   clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue sun effect reveal`);
 
   await waitForSmoke(
