@@ -4146,6 +4146,74 @@ async function runTrioOmegaVowDemoSmoke(ctx) {
   setSmokeStatus("passed", "trio-omega-vow-demo");
 }
 
+async function runFinaleNegatedTrapSunderBasicSmoke(ctx) {
+  const smokeName = "finale-negated-trap-sunder-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaFinaleRush");
+  const storyLog = () => (ctx.state.log || []).map(logEntryMessage).join(" ");
+
+  clickSmokeElement(handCard(ctx.els, "trio-chain-veil"), `${smokeName}: select chain veil`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}: set chain veil first`);
+  await waitForSmoke(() => ctx.state.player.traps[0]?.id === "trio-chain-veil", `${smokeName}: chain veil set`);
+  const veil = ctx.state.player.traps[0];
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}: select solar snare`);
+  clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), `${smokeName}: set solar snare second`);
+  await waitForSmoke(() => ctx.state.player.traps[1]?.id === "trio-solar-snare", `${smokeName}: solar snare set`);
+  const snare = ctx.state.player.traps[1];
+  await finishPlayerTurn(ctx);
+
+  await waitForSmoke(
+    () => ctx.els.chainModal.classList.contains("show") &&
+      chainChoiceButton(ctx.els, "trio-chain-veil") &&
+      chainChoiceButton(ctx.els, "trio-solar-snare"),
+    `${smokeName}: both attack traps are offered`,
+    26000
+  );
+  clickSmokeElement(chainChoiceButton(ctx.els, "trio-chain-veil"), `${smokeName}: choose chain veil`);
+  await waitForSmoke(
+    () => !ctx.els.chainYes.disabled && ctx.els.chainYes.textContent.includes("星线护续"),
+    `${smokeName}: chain veil selected`
+  );
+  clickSmokeElement(ctx.els.chainYes, `${smokeName}: activate chain veil into nullifier`);
+
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "chain-nullifier"),
+    `${smokeName}: rival reveals chain nullifier`,
+    12000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue nullifier reveal`);
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "trio-sun-judicator"),
+    `${smokeName}: sun after-attack effect reveal`,
+    18000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue sun effect reveal`);
+
+  await waitForSmoke(
+    () => ctx.state.player.grave.some((card) => card?.uid === veil.uid) &&
+      ctx.state.player.grave.some((card) => card?.uid === snare.uid) &&
+      storyLog().includes("星线护续的效果被连锁无效；已发动陷阱仍送入墓地") &&
+      storyLog().includes("曜冕裁决者的攻击后效果破坏了当前最靠前的魔陷「日冕诱锁」"),
+    `${smokeName}: distinct graveyard reasons are public. ${trioOmegaFailureSnapshot(ctx)}`,
+    18000
+  );
+
+  const skippedEvent = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "EFFECT_SKIPPED" && event.cardId === veil.uid && event.reason === "negated"
+  );
+  const sunderEvent = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "CARD_DESTROYED" && event.cardId === snare.uid &&
+    eventReferencesTemplate(event, "trio-sun-judicator")
+  );
+  if (!skippedEvent || !sunderEvent || Number(skippedEvent.id) >= Number(sunderEvent.id)) {
+    throw new Error(`${smokeName}: chain cleanup and sun sunder event order is wrong. ${smokeDebug(ctx)}`);
+  }
+  if (!logCardLink(ctx.els, "trio-chain-veil") || !logCardLink(ctx.els, "trio-solar-snare")) {
+    throw new Error(`${smokeName}: both public trap names must remain inspectable in the timeline.`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioOmegaFinaleSmoke(ctx) {
   const smokeName = "trio-omega-finale-demo";
   setSmokeStatus("running", smokeName);
@@ -5414,7 +5482,9 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
   );
   await waitForSmoke(
     () => (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("断链裁决 无效了 日冕诱锁")) &&
-      (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("日冕诱锁 的效果被连锁无效")),
+      (ctx.state.log || []).some((entry) =>
+        logEntryMessage(entry).includes("日冕诱锁的效果被连锁无效；已发动陷阱仍送入墓地")
+      ),
     `full duel: the public log should explain why solar snare failed. ${smokeDebug(ctx)}`,
     9000
   );
@@ -8728,6 +8798,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-challenge": runTrioOmegaChallengeSmoke,
     "trio-omega-story-demo": runTrioOmegaStoryDemoSmoke,
     "trio-omega-vow-demo": runTrioOmegaVowDemoSmoke,
+    "finale-negated-trap-sunder-basic": runFinaleNegatedTrapSunderBasicSmoke,
     "trio-omega-finale-demo": runTrioOmegaFinaleSmoke,
     "trio-omega-finale-rush": runTrioOmegaFinaleRushSmoke,
     "trio-gauntlet-demo": runTrioGauntletSmoke,

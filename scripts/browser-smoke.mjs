@@ -36,6 +36,7 @@ const DEFAULT_SMOKES = [
   "fusion-occlusion-mobile",
   "trio-omega-story-demo",
   "trio-omega-vow-demo",
+  "finale-negated-trap-sunder-basic",
   "trio-omega-finale-demo",
   "trio-omega-finale-rush",
   "trio-gauntlet-preview-basic",

@@ -53,7 +53,9 @@ import { buildDeckEditorView } from './deck-editor.js';
 import { bindDeckEditorEvents, renderDeckEditor } from './deck-editor-renderer.js';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import {
+  afterAttackBackrowDestroyedText,
   isContinuousReleaseStat,
+  negatedActivatedTrapText,
   shouldLogGenericDestroyedEvent,
   statChangeText
 } from './effect-feedback.js';
@@ -3253,7 +3255,16 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
   if (skippedEvent) {
     playSound("guard");
     playEpicAction("连锁无效", "guard");
-    addLog(`${trap.name} 的效果被连锁无效。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
+    const sentToGrave = trapEvents.some((event) =>
+      event.type === "CARD_MOVED" &&
+      event.cardId === runtimeCardId(trap) &&
+      event.from?.zone === "spellTrapZone" &&
+      event.to?.zone === "grave"
+    );
+    addLog(
+      sentToGrave ? negatedActivatedTrapText(trap.name) : `${trap.name} 的效果被连锁无效。`,
+      cardLogMeta(trap, { actor: owner.owner, type: "trap" })
+    );
     speak(`${trap.name}，效果无效。`);
     return { cancelled: false, shielded: false, negated: true };
   }
@@ -3476,6 +3487,21 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
   )) {
     addLog(`${duelistLabel(owner)}消耗 1 次直接攻击许可。`);
   }
+  const destroyedBackrow = events
+    .filter((event) => event.type === "CARD_DESTROYED" && event.sourceCardId === attackerId)
+    .map((event) => ({ event, found: findRuntimeCard(event.cardId) }))
+    .filter(({ found }) => found?.card && ["spell", "trap"].includes(found.card.type));
+  destroyedBackrow.forEach(({ found }) => {
+    playEpicAction("后场破坏", "attack", 900);
+    addLog(
+      afterAttackBackrowDestroyedText(attacker.name, found.card.name),
+      cardLogMeta(attacker, {
+        actor: owner.owner,
+        type: "effect",
+        relatedCardIds: relatedCardIds(found.card)
+      })
+    );
+  });
   events
     .filter((event) =>
       event.type === "CONTINUOUS_EFFECT_RELEASED" &&

@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  afterAttackBackrowDestroyedText,
   isContinuousReleaseStat,
+  negatedActivatedTrapText,
   shouldLogGenericDestroyedEvent,
   statChangeText
 } from "../src/effect-feedback.js";
@@ -44,4 +46,15 @@ test("matches stat rollback events to their continuous release", () => {
 test("logs attack-destroy results through the shared public effect feedback", () => {
   assert.equal(shouldLogGenericDestroyedEvent({ trigger: "attackDestroy" }), true);
   assert.equal(shouldLogGenericDestroyedEvent({ effect: "destroySpellTrap" }), true);
+});
+
+test("explains the two distinct graveyard moves around a negated attack trap", () => {
+  assert.equal(
+    negatedActivatedTrapText("星线护续"),
+    "星线护续的效果被连锁无效；已发动陷阱仍送入墓地。"
+  );
+  assert.equal(
+    afterAttackBackrowDestroyedText("曜冕裁决者", "日冕诱锁"),
+    "曜冕裁决者的攻击后效果破坏了当前最靠前的魔陷「日冕诱锁」。"
+  );
 });
