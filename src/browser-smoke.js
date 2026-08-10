@@ -1147,6 +1147,9 @@ async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
   const breachActivated = events.some((event) =>
     event.type === "CARD_ACTIVATED" && event.cardId === breach.uid
   );
+  const previewMessage = (ctx.state.log || [])
+    .map(logEntryMessage)
+    .find((message) => message.includes("对手攻击预判：") && message.includes("曜冕裁决者")) || "";
   if (!attack || attack.targetCardId !== saint.uid || breachActivated) {
     throw new Error(`${smokeName}: shielded false lethal must not spend direct strike or bypass the monster. ${smokeDebug(ctx)}`);
   }
@@ -1154,6 +1157,11 @@ async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
       !ctx.state.ai.hand.some((card) => card?.uid === breach.uid) ||
       ctx.state.player.lp !== 2000 || ctx.state.player.shield !== 0 || ctx.state.gameOver) {
     throw new Error(`${smokeName}: sun should clear the monster into shield without dealing LP damage. ${smokeDebug(ctx)}`);
+  }
+  if (!previewMessage.includes("护盾预计吸收 2000") ||
+      !previewMessage.includes("最终生命值伤害 0") ||
+      previewMessage.includes("预计造成 2000 点伤害")) {
+    throw new Error(`${smokeName}: attack preview must show shield-adjusted life damage instead of the raw battle difference. ${smokeDebug(ctx)}`);
   }
   setSmokeStatus("passed", smokeName);
 }

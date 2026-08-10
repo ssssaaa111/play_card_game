@@ -178,6 +178,36 @@ test("describes battle preview outcomes", () => {
   assert.match(battlePreviewText(attacker, equalDefenseTarget), /守备怪兽挡下攻击/);
 });
 
+test("describes shield-adjusted life damage in battle preview text", () => {
+  const attacker = monster({ name: "曜冕裁决者", atk: 3000 });
+  const target = monster({ name: "辉棱圣徒", atk: 1000 });
+  const owner = duelist({ owner: "ai", shield: 0 });
+  const rival = duelist({ owner: "player", shield: 2000 });
+  const preview = battlePreviewText(
+    attacker,
+    target,
+    owner,
+    rival
+  );
+
+  assert.match(preview, /护盾预计吸收 2000/);
+  assert.match(preview, /最终生命值伤害 0/);
+  assert.doesNotMatch(preview, /预计造成 2000 点伤害/);
+
+  const directPreview = battlePreviewText(attacker, null, owner, duelist({ shield: 1000 }));
+  assert.match(directPreview, /护盾预计吸收 1000/);
+  assert.match(directPreview, /最终生命值伤害 2000/);
+
+  const counterPreview = battlePreviewText(
+    monster({ name: "进攻者", atk: 1800 }),
+    monster({ name: "反击者", atk: 2200 }),
+    duelist({ shield: 300 }),
+    duelist({ owner: "ai", shield: 0 })
+  );
+  assert.match(counterPreview, /攻击方护盾预计吸收 300/);
+  assert.match(counterPreview, /最终生命值伤害 100/);
+});
+
 test("builds structured battle previews with shield math", () => {
   const attacker = monster({ name: "星轨枪兵", atk: 1800 });
   const target = monster({ name: "铁壁守卫", atk: 900 });
