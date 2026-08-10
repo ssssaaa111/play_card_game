@@ -5,6 +5,7 @@ import {
   afterAttackBackrowDestroyedText,
   afterAttackDamageAndGrowthText,
   afterAttackLockedTargetLostText,
+  findAfterAttackDamageAndGrowthEvents,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
   shouldLogGenericDestroyedEvent,
@@ -70,4 +71,26 @@ test("explains after-attack damage and self growth with exact public values", ()
     afterAttackDamageAndGrowthText("星坠宣告者", 300, 300),
     "星坠宣告者的攻击后效果追加造成 300 点伤害，并使自身攻击力提升 300。"
   );
+});
+
+test("pairs effect damage with growth only for the matching after-attack effect", () => {
+  const events = [
+    { type: "DAMAGE_DEALT", sourceCardId: "star-1", amount: 2400 },
+    { type: "DAMAGE_DEALT", sourceCardId: "star-1", amount: 300 },
+    { type: "GAME_OVER_DECLARED", sourceCardId: "star-1" },
+    { type: "STAT_MODIFIED", sourceCardId: "star-1", cardId: "star-1", stat: "tempAtk", amount: 300 }
+  ];
+  const starResolution = findAfterAttackDamageAndGrowthEvents(events, {
+    attackerId: "star-1",
+    effectId: "starDoomCharge"
+  });
+  assert.equal(starResolution.damageEvent, events[1]);
+  assert.equal(starResolution.growEvent, events[3]);
+
+  const ordinaryGrowth = findAfterAttackDamageAndGrowthEvents(events, {
+    attackerId: "star-1",
+    effectId: "grow200"
+  });
+  assert.equal(ordinaryGrowth.damageEvent, null);
+  assert.equal(ordinaryGrowth.growEvent, events[3]);
 });

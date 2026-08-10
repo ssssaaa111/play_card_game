@@ -36,6 +36,27 @@ export function afterAttackDamageAndGrowthText(attackerName = "攻击怪兽", da
   return `${attackerName}的攻击后效果追加造成 ${Math.max(0, Number(damage) || 0)} 点伤害，并使自身攻击力提升 ${Math.max(0, Number(attackGain) || 0)}。`;
 }
 
+export function findAfterAttackDamageAndGrowthEvents(events = [], { attackerId = "", effectId = "" } = {}) {
+  const growEventIndex = events.findIndex((event) =>
+    event.type === "STAT_MODIFIED" &&
+    event.sourceCardId === attackerId &&
+    event.cardId === attackerId &&
+    event.stat === "tempAtk" &&
+    event.amount > 0
+  );
+  const growEvent = growEventIndex >= 0 ? events[growEventIndex] : null;
+  if (!growEvent || effectId !== "starDoomCharge") {
+    return { damageEvent: null, growEvent };
+  }
+  for (let index = growEventIndex - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.type === "DAMAGE_DEALT" && event.sourceCardId === attackerId) {
+      return { damageEvent: event, growEvent };
+    }
+  }
+  return { damageEvent: null, growEvent };
+}
+
 export function afterAttackLockedTargetLostText(attackerName = "攻击怪兽", targetName = "魔陷卡") {
   return `${attackerName}锁定的魔陷「${targetName}」已提前离场，攻击后效果没有转移到其他魔陷。`;
 }

@@ -56,6 +56,7 @@ import {
   afterAttackBackrowDestroyedText,
   afterAttackDamageAndGrowthText,
   afterAttackLockedTargetLostText,
+  findAfterAttackDamageAndGrowthEvents,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
   shouldLogGenericDestroyedEvent,
@@ -3495,22 +3496,13 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
           : `魔陷区 ${(Number(event.targetIndex) || 0) + 1} 的盖牌`
       };
     });
-  const growEventIndex = events.findIndex((event) =>
-    event.type === "STAT_MODIFIED" &&
-    event.sourceCardId === attackerId &&
-    event.cardId === attackerId &&
-    event.stat === "tempAtk" &&
-    event.amount > 0
-  );
-  const growEvent = growEventIndex >= 0 ? events[growEventIndex] : null;
-  let afterAttackDamageEvent = null;
-  for (let index = growEventIndex - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event.type === "DAMAGE_DEALT" && event.sourceCardId === attackerId) {
-      afterAttackDamageEvent = event;
-      break;
-    }
-  }
+  const {
+    damageEvent: afterAttackDamageEvent,
+    growEvent
+  } = findAfterAttackDamageAndGrowthEvents(events, {
+    attackerId,
+    effectId: attacker.afterAttack
+  });
   const publicEffectSummary = lostBackrow[0]
     ? afterAttackLockedTargetLostText(attacker.name, lostBackrow[0].targetName)
     : destroyedBackrow[0]
@@ -3582,7 +3574,12 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
       });
     });
   if (growEvent) {
-    addLog(`${attacker.name} 吞噬影子，攻击力提升 ${growEvent.amount}。`, cardLogMeta(attacker, { actor: owner.owner, type: "effect" }));
+    addLog(
+      afterAttackDamageEvent
+        ? afterAttackDamageAndGrowthText(attacker.name, afterAttackDamageEvent.amount, growEvent.amount)
+        : `${attacker.name} 吞噬影子，攻击力提升 ${growEvent.amount}。`,
+      cardLogMeta(attacker, { actor: owner.owner, type: "effect" })
+    );
   }
   const wearEvent = events.find((event) => event.type === "BATTLE_WEAR_APPLIED");
   if (wearEvent) {
