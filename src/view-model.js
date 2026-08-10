@@ -45,18 +45,30 @@ export function duelHintText({
   return "没有可操作项，回合即将结束";
 }
 
+export function compactScenarioGoal(goal = "", maxLength = 28) {
+  const normalized = String(goal).replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  const [firstStep = normalized] = normalized.split(/[，。；;]/, 1);
+  const compact = firstStep.trim() || normalized;
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`;
+}
+
 export function duelHintView(options = {}) {
-  const text = duelHintText(options);
+  const fullText = duelHintText(options);
   const kind = options.started && !options.paused && (options.pendingPrompt || options.selectionHint)
     ? "action"
     : options.started && !options.paused && options.scenarioId !== "normal" && options.scenarioGoal
       ? "objective"
       : "status";
+  const text = kind === "objective"
+    ? `当前目标：${compactScenarioGoal(options.scenarioGoal)}`
+    : fullText;
 
   return {
     text,
     kind,
-    title: ["objective", "action"].includes(kind) ? text : ""
+    title: kind === "objective" ? fullText : kind === "action" ? text : ""
   };
 }
 

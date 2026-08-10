@@ -12,6 +12,7 @@ const SMOKE_VIRTUAL_BUDGETS = {
 const SMOKE_VIEWPORTS = {
   "duel-layout-density-basic": { width: 1280, height: 720 },
   "mobile-hand-choice-fit-basic": { width: 390, height: 844 },
+  "objective-hierarchy-mobile-basic": { width: 390, height: 844 },
   // Headless Chrome applies --window-size to the outer window on Windows; this yields an 844x390 content viewport.
   "landscape-hand-choice-fit-basic": { width: 866, height: 488 },
   "fusion-occlusion-desktop": { width: 1280, height: 720 },
