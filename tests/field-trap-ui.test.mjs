@@ -23,3 +23,8 @@ test("field support cards expose compact spell and trap state chips", () => {
   assert.match(css, /\.support-state-chip\s*\{[\s\S]*height: 17px;[\s\S]*letter-spacing: 0;/);
   assert.match(css, /\.support-state-chip\.active\s*\{[\s\S]*#baf7f1/);
 });
+
+test("after-attack target locks are visible above ordinary support states", () => {
+  assert.match(css, /\.trap-slot\.after-attack-locked\s*\{[\s\S]*animation:/);
+  assert.match(css, /\.after-attack-lock-chip\s*\{[\s\S]*position:/);
+});
