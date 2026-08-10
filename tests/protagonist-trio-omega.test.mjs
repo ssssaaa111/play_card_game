@@ -662,7 +662,26 @@ test("sun and star trio ace pressure effects resolve through battle", () => {
 
   assert.equal(state.cards[starId].tempAtk, 300);
   assert.equal(state.players[PLAYER].lp, 1300);
-  assert.ok(starEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 300 && event.sourceCardId === starId));
+  const baseDamageEvent = starEvents.find((event) => event.type === "DAMAGE_DEALT" && event.amount === 2400 && event.sourceCardId === starId);
+  const effectDamageEvent = starEvents.find((event) => event.type === "DAMAGE_DEALT" && event.amount === 300 && event.sourceCardId === starId);
+  const growthEvent = starEvents.find((event) =>
+    event.type === "STAT_MODIFIED"
+    && event.cardId === starId
+    && event.sourceCardId === starId
+    && event.stat === "tempAtk"
+    && event.amount === 300
+  );
+  const resolutionEvent = starEvents.find((event) =>
+    event.type === "AFTER_ATTACK_EFFECT_RESOLVED"
+    && event.cardId === starId
+    && event.effectId === "starDoomCharge"
+  );
+  assert.ok(baseDamageEvent);
+  assert.ok(effectDamageEvent);
+  assert.ok(growthEvent);
+  assert.ok(resolutionEvent?.resultEventIds.includes(effectDamageEvent.id));
+  assert.ok(resolutionEvent.resultEventIds.includes(growthEvent.id));
+  assert.ok(!resolutionEvent.resultEventIds.includes(baseDamageEvent.id));
   assertValidGameState(state);
 });
 

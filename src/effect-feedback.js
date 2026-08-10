@@ -24,6 +24,22 @@ export function shouldLogGenericDestroyedEvent(card = {}) {
   return Boolean(card);
 }
 
+export function battleDamageAmount(events = [], { playerId = "" } = {}) {
+  const afterAttackResultIds = new Set(
+    events
+      .filter((event) => event.type === "AFTER_ATTACK_EFFECT_RESOLVED")
+      .flatMap((event) => Array.isArray(event.resultEventIds) ? event.resultEventIds : [])
+      .map((eventId) => String(eventId))
+  );
+  return events
+    .filter((event) =>
+      event.type === "DAMAGE_DEALT"
+      && event.playerId === playerId
+      && !afterAttackResultIds.has(String(event.id))
+    )
+    .reduce((total, event) => total + Math.max(0, Number(event.amount) || 0), 0);
+}
+
 export function negatedActivatedTrapText(cardName = "陷阱卡") {
   return `${cardName}的效果被连锁无效；已发动陷阱仍送入墓地。`;
 }

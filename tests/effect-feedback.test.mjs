@@ -5,6 +5,7 @@ import {
   afterAttackBackrowDestroyedText,
   afterAttackDamageAndGrowthText,
   afterAttackLockedTargetLostText,
+  battleDamageAmount,
   findAfterAttackDamageAndGrowthEvents,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
@@ -12,6 +13,24 @@ import {
   shouldLogGenericDestroyedEvent,
   statChangeText
 } from "../src/effect-feedback.js";
+
+test("keeps after-attack effect damage out of the base battle damage total", () => {
+  const events = [
+    { id: 10, type: "DAMAGE_DEALT", playerId: "player", sourceCardId: "star-1", amount: 1200 },
+    { id: 11, type: "DAMAGE_DEALT", playerId: "player", sourceCardId: "star-1", amount: 300 },
+    { id: 12, type: "STAT_MODIFIED", sourceCardId: "star-1", cardId: "star-1", stat: "tempAtk", amount: 300 },
+    {
+      id: 13,
+      type: "AFTER_ATTACK_EFFECT_RESOLVED",
+      cardId: "star-1",
+      effectId: "starDoomCharge",
+      resultEventIds: [11, 12]
+    }
+  ];
+
+  assert.equal(battleDamageAmount(events, { playerId: "player" }), 1200);
+  assert.equal(battleDamageAmount(events, { playerId: "ai" }), 0);
+});
 
 test("describes ordinary stat changes and continuous-effect restoration", () => {
   assert.equal(statChangeText({ stat: "tempAtk", amount: 500 }), "攻击力提升 500");
