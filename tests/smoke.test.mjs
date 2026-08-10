@@ -567,21 +567,21 @@ test("app uses extracted log audit module", () => {
   assert.match(app, /playLifeDelta\(target\.owner, -dealt\)/);
 });
 
-test("resolved battle HUD refreshes before blocking after-attack feedback", () => {
+test("after-attack feedback stages base damage before revealing effect damage", () => {
   const app = readProjectFile("src/app.js");
   const smoke = readProjectFile("src/browser-smoke.js");
-  const attackStart = app.indexOf("async function attack(owner, rival, attackerIndex, targetIndex)");
-  const attackEnd = app.indexOf("function cardImpactSignature", attackStart);
-  const attackSource = app.slice(attackStart, attackEnd);
+  const feedbackStart = app.indexOf("async function resolveAfterAttackBattleFeedback(owner, attacker, events)");
+  const feedbackEnd = app.indexOf("function declareAttackWithEngine", feedbackStart);
+  const feedbackSource = app.slice(feedbackStart, feedbackEnd);
 
-  assert.ok(attackStart >= 0 && attackEnd > attackStart);
+  assert.ok(feedbackStart >= 0 && feedbackEnd > feedbackStart);
   assert.match(
-    attackSource,
-    /renderCurrentCombatHud\(\);\s*const afterAttackFeedback = resolveAfterAttackBattleFeedback/
+    feedbackSource,
+    /renderCurrentCombatHud\(\{ rewindDamageEvent: afterAttackDamageEvent \}\);[\s\S]*await waitForAiReveal/
   );
   assert.match(
     smoke,
-    /aiRevealVisible\(ctx\.els, "trio-star-herald"\)[\s\S]*ctx\.els\.playerLp\?\.textContent\.trim\(\) !== "0 \/ 4000"/
+    /aiRevealVisible\(ctx\.els, "trio-star-herald"\)[\s\S]*ctx\.els\.playerLp\?\.textContent\.trim\(\) !== "300 \/ 4000"/
   );
 });
 

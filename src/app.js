@@ -59,6 +59,7 @@ import {
   findAfterAttackDamageAndGrowthEvents,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
+  rewindDamageForHud,
   shouldLogGenericDestroyedEvent,
   statChangeText
 } from './effect-feedback.js';
@@ -3511,7 +3512,9 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
         ? afterAttackDamageAndGrowthText(attacker.name, afterAttackDamageEvent.amount, growEvent.amount)
         : "";
   const hasPublicEffect = attacker.afterAttack && events.some((event) => event.sourceCardId === attackerId);
-  if (owner.owner === "ai" && hasPublicEffect) {
+  const hasBlockingReveal = owner.owner === "ai" && hasPublicEffect;
+  if (hasBlockingReveal) {
+    renderCurrentCombatHud({ rewindDamageEvent: afterAttackDamageEvent });
     await waitForAiReveal({
       actor: "ai",
       public: true,
@@ -3522,6 +3525,8 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
       summary: publicEffectSummary || undefined,
       allowAfterGameOver: true
     });
+  } else {
+    renderCurrentCombatHud();
   }
   if (events.some((event) =>
     event.type === "ABILITY_SPENT" &&
@@ -3879,7 +3884,6 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   }
 
   playAttackResetFeedback(owner, attacker, battleEvents);
-  renderCurrentCombatHud();
   const afterAttackFeedback = resolveAfterAttackBattleFeedback(owner, attacker, battleEvents);
   if (owner.owner === "ai") {
     await afterAttackFeedback;
@@ -4964,14 +4968,14 @@ function handleDuelFieldBackgroundClick(event) {
   cancelSelectedMonsterAction();
 }
 
-function renderCurrentCombatHud() {
+function renderCurrentCombatHud({ rewindDamageEvent = null } = {}) {
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
   return renderCombatHud({
     document,
     body: document.body,
     elements: els,
-    player: state.player,
-    ai: state.ai,
+    player: rewindDamageForHud(state.player, rewindDamageEvent),
+    ai: rewindDamageForHud(state.ai, rewindDamageEvent),
     playerProfile: characterProfiles.player,
     aiProfile: characterProfiles.ai,
     activeTurn,

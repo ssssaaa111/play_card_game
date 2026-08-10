@@ -57,6 +57,19 @@ export function findAfterAttackDamageAndGrowthEvents(events = [], { attackerId =
   return { damageEvent: null, growEvent };
 }
 
+export function rewindDamageForHud(duelist = {}, event = {}) {
+  if (event?.type !== "DAMAGE_DEALT" || event.playerId !== duelist.owner) return duelist;
+  const amount = Math.max(0, Number(event.amount) || 0);
+  const blocked = Math.max(0, Number(event.blocked) || 0);
+  const shieldPierced = Math.max(0, Number(event.shieldPierced) || 0);
+  if (amount === 0 && blocked === 0 && shieldPierced === 0) return duelist;
+  return {
+    ...duelist,
+    lp: Math.max(0, Number(duelist.lp) || 0) + amount,
+    shield: Math.max(0, Number(duelist.shield) || 0) + blocked + shieldPierced
+  };
+}
+
 export function afterAttackLockedTargetLostText(attackerName = "攻击怪兽", targetName = "魔陷卡") {
   return `${attackerName}锁定的魔陷「${targetName}」已提前离场，攻击后效果没有转移到其他魔陷。`;
 }
