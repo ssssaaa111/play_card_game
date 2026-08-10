@@ -120,6 +120,7 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
 
   assert.equal(cardByTemplate("trio-sun-judicator").afterAttack, "sunflareSunder");
   assert.match(cardByTemplate("trio-sun-judicator").text, /攻击宣言时锁定.*提前离场.*不转移/);
+  assert.match(cardByTemplate("trio-sun-judicator").summary, /锁定最前魔陷.*目标离场不转移/);
   assert.equal(cardByTemplate("trio-star-herald").afterAttack, "starDoomCharge");
   assert.ok([
     "trio-sun-judicator",

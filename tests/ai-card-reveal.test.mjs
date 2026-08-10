@@ -58,6 +58,22 @@ test("AI reveal card details resolve from the unified card definition", () => {
   assert.equal(detail.effectText, definition.text);
 });
 
+test("AI monster effect reveals can explain the exact public resolution without mutating card definitions", () => {
+  const definition = cardDefinitionById("trio-sun-judicator");
+  const definitionSummary = definition.summary;
+  const resolutionSummary = "曜冕裁决者锁定的魔陷「星线护续」已提前离场，攻击后效果没有转移到其他魔陷。";
+  const reveal = buildAiCardReveal({
+    actor: "ai",
+    public: true,
+    cardId: "trio-sun-judicator",
+    revealKind: "monster-effect",
+    summary: resolutionSummary
+  });
+
+  assert.equal(reveal.summary, resolutionSummary);
+  assert.equal(definition.summary, definitionSummary);
+});
+
 test("AI reveal queue progress only appears for multiple public cards", () => {
   const reveal = buildAiCardReveal({
     actor: "ai",

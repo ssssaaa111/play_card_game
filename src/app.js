@@ -3470,6 +3470,35 @@ function playBattleDamageFeedback(events, duelist) {
 async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
   const attackerId = runtimeCardId(attacker);
   if (!attackerId) return;
+  const destroyedBackrow = events
+    .filter((event) => event.type === "CARD_DESTROYED" && event.sourceCardId === attackerId)
+    .map((event) => ({ event, found: findRuntimeCard(event.cardId) }))
+    .filter(({ found }) => found?.card && ["spell", "trap"].includes(found.card.type));
+  const lostBackrow = events
+    .filter((event) =>
+      event.type === "EFFECT_SKIPPED"
+      && event.sourceCardId === attackerId
+      && event.reason === "locked-target-left-zone"
+    )
+    .map((event) => {
+      const target = findRuntimeCard(event.targetCardId);
+      const targetInPublicZone = target?.owner === "player"
+        || target?.card?.type === "spell"
+        || state.ai.grave.some((card) => runtimeCardId(card) === event.targetCardId);
+      return {
+        event,
+        target,
+        targetInPublicZone,
+        targetName: targetInPublicZone && target?.card
+          ? target.card.name
+          : `魔陷区 ${(Number(event.targetIndex) || 0) + 1} 的盖牌`
+      };
+    });
+  const publicEffectSummary = lostBackrow[0]
+    ? afterAttackLockedTargetLostText(attacker.name, lostBackrow[0].targetName)
+    : destroyedBackrow[0]
+      ? afterAttackBackrowDestroyedText(attacker.name, destroyedBackrow[0].found.card.name)
+      : "";
   const hasPublicEffect = attacker.afterAttack && events.some((event) => event.sourceCardId === attackerId);
   if (owner.owner === "ai" && hasPublicEffect) {
     await waitForAiReveal({
@@ -3478,7 +3507,8 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
       cardId: attacker.id,
       type: "effect",
       revealKind: "monster-effect",
-      message: `${attacker.name} 的效果触发。`
+      message: `${attacker.name} 的效果触发。`,
+      summary: publicEffectSummary || undefined
     });
   }
   if (events.some((event) =>
@@ -3488,10 +3518,6 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
   )) {
     addLog(`${duelistLabel(owner)}消耗 1 次直接攻击许可。`);
   }
-  const destroyedBackrow = events
-    .filter((event) => event.type === "CARD_DESTROYED" && event.sourceCardId === attackerId)
-    .map((event) => ({ event, found: findRuntimeCard(event.cardId) }))
-    .filter(({ found }) => found?.card && ["spell", "trap"].includes(found.card.type));
   destroyedBackrow.forEach(({ found }) => {
     playEpicAction("后场破坏", "attack", 900);
     addLog(
@@ -3503,20 +3529,8 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
       })
     );
   });
-  events
-    .filter((event) =>
-      event.type === "EFFECT_SKIPPED"
-      && event.sourceCardId === attackerId
-      && event.reason === "locked-target-left-zone"
-    )
-    .forEach((event) => {
-      const target = findRuntimeCard(event.targetCardId);
-      const targetInPublicZone = target?.owner === "player"
-        || target?.card?.type === "spell"
-        || state.ai.grave.some((card) => runtimeCardId(card) === event.targetCardId);
-      const targetName = targetInPublicZone && target?.card
-        ? target.card.name
-        : `魔陷区 ${(Number(event.targetIndex) || 0) + 1} 的盖牌`;
+  lostBackrow
+    .forEach(({ target, targetInPublicZone, targetName }) => {
       addLog(
         afterAttackLockedTargetLostText(attacker.name, targetName),
         cardLogMeta(attacker, {
