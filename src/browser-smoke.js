@@ -8152,18 +8152,20 @@ async function runTrioGauntletPreviewBasicSmoke(ctx) {
 
 async function runObjectiveHierarchyMobileBasicSmoke(ctx) {
   const smokeName = "objective-hierarchy-mobile-basic";
-  const fullGoal = "先布置防御挡下太阳神的第一击，再清掉月曜帷幕，复活低星王牌，用终局反击击碎三曜。";
-  const compactGoal = "当前目标：先布置防御挡下太阳神的第一击";
+  const openingGoal = "当前目标：先布防：盖放日冕诱锁";
+  const openingTitle = "当前目标：先布防：盖放日冕诱锁，不要急着攻击或消耗终局资源。";
+  const defendedGoal = "当前目标：防御准备完成：结束回合";
+  const defendedTitle = "当前目标：防御准备完成：结束回合，让日冕诱锁处理曜冕裁决者。";
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "protagonistTrioGauntlet");
   await waitForSmoke(
     () => ctx.state.scenarioId === "protagonistTrioOmegaStory" &&
       ctx.els.duelHint?.dataset.kind === "objective" &&
-      ctx.els.duelHint.textContent === compactGoal,
-    `${smokeName}: first chapter exposes one compact battlefield objective`
+      ctx.els.duelHint.textContent === openingGoal,
+    `${smokeName}: first chapter exposes the live opening objective`
   );
-  if (ctx.els.duelHint.title !== `当前目标：${fullGoal}`) {
-    throw new Error(`${smokeName}: full route should remain available in the objective title`);
+  if (ctx.els.duelHint.title !== openingTitle) {
+    throw new Error(`${smokeName}: opening objective title should preserve its full instruction`);
   }
 
   clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}: select solar snare`);
@@ -8173,9 +8175,13 @@ async function runObjectiveHierarchyMobileBasicSmoke(ctx) {
       document.querySelector("#handCommandTitle")?.textContent.includes("日冕诱锁"),
     `${smokeName}: selected card owns the tactical command area`
   );
-  if (ctx.els.duelHint.textContent !== compactGoal || ctx.els.duelHint.title !== `当前目标：${fullGoal}`) {
-    throw new Error(`${smokeName}: selecting a card should not restore the full route over the battlefield`);
-  }
+  clickSmokeElement(trapSlot(ctx.els, "player", 0), `${smokeName}: set solar snare in first trap slot`);
+  await waitForSmoke(
+    () => trapCard(ctx.els, "player", "trio-solar-snare") &&
+      ctx.els.duelHint.textContent === defendedGoal &&
+      ctx.els.duelHint.title === defendedTitle,
+    `${smokeName}: setting solar snare advances the live objective`
+  );
   setSmokeStatus("passed", smokeName);
 }
 
