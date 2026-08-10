@@ -181,7 +181,7 @@ export const defaultCardEffects = Object.freeze({
     ]
   }),
   trioFinalCounterVow: oneShot([
-    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "atk", amount: 2100 },
+    { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "tempAtk", amount: 2100 },
     {
       op: "readyMonsterOrGrantAbility",
       player: "self",
@@ -431,7 +431,10 @@ export class EffectContext {
     this.#emit("CARD_MOVED", {
       cardId,
       from: source,
-      to: destination
+      to: destination,
+      ...(source?.zone === "monsterZone" && destination.zone !== "monsterZone"
+        ? { resetMonsterState: true }
+        : {})
     });
   }
 
@@ -2910,6 +2913,15 @@ function applyCardMoved(state, event) {
     destinationZone.splice(destinationIndex, 0, event.cardId);
   } else {
     destinationZone.push(event.cardId);
+  }
+  if (event.resetMonsterState && card.type === "monster") {
+    card.used = false;
+    card.changedMode = false;
+    card.attackLockReason = null;
+    card.tempAtk = 0;
+    card.tempDef = 0;
+    card.battleWear = 0;
+    card.destructionProtectionUsed = false;
   }
 }
 

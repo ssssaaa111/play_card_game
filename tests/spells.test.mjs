@@ -499,3 +499,37 @@ test("AI prioritizes a buff that turns the attack line lethal", () => {
   });
   assert.equal(normalScore, 50);
 });
+
+test("AI does not treat an attack reset as lethal through an unbreakable guard", () => {
+  const score = scoreSpellForAi("rallyAttack", {
+    owner: duelist({ owner: "ai", field: [monster({ atk: 2000 }), null, null, null, null] }),
+    rival: duelist({
+      owner: "player",
+      field: [monster({ mode: "defense", def: 4000 }), null, null, null, null],
+      lp: 2000,
+      shield: 0
+    }),
+    aiStyle: "balanced"
+  });
+
+  assert.equal(score, 44);
+});
+
+test("AI models rally attack as readying the first spent monster", () => {
+  const score = scoreSpellForAi("rallyAttack", {
+    owner: duelist({
+      owner: "ai",
+      field: [
+        monster({ id: "strong", atk: 2000, used: false }),
+        monster({ id: "spent", atk: 1000, used: true }),
+        null,
+        null,
+        null
+      ]
+    }),
+    rival: duelist({ owner: "player", lp: 4200, shield: 0 }),
+    aiStyle: "balanced"
+  });
+
+  assert.equal(score, 82);
+});

@@ -84,6 +84,19 @@ test("lookahead estimates the rival lethal threat through a wall", () => {
   assert.equal(threat, 2000);
 });
 
+test("rival lethal lookahead includes monsters that ready at the start of their next turn", () => {
+  const threat = aiRivalLethalThreat({
+    rivalField: [
+      monster({ name: "spent breaker", atk: 3000, used: true }),
+      monster({ name: "spent raider", atk: 2000, used: true })
+    ],
+    ownerField: [monster({ name: "wall", mode: "defense", def: 2600 })],
+    ownerShield: 0
+  });
+
+  assert.equal(threat, 2000);
+});
+
 test("attack sequence planner finds a through-monster lethal line", () => {
   const breaker = { atk: 3000, def: 1000, tempAtk: 0, tempDef: 0, mode: "attack" };
   const raider = { atk: 2000, def: 1000, tempAtk: 0, tempDef: 0, mode: "attack" };
@@ -710,6 +723,35 @@ test("next-turn lethal setup stays silent when two turns cannot kill", () => {
   });
 
   assert.equal(setup, null);
+});
+
+test("next-turn lethal setup does not reuse an attacker destroyed in an equal clash", () => {
+  const ace = monster({ name: "ace", atk: 2000, uid: "ace" });
+  const helper = monster({ name: "helper", atk: 1000, uid: "helper" });
+  const equalThreat = monster({ name: "equal threat", atk: 2000, uid: "equal" });
+  const weakTarget = monster({ name: "weak target", atk: 500, uid: "weak" });
+
+  const setup = findAiNextTurnLethalSetup({
+    attackers: [ace, helper],
+    targets: [equalThreat, weakTarget],
+    shield: 0,
+    directAttacks: 0,
+    rivalLp: 2500
+  });
+  const action = chooseAiAttackAction({
+    owner: { directAttacks: 0, lp: 4000, shield: 0, traps: [] },
+    field: [ace, helper],
+    rivalField: [equalThreat, weakTarget],
+    rivalLp: 2500,
+    rivalShield: 0,
+    aiStyle: "balanced",
+    canAttackMonster: () => true
+  });
+
+  assert.notEqual(setup?.targetIndex, 0, "the equal clash cannot preserve the ace for next turn");
+  assert.equal(action.type, "attack");
+  assert.equal(action.card.uid, "ace");
+  assert.equal(action.targetIndex, 1, "without a false lethal line the ace should remove the weak target");
 });
 
 test("AI prefers the next-turn lethal setup move over a greedy target trade", () => {

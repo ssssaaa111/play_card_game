@@ -2410,7 +2410,7 @@ test("explains active rival continuous pressure and allows the spell after that 
   assert.ok(state.player.hand.includes(finalCounter));
 });
 
-test("trio vow counter permanently raises the weakest monster's attack", () => {
+test("trio vow counter applies a field-scoped boost to the weakest monster", () => {
   const vow = uiSpell("vow-permanent", "trioFinalCounterVow", "trio-final-counter-vow");
   const pawn = uiMonster("vow-pawn", "trio-ember-pawn");
   pawn.atk = 600;
@@ -2423,9 +2423,10 @@ test("trio vow counter permanently raises the weakest monster's attack", () => {
   const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
 
   assert.ok(events.some((event) =>
-    event.type === "STAT_MODIFIED" && event.cardId === pawn.uid && event.stat === "atk" && event.amount === 2100
+    event.type === "STAT_MODIFIED" && event.cardId === pawn.uid && event.stat === "tempAtk" && event.amount === 2100
   ));
-  assert.equal(state.player.field[0].atk, 2700);
+  assert.equal(state.player.field[0].atk, 600);
+  assert.equal(state.player.field[0].tempAtk, 2100);
   assert.ok(state.player.grave.some((card) => card.uid === vow.uid));
 });
 

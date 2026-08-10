@@ -607,10 +607,14 @@ export function shouldSwitchSummonedMonsterToDefense({
   return totalDef(monster) > totalAtk(monster) + 400 && ownerLp < rivalLp;
 }
 
-function aiAttackersList(field) {
+function aiAttackersList(field, { includeUsed = false } = {}) {
   return (field || [])
     .map((card, index) => ({ card, index }))
-    .filter((entry) => entry.card && entry.card.mode !== "defense" && !entry.card.used);
+    .filter((entry) =>
+      entry.card &&
+      entry.card.mode !== "defense" &&
+      (includeUsed || !entry.card.used)
+    );
 }
 
 export function aiMaxDamageThisTurn({ attackers = [], targets = [], shield = 0, directAttacks = 0 } = {}) {
@@ -627,7 +631,7 @@ export function aiMaxDamageThisTurn({ attackers = [], targets = [], shield = 0, 
 
 export function aiRivalLethalThreat({ rivalField = [], ownerField = [], ownerShield = 0 } = {}) {
   return aiMaxDamageThisTurn({
-    attackers: aiAttackersList(rivalField).map((entry) => entry.card),
+    attackers: aiAttackersList(rivalField, { includeUsed: true }).map((entry) => entry.card),
     targets: ownerField.filter(Boolean),
     shield: ownerShield
   });

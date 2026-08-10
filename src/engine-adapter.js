@@ -497,6 +497,15 @@ export function applyUiGameEvents(uiState, events = []) {
     if (event.type === "CARD_MOVED") {
       const card = removeCardFromUiState(uiState, event.cardId);
       insertCardIntoUiState(uiState, card, event.to);
+      if (event.resetMonsterState && card?.type === "monster") {
+        card.used = false;
+        card.changedMode = false;
+        card.attackLockReason = null;
+        card.tempAtk = 0;
+        card.tempDef = 0;
+        card.battleWear = 0;
+        card.destructionProtectionUsed = false;
+      }
       return;
     }
     if (event.type === "CARD_DESTRUCTION_PREVENTED") {

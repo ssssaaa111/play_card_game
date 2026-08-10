@@ -37,7 +37,10 @@ function previewTargetAttackDamage(attacker, target, shield) {
   if (!outcome?.destroysTarget) return null;
   const amounts = [outcome.rawDamage];
   if (!outcome.destroysAttacker) amounts.push(...guaranteedAfterAttackDamage(attacker));
-  return previewDamageSequence(attacker, amounts, shield);
+  return {
+    ...previewDamageSequence(attacker, amounts, shield),
+    destroysAttacker: Boolean(outcome.destroysAttacker)
+  };
 }
 
 export function maximumRemainingAttackDamage(attackers, targets, shield, directAttacks) {
@@ -106,27 +109,39 @@ export function maximumRemainingAttackDamage(attackers, targets, shield, directA
   );
 }
 
-export function findAiAttackSequence({ attackers = [], targets = [], shield = 0, directAttacks = 0 } = {}) {
+export function findAiAttackSequence({
+  attackers = [],
+  targets = [],
+  shield = 0,
+  directAttacks = 0,
+  attackUses = []
+} = {}) {
   const activeAttackers = attackers.filter(Boolean);
   const activeTargets = targets.filter(Boolean);
   if (!activeAttackers.length) return { moves: [], damage: 0 };
   const memo = new Map();
-  const allAttackers = (1 << activeAttackers.length) - 1;
   const allTargets = (1 << activeTargets.length) - 1;
+  const initialUses = activeAttackers.map((card, index) => {
+    const requested = Number(attackUses[index]);
+    return Number.isFinite(requested) ? Math.max(0, Math.floor(requested)) : 1;
+  });
 
-  function search(attackerMask, targetMask, remainingShield, remainingDirectAttacks) {
-    if (attackerMask === 0) return { damage: 0, moves: [] };
-    const key = `${attackerMask}:${targetMask}:${remainingShield}:${remainingDirectAttacks}`;
+  function search(remainingUses, targetMask, remainingShield, remainingDirectAttacks) {
+    if (!remainingUses.some((uses) => uses > 0)) return { damage: 0, moves: [] };
+    const key = `${remainingUses.join(",")}:${targetMask}:${remainingShield}:${remainingDirectAttacks}`;
     if (memo.has(key)) return memo.get(key);
     let best = { damage: 0, moves: [] };
 
     for (let attackerIndex = 0; attackerIndex < activeAttackers.length; attackerIndex += 1) {
-      const attackerBit = 1 << attackerIndex;
-      if ((attackerMask & attackerBit) === 0) continue;
+      if (remainingUses[attackerIndex] <= 0) continue;
       const attacker = activeAttackers[attackerIndex];
-      const nextAttackers = attackerMask & ~attackerBit;
-      const skip = search(nextAttackers, targetMask, remainingShield, remainingDirectAttacks);
+      const skippedUses = [...remainingUses];
+      skippedUses[attackerIndex] = 0;
+      const skip = search(skippedUses, targetMask, remainingShield, remainingDirectAttacks);
       if (skip.damage > best.damage) best = skip;
+
+      const nextUses = [...remainingUses];
+      nextUses[attackerIndex] -= 1;
 
       const naturalDirect = targetMask === 0 || Boolean(attacker?.canDirectAttack);
       if (naturalDirect || remainingDirectAttacks > 0) {
@@ -137,7 +152,7 @@ export function findAiAttackSequence({ attackers = [], targets = [], shield = 0,
         );
         const directCost = naturalDirect ? 0 : 1;
         const follow = search(
-          nextAttackers,
+          nextUses,
           targetMask,
           direct.shieldAfter,
           remainingDirectAttacks - directCost
@@ -152,10 +167,12 @@ export function findAiAttackSequence({ attackers = [], targets = [], shield = 0,
       for (let targetIndex = 0; targetIndex < activeTargets.length; targetIndex += 1) {
         const targetBit = 1 << targetIndex;
         if ((targetMask & targetBit) === 0) continue;
-        const attack = previewTargetAttackDamage(attacker, targets[targetIndex], remainingShield);
+        const attack = previewTargetAttackDamage(attacker, activeTargets[targetIndex], remainingShield);
         if (!attack) continue;
+        const followUses = [...nextUses];
+        if (attack.destroysAttacker) followUses[attackerIndex] = 0;
         const follow = search(
-          nextAttackers,
+          followUses,
           targetMask & ~targetBit,
           attack.shieldAfter,
           remainingDirectAttacks
@@ -173,7 +190,7 @@ export function findAiAttackSequence({ attackers = [], targets = [], shield = 0,
   }
 
   const result = search(
-    allAttackers,
+    initialUses,
     allTargets,
     Math.max(0, Number(shield) || 0),
     Math.max(0, Number(directAttacks) || 0)
@@ -209,7 +226,6 @@ export function findAiNextTurnLethalSetup({
         [totalAtk(attacker), ...guaranteedAfterAttackDamage(attacker)],
         initialShield
       );
-      const directCost = naturalDirect ? 0 : 1;
       const nextTurnMax = maximumRemainingAttackDamage(
         [...remainingAttackers, attacker],
         remainingTargets,
@@ -235,8 +251,11 @@ export function findAiNextTurnLethalSetup({
       const restTargets = activeTargets
         .filter((entry) => entry.index !== targetIndex)
         .map((entry) => entry.card);
+      const nextTurnAttackers = attack.destroysAttacker
+        ? remainingAttackers
+        : [...remainingAttackers, attacker];
       const nextTurnMax = maximumRemainingAttackDamage(
-        [...remainingAttackers, attacker],
+        nextTurnAttackers,
         restTargets,
         attack.shieldAfter,
         0
@@ -770,41 +789,49 @@ const buffSpellMeta = {
   lastStandSurge: { buff: 700, rule: "strongest" },
   buff500: { buff: 500, rule: "strongest" },
   soulResonance: { buff: 200, rule: "strongest" },
-  battleTrance: { buff: 200, rule: "strongest", resets: 1 },
-  rallyAttack: { buff: 300, rule: "strongest", resets: 1 }
+  battleTrance: { buff: 200, rule: "strongest", resets: 1, resetRule: "target" },
+  rallyAttack: { buff: 300, rule: "strongest", resets: 1, resetRule: "firstUsed" }
 };
 
-function buffedAttackers(owner, buff, rule) {
-  const attackers = (owner.field || []).filter((card) => card && card.mode !== "defense" && !card.used);
-  if (!attackers.length) return [];
+function buffedAttackPlan(owner, buff, rule, resets, resetRule) {
+  const monsters = fieldCards(owner);
+  if (!monsters.length) return { attackers: [], attackUses: [] };
   let targetIndex = 0;
-  for (let index = 1; index < attackers.length; index += 1) {
+  for (let index = 1; index < monsters.length; index += 1) {
     const better = rule === "weakest"
-      ? totalAtk(attackers[index]) < totalAtk(attackers[targetIndex])
-      : totalAtk(attackers[index]) > totalAtk(attackers[targetIndex]);
+      ? totalAtk(monsters[index]) < totalAtk(monsters[targetIndex])
+      : totalAtk(monsters[index]) > totalAtk(monsters[targetIndex]);
     if (better) targetIndex = index;
   }
-  return attackers.map((card, index) =>
-    index === targetIndex ? { ...card, tempAtk: (card.tempAtk || 0) + buff } : card
-  );
+  const target = monsters[targetIndex];
+  const resetTarget = resetRule === "firstUsed"
+    ? monsters.find((card) => card.used) || target
+    : target;
+  const attackers = [];
+  const attackUses = [];
+  monsters.forEach((card) => {
+    const canReadyTarget = card === resetTarget && resets > 0 && card.used && !card.attackLockReason;
+    const grantsExtraAttack = card === resetTarget && resets > 0 && !card.used && !card.attackLockReason;
+    if (card.mode === "defense" || card.attackLockReason || (card.used && !canReadyTarget)) return;
+    attackers.push(card === target
+      ? { ...card, tempAtk: (card.tempAtk || 0) + buff, used: false }
+      : card);
+    attackUses.push(1 + (grantsExtraAttack ? resets : 0));
+  });
+  return { attackers, attackUses };
 }
 
-function buffLeadsToLethal({ owner, rival, buff = 0, rule = "strongest", resets = 0 } = {}) {
-  const buffed = buffedAttackers(owner, buff, rule);
-  if (!buffed.length) return false;
+function buffLeadsToLethal({ owner, rival, buff = 0, rule = "strongest", resets = 0, resetRule = "target" } = {}) {
+  if (owner?.attacksSkipped) return false;
+  const plan = buffedAttackPlan(owner, buff, rule, resets, resetRule);
+  if (!plan.attackers.length) return false;
   const targets = (rival?.field || []).filter(Boolean);
-  let damage = findAiAttackSequence({
-    attackers: buffed,
+  const damage = findAiAttackSequence({
+    attackers: plan.attackers,
     targets,
     shield: Number(rival?.shield) || 0,
-    directAttacks: 0
+    directAttacks: Number(owner?.directAttacks) || 0,
+    attackUses: plan.attackUses
   }).damage;
-  if (resets > 0) {
-    let strongestIndex = 0;
-    for (let index = 1; index < buffed.length; index += 1) {
-      if (totalAtk(buffed[index]) > totalAtk(buffed[strongestIndex])) strongestIndex = index;
-    }
-    damage += resets * totalAtk(buffed[strongestIndex]);
-  }
   return damage >= Number(rival?.lp) || 0;
 }

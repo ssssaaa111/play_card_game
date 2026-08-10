@@ -1266,6 +1266,71 @@ test("starwake recall revives only legal graveyard monster targets", () => {
   assertValidGameState(next);
 });
 
+test("trio vow attack boost expires when its monster leaves the field", () => {
+  const state = makeState({
+    cards: [
+      card("vow-1", { templateId: "trio-final-counter-vow", effect: "trioFinalCounterVow" }),
+      card("dismiss-1", { templateId: "test-dismiss", effect: "dismissOwnMonster" }),
+      card("recall-1", { templateId: "trio-ember-recall", effect: "graveRevive" }),
+      card("pawn-1", {
+        templateId: "trio-ember-pawn",
+        type: "monster",
+        atk: 600,
+        def: 600,
+        mode: "attack",
+        used: false,
+        changedMode: false,
+        tempAtk: 0,
+        tempDef: 0,
+        battleWear: 0
+      })
+    ],
+    player: {
+      lp: 1300,
+      hand: ["vow-1", "dismiss-1", "recall-1"],
+      monsterZone: ["pawn-1"]
+    }
+  });
+  const engine = new GameEngine(state, {
+    cardEffects: {
+      dismissOwnMonster: {
+        duration: "oneShot",
+        target: { player: "self", zone: "monsterZone", cardType: "monster" },
+        operations: [{ op: "destroyCard", cardId: "$action.targetCardId" }]
+      }
+    }
+  });
+
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "vow-1" });
+  assert.equal(engine.getState().cards["pawn-1"].atk, 600);
+  assert.equal(engine.getState().cards["pawn-1"].tempAtk, 2100);
+
+  const leaveEvents = engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "dismiss-1",
+    targetCardId: "pawn-1"
+  });
+  const graveState = engine.getState();
+  assert.ok(graveState.players[PLAYER].grave.includes("pawn-1"));
+  assert.equal(graveState.cards["pawn-1"].tempAtk, 0);
+  assert.ok(leaveEvents.some((event) =>
+    event.type === "CARD_MOVED" && event.cardId === "pawn-1" && event.resetMonsterState === true
+  ));
+
+  engine.dispatch({
+    type: "ACTIVATE_CARD",
+    playerId: PLAYER,
+    rivalId: AI,
+    cardId: "recall-1",
+    targetCardId: "pawn-1"
+  });
+  const revived = engine.getState().cards["pawn-1"];
+  assert.equal(revived.atk, 600);
+  assert.equal(revived.tempAtk, 0);
+});
+
 test("normal summon clears stale field state carried through other zones", () => {
   const state = makeState({
     cards: [card("recycled-1", {
