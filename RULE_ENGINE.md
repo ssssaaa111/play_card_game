@@ -128,7 +128,7 @@ The validator catches:
 - A queued `attackReset` is spent automatically when an attack chance is consumed; a surviving attacker is readied through `MONSTER_READIED`.
 - Element combos resolve through `RESOLVE_ELEMENT_COMBOS`. `COMBO_TRIGGERED` and `CHARACTER_PASSIVE_TRIGGERED` own the combo and once-per-turn passive flags.
 - Element combos and character passives declare `operations`; UI code and card configuration must not store free functions that mutate rule state.
-- Attack-after effects use the same DSL registry through the monster `afterAttack` key, so custom and existing monster effects share one implementation path.
+- Attack-after effects use the same DSL registry through the monster `afterAttack` key, so custom and existing monster effects share one implementation path. Successful DSL execution emits `AFTER_ATTACK_EFFECT_RESOLVED`; a targeted hook with no declaration target emits no resolution marker, while an earlier locked target leaving its zone remains an explicit `EFFECT_SKIPPED` result.
 
 ## UI action windows
 

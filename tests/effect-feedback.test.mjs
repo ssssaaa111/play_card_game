@@ -8,6 +8,7 @@ import {
   findAfterAttackDamageAndGrowthEvents,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
+  rewindDamageForHud,
   shouldLogGenericDestroyedEvent,
   statChangeText
 } from "../src/effect-feedback.js";
@@ -93,4 +94,20 @@ test("pairs effect damage with growth only for the matching after-attack effect"
   });
   assert.equal(ordinaryGrowth.damageEvent, null);
   assert.equal(ordinaryGrowth.growEvent, events[3]);
+});
+
+test("rewinds one resolved damage event for staged HUD feedback without mutating rules state", () => {
+  const player = { owner: "player", lp: 0, shield: 0, deck: [], grave: [] };
+  const staged = rewindDamageForHud(player, {
+    type: "DAMAGE_DEALT",
+    playerId: "player",
+    amount: 200,
+    blocked: 100,
+    shieldPierced: 50
+  });
+
+  assert.deepEqual(staged, { ...player, lp: 200, shield: 150 });
+  assert.deepEqual(player, { owner: "player", lp: 0, shield: 0, deck: [], grave: [] });
+  assert.equal(rewindDamageForHud(player, null), player);
+  assert.equal(rewindDamageForHud(player, { type: "DAMAGE_DEALT", playerId: "ai", amount: 300 }), player);
 });

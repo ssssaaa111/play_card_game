@@ -114,21 +114,42 @@ export function findAiAttackSequence({
   targets = [],
   shield = 0,
   directAttacks = 0,
-  attackUses = []
+  attackUses = [],
+  damageGoal = null
 } = {}) {
   const activeAttackers = attackers.filter(Boolean);
   const activeTargets = targets.filter(Boolean);
   if (!activeAttackers.length) return { moves: [], damage: 0 };
   const memo = new Map();
   const allTargets = (1 << activeTargets.length) - 1;
+  const initialDamageGoal = damageGoal !== null && damageGoal !== undefined && Number.isFinite(Number(damageGoal))
+    ? Math.max(0, Number(damageGoal))
+    : null;
   const initialUses = activeAttackers.map((card, index) => {
     const requested = Number(attackUses[index]);
     return Number.isFinite(requested) ? Math.max(0, Math.floor(requested)) : 1;
   });
 
-  function search(remainingUses, targetMask, remainingShield, remainingDirectAttacks) {
-    if (!remainingUses.some((uses) => uses > 0)) return { damage: 0, moves: [] };
-    const key = `${remainingUses.join(",")}:${targetMask}:${remainingShield}:${remainingDirectAttacks}`;
+  function preferCandidate(candidate, best, remainingDamageGoal) {
+    if (remainingDamageGoal !== null) {
+      const candidateCompletes = candidate.damage >= remainingDamageGoal;
+      const bestCompletes = best.damage >= remainingDamageGoal;
+      if (candidateCompletes !== bestCompletes) return candidateCompletes;
+      if (candidateCompletes) {
+        const candidateExcess = candidate.damage - remainingDamageGoal;
+        const bestExcess = best.damage - remainingDamageGoal;
+        if (candidateExcess !== bestExcess) return candidateExcess < bestExcess;
+        if (candidate.moves.length !== best.moves.length) return candidate.moves.length < best.moves.length;
+      }
+    }
+    return candidate.damage > best.damage;
+  }
+
+  function search(remainingUses, targetMask, remainingShield, remainingDirectAttacks, remainingDamageGoal) {
+    if (remainingDamageGoal === 0 || !remainingUses.some((uses) => uses > 0)) {
+      return { damage: 0, moves: [] };
+    }
+    const key = `${remainingUses.join(",")}:${targetMask}:${remainingShield}:${remainingDirectAttacks}:${remainingDamageGoal ?? "max"}`;
     if (memo.has(key)) return memo.get(key);
     let best = { damage: 0, moves: [] };
 
@@ -137,8 +158,8 @@ export function findAiAttackSequence({
       const attacker = activeAttackers[attackerIndex];
       const skippedUses = [...remainingUses];
       skippedUses[attackerIndex] = 0;
-      const skip = search(skippedUses, targetMask, remainingShield, remainingDirectAttacks);
-      if (skip.damage > best.damage) best = skip;
+      const skip = search(skippedUses, targetMask, remainingShield, remainingDirectAttacks, remainingDamageGoal);
+      if (preferCandidate(skip, best, remainingDamageGoal)) best = skip;
 
       const nextUses = [...remainingUses];
       nextUses[attackerIndex] -= 1;
@@ -155,13 +176,14 @@ export function findAiAttackSequence({
           nextUses,
           targetMask,
           direct.shieldAfter,
-          remainingDirectAttacks - directCost
+          remainingDirectAttacks - directCost,
+          remainingDamageGoal === null ? null : Math.max(0, remainingDamageGoal - direct.finalDamage)
         );
         const candidate = {
           damage: direct.finalDamage + follow.damage,
           moves: [{ attackerIndex, targetIndex: -1 }, ...follow.moves]
         };
-        if (candidate.damage > best.damage) best = candidate;
+        if (preferCandidate(candidate, best, remainingDamageGoal)) best = candidate;
       }
 
       for (let targetIndex = 0; targetIndex < activeTargets.length; targetIndex += 1) {
@@ -175,13 +197,14 @@ export function findAiAttackSequence({
           followUses,
           targetMask & ~targetBit,
           attack.shieldAfter,
-          remainingDirectAttacks
+          remainingDirectAttacks,
+          remainingDamageGoal === null ? null : Math.max(0, remainingDamageGoal - attack.finalDamage)
         );
         const candidate = {
           damage: attack.finalDamage + follow.damage,
           moves: [{ attackerIndex, targetIndex }, ...follow.moves]
         };
-        if (candidate.damage > best.damage) best = candidate;
+        if (preferCandidate(candidate, best, remainingDamageGoal)) best = candidate;
       }
     }
 
@@ -193,7 +216,8 @@ export function findAiAttackSequence({
     initialUses,
     allTargets,
     Math.max(0, Number(shield) || 0),
-    Math.max(0, Number(directAttacks) || 0)
+    Math.max(0, Number(directAttacks) || 0),
+    initialDamageGoal
   );
   return { moves: result.moves, damage: result.damage };
 }

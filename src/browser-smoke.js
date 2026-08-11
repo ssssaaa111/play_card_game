@@ -1182,8 +1182,8 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
     `${smokeName}: AI reveals star after-attack effect`,
     12000
   );
-  if (ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "0 / 4000") {
-    throw new Error(`${smokeName}: resolved lethal LP must reach the HUD before the star effect reveal. ${smokeDebug(ctx)}`);
+  if (ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "300 / 4000") {
+    throw new Error(`${smokeName}: the HUD must stage base attack damage before revealing the lethal star effect. ${smokeDebug(ctx)}`);
   }
   const starEffectSummary = ctx.els.aiRevealSummary?.textContent || "";
   if (!starEffectSummary.includes("追加造成 300 点伤害") ||
@@ -1212,7 +1212,8 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
   }
   if (damage.length !== 2 || damage[0] !== 2400 || damage[1] !== 300 ||
       !ctx.state.player.field.some((card) => card?.uid === saint.uid) ||
-      ctx.state.player.lp !== 0 || star.tempAtk !== 300) {
+      ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "0 / 4000" ||
+      star.tempAtk !== 300) {
     throw new Error(`${smokeName}: star must deal 2400 plus 300 while leaving the bypassed monster in play. ${smokeDebug(ctx)}`);
   }
   const starEffectLog = (ctx.state.log || []).find((entry) => {
@@ -1246,12 +1247,22 @@ async function runTrioCombinedLethalPlanningBasicSmoke(ctx) {
     12000
   );
   clickSmokeElementCenter(ctx.els.aiRevealContinue, `${smokeName}: continue direct strike reveal`);
-  await waitForSmoke(
-    () => aiRevealVisible(ctx.els, "trio-sun-judicator"),
-    `${smokeName}: AI reveals sun after-attack effect`,
-    12000
-  );
-  clickSmokeElementCenter(ctx.els.aiRevealContinue, `${smokeName}: continue sun effect reveal`);
+  try {
+    await waitForSmoke(
+      () => aiRevealVisible(ctx.els),
+      `${smokeName}: AI reaches the next real public effect`,
+      30000
+    );
+  } catch (error) {
+    throw new Error(`${error.message}. ${smokeDebug(ctx)}`);
+  }
+  if (aiRevealVisible(ctx.els, "trio-sun-judicator")) {
+    throw new Error(`${smokeName}: sun must not reveal an after-attack effect without a declaration target. ${smokeDebug(ctx)}`);
+  }
+  if (!aiRevealVisible(ctx.els, "trio-star-herald")) {
+    throw new Error(`${smokeName}: star should be the next real public after-attack effect. ${smokeDebug(ctx)}`);
+  }
+  clickSmokeElementCenter(ctx.els.aiRevealContinue, `${smokeName}: continue star effect reveal`);
   await waitForSmoke(
     () => ctx.state.gameOver && ctx.state.gameOverWinner === "ai" && !ctx.state.aiRunning,
     `${smokeName}: direct and follow-up attacks end the duel. ${smokeDebug(ctx)}`,

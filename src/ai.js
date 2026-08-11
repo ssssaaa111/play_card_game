@@ -734,7 +734,8 @@ export function chooseAiAttackAction({
     attackers: attackers.map((entry) => entry.card),
     targets: targetEntries.map((entry) => entry.card),
     shield: rivalShield,
-    directAttacks: owner?.directAttacks || 0
+    directAttacks: owner?.directAttacks || 0,
+    damageGoal: rivalLp
   });
   if (sequencePlan.damage >= rivalLp && sequencePlan.moves.length > 0) {
     const first = sequencePlan.moves[0];
