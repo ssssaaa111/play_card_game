@@ -4603,6 +4603,11 @@ async function aiPlaySpells({ turnGoal = "pressure", timing = "beforeSummon" } =
         `对手在三曜部署完成后才发动「${playedCard.name}」，避免把强化浪费在祭品上。`,
         cardLogMeta(playedCard, { actor: "ai", type: "decision" })
       );
+    } else if (action.reason === "tributeDevelopment") {
+      addLog(
+        `对手发动「${playedCard.name}」补充祭品候选，为下一次三祭品降神做准备。`,
+        cardLogMeta(playedCard, { actor: "ai", type: "decision" })
+      );
     }
     await sleep(1650);
     action = chooseAiSpellAction({

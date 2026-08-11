@@ -876,6 +876,95 @@ async function runTrioTurnPlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioStagedTributePlanningBasicSmoke(ctx) {
+  const smokeName = "trio-staged-tribute-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioStagedTributePlanning");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") ||
+      !ctx.state.ai.hand.some((card) => card?.id === "trio-moon-warden") ||
+      !ctx.state.ai.hand.some((card) => card?.id === "spark-split")) {
+    throw new Error(`${smokeName}: staged tribute fixture is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && !ctx.state.aiRunning,
+    `${smokeName}: AI completes split-token tribute development. ${smokeDebug(ctx)}`,
+    42000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const splitIndex = events.findIndex((event) =>
+    event.type === "CARD_ACTIVATED" && eventReferencesTemplate(event, "spark-split")
+  );
+  const moonSummonIndex = events.findIndex((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.summonType === "tribute" &&
+    eventReferencesTemplate(event, "trio-moon-warden")
+  );
+  const tokenSummons = events.filter((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.summonType === "token"
+  );
+  const moonTributes = events.filter((event) =>
+    event.type === "CARD_TRIBUTED" && eventReferencesTemplate(event, "trio-moon-warden")
+  );
+  const decisionLog = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("补充祭品候选")
+  );
+
+  if (splitIndex < 0 || moonSummonIndex <= splitIndex || tokenSummons.length !== 2 || moonTributes.length !== 3) {
+    throw new Error(`${smokeName}: split must create two tokens before moon consumes three tributes. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") ||
+      !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") ||
+      ctx.state.ai.field.some((card) => card?.id === "trio-star-herald") ||
+      events.some((event) => event.type === "TRIO_CONVERGENCE_RESOLVED")) {
+    throw new Error(`${smokeName}: staged summon must preserve sun without converging star. ${smokeDebug(ctx)}`);
+  }
+  if (!decisionLog || decisionLog.cardId !== "spark-split") {
+    throw new Error(`${smokeName}: public AI log must explain tribute development. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
+  const smokeName = "trio-omega-ascension-opening-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaAscension");
+  if (ctx.state.ai.field.some((card) => card?.archetype === "三曜神格")) {
+    throw new Error(`${smokeName}: no god should be preloaded on the field. ${smokeDebug(ctx)}`);
+  }
+  const openingGods = ctx.state.ai.hand.filter((card) => card?.archetype === "三曜神格");
+  if (openingGods.length !== 1 || openingGods[0].id !== "trio-sun-judicator") {
+    throw new Error(`${smokeName}: opening hand should expose only sun to the AI plan. ${smokeDebug(ctx)}`);
+  }
+
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.els.aiRevealModal?.classList.contains("show"),
+    `${smokeName}: sun tribute summon reaches its public reveal. ${smokeDebug(ctx)}`,
+    32000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const godsOnField = ctx.state.ai.field.filter((card) => card?.archetype === "三曜神格");
+  const sunTributes = events.filter((event) =>
+    event.type === "CARD_TRIBUTED" && eventReferencesTemplate(event, "trio-sun-judicator")
+  );
+  if (godsOnField.length !== 1 || godsOnField[0].id !== "trio-sun-judicator" || sunTributes.length !== 3) {
+    throw new Error(`${smokeName}: first god must be sun after exactly three tributes. ${smokeDebug(ctx)}`);
+  }
+  if (events.some((event) => event.type === "TRIO_CONVERGENCE_RESOLVED") ||
+      ctx.state.ai.hand.some((card) => ["trio-moon-warden", "trio-star-herald"].includes(card?.id))) {
+    throw new Error(`${smokeName}: combo draw must not pull a second god into the first convergence window. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioTrapPlanningBasicSmoke(ctx) {
   const smokeName = "trio-trap-planning-basic";
   setSmokeStatus("running", smokeName);
@@ -9067,6 +9156,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke,
     "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
     "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
+    "trio-staged-tribute-planning-basic": runTrioStagedTributePlanningBasicSmoke,
+    "trio-omega-ascension-opening-basic": runTrioOmegaAscensionOpeningBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "trio-trap-reserve-planning-basic": runTrioTrapReservePlanningBasicSmoke,
     "trio-direct-trap-planning-basic": runTrioDirectTrapPlanningBasicSmoke,

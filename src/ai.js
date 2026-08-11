@@ -468,6 +468,9 @@ export function chooseAiSpellAction({
   const shouldResumeMonsterInvestment = aiStyle === "scriptedPressure" &&
     turnGoal === "deployTrio" &&
     timing === "afterSummon";
+  const tributeBodies = (owner?.field || [])
+    .filter((card) => card && !isTrioPressureMonster(card))
+    .length;
   const candidates = hand
     .map((card, index) => ({ card, index }))
     .filter(({ card, index }) =>
@@ -481,18 +484,27 @@ export function chooseAiSpellAction({
     .filter(({ card }) =>
       !shouldResumeMonsterInvestment || summonSensitiveSpellEffects.has(card.effect)
     )
-    .map(({ card, index }) => ({
-      type: "spell",
-      card,
-      handIndex: index,
-      score: scoreSpellForAi(card.effect, { owner, rival, aiStyle }),
-      reason: aiStyle === "scriptedPressure" &&
-        turnGoal === "deployTrio" &&
-        timing === "afterSummon" &&
-        summonSensitiveSpellEffects.has(card.effect)
-        ? "trioDeploymentFirst"
-        : ""
-    }))
+    .map(({ card, index }) => {
+      const developsTributes = aiStyle === "scriptedPressure" &&
+        turnGoal === "buildTributes" &&
+        timing === "beforeSummon" &&
+        card.effect === "splitToken" &&
+        tributeBodies < 3;
+      return {
+        type: "spell",
+        card,
+        handIndex: index,
+        score: developsTributes ? 94 : scoreSpellForAi(card.effect, { owner, rival, aiStyle }),
+        reason: developsTributes
+          ? "tributeDevelopment"
+          : aiStyle === "scriptedPressure" &&
+            turnGoal === "deployTrio" &&
+            timing === "afterSummon" &&
+            summonSensitiveSpellEffects.has(card.effect)
+            ? "trioDeploymentFirst"
+            : ""
+      };
+    })
     .filter((entry) => entry.score >= minScore)
     .sort((a, b) => b.score - a.score || a.handIndex - b.handIndex);
 
@@ -862,9 +874,10 @@ export function chooseAiTurnGoal({
 } = {}) {
   if (aiStyle !== "scriptedPressure") return "pressure";
   const summon = chooseAiSummonAction({ hand, field, aiStyle, canSummon });
-  return summon?.tributeCost === 3 && isTrioPressureMonster(summon.card)
-    ? "deployTrio"
-    : "pressure";
+  if (summon?.tributeCost === 3 && isTrioPressureMonster(summon.card)) return "deployTrio";
+  const trioWaiting = hand.some((card) => isTrioPressureMonster(card));
+  const tributeBodies = field.filter((card) => card && !isTrioPressureMonster(card)).length;
+  return trioWaiting && tributeBodies < 3 ? "buildTributes" : "pressure";
 }
 
 export function aiSupportZoneReserve({

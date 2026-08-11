@@ -1036,7 +1036,7 @@ test("scripted pressure AI selects ordinary bodies before trio gods as tribute",
   assert.equal(action.fieldIndex, 2);
 });
 
-test("scripted pressure AI adopts a trio deployment goal only for a legal three-tribute summon", () => {
+test("scripted pressure AI distinguishes legal trio deployment from tribute development", () => {
   const field = [
     monster({ id: "material-1" }),
     monster({ id: "material-2" }),
@@ -1065,7 +1065,40 @@ test("scripted pressure AI adopts a trio deployment goal only for a legal three-
     field: [field[0], field[1], null, null, null],
     aiStyle: "scriptedPressure",
     canSummon: () => false
-  }), "pressure");
+  }), "buildTributes");
+});
+
+test("scripted pressure AI uses split tokens to build tribute bodies for a staged trio summon", () => {
+  const sun = monster({ id: "trio-sun-judicator", atk: 3000, stars: 7, tributeCost: 3 });
+  const fodder = monster({ id: "nova-squire", atk: 1250, stars: 3 });
+  const moon = monster({ id: "trio-moon-warden", atk: 2100, stars: 6, tributeCost: 3 });
+  const split = { id: "spark-split", type: "spell", effect: "splitToken", name: "星火分裂" };
+  const owner = {
+    lp: 4000,
+    hand: [moon, split],
+    field: [sun, fodder, null, null, null],
+    traps: []
+  };
+
+  const turnGoal = chooseAiTurnGoal({
+    hand: owner.hand,
+    field: owner.field,
+    aiStyle: "scriptedPressure",
+    canSummon: () => false
+  });
+  const action = chooseAiSpellAction({
+    hand: owner.hand,
+    owner,
+    rival: { lp: 4000, field: [], traps: [] },
+    aiStyle: "scriptedPressure",
+    turnGoal,
+    timing: "beforeSummon",
+    canActivateSpell: (card) => card.effect === "splitToken"
+  });
+
+  assert.equal(turnGoal, "buildTributes");
+  assert.equal(action?.card, split);
+  assert.equal(action?.reason, "tributeDevelopment");
 });
 
 test("AI defense switch policy is explicit", () => {
