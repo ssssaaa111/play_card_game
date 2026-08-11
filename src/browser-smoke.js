@@ -4409,8 +4409,9 @@ async function runSunflareHiddenTargetReadabilityBasicSmoke(ctx) {
   await waitForSmoke(
     () => ctx.state.pendingTarget?.selectedTarget?.cardUid === secondSupport.uid &&
       trapSlot(ctx.els, "ai", 1)?.getAttribute("aria-label")?.includes("已选择为效果目标") &&
+      ctx.els.toast?.textContent === "盖放卡牌（敌方魔陷区 2）已选为目标，请确认攻击。" &&
       !ctx.els.choiceConfirmBtn.disabled,
-    `${smokeName}: second concealed slot selected as an effect target`
+    `${smokeName}: second concealed slot selected with attack confirmation copy`
   );
   const selectedTargetText = [
     ctx.els.choiceText.textContent,

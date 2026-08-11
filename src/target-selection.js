@@ -215,6 +215,11 @@ export function targetSelectionTargetLabel(target) {
   return `${target.card?.name || "怪兽"}（${owner}怪兽区 ${position}）`;
 }
 
+export function targetSelectionConfirmationText(pending, target) {
+  const action = pending?.purpose === "afterAttackTarget" ? "攻击" : "发动";
+  return `${targetSelectionTargetLabel(target)}已选为目标，请确认${action}。`;
+}
+
 export function buildTargetSelectionDisplay(pending, duelists = {}) {
   if (!pending) {
     return {

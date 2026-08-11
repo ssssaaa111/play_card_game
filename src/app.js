@@ -138,6 +138,7 @@ import {
   resolveSelectedTargetSelection,
   selectTargetSelection,
   spellNeedsManualTarget,
+  targetSelectionConfirmationText,
   targetSelectionForCard,
   targetSelectionTargetLabel,
   targetSelectionPrompt,
@@ -1427,7 +1428,7 @@ function selectPendingSpellTarget(ownerName, index, zone = "field") {
   state.pendingTarget = selectTargetSelection(state.pendingTarget, targetInfo, { source: "player" });
   const display = currentTargetSelectionDisplay();
   playSound("click");
-  cue(`${targetSelectionTargetLabel(targetInfo)}已选为目标，请确认发动。`);
+  cue(targetSelectionConfirmationText(state.pendingTarget, targetInfo));
   render();
   resetPlayerIdleCountdown();
   return true;

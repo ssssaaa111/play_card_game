@@ -13,6 +13,7 @@ import {
   resolveSelectedTargetSelection,
   selectTargetSelection,
   spellNeedsManualTarget,
+  targetSelectionConfirmationText,
   targetSelectionForCard,
   targetSelectionPrompt,
   validateTargetSelection
@@ -390,4 +391,23 @@ test("selected concealed enemy support targets never expose their card name", ()
 
   assert.match(display.text, /盖放卡牌（敌方魔陷区 1）/);
   assert.doesNotMatch(display.text, /镜光反制/);
+});
+
+test("target confirmation text distinguishes spell activation from an attack declaration", () => {
+  const state = duelists();
+  state.ai.traps[0] = { id: "mirror-snare", uid: "hidden-trap-1", type: "trap", name: "镜光反制" };
+  const spellPending = targetSelectionForCard(
+    { id: "dispelling-ray", uid: "ray-1", type: "spell", name: "解印射线", effect: "destroySpellTrap" },
+    effects
+  );
+  const target = validateTargetSelection(spellPending, state, "ai", 0, "traps");
+
+  assert.equal(
+    targetSelectionConfirmationText(spellPending, target),
+    "盖放卡牌（敌方魔陷区 1）已选为目标，请确认发动。"
+  );
+  assert.equal(
+    targetSelectionConfirmationText({ ...spellPending, purpose: "afterAttackTarget" }, target),
+    "盖放卡牌（敌方魔陷区 1）已选为目标，请确认攻击。"
+  );
 });
