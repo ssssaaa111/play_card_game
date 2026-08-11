@@ -995,6 +995,11 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   const smokeName = "trio-omega-ascension-opening-basic";
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "protagonistTrioOmegaAscension");
+  if (ctx.els.duelHint?.dataset.kind !== "objective" ||
+      !ctx.els.duelHint?.title.includes("第一神降临准备") ||
+      !ctx.els.duelHint?.title.includes("3/3")) {
+    throw new Error(`${smokeName}: opening objective must expose the public 3/3 tribute window. ${smokeDebug(ctx)}`);
+  }
   if (ctx.state.ai.field.some((card) => card?.archetype === "三曜神格")) {
     throw new Error(`${smokeName}: no god should be preloaded on the field. ${smokeDebug(ctx)}`);
   }
@@ -1024,6 +1029,13 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
       ctx.state.ai.hand.some((card) => ["trio-moon-warden", "trio-star-herald"].includes(card?.id))) {
     throw new Error(`${smokeName}: combo draw must not pull a second god into the first convergence window. ${smokeDebug(ctx)}`);
   }
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue sun reveal`);
+  await waitForSmoke(
+    () => ctx.els.duelHint?.title.includes("第一神已降临") &&
+      ctx.els.duelHint?.title.includes("下一次降神重建 1/3"),
+    `${smokeName}: objective advances to the public 1/3 rebuild after sun. ${smokeDebug(ctx)}`,
+    6000
+  );
   setSmokeStatus("passed", smokeName);
 }
 

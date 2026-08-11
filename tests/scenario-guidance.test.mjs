@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { scenarioTacticalGoal } from "../src/scenario-guidance.js";
+import {
+  projectTrioAscensionObjective,
+  scenarioTacticalGoal
+} from "../src/scenario-guidance.js";
 
 function card(id) {
   return { id };
@@ -170,4 +173,94 @@ test("guides the trio route from low-star recovery into the finale", () => {
 test("only adds tactical goals to active trio scenarios", () => {
   assert.equal(scenarioTacticalGoal({ started: false, scenarioId: "protagonistTrioOmega" }), "");
   assert.equal(scenarioTacticalGoal({ started: true, scenarioId: "normal" }), "");
+});
+
+test("projects ascension progress from public summon events without reading AI hand", () => {
+  const hiddenAi = {
+    field: [card("iron-guardian"), card("rift-bulwark"), card("void-hound"), card("nova-squire")],
+    traps: [],
+    get hand() {
+      throw new Error("ascension objective must not inspect hidden AI hand");
+    }
+  };
+  const opening = trioState({
+    scenarioId: "protagonistTrioOmegaAscension",
+    ai: hiddenAi
+  });
+
+  assert.deepEqual(projectTrioAscensionObjective(opening), {
+    stage: "firstGod",
+    completedGodSummons: 0,
+    tributeCandidates: 4,
+    tributeProgress: 3,
+    goal: "第一神降临准备：对手已有 3/3 只公开祭品候选，现在是切断祭品链的最后窗口。"
+  });
+  assert.equal(scenarioTacticalGoal(opening), projectTrioAscensionObjective(opening).goal);
+
+  const afterFirstGod = {
+    ...opening,
+    ai: {
+      field: [
+        { id: "trio-sun-judicator", archetype: "三曜神格" },
+        card("nova-squire"),
+        null,
+        null,
+        null
+      ],
+      traps: []
+    },
+    gameEvents: [
+      { type: "CARD_TRIBUTED", playerId: "ai", cardId: "tribute-1", summonCardId: "sun-1", tributeCost: 3 },
+      { type: "CARD_TRIBUTED", playerId: "ai", cardId: "tribute-2", summonCardId: "sun-1", tributeCost: 3 },
+      { type: "CARD_TRIBUTED", playerId: "ai", cardId: "tribute-3", summonCardId: "sun-1", tributeCost: 3 },
+      { type: "MONSTER_SUMMONED", playerId: "ai", cardId: "sun-1", summonType: "tribute" },
+      { type: "MONSTER_SUMMONED", playerId: "ai", cardId: "moon-1", summonType: "trioConvergence" }
+    ]
+  };
+
+  assert.deepEqual(projectTrioAscensionObjective(afterFirstGod), {
+    stage: "rebuildSecond",
+    completedGodSummons: 1,
+    tributeCandidates: 1,
+    tributeProgress: 1,
+    goal: "第一神已降临 · 下一次降神重建 1/3：清理公开祭品可以真实推迟第二次降神。"
+  });
+});
+
+test("ascension objective advances only after independent three-tribute summons", () => {
+  const events = [];
+  for (const [summonCardId, prefix] of [["sun-1", "a"], ["moon-1", "b"]]) {
+    for (let index = 1; index <= 3; index += 1) {
+      events.push({
+        type: "CARD_TRIBUTED",
+        playerId: "ai",
+        cardId: `${prefix}-${index}`,
+        summonCardId,
+        tributeCost: 3
+      });
+    }
+    events.push({ type: "MONSTER_SUMMONED", playerId: "ai", cardId: summonCardId, summonType: "tribute" });
+  }
+  const state = trioState({
+    scenarioId: "protagonistTrioOmegaAscension",
+    ai: {
+      field: [
+        { id: "trio-sun-judicator", archetype: "三曜神格" },
+        { id: "trio-moon-warden", archetype: "三曜神格" },
+        card("spark-fragment-token"),
+        card("flare-gale-archon"),
+        null
+      ],
+      traps: []
+    },
+    gameEvents: events
+  });
+
+  assert.deepEqual(projectTrioAscensionObjective(state), {
+    stage: "rebuildFinal",
+    completedGodSummons: 2,
+    tributeCandidates: 2,
+    tributeProgress: 2,
+    goal: "两次独立降神已完成 · 最终降神准备 2/3：再清掉一只公开祭品就能延后第三神。"
+  });
 });
