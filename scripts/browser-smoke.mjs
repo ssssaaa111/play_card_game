@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { removeBrowserProfileDir } from "./browser-smoke-cleanup.mjs";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:5177";
 const DEFAULT_VIRTUAL_TIME_BUDGET_MS = 60000;
@@ -174,6 +175,7 @@ async function createBrowserProfileDir() {
 async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin, seed = "" }) {
   const profileDir = await createBrowserProfileDir();
   const url = `${baseUrl}/?test=1&smoke=${encodeURIComponent(smoke)}${seed ? `&seed=${encodeURIComponent(seed)}` : ""}&t=${Date.now()}`;
+  let smokeError = null;
   try {
     const result = await runBrowser({
       browserBin,
@@ -192,8 +194,16 @@ async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin, seed = "" }) {
       throw new Error(`${smoke} ${status || "missing-status"} ${detail ? `(${detail})` : ""}\n${diagnostic}`);
     }
     console.log(`${smoke} passed ${detail ? `(${detail})` : ""}`);
+  } catch (error) {
+    smokeError = error;
+    throw error;
   } finally {
-    await rm(profileDir, { recursive: true, force: true });
+    try {
+      await removeBrowserProfileDir(profileDir);
+    } catch (cleanupError) {
+      if (!smokeError) throw cleanupError;
+      console.error(`Browser profile cleanup also failed: ${cleanupError.message || cleanupError}`);
+    }
   }
 }
 

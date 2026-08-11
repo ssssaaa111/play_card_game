@@ -4453,14 +4453,17 @@ function resolveAfterAttackEffect(effects, state, ctx, emit, playerId, rivalId, 
   }
   const skipReason = effectRequirementFailure(definition, state, effectAction, attacker);
   if (skipReason) return;
+  const resultEventStart = state.events.length;
   runEffect(effects, attacker.afterAttack, ctx, effectAction, attacker);
+  const resultEventIds = state.events.slice(resultEventStart).map((event) => event.id);
   emit("AFTER_ATTACK_EFFECT_RESOLVED", {
     playerId,
     rivalId,
     cardId: attackerCardId,
     effectId: attacker.afterAttack,
     sourceCardId: attackerCardId,
-    targetCardId: effectAction.afterAttackTargetCardId || null
+    targetCardId: effectAction.afterAttackTargetCardId || null,
+    resultEventIds
   });
 }
 

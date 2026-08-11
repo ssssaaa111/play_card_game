@@ -1285,6 +1285,12 @@ async function runTrioCombinedLethalPlanningBasicSmoke(ctx) {
       ctx.state.player.lp !== 0 || star.tempAtk !== 300) {
     throw new Error(`${smokeName}: combined lethal must deal 3000, 1200, and 300 while bypassing saint. ${smokeDebug(ctx)}`);
   }
+  const messages = (ctx.state.log || []).map(logEntryMessage);
+  if (!messages.some((message) => message.includes("差值 1200") && message.includes("造成 1200 点战斗伤害")) ||
+      messages.some((message) => message.includes("造成 1500 点战斗伤害")) ||
+      !messages.some((message) => message.includes("追加造成 300 点伤害"))) {
+    throw new Error(`${smokeName}: base battle damage and the 300-point after-attack effect must have separate log entries. ${smokeDebug(ctx)}`);
+  }
   setSmokeStatus("passed", smokeName);
 }
 

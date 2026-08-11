@@ -56,6 +56,7 @@ import {
   afterAttackBackrowDestroyedText,
   afterAttackDamageAndGrowthText,
   afterAttackLockedTargetLostText,
+  battleDamageAmount,
   findAfterAttackDamageAndGrowthEvents,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
@@ -3444,7 +3445,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
 }
 
 function playBattleDamageFeedback(events, duelist) {
-  let total = 0;
+  const battleDamage = battleDamageAmount(events, { playerId: duelist.owner });
   events
     .filter((event) => event.type === "DAMAGE_DEALT" && event.playerId === duelist.owner)
     .forEach((event) => {
@@ -3462,12 +3463,11 @@ function playBattleDamageFeedback(events, duelist) {
         addLog(`${duelist.owner === "player" ? "你的" : "AI 的"}护盾吸收了 ${blocked} 点伤害。`);
       }
       if (dealt > 0) {
-        total += dealt;
         playSound("damage");
         playLifeDelta(duelist.owner, -dealt);
       }
     });
-  return total;
+  return battleDamage;
 }
 
 async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
