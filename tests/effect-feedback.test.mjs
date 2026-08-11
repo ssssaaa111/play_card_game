@@ -95,10 +95,17 @@ test("explains after-attack damage and self growth with exact public values", ()
 
 test("pairs effect damage with growth only for the matching after-attack effect", () => {
   const events = [
-    { type: "DAMAGE_DEALT", sourceCardId: "star-1", amount: 2400 },
-    { type: "DAMAGE_DEALT", sourceCardId: "star-1", amount: 300 },
-    { type: "GAME_OVER_DECLARED", sourceCardId: "star-1" },
-    { type: "STAT_MODIFIED", sourceCardId: "star-1", cardId: "star-1", stat: "tempAtk", amount: 300 }
+    { id: 20, type: "DAMAGE_DEALT", sourceCardId: "star-1", amount: 2400 },
+    { id: 21, type: "DAMAGE_DEALT", sourceCardId: "star-1", amount: 300 },
+    { id: 22, type: "DAMAGE_DEALT", sourceCardId: "star-1", amount: 700 },
+    { id: 23, type: "STAT_MODIFIED", sourceCardId: "star-1", cardId: "star-1", stat: "tempAtk", amount: 300 },
+    {
+      id: 24,
+      type: "AFTER_ATTACK_EFFECT_RESOLVED",
+      cardId: "star-1",
+      effectId: "starDoomCharge",
+      resultEventIds: [21, 23]
+    }
   ];
   const starResolution = findAfterAttackDamageAndGrowthEvents(events, {
     attackerId: "star-1",
@@ -112,7 +119,7 @@ test("pairs effect damage with growth only for the matching after-attack effect"
     effectId: "grow200"
   });
   assert.equal(ordinaryGrowth.damageEvent, null);
-  assert.equal(ordinaryGrowth.growEvent, events[3]);
+  assert.equal(ordinaryGrowth.growEvent, null);
 });
 
 test("rewinds one resolved damage event for staged HUD feedback without mutating rules state", () => {
