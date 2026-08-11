@@ -236,6 +236,15 @@ export function targetSelectionTimeoutFeedback(pending) {
   };
 }
 
+export function targetSelectionTimeoutLogMetadata(pending) {
+  return {
+    actor: pending?.sourceOwner || "player",
+    type: pending?.purpose === "afterAttackTarget" ? "effect" : "spell",
+    cardId: pending?.sourceCard?.id || null,
+    public: true
+  };
+}
+
 export function buildTargetSelectionDisplay(pending, duelists = {}) {
   if (!pending) {
     return {

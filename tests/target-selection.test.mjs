@@ -17,6 +17,7 @@ import {
   targetSelectionForCard,
   targetSelectionPrompt,
   targetSelectionTimeoutFeedback,
+  targetSelectionTimeoutLogMetadata,
   validateTargetSelection
 } from "../src/target-selection.js";
 
@@ -428,6 +429,34 @@ test("target timeout feedback distinguishes a spell cancellation from an unmade 
       cue: "目标选择超时，已取消 曜冕裁决者 的本次攻击。",
       log: "曜冕裁决者 目标选择超时，本次攻击未宣言。",
       preserveSelected: true
+    }
+  );
+});
+
+test("target timeout logs keep the public source card available to unified card details", () => {
+  assert.deepEqual(
+    targetSelectionTimeoutLogMetadata({
+      purpose: "afterAttackTarget",
+      sourceOwner: "player",
+      sourceCard: { id: "trio-sun-judicator", name: "曜冕裁决者" }
+    }),
+    {
+      actor: "player",
+      type: "effect",
+      cardId: "trio-sun-judicator",
+      public: true
+    }
+  );
+  assert.deepEqual(
+    targetSelectionTimeoutLogMetadata({
+      sourceOwner: "player",
+      sourceCard: { id: "dispelling-ray", name: "解印射线" }
+    }),
+    {
+      actor: "player",
+      type: "spell",
+      cardId: "dispelling-ray",
+      public: true
     }
   );
 });

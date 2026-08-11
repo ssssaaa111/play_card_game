@@ -431,6 +431,12 @@ function logCardLink(els, cardId) {
   return els.timeline?.querySelector(`.timeline-card-link[data-card-id="${cardId}"]`);
 }
 
+function logCardLinkForMessage(els, cardId, messageFragment) {
+  const item = [...(els.timeline?.querySelectorAll(".timeline-item") || [])]
+    .find((entry) => entry.textContent.includes(messageFragment));
+  return item?.querySelector(`.timeline-card-link[data-card-id="${cardId}"]`) || null;
+}
+
 function aiRevealVisible(els, cardId) {
   return els.aiRevealModal?.classList.contains("show") &&
     (!cardId || els.aiRevealModal.dataset.cardId === cardId);
@@ -4461,6 +4467,7 @@ async function runSunflareTargetTimeoutRecoveryBasicSmoke(ctx) {
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "sunflareHiddenTargetChoice");
   const attackerIndex = ctx.state.player.field.findIndex((card) => card?.id === "trio-sun-judicator");
+  const attacker = ctx.state.player.field[attackerIndex];
   const secondSupport = ctx.state.ai.traps[1];
   if (attackerIndex < 0 || !secondSupport) {
     throw new Error(`${smokeName}: timeout fixture is incomplete. ${smokeDebug(ctx)}`);
@@ -4488,6 +4495,28 @@ async function runSunflareTargetTimeoutRecoveryBasicSmoke(ctx) {
       (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("本次攻击未宣言")),
     `${smokeName}: timeout restores the attacker with attack-specific feedback`,
     26000
+  );
+
+  const timeoutLog = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("本次攻击未宣言")
+  );
+  if (!timeoutLog || typeof timeoutLog !== "object" ||
+      timeoutLog.cardId !== attacker.id || timeoutLog.public !== true || timeoutLog.type !== "effect") {
+    throw new Error(`${smokeName}: timeout log did not retain public attacker metadata. ${smokeDebug(ctx)}`);
+  }
+  await waitForSmoke(
+    () => logCardLinkForMessage(ctx.els, attacker.id, "本次攻击未宣言"),
+    `${smokeName}: timeout timeline entry exposes attacker detail`
+  );
+  clickSmokeElement(
+    logCardLinkForMessage(ctx.els, attacker.id, "本次攻击未宣言"),
+    `${smokeName}: open timeout attacker detail`
+  );
+  await assertCardDetailModal(ctx, attacker, `${smokeName}: timeout attacker`);
+  clickSmokeElement(ctx.els.zoomClose, `${smokeName}: close timeout attacker detail`);
+  await waitForSmoke(
+    () => !ctx.els.cardModal.classList.contains("show"),
+    `${smokeName}: timeout attacker detail closes`
   );
 
   clickSmokeElement(ctx.els.aiPanel, `${smokeName}: reopen direct attack after timeout`);

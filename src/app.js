@@ -143,6 +143,7 @@ import {
   targetSelectionTargetLabel,
   targetSelectionPrompt,
   targetSelectionTimeoutFeedback,
+  targetSelectionTimeoutLogMetadata,
   validateTargetSelection
 } from './target-selection.js';
 import {
@@ -5023,22 +5024,24 @@ function handleTargetSelectionTimeout() {
     return;
   }
 
-  const cardName = state.pendingTarget.cardName;
+  const pendingTarget = state.pendingTarget;
+  const cardName = pendingTarget.cardName;
+  const logMetadata = targetSelectionTimeoutLogMetadata(pendingTarget);
   const targets = legalPendingTargets();
   if (targets.length === 1) {
     const targetLabel = targetSelectionTargetLabel(targets[0]);
-    addLog(`${cardName} 目标选择超时，自动确认唯一合法目标 ${targetLabel}。`);
+    addLog(`${cardName} 目标选择超时，自动确认唯一合法目标 ${targetLabel}。`, logMetadata);
     cue(`已自动确认 ${targetLabel}`);
     resolvePendingSpellTarget(targets[0].owner, targets[0].index, targets[0].zone);
     return;
   }
 
-  const feedback = targetSelectionTimeoutFeedback(state.pendingTarget);
+  const feedback = targetSelectionTimeoutFeedback(pendingTarget);
   const preserveSelectedMonster = feedback.preserveSelected && state.selected?.zone === "playerField";
   clearPendingTarget();
   clearTransientSelection(state, { preserveSelected: preserveSelectedMonster });
   cue(feedback.cue);
-  addLog(feedback.log);
+  addLog(feedback.log, logMetadata);
   render();
   resolvePlayerActionWindow("目标选择超时");
 }
