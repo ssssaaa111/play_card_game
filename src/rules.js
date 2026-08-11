@@ -78,9 +78,16 @@ export function canEffectTargetCard(sourceCard, targetCard, { sourceOwner = "", 
   return bypassesTargetResistance(sourceCard, targetCard);
 }
 
-export function battlePreviewText(attacker, target) {
+function shieldAdjustedPreviewText(amount, duelist, sourceCard) {
+  const shield = shieldPreview(amount, duelist?.shield || 0, sourceCard);
+  return shield.blocked > 0 || shield.shieldPierced > 0 ? shield.text : "";
+}
+
+export function battlePreviewText(attacker, target, owner = null, rival = null) {
   if (!attacker) return "还没有选择攻击怪兽。";
   if (!target) {
+    const shieldText = shieldAdjustedPreviewText(totalAtk(attacker), rival, attacker);
+    if (shieldText) return `${attacker.name} 直接攻击，${shieldText}`;
     const pressure = hasShieldPierce(attacker) ? `神格威压会先消解至多 ${shieldPierceAmount(attacker)} 点护盾。` : "";
     return `${attacker.name} 直接攻击，预计造成 ${totalAtk(attacker)} 点伤害。${pressure}`;
   }
@@ -89,14 +96,25 @@ export function battlePreviewText(attacker, target) {
   const diff = totalAtk(attacker) - battleValue(target);
   if (diff > 0) {
     if (target.mode === "defense" && hasPiercingDamage(attacker)) {
+      const shieldText = shieldAdjustedPreviewText(diff, rival, attacker);
+      if (shieldText) {
+        return `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破并贯穿；${shieldText}`;
+      }
       const pressure = hasShieldPierce(attacker) ? `神格威压会先消解至多 ${shieldPierceAmount(attacker)} 点护盾。` : "";
       return `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破并贯穿造成 ${diff} 点伤害。${pressure}`;
     }
+    const shieldText = shieldAdjustedPreviewText(diff, rival, attacker);
     return target.mode === "defense"
       ? `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破但不造成战斗伤害。`
-      : `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，预计造成 ${diff} 点伤害。`;
+      : `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，${shieldText || `预计造成 ${diff} 点伤害。`}`;
   }
   if (diff < 0) {
+    const shieldText = shieldAdjustedPreviewText(Math.abs(diff), owner, target);
+    if (shieldText) {
+      return target.mode === "defense"
+        ? `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方${shieldText}双方怪兽保留。`
+        : `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方${shieldText}`;
+    }
     return target.mode === "defense"
       ? `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害，双方怪兽保留。`
       : `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害。`;

@@ -2044,7 +2044,7 @@ async function queuePendingAttack(targetIndex) {
     return false;
   }
   const target = state.ai.field[targetIndex];
-  const preview = battlePreviewText(attacker, target);
+  const preview = battlePreviewText(attacker, target, state.player, state.ai);
   cancelAutoEnd();
   clearPlayerIdleTimers();
   setActionWindow(ACTION_WINDOWS.resolution, { reason: "attack-resolution" });
@@ -4611,7 +4611,7 @@ async function aiAttack() {
       await sleep(900);
     }
     showBattlePreview(card, target, state.ai, state.player);
-      addLog(`对手攻击预判：${battlePreviewText(card, target)}`);
+    addLog(`对手攻击预判：${battlePreviewText(card, target, state.ai, state.player)}`);
     render();
     await sleep(1080);
     const resolved = await attack(state.ai, state.player, attackerIndex, targetIndex);
