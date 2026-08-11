@@ -96,6 +96,21 @@ test("clearing transient selection removes every pending mode and selected card"
   assert.equal(state.pendingFusion, null);
 });
 
+test("clearing an attack effect target can preserve its selected monster", () => {
+  const state = {
+    selected: { zone: "playerField", index: 1 },
+    pendingTarget: { purpose: "afterAttackTarget", attackerIndex: 1 },
+    pendingTribute: null,
+    pendingFusion: null
+  };
+
+  const snapshot = clearTransientSelection(state, { preserveSelected: true });
+
+  assert.equal(snapshot.hasPending, false);
+  assert.deepEqual(snapshot.selected, { zone: "playerField", index: 1 });
+  assert.equal(state.pendingTarget, null);
+});
+
 test("snapshot exposes legacy conflicts without choosing an arbitrary mode", () => {
   const snapshot = selectionStateSnapshot({
     selected: { zone: "hand", uid: "card-1" },

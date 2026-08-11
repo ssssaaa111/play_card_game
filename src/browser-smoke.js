@@ -4386,9 +4386,27 @@ async function runSunflareHiddenTargetReadabilityBasicSmoke(ctx) {
   await waitForSmoke(
     () => ctx.state.pendingTarget?.purpose === "afterAttackTarget" &&
       ctx.els.turnText.textContent === "选择效果目标" &&
+      ctx.els.fieldActionBar?.hidden &&
+      !ctx.els.choiceActions?.hidden &&
       trapSlot(ctx.els, "ai", 0)?.classList.contains("targetable") &&
       trapSlot(ctx.els, "ai", 1)?.classList.contains("targetable"),
-    `${smokeName}: generic effect-target window opens for both concealed slots`
+    `${smokeName}: effect-target controls take exclusive command focus`
+  );
+
+  clickSmokeElement(ctx.els.choiceCancelBtn, `${smokeName}: cancel effect-target selection`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      !ctx.els.fieldActionBar?.hidden &&
+      ctx.els.choiceActions?.hidden &&
+      ctx.els.aiPanel.classList.contains("direct-target"),
+    `${smokeName}: selected monster controls return after target cancellation`
+  );
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: reopen direct attack target selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.purpose === "afterAttackTarget" &&
+      ctx.els.fieldActionBar?.hidden &&
+      !ctx.els.choiceActions?.hidden,
+    `${smokeName}: effect-target controls regain command focus`
   );
 
   const firstSlot = trapSlot(ctx.els, "ai", 0);

@@ -2291,6 +2291,8 @@ function cancelSelectedHandAction() {
   const hadPendingTarget = selectionSnapshot.pendingKinds.includes("target");
   const hadPendingTribute = selectionSnapshot.pendingKinds.includes("tribute");
   const hadPendingFusion = selectionSnapshot.pendingKinds.includes("fusion");
+  const preserveSelectedMonster = state.pendingTarget?.purpose === "afterAttackTarget"
+    && state.selected?.zone === "playerField";
   const selected = selectedHandInfo();
   if (!hadPendingTarget && !hadPendingTribute && !hadPendingFusion && !selected) {
     cue("当前没有选中的手牌。");
@@ -2298,7 +2300,7 @@ function cancelSelectedHandAction() {
     return;
   }
   clearPendingTarget();
-  clearTransientSelection(state);
+  clearTransientSelection(state, { preserveSelected: preserveSelectedMonster });
   clearBattlePreview();
   playSound("click");
   cue(hadPendingTarget ? "已取消目标选择。" : "已取消选择。");
