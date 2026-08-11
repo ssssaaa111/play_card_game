@@ -441,6 +441,17 @@ export function chooseAiAttackTarget({
   return null;
 }
 
+export function chooseAiAfterAttackSupportTarget({ attacker = null, traps = [] } = {}) {
+  const definition = getCardEffectDefinition(attacker?.afterAttack);
+  if (definition?.attackDeclarationTarget?.zone !== "spellTrapZone") return -1;
+  const occupied = traps
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => Boolean(card));
+  if (occupied.length === 0) return -1;
+  const publicSpell = occupied.find(({ card }) => card.type === "spell");
+  return (publicSpell || occupied[0]).index;
+}
+
 export function chooseAiSpellAction({
   hand = [],
   owner = null,

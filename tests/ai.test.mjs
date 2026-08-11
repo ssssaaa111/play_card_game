@@ -7,6 +7,7 @@ import {
   aiSupportZoneReserve,
   aiTrapSetLimit,
   collectAiAttackBlockers,
+  chooseAiAfterAttackSupportTarget,
   chooseAiAttackAction,
   chooseAiAttackTarget,
   chooseAiTrapResponseAction,
@@ -60,6 +61,21 @@ test("AI attacks a beatable guard instead of a stronger defense target", () => {
   });
 
   assert.equal(target, 0);
+});
+
+test("AI chooses sunflare support targets from public information only", () => {
+  const sun = monster({ id: "trio-sun-judicator", afterAttack: "sunflareSunder" });
+  const concealedTargets = [
+    trap({ id: "mirror-snare", name: "hidden high-value trap" }),
+    trap({ id: "guard-sigil", name: "hidden low-value trap" })
+  ];
+
+  assert.equal(chooseAiAfterAttackSupportTarget({ attacker: sun, traps: concealedTargets }), 0);
+  assert.equal(chooseAiAfterAttackSupportTarget({
+    attacker: sun,
+    traps: [concealedTargets[0], spell("lunarDominion", { id: "trio-moon-dominion" })]
+  }), 1);
+  assert.equal(chooseAiAfterAttackSupportTarget({ attacker: monster(), traps: concealedTargets }), -1);
 });
 
 test("lookahead computes the AI's maximum damage this turn", () => {

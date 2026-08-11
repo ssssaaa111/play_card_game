@@ -4326,6 +4326,76 @@ async function runFinaleSunflareTargetLockBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runSunflareTargetChoiceBasicSmoke(ctx) {
+  const smokeName = "sunflare-target-choice-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "sunflareTargetChoice");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "trio-sun-judicator");
+  const firstSupport = ctx.state.ai.traps.find((card) => card?.id === "renewal");
+  const secondSupport = ctx.state.ai.traps.find((card) => card?.id === "war-chant");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!attacker || !firstSupport || !secondSupport) {
+    throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-sun-judicator"), `${smokeName}: select sun attacker`);
+  await waitForSmoke(
+    () => ctx.els.aiPanel.classList.contains("direct-target"),
+    `${smokeName}: direct attack target highlighted`
+  );
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: request direct attack`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.purpose === "afterAttackTarget" &&
+      ctx.state.pendingTarget?.effect === "sunflareSunder" &&
+      trapCard(ctx.els, "ai", "renewal")?.classList.contains("targetable") &&
+      trapCard(ctx.els, "ai", "war-chant")?.classList.contains("targetable") &&
+      ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: two support targets await an explicit choice`
+  );
+  if ((ctx.state.gameEvents || []).some((event) =>
+    Number(event.id) > eventIdBefore && event.type === "ATTACK_DECLARED"
+  )) {
+    throw new Error(`${smokeName}: attack declared before the player confirmed a support target. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(trapCard(ctx.els, "ai", "war-chant"), `${smokeName}: select second support target`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.selectedTarget?.cardUid === secondSupport.uid &&
+      trapCard(ctx.els, "ai", "war-chant")?.classList.contains("target-selected") &&
+      !ctx.els.choiceConfirmBtn.disabled &&
+      ctx.els.choiceConfirmBtn.textContent.includes("确认攻击"),
+    `${smokeName}: second support target selected`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm attack and lock`);
+
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.ai.lp === 1000 &&
+      ctx.state.ai.traps.some((card) => card?.uid === firstSupport.uid) &&
+      ctx.state.ai.grave.some((card) => card?.uid === secondSupport.uid),
+    `${smokeName}: attack resolves against only the chosen support. ${smokeDebug(ctx)}`,
+    12000
+  );
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const declaration = events.find((event) =>
+    event.type === "ATTACK_DECLARED" && event.attackerCardId === attacker.uid
+  );
+  const lock = events.find((event) =>
+    event.type === "AFTER_ATTACK_TARGET_LOCKED" && event.targetCardId === secondSupport.uid
+  );
+  const chosenDestruction = events.find((event) =>
+    event.type === "CARD_DESTROYED" && event.cardId === secondSupport.uid
+  );
+  const wrongDestruction = events.find((event) =>
+    event.type === "CARD_DESTROYED" && event.cardId === firstSupport.uid
+  );
+  if (!declaration || !lock || !chosenDestruction || wrongDestruction ||
+      Number(declaration.id) >= Number(lock.id) || Number(lock.id) >= Number(chosenDestruction.id)) {
+    throw new Error(`${smokeName}: declaration, selected lock, and destruction order is wrong. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioOmegaFinaleSmoke(ctx) {
   const smokeName = "trio-omega-finale-demo";
   setSmokeStatus("running", smokeName);
@@ -8911,6 +8981,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-story-demo": runTrioOmegaStoryDemoSmoke,
     "trio-omega-vow-demo": runTrioOmegaVowDemoSmoke,
     "finale-sunflare-target-lock-basic": runFinaleSunflareTargetLockBasicSmoke,
+    "sunflare-target-choice-basic": runSunflareTargetChoiceBasicSmoke,
     "trio-omega-finale-demo": runTrioOmegaFinaleSmoke,
     "trio-omega-finale-rush": runTrioOmegaFinaleRushSmoke,
     "trio-gauntlet-demo": runTrioGauntletSmoke,

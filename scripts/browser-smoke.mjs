@@ -38,6 +38,7 @@ const DEFAULT_SMOKES = [
   "trio-omega-story-demo",
   "trio-omega-vow-demo",
   "finale-sunflare-target-lock-basic",
+  "sunflare-target-choice-basic",
   "trio-omega-finale-demo",
   "trio-omega-finale-rush",
   "trio-gauntlet-preview-basic",

@@ -73,7 +73,7 @@ export const library = [
   { id: "material-reclaim", type: "spell", name: "星屑返轨", icon: "返", text: "将墓地 1 张非本卡的卡放回卡组顶，然后抽 1 张卡。", effect: "graveReturn" },
   { id: "corebreak-edict", type: "spell", name: "裂核裁令", icon: "裁", text: "选择对手攻击力最高的怪兽，攻击力和守备力下降 500。", effect: "aceCrackdown" },
   { id: "ace-vow-guard", type: "trap", name: "王牌誓护", icon: "誓", text: "盖放后自动触发：对手攻击时，无效本次攻击，并让我方攻击力最高的怪兽提升 900。", trigger: "aceGuard" },
-  { id: "trio-sun-judicator", type: "monster", name: "曜冕裁决者", element: "light", stars: 7, atk: 3000, def: 1800, icon: "日", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。以三只祭品成功召唤时，手牌中其余不同名三曜神格会特殊召唤；它们本回合不能攻击。攻击宣言时锁定对手最靠前的魔陷区卡牌；攻击结算后破坏该锁定卡。锁定卡提前离场时不转移目标。", summary: "三祭品引发三曜共降；攻击宣言时锁定最前魔陷，攻击后破坏，目标离场不转移。", tributeCost: 3, rarity: "UR", archetype: "三曜神格", trioConvergence: "trioOmega", afterAttack: "sunflareSunder" },
+  { id: "trio-sun-judicator", type: "monster", name: "曜冕裁决者", element: "light", stars: 7, atk: 3000, def: 1800, icon: "日", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。以三只祭品成功召唤时，手牌中其余不同名三曜神格会特殊召唤；它们本回合不能攻击。攻击宣言时选择并锁定对手 1 张魔陷区卡牌；攻击结算后破坏该锁定卡。锁定卡提前离场时不转移目标。", summary: "三祭品引发三曜共降；攻击宣言时自主选择并锁定 1 张对手魔陷，攻击后破坏，目标离场不转移。", tributeCost: 3, rarity: "UR", archetype: "三曜神格", trioConvergence: "trioOmega", afterAttack: "sunflareSunder" },
   { id: "trio-moon-warden", type: "monster", name: "月蚀守密者", element: "light", stars: 6, atk: 2100, def: 2500, icon: "月", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。以三只祭品成功召唤时，手牌中其余不同名三曜神格会特殊召唤；它们本回合不能攻击。配合月曜帷幕压低关键怪兽。", summary: "三祭品登场并引发三曜共降，以高守备和持续压制封锁反击。", tributeCost: 3, rarity: "UR", archetype: "三曜神格", trioConvergence: "trioOmega" },
   { id: "trio-star-herald", type: "monster", name: "星坠宣告者", element: "light", stars: 6, atk: 2400, def: 1400, icon: "星", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。以三只祭品成功召唤时，手牌中其余不同名三曜神格会特殊召唤；它们本回合不能攻击。攻击后追加 300 点终局压力，并提升自身攻击力 300。", summary: "三祭品引发三曜共降；攻击后追加 300 点伤害，并使自身攻击力提升 300。", tributeCost: 3, rarity: "UR", archetype: "三曜神格", trioConvergence: "trioOmega", afterAttack: "starDoomCharge" },
   { id: "trio-decoy-ward", type: "monster", name: "折光诱标卫", element: "light", stars: 2, atk: 1000, def: 3700, icon: "诱", text: "低星防线。正确路线中用来吸引日曜攻势，为反击回合争取窗口。" },
@@ -791,6 +791,23 @@ export const scenarioSetups = {
     aiDeck: ["mirror-snare"],
     aiStyle: "scriptedPressure"
   },
+  sunflareTargetChoice: {
+    label: "日曜目标选择",
+    difficulty: "demo",
+    text: "规则与界面测试场景：玩家控制曜冕裁决者，对手魔陷区同时有两张可选目标。",
+    goal: "用曜冕裁决者直接攻击，自主选择第二张对手魔陷并确认；攻击后只破坏所选目标。",
+    objectives: ["宣言攻击前进入魔陷目标选择。", "选择对手魔陷区第二张卡。", "确认攻击后检查锁定与破坏没有转移。"],
+    hints: ["曜冕裁决者会先选定攻击后效果目标，再正式宣言攻击。", "只有已选择并锁定的卡会在攻击结算后被破坏。"],
+    playerLp: 4000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["trio-sun-judicator"],
+    aiField: [],
+    aiTraps: ["renewal", "war-chant"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
   trioShieldLethalPlanning: {
     label: "三曜护盾斩杀",
     text: "规则测试场景：玩家生命值看似进入日曜直击斩杀线，但现有护盾足以让直击无法终结对局。",
@@ -1363,7 +1380,7 @@ export const scenarioSetups = {
   protagonistTrioOmegaFinale: {
     label: "终局三曜 · 终焉篇",
     setupVisibility: "player",
-    text: "神殿守门人将断链之力注入三曜阵线：断链裁决会无效你的陷阱，太阳神则会在攻击宣言时锁定最前方的魔陷。你可以让锁定的诱饵承受破坏，也可以发动它与断链交换；锁定目标提前离场后，破坏不会转移到日冕诱锁。随后用解印射线拆掉断链——而当太阳神崩落时，神殿会召出再临守卫；守卫倒下后，太阳神还会最后一次站起来。",
+    text: "神殿守门人将断链之力注入三曜阵线：断链裁决会无效你的陷阱，太阳神则会在攻击宣言时自主选择并锁定一张魔陷。对手无法辨认盖牌内容，只能按公开卡位决策；你可以让锁定的诱饵承受破坏，也可以发动它与断链交换。锁定目标提前离场后，破坏不会转移到日冕诱锁。随后用解印射线拆掉断链——而当太阳神崩落时，神殿会召出再临守卫；守卫倒下后，太阳神还会最后一次站起来。",
     goal: "第一回合盖下星线护续（前）与日冕诱锁（后），让太阳神锁定星线护续；可以放弃响应让诱饵承受破坏，也可以发动它与断链裁决交换，日冕诱锁都不会成为转移目标。第二回合重筑防线并用解印射线拆掉断链裁决；太阳神第二击时日冕诱锁将击落它；随后清掉再临的月曜帷幕，回召余烁小卫发动三曜终断，逐尊瓦解神格，再破再临守卫；当太阳神最后一次站起时，用第二发三曜终断强化防线，让防线击落最终神格。",
     difficulty: "challenge",
     aiStyle: "scriptedPressure",
@@ -1377,7 +1394,7 @@ export const scenarioSetups = {
     hints: [
       "断链裁决只会在你发动陷阱时响应；若选择发动星线护续，它会被无效并送墓，但太阳神的锁定不会转移。",
       "太阳神能击破被月幕压制的 2800 防线，却啃不动 3700 的折光诱标卫。",
-      "太阳神在攻击宣言时锁定目标：把星线护续放前面，日冕诱锁藏在后面。",
+      "太阳神会自主选择目标；但无法辨认盖牌内容，会优先锁定最前的占用卡位。把星线护续放前面，日冕诱锁藏在后面。",
       "月曜帷幕会随目标一起消失，但神殿会重新展开——第二张会压制余烁小卫，必须先用解印射线解除。",
       "最终太阳神由防线击落：第二发三曜终断瞄准的是攻击力最低的怪兽——把强化后的诱标卫转成攻击，小卫则负责再临守卫。"
     ],
@@ -1513,7 +1530,7 @@ export const scenarioSetups = {
     ],
     hints: [
       "断链裁决只会在你发动陷阱时响应；即使星线护续被无效送墓，太阳神也不会把锁定转给下一张牌。",
-      "太阳神在攻击宣言时锁定目标：把星线护续放前面，日冕诱锁藏在后面。",
+      "太阳神会自主选择目标；但无法辨认盖牌内容，会优先锁定最前的占用卡位。把星线护续放前面，日冕诱锁藏在后面。",
       "每回合开始时先看余烁小卫的攻击力：只要被月曜帷幕压制（低于 2100），就先解除压制再进攻。",
       "第二发三曜终断瞄准攻击力最低的怪兽——把强化后的诱标卫转成攻击，小卫负责再临守卫。",
       "两发解印射线足够应付所有波次：不要提前浪费。"

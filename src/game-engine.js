@@ -151,7 +151,7 @@ export const defaultCardEffects = Object.freeze({
   ], { requirements: [{ type: "responseWindow", prompt: "attack" }] }),
   sunflareSunder: oneShot(
     [{ op: "destroyCard", cardId: "$action.afterAttackTargetCardId" }],
-    { attackDeclarationTarget: { playerId: "$action.rivalId", zone: "spellTrapZone", rule: "first" } }
+    { attackDeclarationTarget: { playerId: "$action.rivalId", zone: "spellTrapZone" } }
   ),
   starDoomCharge: oneShot([
     { op: "dealDamage", player: "rival", amount: 300 },
@@ -1401,7 +1401,8 @@ export class GameEngine {
       state,
       action.playerId,
       rivalId,
-      action.attackerCardId
+      action.attackerCardId,
+      action.afterAttackTargetCardId
     );
 
     emit("TIMING_CHANGED", {
@@ -1474,7 +1475,8 @@ export class GameEngine {
         state,
         action.playerId,
         rivalId,
-        action.attackerCardId
+        action.attackerCardId,
+        action.afterAttackTargetCardId
       );
       emit("TIMING_CHANGED", {
         playerId: action.playerId,
@@ -4387,7 +4389,14 @@ function cardShieldPierceAmount(card) {
   return 0;
 }
 
-function resolveAfterAttackDeclarationTarget(effects, state, playerId, rivalId, attackerCardId) {
+function resolveAfterAttackDeclarationTarget(
+  effects,
+  state,
+  playerId,
+  rivalId,
+  attackerCardId,
+  selectedTargetCardId = null
+) {
   const attacker = requireCard(state, attackerCardId);
   if (!attacker.afterAttack) return null;
   const definition = effects[attacker.afterAttack];
@@ -4401,9 +4410,15 @@ function resolveAfterAttackDeclarationTarget(effects, state, playerId, rivalId, 
     attackerCardId
   };
   const selector = resolveValue(definition.attackDeclarationTarget, effectAction, attacker);
-  const targetCardId = resolveCardIdInput(state, selector)[0] || null;
   const targetPlayerId = selector.playerId || rivalId;
   const targetZone = selector.zone || null;
+  const legalTargetCardIds = resolveCardIdInput(state, selector);
+  if (selectedTargetCardId && !legalTargetCardIds.includes(selectedTargetCardId)) {
+    throw new GameRuleError(
+      `Selected after-attack target ${selectedTargetCardId} must be in rival ${targetPlayerId}.${targetZone}`
+    );
+  }
+  const targetCardId = selectedTargetCardId || legalTargetCardIds[0] || null;
   const slots = targetZone ? fixedZoneSlots(requirePlayer(state, targetPlayerId), targetZone) : null;
   return {
     effectId: attacker.afterAttack,

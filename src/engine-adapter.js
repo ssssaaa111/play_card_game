@@ -783,7 +783,7 @@ export function explainSetTrapFromUiState(uiState, playerId, handIndex, trapInde
   }, "盖放这张陷阱");
 }
 
-export function explainDeclareAttackFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex) {
+export function explainDeclareAttackFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex, options = {}) {
   const duelist = uiDuelist(uiState, playerId);
   const rival = uiDuelist(uiState, rivalId);
   const attacker = duelist.field[attackerIndex];
@@ -800,6 +800,7 @@ export function explainDeclareAttackFromUiState(uiState, playerId, rivalId, atta
     attackerCardId: cardKey(attacker)
   };
   if (target) action.targetCardId = cardKey(target);
+  if (options.afterAttackTargetCardId) action.afterAttackTargetCardId = options.afterAttackTargetCardId;
 
   return explainUiAction(buildEngineStateFromUiState(uiState), action, "攻击");
 }
@@ -1233,7 +1234,7 @@ export function dispatchEndTurnFromUiState(uiState, playerId, {
   return applyUiGameEvents(uiState, events);
 }
 
-export function dispatchDeclareAttackFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex) {
+export function dispatchDeclareAttackFromUiState(uiState, playerId, rivalId, attackerIndex, targetIndex, options = {}) {
   const duelist = uiDuelist(uiState, playerId);
   const rival = uiDuelist(uiState, rivalId);
   const attacker = duelist.field[attackerIndex];
@@ -1248,6 +1249,7 @@ export function dispatchDeclareAttackFromUiState(uiState, playerId, rivalId, att
     attackerCardId: cardKey(attacker)
   };
   if (target) action.targetCardId = cardKey(target);
+  if (options.afterAttackTargetCardId) action.afterAttackTargetCardId = options.afterAttackTargetCardId;
 
   const engine = new GameEngine(buildEngineStateFromUiState(uiState));
   const events = engine.dispatch(action);
