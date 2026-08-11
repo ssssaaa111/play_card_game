@@ -1199,7 +1199,7 @@ test("app uses extracted spell metadata", () => {
   assert.match(app, /canSummon: \(_card, handIndex, options\) => explainSummonMonsterFromUiState\(/);
   assert.match(app, /canSetTrap: \(_card, handIndex, trapIndex\) =>/);
   assert.match(app, /canAttackMonster: \(_card, fieldIndex\) =>/);
-  assert.match(app, /dispatchChangePhaseFromUiState\(state, "ai", PHASES\.battle\);\s+await aiAttack\(\);/);
+  assert.match(app, /dispatchChangePhaseFromUiState\(state, "ai", PHASES\.battle\);\s+await aiAttack\(\{ getTurnGoal: chooseLiveAiTurnGoal \}\);/);
   assert.doesNotMatch(app, /setActionWindow\(ACTION_WINDOWS\.ai, \{ playerId: "ai", reason: "ai battle" \}\)/);
   assert.match(ai, /scoreSpellForAi\(card\.effect/);
   assert.doesNotMatch(app, /validateSpellCondition/);
