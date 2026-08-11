@@ -119,8 +119,8 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
   expectedIds.forEach((id) => cardByTemplate(id));
 
   assert.equal(cardByTemplate("trio-sun-judicator").afterAttack, "sunflareSunder");
-  assert.match(cardByTemplate("trio-sun-judicator").text, /攻击宣言时锁定.*提前离场.*不转移/);
-  assert.match(cardByTemplate("trio-sun-judicator").summary, /锁定最前魔陷.*目标离场不转移/);
+  assert.match(cardByTemplate("trio-sun-judicator").text, /攻击宣言时选择并锁定.*提前离场.*不转移/);
+  assert.match(cardByTemplate("trio-sun-judicator").summary, /自主选择并锁定.*目标离场不转移/);
   assert.equal(cardByTemplate("trio-star-herald").afterAttack, "starDoomCharge");
   assert.match(cardByTemplate("trio-star-herald").summary, /追加 300 点伤害.*攻击力提升 300/);
   assert.ok([
@@ -152,7 +152,7 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
   ]);
   assert.deepEqual(getCardEffectDefinition("sunflareSunder"), {
     duration: EffectDuration.oneShot,
-    attackDeclarationTarget: { playerId: "$action.rivalId", zone: "spellTrapZone", rule: "first" },
+    attackDeclarationTarget: { playerId: "$action.rivalId", zone: "spellTrapZone" },
     operations: [{ op: "destroyCard", cardId: "$action.afterAttackTargetCardId" }]
   });
 
@@ -366,6 +366,24 @@ test("trio direct trap planning scenario isolates a lethal rebound choice", () =
     "guard-sigil",
     "reversal-flare"
   ]);
+  assertValidGameState(buildEngineStateFromUiState({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai },
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+});
+
+test("sunflare target choice scenario exposes two player-selectable support targets", () => {
+  const setup = buildScenarioState(scenarioSetups.sunflareTargetChoice, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), ["trio-sun-judicator"]);
+  assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), []);
+  assert.deepEqual(setup.ai.traps.filter(Boolean).map((card) => card.id), ["renewal", "war-chant"]);
   assertValidGameState(buildEngineStateFromUiState({
     player: { ...createDuelist(PLAYER), ...setup.player },
     ai: { ...createDuelist(AI), ...setup.ai },
@@ -685,7 +703,7 @@ test("sun and star trio ace pressure effects resolve through battle", () => {
   assertValidGameState(state);
 });
 
-test("sun locks its front backrow target at attack declaration and does not transfer after that target leaves", () => {
+test("sun locks its selected hidden backrow target at attack declaration and does not transfer after it leaves", () => {
   const engine = new GameEngine(buildEngineStateFromUiState(scenarioUiState("protagonistTrioOmegaFinaleRush")));
   let state = engine.getState();
   const veilId = findCardId(state, PLAYER, "hand", "trio-chain-veil");

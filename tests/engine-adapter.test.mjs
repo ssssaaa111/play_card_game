@@ -898,6 +898,42 @@ test("dispatches attack declaration as a response-window event without resolving
   assert.equal(state.gameEvents.at(-1).type, "RESPONSE_WINDOW_OPENED");
 });
 
+test("attack declaration adapter forwards the selected sunflare support target", () => {
+  const attacker = uiMonster("adapter-sunflare-attacker", "trio-sun-judicator");
+  attacker.afterAttack = "sunflareSunder";
+  const first = uiTrap("adapter-sunflare-first", "starline-veil");
+  const second = uiTrap("adapter-sunflare-second", "sunflare-snare");
+  first.ownerId = "ai";
+  second.ownerId = "ai";
+  const state = appState({ phase: PHASES.battle });
+  state.player.field[0] = attacker;
+  state.ai.traps[0] = first;
+  state.ai.traps[3] = second;
+
+  const explanation = explainDeclareAttackFromUiState(
+    state,
+    "player",
+    "ai",
+    0,
+    -1,
+    { afterAttackTargetCardId: second.uid }
+  );
+  assert.equal(explanation.ok, true);
+
+  const events = dispatchDeclareAttackFromUiState(
+    state,
+    "player",
+    "ai",
+    0,
+    -1,
+    { afterAttackTargetCardId: second.uid }
+  );
+  const lock = events.find((event) => event.type === "AFTER_ATTACK_TARGET_LOCKED");
+  assert.equal(lock.targetCardId, second.uid);
+  assert.equal(lock.targetIndex, 3);
+  assert.equal(buildEngineStateFromUiState(state).machine.pendingAttack.afterAttackTargetCardId, second.uid);
+});
+
 test("pending attack blocks UI auto-end until response is declined and attack is canceled", () => {
   const attacker = uiMonster("attacker-pending", "star-lancer");
   const target = uiMonster("target-pending", "iron-guardian");

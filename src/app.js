@@ -13,6 +13,7 @@ import {
   aiSupportZoneReserve,
   aiTrapSetLimit,
   collectAiAttackBlockers,
+  chooseAiAfterAttackSupportTarget,
   chooseAiAttackAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
@@ -25,6 +26,7 @@ import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createBattleLogEntry, logEntryMessage } from './battle-log.js';
 import { renderBattlePreviewElement } from './battle-preview-renderer.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
+import { getCardEffectDefinition } from './game-engine.js';
 import { cardDefinitionById, cardDetailViewModel, cardInspectorViewModel } from './card-detail.js';
 import { bindCardInspector, renderCardInspector } from './card-inspector-renderer.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
@@ -1236,6 +1238,17 @@ function currentTargetSelectionDisplay(pending = state.pendingTarget) {
     player: state.player,
     ai: state.ai
   });
+  if (pending?.purpose === "afterAttackTarget") {
+    return {
+      ...display,
+      text: [
+        `${pending.cardName}：选择本次攻击后要破坏的对手魔陷。`,
+        display.selectedTarget ? `已选择：${display.selectedName}。` : "尚未选择目标。",
+        display.selectedTarget ? "可点击其他高亮卡位更换，确认后再发动攻击。" : "请点击一个高亮魔陷卡位。"
+      ].join("\n"),
+      confirmLabel: display.selectedTarget ? "确认攻击" : "请选择目标"
+    };
+  }
   if (pending?.effect !== "splitToken") return display;
   const split = currentSplitTokenDisplay(display.selectedTarget?.card || null);
   const selectionText = display.complete
@@ -1293,6 +1306,50 @@ function beginSpellTargetSelection(handIndex, card) {
   return true;
 }
 
+function attackAfterEffectSelection(attacker, attackerIndex, battleTargetIndex) {
+  const definition = getCardEffectDefinition(attacker?.afterAttack);
+  if (definition?.attackDeclarationTarget?.zone !== "spellTrapZone") return null;
+  return {
+    purpose: "afterAttackTarget",
+    effect: attacker.afterAttack,
+    mode: "enemySpellTrap",
+    cardName: attacker.name,
+    sourceCard: attacker,
+    sourceOwner: "player",
+    attackerUid: runtimeCardId(attacker),
+    attackerIndex,
+    battleTargetIndex
+  };
+}
+
+function preparePlayerAfterAttackTarget(attacker, attackerIndex, battleTargetIndex) {
+  const pendingTarget = attackAfterEffectSelection(attacker, attackerIndex, battleTargetIndex);
+  if (!pendingTarget) return { pending: false, targetCardId: null };
+  const legalTargets = collectLegalTargetSelections(pendingTarget, {
+    player: state.player,
+    ai: state.ai
+  });
+  if (legalTargets.length === 0) return { pending: false, targetCardId: null };
+  if (legalTargets.length === 1) {
+    return { pending: false, targetCardId: runtimeCardId(legalTargets[0].card) };
+  }
+  beginPendingSelection(
+    state,
+    "target",
+    pendingTarget,
+    { zone: "playerField", index: attackerIndex }
+  );
+  setActionWindow(ACTION_WINDOWS.targetSelect, { reason: `after-attack-target:${runtimeCardId(attacker)}` });
+  addLog(`等待为 ${attacker.name} 选择攻击后效果目标，共有 ${legalTargets.length} 个合法魔陷卡位。`, cardLogMeta(attacker, {
+    actor: "player",
+    type: "effect"
+  }));
+  speak(currentTargetSelectionDisplay().text);
+  render();
+  resetPlayerIdleCountdown();
+  return { pending: true, targetCardId: null };
+}
+
 function validateCurrentTarget(ownerName, index, zone = "field") {
   if (state.pendingTarget?.effect === "splitToken") {
     const duelist = ownerName === "player" ? state.player : state.ai;
@@ -1327,6 +1384,23 @@ async function resolvePendingSpellTarget(ownerName, index, zone = "field") {
   if (!targetInfo.ok) {
     cue(targetInfo.reason);
     return true;
+  }
+  if (state.pendingTarget.purpose === "afterAttackTarget") {
+    const pending = state.pendingTarget;
+    const attackerIndex = state.player.field.findIndex((card) => runtimeCardId(card) === pending.attackerUid);
+    if (attackerIndex < 0) {
+      clearPendingTarget();
+      clearTransientSelection(state);
+      cue(`${pending.cardName} 已不在怪兽区，攻击已取消。`);
+      render();
+      resolvePlayerActionWindow("攻击来源离场");
+      return true;
+    }
+    clearPendingTarget();
+    state.selected = { zone: "playerField", index: attackerIndex };
+    return queuePendingAttack(pending.battleTargetIndex, {
+      afterAttackTargetCardId: runtimeCardId(targetInfo.card)
+    });
   }
   notePlayerIntent();
   const handIndex = state.player.hand.findIndex((card) => card.uid === state.pendingTarget.handUid);
@@ -2026,7 +2100,7 @@ async function confirmFusionSummon(fieldIndex = null) {
   return true;
 }
 
-async function queuePendingAttack(targetIndex) {
+async function queuePendingAttack(targetIndex, options = {}) {
   const attackerIndex = state.selected?.zone === "playerField" ? state.selected.index : -1;
   const attacker = state.player.field[attackerIndex];
   if (!attacker) return false;
@@ -2044,6 +2118,27 @@ async function queuePendingAttack(targetIndex) {
     resetPlayerIdleCountdown();
     return false;
   }
+  let afterAttackTargetCardId = options.afterAttackTargetCardId || null;
+  if (!afterAttackTargetCardId) {
+    const afterAttackTarget = preparePlayerAfterAttackTarget(attacker, attackerIndex, targetIndex);
+    if (afterAttackTarget.pending) return false;
+    afterAttackTargetCardId = afterAttackTarget.targetCardId;
+  }
+  const targetValidation = explainDeclareAttackFromUiState(
+    state,
+    "player",
+    "ai",
+    attackerIndex,
+    targetIndex,
+    { afterAttackTargetCardId }
+  );
+  if (!targetValidation.ok) {
+    cue(targetValidation.reason);
+    addLog(`攻击无效：${targetValidation.reason}`);
+    render();
+    resetPlayerIdleCountdown();
+    return false;
+  }
   const target = state.ai.field[targetIndex];
   const preview = battlePreviewText(attacker, target);
   cancelAutoEnd();
@@ -2056,7 +2151,7 @@ async function queuePendingAttack(targetIndex) {
   let resolved = false;
   try {
     await sleep(ATTACK_TIMING_MS.preview);
-    resolved = await attack(state.player, state.ai, attackerIndex, targetIndex);
+    resolved = await attack(state.player, state.ai, attackerIndex, targetIndex, { afterAttackTargetCardId });
   } finally {
     if (!state.gameOver && state.actionWindow === ACTION_WINDOWS.resolution) {
       setActionWindow(ACTION_WINDOWS.battle, { reason: "attack-resolved" });
@@ -3617,9 +3712,16 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
   }
 }
 
-function declareAttackWithEngine(owner, rival, attackerIndex, targetIndex) {
+function declareAttackWithEngine(owner, rival, attackerIndex, targetIndex, options = {}) {
   try {
-    return dispatchDeclareAttackFromUiState(state, owner.owner, rival.owner, attackerIndex, targetIndex);
+    return dispatchDeclareAttackFromUiState(
+      state,
+      owner.owner,
+      rival.owner,
+      attackerIndex,
+      targetIndex,
+      options
+    );
   } catch (error) {
     cue(error.message || "攻击宣言失败。");
     console.error(error);
@@ -3690,11 +3792,29 @@ function playAttackResetFeedback(owner, attacker, events = []) {
   return true;
 }
 
-async function attack(owner, rival, attackerIndex, targetIndex) {
+async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
   state.ruleCheckIssue = null;
   const attacker = owner.field[attackerIndex];
   if (!attacker || attacker.used) return;
-  const engineLegality = explainDeclareAttackFromUiState(state, owner.owner, rival.owner, attackerIndex, targetIndex);
+  let afterAttackTargetCardId = options.afterAttackTargetCardId || null;
+  if (!afterAttackTargetCardId && owner.owner === "ai") {
+    const supportTargetIndex = chooseAiAfterAttackSupportTarget({
+      attacker,
+      traps: rival.traps
+    });
+    if (supportTargetIndex >= 0) {
+      afterAttackTargetCardId = runtimeCardId(rival.traps[supportTargetIndex]);
+    }
+  }
+  const attackOptions = { afterAttackTargetCardId };
+  const engineLegality = explainDeclareAttackFromUiState(
+    state,
+    owner.owner,
+    rival.owner,
+    attackerIndex,
+    targetIndex,
+    attackOptions
+  );
   if (!engineLegality.ok) {
     if (owner.owner === "player") {
       cue(engineLegality.reason);
@@ -3704,7 +3824,13 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
   }
   const impactBefore = attackImpactSnapshot(owner, rival);
   const attackContext = { attackerIndex, targetIndex, engineResponse: true };
-  const declarationEvents = declareAttackWithEngine(owner, rival, attackerIndex, targetIndex);
+  const declarationEvents = declareAttackWithEngine(
+    owner,
+    rival,
+    attackerIndex,
+    targetIndex,
+    attackOptions
+  );
   if (!declarationEvents) return false;
   const attackEvent = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
   if (attackEvent) {
@@ -3719,7 +3845,7 @@ async function attack(owner, rival, attackerIndex, targetIndex) {
       ? `「${locked.card.name}」`
       : `对手魔陷区 ${(Number(afterAttackLock.targetIndex) || 0) + 1} 的盖牌`;
     addLog(
-      `${attacker.name} 在攻击宣言时锁定了${targetLabel}；攻击后只处理该目标。`,
+      `${attacker.name} 在攻击宣言时选择并锁定了${targetLabel}；攻击后只处理该目标。`,
       cardLogMeta(attacker, {
         actor: owner.owner,
         type: "effect",

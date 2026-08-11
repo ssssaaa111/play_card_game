@@ -287,7 +287,7 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
 
   assert.match(app, /function selectedHandInfo\(\)/);
   assert.match(app, /function isAttackTargetSlot\(ownerName, index\)/);
-  assert.match(app, /async function queuePendingAttack\(targetIndex\)/);
+  assert.match(app, /async function queuePendingAttack\(targetIndex, options = \{\}\)/);
   assert.match(app, /function confirmSelectedHandAction\(\)/);
   assert.match(app, /function cancelSelectedHandAction\(\)/);
   assert.match(controls, /targetSelectionStatus\?\.confirmLabel \|\| "确认发动"/);
@@ -385,7 +385,7 @@ test("app dispatches battle state changes through the engine adapter", () => {
   assert.match(app, /dispatchCancelAttackFromUiState/);
   assert.match(app, /function isAttackFlowPending\(\)/);
   assert.match(app, /if \(isAttackFlowPending\(\)\) return/);
-  assert.match(attackSource, /declareAttackWithEngine\(owner, rival, attackerIndex, targetIndex\)/);
+  assert.match(attackSource, /declareAttackWithEngine\(\s*owner,\s*rival,\s*attackerIndex,\s*targetIndex,\s*attackOptions\s*\)/);
   assert.match(attackSource, /targetEffectId = attackEvent\.id/);
   assert.match(attackSource, /declarationEventId: attackContext\.targetEffectId/);
   assert.match(attackSource, /consumeAttack: trapResult\.consumesAttack/);

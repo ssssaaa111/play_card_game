@@ -3877,6 +3877,94 @@ test("after-attack monster effects resolve through battle events", () => {
   ));
 });
 
+test("sunflare declaration locks the explicitly selected rival support target", () => {
+  const state = makeState({
+    cards: [
+      card("sun-1", {
+        templateId: "trio-sun-judicator",
+        type: "monster",
+        atk: 3000,
+        def: 1800,
+        afterAttack: "sunflareSunder"
+      }),
+      card("front-1", { templateId: "guard-sigil", ownerId: AI, type: "trap" }),
+      card("chosen-1", { templateId: "mirror-snare", ownerId: AI, type: "trap" }),
+      card("foreign-1", { templateId: "renewal", type: "spell" })
+    ],
+    player: {
+      monsterZone: ["sun-1"],
+      spellTrapZone: ["foreign-1"]
+    },
+    ai: {
+      spellTrapZone: ["front-1", "chosen-1"]
+    },
+    turn: {
+      phase: Phase.battle
+    }
+  });
+  state.machine.phase = Phase.battle;
+  state.machine.timing = Timing.battleOpen;
+  const engine = new GameEngine(state);
+
+  const declarationEvents = engine.dispatch({
+    type: "DECLARE_ATTACK",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "sun-1",
+    afterAttackTargetCardId: "chosen-1"
+  });
+  const declaration = declarationEvents.find((event) => event.type === "ATTACK_DECLARED");
+  const lock = declarationEvents.find((event) => event.type === "AFTER_ATTACK_TARGET_LOCKED");
+
+  assert.equal(declaration.afterAttackTargetCardId, "chosen-1");
+  assert.equal(declaration.afterAttackTargetIndex, 1);
+  assert.equal(lock?.targetCardId, "chosen-1");
+  assert.equal(engine.getState().machine.pendingAttack.afterAttackTargetCardId, "chosen-1");
+
+  engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: AI, reason: "declined" });
+  const battleEvents = engine.dispatch({
+    type: "RESOLVE_BATTLE",
+    playerId: PLAYER,
+    rivalId: AI,
+    attackerCardId: "sun-1",
+    declarationEventId: declaration.id
+  });
+  assert.ok(battleEvents.some((event) => event.type === "CARD_DESTROYED" && event.cardId === "chosen-1"));
+  assert.ok(engine.getState().players[AI].spellTrapZone.includes("front-1"));
+
+  const invalidState = makeState({
+    cards: [
+      card("sun-2", {
+        templateId: "trio-sun-judicator",
+        type: "monster",
+        atk: 3000,
+        def: 1800,
+        afterAttack: "sunflareSunder"
+      }),
+      card("own-support-1", { templateId: "renewal", type: "spell" })
+    ],
+    player: {
+      monsterZone: ["sun-2"],
+      spellTrapZone: ["own-support-1"]
+    },
+    turn: { phase: Phase.battle }
+  });
+  invalidState.machine.phase = Phase.battle;
+  invalidState.machine.timing = Timing.battleOpen;
+  const invalidEngine = new GameEngine(invalidState);
+  assert.throws(
+    () => invalidEngine.dispatch({
+      type: "DECLARE_ATTACK",
+      playerId: PLAYER,
+      rivalId: AI,
+      attackerCardId: "sun-2",
+      afterAttackTargetCardId: "own-support-1"
+    }),
+    /after-attack target.*rival.*spellTrapZone/i
+  );
+  assert.equal(invalidEngine.getState().machine.responseWindow, null);
+});
+
 test("targeted after-attack effects do not report a resolution when no declaration target exists", () => {
   const state = makeState({
     cards: [
