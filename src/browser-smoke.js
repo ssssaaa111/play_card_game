@@ -808,6 +808,7 @@ async function runTrioAttackPlanningBasicSmoke(ctx) {
   const attacks = (ctx.state.gameEvents || [])
     .filter((event) => event.type === "ATTACK_DECLARED" && event.playerId === "ai")
     .slice(attackEventsBefore);
+  const gameEvents = ctx.state.gameEvents || [];
   const referencesTemplate = (cardId, templateId) => eventReferencesTemplate({ cardId }, templateId);
   const [firstAttack, secondAttack, thirdAttack] = attacks;
   if (attacks.length !== 3 ||
@@ -818,6 +819,27 @@ async function runTrioAttackPlanningBasicSmoke(ctx) {
       !referencesTemplate(thirdAttack?.attackerCardId, "trio-star-herald") ||
       thirdAttack?.targetCardId) {
     throw new Error(`${smokeName}: trio should assign sun to the exclusive high threat, moon to the weak target, then let star attack directly. ${smokeDebug(ctx)}`);
+  }
+  const effectiveAttacks = attacks.filter((attack) => {
+    const attackIndex = gameEvents.indexOf(attack);
+    const resolutionIndex = gameEvents.findIndex((event, index) =>
+      index >= attackIndex &&
+      event.type === "BATTLE_RESOLVED" &&
+      String(event.declarationEventId) === String(attack.id)
+    );
+    if (resolutionIndex < 0) return false;
+    const outcome = gameEvents[resolutionIndex].outcome || {};
+    const resolutionEvents = gameEvents.slice(attackIndex, resolutionIndex + 1);
+    return Number(outcome.wear) > 0 || outcome.destroysTarget || resolutionEvents.some((event) =>
+      event.sourceCardId === attack.attackerCardId &&
+      (
+        (event.type === "DAMAGE_DEALT" && Number(event.amount) > 0) ||
+        (event.type === "CARD_DESTROYED" && event.cardId !== attack.attackerCardId)
+      )
+    );
+  });
+  if (effectiveAttacks.length !== 3) {
+    throw new Error(`${smokeName}: all three planned attacks must produce event-backed pressure. ${smokeDebug(ctx)}`);
   }
   if (!ctx.state.player.grave.some((card) => card?.id === "void-siege-breaker") ||
       !ctx.state.player.grave.some((card) => card?.id === "prism-saint") ||

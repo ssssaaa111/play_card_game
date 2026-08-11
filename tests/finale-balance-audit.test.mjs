@@ -3,8 +3,83 @@ import assert from "node:assert/strict";
 
 import {
   analyzeFinaleBalance,
+  summarizeFinalePressureSamples,
   simulateFinaleDeployment
 } from "../src/finale-balance-audit.js";
+
+test("finale pressure metrics distinguish effective attacks, trap exchanges, and censored survival", () => {
+  const cards = {
+    sun: { templateId: "trio-sun-judicator" },
+    moon: { templateId: "trio-moon-warden" },
+    star: { templateId: "trio-star-herald" },
+    snare: { templateId: "trio-solar-snare", type: "trap" }
+  };
+  const report = summarizeFinalePressureSamples([
+    {
+      id: "resolved-pressure",
+      cards,
+      initialTrioCardIds: ["sun", "moon", "star"],
+      finalTrioCardIds: ["sun", "moon", "star"],
+      fullTrioEstablished: true,
+      events: [
+        { id: 1, type: "TURN_STARTED", playerId: "ai" },
+        { id: 2, type: "ATTACK_DECLARED", playerId: "ai", attackerCardId: "sun", targetCardId: "target" },
+        { id: 3, type: "DAMAGE_DEALT", playerId: "player", sourceCardId: "sun", amount: 300 },
+        { id: 4, type: "AFTER_ATTACK_EFFECT_RESOLVED", sourceCardId: "sun", resultEventIds: [3] },
+        {
+          id: 5,
+          type: "BATTLE_RESOLVED",
+          declarationEventId: 2,
+          attackerCardId: "sun",
+          outcome: { kind: "attackWin", rawDamage: 400, destroysTarget: true }
+        }
+      ]
+    },
+    {
+      id: "trap-exchange",
+      cards,
+      initialTrioCardIds: ["sun", "moon", "star"],
+      finalTrioCardIds: ["moon", "star"],
+      fullTrioEstablished: true,
+      events: [
+        { id: 10, type: "ATTACK_DECLARED", playerId: "ai", attackerCardId: "sun", targetCardId: "target" },
+        { id: 11, type: "CARD_ACTIVATED", playerId: "player", cardId: "snare", cardType: "trap" },
+        { id: 12, type: "CARD_DESTROYED", cardId: "sun", sourceCardId: "snare", reason: "effect" },
+        { id: 13, type: "ATTACK_CANCELED", declarationEventId: 10, attackerCardId: "sun" },
+        { id: 14, type: "TURN_STARTED", playerId: "ai" }
+      ]
+    }
+  ]);
+
+  assert.deepEqual(report.deployment, {
+    probes: 2,
+    fullTrioEstablished: 2,
+    rate: 1
+  });
+  assert.deepEqual(report.survival, {
+    trackedGods: 6,
+    destroyedGods: 1,
+    ongoingAtAuditEnd: 5,
+    observedTurns: 5,
+    averageObservedTurns: 0.8333
+  });
+  assert.deepEqual(report.attacks, {
+    declared: 2,
+    resolved: 1,
+    effective: 1,
+    effectiveRate: 0.5
+  });
+  assert.deepEqual(report.trapExchanges, {
+    responses: 1,
+    trioGodsRemoved: 1,
+    rate: 1
+  });
+  assert.deepEqual(report.afterAttackEffects, {
+    resolved: 1,
+    damageEvents: 1,
+    damage: 300
+  });
+});
 
 test("authored finale opening guarantees a legal three-tribute full trio deployment", () => {
   const report = analyzeFinaleBalance({
@@ -28,6 +103,29 @@ test("authored finale opening guarantees a legal three-tribute full trio deploym
   assert.equal(report.authored.deployment.lockedByConvergence, 2);
   assert.equal(report.authored.deployment.immediatelyAttackable, 1);
   assert.equal(report.authored.deployment.totalPrintedAtkOnField, 7500);
+  assert.deepEqual(report.pressure.auditWindow, {
+    probes: ["next-turn-attacks", "attack-destroy-trap"],
+    aiTurnsObservedPerProbe: 1,
+    survivalValuesAreLowerBounds: true
+  });
+  assert.equal(report.pressure.deployment.rate, 1);
+  assert.deepEqual(report.pressure.attacks, {
+    declared: 4,
+    resolved: 3,
+    effective: 3,
+    effectiveRate: 0.75
+  });
+  assert.equal(report.pressure.survival.averageObservedTurns, 0.8333);
+  assert.deepEqual(report.pressure.afterAttackEffects, {
+    resolved: 1,
+    damageEvents: 1,
+    damage: 300
+  });
+  assert.deepEqual(report.pressure.trapExchanges, {
+    responses: 1,
+    trioGodsRemoved: 1,
+    rate: 1
+  });
 });
 
 test("losing one of four opening tribute bodies still permits the authored trio deployment", () => {

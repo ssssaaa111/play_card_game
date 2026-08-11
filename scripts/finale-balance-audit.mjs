@@ -11,6 +11,10 @@ if (
   || !report.disruption.oneTributeLost.fullTrioEstablished
   || report.disruption.twoTributesLost.legal
   || !report.disruption.attackDestroyTrap.trapResult?.sourceGodDestroyed
+  || report.pressure.deployment.rate !== 1
+  || report.pressure.attacks.effective !== 3
+  || report.pressure.afterAttackEffects.damage !== 300
+  || report.pressure.trapExchanges.rate !== 1
 ) {
   process.exitCode = 1;
 }
