@@ -47,12 +47,12 @@ test("monster field view centralizes attack and selection states", () => {
   assert.equal(ready.materialCandidate, true);
   assert.equal(ready.materialSelected, true);
   assert.equal(ready.animationClass, "summon-flash");
-  assert.equal(ready.ariaLabel, "我方召唤区 3，当前选中，已选择为魔法目标");
+  assert.equal(ready.ariaLabel, "我方召唤区 3，当前选中，已选择为效果目标");
   assert.ok(ready.slotClasses.includes("attack-target"));
   assert.ok(ready.slotClasses.includes("target-selected"));
   assert.ok(ready.cardClasses.includes("selected"));
   assert.ok(ready.cardClasses.includes("target-selected"));
-  assert.match(ready.ariaLabel, /已选择为魔法目标/);
+  assert.match(ready.ariaLabel, /已选择为效果目标/);
   assert.ok(ready.cardClasses.includes("enhanced"));
   assert.ok(ready.cardClasses.includes("tribute-selected"));
 });
@@ -216,7 +216,7 @@ test("support field view reveals active spells while keeping rival traps conceal
   assert.match(rivalSpell.ariaLabel, /持续魔法生效中/);
   assert.ok(selectedRivalSpell.slotClasses.includes("target-selected"));
   assert.ok(selectedRivalSpell.cardClasses.includes("target-selected"));
-  assert.match(selectedRivalSpell.ariaLabel, /已选择为魔法目标/);
+  assert.match(selectedRivalSpell.ariaLabel, /已选择为效果目标/);
 });
 
 test("support field view exposes target legality without revealing a rival face-down card", () => {
@@ -232,6 +232,7 @@ test("support field view exposes target legality without revealing a rival face-
     owner: "ai",
     index: 0,
     targetable: true,
+    targetSelected: true,
     spellTarget: { ok: true, card: hiddenTrap }
   });
   const wrongOwner = supportFieldSlotView({
@@ -251,6 +252,7 @@ test("support field view exposes target legality without revealing a rival face-
   assert.equal(legalHidden.targetInteraction, true);
   assert.equal(legalHidden.effectTargetState, "legal");
   assert.equal(legalHidden.effectTargetReason, "");
+  assert.equal(legalHidden.ariaLabel, "敌方魔陷区 1，盖放卡牌，已选择为效果目标");
   assert.doesNotMatch(JSON.stringify(legalHidden), /镜光反制|mirror-snare|destroyAttacker/);
 
   assert.equal(wrongOwner.targetInteraction, true);

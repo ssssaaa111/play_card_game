@@ -808,6 +808,23 @@ export const scenarioSetups = {
     aiHand: [],
     aiDeck: ["guard-sigil"]
   },
+  sunflareHiddenTargetChoice: {
+    label: "日曜盖牌目标",
+    difficulty: "demo",
+    text: "界面测试场景：玩家控制曜冕裁决者，对手魔陷区有两张内容不可见的盖牌。",
+    goal: "用曜冕裁决者直接攻击，按卡位选择第二张盖牌；选择和锁定全程不应公开盖牌卡名。",
+    objectives: ["进入通用的“效果目标”选择阶段。", "选择对手魔陷区第二张盖牌。", "确认卡位标签和提示始终不泄露卡名。"],
+    hints: ["盖牌只显示卡位，不显示卡名或效果。", "攻击宣言后的公开日志也只会记录被锁定的魔陷区位置。"],
+    playerLp: 4000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["trio-sun-judicator"],
+    aiField: [],
+    aiTraps: ["summon-flare", "chain-nullifier"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
   trioShieldLethalPlanning: {
     label: "三曜护盾斩杀",
     text: "规则测试场景：玩家生命值看似进入日曜直击斩杀线，但现有护盾足以让直击无法终结对局。",

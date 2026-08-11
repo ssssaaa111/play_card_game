@@ -393,6 +393,23 @@ test("sunflare target choice scenario exposes two player-selectable support targ
   }));
 });
 
+test("sunflare hidden target choice scenario keeps two non-attack traps concealed", () => {
+  const setup = buildScenarioState(scenarioSetups.sunflareHiddenTargetChoice, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), ["trio-sun-judicator"]);
+  assert.deepEqual(setup.ai.traps.filter(Boolean).map((card) => card.id), ["summon-flare", "chain-nullifier"]);
+  assertValidGameState(buildEngineStateFromUiState({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai },
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+});
+
 test("trio shield lethal planning scenario isolates a shielded false lethal", () => {
   const setup = buildScenarioState(scenarioSetups.trioShieldLethalPlanning, {
     playerPreset: "protagonistTrioOmegaFull",

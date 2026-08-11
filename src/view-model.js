@@ -11,7 +11,7 @@ export function phaseLabel({ started, paused, gameOver, actionWindow, phase }) {
 export function turnLabel({ started, paused, actionWindow, turn }) {
   if (!started) return "点击开始";
   if (paused) return "暂停中";
-  if (actionWindow === "targetSelect") return "选择魔法目标";
+  if (actionWindow === "targetSelect") return "选择效果目标";
   return turn === "player" ? "你的回合" : "AI 正在行动";
 }
 

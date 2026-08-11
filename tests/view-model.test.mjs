@@ -30,7 +30,7 @@ test("builds phase and turn labels from state", () => {
 
   assert.equal(turnLabel({ started: false }), "点击开始");
   assert.equal(turnLabel({ started: true, paused: true }), "暂停中");
-  assert.equal(turnLabel({ started: true, actionWindow: "targetSelect" }), "选择魔法目标");
+  assert.equal(turnLabel({ started: true, actionWindow: "targetSelect" }), "选择效果目标");
   assert.equal(turnLabel({ started: true, turn: "ai" }), "AI 正在行动");
 });
 

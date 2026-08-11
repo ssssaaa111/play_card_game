@@ -4366,6 +4366,77 @@ async function runSunflareTargetChoiceBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runSunflareHiddenTargetReadabilityBasicSmoke(ctx) {
+  const smokeName = "sunflare-hidden-target-readability-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "sunflareHiddenTargetChoice");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "trio-sun-judicator");
+  const firstSupport = ctx.state.ai.traps[0];
+  const secondSupport = ctx.state.ai.traps[1];
+  if (!attacker || firstSupport?.id !== "summon-flare" || secondSupport?.id !== "chain-nullifier") {
+    throw new Error(`${smokeName}: concealed support fixture is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-sun-judicator"), `${smokeName}: select sun attacker`);
+  await waitForSmoke(
+    () => ctx.els.aiPanel.classList.contains("direct-target"),
+    `${smokeName}: direct attack target highlighted`
+  );
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: request direct attack`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.purpose === "afterAttackTarget" &&
+      ctx.els.turnText.textContent === "选择效果目标" &&
+      trapSlot(ctx.els, "ai", 0)?.classList.contains("targetable") &&
+      trapSlot(ctx.els, "ai", 1)?.classList.contains("targetable"),
+    `${smokeName}: generic effect-target window opens for both concealed slots`
+  );
+
+  const firstSlot = trapSlot(ctx.els, "ai", 0);
+  const secondSlot = trapSlot(ctx.els, "ai", 1);
+  const openingTargetText = [
+    ctx.els.turnText.textContent,
+    ctx.els.choiceText.textContent,
+    firstSlot?.getAttribute("aria-label") || "",
+    secondSlot?.getAttribute("aria-label") || ""
+  ].join(" ");
+  if (!firstSlot?.getAttribute("aria-label")?.includes("敌方魔陷区 1，盖放卡牌") ||
+      !secondSlot?.getAttribute("aria-label")?.includes("敌方魔陷区 2，盖放卡牌") ||
+      /召雷陷阵|断链裁决/.test(openingTargetText)) {
+    throw new Error(`${smokeName}: opening target UI leaked a concealed card identity. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(secondSlot, `${smokeName}: select second concealed support slot`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.selectedTarget?.cardUid === secondSupport.uid &&
+      trapSlot(ctx.els, "ai", 1)?.getAttribute("aria-label")?.includes("已选择为效果目标") &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: second concealed slot selected as an effect target`
+  );
+  const selectedTargetText = [
+    ctx.els.choiceText.textContent,
+    trapSlot(ctx.els, "ai", 1)?.getAttribute("aria-label") || ""
+  ].join(" ");
+  if (/召雷陷阵|断链裁决/.test(selectedTargetText)) {
+    throw new Error(`${smokeName}: selected target UI leaked a concealed card identity. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm concealed support target`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.ai.lp === 1000 &&
+      ctx.state.ai.traps.some((card) => card?.uid === firstSupport.uid) &&
+      ctx.state.ai.grave.some((card) => card?.uid === secondSupport.uid),
+    `${smokeName}: chosen concealed support resolves without transfer. ${smokeDebug(ctx)}`,
+    12000
+  );
+  if (!(ctx.state.gameEvents || []).some((event) =>
+    event.type === "AFTER_ATTACK_TARGET_LOCKED" && event.targetCardId === secondSupport.uid
+  )) {
+    throw new Error(`${smokeName}: selected concealed target was not locked by the engine. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioOmegaFinaleSmoke(ctx) {
   const smokeName = "trio-omega-finale-demo";
   setSmokeStatus("running", smokeName);
@@ -8952,6 +9023,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-vow-demo": runTrioOmegaVowDemoSmoke,
     "finale-sunflare-target-lock-basic": runFinaleSunflareTargetLockBasicSmoke,
     "sunflare-target-choice-basic": runSunflareTargetChoiceBasicSmoke,
+    "sunflare-hidden-target-readability-basic": runSunflareHiddenTargetReadabilityBasicSmoke,
     "trio-omega-finale-demo": runTrioOmegaFinaleSmoke,
     "trio-omega-finale-rush": runTrioOmegaFinaleRushSmoke,
     "trio-gauntlet-demo": runTrioGauntletSmoke,
