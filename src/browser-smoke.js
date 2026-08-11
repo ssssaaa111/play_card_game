@@ -1215,6 +1215,15 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
   if (ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "300 / 4000") {
     throw new Error(`${smokeName}: the HUD must stage base attack damage before revealing the lethal star effect. ${smokeDebug(ctx)}`);
   }
+  const soundWasOn = ctx.state.soundOn;
+  clickSmokeElement(ctx.els.soundBtn, `${smokeName}: toggle sound during staged effect reveal`);
+  await waitForSmoke(
+    () => ctx.state.soundOn !== soundWasOn,
+    `${smokeName}: sound preference should update during the reveal`
+  );
+  if (ctx.els.playerLp?.textContent.trim() !== "300 / 4000") {
+    throw new Error(`${smokeName}: unrelated settings renders must preserve the staged LP display. ${smokeDebug(ctx)}`);
+  }
   const starEffectSummary = ctx.els.aiRevealSummary?.textContent || "";
   if (!starEffectSummary.includes("追加造成 300 点伤害") ||
       !starEffectSummary.includes("攻击力提升 300")) {

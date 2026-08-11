@@ -6,6 +6,7 @@ import {
   afterAttackDamageAndGrowthText,
   afterAttackLockedTargetLostText,
   battleDamageAmount,
+  createCombatHudDamageStage,
   findAfterAttackDamageAndGrowthEvents,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
@@ -136,4 +137,26 @@ test("rewinds one resolved damage event for staged HUD feedback without mutating
   assert.deepEqual(player, { owner: "player", lp: 0, shield: 0, deck: [], grave: [] });
   assert.equal(rewindDamageForHud(player, null), player);
   assert.equal(rewindDamageForHud(player, { type: "DAMAGE_DEALT", playerId: "ai", amount: 300 }), player);
+});
+
+test("keeps staged damage projected through unrelated HUD renders until its reveal ends", () => {
+  const player = { owner: "player", lp: 0, shield: 0, deck: [], grave: [] };
+  const damageEvent = {
+    id: 42,
+    type: "DAMAGE_DEALT",
+    playerId: "player",
+    amount: 300
+  };
+  const stage = createCombatHudDamageStage();
+
+  stage.begin(damageEvent);
+  assert.equal(stage.project(player).lp, 300);
+  assert.equal(stage.project(player).lp, 300);
+
+  stage.end({ ...damageEvent, id: 99 });
+  assert.equal(stage.project(player).lp, 300);
+
+  stage.end(damageEvent);
+  assert.equal(stage.project(player), player);
+  assert.deepEqual(player, { owner: "player", lp: 0, shield: 0, deck: [], grave: [] });
 });

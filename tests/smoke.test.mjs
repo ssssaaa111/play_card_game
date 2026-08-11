@@ -577,8 +577,9 @@ test("after-attack feedback stages base damage before revealing effect damage", 
   assert.ok(feedbackStart >= 0 && feedbackEnd > feedbackStart);
   assert.match(
     feedbackSource,
-    /renderCurrentCombatHud\(\{ rewindDamageEvent: afterAttackDamageEvent \}\);[\s\S]*await waitForAiReveal/
+    /combatHudDamageStage\.begin\(afterAttackDamageEvent\);[\s\S]*await waitForAiReveal/
   );
+  assert.match(feedbackSource, /finally \{[\s\S]*combatHudDamageStage\.end\(afterAttackDamageEvent\);[\s\S]*renderCurrentCombatHud\(\)/);
   assert.match(feedbackSource, /event\.type === "AFTER_ATTACK_EFFECT_RESOLVED"/);
   assert.doesNotMatch(feedbackSource, /attacker\.afterAttack && events\.some\(\(event\) => event\.sourceCardId === attackerId\)/);
   assert.match(
