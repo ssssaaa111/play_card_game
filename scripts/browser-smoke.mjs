@@ -40,6 +40,7 @@ const DEFAULT_SMOKES = [
   "finale-sunflare-target-lock-basic",
   "sunflare-target-choice-basic",
   "sunflare-hidden-target-readability-basic",
+  "sunflare-target-timeout-recovery-basic",
   "trio-omega-finale-demo",
   "trio-omega-finale-rush",
   "trio-gauntlet-preview-basic",

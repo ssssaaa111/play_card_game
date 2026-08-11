@@ -16,6 +16,7 @@ import {
   targetSelectionConfirmationText,
   targetSelectionForCard,
   targetSelectionPrompt,
+  targetSelectionTimeoutFeedback,
   validateTargetSelection
 } from "../src/target-selection.js";
 
@@ -409,5 +410,24 @@ test("target confirmation text distinguishes spell activation from an attack dec
   assert.equal(
     targetSelectionConfirmationText({ ...spellPending, purpose: "afterAttackTarget" }, target),
     "盖放卡牌（敌方魔陷区 1）已选为目标，请确认攻击。"
+  );
+});
+
+test("target timeout feedback distinguishes a spell cancellation from an unmade attack", () => {
+  assert.deepEqual(
+    targetSelectionTimeoutFeedback({ cardName: "解印射线" }),
+    {
+      cue: "目标选择超时，已取消 解印射线",
+      log: "解印射线 目标选择超时，未发动。",
+      preserveSelected: false
+    }
+  );
+  assert.deepEqual(
+    targetSelectionTimeoutFeedback({ cardName: "曜冕裁决者", purpose: "afterAttackTarget" }),
+    {
+      cue: "目标选择超时，已取消 曜冕裁决者 的本次攻击。",
+      log: "曜冕裁决者 目标选择超时，本次攻击未宣言。",
+      preserveSelected: true
+    }
   );
 });

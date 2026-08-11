@@ -220,6 +220,22 @@ export function targetSelectionConfirmationText(pending, target) {
   return `${targetSelectionTargetLabel(target)}已选为目标，请确认${action}。`;
 }
 
+export function targetSelectionTimeoutFeedback(pending) {
+  const cardName = pending?.cardName || "当前效果";
+  if (pending?.purpose === "afterAttackTarget") {
+    return {
+      cue: `目标选择超时，已取消 ${cardName} 的本次攻击。`,
+      log: `${cardName} 目标选择超时，本次攻击未宣言。`,
+      preserveSelected: true
+    };
+  }
+  return {
+    cue: `目标选择超时，已取消 ${cardName}`,
+    log: `${cardName} 目标选择超时，未发动。`,
+    preserveSelected: false
+  };
+}
+
 export function buildTargetSelectionDisplay(pending, duelists = {}) {
   if (!pending) {
     return {

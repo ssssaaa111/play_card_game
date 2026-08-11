@@ -4456,6 +4456,62 @@ async function runSunflareHiddenTargetReadabilityBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runSunflareTargetTimeoutRecoveryBasicSmoke(ctx) {
+  const smokeName = "sunflare-target-timeout-recovery-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "sunflareHiddenTargetChoice");
+  const attackerIndex = ctx.state.player.field.findIndex((card) => card?.id === "trio-sun-judicator");
+  const secondSupport = ctx.state.ai.traps[1];
+  if (attackerIndex < 0 || !secondSupport) {
+    throw new Error(`${smokeName}: timeout fixture is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-sun-judicator"), `${smokeName}: select sun attacker`);
+  await waitForSmoke(
+    () => ctx.els.aiPanel.classList.contains("direct-target"),
+    `${smokeName}: direct attack target highlighted`
+  );
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: open timed effect-target selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.purpose === "afterAttackTarget" &&
+      ctx.els.timerProgress?.classList.contains("active"),
+    `${smokeName}: effect-target countdown starts`
+  );
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.selected?.zone === "playerField" &&
+      ctx.state.selected.index === attackerIndex &&
+      !ctx.els.fieldActionBar?.hidden &&
+      ctx.els.choiceActions?.hidden &&
+      ctx.els.aiPanel.classList.contains("direct-target") &&
+      ctx.els.toast?.textContent === "目标选择超时，已取消 曜冕裁决者 的本次攻击。" &&
+      (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("本次攻击未宣言")),
+    `${smokeName}: timeout restores the attacker with attack-specific feedback`,
+    26000
+  );
+
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: reopen direct attack after timeout`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.purpose === "afterAttackTarget",
+    `${smokeName}: effect-target selection reopens`
+  );
+  clickSmokeElement(trapSlot(ctx.els, "ai", 1), `${smokeName}: choose second support after timeout`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.selectedTarget?.cardUid === secondSupport.uid &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: second support selected after timeout`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm attack after timeout`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.ai.lp === 1000 &&
+      ctx.state.ai.grave.some((card) => card?.uid === secondSupport.uid),
+    `${smokeName}: recovered attack resolves normally. ${smokeDebug(ctx)}`,
+    12000
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioOmegaFinaleSmoke(ctx) {
   const smokeName = "trio-omega-finale-demo";
   setSmokeStatus("running", smokeName);
@@ -9043,6 +9099,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "finale-sunflare-target-lock-basic": runFinaleSunflareTargetLockBasicSmoke,
     "sunflare-target-choice-basic": runSunflareTargetChoiceBasicSmoke,
     "sunflare-hidden-target-readability-basic": runSunflareHiddenTargetReadabilityBasicSmoke,
+    "sunflare-target-timeout-recovery-basic": runSunflareTargetTimeoutRecoveryBasicSmoke,
     "trio-omega-finale-demo": runTrioOmegaFinaleSmoke,
     "trio-omega-finale-rush": runTrioOmegaFinaleRushSmoke,
     "trio-gauntlet-demo": runTrioGauntletSmoke,

@@ -142,6 +142,7 @@ import {
   targetSelectionForCard,
   targetSelectionTargetLabel,
   targetSelectionPrompt,
+  targetSelectionTimeoutFeedback,
   validateTargetSelection
 } from './target-selection.js';
 import {
@@ -5032,10 +5033,12 @@ function handleTargetSelectionTimeout() {
     return;
   }
 
+  const feedback = targetSelectionTimeoutFeedback(state.pendingTarget);
+  const preserveSelectedMonster = feedback.preserveSelected && state.selected?.zone === "playerField";
   clearPendingTarget();
-  state.selected = null;
-  cue(`目标选择超时，已取消 ${cardName}`);
-  addLog(`${cardName} 目标选择超时，未发动。`);
+  clearTransientSelection(state, { preserveSelected: preserveSelectedMonster });
+  cue(feedback.cue);
+  addLog(feedback.log);
   render();
   resolvePlayerActionWindow("目标选择超时");
 }
