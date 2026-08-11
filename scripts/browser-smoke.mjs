@@ -31,6 +31,7 @@ const DEFAULT_SMOKES = [
   "equipment-spell",
   "effect-marker-stacking-basic",
   "support-target-readability-basic",
+  "ai-fusion-planning-basic",
   "fusion-occlusion-desktop",
   "fusion-occlusion-tablet",
   "fusion-occlusion-landscape",

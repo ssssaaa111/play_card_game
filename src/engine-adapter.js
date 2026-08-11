@@ -143,6 +143,45 @@ function fusionSummonSlotIndex(duelist, materialIndexes = [], fieldIndex = null)
   return emptyIndex >= 0 ? emptyIndex : -1;
 }
 
+function fusionMaterialSelections(duelist, sourceCard, fusion) {
+  const available = [
+    ...duelist.field
+      .map((card, index) => ({ card, zone: "field", index }))
+      .filter((entry) => entry.card),
+    ...duelist.hand
+      .map((card, index) => ({ card, zone: "hand", index }))
+      .filter((entry) => entry.card && cardKey(entry.card) !== cardKey(sourceCard))
+  ];
+  const requirements = fusion.materials.flatMap((requirement) =>
+    Array.from({ length: requirement.count }, () => requirement.templateId)
+  );
+  const selections = [];
+  const seen = new Set();
+
+  function collect(requirementIndex, remaining, selected) {
+    if (requirementIndex >= requirements.length) {
+      const key = selected.map((entry) => cardKey(entry.card)).sort().join(":");
+      if (!seen.has(key)) {
+        seen.add(key);
+        selections.push(selected);
+      }
+      return;
+    }
+    const templateId = requirements[requirementIndex];
+    remaining.forEach((entry, index) => {
+      if (cardTemplateId(entry.card) !== templateId) return;
+      collect(
+        requirementIndex + 1,
+        remaining.filter((_candidate, candidateIndex) => candidateIndex !== index),
+        [...selected, entry]
+      );
+    });
+  }
+
+  collect(0, available, []);
+  return selections;
+}
+
 function collectCards(cards, ownerId, target) {
   cards.filter(Boolean).forEach((card) => {
     const id = cardKey(card);
@@ -704,6 +743,43 @@ export function explainFusionSummonFromUiState(uiState, playerId, rivalId, handI
   }, "Fusion summon");
 }
 
+export function getLegalFusionActionsFromUiState(uiState, playerId, rivalId) {
+  const duelist = uiDuelist(uiState, playerId);
+  return duelist.hand.flatMap((card, handIndex) => {
+    if (!isFusionSpell(card)) return [];
+    return fusionOptionsForCard(card).flatMap((fusion) =>
+      fusionMaterialSelections(duelist, card, fusion).flatMap((selection) => {
+        const materialCardIds = selection.map((entry) => cardKey(entry.card));
+        const materialIndexes = selection
+          .filter((entry) => entry.zone === "field")
+          .map((entry) => entry.index);
+        const fieldIndex = fusionSummonSlotIndex(duelist, materialIndexes);
+        if (fieldIndex < 0) return [];
+        const legality = explainFusionSummonFromUiState(uiState, playerId, rivalId, handIndex, {
+          fusionResultTemplateId: fusion.resultTemplateId,
+          materialCardIds,
+          fieldIndex
+        });
+        if (!legality.ok) return [];
+        const resultCard = [...duelist.hand, ...duelist.deck]
+          .find((entry) => cardTemplateId(entry) === fusion.resultTemplateId);
+        if (!resultCard) return [];
+        return [{
+          type: "fusion",
+          card,
+          cardUid: cardKey(card),
+          handIndex,
+          fusionResultTemplateId: fusion.resultTemplateId,
+          resultCard,
+          materialCardIds,
+          materialZones: selection.map((entry) => entry.zone),
+          fieldIndex
+        }];
+      })
+    );
+  });
+}
+
 export function explainSummonMonsterFromUiState(uiState, playerId, handIndex, fieldIndex = null, options = {}) {
   const duelist = uiDuelist(uiState, playerId);
   const card = duelist.hand[handIndex];
@@ -963,6 +1039,7 @@ function localizeEngineRuleReason(message = "", actionLabel = "操作") {
   if (/requires at least .* cards in deck/.test(message)) return "卡组剩余数量不足。";
   if (/requires LP at most/.test(message)) return "生命值还没有降到发动条件。";
   if (/is not a monster/.test(message)) return "这张卡不是怪兽卡。";
+  if (/can only be fusion summoned/.test(message)) return "这只怪兽只能通过融合召唤登场。";
   if (/is not a trap/.test(message)) return "这张卡不是陷阱卡。";
   if (/has no normal or extra summon/.test(message)) return "本回合没有可用的通常召唤或额外召唤次数。";
   if (/monsterZone is full/.test(message)) return "召唤区已满。";

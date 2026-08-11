@@ -15,6 +15,7 @@ import {
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
   getBattleLegalActionsFromUiState,
+  getLegalFusionActionsFromUiState,
   getLegalActionsFromUiState,
   projectBattleFromUiState,
   applyUiGameEvents,
@@ -424,6 +425,19 @@ test("explains tribute summon legality from UI state", () => {
   assert.match(rejected.engineReason, /requires exactly 1 tribute/);
 });
 
+test("rejects a fusion-only result from the normal summon action path", () => {
+  const result = uiMonster("fusion-result", "flare-gale-archon");
+  result.summonRoute = "fusion";
+  const state = appState();
+  state.player.hand = [result];
+
+  const rejected = explainSummonMonsterFromUiState(state, "player", 0, 0);
+
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.engineReason, /can only be fusion summoned/);
+  assert.match(rejected.reason, /只能通过融合召唤/);
+});
+
 test("dispatches fusion summon through engine and fixed UI slots", () => {
   const fusion = uiSpell("fusion-spell", "fusionSummon", "starforge-fusion");
   fusion.fusion = { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] };
@@ -509,6 +523,40 @@ test("dispatches the explicitly selected result for a multi-result fusion", () =
   assert.deepEqual(state.player.deck, [attackArchon]);
   assert.equal(state.player.shield, 400);
   assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.resultTemplateId === "tempest-aegis-archon"));
+});
+
+test("enumerates complete legal fusion actions with result, materials, zones, and summon slot", () => {
+  const fusion = uiSpell("fusion-spell", "fusionSummon", "starforge-fusion");
+  fusion.fusion = {
+    options: [
+      { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] },
+      { result: "tempest-aegis-archon", materials: ["ember-drake", "gale-mage"] }
+    ]
+  };
+  const ember = uiMonster("fusion-ember", "ember-drake");
+  const gale = uiMonster("fusion-gale", "gale-mage");
+  const attackArchon = uiMonster("fusion-attack", "flare-gale-archon");
+  const guardArchon = uiMonster("fusion-guard", "tempest-aegis-archon");
+  const state = appState();
+  state.player.hand = [fusion, gale];
+  state.player.field[0] = ember;
+  state.player.deck = [attackArchon, guardArchon];
+
+  const actions = getLegalFusionActionsFromUiState(state, "player", "ai");
+
+  assert.deepEqual(actions.map((action) => action.fusionResultTemplateId), [
+    "flare-gale-archon",
+    "tempest-aegis-archon"
+  ]);
+  actions.forEach((action) => {
+    assert.equal(action.type, "fusion");
+    assert.equal(action.cardUid, fusion.uid);
+    assert.equal(action.handIndex, 0);
+    assert.deepEqual(action.materialCardIds, [ember.uid, gale.uid]);
+    assert.deepEqual(action.materialZones, ["field", "hand"]);
+    assert.equal(action.fieldIndex, 0);
+    assert.ok(action.resultCard === attackArchon || action.resultCard === guardArchon);
+  });
 });
 
 test("explains fusion summon legality from UI state", () => {

@@ -15,6 +15,7 @@ import {
   collectAiAttackBlockers,
   chooseAiAfterAttackSupportTarget,
   chooseAiAttackAction,
+  chooseAiFusionAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
   chooseAiSpellAction,
@@ -109,6 +110,7 @@ import {
   explainMonsterAttackReadinessFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
+  getLegalFusionActionsFromUiState,
   projectBattleFromUiState
 } from './engine-adapter.js';
 import { renderChainHistoryPanel, renderTimelinePanel } from './timeline-renderer.js';
@@ -4562,6 +4564,8 @@ async function runAiTurn() {
       await aiPlaySpells({ turnGoal, timing: "afterSummon" });
     }
     if (state.gameOver) return;
+    await aiPlayFusion({ turnGoal });
+    if (state.gameOver) return;
     dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
     await aiAttack();
     if (!state.gameOver) {
@@ -4620,6 +4624,66 @@ async function aiPlaySpells({ turnGoal = "pressure", timing = "beforeSummon" } =
       canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
     });
   }
+}
+
+async function aiPlayFusion({ turnGoal = "pressure" } = {}) {
+  const action = chooseAiFusionAction({
+    candidates: getLegalFusionActionsFromUiState(state, "ai", "player"),
+    owner: state.ai,
+    rival: state.player,
+    aiStyle: state.aiStyle,
+    turnGoal
+  });
+  if (!action) return false;
+  const fusionCard = state.ai.hand[action.handIndex];
+  if (!fusionCard || runtimeCardId(fusionCard) !== action.cardUid) return false;
+  const materialCards = action.materialCardIds
+    .map((cardId) => findRuntimeCard(cardId)?.card)
+    .filter(Boolean);
+  let fusionEvents = [];
+  try {
+    fusionEvents = dispatchFusionSummonFromUiState(state, "ai", "player", action.handIndex, {
+      fusionResultTemplateId: action.fusionResultTemplateId,
+      materialCardIds: action.materialCardIds,
+      fieldIndex: action.fieldIndex
+    });
+  } catch (error) {
+    cue(error.message || "AI 融合召唤失败。");
+    console.error(error);
+    return false;
+  }
+
+  const resultEvent = fusionEvents.find((event) =>
+    event.type === "MONSTER_SUMMONED" && event.summonType === "fusion"
+  );
+  const resultCard = findRuntimeCard(resultEvent?.cardId)?.card || action.resultCard;
+  playSound(`spell-${fusionCard.effect}`);
+  animateAvatar("ai", "cast");
+  playCenterCardEffect(fusionCard, spellCaption(fusionCard));
+  playEpicAction("融合", "draw");
+  const spellLog = addLog(`AI 发动魔法卡 ${fusionCard.name}。`, cardLogMeta(fusionCard, {
+    actor: "ai",
+    type: "spell"
+  }));
+  speak(`对手发动魔法卡，${fusionCard.name}。`);
+  playDuelistLine("ai", lineFor("ai", "spell", fusionCard), false, "spell");
+  await waitForAiReveal({ ...spellLog, revealKind: "spell" });
+
+  const reasonText = action.reason === "fusionDefense"
+    ? `对手选择「${resultCard?.name || action.fusionResultTemplateId}」建立防线。`
+    : action.reason === "fusionTributeDevelopment"
+      ? `对手选择「${resultCard?.name || action.fusionResultTemplateId}」，在不减少祭品候选的前提下发展场面。`
+      : `对手选择「${resultCard?.name || action.fusionResultTemplateId}」提高场面压力。`;
+  addLog(reasonText, cardLogMeta(fusionCard, {
+    actor: "ai",
+    type: "decision",
+    relatedCardIds: relatedCardIds(resultCard, ...materialCards)
+  }));
+  resolveEngineSpellFeedback(state.ai, state.player, fusionCard, fusionEvents);
+  resolveElementCombos(state.ai, state.player, "spell");
+  checkGameOver();
+  render("summon-ai-" + action.fieldIndex);
+  return true;
 }
 
 async function aiSummon() {

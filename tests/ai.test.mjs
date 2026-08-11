@@ -10,6 +10,7 @@ import {
   chooseAiAfterAttackSupportTarget,
   chooseAiAttackAction,
   chooseAiAttackTarget,
+  chooseAiFusionAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
   chooseAiSpellAction,
@@ -1099,6 +1100,90 @@ test("scripted pressure AI uses split tokens to build tribute bodies for a stage
   assert.equal(turnGoal, "buildTributes");
   assert.equal(action?.card, split);
   assert.equal(action?.reason, "tributeDevelopment");
+});
+
+test("AI selects a complete defensive fusion action when its life is under pressure", () => {
+  const fusion = spell("fusionSummon", { id: "starforge-fusion", name: "星魂融合" });
+  const ember = monster({ id: "ember-drake", uid: "ember-1", atk: 1400 });
+  const gale = monster({ id: "gale-mage", uid: "gale-1", atk: 1200 });
+  const attackResult = monster({ id: "flare-gale-archon", uid: "attack-result", atk: 2400, def: 1800 });
+  const guardResult = monster({ id: "tempest-aegis-archon", uid: "guard-result", atk: 2000, def: 2600, onSummon: "shield400" });
+  const shared = {
+    type: "fusion",
+    card: fusion,
+    cardUid: "fusion-1",
+    handIndex: 0,
+    materialCardIds: [ember.uid, gale.uid],
+    materialZones: ["field", "hand"],
+    fieldIndex: 0
+  };
+  const candidates = [
+    { ...shared, fusionResultTemplateId: attackResult.id, resultCard: attackResult },
+    { ...shared, fusionResultTemplateId: guardResult.id, resultCard: guardResult }
+  ];
+
+  const action = chooseAiFusionAction({
+    candidates,
+    owner: { lp: 1200, shield: 0, field: [ember, null, null, null, null] },
+    rival: { lp: 4000, field: [monster({ atk: 2600 }), null, null, null, null] },
+    aiStyle: "scriptedPressure",
+    turnGoal: "pressure"
+  });
+
+  assert.equal(action?.fusionResultTemplateId, "tempest-aegis-archon");
+  assert.deepEqual(action?.materialCardIds, ["ember-1", "gale-1"]);
+  assert.equal(action?.fieldIndex, 0);
+  assert.equal(action?.reason, "fusionDefense");
+
+  const pressureAction = chooseAiFusionAction({
+    candidates,
+    owner: { lp: 4000, shield: 0, field: [ember, null, null, null, null] },
+    rival: { lp: 4000, field: [monster({ atk: 800 }), null, null, null, null] },
+    aiStyle: "scriptedPressure",
+    turnGoal: "pressure"
+  });
+  assert.equal(pressureAction?.fusionResultTemplateId, "flare-gale-archon");
+  assert.equal(pressureAction?.reason, "fusionPressure");
+});
+
+test("AI only uses fusion for tribute development when it preserves or adds field bodies", () => {
+  const fusion = spell("fusionSummon", { id: "starforge-fusion", name: "星魂融合" });
+  const resultCard = monster({ id: "flare-gale-archon", uid: "result-1", atk: 2400, def: 1800 });
+  const base = {
+    type: "fusion",
+    card: fusion,
+    cardUid: "fusion-1",
+    handIndex: 0,
+    fusionResultTemplateId: resultCard.id,
+    resultCard,
+    materialCardIds: ["ember-1", "gale-1"],
+    fieldIndex: 0
+  };
+  const action = chooseAiFusionAction({
+    candidates: [
+      { ...base, materialZones: ["field", "field"] },
+      { ...base, materialZones: ["field", "hand"] }
+    ],
+    owner: { lp: 4000, shield: 0, field: [monster(), null, null, null, null] },
+    rival: { lp: 4000, field: [] },
+    aiStyle: "scriptedPressure",
+    turnGoal: "buildTributes"
+  });
+
+  assert.deepEqual(action?.materialZones, ["field", "hand"]);
+  assert.equal(action?.reason, "fusionTributeDevelopment");
+
+  const pressureAction = chooseAiFusionAction({
+    candidates: [
+      { ...base, materialZones: ["field", "field"] },
+      { ...base, materialZones: ["field", "hand"] }
+    ],
+    owner: { lp: 4000, shield: 0, field: [monster(), monster(), null, null, null] },
+    rival: { lp: 4000, field: [] },
+    aiStyle: "scriptedPressure",
+    turnGoal: "pressure"
+  });
+  assert.deepEqual(pressureAction?.materialZones, ["field", "hand"]);
 });
 
 test("AI defense switch policy is explicit", () => {

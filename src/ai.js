@@ -511,6 +511,55 @@ export function chooseAiSpellAction({
   return candidates[0] || null;
 }
 
+function fusionShieldGain(card) {
+  const definition = getCardEffectDefinition(card?.onSummon);
+  return (definition?.operations || [])
+    .filter((operation) => operation.op === "gainShield" && operation.player === "self")
+    .reduce((total, operation) => total + Math.max(0, Number(operation.amount) || 0), 0);
+}
+
+export function chooseAiFusionAction({
+  candidates = [],
+  owner = null,
+  rival = null,
+  aiStyle = "balanced",
+  turnGoal = "pressure"
+} = {}) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const rivalPeak = Math.max(0, ...(rival?.field || []).filter(Boolean).map((card) => battleValue(card)));
+  const ownerLp = Math.max(0, Number(owner?.lp) || 0);
+  const defensiveNeed = turnGoal === "survive" || ownerLp <= 1600 || rivalPeak >= ownerLp + (Number(owner?.shield) || 0);
+  const ranked = candidates
+    .map((candidate) => {
+      const result = candidate.resultCard;
+      if (!result) return null;
+      const fieldMaterialCount = (candidate.materialZones || []).filter((zone) => zone === "field").length;
+      const fieldBodyDelta = 1 - fieldMaterialCount;
+      if (turnGoal === "buildTributes" && fieldBodyDelta < 0) return null;
+      const shieldGain = fusionShieldGain(result);
+      const attack = totalAtk(result);
+      const defense = totalDef(result);
+      const baseScore = turnGoal === "buildTributes"
+        ? 3000 + fieldBodyDelta * 1000 + attack + Math.floor(defense / 4) + shieldGain
+        : defensiveNeed
+          ? defense + Math.floor(attack / 6) + shieldGain * 2
+          : attack + Math.floor(defense / 4) + Math.floor(shieldGain / 4);
+      const score = turnGoal === "buildTributes" ? baseScore : baseScore + fieldBodyDelta * 120;
+      return {
+        ...candidate,
+        score,
+        reason: turnGoal === "buildTributes"
+          ? "fusionTributeDevelopment"
+          : defensiveNeed
+            ? "fusionDefense"
+            : "fusionPressure"
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.handIndex - b.handIndex || a.fieldIndex - b.fieldIndex);
+  return ranked[0] || null;
+}
+
 export function chooseAiSetTrapAction({
   hand = [],
   traps = [],

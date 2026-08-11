@@ -4391,6 +4391,57 @@ async function runFinaleSunflareTargetLockBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runAiFusionPlanningBasicSmoke(ctx) {
+  const smokeName = "ai-fusion-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "aiFusionPlanning");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "starforge-fusion"),
+    `${smokeName}: AI fusion spell reaches its public reveal. ${smokeDebug(ctx)}`,
+    32000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const fusionEvent = events.find((event) =>
+    event.type === "FUSION_SUMMONED" && event.resultTemplateId === "tempest-aegis-archon"
+  );
+  const materialsEvent = events.find((event) =>
+    event.type === "MATERIALS_SENT" && event.purpose === "fusion"
+  );
+  if (!fusionEvent || materialsEvent?.materialCardIds?.length !== 2) {
+    throw new Error(`${smokeName}: AI must dispatch a complete two-material defensive fusion. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.ai.field.some((card) => card?.id === "tempest-aegis-archon") ||
+      ctx.state.ai.field.some((card) => card?.id === "flare-gale-archon") ||
+      ctx.state.ai.shield !== 400) {
+    throw new Error(`${smokeName}: low-life AI must choose the guard result and gain 400 shield. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue fusion reveal`);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && !ctx.state.aiRunning,
+    `${smokeName}: AI completes its turn after fusion. ${smokeDebug(ctx)}`,
+    32000
+  );
+  const decisionLog = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("建立防线")
+  );
+  if (!decisionLog || decisionLog.cardId !== "starforge-fusion") {
+    throw new Error(`${smokeName}: public log must explain the defensive result choice. ${smokeDebug(ctx)}`);
+  }
+  await waitForSmoke(
+    () => logCardLink(ctx.els, "tempest-aegis-archon"),
+    `${smokeName}: public fusion result log link`,
+    6000
+  );
+  clickSmokeElement(logCardLink(ctx.els, "tempest-aegis-archon"), `${smokeName}: open fusion result detail`);
+  await assertCardDetailModal(ctx, cloneCardById("tempest-aegis-archon"), smokeName);
+  clickSmokeElement(ctx.els.zoomClose, `${smokeName}: close fusion result detail`);
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runSunflareTargetChoiceBasicSmoke(ctx) {
   const smokeName = "sunflare-target-choice-basic";
   setSmokeStatus("running", smokeName);
@@ -9187,6 +9238,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-break": runDivineBreakSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "fusion-summon-basic": runFusionSummonBasicSmoke,
+    "ai-fusion-planning-basic": runAiFusionPlanningBasicSmoke,
     "fusion-readability-basic": runFusionReadabilityBasicSmoke,
     "fusion-occlusion-desktop": runFusionOcclusionSmoke,
     "fusion-occlusion-tablet": runFusionOcclusionSmoke,

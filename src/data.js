@@ -5,8 +5,8 @@ export const library = [
   { id: "ember-drake", type: "monster", name: "赤焰幼龙", element: "fire", stars: 4, atk: 1500, def: 900, icon: "炎", text: "被召唤时，对对手造成 200 点伤害。", onSummon: "burn200" },
   { id: "solar-knight", type: "monster", name: "日冕骑士", element: "light", stars: 4, atk: 1700, def: 1200, icon: "光", text: "稳健的光属性战士，适合抢节奏。" },
   { id: "gale-mage", type: "monster", name: "疾风术士", element: "wind", stars: 3, atk: 1200, def: 1400, icon: "风", text: "召唤时抽 1 张卡。", onSummon: "draw1" },
-  { id: "flare-gale-archon", type: "monster", name: "焰岚合星者", element: "fire", stars: 6, atk: 2400, def: 1800, icon: "融", text: "由赤焰幼龙和疾风术士融合召唤。攻击后自身攻击力提升 200。", summary: "指定素材融合登场的高阶进攻怪兽。", afterAttack: "grow200" },
-  { id: "tempest-aegis-archon", type: "monster", name: "岚耀守星者", element: "wind", stars: 6, atk: 2000, def: 2600, icon: "守", text: "由赤焰幼龙和疾风术士融合召唤。召唤时获得 400 护盾。", summary: "与焰岚合星者共用素材的防御形态，登场后立即建立护盾。", onSummon: "shield400" },
+  { id: "flare-gale-archon", type: "monster", name: "焰岚合星者", element: "fire", stars: 6, atk: 2400, def: 1800, icon: "融", text: "由赤焰幼龙和疾风术士融合召唤。攻击后自身攻击力提升 200。", summary: "指定素材融合登场的高阶进攻怪兽。", summonRoute: "fusion", afterAttack: "grow200" },
+  { id: "tempest-aegis-archon", type: "monster", name: "岚耀守星者", element: "wind", stars: 6, atk: 2000, def: 2600, icon: "守", text: "由赤焰幼龙和疾风术士融合召唤。召唤时获得 400 护盾。", summary: "与焰岚合星者共用素材的防御形态，登场后立即建立护盾。", summonRoute: "fusion", onSummon: "shield400" },
   { id: "void-hound", type: "monster", name: "虚影猎犬", element: "shadow", stars: 4, atk: 1600, def: 800, icon: "影", text: "攻击后自身攻击力提升 200。", afterAttack: "grow200" },
   { id: "iron-guardian", type: "monster", name: "铁壁守卫", element: "light", stars: 4, atk: 900, def: 2100, icon: "盾", text: "光属性。守备表示时用守备力结算，适合挡住高攻击怪兽。" },
   { id: "star-lancer", type: "monster", name: "星轨枪兵", element: "wind", stars: 4, atk: 1800, def: 1000, icon: "星", text: "风属性。高攻击力的前线怪兽。" },
@@ -402,7 +402,7 @@ export const deckPresets = {
       "nova-squire", "war-chant", "void-hound", "trio-moon-warden", "nova-squire",
       "spark-split", "trio-star-herald", "star-lancer", "trio-sun-judicator", "void-lock",
       "trio-star-herald", "battle-trance", "trio-moon-warden", "mirror-snare", "overclock-core",
-      "sky-raider", "dusk-alchemist", "ember-drake", "chain-nullifier", "rally-strike",
+      "starforge-fusion", "gale-mage", "ember-drake", "flare-gale-archon", "tempest-aegis-archon",
       "trio-moon-dominion", "trio-sun-judicator", "trio-moon-warden", "trio-star-herald", "mirror-snare",
       "chain-nullifier", "void-siege-breaker", "corebreak-edict", "pierce-line", "summon-flare",
       "nova-squire", "spark-split", "star-lancer", "war-chant", "trio-moon-dominion"
@@ -603,6 +603,20 @@ export const scenarioSetups = {
     aiField: ["iron-guardian"],
     aiHand: [],
     aiDeck: []
+  },
+  aiFusionPlanning: {
+    label: "AI 融合形态规划",
+    text: "规则测试场景：AI 生命值较低，拥有手牌与场上的混合融合素材，并可选择进攻或防御融合形态。",
+    goal: "结束回合，观察 AI 保留手牌素材完成融合，并根据生存压力选择岚耀守星者。",
+    playerLp: 4000,
+    aiLp: 1200,
+    playerHand: [],
+    playerDeck: ["guard-sigil", "solar-knight"],
+    playerField: ["void-siege-breaker"],
+    aiHand: ["starforge-fusion", "gale-mage"],
+    aiField: ["ember-drake"],
+    aiDeck: ["solar-knight", "flare-gale-archon", "tempest-aegis-archon"],
+    aiStyle: "scriptedPressure"
   },
   splitToken: {
     label: "分裂衍生物测试",

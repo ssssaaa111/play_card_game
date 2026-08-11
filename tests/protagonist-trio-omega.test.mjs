@@ -266,6 +266,13 @@ test("staged trio finale separates each god draw and exposes a split-token tribu
     "spark-split",
     "trio-star-herald"
   ]);
+  assert.deepEqual(deckPresets.trioOmegaRivalAscension.ids.slice(20, 25), [
+    "starforge-fusion",
+    "gale-mage",
+    "ember-drake",
+    "flare-gale-archon",
+    "tempest-aegis-archon"
+  ]);
 
   const scenario = scenarioSetups.protagonistTrioOmegaAscension;
   assert.equal(scenario.aiStyle, "scriptedPressure");

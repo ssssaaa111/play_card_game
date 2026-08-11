@@ -37,6 +37,11 @@ test("fusion and effect-only special summon results do not gain tribute costs", 
   ["flare-gale-archon", "tempest-aegis-archon", "astral-forge-dragon"].forEach((cardId) => {
     assert.equal(cardsById.get(cardId)?.tributeCost, undefined, `${cardId} should keep its special summon route`);
   });
+  ["flare-gale-archon", "tempest-aegis-archon"].forEach((cardId) => {
+    const card = cardsById.get(cardId);
+    assert.equal(card?.summonRoute, "fusion");
+    assert.equal(cardDetailViewModel(card).summonRequirement, "召唤需求：仅可融合召唤");
+  });
 });
 
 test("trio tribute fixture and full duel preserve the established campaign route", () => {
