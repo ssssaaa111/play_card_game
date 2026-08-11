@@ -92,6 +92,33 @@ export function rewindDamageForHud(duelist = {}, event = {}) {
   };
 }
 
+function sameDamageEvent(left = null, right = null) {
+  if (left === right) return true;
+  if (left?.id == null || right?.id == null) return false;
+  return String(left.id) === String(right.id);
+}
+
+export function createCombatHudDamageStage() {
+  let activeEvent = null;
+  return {
+    begin(event = null) {
+      activeEvent = event?.type === "DAMAGE_DEALT" ? event : null;
+      return activeEvent;
+    },
+    end(event = null) {
+      if (!activeEvent || (event && !sameDamageEvent(activeEvent, event))) return false;
+      activeEvent = null;
+      return true;
+    },
+    project(duelist = {}) {
+      return rewindDamageForHud(duelist, activeEvent);
+    },
+    get activeEvent() {
+      return activeEvent;
+    }
+  };
+}
+
 export function afterAttackLockedTargetLostText(attackerName = "攻击怪兽", targetName = "魔陷卡") {
   return `${attackerName}锁定的魔陷「${targetName}」已提前离场，攻击后效果没有转移到其他魔陷。`;
 }

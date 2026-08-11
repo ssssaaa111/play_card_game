@@ -57,10 +57,10 @@ import {
   afterAttackDamageAndGrowthText,
   afterAttackLockedTargetLostText,
   battleDamageAmount,
+  createCombatHudDamageStage,
   findAfterAttackDamageAndGrowthEvents,
   isContinuousReleaseStat,
   negatedActivatedTrapText,
-  rewindDamageForHud,
   shouldLogGenericDestroyedEvent,
   statChangeText
 } from './effect-feedback.js';
@@ -282,6 +282,7 @@ let pendingAiRevealTotal = 0;
 let preDuelDeckExpanded = false;
 let chainHistoryExpanded = false;
 const directActivationTracker = createDirectActivationTracker();
+const combatHudDamageStage = createCombatHudDamageStage();
 
 const els = {
   phaseText: document.querySelector("#phaseText"),
@@ -3519,17 +3520,23 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
   const hasPublicEffect = resolvedAfterAttackEffect || lostBackrow.length > 0;
   const hasBlockingReveal = owner.owner === "ai" && hasPublicEffect;
   if (hasBlockingReveal) {
-    renderCurrentCombatHud({ rewindDamageEvent: afterAttackDamageEvent });
-    await waitForAiReveal({
-      actor: "ai",
-      public: true,
-      cardId: attacker.id,
-      type: "effect",
-      revealKind: "monster-effect",
-      message: `${attacker.name} 的效果触发。`,
-      summary: publicEffectSummary || undefined,
-      allowAfterGameOver: true
-    });
+    combatHudDamageStage.begin(afterAttackDamageEvent);
+    renderCurrentCombatHud();
+    try {
+      await waitForAiReveal({
+        actor: "ai",
+        public: true,
+        cardId: attacker.id,
+        type: "effect",
+        revealKind: "monster-effect",
+        message: `${attacker.name} 的效果触发。`,
+        summary: publicEffectSummary || undefined,
+        allowAfterGameOver: true
+      });
+    } finally {
+      combatHudDamageStage.end(afterAttackDamageEvent);
+      renderCurrentCombatHud();
+    }
   } else {
     renderCurrentCombatHud();
   }
@@ -4973,14 +4980,14 @@ function handleDuelFieldBackgroundClick(event) {
   cancelSelectedMonsterAction();
 }
 
-function renderCurrentCombatHud({ rewindDamageEvent = null } = {}) {
+function renderCurrentCombatHud() {
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
   return renderCombatHud({
     document,
     body: document.body,
     elements: els,
-    player: rewindDamageForHud(state.player, rewindDamageEvent),
-    ai: rewindDamageForHud(state.ai, rewindDamageEvent),
+    player: combatHudDamageStage.project(state.player),
+    ai: combatHudDamageStage.project(state.ai),
     playerProfile: characterProfiles.player,
     aiProfile: characterProfiles.ai,
     activeTurn,
