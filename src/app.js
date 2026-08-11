@@ -44,6 +44,13 @@ import {
 } from './duel-modal-renderer.js';
 import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
 import { renderHandCards } from './hand-renderer.js';
+import { placeHandCard, reconcileHandOrder, shiftHandCard } from './hand-order.js';
+import {
+  deckBrowserSwipeOffset,
+  hideDeckBrowser,
+  moveDeckBrowserIndex,
+  renderDeckBrowser
+} from './deck-browser.js';
 import { buildDeck, createDuelist } from './deck.js';
 import {
   createCustomDeck,
@@ -286,7 +293,11 @@ let pendingAiRevealResolver = null;
 let pendingAiRevealQueue = [];
 let pendingAiRevealIndex = 0;
 let pendingAiRevealTotal = 0;
-let preDuelDeckExpanded = false;
+let preDuelPreviewModel = null;
+let deckBrowserIndex = 0;
+let deckBrowserPointerStartX = null;
+let handDisplayOrder = [];
+let handReorderMode = false;
 let chainHistoryExpanded = false;
 const directActivationTracker = createDirectActivationTracker();
 const combatHudDamageStage = createCombatHudDamageStage();
@@ -336,6 +347,9 @@ const els = {
   playerTraps: document.querySelector("#playerTraps"),
   aiTraps: document.querySelector("#aiTraps"),
   hand: document.querySelector("#hand"),
+  handToolbar: document.querySelector("#handToolbar"),
+  handOrderStatus: document.querySelector("#handOrderStatus"),
+  handReorderToggle: document.querySelector("#handReorderToggle"),
   graveTargets: document.querySelector("#graveTargets"),
   timeline: document.querySelector("#timeline"),
   timelineCount: document.querySelector("#timelineCount"),
@@ -419,7 +433,19 @@ const els = {
   preDuelRecommendedList: document.querySelector("#preDuelRecommendedList"),
   preDuelDeckCount: document.querySelector("#preDuelDeckCount"),
   preDuelDeckToggle: document.querySelector("#preDuelDeckToggle"),
-  preDuelDeckList: document.querySelector("#preDuelDeckList"),
+  deckBrowserModal: document.querySelector("#deckBrowserModal"),
+  deckBrowserClose: document.querySelector("#deckBrowserClose"),
+  deckBrowserStage: document.querySelector("#deckBrowserStage"),
+  deckBrowserName: document.querySelector("#deckBrowserName"),
+  deckBrowserPosition: document.querySelector("#deckBrowserPosition"),
+  deckBrowserCard: document.querySelector("#deckBrowserCard"),
+  deckBrowserZone: document.querySelector("#deckBrowserZone"),
+  deckBrowserCopy: document.querySelector("#deckBrowserCopy"),
+  deckBrowserText: document.querySelector("#deckBrowserText"),
+  deckBrowserMeta: document.querySelector("#deckBrowserMeta"),
+  deckBrowserPrev: document.querySelector("#deckBrowserPrev"),
+  deckBrowserNext: document.querySelector("#deckBrowserNext"),
+  deckBrowserRail: document.querySelector("#deckBrowserRail"),
   guideModal: document.querySelector("#guideModal"),
   guideClose: document.querySelector("#guideClose"),
   aiRevealModal: document.querySelector("#aiRevealModal"),
@@ -915,6 +941,9 @@ function startGame() {
   state.timelineStep = 0;
   state.gameEvents = [];
   chainHistoryExpanded = false;
+  handDisplayOrder = [];
+  handReorderMode = false;
+  closeDeckBrowser();
   resetDuelModal(els);
   if (state.scenarioId === "normal") {
     drawCards(state.player, 5, { announce: false, reason: "opening" });
@@ -946,7 +975,11 @@ function prepareGame() {
   closeTrapChoicePrompt();
   clearAiReveal(false);
   scenarioHintsVisible = true;
-  preDuelDeckExpanded = false;
+  preDuelPreviewModel = null;
+  deckBrowserIndex = 0;
+  handDisplayOrder = [];
+  handReorderMode = false;
+  closeDeckBrowser();
   chainHistoryExpanded = false;
   if (BROWSER_MANUAL_SCENARIO && state.scenarioId === BROWSER_MANUAL_SCENARIO) {
     syncSetupControls();
@@ -4979,6 +5012,38 @@ function closeCardDetail() {
   resetPlayerIdleCountdown();
 }
 
+function renderCurrentDeckBrowser() {
+  if (!preDuelPreviewModel) return null;
+  return renderDeckBrowser(document, els, preDuelPreviewModel, deckBrowserIndex, {
+    assetForCard: monsterAsset,
+    onSelect: (index) => {
+      deckBrowserIndex = index;
+      renderCurrentDeckBrowser();
+    }
+  });
+}
+
+function openDeckBrowser() {
+  if (!preDuelPreviewModel) {
+    cue("当前卡组暂时无法预览。");
+    return;
+  }
+  deckBrowserIndex = 0;
+  renderCurrentDeckBrowser();
+  els.deckBrowserStage?.focus();
+}
+
+function closeDeckBrowser() {
+  hideDeckBrowser(els);
+  deckBrowserPointerStartX = null;
+}
+
+function navigateDeckBrowser(offset) {
+  const total = preDuelPreviewModel?.displayDeckCards?.length || preDuelPreviewModel?.deckCards?.length || 0;
+  deckBrowserIndex = moveDeckBrowserIndex(deckBrowserIndex, total, offset);
+  renderCurrentDeckBrowser();
+}
+
 function cardLogMeta(card, metadata = {}) {
   return {
     ...metadata,
@@ -5357,11 +5422,10 @@ function render(animationKey = "") {
     deckDefinitions: currentDeckDefinitions(),
     customDecks: currentCustomDecks(),
     statsText: formatDuelStats(state.stats),
-    hintsVisible: scenarioHintsVisible,
-    deckExpanded: preDuelDeckExpanded,
-    onOpenCardDetail: openCardDetail
+    hintsVisible: scenarioHintsVisible
   });
   scenarioHintsVisible = setupView.hintsVisible;
+  preDuelPreviewModel = setupView.preview;
   renderCurrentCombatHud();
 
   renderField(els.playerField, state.player, "player", animationKey);
@@ -5681,11 +5745,51 @@ function handActionInfo(card, handIndex) {
   return action;
 }
 
+function orderedPlayerHand() {
+  const cards = reconcileHandOrder(state.player.hand, handDisplayOrder);
+  handDisplayOrder = cards.map((card) => card.uid);
+  return cards;
+}
+
+function moveDisplayedHandCard(card, direction) {
+  handDisplayOrder = shiftHandCard(handDisplayOrder, card.uid, direction);
+  if (els.handOrderStatus) els.handOrderStatus.textContent = `已移动「${card.name}」。拖动卡牌或继续使用左右按钮。`;
+  renderHand();
+}
+
+function placeDisplayedHandCard(sourceUid, targetUid) {
+  const source = state.player.hand.find((card) => card?.uid === sourceUid);
+  handDisplayOrder = placeHandCard(handDisplayOrder, sourceUid, targetUid);
+  if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已移动「${source.name}」。`;
+  renderHand();
+}
+
+function toggleHandReorder() {
+  handReorderMode = !handReorderMode;
+  if (els.handOrderStatus) {
+    els.handOrderStatus.textContent = handReorderMode
+      ? "拖动卡牌，或使用卡牌上的左右按钮调整顺序。"
+      : "手牌顺序已保存到本局显示。";
+  }
+  renderHand();
+}
+
 function renderHand(animationKey) {
+  const cards = orderedPlayerHand();
+  if (cards.length < 2) handReorderMode = false;
+  const showToolbar = state.started && cards.length > 1;
+  if (els.handToolbar) els.handToolbar.hidden = !showToolbar;
+  if (els.handOrderStatus) els.handOrderStatus.hidden = !handReorderMode;
+  if (els.handReorderToggle) {
+    els.handReorderToggle.textContent = handReorderMode ? "完成整理" : "整理手牌";
+    els.handReorderToggle.setAttribute("aria-pressed", String(handReorderMode));
+    els.handReorderToggle.disabled = !showToolbar;
+  }
+  els.hand?.setAttribute("data-reorder-mode", String(handReorderMode));
   renderHandCards({
     document,
     root: els.hand,
-    cards: state.player.hand,
+    cards,
     animationKey,
     assetForCard: monsterAsset,
     actionForCard: handActionInfo,
@@ -5700,6 +5804,9 @@ function renderHand(animationKey) {
         : null;
     },
     fusionSelectedUids: state.pendingFusion ? selectedFusionHandUids() : [],
+    reorderMode: handReorderMode,
+    onMoveCard: moveDisplayedHandCard,
+    onPlaceCard: placeDisplayedHandCard,
     onCardClick: (card) => selectHandCard(card.uid, {
       directActivate: directActivationTracker.register(`hand:${card.uid}`)
     }),
@@ -5926,11 +6033,45 @@ if (els.scenarioHintToggle) {
   });
 }
 if (els.preDuelDeckToggle) {
-  els.preDuelDeckToggle.addEventListener("click", () => {
-    preDuelDeckExpanded = !preDuelDeckExpanded;
-    render();
+  els.preDuelDeckToggle.addEventListener("click", openDeckBrowser);
+}
+if (els.deckBrowserClose) els.deckBrowserClose.addEventListener("click", closeDeckBrowser);
+if (els.deckBrowserPrev) els.deckBrowserPrev.addEventListener("click", () => navigateDeckBrowser(-1));
+if (els.deckBrowserNext) els.deckBrowserNext.addEventListener("click", () => navigateDeckBrowser(1));
+if (els.deckBrowserModal) {
+  els.deckBrowserModal.addEventListener("click", (event) => {
+    if (event.target === els.deckBrowserModal) closeDeckBrowser();
+  });
+  els.deckBrowserModal.addEventListener("keydown", (event) => {
+    if (!els.deckBrowserModal.classList.contains("show")) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      navigateDeckBrowser(-1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      navigateDeckBrowser(1);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeDeckBrowser();
+    }
   });
 }
+if (els.deckBrowserStage) {
+  els.deckBrowserStage.addEventListener("pointerdown", (event) => {
+    if (!event.isPrimary) return;
+    deckBrowserPointerStartX = event.clientX;
+  });
+  els.deckBrowserStage.addEventListener("pointerup", (event) => {
+    if (deckBrowserPointerStartX == null) return;
+    const offset = deckBrowserSwipeOffset(deckBrowserPointerStartX, event.clientX);
+    deckBrowserPointerStartX = null;
+    if (offset) navigateDeckBrowser(offset);
+  });
+  els.deckBrowserStage.addEventListener("pointercancel", () => {
+    deckBrowserPointerStartX = null;
+  });
+}
+if (els.handReorderToggle) els.handReorderToggle.addEventListener("click", toggleHandReorder);
 els.modalRestart.addEventListener("click", () => {
   if (state.gameOver) {
     prepareGame();
@@ -5948,7 +6089,7 @@ if (els.modalReviewLog) {
   select.addEventListener("change", () => {
     if (select === els.scenarioSelect) {
       scenarioHintsVisible = true;
-      preDuelDeckExpanded = false;
+      closeDeckBrowser();
     }
     applySetupChoices();
     render();

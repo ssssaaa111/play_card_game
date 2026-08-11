@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20260802-sideways-defense-face-v5" />
-  <link rel="stylesheet" href="duel-table.css?v=20260805-fusion-occlusion" />
+  <link rel="stylesheet" href="styles.css?v=20260812-card-browser-hand-order-v2" />
+  <link rel="stylesheet" href="duel-table.css?v=20260812-card-browser-hand-order" />
 </head>
 <body>
   <div id="app">
@@ -217,6 +217,10 @@
         </div>
       </div>
       <div class="hand-stack">
+        <div class="hand-toolbar" id="handToolbar" hidden>
+          <span id="handOrderStatus" hidden>拖动卡牌，或使用卡牌上的左右按钮调整顺序。</span>
+          <button class="btn ghost hand-reorder-toggle" id="handReorderToggle" type="button" aria-pressed="false">整理手牌</button>
+        </div>
         <div class="hand" id="hand"></div>
         <div class="grave-targets" id="graveTargets" hidden></div>
       </div>
@@ -377,9 +381,8 @@
                 <div class="pre-duel-deck-head">
                   <strong>己方卡组预览</strong>
                   <span id="preDuelDeckCount"></span>
-                  <button class="btn ghost pre-duel-deck-toggle" id="preDuelDeckToggle" type="button">查看牌组</button>
+                  <button class="btn ghost pre-duel-deck-toggle" id="preDuelDeckToggle" type="button" aria-haspopup="dialog">打开卡组浏览</button>
                 </div>
-                <div class="pre-duel-deck-list" id="preDuelDeckList"></div>
               </div>
             </div>
           </section>
@@ -491,6 +494,35 @@
       <button class="btn primary" id="zoomClose">关闭</button>
     </div>
   </div>
+  <div class="modal deck-browser-modal" id="deckBrowserModal">
+    <div class="modal-box deck-browser" role="dialog" aria-modal="true" aria-labelledby="deckBrowserName">
+      <header class="deck-browser-head">
+        <div>
+          <span class="setup-kicker">DECK GALLERY</span>
+          <h2 id="deckBrowserName">卡组浏览</h2>
+        </div>
+        <div class="deck-browser-head-actions">
+          <strong id="deckBrowserPosition">1 / 1</strong>
+          <button class="drawer-close" id="deckBrowserClose" type="button" aria-label="关闭卡组浏览">×</button>
+        </div>
+      </header>
+      <div class="deck-browser-stage" id="deckBrowserStage" tabindex="0" aria-live="polite">
+        <button class="deck-browser-nav deck-browser-prev" id="deckBrowserPrev" type="button" aria-label="查看上一张卡">‹</button>
+        <div class="deck-browser-card" id="deckBrowserCard"></div>
+        <section class="deck-browser-detail">
+          <div class="deck-browser-badges">
+            <span id="deckBrowserZone">卡组</span>
+            <span id="deckBrowserCopy">1 张</span>
+          </div>
+          <p id="deckBrowserText"></p>
+          <p id="deckBrowserMeta"></p>
+          <small>可使用方向键或左右滑动切换卡牌</small>
+        </section>
+        <button class="deck-browser-nav deck-browser-next" id="deckBrowserNext" type="button" aria-label="查看下一张卡">›</button>
+      </div>
+      <nav class="deck-browser-rail" id="deckBrowserRail" aria-label="卡组卡牌列表"></nav>
+    </div>
+  </div>
   <div class="modal" id="chainModal">
     <div class="modal-box chain">
       <div class="chain-heading">
@@ -509,6 +541,6 @@
   </div>
 
   <script type="module" src="src/duel-table.js?v=20260802-passive-log-attention"></script>
-  <script type="module" src="src/app.js?v=20260803-action-readability"></script>
+  <script type="module" src="src/app.js?v=20260812-card-browser-hand-order"></script>
 </body>
 </html>

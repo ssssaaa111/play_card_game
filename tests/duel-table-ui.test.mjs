@@ -10,8 +10,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260805-fusion-occlusion"/);
-  assert.match(html, /src="src\/app\.js\?v=20260803-action-readability"/);
+  assert.match(html, /href="duel-table\.css\?v=20260812-card-browser-hand-order"/);
+  assert.match(html, /src="src\/app\.js\?v=20260812-card-browser-hand-order"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
