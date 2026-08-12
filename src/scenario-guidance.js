@@ -6,6 +6,12 @@ const TRIO_OMEGA_SCENARIOS = new Set([
   "protagonistTrioOmegaAscension"
 ]);
 
+const TRIO_GOD_IDS = new Set([
+  "trio-sun-judicator",
+  "trio-moon-warden",
+  "trio-star-herald"
+]);
+
 function cardTemplateId(card) {
   return card?.id || card?.templateId || "";
 }
@@ -25,8 +31,80 @@ function activeContinuousEffects(events = []) {
   return [...active.values()];
 }
 
+function isPublicTrioGod(card) {
+  return card?.archetype === "三曜神格" || TRIO_GOD_IDS.has(cardTemplateId(card));
+}
+
+function completedIndependentGodSummons(events = []) {
+  const tributesBySummon = new Map();
+  events.forEach((event) => {
+    if (event.type !== "CARD_TRIBUTED" || event.playerId !== "ai" ||
+        event.tributeCost !== 3 || !event.summonCardId) return;
+    tributesBySummon.set(event.summonCardId, (tributesBySummon.get(event.summonCardId) || 0) + 1);
+  });
+  return new Set(events
+    .filter((event) =>
+      event.type === "MONSTER_SUMMONED" &&
+      event.playerId === "ai" &&
+      event.summonType === "tribute" &&
+      (tributesBySummon.get(event.cardId) || 0) >= 3
+    )
+    .map((event) => event.cardId)).size;
+}
+
+export function projectTrioAscensionObjective(state = {}) {
+  const completedGodSummons = Math.min(3, completedIndependentGodSummons(state.gameEvents || []));
+  const tributeCandidates = (state.ai?.field || [])
+    .filter((card) => card && !isPublicTrioGod(card))
+    .length;
+  const tributeProgress = Math.min(3, tributeCandidates);
+
+  if (completedGodSummons === 0) {
+    const goal = tributeProgress >= 3
+      ? "第一神降临准备：对手已有 3/3 只公开祭品候选，现在是切断祭品链的最后窗口。"
+      : `第一神尚未降临 · 公开祭品建设 ${tributeProgress}/3：优先清理普通怪兽或衍生物。`;
+    return { stage: "firstGod", completedGodSummons, tributeCandidates, tributeProgress, goal };
+  }
+
+  if (completedGodSummons === 1) {
+    return {
+      stage: "rebuildSecond",
+      completedGodSummons,
+      tributeCandidates,
+      tributeProgress,
+      goal: `第一神已降临 · 下一次降神重建 ${tributeProgress}/3：清理公开祭品可以真实推迟第二次降神。`
+    };
+  }
+
+  if (completedGodSummons === 2) {
+    const instruction = tributeProgress === 2
+      ? "再清掉一只公开祭品就能延后第三神。"
+      : tributeProgress >= 3
+        ? "祭品已经齐备，现在是阻止第三神的最后窗口。"
+        : "继续切断公开祭品，拖慢第三神登场。";
+    return {
+      stage: "rebuildFinal",
+      completedGodSummons,
+      tributeCandidates,
+      tributeProgress,
+      goal: `两次独立降神已完成 · 最终降神准备 ${tributeProgress}/3：${instruction}`
+    };
+  }
+
+  return {
+    stage: "trioEstablished",
+    completedGodSummons,
+    tributeCandidates,
+    tributeProgress,
+    goal: "三次独立降神已经完成：优先处理仍在场的神格与公开保护后场。"
+  };
+}
+
 export function scenarioTacticalGoal(state = {}) {
   if (!state.started || !TRIO_OMEGA_SCENARIOS.has(state.scenarioId)) return "";
+  if (state.scenarioId === "protagonistTrioOmegaAscension") {
+    return projectTrioAscensionObjective(state).goal;
+  }
 
   const player = state.player || {};
   const ai = state.ai || {};
