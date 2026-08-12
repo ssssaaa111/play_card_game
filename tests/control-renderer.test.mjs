@@ -153,6 +153,36 @@ test("field action bar stays hidden until an own monster is selected", () => {
   assert.equal(view.fieldMode.disabled, true);
 });
 
+test("pending target selection takes exclusive command focus from the selected monster", () => {
+  const choosingTarget = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    phase: "main",
+    pendingTarget: { purpose: "afterAttackTarget", cardName: "曜冕裁决者" },
+    targetSelectionStatus: {
+      complete: false,
+      confirmLabel: "请选择目标",
+      text: "请选择本次攻击后要破坏的对手魔陷。"
+    },
+    selectedPlayerMonster: true,
+    selectedPlayerMonsterName: "曜冕裁决者",
+    selectedPlayerMonsterCanAttack: true
+  });
+  const restoredMonster = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    phase: "main",
+    selectedPlayerMonster: true,
+    selectedPlayerMonsterName: "曜冕裁决者",
+    selectedPlayerMonsterCanAttack: true
+  });
+
+  assert.equal(choosingTarget.choice.hidden, false);
+  assert.equal(choosingTarget.fieldAction.hidden, true);
+  assert.equal(restoredMonster.choice.hidden, true);
+  assert.equal(restoredMonster.fieldAction.hidden, false);
+});
+
 test("target and fusion selections block turn controls and expose the correct prompt", () => {
   const target = buildDuelControlsView({
     started: true,

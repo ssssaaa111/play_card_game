@@ -15,6 +15,7 @@ import {
   collectAiAttackBlockers,
   chooseAiAfterAttackSupportTarget,
   chooseAiAttackAction,
+  chooseAiFusionAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
   chooseAiSpellAction,
@@ -109,6 +110,7 @@ import {
   explainMonsterAttackReadinessFromUiState,
   explainSetTrapFromUiState,
   explainSummonMonsterFromUiState,
+  getLegalFusionActionsFromUiState,
   projectBattleFromUiState
 } from './engine-adapter.js';
 import { renderChainHistoryPanel, renderTimelinePanel } from './timeline-renderer.js';
@@ -138,9 +140,12 @@ import {
   resolveSelectedTargetSelection,
   selectTargetSelection,
   spellNeedsManualTarget,
+  targetSelectionConfirmationText,
   targetSelectionForCard,
   targetSelectionTargetLabel,
   targetSelectionPrompt,
+  targetSelectionTimeoutFeedback,
+  targetSelectionTimeoutLogMetadata,
   validateTargetSelection
 } from './target-selection.js';
 import {
@@ -1427,7 +1432,7 @@ function selectPendingSpellTarget(ownerName, index, zone = "field") {
   state.pendingTarget = selectTargetSelection(state.pendingTarget, targetInfo, { source: "player" });
   const display = currentTargetSelectionDisplay();
   playSound("click");
-  cue(`${targetSelectionTargetLabel(targetInfo)}已选为目标，请确认发动。`);
+  cue(targetSelectionConfirmationText(state.pendingTarget, targetInfo));
   render();
   resetPlayerIdleCountdown();
   return true;
@@ -2290,6 +2295,8 @@ function cancelSelectedHandAction() {
   const hadPendingTarget = selectionSnapshot.pendingKinds.includes("target");
   const hadPendingTribute = selectionSnapshot.pendingKinds.includes("tribute");
   const hadPendingFusion = selectionSnapshot.pendingKinds.includes("fusion");
+  const preserveSelectedMonster = state.pendingTarget?.purpose === "afterAttackTarget"
+    && state.selected?.zone === "playerField";
   const selected = selectedHandInfo();
   if (!hadPendingTarget && !hadPendingTribute && !hadPendingFusion && !selected) {
     cue("当前没有选中的手牌。");
@@ -2297,7 +2304,7 @@ function cancelSelectedHandAction() {
     return;
   }
   clearPendingTarget();
-  clearTransientSelection(state);
+  clearTransientSelection(state, { preserveSelected: preserveSelectedMonster });
   clearBattlePreview();
   playSound("click");
   cue(hadPendingTarget ? "已取消目标选择。" : "已取消选择。");
@@ -4557,6 +4564,8 @@ async function runAiTurn() {
       await aiPlaySpells({ turnGoal, timing: "afterSummon" });
     }
     if (state.gameOver) return;
+    await aiPlayFusion({ turnGoal });
+    if (state.gameOver) return;
     dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
     await aiAttack();
     if (!state.gameOver) {
@@ -4598,6 +4607,11 @@ async function aiPlaySpells({ turnGoal = "pressure", timing = "beforeSummon" } =
         `对手在三曜部署完成后才发动「${playedCard.name}」，避免把强化浪费在祭品上。`,
         cardLogMeta(playedCard, { actor: "ai", type: "decision" })
       );
+    } else if (action.reason === "tributeDevelopment") {
+      addLog(
+        `对手发动「${playedCard.name}」补充祭品候选，为下一次三祭品降神做准备。`,
+        cardLogMeta(playedCard, { actor: "ai", type: "decision" })
+      );
     }
     await sleep(1650);
     action = chooseAiSpellAction({
@@ -4610,6 +4624,66 @@ async function aiPlaySpells({ turnGoal = "pressure", timing = "beforeSummon" } =
       canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
     });
   }
+}
+
+async function aiPlayFusion({ turnGoal = "pressure" } = {}) {
+  const action = chooseAiFusionAction({
+    candidates: getLegalFusionActionsFromUiState(state, "ai", "player"),
+    owner: state.ai,
+    rival: state.player,
+    aiStyle: state.aiStyle,
+    turnGoal
+  });
+  if (!action) return false;
+  const fusionCard = state.ai.hand[action.handIndex];
+  if (!fusionCard || runtimeCardId(fusionCard) !== action.cardUid) return false;
+  const materialCards = action.materialCardIds
+    .map((cardId) => findRuntimeCard(cardId)?.card)
+    .filter(Boolean);
+  let fusionEvents = [];
+  try {
+    fusionEvents = dispatchFusionSummonFromUiState(state, "ai", "player", action.handIndex, {
+      fusionResultTemplateId: action.fusionResultTemplateId,
+      materialCardIds: action.materialCardIds,
+      fieldIndex: action.fieldIndex
+    });
+  } catch (error) {
+    cue(error.message || "AI 融合召唤失败。");
+    console.error(error);
+    return false;
+  }
+
+  const resultEvent = fusionEvents.find((event) =>
+    event.type === "MONSTER_SUMMONED" && event.summonType === "fusion"
+  );
+  const resultCard = findRuntimeCard(resultEvent?.cardId)?.card || action.resultCard;
+  playSound(`spell-${fusionCard.effect}`);
+  animateAvatar("ai", "cast");
+  playCenterCardEffect(fusionCard, spellCaption(fusionCard));
+  playEpicAction("融合", "draw");
+  const spellLog = addLog(`AI 发动魔法卡 ${fusionCard.name}。`, cardLogMeta(fusionCard, {
+    actor: "ai",
+    type: "spell"
+  }));
+  speak(`对手发动魔法卡，${fusionCard.name}。`);
+  playDuelistLine("ai", lineFor("ai", "spell", fusionCard), false, "spell");
+  await waitForAiReveal({ ...spellLog, revealKind: "spell" });
+
+  const reasonText = action.reason === "fusionDefense"
+    ? `对手选择「${resultCard?.name || action.fusionResultTemplateId}」建立防线。`
+    : action.reason === "fusionTributeDevelopment"
+      ? `对手选择「${resultCard?.name || action.fusionResultTemplateId}」，在不减少祭品候选的前提下发展场面。`
+      : `对手选择「${resultCard?.name || action.fusionResultTemplateId}」提高场面压力。`;
+  addLog(reasonText, cardLogMeta(fusionCard, {
+    actor: "ai",
+    type: "decision",
+    relatedCardIds: relatedCardIds(resultCard, ...materialCards)
+  }));
+  resolveEngineSpellFeedback(state.ai, state.player, fusionCard, fusionEvents);
+  resolveElementCombos(state.ai, state.player, "spell");
+  checkGameOver();
+  render("summon-ai-" + action.fieldIndex);
+  return true;
 }
 
 async function aiSummon() {
@@ -5019,20 +5093,24 @@ function handleTargetSelectionTimeout() {
     return;
   }
 
-  const cardName = state.pendingTarget.cardName;
+  const pendingTarget = state.pendingTarget;
+  const cardName = pendingTarget.cardName;
+  const logMetadata = targetSelectionTimeoutLogMetadata(pendingTarget);
   const targets = legalPendingTargets();
   if (targets.length === 1) {
     const targetLabel = targetSelectionTargetLabel(targets[0]);
-    addLog(`${cardName} 目标选择超时，自动确认唯一合法目标 ${targetLabel}。`);
+    addLog(`${cardName} 目标选择超时，自动确认唯一合法目标 ${targetLabel}。`, logMetadata);
     cue(`已自动确认 ${targetLabel}`);
     resolvePendingSpellTarget(targets[0].owner, targets[0].index, targets[0].zone);
     return;
   }
 
+  const feedback = targetSelectionTimeoutFeedback(pendingTarget);
+  const preserveSelectedMonster = feedback.preserveSelected && state.selected?.zone === "playerField";
   clearPendingTarget();
-  state.selected = null;
-  cue(`目标选择超时，已取消 ${cardName}`);
-  addLog(`${cardName} 目标选择超时，未发动。`);
+  clearTransientSelection(state, { preserveSelected: preserveSelectedMonster });
+  cue(feedback.cue);
+  addLog(feedback.log, logMetadata);
   render();
   resolvePlayerActionWindow("目标选择超时");
 }

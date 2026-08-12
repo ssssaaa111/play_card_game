@@ -113,7 +113,7 @@ export function monsterFieldSlotView({
       ? (materialCandidate ? (materialSelected ? "selected" : "candidate") : "unavailable")
       : "",
     materialReason: materialTarget?.reason || "",
-    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${selected ? "，当前选中" : ""}${targetSelected ? "，已选择为魔法目标" : ""}${interactionTarget?.reason ? `，${interactionTarget.reason}` : ""}`,
+    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${selected ? "，当前选中" : ""}${targetSelected ? "，已选择为效果目标" : ""}${interactionTarget?.reason ? `，${interactionTarget.reason}` : ""}`,
     slotClasses: enabledClassEntries({
       targetable,
       "target-selected": targetSelected,
@@ -205,7 +205,7 @@ export function supportFieldSlotView({
     supportDisplay,
     ariaLabel: `${supportDisplay
       ? `${zoneLabel}，${card.name}，${supportDisplay.description}`
-      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为魔法目标" : ""}${effectTargetReason ? `，${effectTargetReason}` : ""}${afterAttackLockLabel}`,
+      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为效果目标" : ""}${effectTargetReason ? `，${effectTargetReason}` : ""}${afterAttackLockLabel}`,
     slotClasses: enabledClassEntries({
       "trap-response": trapChoiceReady,
       "trap-response-selected": trapChoiceSelected,

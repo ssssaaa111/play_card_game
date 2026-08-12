@@ -13,8 +13,11 @@ import {
   resolveSelectedTargetSelection,
   selectTargetSelection,
   spellNeedsManualTarget,
+  targetSelectionConfirmationText,
   targetSelectionForCard,
   targetSelectionPrompt,
+  targetSelectionTimeoutFeedback,
+  targetSelectionTimeoutLogMetadata,
   validateTargetSelection
 } from "../src/target-selection.js";
 
@@ -390,4 +393,70 @@ test("selected concealed enemy support targets never expose their card name", ()
 
   assert.match(display.text, /盖放卡牌（敌方魔陷区 1）/);
   assert.doesNotMatch(display.text, /镜光反制/);
+});
+
+test("target confirmation text distinguishes spell activation from an attack declaration", () => {
+  const state = duelists();
+  state.ai.traps[0] = { id: "mirror-snare", uid: "hidden-trap-1", type: "trap", name: "镜光反制" };
+  const spellPending = targetSelectionForCard(
+    { id: "dispelling-ray", uid: "ray-1", type: "spell", name: "解印射线", effect: "destroySpellTrap" },
+    effects
+  );
+  const target = validateTargetSelection(spellPending, state, "ai", 0, "traps");
+
+  assert.equal(
+    targetSelectionConfirmationText(spellPending, target),
+    "盖放卡牌（敌方魔陷区 1）已选为目标，请确认发动。"
+  );
+  assert.equal(
+    targetSelectionConfirmationText({ ...spellPending, purpose: "afterAttackTarget" }, target),
+    "盖放卡牌（敌方魔陷区 1）已选为目标，请确认攻击。"
+  );
+});
+
+test("target timeout feedback distinguishes a spell cancellation from an unmade attack", () => {
+  assert.deepEqual(
+    targetSelectionTimeoutFeedback({ cardName: "解印射线" }),
+    {
+      cue: "目标选择超时，已取消 解印射线",
+      log: "解印射线 目标选择超时，未发动。",
+      preserveSelected: false
+    }
+  );
+  assert.deepEqual(
+    targetSelectionTimeoutFeedback({ cardName: "曜冕裁决者", purpose: "afterAttackTarget" }),
+    {
+      cue: "目标选择超时，已取消 曜冕裁决者 的本次攻击。",
+      log: "曜冕裁决者 目标选择超时，本次攻击未宣言。",
+      preserveSelected: true
+    }
+  );
+});
+
+test("target timeout logs keep the public source card available to unified card details", () => {
+  assert.deepEqual(
+    targetSelectionTimeoutLogMetadata({
+      purpose: "afterAttackTarget",
+      sourceOwner: "player",
+      sourceCard: { id: "trio-sun-judicator", name: "曜冕裁决者" }
+    }),
+    {
+      actor: "player",
+      type: "effect",
+      cardId: "trio-sun-judicator",
+      public: true
+    }
+  );
+  assert.deepEqual(
+    targetSelectionTimeoutLogMetadata({
+      sourceOwner: "player",
+      sourceCard: { id: "dispelling-ray", name: "解印射线" }
+    }),
+    {
+      actor: "player",
+      type: "spell",
+      cardId: "dispelling-ray",
+      public: true
+    }
+  );
 });

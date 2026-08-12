@@ -16,6 +16,7 @@ test("production setup only exposes player decks", () => {
   assert.ok(ids.includes("protagonistTrioOmegaFull"));
   assert.ok(!ids.includes("suppressionRival"));
   assert.ok(!ids.includes("trioOmegaRivalFull"));
+  assert.ok(!ids.includes("trioOmegaRivalAscension"));
 });
 
 test("production setup exposes curated duel modes", () => {
@@ -34,7 +35,8 @@ test("production setup exposes curated duel modes", () => {
     "protagonistTrioOmegaFinale",
     "protagonistTrioOmegaFinaleRush",
     "protagonistTrioGauntlet",
-    "protagonistTrioOmegaFull"
+    "protagonistTrioOmegaFull",
+    "protagonistTrioOmegaAscension"
   ]);
 });
 

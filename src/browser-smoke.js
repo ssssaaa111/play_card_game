@@ -431,6 +431,12 @@ function logCardLink(els, cardId) {
   return els.timeline?.querySelector(`.timeline-card-link[data-card-id="${cardId}"]`);
 }
 
+function logCardLinkForMessage(els, cardId, messageFragment) {
+  const item = [...(els.timeline?.querySelectorAll(".timeline-item") || [])]
+    .find((entry) => entry.textContent.includes(messageFragment));
+  return item?.querySelector(`.timeline-card-link[data-card-id="${cardId}"]`) || null;
+}
+
 function aiRevealVisible(els, cardId) {
   return els.aiRevealModal?.classList.contains("show") &&
     (!cardId || els.aiRevealModal.dataset.cardId === cardId);
@@ -888,6 +894,95 @@ async function runTrioTurnPlanningBasicSmoke(ctx) {
   }
   if (!decisionLog || decisionLog.cardId !== "war-chant") {
     throw new Error(`${smokeName}: the public decision log must explain the delayed visible spell. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioStagedTributePlanningBasicSmoke(ctx) {
+  const smokeName = "trio-staged-tribute-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioStagedTributePlanning");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") ||
+      !ctx.state.ai.hand.some((card) => card?.id === "trio-moon-warden") ||
+      !ctx.state.ai.hand.some((card) => card?.id === "spark-split")) {
+    throw new Error(`${smokeName}: staged tribute fixture is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && !ctx.state.aiRunning,
+    `${smokeName}: AI completes split-token tribute development. ${smokeDebug(ctx)}`,
+    42000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const splitIndex = events.findIndex((event) =>
+    event.type === "CARD_ACTIVATED" && eventReferencesTemplate(event, "spark-split")
+  );
+  const moonSummonIndex = events.findIndex((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.summonType === "tribute" &&
+    eventReferencesTemplate(event, "trio-moon-warden")
+  );
+  const tokenSummons = events.filter((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.summonType === "token"
+  );
+  const moonTributes = events.filter((event) =>
+    event.type === "CARD_TRIBUTED" && eventReferencesTemplate(event, "trio-moon-warden")
+  );
+  const decisionLog = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("补充祭品候选")
+  );
+
+  if (splitIndex < 0 || moonSummonIndex <= splitIndex || tokenSummons.length !== 2 || moonTributes.length !== 3) {
+    throw new Error(`${smokeName}: split must create two tokens before moon consumes three tributes. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") ||
+      !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") ||
+      ctx.state.ai.field.some((card) => card?.id === "trio-star-herald") ||
+      events.some((event) => event.type === "TRIO_CONVERGENCE_RESOLVED")) {
+    throw new Error(`${smokeName}: staged summon must preserve sun without converging star. ${smokeDebug(ctx)}`);
+  }
+  if (!decisionLog || decisionLog.cardId !== "spark-split") {
+    throw new Error(`${smokeName}: public AI log must explain tribute development. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
+  const smokeName = "trio-omega-ascension-opening-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaAscension");
+  if (ctx.state.ai.field.some((card) => card?.archetype === "三曜神格")) {
+    throw new Error(`${smokeName}: no god should be preloaded on the field. ${smokeDebug(ctx)}`);
+  }
+  const openingGods = ctx.state.ai.hand.filter((card) => card?.archetype === "三曜神格");
+  if (openingGods.length !== 1 || openingGods[0].id !== "trio-sun-judicator") {
+    throw new Error(`${smokeName}: opening hand should expose only sun to the AI plan. ${smokeDebug(ctx)}`);
+  }
+
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.els.aiRevealModal?.classList.contains("show"),
+    `${smokeName}: sun tribute summon reaches its public reveal. ${smokeDebug(ctx)}`,
+    32000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const godsOnField = ctx.state.ai.field.filter((card) => card?.archetype === "三曜神格");
+  const sunTributes = events.filter((event) =>
+    event.type === "CARD_TRIBUTED" && eventReferencesTemplate(event, "trio-sun-judicator")
+  );
+  if (godsOnField.length !== 1 || godsOnField[0].id !== "trio-sun-judicator" || sunTributes.length !== 3) {
+    throw new Error(`${smokeName}: first god must be sun after exactly three tributes. ${smokeDebug(ctx)}`);
+  }
+  if (events.some((event) => event.type === "TRIO_CONVERGENCE_RESOLVED") ||
+      ctx.state.ai.hand.some((card) => ["trio-moon-warden", "trio-star-herald"].includes(card?.id))) {
+    throw new Error(`${smokeName}: combo draw must not pull a second god into the first convergence window. ${smokeDebug(ctx)}`);
   }
   setSmokeStatus("passed", smokeName);
 }
@@ -4326,6 +4421,57 @@ async function runFinaleSunflareTargetLockBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runAiFusionPlanningBasicSmoke(ctx) {
+  const smokeName = "ai-fusion-planning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "aiFusionPlanning");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "starforge-fusion"),
+    `${smokeName}: AI fusion spell reaches its public reveal. ${smokeDebug(ctx)}`,
+    32000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const fusionEvent = events.find((event) =>
+    event.type === "FUSION_SUMMONED" && event.resultTemplateId === "tempest-aegis-archon"
+  );
+  const materialsEvent = events.find((event) =>
+    event.type === "MATERIALS_SENT" && event.purpose === "fusion"
+  );
+  if (!fusionEvent || materialsEvent?.materialCardIds?.length !== 2) {
+    throw new Error(`${smokeName}: AI must dispatch a complete two-material defensive fusion. ${smokeDebug(ctx)}`);
+  }
+  if (!ctx.state.ai.field.some((card) => card?.id === "tempest-aegis-archon") ||
+      ctx.state.ai.field.some((card) => card?.id === "flare-gale-archon") ||
+      ctx.state.ai.shield !== 400) {
+    throw new Error(`${smokeName}: low-life AI must choose the guard result and gain 400 shield. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue fusion reveal`);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && !ctx.state.aiRunning,
+    `${smokeName}: AI completes its turn after fusion. ${smokeDebug(ctx)}`,
+    32000
+  );
+  const decisionLog = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("建立防线")
+  );
+  if (!decisionLog || decisionLog.cardId !== "starforge-fusion") {
+    throw new Error(`${smokeName}: public log must explain the defensive result choice. ${smokeDebug(ctx)}`);
+  }
+  await waitForSmoke(
+    () => logCardLink(ctx.els, "tempest-aegis-archon"),
+    `${smokeName}: public fusion result log link`,
+    6000
+  );
+  clickSmokeElement(logCardLink(ctx.els, "tempest-aegis-archon"), `${smokeName}: open fusion result detail`);
+  await assertCardDetailModal(ctx, cloneCardById("tempest-aegis-archon"), smokeName);
+  clickSmokeElement(ctx.els.zoomClose, `${smokeName}: close fusion result detail`);
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runSunflareTargetChoiceBasicSmoke(ctx) {
   const smokeName = "sunflare-target-choice-basic";
   setSmokeStatus("running", smokeName);
@@ -4393,6 +4539,175 @@ async function runSunflareTargetChoiceBasicSmoke(ctx) {
       Number(declaration.id) >= Number(lock.id) || Number(lock.id) >= Number(chosenDestruction.id)) {
     throw new Error(`${smokeName}: declaration, selected lock, and destruction order is wrong. ${smokeDebug(ctx)}`);
   }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runSunflareHiddenTargetReadabilityBasicSmoke(ctx) {
+  const smokeName = "sunflare-hidden-target-readability-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "sunflareHiddenTargetChoice");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "trio-sun-judicator");
+  const firstSupport = ctx.state.ai.traps[0];
+  const secondSupport = ctx.state.ai.traps[1];
+  if (!attacker || firstSupport?.id !== "summon-flare" || secondSupport?.id !== "chain-nullifier") {
+    throw new Error(`${smokeName}: concealed support fixture is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-sun-judicator"), `${smokeName}: select sun attacker`);
+  await waitForSmoke(
+    () => ctx.els.aiPanel.classList.contains("direct-target"),
+    `${smokeName}: direct attack target highlighted`
+  );
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: request direct attack`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.purpose === "afterAttackTarget" &&
+      ctx.els.turnText.textContent === "选择效果目标" &&
+      ctx.els.fieldActionBar?.hidden &&
+      !ctx.els.choiceActions?.hidden &&
+      trapSlot(ctx.els, "ai", 0)?.classList.contains("targetable") &&
+      trapSlot(ctx.els, "ai", 1)?.classList.contains("targetable"),
+    `${smokeName}: effect-target controls take exclusive command focus`
+  );
+
+  clickSmokeElement(ctx.els.choiceCancelBtn, `${smokeName}: cancel effect-target selection`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      !ctx.els.fieldActionBar?.hidden &&
+      ctx.els.choiceActions?.hidden &&
+      ctx.els.aiPanel.classList.contains("direct-target"),
+    `${smokeName}: selected monster controls return after target cancellation`
+  );
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: reopen direct attack target selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.purpose === "afterAttackTarget" &&
+      ctx.els.fieldActionBar?.hidden &&
+      !ctx.els.choiceActions?.hidden,
+    `${smokeName}: effect-target controls regain command focus`
+  );
+
+  const firstSlot = trapSlot(ctx.els, "ai", 0);
+  const secondSlot = trapSlot(ctx.els, "ai", 1);
+  const openingTargetText = [
+    ctx.els.turnText.textContent,
+    ctx.els.choiceText.textContent,
+    firstSlot?.getAttribute("aria-label") || "",
+    secondSlot?.getAttribute("aria-label") || ""
+  ].join(" ");
+  if (!firstSlot?.getAttribute("aria-label")?.includes("敌方魔陷区 1，盖放卡牌") ||
+      !secondSlot?.getAttribute("aria-label")?.includes("敌方魔陷区 2，盖放卡牌") ||
+      /召雷陷阵|断链裁决/.test(openingTargetText)) {
+    throw new Error(`${smokeName}: opening target UI leaked a concealed card identity. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(secondSlot, `${smokeName}: select second concealed support slot`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.selectedTarget?.cardUid === secondSupport.uid &&
+      trapSlot(ctx.els, "ai", 1)?.getAttribute("aria-label")?.includes("已选择为效果目标") &&
+      ctx.els.toast?.textContent === "盖放卡牌（敌方魔陷区 2）已选为目标，请确认攻击。" &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: second concealed slot selected with attack confirmation copy`
+  );
+  const selectedTargetText = [
+    ctx.els.choiceText.textContent,
+    trapSlot(ctx.els, "ai", 1)?.getAttribute("aria-label") || ""
+  ].join(" ");
+  if (/召雷陷阵|断链裁决/.test(selectedTargetText)) {
+    throw new Error(`${smokeName}: selected target UI leaked a concealed card identity. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm concealed support target`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.ai.lp === 1000 &&
+      ctx.state.ai.traps.some((card) => card?.uid === firstSupport.uid) &&
+      ctx.state.ai.grave.some((card) => card?.uid === secondSupport.uid),
+    `${smokeName}: chosen concealed support resolves without transfer. ${smokeDebug(ctx)}`,
+    12000
+  );
+  if (!(ctx.state.gameEvents || []).some((event) =>
+    event.type === "AFTER_ATTACK_TARGET_LOCKED" && event.targetCardId === secondSupport.uid
+  )) {
+    throw new Error(`${smokeName}: selected concealed target was not locked by the engine. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runSunflareTargetTimeoutRecoveryBasicSmoke(ctx) {
+  const smokeName = "sunflare-target-timeout-recovery-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "sunflareHiddenTargetChoice");
+  const attackerIndex = ctx.state.player.field.findIndex((card) => card?.id === "trio-sun-judicator");
+  const attacker = ctx.state.player.field[attackerIndex];
+  const secondSupport = ctx.state.ai.traps[1];
+  if (attackerIndex < 0 || !secondSupport) {
+    throw new Error(`${smokeName}: timeout fixture is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "trio-sun-judicator"), `${smokeName}: select sun attacker`);
+  await waitForSmoke(
+    () => ctx.els.aiPanel.classList.contains("direct-target"),
+    `${smokeName}: direct attack target highlighted`
+  );
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: open timed effect-target selection`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.purpose === "afterAttackTarget" &&
+      ctx.els.timerProgress?.classList.contains("active"),
+    `${smokeName}: effect-target countdown starts`
+  );
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.selected?.zone === "playerField" &&
+      ctx.state.selected.index === attackerIndex &&
+      !ctx.els.fieldActionBar?.hidden &&
+      ctx.els.choiceActions?.hidden &&
+      ctx.els.aiPanel.classList.contains("direct-target") &&
+      ctx.els.toast?.textContent === "目标选择超时，已取消 曜冕裁决者 的本次攻击。" &&
+      (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("本次攻击未宣言")),
+    `${smokeName}: timeout restores the attacker with attack-specific feedback`,
+    26000
+  );
+
+  const timeoutLog = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("本次攻击未宣言")
+  );
+  if (!timeoutLog || typeof timeoutLog !== "object" ||
+      timeoutLog.cardId !== attacker.id || timeoutLog.public !== true || timeoutLog.type !== "effect") {
+    throw new Error(`${smokeName}: timeout log did not retain public attacker metadata. ${smokeDebug(ctx)}`);
+  }
+  await waitForSmoke(
+    () => logCardLinkForMessage(ctx.els, attacker.id, "本次攻击未宣言"),
+    `${smokeName}: timeout timeline entry exposes attacker detail`
+  );
+  clickSmokeElement(
+    logCardLinkForMessage(ctx.els, attacker.id, "本次攻击未宣言"),
+    `${smokeName}: open timeout attacker detail`
+  );
+  await assertCardDetailModal(ctx, attacker, `${smokeName}: timeout attacker`);
+  clickSmokeElement(ctx.els.zoomClose, `${smokeName}: close timeout attacker detail`);
+  await waitForSmoke(
+    () => !ctx.els.cardModal.classList.contains("show"),
+    `${smokeName}: timeout attacker detail closes`
+  );
+
+  clickSmokeElement(ctx.els.aiPanel, `${smokeName}: reopen direct attack after timeout`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.purpose === "afterAttackTarget",
+    `${smokeName}: effect-target selection reopens`
+  );
+  clickSmokeElement(trapSlot(ctx.els, "ai", 1), `${smokeName}: choose second support after timeout`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.selectedTarget?.cardUid === secondSupport.uid &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: second support selected after timeout`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm attack after timeout`);
+  await waitForSmoke(
+    () => !ctx.state.pendingTarget &&
+      ctx.state.ai.lp === 1000 &&
+      ctx.state.ai.grave.some((card) => card?.uid === secondSupport.uid),
+    `${smokeName}: recovered attack resolves normally. ${smokeDebug(ctx)}`,
+    12000
+  );
   setSmokeStatus("passed", smokeName);
 }
 
@@ -8922,6 +9237,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-multi-attack-reentry-basic": runAiMultiAttackReentryBasicSmoke,
     "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
     "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
+    "trio-staged-tribute-planning-basic": runTrioStagedTributePlanningBasicSmoke,
+    "trio-omega-ascension-opening-basic": runTrioOmegaAscensionOpeningBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "trio-trap-reserve-planning-basic": runTrioTrapReservePlanningBasicSmoke,
     "trio-direct-trap-planning-basic": runTrioDirectTrapPlanningBasicSmoke,
@@ -8951,6 +9268,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "divine-break": runDivineBreakSmoke,
     "fusion-summon": runFusionSummonSmoke,
     "fusion-summon-basic": runFusionSummonBasicSmoke,
+    "ai-fusion-planning-basic": runAiFusionPlanningBasicSmoke,
     "fusion-readability-basic": runFusionReadabilityBasicSmoke,
     "fusion-occlusion-desktop": runFusionOcclusionSmoke,
     "fusion-occlusion-tablet": runFusionOcclusionSmoke,
@@ -8982,6 +9300,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-omega-vow-demo": runTrioOmegaVowDemoSmoke,
     "finale-sunflare-target-lock-basic": runFinaleSunflareTargetLockBasicSmoke,
     "sunflare-target-choice-basic": runSunflareTargetChoiceBasicSmoke,
+    "sunflare-hidden-target-readability-basic": runSunflareHiddenTargetReadabilityBasicSmoke,
+    "sunflare-target-timeout-recovery-basic": runSunflareTargetTimeoutRecoveryBasicSmoke,
     "trio-omega-finale-demo": runTrioOmegaFinaleSmoke,
     "trio-omega-finale-rush": runTrioOmegaFinaleRushSmoke,
     "trio-gauntlet-demo": runTrioGauntletSmoke,

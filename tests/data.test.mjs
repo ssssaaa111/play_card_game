@@ -520,6 +520,15 @@ test("fusion result choice scenario preserves the opening order and exposes both
   assert.ok(scenario.recommendedLine.some((entry) => entry.includes("岚耀守星者")));
 });
 
+test("AI fusion planning scenario exposes mixed materials and both legal results", () => {
+  const scenario = scenarioSetups.aiFusionPlanning;
+
+  assert.equal(scenario.aiLp, 1200);
+  assert.deepEqual(scenario.aiHand, ["starforge-fusion", "gale-mage"]);
+  assert.deepEqual(scenario.aiField, ["ember-drake"]);
+  assert.deepEqual(scenario.aiDeck.slice(1), ["flare-gale-archon", "tempest-aegis-archon"]);
+});
+
 test("player counter chain scenario exposes a deterministic two-link response", () => {
   const scenario = scenarioSetups.playerCounterChain;
 

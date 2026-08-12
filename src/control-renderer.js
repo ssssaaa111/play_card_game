@@ -134,7 +134,7 @@ export function buildDuelControlsView({
     modeTitle,
     modeText: modeActionText,
     fieldAction: {
-      hidden: !selectedPlayerMonster,
+      hidden: !selectedPlayerMonster || hasPendingSelection,
       name: selectedPlayerMonsterName || "所选怪兽",
       status: selectedPlayerMonsterAttackIntent
         ? "请选择高亮目标"

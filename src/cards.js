@@ -13,6 +13,11 @@ export function tributeRequirementText(card, { compact = false } = {}) {
   return compact ? `祭品 ${cost}` : `召唤需求：${cost} 只祭品`;
 }
 
+export function summonRouteRequirementText(card, { compact = false } = {}) {
+  if (card?.summonRoute !== "fusion") return "";
+  return compact ? "融合专属" : "召唤需求：仅可融合召唤";
+}
+
 export function fusionDefinitionForDisplay(card) {
   const options = fusionOptionsForCard(card);
   if (options.length === 0) return null;
@@ -102,6 +107,10 @@ export function cardRuleText(card) {
     const target = spellTargetSummary(card.effect);
     return target ? `目标:${target}` : (card.rarity || inferRarity(card));
   }
-  if (card.type === "monster") return tributeRequirementText(card, { compact: true }) || (card.rarity || inferRarity(card));
+  if (card.type === "monster") {
+    return tributeRequirementText(card, { compact: true }) ||
+      summonRouteRequirementText(card, { compact: true }) ||
+      (card.rarity || inferRarity(card));
+  }
   return card.rarity || inferRarity(card);
 }

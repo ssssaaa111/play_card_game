@@ -250,6 +250,66 @@ test("trio omega full duel starts from full decks and does not reveal the puzzle
   assertValidGameState(buildEngineStateFromUiState(opened));
 });
 
+test("staged trio finale separates each god draw and exposes a split-token tribute route", () => {
+  assert.equal(deckPresets.trioOmegaRivalAscension.ids.length, 40);
+  assert.deepEqual(deckPresets.trioOmegaRivalAscension.ids.slice(0, 12), [
+    "trio-moon-dominion",
+    "trio-sun-judicator",
+    "mirror-snare",
+    "chain-nullifier",
+    "spark-split",
+    "nova-squire",
+    "war-chant",
+    "void-hound",
+    "trio-moon-warden",
+    "nova-squire",
+    "spark-split",
+    "trio-star-herald"
+  ]);
+  assert.deepEqual(deckPresets.trioOmegaRivalAscension.ids.slice(20, 25), [
+    "starforge-fusion",
+    "gale-mage",
+    "ember-drake",
+    "flare-gale-archon",
+    "tempest-aegis-archon"
+  ]);
+
+  const scenario = scenarioSetups.protagonistTrioOmegaAscension;
+  assert.equal(scenario.aiStyle, "scriptedPressure");
+  assert.equal(scenario.openingDrawCount, 5);
+  assert.deepEqual(scenario.aiField, [
+    "iron-guardian",
+    "rift-bulwark",
+    "void-hound",
+    "nova-squire"
+  ]);
+
+  const setup = buildScenarioState(scenario, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalAscension"
+  });
+  const opened = drawOpeningHands({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai }
+  });
+  const openingGods = opened.ai.hand
+    .filter((card) => card.archetype === "三曜神格")
+    .map((card) => card.id);
+
+  assert.deepEqual(openingGods, ["trio-sun-judicator"]);
+  assert.equal(opened.ai.hand.some((card) => card.id === "spark-split"), true);
+  assertValidGameState(buildEngineStateFromUiState({
+    ...opened,
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+
+  const planning = scenarioSetups.trioStagedTributePlanning;
+  assert.deepEqual(planning.aiField, ["trio-sun-judicator", "nova-squire"]);
+  assert.deepEqual(planning.aiHand, ["trio-moon-warden", "spark-split"]);
+});
+
 test("trio attack planning scenario isolates an exclusive high-threat matchup", () => {
   const setup = buildScenarioState(scenarioSetups.trioAttackPlanning, {
     playerPreset: "protagonistTrioOmegaFull",
@@ -384,6 +444,23 @@ test("sunflare target choice scenario exposes two player-selectable support targ
   assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), ["trio-sun-judicator"]);
   assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), []);
   assert.deepEqual(setup.ai.traps.filter(Boolean).map((card) => card.id), ["renewal", "war-chant"]);
+  assertValidGameState(buildEngineStateFromUiState({
+    player: { ...createDuelist(PLAYER), ...setup.player },
+    ai: { ...createDuelist(AI), ...setup.ai },
+    turn: PLAYER,
+    phase: Phase.main,
+    gameEvents: setup.gameEvents || []
+  }));
+});
+
+test("sunflare hidden target choice scenario keeps two non-attack traps concealed", () => {
+  const setup = buildScenarioState(scenarioSetups.sunflareHiddenTargetChoice, {
+    playerPreset: "protagonistTrioOmegaFull",
+    aiPreset: "trioOmegaRivalFull"
+  });
+
+  assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), ["trio-sun-judicator"]);
+  assert.deepEqual(setup.ai.traps.filter(Boolean).map((card) => card.id), ["summon-flare", "chain-nullifier"]);
   assertValidGameState(buildEngineStateFromUiState({
     player: { ...createDuelist(PLAYER), ...setup.player },
     ai: { ...createDuelist(AI), ...setup.ai },

@@ -5,8 +5,8 @@ export const library = [
   { id: "ember-drake", type: "monster", name: "赤焰幼龙", element: "fire", stars: 4, atk: 1500, def: 900, icon: "炎", text: "被召唤时，对对手造成 200 点伤害。", onSummon: "burn200" },
   { id: "solar-knight", type: "monster", name: "日冕骑士", element: "light", stars: 4, atk: 1700, def: 1200, icon: "光", text: "稳健的光属性战士，适合抢节奏。" },
   { id: "gale-mage", type: "monster", name: "疾风术士", element: "wind", stars: 3, atk: 1200, def: 1400, icon: "风", text: "召唤时抽 1 张卡。", onSummon: "draw1" },
-  { id: "flare-gale-archon", type: "monster", name: "焰岚合星者", element: "fire", stars: 6, atk: 2400, def: 1800, icon: "融", text: "由赤焰幼龙和疾风术士融合召唤。攻击后自身攻击力提升 200。", summary: "指定素材融合登场的高阶进攻怪兽。", afterAttack: "grow200" },
-  { id: "tempest-aegis-archon", type: "monster", name: "岚耀守星者", element: "wind", stars: 6, atk: 2000, def: 2600, icon: "守", text: "由赤焰幼龙和疾风术士融合召唤。召唤时获得 400 护盾。", summary: "与焰岚合星者共用素材的防御形态，登场后立即建立护盾。", onSummon: "shield400" },
+  { id: "flare-gale-archon", type: "monster", name: "焰岚合星者", element: "fire", stars: 6, atk: 2400, def: 1800, icon: "融", text: "由赤焰幼龙和疾风术士融合召唤。攻击后自身攻击力提升 200。", summary: "指定素材融合登场的高阶进攻怪兽。", summonRoute: "fusion", afterAttack: "grow200" },
+  { id: "tempest-aegis-archon", type: "monster", name: "岚耀守星者", element: "wind", stars: 6, atk: 2000, def: 2600, icon: "守", text: "由赤焰幼龙和疾风术士融合召唤。召唤时获得 400 护盾。", summary: "与焰岚合星者共用素材的防御形态，登场后立即建立护盾。", summonRoute: "fusion", onSummon: "shield400" },
   { id: "void-hound", type: "monster", name: "虚影猎犬", element: "shadow", stars: 4, atk: 1600, def: 800, icon: "影", text: "攻击后自身攻击力提升 200。", afterAttack: "grow200" },
   { id: "iron-guardian", type: "monster", name: "铁壁守卫", element: "light", stars: 4, atk: 900, def: 2100, icon: "盾", text: "光属性。守备表示时用守备力结算，适合挡住高攻击怪兽。" },
   { id: "star-lancer", type: "monster", name: "星轨枪兵", element: "wind", stars: 4, atk: 1800, def: 1000, icon: "星", text: "风属性。高攻击力的前线怪兽。" },
@@ -394,6 +394,20 @@ export const deckPresets = {
       "chain-nullifier", "void-siege-breaker", "corebreak-edict", "pierce-line", "summon-flare"
     ]
   },
+  trioOmegaRivalAscension: {
+    label: "三曜逐神降临对手",
+    setupVisibility: "internal",
+    ids: [
+      "trio-moon-dominion", "trio-sun-judicator", "mirror-snare", "chain-nullifier", "spark-split",
+      "nova-squire", "war-chant", "void-hound", "trio-moon-warden", "nova-squire",
+      "spark-split", "trio-star-herald", "star-lancer", "trio-sun-judicator", "void-lock",
+      "trio-star-herald", "battle-trance", "trio-moon-warden", "mirror-snare", "overclock-core",
+      "starforge-fusion", "gale-mage", "ember-drake", "flare-gale-archon", "tempest-aegis-archon",
+      "trio-moon-dominion", "trio-sun-judicator", "trio-moon-warden", "trio-star-herald", "mirror-snare",
+      "chain-nullifier", "void-siege-breaker", "corebreak-edict", "pierce-line", "summon-flare",
+      "nova-squire", "spark-split", "star-lancer", "war-chant", "trio-moon-dominion"
+    ]
+  },
   suppressionRival: {
     label: "压制型对手",
     setupVisibility: "internal",
@@ -590,6 +604,20 @@ export const scenarioSetups = {
     aiHand: [],
     aiDeck: []
   },
+  aiFusionPlanning: {
+    label: "AI 融合形态规划",
+    text: "规则测试场景：AI 生命值较低，拥有手牌与场上的混合融合素材，并可选择进攻或防御融合形态。",
+    goal: "结束回合，观察 AI 保留手牌素材完成融合，并根据生存压力选择岚耀守星者。",
+    playerLp: 4000,
+    aiLp: 1200,
+    playerHand: [],
+    playerDeck: ["guard-sigil", "solar-knight"],
+    playerField: ["void-siege-breaker"],
+    aiHand: ["starforge-fusion", "gale-mage"],
+    aiField: ["ember-drake"],
+    aiDeck: ["solar-knight", "flare-gale-archon", "tempest-aegis-archon"],
+    aiStyle: "scriptedPressure"
+  },
   splitToken: {
     label: "分裂衍生物测试",
     difficulty: "demo",
@@ -730,6 +758,20 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioStagedTributePlanning: {
+    label: "三曜逐神祭品",
+    text: "规则测试场景：日曜已经通过祭品登场，AI 手牌中的月曜仍缺少三只普通祭品，并持有星火分裂。",
+    goal: "结束回合，观察 AI 先用星火分裂生成两只衍生物，再把衍生物和普通怪兽作为三只祭品召唤月曜；日曜不能被当作祭品。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: [],
+    aiField: ["trio-sun-judicator", "nova-squire"],
+    aiHand: ["trio-moon-warden", "spark-split"],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trioTrapPlanning: {
     label: "三曜陷阱择优",
     text: "规则测试场景：AI 同时盖放弱化力场和星界封锁，弱化 500 后仍无法保住疾风术士。",
@@ -805,6 +847,23 @@ export const scenarioSetups = {
     playerField: ["trio-sun-judicator"],
     aiField: [],
     aiTraps: ["renewal", "war-chant"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"]
+  },
+  sunflareHiddenTargetChoice: {
+    label: "日曜盖牌目标",
+    difficulty: "demo",
+    text: "界面测试场景：玩家控制曜冕裁决者，对手魔陷区有两张内容不可见的盖牌。",
+    goal: "用曜冕裁决者直接攻击，按卡位选择第二张盖牌；选择和锁定全程不应公开盖牌卡名。",
+    objectives: ["进入通用的“效果目标”选择阶段。", "选择对手魔陷区第二张盖牌。", "确认卡位标签和提示始终不泄露卡名。"],
+    hints: ["盖牌只显示卡位，不显示卡名或效果。", "攻击宣言后的公开日志也只会记录被锁定的魔陷区位置。"],
+    playerLp: 4000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["trio-sun-judicator"],
+    aiField: [],
+    aiTraps: ["summon-flare", "chain-nullifier"],
     aiHand: [],
     aiDeck: ["guard-sigil"]
   },
@@ -1685,6 +1744,44 @@ export const scenarioSetups = {
     aiGrave: [],
     playerDeck: deckPresets.protagonistTrioOmegaFull.ids,
     aiDeck: deckPresets.trioOmegaRivalFull.ids
+  },
+  protagonistTrioOmegaAscension: {
+    label: "终局三曜完整对局 · 逐神降临",
+    setupVisibility: "player",
+    text: "长局型终局原型。三曜不会同时出现在对手起手；日曜、月曜、星曜必须分批积累三只祭品后逐一通常召唤。对手会利用分裂衍生物重建祭品线，玩家可以在每次降神前破坏其资源链。",
+    goal: "阻止对手完成三次独立的三祭品召唤：判断该攻击神还是先清祭品，利用两次降神之间的建设回合建立自己的融合、墓地和反制资源。",
+    difficulty: "challenge",
+    aiStyle: "scriptedPressure",
+    objectives: [
+      "确认对手起手只有日曜，不会由一次召唤直接共降三神。",
+      "观察对手用星火分裂生成公开衍生物，建立下一次三祭品路线。",
+      "在月曜、星曜进入手牌前后分别破坏祭品链，而不是只处理已经登场的神。",
+      "利用较长的展开窗口完成自己的融合、分裂或墓地回收。"
+    ],
+    hints: [
+      "每一尊三曜仍需要整整三只祭品；衍生物也可以作为祭品，但离场后会直接消失。",
+      "对手手里出现新的三曜时，会把补充祭品的行动放在普通强化之前。",
+      "旧三曜不会被 AI 当作后续降神的祭品，清掉普通怪兽和衍生物可以真实拖慢节奏。",
+      "前十二张之后的对手牌堆会乱序，固定的是早期节奏，不是整局答案。"
+    ],
+    recommendedLine: [
+      "首回合削减一只前线祭品并铺设防御，迫使日曜消耗剩余三只怪兽。",
+      "日曜登场后优先观察普通怪兽和星火分裂；下一尊神尚未落地时，祭品就是最脆弱的节点。",
+      "在建设回合展开融合或墓地资源，不要把全部手牌换成一次性的攻击提升。",
+      "第三尊神进入手牌后，根据生命值决定抢终结还是继续切断三祭品。"
+    ],
+    playerLp: 4000,
+    aiLp: 4000,
+    openingDrawCount: 5,
+    playerHand: [],
+    aiHand: [],
+    playerField: [],
+    aiField: ["iron-guardian", "rift-bulwark", "void-hound", "nova-squire"],
+    playerGrave: [],
+    aiGrave: [],
+    playerDeck: deckPresets.protagonistTrioOmegaFull.ids,
+    aiDeck: deckPresets.trioOmegaRivalAscension.ids,
+    aiDeckShuffleRange: [12, 40]
   },
   target: {
     label: "目标选择",

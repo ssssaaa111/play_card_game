@@ -1252,6 +1252,9 @@ export class GameEngine {
     if (card.type !== "monster") {
       throw new GameRuleError(`Card ${action.cardId} is not a monster`);
     }
+    if (card.summonRoute === "fusion") {
+      throw new GameRuleError(`Card ${action.cardId} can only be fusion summoned`);
+    }
 
     const rivalId = action.rivalId || otherPlayerId(state, action.playerId);
     const preparedAction = { ...action, rivalId };

@@ -66,8 +66,8 @@ export function clearPendingSelection(state, kind) {
   return selectionStateSnapshot(state);
 }
 
-export function clearTransientSelection(state) {
+export function clearTransientSelection(state, { preserveSelected = false } = {}) {
   clearPendingFields(state);
-  state.selected = null;
+  if (!preserveSelected) state.selected = null;
   return selectionStateSnapshot(state);
 }

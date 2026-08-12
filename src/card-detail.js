@@ -1,5 +1,5 @@
 import { library } from './data.js';
-import { cardHandSummary, cardRuleText, cardTagText, cardTypeLabel, elementBadgeText, fusionRequirementText, tributeRequirementText } from './cards.js';
+import { cardHandSummary, cardRuleText, cardTagText, cardTypeLabel, elementBadgeText, fusionRequirementText, summonRouteRequirementText, tributeRequirementText } from './cards.js';
 import { cardStatusText } from './card-state-display.js';
 import { totalAtk, totalDef } from './rules.js';
 
@@ -20,7 +20,7 @@ export function cardRuleLine(card) {
   if (card.concealed) return "状态：未公开";
   if (card.type === "monster") {
     const status = cardStatusText(card) || (card.mode === "defense" ? "守备表示" : "攻击表示");
-    const requirement = tributeRequirementText(card);
+    const requirement = tributeRequirementText(card) || summonRouteRequirementText(card);
     return requirement ? `${requirement} / ${status}` : status;
   }
   if (card.type === "trap") return `触发：${cardRuleText(card)}`;
@@ -58,7 +58,7 @@ function buildCardDetailViewModel(card) {
     type: cardTypeLabel(card),
     effectText: card.text || "没有效果文本。",
     summary: card.summary || "",
-    summonRequirement: tributeRequirementText(card) || fusionRequirementText(card),
+    summonRequirement: tributeRequirementText(card) || summonRouteRequirementText(card) || fusionRequirementText(card),
     tags: cardTagText(card),
     attribute: elementBadgeText(card),
     attack: isMonster ? totalAtk(card) : null,

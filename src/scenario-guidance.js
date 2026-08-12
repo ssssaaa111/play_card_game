@@ -2,7 +2,8 @@ const TRIO_OMEGA_SCENARIOS = new Set([
   "protagonistTrioOmega",
   "protagonistTrioOmegaChallenge",
   "protagonistTrioOmegaStory",
-  "protagonistTrioOmegaFull"
+  "protagonistTrioOmegaFull",
+  "protagonistTrioOmegaAscension"
 ]);
 
 function cardTemplateId(card) {
