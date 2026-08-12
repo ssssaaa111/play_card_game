@@ -77,6 +77,9 @@ export function renderHandCards({
   fusionCandidateForCard = () => false,
   fusionTargetForCard = () => null,
   fusionSelectedUids = [],
+  reorderMode = false,
+  onMoveCard = () => {},
+  onPlaceCard = () => {},
   onCardClick = () => {},
   onCardDoubleClick = () => {}
 } = {}) {
@@ -97,6 +100,10 @@ export function renderHandCards({
     });
     const cardEl = createCardElement(document, card, { asset: assetForCard(card), handSummary: true });
     cardEl.dataset.zone = "hand";
+    cardEl.dataset.displayIndex = String(index);
+    cardEl.draggable = reorderMode;
+    cardEl.classList.toggle("hand-reorder-card", reorderMode);
+    cardEl.setAttribute("aria-grabbed", "false");
     view.cardClasses.forEach((className) => cardEl.classList.add(className));
     cardEl.title = view.title;
 
@@ -111,10 +118,63 @@ export function renderHandCards({
     actionReason.hidden = !view.showActionReason;
     cardEl.appendChild(actionReason);
 
-    cardEl.addEventListener("click", () => onCardClick(card, index));
+    if (reorderMode) {
+      const controls = document.createElement("span");
+      controls.className = "hand-reorder-controls";
+      const left = document.createElement("button");
+      left.type = "button";
+      left.className = "hand-reorder-step";
+      left.textContent = "←";
+      left.disabled = index === 0;
+      left.setAttribute("aria-label", `将${card.name}左移`);
+      left.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onMoveCard(card, -1);
+      });
+      const right = document.createElement("button");
+      right.type = "button";
+      right.className = "hand-reorder-step";
+      right.textContent = "→";
+      right.disabled = index === cards.length - 1;
+      right.setAttribute("aria-label", `将${card.name}右移`);
+      right.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onMoveCard(card, 1);
+      });
+      controls.append(left, right);
+      cardEl.appendChild(controls);
+
+      cardEl.addEventListener("dragstart", (event) => {
+        event.dataTransfer?.setData("text/plain", card.uid);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+        cardEl.classList.add("is-dragging");
+        cardEl.setAttribute("aria-grabbed", "true");
+      });
+      cardEl.addEventListener("dragend", () => {
+        cardEl.classList.remove("is-dragging");
+        cardEl.setAttribute("aria-grabbed", "false");
+        root.querySelectorAll(".is-drop-target").forEach((element) => element.classList.remove("is-drop-target"));
+      });
+      cardEl.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        cardEl.classList.add("is-drop-target");
+      });
+      cardEl.addEventListener("dragleave", () => cardEl.classList.remove("is-drop-target"));
+      cardEl.addEventListener("drop", (event) => {
+        event.preventDefault();
+        cardEl.classList.remove("is-drop-target");
+        const sourceUid = event.dataTransfer?.getData("text/plain") || "";
+        onPlaceCard(sourceUid, card.uid);
+      });
+    }
+
+    cardEl.addEventListener("click", () => {
+      if (!reorderMode) onCardClick(card, index);
+    });
     cardEl.addEventListener("dblclick", (event) => {
       event.preventDefault();
-      onCardDoubleClick(card, index);
+      if (!reorderMode) onCardDoubleClick(card, index);
     });
     fragment.appendChild(cardEl);
   });

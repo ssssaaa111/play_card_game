@@ -74,45 +74,6 @@ export function renderScenarioBrief(doc, elements, scenario, { hintsVisible = fa
   return view;
 }
 
-function appendTextNode(doc, root, className, text) {
-  const node = doc.createElement("span");
-  node.className = className;
-  node.textContent = text;
-  root.appendChild(node);
-  return node;
-}
-
-export function renderPreDuelDeckCard(doc, entry, { onOpenCardDetail } = {}) {
-  const button = doc.createElement("button");
-  button.type = "button";
-  button.className = "pre-duel-card";
-  button.dataset.cardId = entry.id;
-  button.dataset.zone = entry.zone;
-  button.dataset.count = String(entry.count || 1);
-  button.title = `查看 ${entry.name} 详情`;
-
-  const title = doc.createElement("span");
-  title.className = "pre-duel-card-title";
-  appendTextNode(doc, title, "pre-duel-zone", entry.zoneSummary || entry.zoneLabel);
-  appendTextNode(doc, title, "pre-duel-card-name", entry.name);
-  if ((entry.count || 1) > 1) appendTextNode(doc, title, "pre-duel-count", `x${entry.count}`);
-  button.appendChild(title);
-
-  const meta = doc.createElement("span");
-  meta.className = "pre-duel-card-meta";
-  const stats = Number.isFinite(entry.attack) && Number.isFinite(entry.defense)
-    ? ` · ATK ${entry.attack} / DEF ${entry.defense}`
-    : "";
-  meta.textContent = `${entry.type}${stats}`;
-  button.appendChild(meta);
-
-  if (entry.summary) appendTextNode(doc, button, "pre-duel-card-summary", entry.summary);
-  if (onOpenCardDetail) {
-    button.addEventListener("click", () => onOpenCardDetail(entry.id));
-  }
-  return button;
-}
-
 export function preDuelDeckCountText(preview = {}) {
   const displayCount = preview.displayDeckCards?.length || preview.deckCards?.length || 0;
   const deckCount = preview.deckCards?.length || 0;
@@ -123,9 +84,7 @@ export function preDuelDeckCountText(preview = {}) {
 
 export function renderPreDuelPreview(doc, elements, preview, {
   started = false,
-  gameOver = false,
-  deckExpanded = false,
-  onOpenCardDetail
+  gameOver = false
 } = {}) {
   if (!elements.preDuelPreview || !preview) return false;
 
@@ -148,17 +107,9 @@ export function renderPreDuelPreview(doc, elements, preview, {
     elements.preDuelDeckCount.textContent = preDuelDeckCountText(preview);
   }
   if (elements.preDuelDeckToggle) {
-    elements.preDuelDeckToggle.textContent = deckExpanded ? "收起牌组" : "查看牌组";
-    elements.preDuelDeckToggle.setAttribute("aria-expanded", String(deckExpanded));
-  }
-  if (elements.preDuelDeckList) {
-    const fragment = doc.createDocumentFragment();
-    (preview.displayDeckCards || preview.deckCards).forEach((entry) => {
-      fragment.appendChild(renderPreDuelDeckCard(doc, entry, { onOpenCardDetail }));
-    });
-    elements.preDuelDeckList.textContent = "";
-    elements.preDuelDeckList.appendChild(fragment);
-    elements.preDuelDeckList.hidden = !deckExpanded;
+    elements.preDuelDeckToggle.textContent = "打开卡组浏览";
+    elements.preDuelDeckToggle.setAttribute("aria-haspopup", "dialog");
+    elements.preDuelDeckToggle.removeAttribute("aria-expanded");
   }
   return true;
 }
@@ -209,9 +160,7 @@ export function renderSetupPanel(doc, elements, {
   deckDefinitions = {},
   customDecks = [],
   statsText = "",
-  hintsVisible = false,
-  deckExpanded = false,
-  onOpenCardDetail
+  hintsVisible = false
 } = {}) {
   if (elements.setupPanel) elements.setupPanel.hidden = state.started || state.gameOver;
 
@@ -225,9 +174,7 @@ export function renderSetupPanel(doc, elements, {
   });
   renderPreDuelPreview(doc, elements, preview, {
     started: state.started,
-    gameOver: state.gameOver,
-    deckExpanded,
-    onOpenCardDetail
+    gameOver: state.gameOver
   });
 
   const deckLabel = definitionLabel(deckDefinitions, state.deckPreset);

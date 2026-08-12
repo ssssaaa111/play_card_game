@@ -1845,19 +1845,8 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   margin-bottom: 0;
 }
 
-.setup-modal .pre-duel-deck:has(.pre-duel-deck-list:not([hidden])) .pre-duel-deck-head {
-  margin-bottom: 8px;
-}
-
 .setup-modal .pre-duel-deck-toggle {
   border-radius: 7px;
-}
-
-.setup-modal .pre-duel-card {
-  border-radius: 9px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent 58%),
-    rgba(11, 16, 28, 0.92);
 }
 
 .setup-modal .modal-actions {
@@ -2911,7 +2900,15 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   }
 
   .hand-stack {
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .hand-toolbar {
+    min-height: 28px;
+  }
+
+  #handOrderStatus {
+    display: none;
   }
 
   .hand {

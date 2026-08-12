@@ -146,10 +146,10 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         lp: els.preDuelLp?.textContent || "",
         skill: els.preDuelSkillName?.textContent || "",
         deckCount: els.preDuelDeckCount?.textContent || "",
-        deckExpanded: Boolean(els.preDuelDeckList && !els.preDuelDeckList.hidden),
-        deckCards: Array.from(els.preDuelDeckList?.querySelectorAll(".pre-duel-card") || []).map((item) => ({
+        browserOpen: Boolean(els.deckBrowserModal?.classList.contains("show")),
+        browserPosition: els.deckBrowserPosition?.textContent || "",
+        deckCards: Array.from(els.deckBrowserRail?.querySelectorAll(".deck-browser-rail-card") || []).map((item) => ({
           id: item.dataset.cardId || "",
-          zone: item.dataset.zone || "",
           count: item.dataset.count || "",
           text: item.textContent || ""
         }))
@@ -403,10 +403,6 @@ function assertCardEffectMarkerMissing(card, markerLabel) {
   const marker = [...card.querySelectorAll(".card-state-chip")]
     .find((entry) => entry.textContent.trim() === markerLabel);
   if (marker) throw new Error(`${markerLabel}: expired effect marker is still visible`);
-}
-
-function preDuelDeckCard(els, cardId) {
-  return els.preDuelDeckList?.querySelector(`.pre-duel-card[data-card-id="${cardId}"]`);
 }
 
 function graveTargetCard(els, cardId) {
@@ -8706,28 +8702,28 @@ async function runPreDuelDeckPreviewSmoke(ctx) {
   if (!routeText.includes("醒星回召选择天穹逆星者")) {
     throw new Error("pre-duel-deck-preview: recommended line should be rendered");
   }
-  if (!ctx.els.preDuelDeckList?.hidden) {
-    throw new Error("pre-duel-deck-preview: deck list should start collapsed");
+  if (ctx.els.deckBrowserModal?.classList.contains("show")) {
+    throw new Error("pre-duel-deck-preview: deck browser should start closed");
   }
-  clickSmokeElement(ctx.els.preDuelDeckToggle, "pre-duel-deck-preview: expand deck preview");
-  await waitForSmoke(() => !ctx.els.preDuelDeckList.hidden, "pre-duel-deck-preview: deck list expands");
-  const previewCard = preDuelDeckCard(ctx.els, "dawn-edge");
-  const deckCard = preDuelDeckCard(ctx.els, "battle-trance");
-  if (!previewCard || !deckCard) {
-    throw new Error("pre-duel-deck-preview: own starting cards and deck cards should be visible");
-  }
-  if (!previewCard.textContent.includes("魔法")) {
-    throw new Error("pre-duel-deck-preview: preview card row should show type");
-  }
-  if (previewCard.textContent.includes("ATK") || previewCard.textContent.includes("DEF")) {
-    throw new Error("pre-duel-deck-preview: spell preview should not show monster stats");
-  }
+  clickSmokeElement(ctx.els.preDuelDeckToggle, "pre-duel-deck-preview: open deck browser");
+  await waitForSmoke(
+    () => ctx.els.deckBrowserModal?.classList.contains("show") &&
+      ctx.els.deckBrowserCard?.querySelector('[data-card-id="dawn-edge"]'),
+    "pre-duel-deck-preview: deck browser opens on the first authored card"
+  );
   const card = cloneCardById("dawn-edge");
   if (!card) throw new Error("pre-duel-deck-preview: dawn-edge definition should exist");
-  clickSmokeElement(previewCard, "pre-duel-deck-preview: open preview card detail");
-  await assertCardDetailModal(ctx, card, "pre-duel-deck-preview");
-  clickSmokeElement(ctx.els.zoomClose, "pre-duel-deck-preview: close card detail");
-  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "pre-duel-deck-preview: modal closes");
+  if (ctx.els.deckBrowserName?.textContent !== card.name || ctx.els.deckBrowserText?.textContent !== card.text) {
+    throw new Error("pre-duel-deck-preview: deck browser detail must come from the unified definition");
+  }
+  clickSmokeElement(ctx.els.deckBrowserNext, "pre-duel-deck-preview: show next card");
+  await waitForSmoke(
+    () => ctx.els.deckBrowserPosition?.textContent.startsWith("2 /") &&
+      !ctx.els.deckBrowserCard?.querySelector('[data-card-id="dawn-edge"]'),
+    "pre-duel-deck-preview: next control advances the card detail"
+  );
+  clickSmokeElement(ctx.els.deckBrowserClose, "pre-duel-deck-preview: close deck browser");
+  await waitForSmoke(() => !ctx.els.deckBrowserModal.classList.contains("show"), "pre-duel-deck-preview: browser closes");
 
   clickSmokeElement(ctx.els.modalRestart, "pre-duel-deck-preview: start duel");
   await waitForSmoke(
@@ -8761,18 +8757,23 @@ async function runTrioGauntletPreviewBasicSmoke(ctx) {
   if (!lifePreview.includes("己方 1500") || !lifePreview.includes("对方 900")) {
     throw new Error(`${smokeName}: first chapter LP preview is inaccurate: ${lifePreview}`);
   }
-  if (!ctx.els.preDuelDeckList?.hidden) {
-    throw new Error(`${smokeName}: deck list should start collapsed`);
-  }
-  clickSmokeElement(ctx.els.preDuelDeckToggle, `${smokeName}: expand first chapter deck`);
-  await waitForSmoke(() => !ctx.els.preDuelDeckList.hidden, `${smokeName}: deck list expands`);
+  clickSmokeElement(ctx.els.preDuelDeckToggle, `${smokeName}: open first chapter deck browser`);
+  await waitForSmoke(
+    () => ctx.els.deckBrowserModal?.classList.contains("show"),
+    `${smokeName}: deck browser opens`
+  );
   const expectedDeckIds = ["trio-chain-veil", "trio-moonbreaker-ray", "last-spark"];
   for (const cardId of expectedDeckIds) {
-    const card = preDuelDeckCard(ctx.els, cardId);
-    if (!card || card.dataset.zone !== "deck") {
+    const card = ctx.els.deckBrowserRail?.querySelector(`[data-card-id="${cardId}"]`);
+    if (!card) {
       throw new Error(`${smokeName}: missing authored first chapter deck card ${cardId}`);
     }
   }
+  clickSmokeElement(ctx.els.deckBrowserClose, `${smokeName}: close first chapter deck browser`);
+  await waitForSmoke(
+    () => !ctx.els.deckBrowserModal.classList.contains("show"),
+    `${smokeName}: deck browser closes`
+  );
 
   clickSmokeElement(ctx.els.modalRestart, `${smokeName}: start gauntlet`);
   await waitForSmoke(
@@ -8839,33 +8840,29 @@ async function runPreDuelDeckScrollPreviewSmoke(ctx) {
   if (!ctx.els.preDuelDeckCount?.textContent.includes("种 /")) {
     throw new Error(`pre-duel-deck-scroll-preview: duplicate count summary missing: ${ctx.els.preDuelDeckCount?.textContent || ""}`);
   }
-  if (!ctx.els.preDuelDeckList?.hidden) {
-    throw new Error("pre-duel-deck-scroll-preview: deck list should start collapsed");
-  }
-  clickSmokeElement(ctx.els.preDuelDeckToggle, "pre-duel-deck-scroll-preview: expand deck preview");
-  await waitForSmoke(() => !ctx.els.preDuelDeckList.hidden, "pre-duel-deck-scroll-preview: deck list expands");
-  const cards = Array.from(ctx.els.preDuelDeckList.querySelectorAll(".pre-duel-card"));
+  clickSmokeElement(ctx.els.preDuelDeckToggle, "pre-duel-deck-scroll-preview: open deck browser");
+  await waitForSmoke(
+    () => ctx.els.deckBrowserModal?.classList.contains("show") && ctx.els.deckBrowserRail?.children.length > 1,
+    "pre-duel-deck-scroll-preview: deck browser opens"
+  );
+  const cards = Array.from(ctx.els.deckBrowserRail.querySelectorAll(".deck-browser-rail-card"));
   const ids = cards.map((item) => item.dataset.cardId || "");
   if (ids.length !== new Set(ids).size) {
     throw new Error(`pre-duel-deck-scroll-preview: duplicate card rows remain: ${ids.join(",")}`);
   }
-  const duplicateCard = preDuelDeckCard(ctx.els, "ember-drake");
-  if (!duplicateCard || duplicateCard.dataset.count !== "2" || !duplicateCard.textContent.includes("x2")) {
+  const duplicateCard = ctx.els.deckBrowserRail.querySelector('[data-card-id="ember-drake"]');
+  if (!duplicateCard || duplicateCard.dataset.count !== "2" || !duplicateCard.textContent.includes("×2")) {
     throw new Error("pre-duel-deck-scroll-preview: duplicate card should render once with x2 count");
   }
-  const list = ctx.els.preDuelDeckList;
-  if (!(list.scrollWidth > list.clientWidth)) {
-    throw new Error("pre-duel-deck-scroll-preview: deck list should be horizontally scrollable");
-  }
-  const beforeScroll = list.scrollLeft;
-  list.scrollLeft = list.scrollWidth;
-  await waitForSmoke(() => list.scrollLeft > beforeScroll, "pre-duel-deck-scroll-preview: list scrolls horizontally");
   const card = cloneCardById("ember-drake");
   if (!card) throw new Error("pre-duel-deck-scroll-preview: ember-drake definition should exist");
-  clickSmokeElement(duplicateCard, "pre-duel-deck-scroll-preview: open duplicate card detail");
-  await assertCardDetailModal(ctx, card, "pre-duel-deck-scroll-preview");
-  clickSmokeElement(ctx.els.zoomClose, "pre-duel-deck-scroll-preview: close card detail");
-  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "pre-duel-deck-scroll-preview: modal closes");
+  clickSmokeElement(duplicateCard, "pre-duel-deck-scroll-preview: select duplicate card detail");
+  await waitForSmoke(
+    () => ctx.els.deckBrowserName?.textContent === card.name && ctx.els.deckBrowserCopy?.textContent === "2 张",
+    "pre-duel-deck-scroll-preview: duplicate detail and count are visible"
+  );
+  clickSmokeElement(ctx.els.deckBrowserClose, "pre-duel-deck-scroll-preview: close deck browser");
+  await waitForSmoke(() => !ctx.els.deckBrowserModal.classList.contains("show"), "pre-duel-deck-scroll-preview: browser closes");
   clickSmokeElement(ctx.els.modalRestart, "pre-duel-deck-scroll-preview: start duel");
   await waitForSmoke(
     () => ctx.state.started && ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.pendingOpeningDraw,
@@ -8873,6 +8870,39 @@ async function runPreDuelDeckScrollPreviewSmoke(ctx) {
     9000
   );
   setSmokeStatus("passed", "pre-duel-deck-scroll-preview");
+}
+
+async function runHandReorderBasicSmoke(ctx) {
+  const smokeName = "hand-reorder-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "protagonistComebackChallenge");
+  const ruleOrderBefore = ctx.state.player.hand.map((card) => card.uid);
+  const displayBefore = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'))
+    .map((card) => card.dataset.cardId);
+  if (displayBefore.length < 2) throw new Error(`${smokeName}: scenario must expose at least two hand cards`);
+
+  clickSmokeElement(ctx.els.handReorderToggle, `${smokeName}: enter reorder mode`);
+  await waitForSmoke(
+    () => ctx.els.hand.dataset.reorderMode === "true" &&
+      ctx.els.hand.querySelectorAll(".hand-reorder-controls").length === displayBefore.length,
+    `${smokeName}: reorder controls appear`
+  );
+  const firstCard = ctx.els.hand.querySelector('[data-zone="hand"]');
+  const moveRight = firstCard?.querySelector('.hand-reorder-step[aria-label$="右移"]');
+  clickSmokeElement(moveRight, `${smokeName}: move first display card right`);
+  await waitForSmoke(() => {
+    const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
+    return ids[0] === displayBefore[1] && ids[1] === displayBefore[0];
+  }, `${smokeName}: display order changes`);
+  if (ctx.state.player.hand.some((card, index) => card.uid !== ruleOrderBefore[index])) {
+    throw new Error(`${smokeName}: UI reorder must not mutate the rule hand array`);
+  }
+  clickSmokeElement(ctx.els.handReorderToggle, `${smokeName}: finish reorder mode`);
+  await waitForSmoke(
+    () => ctx.els.hand.dataset.reorderMode === "false" && !ctx.els.hand.querySelector(".hand-reorder-controls"),
+    `${smokeName}: reorder controls close without resetting display order`
+  );
+  setSmokeStatus("passed", smokeName);
 }
 
 async function runEquipmentSpellSmoke(ctx) {
@@ -9435,6 +9465,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-gauntlet-preview-basic": runTrioGauntletPreviewBasicSmoke,
     "objective-hierarchy-mobile-basic": runObjectiveHierarchyMobileBasicSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
+    "hand-reorder-basic": runHandReorderBasicSmoke,
     "equipment-spell": runEquipmentSpellSmoke,
     "support-target-readability-basic": runSupportTargetReadabilityBasicSmoke,
     "hand-action-highlight-recovery-basic": runHandActionHighlightRecoveryBasicSmoke,

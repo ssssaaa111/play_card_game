@@ -37,10 +37,12 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/card-renderer.js");
   checkModuleSyntax("src/card-state-display.js");
   checkModuleSyntax("src/control-renderer.js");
+  checkModuleSyntax("src/deck-browser.js");
   checkModuleSyntax("src/duel-modal-renderer.js");
   checkModuleSyntax("src/field-renderer.js");
   checkModuleSyntax("src/fusion-selection-renderer.js");
   checkModuleSyntax("src/hand-renderer.js");
+  checkModuleSyntax("src/hand-order.js");
   checkModuleSyntax("src/hud-renderer.js");
   checkModuleSyntax("src/log-renderer.js");
   checkModuleSyntax("src/timeline-renderer.js");
@@ -88,8 +90,12 @@ test("index keeps critical app mount points wired", () => {
   assert.match(html, /id="skipAttackBtn"/);
   assert.match(html, /id="endTurnBtn"/);
   assert.match(html, /id="preDuelPreview"/);
-  assert.match(html, /id="preDuelDeckList"/);
   assert.match(html, /id="preDuelDeckToggle"/);
+  assert.match(html, /id="deckBrowserModal"/);
+  assert.match(html, /id="deckBrowserStage"/);
+  assert.match(html, /id="deckBrowserPrev"/);
+  assert.match(html, /id="deckBrowserNext"/);
+  assert.match(html, /id="handReorderToggle"/);
   assert.match(html, /id="aiRevealModal"/);
   assert.match(html, /id="aiRevealProgress"/);
   assert.match(html, /id="aiRevealContinue"/);
@@ -594,6 +600,7 @@ test("browser smoke runner covers key click regressions", () => {
   const data = readProjectFile("src/data.js");
   const app = readProjectFile("src/app.js");
   const smoke = readProjectFile("src/browser-smoke.js");
+  const deckBrowser = readProjectFile("src/deck-browser.js");
   const setupOptions = readProjectFile("src/setup-options.js");
   const setupRenderer = readProjectFile("src/setup-renderer.js");
   const controls = readProjectFile("src/control-renderer.js");
@@ -687,9 +694,11 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /scheduleBrowserSmoke\(\{/);
   assert.match(app, /graveTargets: document\.querySelector\("#graveTargets"\)/);
   assert.match(app, /scenarioBrief: document\.querySelector\("#scenarioBrief"\)/);
-  assert.match(app, /preDuelDeckList: document\.querySelector\("#preDuelDeckList"\)/);
   assert.match(app, /preDuelDeckToggle: document\.querySelector\("#preDuelDeckToggle"\)/);
-  assert.match(app, /preDuelDeckExpanded = !preDuelDeckExpanded/);
+  assert.match(app, /deckBrowserModal: document\.querySelector\("#deckBrowserModal"\)/);
+  assert.match(app, /els\.preDuelDeckToggle\.addEventListener\("click", openDeckBrowser\)/);
+  assert.match(app, /handReorderToggle: document\.querySelector\("#handReorderToggle"\)/);
+  assert.match(app, /reconcileHandOrder\(state\.player\.hand, handDisplayOrder\)/);
   assert.match(app, /aiRevealModal: document\.querySelector\("#aiRevealModal"\)/);
   assert.match(app, /aiRevealProgress: document\.querySelector\("#aiRevealProgress"\)/);
   assert.match(app, /fusionPreview: document\.querySelector\("#fusionPreview"\)/);
@@ -714,7 +723,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /\["ai-card-reveal-confirm", "ai-card-reveal-queue"\]\.includes\(BROWSER_SMOKE\)/);
   assert.match(app, /buildAiCardReveal\(/);
   assert.match(setupRenderer, /buildPreDuelPreview\(\{/);
-  assert.match(setupRenderer, /onOpenCardDetail\(entry\.id\)/);
+  assert.match(deckBrowser, /cardDetailViewModel\(entry\.id\)/);
+  assert.match(deckBrowser, /onSelect\(entryIndex\)/);
   assert.match(app, /scenarioHintsVisible = !scenarioHintsVisible/);
   assert.match(targetSelection, /pending\.mode === "ownGraveMonster"/);
   assert.match(targetSelection, /pending\.mode === "ownGraveCard"/);
@@ -816,6 +826,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-card-reveal-queue": runAiCardRevealQueueSmoke/);
   assert.match(smoke, /"pre-duel-deck-preview": runPreDuelDeckPreviewSmoke/);
   assert.match(smoke, /"pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke/);
+  assert.match(smoke, /"hand-reorder-basic": runHandReorderBasicSmoke/);
   assert.match(smoke, /"equipment-spell": runEquipmentSpellSmoke/);
   assert.match(smoke, /"hand-action-highlight-recovery-basic": runHandActionHighlightRecoveryBasicSmoke/);
   assert.match(smoke, /"game-over-event": runGameOverEventSmoke/);
@@ -823,7 +834,6 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /data-card-id="\$\{cardId\}"/);
   assert.match(smoke, /function trapCard/);
   assert.match(smoke, /function graveTargetCard/);
-  assert.match(smoke, /function preDuelDeckCard/);
   assert.match(smoke, /function clickSmokeElementCenter/);
   assert.match(smoke, /document\.elementFromPoint\(x, y\)/);
   assert.match(smoke, /function aiRevealVisible/);
@@ -941,6 +951,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-queue"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-scroll-preview"\)/);
+  assert.match(smoke, /const smokeName = "hand-reorder-basic";[\s\S]*UI reorder must not mutate the rule hand array[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);
   assert.match(smoke, /const lockedBefore = lockedRulesSnapshot\(\);[\s\S]*finished duel should expose no player actions[\s\S]*inspecting a hand card after game over changed rules state/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);
@@ -1383,7 +1394,7 @@ test("narrow fusion prompts stay clear of clickable hand materials", () => {
 });
 
 test("required static files exist at documented paths", () => {
-  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "scripts/finale-sim.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/control-renderer.js", "src/data.js", "src/deck.js", "src/duel-modal-renderer.js", "src/engine-adapter.js", "src/field-renderer.js", "src/fusion-selection-renderer.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/selection-state.js", "src/setup-options.js", "src/setup-renderer.js", "src/spells.js", "src/target-selection.js", "src/timeline.js", "src/timeline-renderer.js", "src/trap-response-renderer.js", "src/traps.js", "src/tribute-selection.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
+  ["index.html", "styles.css", "assets/card-art-spell-trap-atlas.png", "assets/card-art-spells-01.png", "assets/card-art-spells-02.png", "assets/card-art-spells-03.png", "assets/card-art-traps-01.png", "scripts/browser-smoke.mjs", "scripts/finale-sim.mjs", "src/actions.js", "src/animation.js", "src/ai-card-reveal.js", "src/app.js", "src/audio.js", "src/battle.js", "src/battle-log.js", "src/browser-smoke.js", "src/card-art.js", "src/card-detail.js", "src/card-renderer.js", "src/cards.js", "src/chain-view.js", "src/combos.js", "src/control-renderer.js", "src/data.js", "src/deck.js", "src/deck-browser.js", "src/duel-modal-renderer.js", "src/engine-adapter.js", "src/field-renderer.js", "src/fusion-selection-renderer.js", "src/hand-order.js", "src/hand-renderer.js", "src/hud-renderer.js", "src/log-audit.js", "src/log-renderer.js", "src/music.js", "src/pre-duel-preview.js", "src/response-state.js", "src/rules.js", "src/scenario-state.js", "src/selection-state.js", "src/setup-options.js", "src/setup-renderer.js", "src/spells.js", "src/target-selection.js", "src/timeline.js", "src/timeline-renderer.js", "src/trap-response-renderer.js", "src/traps.js", "src/tribute-selection.js", "src/turn-state.js", "src/view-model.js"].forEach((path) => {
     assert.ok(readFileSync(join(rootPath, path)), `${path} should exist`);
   });
 });
