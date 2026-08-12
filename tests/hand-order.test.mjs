@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  handPlacementTap,
   placeHandCard,
   reconcileHandOrder,
-  shiftHandCard
+  shiftHandCard,
+  sortHandCardsByType
 } from "../src/hand-order.js";
 
 function card(uid) {
@@ -29,4 +31,28 @@ test("hand display order supports accessible one-step moves and drag placement",
   assert.deepEqual(shiftHandCard(order, "d", 1), order, "right edge should clamp");
   assert.deepEqual(placeHandCard(order, "a", "d"), ["b", "c", "a", "d"]);
   assert.deepEqual(order, ["a", "b", "c", "d"], "reordering helpers must be immutable");
+});
+
+test("type sorting groups the displayed hand while preserving relative order and rule state", () => {
+  const ruleHand = [
+    { ...card("spell"), type: "spell" },
+    { ...card("monster-a"), type: "monster", stars: 4 },
+    { ...card("trap"), type: "trap" },
+    { ...card("monster-b"), type: "monster", stars: 8 }
+  ];
+  const before = [...ruleHand];
+  const sorted = sortHandCardsByType(ruleHand, ["trap", "monster-a", "spell", "monster-b"]);
+
+  assert.deepEqual(sorted.map((entry) => entry.uid), ["monster-b", "monster-a", "spell", "trap"]);
+  assert.deepEqual(ruleHand, before, "type sorting must not mutate the engine hand array");
+});
+
+test("tap placement selects, cancels, then emits an explicit source and target", () => {
+  assert.deepEqual(handPlacementTap("", "a"), { selectedUid: "a", placement: null });
+  assert.deepEqual(handPlacementTap("a", "a"), { selectedUid: "", placement: null });
+  assert.deepEqual(handPlacementTap("a", "c"), {
+    selectedUid: "",
+    placement: { sourceUid: "a", targetUid: "c" }
+  });
+  assert.deepEqual(handPlacementTap("a", ""), { selectedUid: "a", placement: null });
 });

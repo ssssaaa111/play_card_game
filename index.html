@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20260812-card-browser-hand-order-v2" />
+  <link rel="stylesheet" href="styles.css?v=20260812-hand-sort-shortcuts" />
   <link rel="stylesheet" href="duel-table.css?v=20260812-card-browser-hand-order" />
 </head>
 <body>
@@ -219,6 +219,8 @@
       <div class="hand-stack">
         <div class="hand-toolbar" id="handToolbar" hidden>
           <span id="handOrderStatus" hidden>拖动卡牌，或使用卡牌上的左右按钮调整顺序。</span>
+          <button class="btn ghost hand-order-shortcut" id="handSortType" type="button" hidden>按类型整理</button>
+          <button class="btn ghost hand-order-shortcut" id="handResetOrder" type="button" hidden>恢复摸牌顺序</button>
           <button class="btn ghost hand-reorder-toggle" id="handReorderToggle" type="button" aria-pressed="false">整理手牌</button>
         </div>
         <div class="hand" id="hand"></div>
@@ -541,6 +543,6 @@
   </div>
 
   <script type="module" src="src/duel-table.js?v=20260802-passive-log-attention"></script>
-  <script type="module" src="src/app.js?v=20260812-card-browser-hand-order"></script>
+  <script type="module" src="src/app.js?v=20260812-hand-sort-shortcuts"></script>
 </body>
 </html>

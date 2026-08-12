@@ -43,3 +43,34 @@ export function placeHandCard(order = [], sourceUid, targetUid) {
   next.splice(targetIndex, 0, sourceUid);
   return next;
 }
+
+const HAND_TYPE_ORDER = new Map([
+  ["monster", 0],
+  ["spell", 1],
+  ["trap", 2]
+]);
+
+export function sortHandCardsByType(cards = [], preferredOrder = []) {
+  return reconcileHandOrder(cards, preferredOrder)
+    .map((card, index) => ({ card, index }))
+    .sort((left, right) => {
+      const typeDifference = (HAND_TYPE_ORDER.get(left.card?.type) ?? 3) - (HAND_TYPE_ORDER.get(right.card?.type) ?? 3);
+      if (typeDifference) return typeDifference;
+      if (left.card?.type === "monster") {
+        const starDifference = (Number(right.card?.stars) || 0) - (Number(left.card?.stars) || 0);
+        if (starDifference) return starDifference;
+      }
+      return left.index - right.index;
+    })
+    .map(({ card }) => card);
+}
+
+export function handPlacementTap(selectedUid = "", tappedUid = "") {
+  if (!tappedUid) return { selectedUid, placement: null };
+  if (!selectedUid) return { selectedUid: tappedUid, placement: null };
+  if (selectedUid === tappedUid) return { selectedUid: "", placement: null };
+  return {
+    selectedUid: "",
+    placement: { sourceUid: selectedUid, targetUid: tappedUid }
+  };
+}

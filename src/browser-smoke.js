@@ -8857,6 +8857,34 @@ async function runHandReorderBasicSmoke(ctx) {
       ctx.els.hand.querySelectorAll(".hand-reorder-controls").length === displayBefore.length,
     `${smokeName}: reorder controls appear`
   );
+  clickSmokeElement(ctx.els.handSortType, `${smokeName}: sort display cards by type`);
+  await waitForSmoke(() => {
+    const types = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardType);
+    return types.lastIndexOf("spell") < types.indexOf("trap");
+  }, `${smokeName}: type shortcut groups spells before traps`);
+  if (ctx.state.player.hand.some((card, index) => card.uid !== ruleOrderBefore[index])) {
+    throw new Error(`${smokeName}: type sort must not mutate the rule hand array`);
+  }
+  clickSmokeElement(ctx.els.handResetOrder, `${smokeName}: reset display to draw order`);
+  await waitForSmoke(() => {
+    const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
+    return ids.every((id, index) => id === displayBefore[index]);
+  }, `${smokeName}: reset restores draw order`);
+
+  const cardsForTap = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
+  clickSmokeElement(cardsForTap.at(-1), `${smokeName}: choose tap-move source`);
+  await waitForSmoke(
+    () => ctx.els.hand.querySelector(".hand-reorder-selected")?.dataset.cardId === displayBefore.at(-1),
+    `${smokeName}: tap-move source is visible`
+  );
+  clickSmokeElement(ctx.els.hand.querySelector('[data-zone="hand"]'), `${smokeName}: choose tap-move destination`);
+  await waitForSmoke(() => {
+    const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
+    return ids[0] === displayBefore.at(-1) && !ctx.els.hand.querySelector(".hand-reorder-selected");
+  }, `${smokeName}: tap placement moves the display card`);
+  clickSmokeElement(ctx.els.handResetOrder, `${smokeName}: reset after tap placement`);
+  await waitForSmoke(() => ctx.els.hand.querySelector('[data-zone="hand"]')?.dataset.cardId === displayBefore[0], `${smokeName}: second reset restores draw order`);
+
   const firstCard = ctx.els.hand.querySelector('[data-zone="hand"]');
   const moveRight = firstCard?.querySelector('.hand-reorder-step[aria-label$="右移"]');
   clickSmokeElement(moveRight, `${smokeName}: move first display card right`);

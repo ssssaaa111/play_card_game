@@ -78,8 +78,10 @@ export function renderHandCards({
   fusionTargetForCard = () => null,
   fusionSelectedUids = [],
   reorderMode = false,
+  reorderSelectedUid = "",
   onMoveCard = () => {},
   onPlaceCard = () => {},
+  onTapCard = () => {},
   onCardClick = () => {},
   onCardDoubleClick = () => {}
 } = {}) {
@@ -103,6 +105,7 @@ export function renderHandCards({
     cardEl.dataset.displayIndex = String(index);
     cardEl.draggable = reorderMode;
     cardEl.classList.toggle("hand-reorder-card", reorderMode);
+    cardEl.classList.toggle("hand-reorder-selected", reorderMode && reorderSelectedUid === card.uid);
     cardEl.setAttribute("aria-grabbed", "false");
     view.cardClasses.forEach((className) => cardEl.classList.add(className));
     cardEl.title = view.title;
@@ -119,6 +122,9 @@ export function renderHandCards({
     cardEl.appendChild(actionReason);
 
     if (reorderMode) {
+      cardEl.setAttribute("role", "button");
+      cardEl.tabIndex = 0;
+      cardEl.setAttribute("aria-pressed", String(reorderSelectedUid === card.uid));
       const controls = document.createElement("span");
       controls.className = "hand-reorder-controls";
       const left = document.createElement("button");
@@ -167,10 +173,16 @@ export function renderHandCards({
         const sourceUid = event.dataTransfer?.getData("text/plain") || "";
         onPlaceCard(sourceUid, card.uid);
       });
+      cardEl.addEventListener("keydown", (event) => {
+        if (!["Enter", " "].includes(event.key)) return;
+        event.preventDefault();
+        onTapCard(card);
+      });
     }
 
     cardEl.addEventListener("click", () => {
-      if (!reorderMode) onCardClick(card, index);
+      if (reorderMode) onTapCard(card);
+      else onCardClick(card, index);
     });
     cardEl.addEventListener("dblclick", (event) => {
       event.preventDefault();
