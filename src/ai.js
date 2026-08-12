@@ -52,6 +52,10 @@ function isTrioPressureMonster(card) {
   return trioPressureMonsterIds.has(templateId(card));
 }
 
+function isGodDeploymentGoal(turnGoal) {
+  return turnGoal === "deployGod" || turnGoal === "deployTrio";
+}
+
 function attackTargetEntry(target, targetIndex, attackerAtk) {
   if (!target) return null;
   const targetValue = battleValue(target);
@@ -463,10 +467,9 @@ export function chooseAiSpellAction({
   canActivateSpell = null
 } = {}) {
   const shouldDeferMonsterInvestment = aiStyle === "scriptedPressure" &&
-    turnGoal === "deployTrio" &&
+    isGodDeploymentGoal(turnGoal) &&
     timing === "beforeSummon";
   const shouldResumeMonsterInvestment = aiStyle === "scriptedPressure" &&
-    turnGoal === "deployTrio" &&
     timing === "afterSummon";
   const tributeBodies = (owner?.field || [])
     .filter((card) => card && !isTrioPressureMonster(card))
@@ -498,7 +501,6 @@ export function chooseAiSpellAction({
         reason: developsTributes
           ? "tributeDevelopment"
           : aiStyle === "scriptedPressure" &&
-            turnGoal === "deployTrio" &&
             timing === "afterSummon" &&
             summonSensitiveSpellEffects.has(card.effect)
             ? "trioDeploymentFirst"
@@ -738,6 +740,7 @@ export function chooseAiAttackAction({
   rivalLp = 0,
   rivalShield = 0,
   aiStyle = "balanced",
+  turnGoal = "pressure",
   skippedAttackers = new Set(),
   canAttackMonster = null
 } = {}) {
@@ -791,13 +794,15 @@ export function chooseAiAttackAction({
     shield: rivalShield,
     directAttacks: owner?.directAttacks || 0
   });
-  const canKillNow = lethalDamage >= rivalLp;
+  const canKillNow = turnGoal === "lethal" || lethalDamage >= rivalLp;
   const rivalThreat = aiRivalLethalThreat({
     rivalField,
     ownerField: field,
     ownerShield: owner?.shield || 0
   });
-  const underLethalThreat = !canKillNow && rivalThreat >= (owner?.lp || 0);
+  const underLethalThreat = !canKillNow && (
+    turnGoal === "survive" || rivalThreat >= (owner?.lp || 0)
+  );
   const threatTarget = underLethalThreat ? chooseThreatTarget(pick.card, rivalField) : null;
   const targetEntries = rivalField
     .map((card, index) => card ? { card, index } : null)
@@ -918,15 +923,37 @@ export function chooseAiAttackAction({
 export function chooseAiTurnGoal({
   hand = [],
   field = [],
+  owner = null,
+  rival = null,
   aiStyle = "balanced",
   canSummon = null
 } = {}) {
   if (aiStyle !== "scriptedPressure") return "pressure";
-  const summon = chooseAiSummonAction({ hand, field, aiStyle, canSummon });
-  if (summon?.tributeCost === 3 && isTrioPressureMonster(summon.card)) return "deployTrio";
-  const trioWaiting = hand.some((card) => isTrioPressureMonster(card));
-  const tributeBodies = field.filter((card) => card && !isTrioPressureMonster(card)).length;
-  return trioWaiting && tributeBodies < 3 ? "buildTributes" : "pressure";
+  const liveHand = owner?.hand || hand;
+  const liveField = owner?.field || field;
+  if (owner && rival) {
+    const lethalDamage = aiMaxDamageThisTurn({
+      attackers: aiAttackersList(liveField).map((entry) => entry.card),
+      targets: rival.field || [],
+      shield: rival.shield || 0,
+      directAttacks: owner.directAttacks || 0
+    });
+    if ((Number(rival.lp) || 0) > 0 && lethalDamage >= rival.lp) return "lethal";
+  }
+  const summon = chooseAiSummonAction({ hand: liveHand, field: liveField, aiStyle, canSummon });
+  if (summon?.tributeCost === 3 && isTrioPressureMonster(summon.card)) return "deployGod";
+  const trioWaiting = liveHand.some((card) => isTrioPressureMonster(card));
+  const tributeBodies = liveField.filter((card) => card && !isTrioPressureMonster(card)).length;
+  if (trioWaiting && tributeBodies < 3) return "buildTributes";
+  if (owner && rival) {
+    const rivalThreat = aiRivalLethalThreat({
+      rivalField: rival.field || [],
+      ownerField: liveField,
+      ownerShield: owner.shield || 0
+    });
+    if ((Number(owner.lp) || 0) > 0 && rivalThreat >= owner.lp) return "survive";
+  }
+  return liveField.some((card) => isTrioPressureMonster(card)) ? "protectGods" : "pressure";
 }
 
 export function aiSupportZoneReserve({
@@ -938,7 +965,7 @@ export function aiSupportZoneReserve({
   minScore = 40,
   canActivateSpell = null
 } = {}) {
-  if (aiStyle !== "scriptedPressure" || turnGoal !== "deployTrio") return 0;
+  if (aiStyle !== "scriptedPressure" || !isGodDeploymentGoal(turnGoal)) return 0;
   const hasDeferredSupport = hand.some((card, handIndex) =>
     card?.type === "spell" &&
     supportZoneInvestmentSpellEffects.has(card.effect) &&

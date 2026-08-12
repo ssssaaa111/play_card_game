@@ -951,6 +951,68 @@ async function runTrioStagedTributePlanningBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioLiveTurnReplanningBasicSmoke(ctx) {
+  const smokeName = "trio-live-turn-replanning-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioLiveTurnReplanning");
+  const chant = ctx.state.ai.hand.find((card) => card?.id === "war-chant");
+  const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  if (!chant ||
+      !ctx.state.ai.hand.some((card) => card?.id === "trio-moon-warden") ||
+      !ctx.state.ai.hand.some((card) => card?.id === "spark-split")) {
+    throw new Error(`${smokeName}: live replanning fixture is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.turn === "player" && !ctx.state.aiRunning,
+    `${smokeName}: AI completes its replanned deployment turn. ${smokeDebug(ctx)}`,
+    46000
+  );
+
+  const events = (ctx.state.gameEvents || []).filter((event) => Number(event.id) > eventIdBefore);
+  const splitIndex = events.findIndex((event) =>
+    event.type === "CARD_ACTIVATED" && eventReferencesTemplate(event, "spark-split")
+  );
+  const moonSummonIndex = events.findIndex((event) =>
+    event.type === "MONSTER_SUMMONED" &&
+    event.summonType === "tribute" &&
+    eventReferencesTemplate(event, "trio-moon-warden")
+  );
+  const chantIndex = events.findIndex((event) =>
+    event.type === "CARD_ACTIVATED" && event.cardId === chant.uid
+  );
+  const tokenSummons = events.filter((event) =>
+    event.type === "MONSTER_SUMMONED" && event.summonType === "token"
+  );
+  const moonTributes = events.filter((event) =>
+    event.type === "CARD_TRIBUTED" && eventReferencesTemplate(event, "trio-moon-warden")
+  );
+  const sun = ctx.state.ai.field.find((card) => card?.id === "trio-sun-judicator");
+  const moon = ctx.state.ai.field.find((card) => card?.id === "trio-moon-warden");
+  const tributeDecision = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("补充祭品候选")
+  );
+  const investmentDecision = (ctx.state.log || []).find((entry) =>
+    logEntryMessage(entry).includes("三曜部署完成后才发动")
+  );
+
+  if (splitIndex < 0 || moonSummonIndex <= splitIndex || chantIndex <= moonSummonIndex) {
+    const actionOrder = events
+      .filter((event) => event.type === "CARD_ACTIVATED" || event.type === "MONSTER_SUMMONED")
+      .map((event) => ({ id: event.id, type: event.type, cardId: event.cardId, summonType: event.summonType }));
+    throw new Error(`${smokeName}: expected split, moon tribute summon, then delayed war chant. ${JSON.stringify({ splitIndex, moonSummonIndex, chantIndex, actionOrder })} ${smokeDebug(ctx)}`);
+  }
+  if (tokenSummons.length !== 2 || moonTributes.length !== 3 || !sun || !moon ||
+      Number(sun.tempAtk) < 500 || !ctx.state.ai.grave.some((card) => card?.uid === chant.uid)) {
+    throw new Error(`${smokeName}: replanned turn must preserve sun, deploy moon, and invest the buff after tribute cleanup. ${smokeDebug(ctx)}`);
+  }
+  if (tributeDecision?.cardId !== "spark-split" || investmentDecision?.cardId !== "war-chant") {
+    throw new Error(`${smokeName}: public logs must explain both goal-driven decisions. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   const smokeName = "trio-omega-ascension-opening-basic";
   setSmokeStatus("running", smokeName);
@@ -9238,6 +9300,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-attack-planning-basic": runTrioAttackPlanningBasicSmoke,
     "trio-turn-planning-basic": runTrioTurnPlanningBasicSmoke,
     "trio-staged-tribute-planning-basic": runTrioStagedTributePlanningBasicSmoke,
+    "trio-live-turn-replanning-basic": runTrioLiveTurnReplanningBasicSmoke,
     "trio-omega-ascension-opening-basic": runTrioOmegaAscensionOpeningBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "trio-trap-reserve-planning-basic": runTrioTrapReservePlanningBasicSmoke,

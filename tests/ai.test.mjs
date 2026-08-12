@@ -716,7 +716,7 @@ test("scripted pressure AI defers monster investment until after planned trio de
     owner,
     rival,
     aiStyle: "scriptedPressure",
-    turnGoal: "deployTrio",
+    turnGoal: "deployGod",
     timing: "beforeSummon",
     canActivateSpell: () => true
   });
@@ -725,7 +725,7 @@ test("scripted pressure AI defers monster investment until after planned trio de
     owner,
     rival,
     aiStyle: "scriptedPressure",
-    turnGoal: "deployTrio",
+    turnGoal: "protectGods",
     timing: "afterSummon",
     canActivateSpell: () => true
   });
@@ -898,7 +898,7 @@ test("scripted pressure AI reserves a support zone for a deferred trio equipment
     owner,
     rival: { field: [], traps: [] },
     aiStyle: "scriptedPressure",
-    turnGoal: "deployTrio",
+    turnGoal: "deployGod",
     canActivateSpell: () => true
   }), 1);
   assert.equal(aiSupportZoneReserve({
@@ -1054,7 +1054,7 @@ test("scripted pressure AI distinguishes legal trio deployment from tribute deve
     field,
     aiStyle: "scriptedPressure",
     canSummon: () => true
-  }), "deployTrio");
+  }), "deployGod");
   assert.equal(chooseAiTurnGoal({
     hand,
     field,
@@ -1067,6 +1067,47 @@ test("scripted pressure AI distinguishes legal trio deployment from tribute deve
     aiStyle: "scriptedPressure",
     canSummon: () => false
   }), "buildTributes");
+});
+
+test("scripted pressure AI replans lethal, survival, and god protection goals from live state", () => {
+  const sun = monster({
+    id: "trio-sun-judicator",
+    atk: 3000,
+    def: 2500,
+    stars: 7,
+    tributeCost: 3,
+    archetype: "三曜神格"
+  });
+  const quietRival = {
+    lp: 4000,
+    shield: 0,
+    field: [null, null, null, null, null]
+  };
+
+  assert.equal(chooseAiTurnGoal({
+    owner: { lp: 4000, shield: 0, directAttacks: 0, hand: [], field: [sun, null, null, null, null] },
+    rival: { ...quietRival, lp: 2500 },
+    aiStyle: "scriptedPressure",
+    canSummon: () => false
+  }), "lethal");
+
+  assert.equal(chooseAiTurnGoal({
+    owner: { lp: 4000, shield: 0, directAttacks: 0, hand: [], field: [sun, null, null, null, null] },
+    rival: quietRival,
+    aiStyle: "scriptedPressure",
+    canSummon: () => false
+  }), "protectGods");
+
+  assert.equal(chooseAiTurnGoal({
+    owner: { lp: 800, shield: 0, directAttacks: 0, hand: [], field: [sun, null, null, null, null] },
+    rival: {
+      lp: 4000,
+      shield: 0,
+      field: [monster({ id: "rival-finisher", atk: 4000 }), null, null, null, null]
+    },
+    aiStyle: "scriptedPressure",
+    canSummon: () => false
+  }), "survive");
 });
 
 test("scripted pressure AI uses split tokens to build tribute bodies for a staged trio summon", () => {

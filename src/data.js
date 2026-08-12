@@ -772,6 +772,20 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioLiveTurnReplanning: {
+    label: "三曜整回合重规划",
+    text: "规则测试场景：AI 必须在星火分裂补齐祭品后立即重算回合目标，再降临月曜并把强化留给登场后的神格。",
+    goal: "结束回合，观察 AI 依次完成分裂、月曜三祭品召唤和战意高扬，且不会把强化浪费在即将成为祭品的怪兽上。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["void-siege-breaker"],
+    aiField: ["trio-sun-judicator", "nova-squire"],
+    aiHand: ["trio-moon-warden", "spark-split", "war-chant"],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trioTrapPlanning: {
     label: "三曜陷阱择优",
     text: "规则测试场景：AI 同时盖放弱化力场和星界封锁，弱化 500 后仍无法保住疾风术士。",

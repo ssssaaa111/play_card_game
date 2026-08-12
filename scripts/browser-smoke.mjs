@@ -43,6 +43,7 @@ const DEFAULT_SMOKES = [
   "sunflare-hidden-target-readability-basic",
   "sunflare-target-timeout-recovery-basic",
   "trio-staged-tribute-planning-basic",
+  "trio-live-turn-replanning-basic",
   "trio-omega-ascension-opening-basic",
   "trio-omega-finale-demo",
   "trio-omega-finale-rush",

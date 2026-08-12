@@ -4510,6 +4510,23 @@ function scheduleOpeningDraw(delay = 700) {
   }
 }
 
+function chooseLiveAiTurnGoal() {
+  return chooseAiTurnGoal({
+    hand: state.ai.hand,
+    field: state.ai.field,
+    owner: state.ai,
+    rival: state.player,
+    aiStyle: state.aiStyle,
+    canSummon: (_card, handIndex, options) => explainSummonMonsterFromUiState(
+      state,
+      "ai",
+      handIndex,
+      options.fieldIndex,
+      { tributeIndexes: options.tributeIndexes }
+    ).ok
+  });
+}
+
 async function runAiTurn() {
   if (state.gameOver || state.paused || !state.started || state.aiRunning) return;
   state.aiRunning = true;
@@ -4523,27 +4540,20 @@ async function runAiTurn() {
     dispatchPendingScriptedSummons();
     render();
     await sleep(1500);
-    const turnGoal = chooseAiTurnGoal({
-      hand: state.ai.hand,
-      field: state.ai.field,
-      aiStyle: state.aiStyle,
-      canSummon: (_card, handIndex, options) => explainSummonMonsterFromUiState(
-        state,
-        "ai",
-        handIndex,
-        options.fieldIndex,
-        { tributeIndexes: options.tributeIndexes }
-      ).ok
-    });
-    await aiPlaySpells({ turnGoal, timing: "beforeSummon" });
+    let turnGoal = chooseLiveAiTurnGoal();
+    await aiPlaySpells({ turnGoal, timing: "beforeSummon", getTurnGoal: chooseLiveAiTurnGoal });
     if (state.gameOver) return;
     await sleep(850);
-    if (aiSetTraps({ turnGoal }) > 0) {
+    turnGoal = chooseLiveAiTurnGoal();
+    if (aiSetTraps({ turnGoal, getTurnGoal: chooseLiveAiTurnGoal }) > 0) {
       render();
       await sleep(1300);
     }
     if (state.gameOver) return;
-    let summonedThisTurn = await aiSummon();
+    turnGoal = chooseLiveAiTurnGoal();
+    const summonAction = await aiSummon();
+    let summonedThisTurn = Boolean(summonAction);
+    let deployedGodThisTurn = summonAction?.card?.archetype === "三曜神格";
     if (summonedThisTurn) {
       render();
       await sleep(1700);
@@ -4553,21 +4563,25 @@ async function runAiTurn() {
       playEpicAction("额外召唤", "draw", 900);
       playVoice("ai", "summon", "对手准备额外召唤。");
       await sleep(950);
-      const summoned = await aiSummon();
-      if (!summoned) break;
+      turnGoal = chooseLiveAiTurnGoal();
+      const extraSummonAction = await aiSummon();
+      if (!extraSummonAction) break;
+      deployedGodThisTurn = deployedGodThisTurn || extraSummonAction.card?.archetype === "三曜神格";
       summonedThisTurn = true;
       render();
       await sleep(1850);
     }
     if (state.gameOver) return;
-    if (turnGoal === "deployTrio" && summonedThisTurn) {
-      await aiPlaySpells({ turnGoal, timing: "afterSummon" });
+    if (deployedGodThisTurn && summonedThisTurn) {
+      turnGoal = chooseLiveAiTurnGoal();
+      await aiPlaySpells({ turnGoal, timing: "afterSummon", getTurnGoal: chooseLiveAiTurnGoal });
     }
     if (state.gameOver) return;
+    turnGoal = chooseLiveAiTurnGoal();
     await aiPlayFusion({ turnGoal });
     if (state.gameOver) return;
     dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
-    await aiAttack();
+    await aiAttack({ getTurnGoal: chooseLiveAiTurnGoal });
     if (!state.gameOver) {
       await sleep(1150);
       try {
@@ -4588,13 +4602,18 @@ async function runAiTurn() {
   }
 }
 
-async function aiPlaySpells({ turnGoal = "pressure", timing = "beforeSummon" } = {}) {
+async function aiPlaySpells({
+  turnGoal = "pressure",
+  timing = "beforeSummon",
+  getTurnGoal = null
+} = {}) {
+  const liveTurnGoal = () => typeof getTurnGoal === "function" ? getTurnGoal() : turnGoal;
   let action = chooseAiSpellAction({
     hand: state.ai.hand,
     owner: state.ai,
     rival: state.player,
     aiStyle: state.aiStyle,
-    turnGoal,
+    turnGoal: liveTurnGoal(),
     timing,
     canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
   });
@@ -4619,7 +4638,7 @@ async function aiPlaySpells({ turnGoal = "pressure", timing = "beforeSummon" } =
       owner: state.ai,
       rival: state.player,
       aiStyle: state.aiStyle,
-      turnGoal,
+      turnGoal: liveTurnGoal(),
       timing,
       canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
     });
@@ -4720,25 +4739,28 @@ async function aiSummon() {
       console.error(error);
     }
   }
-  return true;
+  return { ...action, summoned };
 }
 
-function aiSetTraps({ turnGoal = "pressure" } = {}) {
-  const reservedZones = aiSupportZoneReserve({
-    hand: state.ai.hand,
-    owner: state.ai,
-    rival: state.player,
-    aiStyle: state.aiStyle,
-    turnGoal,
-    canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
-  });
-  const limit = aiTrapSetLimit({
-    traps: state.ai.traps,
-    aiStyle: state.aiStyle,
-    reservedZones
-  });
+function aiSetTraps({ turnGoal = "pressure", getTurnGoal = null } = {}) {
+  const liveTurnGoal = () => typeof getTurnGoal === "function" ? getTurnGoal() : turnGoal;
   let setCount = 0;
-  while (setCount < limit) {
+  while (true) {
+    if (state.aiStyle !== "scriptedPressure" && setCount >= 1) break;
+    const reservedZones = aiSupportZoneReserve({
+      hand: state.ai.hand,
+      owner: state.ai,
+      rival: state.player,
+      aiStyle: state.aiStyle,
+      turnGoal: liveTurnGoal(),
+      canActivateSpell: (card, handIndex) => validateSpell(state.ai, state.player, card, handIndex).ok
+    });
+    const remainingSetLimit = aiTrapSetLimit({
+      traps: state.ai.traps,
+      aiStyle: state.aiStyle,
+      reservedZones
+    });
+    if (remainingSetLimit <= 0) break;
     const action = chooseAiSetTrapAction({
       hand: state.ai.hand,
       traps: state.ai.traps,
@@ -4752,7 +4774,7 @@ function aiSetTraps({ turnGoal = "pressure" } = {}) {
   return setCount;
 }
 
-async function aiAttack() {
+async function aiAttack({ getTurnGoal = null } = {}) {
   const skippedAttackers = new Set();
   const maxAttackSteps = MONSTER_ZONE_SIZE * 3;
   for (let step = 0; step < maxAttackSteps; step += 1) {
@@ -4764,6 +4786,7 @@ async function aiAttack() {
       rivalLp: state.player.lp,
       rivalShield: state.player.shield,
       aiStyle: state.aiStyle,
+      turnGoal: typeof getTurnGoal === "function" ? getTurnGoal() : "pressure",
       skippedAttackers,
       canAttackMonster: (_card, fieldIndex) =>
         explainMonsterAttackReadinessFromUiState(state, "ai", fieldIndex).ok
