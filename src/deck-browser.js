@@ -1,4 +1,4 @@
-import { cardDetailViewModel } from "./card-detail.js";
+import { cardInspectorViewModel } from "./card-detail.js";
 import { createCardElement } from "./card-renderer.js";
 
 function deckBrowserEntries(preview = {}) {
@@ -16,7 +16,7 @@ export function deckBrowserView(preview = {}, requestedIndex = 0) {
   if (!entries.length) return null;
   const index = clampIndex(requestedIndex, entries.length);
   const entry = entries[index];
-  const detail = cardDetailViewModel(entry.id);
+  const detail = cardInspectorViewModel(entry.id);
   if (!detail) return null;
   return {
     index,

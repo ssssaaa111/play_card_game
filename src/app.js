@@ -28,7 +28,7 @@ import { createBattleLogEntry, logEntryMessage } from './battle-log.js';
 import { renderBattlePreviewElement } from './battle-preview-renderer.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { getCardEffectDefinition } from './game-engine.js';
-import { cardDefinitionById, cardDetailViewModel, cardInspectorViewModel } from './card-detail.js';
+import { cardDefinitionById, cardInspectorViewModel } from './card-detail.js';
 import { bindCardInspector, renderCardInspector } from './card-inspector-renderer.js';
 import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDuelControlsView, renderDuelControls } from './control-renderer.js';
@@ -467,7 +467,8 @@ const els = {
   cardModal: document.querySelector("#cardModal"),
   zoomName: document.querySelector("#zoomName"),
   zoomCard: document.querySelector("#zoomCard"),
-  zoomText: document.querySelector("#zoomText"),
+  zoomSummary: document.querySelector("#zoomSummary"),
+  zoomText: document.querySelector("#zoomEffect"),
   zoomMeta: document.querySelector("#zoomMeta"),
   zoomClose: document.querySelector("#zoomClose"),
   chainModal: document.querySelector("#chainModal"),
@@ -4999,7 +5000,7 @@ function showDetail(card) {
 }
 
 function openCardDetail(cardOrId) {
-  const view = cardDetailViewModel(cardOrId);
+  const view = cardInspectorViewModel(cardOrId, { effectMarkers: focusedCardEffectMarkers(cardOrId) });
   const card = view?.card;
   if (!card) {
     cue("找不到这张卡的详情。");
@@ -5856,6 +5857,7 @@ function renderHand(animationKey) {
     onMoveCard: moveDisplayedHandCard,
     onPlaceCard: placeDisplayedHandCard,
     onTapCard: tapDisplayedHandCard,
+    onCardDetail: openCardDetail,
     onCardClick: (card) => selectHandCard(card.uid, {
       directActivate: directActivationTracker.register(`hand:${card.uid}`)
     }),
@@ -5903,6 +5905,17 @@ function renderGraveTargets() {
       reason.title = targetInfo.reason;
       cardEl.appendChild(reason);
     }
+    const detailButton = document.createElement("button");
+    detailButton.type = "button";
+    detailButton.className = "card-detail-entry grave-detail-entry";
+    detailButton.textContent = "详情";
+    detailButton.setAttribute("aria-label", `查看${card.name}详情`);
+    detailButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openCardDetail(card);
+    });
+    cardEl.appendChild(detailButton);
     cardEl.addEventListener("click", () => {
       interactWithPendingSpellTarget("player", index, "grave", {
         directActivate: directActivationTracker.register(`player:grave:${index}`)
@@ -6061,6 +6074,14 @@ els.aiPanel.addEventListener("keydown", (event) => {
   handleAiPanelAttack();
 });
 els.zoomClose.addEventListener("click", closeCardDetail);
+els.cardModal?.addEventListener("click", (event) => {
+  if (event.target === els.cardModal) closeCardDetail();
+});
+els.cardModal?.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  event.preventDefault();
+  closeCardDetail();
+});
 els.aiRevealDetail.addEventListener("click", () => {
   if (pendingAiReveal?.cardId) openCardDetail(pendingAiReveal.cardId);
 });

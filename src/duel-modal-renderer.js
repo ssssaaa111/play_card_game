@@ -70,13 +70,32 @@ export function renderAiRevealModal(elements, reveal) {
 
 export function renderCardDetailModal(doc, elements, view, { asset = "" } = {}) {
   if (!view?.card) return false;
+  elements.cardModal.dataset.cardType = view.cardType;
+  elements.cardModal.dataset.cardId = view.id || "";
   elements.zoomName.textContent = view.name;
   elements.zoomCard.textContent = "";
   const preview = createCardElement(doc, view.card, { asset });
   preview.classList.remove("selected", "used", "defense");
   elements.zoomCard.appendChild(preview);
+  if (elements.zoomSummary) elements.zoomSummary.textContent = view.tacticalSummary || view.summary || view.type;
   elements.zoomText.textContent = view.effectText;
-  elements.zoomMeta.textContent = view.meta;
+  const rows = [
+    { label: "类型", value: view.type },
+    ...(view.summonRequirement ? [{ label: "召唤", value: view.summonRequirement }] : []),
+    ...(view.rows || []).filter((row) => row.label !== "类型")
+  ];
+  elements.zoomMeta.textContent = "";
+  for (const row of rows) {
+    const group = doc.createElement("div");
+    group.className = "zoom-meta-row";
+    group.classList.toggle("scrollable", Boolean(row.scrollable));
+    const label = doc.createElement("dt");
+    label.textContent = `${row.label}：`;
+    const value = doc.createElement("dd");
+    value.textContent = row.value;
+    group.append(label, value);
+    elements.zoomMeta.appendChild(group);
+  }
   elements.cardModal.classList.add("show");
   return true;
 }

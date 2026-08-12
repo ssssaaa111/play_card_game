@@ -62,8 +62,30 @@ test("uses live monster values and status in the selected-card inspector", () =>
   assert.match(view.rows.find((row) => row.label === "状态").value, /强化\+300/);
 });
 
+test("unified full details merge live card state with the shared definition", () => {
+  const view = cardInspectorViewModel({
+    id: "ember-drake",
+    uid: "player-card-1",
+    type: "monster",
+    name: "赤焰幼龙",
+    tempAtk: 300,
+    battleWear: 200,
+    used: true,
+    mode: "attack"
+  }, {
+    effectMarkers: [{ label: "战意 攻+300", detail: "战意高扬生效：攻击力 +300。" }]
+  });
+
+  assert.equal(view.effectText, cardDetailViewModel("ember-drake").effectText);
+  assert.equal(view.attack, 1800);
+  assert.match(view.rows.find((row) => row.label === "状态").value, /强化\+300/);
+  assert.match(view.rows.find((row) => row.label === "状态").value, /损耗/);
+  assert.match(view.rows.find((row) => row.label === "生效中").value, /战意高扬/);
+  assert.equal(view.card.uid, "player-card-1");
+});
+
 test("keeps concealed cards redacted in inspector and zoom details", () => {
-  const card = { type: "trap", name: "盖放的陷阱", text: "这张卡还没有被公开。", concealed: true };
+  const card = { id: "mirror-snare", type: "trap", name: "盖放的陷阱", text: "这张卡还没有被公开。", concealed: true };
   const view = cardInspectorViewModel(card);
 
   assert.equal(view.tacticalSummary, "未知效果");

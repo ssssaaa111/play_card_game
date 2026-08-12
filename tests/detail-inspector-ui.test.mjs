@@ -7,6 +7,8 @@ const html = readFileSync(fileURLToPath(new URL("../index.html", import.meta.url
 const css = readFileSync(fileURLToPath(new URL("../styles.css", import.meta.url)), "utf8");
 const app = readFileSync(fileURLToPath(new URL("../src/app.js", import.meta.url)), "utf8");
 const renderer = readFileSync(fileURLToPath(new URL("../src/card-inspector-renderer.js", import.meta.url)), "utf8");
+const modalRenderer = readFileSync(fileURLToPath(new URL("../src/duel-modal-renderer.js", import.meta.url)), "utf8");
+const handRenderer = readFileSync(fileURLToPath(new URL("../src/hand-renderer.js", import.meta.url)), "utf8");
 
 test("selected-card details expose summary, complete effect, and metadata regions", () => {
   assert.match(html, /id="detailInspector" hidden/);
@@ -36,4 +38,15 @@ test("short desktop and mobile layouts preserve readable detail boundaries", () 
   assert.match(css, /\.detail-card:has\(\.battle-preview:not\(\.empty\)\) \.detail-effect-block,[\s\S]*\.detail-meta\s*\{\s*display: none;/);
   assert.match(css, /\.detail-card:has\(\.battle-preview:not\(\.empty\)\) \.detail-meta:has\(\.detail-meta-row\.scrollable\)\s*\{\s*display: grid;/);
   assert.match(css, /\.detail-meta:has\(\.detail-meta-row\.scrollable\) \.detail-meta-row:not\(\.scrollable\)\s*\{\s*display: none;/);
+});
+
+test("full detail modal and hand entry use the unified inspector projection", () => {
+  assert.match(html, /id="zoomSummary"/);
+  assert.match(html, /id="zoomEffect"/);
+  assert.match(html, /id="zoomMeta"/);
+  assert.match(app, /cardInspectorViewModel\(cardOrId, \{ effectMarkers: focusedCardEffectMarkers/);
+  assert.match(modalRenderer, /for \(const row of rows/);
+  assert.match(handRenderer, /className = "card-detail-entry"/);
+  assert.match(handRenderer, /onCardDetail\(card\)/);
+  assert.match(app, /onCardDetail: openCardDetail/);
 });
