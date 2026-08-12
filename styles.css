@@ -2804,6 +2804,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   justify-content: flex-end;
   gap: 10px;
   min-height: 30px;
+  flex-wrap: wrap;
 }
 
 .hand-toolbar[hidden] {
@@ -2814,6 +2815,18 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   color: #bfeff0;
   font-size: 11px;
   font-weight: 800;
+  margin-right: auto;
+}
+
+.hand-order-shortcut {
+  min-height: 30px;
+  padding: 5px 9px;
+  border-color: rgba(160, 187, 224, 0.36);
+  font-size: 11px;
+}
+
+.hand-order-shortcut[hidden] {
+  display: none;
 }
 
 .hand-reorder-toggle {
@@ -2966,6 +2979,29 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .hand .card.hand-reorder-card.is-drop-target {
   border-color: rgba(246, 189, 96, 0.98);
   box-shadow: 0 0 0 3px rgba(246, 189, 96, 0.24), 0 16px 30px rgba(0, 0, 0, 0.42);
+}
+
+.hand .card.hand-reorder-card.hand-reorder-selected {
+  border-color: rgba(246, 189, 96, 0.98);
+  box-shadow: 0 0 0 3px rgba(246, 189, 96, 0.26), 0 18px 34px rgba(0, 0, 0, 0.46);
+  transform: translateY(-4px);
+}
+
+.hand .card.hand-reorder-card.hand-reorder-selected::after {
+  content: "已选移动起点";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 48%;
+  z-index: 7;
+  padding: 6px;
+  border-radius: 999px;
+  color: #2c1b05;
+  background: rgba(255, 214, 130, 0.96);
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+  pointer-events: none;
 }
 
 .hand-reorder-controls {

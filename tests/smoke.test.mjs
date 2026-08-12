@@ -96,6 +96,8 @@ test("index keeps critical app mount points wired", () => {
   assert.match(html, /id="deckBrowserPrev"/);
   assert.match(html, /id="deckBrowserNext"/);
   assert.match(html, /id="handReorderToggle"/);
+  assert.match(html, /id="handSortType"/);
+  assert.match(html, /id="handResetOrder"/);
   assert.match(html, /id="aiRevealModal"/);
   assert.match(html, /id="aiRevealProgress"/);
   assert.match(html, /id="aiRevealContinue"/);
@@ -698,6 +700,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /deckBrowserModal: document\.querySelector\("#deckBrowserModal"\)/);
   assert.match(app, /els\.preDuelDeckToggle\.addEventListener\("click", openDeckBrowser\)/);
   assert.match(app, /handReorderToggle: document\.querySelector\("#handReorderToggle"\)/);
+  assert.match(app, /handSortType: document\.querySelector\("#handSortType"\)/);
+  assert.match(app, /handResetOrder: document\.querySelector\("#handResetOrder"\)/);
   assert.match(app, /reconcileHandOrder\(state\.player\.hand, handDisplayOrder\)/);
   assert.match(app, /aiRevealModal: document\.querySelector\("#aiRevealModal"\)/);
   assert.match(app, /aiRevealProgress: document\.querySelector\("#aiRevealProgress"\)/);
@@ -951,7 +955,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-queue"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-scroll-preview"\)/);
-  assert.match(smoke, /const smokeName = "hand-reorder-basic";[\s\S]*UI reorder must not mutate the rule hand array[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "hand-reorder-basic";[\s\S]*type sort must not mutate the rule hand array[\s\S]*tap placement moves the display card[\s\S]*UI reorder must not mutate the rule hand array[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);
   assert.match(smoke, /const lockedBefore = lockedRulesSnapshot\(\);[\s\S]*finished duel should expose no player actions[\s\S]*inspecting a hand card after game over changed rules state/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);
