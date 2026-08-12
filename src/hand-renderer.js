@@ -63,6 +63,13 @@ export function handCardView({
   };
 }
 
+export function handDetailEntryView(card = {}, { reorderMode = false } = {}) {
+  return {
+    visible: !reorderMode,
+    label: `查看${card.name || "卡牌"}详情`
+  };
+}
+
 export function renderHandCards({
   document,
   root,
@@ -82,6 +89,7 @@ export function renderHandCards({
   onMoveCard = () => {},
   onPlaceCard = () => {},
   onTapCard = () => {},
+  onCardDetail = () => {},
   onCardClick = () => {},
   onCardDoubleClick = () => {}
 } = {}) {
@@ -101,6 +109,7 @@ export function renderHandCards({
       drawHighlighted: animationKey === "draw-player" && index === cards.length - 1
     });
     const cardEl = createCardElement(document, card, { asset: assetForCard(card), handSummary: true });
+    const detailEntry = handDetailEntryView(card, { reorderMode });
     cardEl.dataset.zone = "hand";
     cardEl.dataset.displayIndex = String(index);
     cardEl.draggable = reorderMode;
@@ -120,6 +129,20 @@ export function renderHandCards({
     actionReason.textContent = view.actionReason;
     actionReason.hidden = !view.showActionReason;
     cardEl.appendChild(actionReason);
+
+    if (detailEntry.visible) {
+      const detailButton = document.createElement("button");
+      detailButton.type = "button";
+      detailButton.className = "card-detail-entry";
+      detailButton.textContent = "详情";
+      detailButton.setAttribute("aria-label", detailEntry.label);
+      detailButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onCardDetail(card);
+      });
+      cardEl.appendChild(detailButton);
+    }
 
     if (reorderMode) {
       cardEl.setAttribute("role", "button");

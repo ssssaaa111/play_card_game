@@ -15,6 +15,7 @@ const SMOKE_VIEWPORTS = {
   "mobile-hand-choice-fit-basic": { width: 390, height: 844 },
   "objective-hierarchy-mobile-basic": { width: 390, height: 844 },
   "pre-duel-deck-scroll-preview": { width: 390, height: 844 },
+  "card-detail-viewer": { width: 390, height: 844 },
   "hand-reorder-basic": { width: 390, height: 844 },
   // Headless Chrome applies --window-size to the outer window on Windows; this yields an 844x390 content viewport.
   "landscape-hand-choice-fit-basic": { width: 866, height: 488 },
@@ -50,6 +51,7 @@ const DEFAULT_SMOKES = [
   "trio-omega-finale-demo",
   "trio-omega-finale-rush",
   "pre-duel-deck-preview",
+  "card-detail-viewer",
   "hand-reorder-basic",
   "trio-gauntlet-preview-basic",
   "trio-gauntlet-demo",

@@ -727,7 +727,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /\["ai-card-reveal-confirm", "ai-card-reveal-queue"\]\.includes\(BROWSER_SMOKE\)/);
   assert.match(app, /buildAiCardReveal\(/);
   assert.match(setupRenderer, /buildPreDuelPreview\(\{/);
-  assert.match(deckBrowser, /cardDetailViewModel\(entry\.id\)/);
+  assert.match(deckBrowser, /cardInspectorViewModel\(entry\.id\)/);
   assert.match(deckBrowser, /onSelect\(entryIndex\)/);
   assert.match(app, /scenarioHintsVisible = !scenarioHintsVisible/);
   assert.match(targetSelection, /pending\.mode === "ownGraveMonster"/);
@@ -949,7 +949,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "invalid-spell-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pause-detail"\)/);
-  assert.match(smoke, /setSmokeStatus\("passed", "card-detail-viewer"\)/);
+  assert.match(smoke, /const detailEntry = handCard[\s\S]*hand detail entry must not select, activate, or move the card[\s\S]*setSmokeStatus\("passed", "card-detail-viewer"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "battle-log-card-detail"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-confirm"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-queue"\)/);
@@ -1130,7 +1130,7 @@ test("app uses extracted card details", () => {
 
   assert.match(app, /from '\.\/card-detail\.js'/);
   assert.match(app, /cardInspectorViewModel\(card, \{ effectMarkers: focusedCardEffectMarkers\(card\) \}\)/);
-  assert.match(app, /cardDetailViewModel\(cardOrId\)/);
+  assert.match(app, /cardInspectorViewModel\(cardOrId, \{ effectMarkers: focusedCardEffectMarkers/);
   assert.doesNotMatch(app, /renderCurrentLog\(\{/);
   assert.doesNotMatch(html, /id="log"/);
   assert.match(timelineRenderer, /appendLogEntryContent\(\{/);

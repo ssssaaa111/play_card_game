@@ -16,7 +16,7 @@ const preview = {
   ]
 };
 
-test("deck browser projects every compact deck entry through the unified card definition", () => {
+test("deck browser projects every compact deck entry through unified card details", () => {
   const first = deckBrowserView(preview, 0);
   const last = deckBrowserView(preview, 99);
 

@@ -73,13 +73,21 @@ export function cardDetailViewModel(cardOrId) {
   return buildCardDetailViewModel(resolveCardDetailSource(cardOrId));
 }
 
+function resolveInspectorDetailSource(cardOrId) {
+  if (!cardOrId || typeof cardOrId === "string" || cardOrId.concealed) {
+    return resolveCardDetailSource(cardOrId);
+  }
+  const definition = cardDefinitionById(cardOrId.id);
+  return definition ? { ...definition, ...cardOrId } : cardOrId;
+}
+
 function supportRuleValue(card, rule) {
   const prefix = card.type === "trap" ? "触发：" : "规则：";
   return rule.startsWith(prefix) ? rule.slice(prefix.length) : rule;
 }
 
 export function cardInspectorViewModel(cardOrId, { effectMarkers = [] } = {}) {
-  const card = typeof cardOrId === "string" ? resolveCardDetailSource(cardOrId) : cardOrId;
+  const card = resolveInspectorDetailSource(cardOrId);
   const view = buildCardDetailViewModel(card);
   if (!view) return null;
 

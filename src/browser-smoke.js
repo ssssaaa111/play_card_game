@@ -8478,10 +8478,16 @@ async function runCardDetailViewerSmoke(ctx) {
   await startSmokeDuel(ctx, "direct");
   const card = ctx.state.player.hand.find((entry) => entry?.id === "star-breach") || ctx.state.player.hand.find(Boolean);
   if (!card) throw new Error("card-detail-viewer: player hand should contain a visible card");
-  clickSmokeElement(handCard(ctx.els, card.id), "card-detail-viewer: select visible hand card");
-  await waitForSmoke(() => !ctx.els.detailBtn.disabled, "card-detail-viewer: unified detail action enabled");
-  clickSmokeElement(ctx.els.detailBtn, "card-detail-viewer: open selected card detail");
+  const selectedBefore = ctx.state.selected;
+  const detailEntry = handCard(ctx.els, card.id)?.querySelector(".card-detail-entry");
+  clickSmokeElement(detailEntry, "card-detail-viewer: open hand card detail without action");
   await assertCardDetailModal(ctx, card, "card-detail-viewer");
+  if (ctx.state.selected !== selectedBefore || !ctx.state.player.hand.some((entry) => entry?.uid === card.uid)) {
+    throw new Error("card-detail-viewer: hand detail entry must not select, activate, or move the card");
+  }
+  if (!ctx.els.zoomSummary?.textContent || !ctx.els.zoomMeta?.textContent.includes("类型：")) {
+    throw new Error("card-detail-viewer: unified detail modal must expose summary and structured metadata");
+  }
   clickSmokeElement(ctx.els.zoomClose, "card-detail-viewer: close card detail");
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "card-detail-viewer: modal closes");
   if (!ctx.state.started || ctx.state.turn !== "player") {

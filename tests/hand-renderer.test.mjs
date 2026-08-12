@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { handCardView } from "../src/hand-renderer.js";
+import { handCardView, handDetailEntryView } from "../src/hand-renderer.js";
 
 function card(overrides = {}) {
   return {
@@ -104,4 +104,15 @@ test("invalid fusion hand materials keep their exact reason after renderer extra
   assert.ok(view.cardClasses.includes("fusion-unavailable"));
   assert.ok(view.cardClasses.includes("action-blocked"));
   assert.ok(!view.cardClasses.includes("action-ready"));
+});
+
+test("hand detail entry stays independent from action and reorder semantics", () => {
+  assert.deepEqual(handDetailEntryView(card(), { reorderMode: false }), {
+    visible: true,
+    label: "查看预见之召详情"
+  });
+  assert.deepEqual(handDetailEntryView(card(), { reorderMode: true }), {
+    visible: false,
+    label: "查看预见之召详情"
+  });
 });
