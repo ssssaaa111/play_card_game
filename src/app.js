@@ -59,6 +59,14 @@ import {
 } from './deck-browser.js';
 import { buildDeck, createDuelist } from './deck.js';
 import {
+  campaignDefinitions,
+  campaignChapterStates,
+  loadCampaignProgress,
+  recordCampaignChapterResult,
+  saveCampaignProgress
+} from './campaign.js';
+import { campaignHubView, renderCampaignHub } from './campaign-renderer.js';
+import {
   createCustomDeck,
   deckDefinitionMap,
   readCustomDecks,
@@ -274,6 +282,8 @@ const state = {
   aiStyle: "balanced",
   scenarioId: BROWSER_MANUAL_SCENARIO || "normal",
   gauntlet: null,
+  campaignProgress: loadCampaignProgress(),
+  activeCampaign: null,
   stats: loadDuelStats(),
   statsRecorded: false,
   ...createAudioSettings({ testMode: BROWSER_TEST_MODE }),
@@ -427,6 +437,7 @@ const els = {
   aiSelect: document.querySelector("#aiSelect"),
   scenarioSelect: document.querySelector("#scenarioSelect"),
   scenarioSelectLabel: document.querySelector("#scenarioSelectLabel"),
+  campaignList: document.querySelector("#campaignList"),
   setupStats: document.querySelector("#setupStats"),
   scenarioBrief: document.querySelector("#scenarioBrief"),
   scenarioBriefTitle: document.querySelector("#scenarioBriefTitle"),
@@ -4905,6 +4916,7 @@ function checkGameOver() {
     stopMusic({ fadeMs: 900 });
     const win = state.gameOverWinner ? state.gameOverWinner === "player" : state.ai.lp <= 0 && state.player.lp > 0;
     recordGameResult(win);
+    const campaignResult = recordCampaignResult(win);
     playSound(win ? "win" : "lose");
     playVoice(win ? "player" : "ai", "win", win ? "你赢了。" : "决斗败北。", true);
     if (state.gauntlet?.active && win && handleGauntletChapterWin()) {
@@ -4913,7 +4925,8 @@ function checkGameOver() {
     renderGameOverDuelModal(els, {
       win,
       statsText: formatDuelStats(state.stats),
-      ...gauntletGameOverText()
+      ...gauntletGameOverText(),
+      ...campaignGameOverText(campaignResult)
     });
     window.setTimeout(() => showDuelModal(els), 260);
   }
@@ -4968,6 +4981,62 @@ function gauntletGameOverText() {
     title: "连战中断",
     text: `在第 ${gauntlet.chapterIndex + 1} 战「${chapter.label}」败北。战意分累计 ${score}。调整思路，重新挑战。`,
     actionText: "再来连战"
+  };
+}
+
+function startCampaignChapter(campaignId, chapterId) {
+  const campaign = campaignDefinitions.find((candidate) => candidate.id === campaignId);
+  const chapter = campaign?.chapters.find((candidate) => candidate.id === chapterId);
+  if (!campaign || !chapter) return;
+  const states = campaignChapterStates(campaign, state.campaignProgress);
+  const entry = states.find((candidate) => candidate.chapterId === chapterId);
+  if (!entry?.startable) return;
+  state.activeCampaign = { campaignId, chapterId };
+  state.gauntlet = null;
+  if (els.scenarioSelect) els.scenarioSelect.value = chapter.scenarioId;
+  state.scenarioId = chapter.scenarioId;
+  startGame();
+}
+
+function recordCampaignResult(win) {
+  if (!state.activeCampaign) return null;
+  const campaign = campaignDefinitions.find((candidate) => candidate.id === state.activeCampaign.campaignId);
+  const chapter = campaign?.chapters.find((candidate) => candidate.id === state.activeCampaign.chapterId);
+  if (!campaign || !chapter) return null;
+  const remainingLp = Math.max(0, Number(state.player.lp) || 0);
+  const recorded = recordCampaignChapterResult(state.campaignProgress, campaign.id, chapter.id, {
+    win,
+    remainingLp,
+    maxLp: MAX_LP
+  });
+  if (!recorded.result) return null;
+  state.campaignProgress = recorded.progress;
+  saveCampaignProgress(state.campaignProgress);
+  return {
+    ...recorded.result,
+    chapterLabel: chapter.label || chapter.id,
+    campaignLabel: campaign.label || campaign.id
+  };
+}
+
+function campaignGameOverText(result) {
+  if (!result) return {};
+  if (result.win) {
+    const rewardText = result.unlockedRewards?.length
+      ? `解锁称号「${result.unlockedRewards.map((reward) => reward.title).join("、")}」！`
+      : "";
+    const unlockText = result.unlockedChapterIds?.length ? " 新章节已解锁。" : "";
+    const completionText = result.completed ? " 战役已通关——你征服了星魂试炼！" : "";
+    return {
+      title: "战役 · 章节胜利",
+      text: `「${result.chapterLabel}」通关，获得 ${result.stars} 星（剩余生命 ${result.remainingLp}）！总进度 ${result.totalStars}/${result.maxStars} 星。${rewardText}${unlockText}${completionText}`,
+      actionText: "继续战役"
+    };
+  }
+  return {
+    title: "战役 · 败北",
+    text: `「${result.chapterLabel}」挑战失败。调整思路再次挑战——胜利时剩余生命越多，星级越高。`,
+    actionText: "再次挑战"
   };
 }
 
@@ -5438,6 +5507,10 @@ function render(animationKey = "") {
   });
   scenarioHintsVisible = setupView.hintsVisible;
   preDuelPreviewModel = setupView.preview;
+  renderCampaignHub(document, els, campaignHubView({
+    progress: state.campaignProgress,
+    visible: !state.started && !state.gameOver && !BROWSER_TEST_MODE
+  }));
   renderCurrentCombatHud();
 
   renderField(els.playerField, state.player, "player", animationKey);
@@ -6162,11 +6235,20 @@ if (els.modalReviewLog) {
     if (select === els.scenarioSelect) {
       scenarioHintsVisible = true;
       closeDeckBrowser();
+      state.activeCampaign = null;
     }
     applySetupChoices();
     render();
   });
 });
+
+if (els.campaignList) {
+  els.campaignList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-campaign-chapter]");
+    if (!button || button.disabled) return;
+    startCampaignChapter(button.dataset.campaignId, button.dataset.campaignChapter);
+  });
+}
 
 if (BROWSER_TEST_MODE) {
   window.__starDuelTest = Object.freeze({

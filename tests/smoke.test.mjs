@@ -32,6 +32,8 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/battle.js");
   checkModuleSyntax("src/battle-preview-renderer.js");
   checkModuleSyntax("src/browser-smoke.js");
+  checkModuleSyntax("src/campaign.js");
+  checkModuleSyntax("src/campaign-renderer.js");
   checkModuleSyntax("src/card-detail.js");
   checkModuleSyntax("src/card-inspector-renderer.js");
   checkModuleSyntax("src/card-renderer.js");
