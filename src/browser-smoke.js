@@ -3,10 +3,64 @@ import { logEntryMessage } from './battle-log.js';
 import { cloneCardById } from './deck.js';
 import { projectMachineStateFromEvents } from './game-engine.js';
 import { selectionStateSnapshot } from './selection-state.js';
+import { campaignDefinitions } from './campaign.js';
 import { deckPresets } from './data.js';
+import { evaluateScenarioObjectives } from './scenario-triggers.js';
 
 function cardIds(list = []) {
   return list.map((card) => card?.id || null);
+}
+
+function campaignProgressWithClearedChapters(chapterIds = []) {
+  const chapters = Object.fromEntries(chapterIds.map((chapterId) => [chapterId, {
+    stars: 1,
+    remainingLp: 1,
+    attempts: 1,
+    clearedAt: "2026-08-20T00:00:00.000Z",
+    objectiveIds: []
+  }]));
+  return {
+    version: 1,
+    campaigns: {
+      "star-trial": { chapters }
+    }
+  };
+}
+
+function smokeRuntimeTemplateId(state, runtimeId) {
+  for (const owner of ["player", "ai"]) {
+    for (const zone of ["hand", "deck", "field", "traps", "grave"]) {
+      const card = (state?.[owner]?.[zone] || []).find((candidate) =>
+        [candidate?.uid, candidate?.engineId, candidate?.id].includes(runtimeId)
+      );
+      if (card?.id) return card.id;
+    }
+  }
+  return runtimeId;
+}
+
+function campaignObjectiveResults(ctx, chapterId) {
+  const campaign = campaignDefinitions.find((entry) => entry.id === "star-trial");
+  const chapter = campaign?.chapters?.find((entry) => entry.id === chapterId);
+  return evaluateScenarioObjectives(chapter?.objectives, {
+    events: ctx.state.gameEvents,
+    resolveCardId: (runtimeId) => smokeRuntimeTemplateId(ctx.state, runtimeId)
+  });
+}
+
+function assertCampaignObjectiveCompleted(ctx, chapterId, objectiveId) {
+  const result = campaignObjectiveResults(ctx, chapterId).find((entry) => entry.id === objectiveId);
+  if (!result?.completed) {
+    throw new Error(`${chapterId}: campaign objective ${objectiveId} incomplete: ${JSON.stringify(result)}. ${smokeDebug(ctx)}`);
+  }
+}
+
+function assertCampaignObjectivesCompleted(ctx, chapterId) {
+  const results = campaignObjectiveResults(ctx, chapterId);
+  const incomplete = results.filter((result) => !result.completed);
+  if (results.length !== 2 || incomplete.length) {
+    throw new Error(`${chapterId}: campaign objectives incomplete: ${JSON.stringify(results)}. ${smokeDebug(ctx)}`);
+  }
 }
 
 function assertUniqueRuntimeCards(state, label) {
@@ -297,13 +351,14 @@ async function selectSpellTarget(ctx, element, label, { center = false } = {}) {
   );
 }
 
-function confirmSpellTarget(ctx, label) {
-  clickSmokeElement(ctx.els.choiceConfirmBtn, label);
+function confirmSpellTarget(ctx, label, { center = false } = {}) {
+  if (center) clickSmokeElementCenter(ctx.els.choiceConfirmBtn, label);
+  else clickSmokeElement(ctx.els.choiceConfirmBtn, label);
 }
 
-async function selectAndConfirmSpellTarget(ctx, element, label, options) {
+async function selectAndConfirmSpellTarget(ctx, element, label, options = {}) {
   await selectSpellTarget(ctx, element, label, options);
-  confirmSpellTarget(ctx, `${label}: confirm activation`);
+  confirmSpellTarget(ctx, `${label}: confirm activation`, { center: Boolean(options.confirmCenter) });
 }
 
 async function clickSmokeElementTwiceAcrossRender(resolveElement, label, afterFirstClick = () => true) {
@@ -944,6 +999,7 @@ async function runTrioStagedTributePlanningBasicSmoke(ctx) {
   if (!decisionLog || decisionLog.cardId !== "spark-split") {
     throw new Error(`${smokeName}: public AI log must explain tribute development. ${smokeDebug(ctx)}`);
   }
+  assertCampaignObjectiveCompleted(ctx, "trio-ascension", "read-moon-rebuild");
   setSmokeStatus("passed", smokeName);
 }
 
@@ -1012,7 +1068,37 @@ async function runTrioLiveTurnReplanningBasicSmoke(ctx) {
 async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   const smokeName = "trio-omega-ascension-opening-basic";
   setSmokeStatus("running", smokeName);
-  await startSmokeDuel(ctx, "protagonistTrioOmegaAscension");
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") && !ctx.els.campaignPanel?.hidden && !ctx.state.started,
+    `${smokeName}: campaign hub is visible`,
+    6000
+  );
+  ctx.state.campaignProgress = campaignProgressWithClearedChapters([
+    "comeback",
+    "comeback-challenge",
+    "ace-evolution",
+    "trio-challenge",
+    "trio-full"
+  ]);
+  ctx.render?.();
+  const chapterButton = ctx.els.campaignList?.querySelector('[data-campaign-chapter="trio-ascension"]');
+  if (!chapterButton || chapterButton.disabled) {
+    throw new Error(`${smokeName}: final campaign chapter should unlock after the first five clears`);
+  }
+  clickSmokeElement(chapterButton, `${smokeName}: start the unlocked final campaign chapter`);
+  await waitForSmoke(
+    () => ctx.state.started &&
+      ctx.state.scenarioId === "protagonistTrioOmegaAscension" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.pendingOpeningDraw &&
+      !ctx.els.campaignMission?.hidden,
+    `${smokeName}: final campaign chapter reaches the opening main phase`,
+    9000
+  );
+  const openingBossPhase = ctx.els.campaignMission?.querySelector('.campaign-boss-phase[data-boss-phase="1"]');
+  if (!openingBossPhase?.textContent.includes("PHASE I · 日曜裁决")) {
+    throw new Error(`${smokeName}: campaign tracker must open on the sun boss phase`);
+  }
   if (ctx.els.duelHint?.dataset.kind !== "objective" ||
       !ctx.els.duelHint?.title.includes("第一神降临准备") ||
       !ctx.els.duelHint?.title.includes("3/3")) {
@@ -1027,6 +1113,47 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   }
 
   const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  await clickSmokeElementTwiceAcrossRender(
+    () => handCard(ctx.els, "seer-call"),
+    `${smokeName}: use seer call before committing to battle`
+  );
+  await waitForSmoke(
+    () => handCard(ctx.els, "trio-ember-pawn") && handCard(ctx.els, "trio-final-counter"),
+    `${smokeName}: seer call exposes later low-star resources. ${smokeDebug(ctx)}`,
+    9000
+  );
+  clickSmokeElement(handCard(ctx.els, "spark-runner"), `${smokeName}: summon spark-runner`);
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), `${smokeName}: choose player monster slot 1`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "spark-runner") && Boolean(handCard(ctx.els, "battle-trance")),
+    `${smokeName}: spark-runner draws the battle setup card. ${smokeDebug(ctx)}`,
+    9000
+  );
+  clickSmokeElement(handCard(ctx.els, "battle-trance"), `${smokeName}: select battle trance`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "battleTrance" &&
+      Boolean(ctx.state.pendingTarget?.selectedTarget) &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: battle trance selects spark-runner. ${smokeDebug(ctx)}`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm battle trance`);
+  await waitForSmoke(
+    () => (ctx.state.player.field[0]?.tempAtk || 0) === 200,
+    `${smokeName}: spark-runner gains enough attack to break one tribute. ${smokeDebug(ctx)}`,
+    9000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), `${smokeName}: select spark-runner attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"),
+    `${smokeName}: iron guardian becomes a legal target. ${smokeDebug(ctx)}`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), `${smokeName}: destroy one tribute body`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "iron-guardian") &&
+      ctx.state.ai.field.filter(Boolean).length === 3,
+    `${smokeName}: exactly three tribute bodies remain. ${smokeDebug(ctx)}`,
+    12000
+  );
   await finishPlayerTurn(ctx);
   await waitForSmoke(
     () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
@@ -1050,10 +1177,19 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue sun reveal`);
   await waitForSmoke(
     () => ctx.els.duelHint?.title.includes("第一神已降临") &&
-      ctx.els.duelHint?.title.includes("下一次降神重建 1/3"),
-    `${smokeName}: objective advances to the public 1/3 rebuild after sun. ${smokeDebug(ctx)}`,
+      ctx.els.duelHint?.title.includes("下一次降神重建 0/3"),
+    `${smokeName}: objective advances to the public 0/3 rebuild after all remaining bodies become sun tributes. ${smokeDebug(ctx)}`,
     6000
   );
+  assertCampaignObjectiveCompleted(ctx, "trio-ascension", "force-sun-descent");
+  const moonBossPhase = ctx.els.campaignMission?.querySelector('.campaign-boss-phase[data-boss-phase="2"]');
+  if (!moonBossPhase?.textContent.includes("PHASE II · 月曜重建")) {
+    throw new Error(`${smokeName}: sun descent must advance the campaign tracker to the moon rebuild phase`);
+  }
+  if (!ctx.state.storyBeatsFired?.["ascension-opening-tribute-broken"] ||
+      !ctx.state.storyBeatsFired?.["ascension-sun-descends"]) {
+    throw new Error(`${smokeName}: opening and first-descent story beats must fire. ${smokeDebug(ctx)}`);
+  }
   setSmokeStatus("passed", smokeName);
 }
 
@@ -3422,6 +3558,12 @@ async function runProtagonistComebackDemoSmoke(ctx) {
     12000
   );
 
+  assertCampaignObjectivesCompleted(ctx, "comeback");
+  if (!["last-spark-kindles", "comet-ace-returns", "comet-ace-counterattacks"]
+    .every((id) => ctx.state.storyBeatsFired?.[id])) {
+    throw new Error(`逆境觉醒剧情节点未全部触发：${smokeDebug(ctx)}`);
+  }
+
   setSmokeStatus("passed", "protagonist-comeback-demo");
 }
 
@@ -3569,6 +3711,12 @@ async function runProtagonistComebackChallengeSmoke(ctx) {
     12000
   );
 
+  assertCampaignObjectivesCompleted(ctx, "comeback-challenge");
+  if (!["challenge-guard-fires", "mirror-snare-falls", "challenge-counterattack"]
+    .every((id) => ctx.state.storyBeatsFired?.[id])) {
+    throw new Error(`逆境觉醒挑战剧情节点未全部触发：${smokeDebug(ctx)}`);
+  }
+
   setSmokeStatus("passed", "protagonist-comeback-challenge");
 }
 
@@ -3680,6 +3828,11 @@ async function runProtagonistComebackAutopilotFailsSmoke(ctx) {
 async function runProtagonistAceEvolutionDemoSmoke(ctx) {
   setSmokeStatus("running", "protagonist-ace-evolution-demo");
   await startSmokeDuel(ctx, "protagonistAceEvolution");
+  assertScenarioBrief(ctx.els, {
+    difficulty: "演示版",
+    objectives: ["发动星魂铸升", "特殊召唤天炉星铠王"],
+    hints: ["星屑返轨", "守护刻印"]
+  });
   const materialUids = ctx.state.player.field
     .filter((card) => ["ember-soul-initiate", "lumen-gearlet"].includes(card?.id))
     .map((card) => card.uid);
@@ -3726,6 +3879,20 @@ async function runProtagonistAceEvolutionDemoSmoke(ctx) {
     `进化王牌应该能完成一次攻击反击。${smokeDebug(ctx)}`,
     12000
   );
+  await waitForSmoke(
+    () => ctx.state.turn === "player" &&
+      ctx.state.phase === "battle" &&
+      ctx.state.actionWindow === "battle" &&
+      !ctx.els.endTurnBtn.disabled,
+    `进化王牌第一击结算后应重新开放战斗窗口。${smokeDebug(ctx)}`,
+    9000
+  );
+
+  assertCampaignObjectivesCompleted(ctx, "ace-evolution");
+  if (!["soulforge-begins", "forge-dragon-descends", "forge-dragon-counterattacks"]
+    .every((id) => ctx.state.storyBeatsFired?.[id])) {
+    throw new Error(`王牌进化剧情节点未全部触发：${smokeDebug(ctx)}`);
+  }
   setSmokeStatus("passed", "protagonist-ace-evolution-demo");
 }
 
@@ -4187,6 +4354,11 @@ async function runTrioOmegaChallengeSmoke(ctx) {
   const finalPawn = ctx.state.player.field.find((card) => card?.id === "trio-ember-pawn");
   if (!finalPawn || finalPawn.atk !== 600) {
     throw new Error(`trio-omega-challenge: final win must come from base-600 pawn. ${trioOmegaFailureSnapshot(ctx)}`);
+  }
+  assertCampaignObjectivesCompleted(ctx, "trio-challenge");
+  if (!["challenge-sun-ensnared", "challenge-dominion-broken", "challenge-pawn-finale"]
+    .every((id) => ctx.state.storyBeatsFired?.[id])) {
+    throw new Error(`trio-omega-challenge: campaign story beats incomplete. ${trioOmegaFailureSnapshot(ctx)}`);
   }
   setSmokeStatus("passed", "trio-omega-challenge");
 }
@@ -6102,6 +6274,12 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
   }
   if (ctx.state.gameOver || ctx.state.ai.grave.some((card) => card?.id === "trio-sun-judicator")) {
     throw new Error(`trio-omega-full-duel: one destroyed tribute body and one exposed trap must not collapse the boss opening. ${smokeDebug(ctx)}`);
+  }
+
+  assertCampaignObjectivesCompleted(ctx, "trio-full");
+  if (!["full-opening-tribute-broken", "full-trio-convergence", "full-snare-committed"]
+    .every((id) => ctx.state.storyBeatsFired?.[id])) {
+    throw new Error(`trio-omega-full-duel: campaign story beats incomplete. ${smokeDebug(ctx)}`);
   }
 
   setSmokeStatus("passed", "trio-omega-full-duel");
@@ -8748,6 +8926,203 @@ async function runPreDuelDeckPreviewSmoke(ctx) {
   setSmokeStatus("passed", "pre-duel-deck-preview");
 }
 
+async function runCampaignHubBasicSmoke(ctx) {
+  const smokeName = "campaign-hub-basic";
+  setSmokeStatus("running", smokeName);
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") &&
+      !ctx.els.campaignPanel?.hidden &&
+      !ctx.els.campaignList?.hidden &&
+      !ctx.state.started,
+    `${smokeName}: campaign hub is visible`,
+    6000
+  );
+
+  const chapters = Array.from(ctx.els.campaignList.querySelectorAll("[data-campaign-chapter]"));
+  if (chapters.length !== 6) {
+    throw new Error(`${smokeName}: expected 6 campaign chapters, got ${chapters.length}`);
+  }
+  if (chapters[0].disabled || chapters.slice(1).some((chapter) => !chapter.disabled)) {
+    throw new Error(`${smokeName}: fresh progress must only unlock the first chapter`);
+  }
+  if ((chapters[0].textContent.match(/☆☆☆/g) || []).length !== 1) {
+    throw new Error(`${smokeName}: chapter star rating should render exactly once`);
+  }
+  if (!chapters[0].textContent.includes("目标 0/2") ||
+      !chapters[0].title.includes("天穹逆星者")) {
+    throw new Error(`${smokeName}: opening chapter objectives should be visible before starting`);
+  }
+  const rewards = ctx.els.campaignList.querySelectorAll(".campaign-reward");
+  if (rewards.length !== 4) {
+    throw new Error(`${smokeName}: expected 4 campaign rewards, got ${rewards.length}`);
+  }
+
+  clickSmokeElement(chapters[0], `${smokeName}: start first chapter`);
+  await waitForSmoke(
+    () => ctx.state.started &&
+      ctx.state.scenarioId === "protagonistComeback" &&
+      ctx.state.activeCampaign?.campaignId === "star-trial" &&
+      ctx.state.activeCampaign?.chapterId === "comeback",
+    `${smokeName}: first campaign chapter starts`,
+    9000
+  );
+  if (ctx.state.player.lp !== 900 || ctx.els.scenarioSelect?.value !== "protagonistComeback") {
+    throw new Error(`${smokeName}: campaign chapter did not use its authored scenario`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runCampaignRewardUnlockBasicSmoke(ctx) {
+  const smokeName = "campaign-reward-unlock-basic";
+  setSmokeStatus("running", smokeName);
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") && !ctx.els.campaignPanel?.hidden && !ctx.state.started,
+    `${smokeName}: campaign hub is visible`,
+    6000
+  );
+
+  const selector = '[data-campaign-reward="trio-finale-gauntlet"]';
+  const lockedReward = ctx.els.campaignList?.querySelector(selector);
+  if (!lockedReward || !lockedReward.disabled || !lockedReward.textContent.includes("三曜终焉连战")) {
+    throw new Error(`${smokeName}: playable gauntlet reward must start visibly locked`);
+  }
+
+  const campaign = campaignDefinitions.find((entry) => entry.id === "star-trial");
+  ctx.state.campaignProgress = campaignProgressWithClearedChapters(
+    campaign?.chapters?.map((chapter) => chapter.id) || []
+  );
+  ctx.render?.();
+  await waitForSmoke(
+    () => {
+      const reward = ctx.els.campaignList?.querySelector(selector);
+      return reward && !reward.disabled && reward.classList.contains("unlocked") && reward.textContent.includes("▶");
+    },
+    `${smokeName}: completing all chapters unlocks a playable reward`
+  );
+
+  clickSmokeElement(ctx.els.campaignList.querySelector(selector), `${smokeName}: start unlocked gauntlet reward`);
+  await waitForSmoke(
+    () => ctx.state.started &&
+      ctx.state.activeCampaign === null &&
+      ctx.state.gauntlet?.active === true &&
+      ctx.state.gauntlet?.sourceScenarioId === "protagonistTrioGauntlet" &&
+      ctx.state.gauntlet?.chapterIndex === 0 &&
+      ctx.state.scenarioId === "protagonistTrioOmegaStory" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.pendingOpeningDraw,
+    `${smokeName}: reward click launches the first gauntlet battle`,
+    9000
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runCampaignObjectiveTrackerBasicSmoke(ctx) {
+  const smokeName = "campaign-objective-tracker-basic";
+  setSmokeStatus("running", smokeName);
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") &&
+      !ctx.els.campaignPanel?.hidden &&
+      !ctx.state.started,
+    `${smokeName}: campaign hub is visible`,
+    6000
+  );
+  const firstChapter = ctx.els.campaignList?.querySelector('[data-campaign-chapter="comeback"]');
+  clickSmokeElement(firstChapter, `${smokeName}: start comeback chapter`);
+  await waitForSmoke(
+    () => ctx.state.started &&
+      ctx.state.phase === "main" &&
+      !ctx.state.pendingOpeningDraw &&
+      !ctx.els.campaignMission?.hidden,
+    `${smokeName}: live mission tracker appears`,
+    9000
+  );
+
+  const openingItems = [...ctx.els.campaignMissionList.querySelectorAll("[data-campaign-objective]")];
+  if (openingItems.length !== 3 || ctx.els.campaignMissionProgress?.textContent !== "0 / 3") {
+    throw new Error(`${smokeName}: tracker must expose victory plus two challenge stars`);
+  }
+  const reviveObjective = ctx.els.campaignMissionList.querySelector('[data-campaign-objective="revive-ace"]');
+  if (!reviveObjective?.classList.contains("focused") || reviveObjective.classList.contains("completed")) {
+    throw new Error(`${smokeName}: grave revival should be the opening focused challenge`);
+  }
+  if (!ctx.els.campaignMissionHint?.textContent.includes("步骤 1/3") ||
+      !ctx.els.campaignMissionHint.textContent.includes("醒星回召")) {
+    throw new Error(`${smokeName}: opening route hint should explain the first actionable step`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "last-spark"), `${smokeName}: select last spark`);
+  await waitForSmoke(
+    () => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: last spark confirmation is ready`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: activate last spark`);
+  await waitForSmoke(
+    () => ctx.state.actionWindow === "main" &&
+      !ctx.state.pendingTarget &&
+      handCard(ctx.els, "starwake-recall")?.classList.contains("action-ready"),
+    `${smokeName}: recall becomes available`,
+    9000
+  );
+
+  clickSmokeElement(handCard(ctx.els, "starwake-recall"), `${smokeName}: open grave revival`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "graveRevive" && graveTargetCard(ctx.els, "astral-comet-ace"),
+    `${smokeName}: ace is selectable in grave`,
+    9000
+  );
+  await selectAndConfirmSpellTarget(
+    ctx,
+    graveTargetCard(ctx.els, "astral-comet-ace"),
+    `${smokeName}: revive campaign ace`,
+    { confirmCenter: true }
+  );
+  await waitForSmoke(
+    () => ctx.state.campaignObjectivesAnnounced?.["revive-ace"] &&
+      ctx.els.campaignMissionProgress?.textContent === "1 / 3" &&
+      ctx.els.campaignMissionList
+        ?.querySelector('[data-campaign-objective="revive-ace"]')
+        ?.classList.contains("completed"),
+    `${smokeName}: revival objective completes live`,
+    9000
+  );
+  if (!ctx.els.campaignMissionList
+    .querySelector('[data-campaign-objective="ace-counterattack"]')
+    ?.classList.contains("focused")) {
+    throw new Error(`${smokeName}: focus must advance to the ace counterattack`);
+  }
+  if (!ctx.els.campaignMissionHint?.textContent.includes("步骤 2/3") ||
+      !ctx.els.campaignMissionHint.textContent.includes("战斗阶段")) {
+    throw new Error(`${smokeName}: route hint must advance after revival`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runSettingsMenuBasicSmoke(ctx) {
+  const smokeName = "settings-menu-basic";
+  setSmokeStatus("running", smokeName);
+  const menuToggle = document.querySelector("#utilityMenuToggle");
+  const menu = document.querySelector("#utilityMenu");
+  if (!menuToggle || !menu || !menu.hidden) {
+    throw new Error(`${smokeName}: settings menu should start closed`);
+  }
+  clickSmokeElement(menuToggle, `${smokeName}: open settings`);
+  await waitForSmoke(
+    () => !menu.hidden && menuToggle.getAttribute("aria-expanded") === "true",
+    `${smokeName}: settings menu opens`
+  );
+  for (const button of [ctx.els.soundBtn, ctx.els.musicBtn, ctx.els.voiceBtn]) {
+    if (!button || !button.textContent.includes("关")) {
+      throw new Error(`${smokeName}: browser test audio should remain disabled: ${button?.textContent || "missing"}`);
+    }
+  }
+  clickSmokeElement(menuToggle, `${smokeName}: close settings`);
+  await waitForSmoke(
+    () => menu.hidden && menuToggle.getAttribute("aria-expanded") === "false",
+    `${smokeName}: settings menu closes`
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioGauntletPreviewBasicSmoke(ctx) {
   const smokeName = "trio-gauntlet-preview-basic";
   setSmokeStatus("running", smokeName);
@@ -9496,6 +9871,10 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-card-reveal-queue": runAiCardRevealQueueSmoke,
     "custom-deck-editor-basic": runCustomDeckEditorSmoke,
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
+    "campaign-hub-basic": runCampaignHubBasicSmoke,
+    "campaign-objective-tracker-basic": runCampaignObjectiveTrackerBasicSmoke,
+    "campaign-reward-unlock-basic": runCampaignRewardUnlockBasicSmoke,
+    "settings-menu-basic": runSettingsMenuBasicSmoke,
     "trio-gauntlet-preview-basic": runTrioGauntletPreviewBasicSmoke,
     "objective-hierarchy-mobile-basic": runObjectiveHierarchyMobileBasicSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,

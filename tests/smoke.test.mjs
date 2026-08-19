@@ -32,6 +32,10 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/battle.js");
   checkModuleSyntax("src/battle-preview-renderer.js");
   checkModuleSyntax("src/browser-smoke.js");
+  checkModuleSyntax("src/campaign.js");
+  checkModuleSyntax("src/campaign-storage.js");
+  checkModuleSyntax("src/campaign-renderer.js");
+  checkModuleSyntax("src/scenario-triggers.js");
   checkModuleSyntax("src/card-detail.js");
   checkModuleSyntax("src/card-inspector-renderer.js");
   checkModuleSyntax("src/card-renderer.js");
@@ -829,6 +833,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-card-reveal-confirm": runAiCardRevealConfirmSmoke/);
   assert.match(smoke, /"ai-card-reveal-queue": runAiCardRevealQueueSmoke/);
   assert.match(smoke, /"pre-duel-deck-preview": runPreDuelDeckPreviewSmoke/);
+  assert.match(smoke, /"campaign-hub-basic": runCampaignHubBasicSmoke/);
+  assert.match(smoke, /"campaign-objective-tracker-basic": runCampaignObjectiveTrackerBasicSmoke/);
+  assert.match(smoke, /"campaign-reward-unlock-basic": runCampaignRewardUnlockBasicSmoke/);
   assert.match(smoke, /"pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke/);
   assert.match(smoke, /"hand-reorder-basic": runHandReorderBasicSmoke/);
   assert.match(smoke, /"equipment-spell": runEquipmentSpellSmoke/);
@@ -954,6 +961,9 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-confirm"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-card-reveal-queue"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
+  assert.match(smoke, /const smokeName = "campaign-hub-basic";[\s\S]*fresh progress must only unlock the first chapter[\s\S]*first campaign chapter starts[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "campaign-reward-unlock-basic";[\s\S]*playable gauntlet reward must start visibly locked[\s\S]*reward click launches the first gauntlet battle[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(app, /state\.gauntlet\?\.active && state\.gauntlet\.sourceScenarioId[\s\S]*state\.gauntlet\.sourceScenarioId[\s\S]*els\.scenarioSelect\?\.value/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-scroll-preview"\)/);
   assert.match(smoke, /const smokeName = "hand-reorder-basic";[\s\S]*type sort must not mutate the rule hand array[\s\S]*tap placement moves the display card[\s\S]*UI reorder must not mutate the rule hand array[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);

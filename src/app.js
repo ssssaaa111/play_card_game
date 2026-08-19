@@ -59,6 +59,23 @@ import {
 } from './deck-browser.js';
 import { buildDeck, createDuelist } from './deck.js';
 import {
+  campaignChapterDefinition,
+  campaignChapterRatingMaxLp,
+  campaignDefinitionById,
+  campaignChapterStates,
+  recordCampaignChapterResult,
+  unlockedCampaignRewards
+} from './campaign.js';
+import { loadCampaignProgress, saveCampaignProgress } from './campaign-storage.js';
+import {
+  campaignGameOverModalView,
+  campaignHubView,
+  campaignMissionView,
+  renderCampaignHub,
+  renderCampaignMission
+} from './campaign-renderer.js';
+import { evaluateScenarioObjectives, scenarioTriggerProgress } from './scenario-triggers.js';
+import {
   createCustomDeck,
   deckDefinitionMap,
   readCustomDecks,
@@ -274,6 +291,9 @@ const state = {
   aiStyle: "balanced",
   scenarioId: BROWSER_MANUAL_SCENARIO || "normal",
   gauntlet: null,
+  campaignProgress: loadCampaignProgress(),
+  activeCampaign: null,
+  campaignObjectivesAnnounced: {},
   stats: loadDuelStats(),
   statsRecorded: false,
   ...createAudioSettings({ testMode: BROWSER_TEST_MODE }),
@@ -427,6 +447,14 @@ const els = {
   aiSelect: document.querySelector("#aiSelect"),
   scenarioSelect: document.querySelector("#scenarioSelect"),
   scenarioSelectLabel: document.querySelector("#scenarioSelectLabel"),
+  campaignPanel: document.querySelector("#campaignPanel"),
+  campaignList: document.querySelector("#campaignList"),
+  campaignMission: document.querySelector("#campaignMission"),
+  campaignMissionKicker: document.querySelector("#campaignMissionKicker"),
+  campaignMissionTitle: document.querySelector("#campaignMissionTitle"),
+  campaignMissionProgress: document.querySelector("#campaignMissionProgress"),
+  campaignMissionList: document.querySelector("#campaignMissionList"),
+  campaignMissionHint: document.querySelector("#campaignMissionHint"),
   setupStats: document.querySelector("#setupStats"),
   scenarioBrief: document.querySelector("#scenarioBrief"),
   scenarioBriefTitle: document.querySelector("#scenarioBriefTitle"),
@@ -841,7 +869,9 @@ function applySetupChoices() {
   state.roleId = els.roleSelect?.value || state.roleId;
   state.deckPreset = els.deckSelect?.value || state.deckPreset;
   state.aiStyle = els.aiSelect?.value || state.aiStyle;
-  state.scenarioId = els.scenarioSelect?.value || state.scenarioId;
+  state.scenarioId = state.gauntlet?.active && state.gauntlet.sourceScenarioId
+    ? state.gauntlet.sourceScenarioId
+    : els.scenarioSelect?.value || state.scenarioId;
   Object.assign(characterProfiles.player, roleProfiles[state.roleId] || roleProfiles.star);
   Object.assign(characterProfiles.ai, aiProfiles[state.aiStyle]?.profile || aiProfiles.balanced.profile);
 }
@@ -856,6 +886,7 @@ function currentBattleScenarioId() {
     if (!state.gauntlet?.active) {
       state.gauntlet = {
         active: true,
+        sourceScenarioId: state.scenarioId,
         chapters: [...scenario.gauntletChapters],
         chapterIndex: 0,
         score: 0,
@@ -910,6 +941,16 @@ function currentMusicMode() {
   });
 }
 
+function resetDuelResultState() {
+  state.gameOver = false;
+  state.gameOverWinner = null;
+  state.gameOverLosers = [];
+  state.gameOverReason = "";
+  state.gameOverAnnounced = false;
+  state.statsRecorded = false;
+  state.gameEvents = [];
+}
+
 function startGame() {
   stopAll();
   stopMusic({ fadeMs: 80 });
@@ -928,28 +969,22 @@ function startGame() {
   clearBattlePreview();
   state.autoEnding = false;
   cancelAutoEnd();
-  setActionWindow("draw");
+  resetDuelResultState();
   state.pendingOpeningDraw = false;
   state.started = true;
   state.paused = false;
   state.aiRunning = false;
   state.resumeResolvers = [];
   clearPlayerIdleTimers();
-  state.gameOver = false;
-  state.gameOverWinner = null;
-  state.gameOverLosers = [];
-  state.gameOverReason = "";
-  state.gameOverAnnounced = false;
-  state.statsRecorded = false;
   state.storyBeatCursor = 0;
   state.storyBeatsFired = {};
+  state.campaignObjectivesAnnounced = {};
   state.scriptedSummonsFired = {};
   state.pendingScriptedSummons = [];
   state.log = [];
   state.logSequence = 0;
   state.timeline = [];
   state.timelineStep = 0;
-  state.gameEvents = [];
   chainHistoryExpanded = false;
   handDisplayOrder = [];
   handReorderMode = false;
@@ -967,6 +1002,7 @@ function startGame() {
       drawCards(state.ai, openingDrawCount, { announce: false, reason: "opening" });
     }
   }
+  setActionWindow("draw");
   addLog("决斗开始。你先攻，抽卡后展开第一波攻势。");
   addLog(`基础扩展已启用：${characterProfiles.player.skill} / ${definitionLabel(currentDeckDefinitions(), state.deckPreset)} / ${characterProfiles.ai.name}。`);
   addLog("教学目标：召唤怪兽、发动魔法或盖陷阱，然后完成一次攻击。");
@@ -1008,24 +1044,19 @@ function prepareGame() {
   clearBattlePreview();
   state.autoEnding = false;
   cancelAutoEnd();
-  setActionWindow("setup");
+  resetDuelResultState();
   state.pendingOpeningDraw = false;
   state.started = false;
   state.paused = false;
   state.aiRunning = false;
   state.resumeResolvers = [];
-  state.gameOver = false;
-  state.gameOverWinner = null;
-  state.gameOverLosers = [];
-  state.gameOverReason = "";
-  state.gameOverAnnounced = false;
-  state.statsRecorded = false;
+  state.campaignObjectivesAnnounced = {};
   state.log = ["先查看场景目标、提示和己方卡组，再点击“开始决斗”。"];
   state.logSequence = 0;
   state.timeline = [];
   state.timelineStep = 0;
-  state.gameEvents = [];
   clearPlayerIdleTimers();
+  setActionWindow("setup");
   renderSetupDuelModal(els);
   render();
 }
@@ -4905,6 +4936,7 @@ function checkGameOver() {
     stopMusic({ fadeMs: 900 });
     const win = state.gameOverWinner ? state.gameOverWinner === "player" : state.ai.lp <= 0 && state.player.lp > 0;
     recordGameResult(win);
+    const campaignResult = recordCampaignResult(win);
     playSound(win ? "win" : "lose");
     playVoice(win ? "player" : "ai", "win", win ? "你赢了。" : "决斗败北。", true);
     if (state.gauntlet?.active && win && handleGauntletChapterWin()) {
@@ -4913,7 +4945,8 @@ function checkGameOver() {
     renderGameOverDuelModal(els, {
       win,
       statsText: formatDuelStats(state.stats),
-      ...gauntletGameOverText()
+      ...gauntletGameOverText(),
+      ...campaignGameOverModalView(campaignResult)
     });
     window.setTimeout(() => showDuelModal(els), 260);
   }
@@ -4969,6 +5002,100 @@ function gauntletGameOverText() {
     text: `在第 ${gauntlet.chapterIndex + 1} 战「${chapter.label}」败北。战意分累计 ${score}。调整思路，重新挑战。`,
     actionText: "再来连战"
   };
+}
+
+function startCampaignChapter(campaignId, chapterId) {
+  const campaign = campaignDefinitionById(campaignId);
+  const chapter = campaignChapterDefinition(campaign, chapterId);
+  if (!campaign || !chapter) return;
+  const states = campaignChapterStates(campaign, state.campaignProgress);
+  const entry = states.find((candidate) => candidate.chapterId === chapterId);
+  if (!entry?.startable) return;
+  state.activeCampaign = { campaignId, chapterId };
+  state.gauntlet = null;
+  if (els.scenarioSelect) els.scenarioSelect.value = chapter.scenarioId;
+  state.scenarioId = chapter.scenarioId;
+  startGame();
+}
+
+function startCampaignReward(campaignId, rewardId) {
+  const campaign = campaignDefinitionById(campaignId);
+  const reward = unlockedCampaignRewards(campaign, state.campaignProgress)
+    .find((candidate) => candidate.id === rewardId);
+  if (!reward?.scenarioId || !scenarioSetups[reward.scenarioId]) return;
+  state.activeCampaign = null;
+  state.gauntlet = null;
+  if (els.scenarioSelect) els.scenarioSelect.value = reward.scenarioId;
+  state.scenarioId = reward.scenarioId;
+  startGame();
+}
+
+function recordCampaignResult(win) {
+  if (!state.activeCampaign) return null;
+  const campaign = campaignDefinitionById(state.activeCampaign.campaignId);
+  const chapter = campaignChapterDefinition(campaign, state.activeCampaign.chapterId);
+  if (!campaign || !chapter) return null;
+  const remainingLp = Math.max(0, Number(state.player.lp) || 0);
+  const objectiveResults = evaluateScenarioObjectives(chapter.objectives, {
+    events: state.gameEvents,
+    resolveCardId: resolveScenarioEventCardId
+  });
+  const recorded = recordCampaignChapterResult(state.campaignProgress, campaign.id, chapter.id, {
+    win,
+    remainingLp,
+    maxLp: campaignChapterRatingMaxLp(chapter, scenarioSetups, MAX_LP),
+    recordedAt: new Date().toISOString(),
+    objectiveResults
+  });
+  if (!recorded.result) return null;
+  state.campaignProgress = recorded.progress;
+  saveCampaignProgress(state.campaignProgress);
+  const chapterIndex = campaign.chapters.findIndex((candidate) => candidate.id === chapter.id);
+  const nextChapter = campaign.chapters[chapterIndex + 1] || null;
+  const nextChapterState = nextChapter
+    ? campaignChapterStates(campaign, state.campaignProgress).find((candidate) => candidate.chapterId === nextChapter.id)
+    : null;
+  return {
+    ...recorded.result,
+    chapterLabel: chapter.label || chapter.id,
+    campaignLabel: campaign.label || campaign.id,
+    nextChapter: nextChapter
+      ? {
+          id: nextChapter.id,
+          label: nextChapter.label || nextChapter.id,
+          phase: nextChapter.phase || "",
+          unlocked: Boolean(nextChapterState?.startable)
+        }
+      : null
+  };
+}
+
+function currentCampaignMission() {
+  if (!state.activeCampaign) return null;
+  const campaign = campaignDefinitionById(state.activeCampaign.campaignId);
+  const chapter = campaignChapterDefinition(campaign, state.activeCampaign.chapterId);
+  if (!campaign || !chapter) return null;
+  return {
+    campaign,
+    chapter,
+    objectiveResults: evaluateScenarioObjectives(chapter.objectives, {
+      events: state.gameEvents,
+      resolveCardId: resolveScenarioEventCardId
+    })
+  };
+}
+
+function syncCampaignObjectiveFeedback(mission) {
+  if (!mission || !state.started || state.gameOver) return;
+  const announced = state.campaignObjectivesAnnounced || (state.campaignObjectivesAnnounced = {});
+  const newlyCompleted = mission.objectiveResults.filter((objective) => objective.completed && !announced[objective.id]);
+  if (newlyCompleted.length === 0) return;
+  newlyCompleted.forEach((objective) => {
+    announced[objective.id] = true;
+    addLog(`章节目标达成：${objective.label}。`);
+  });
+  const completedCount = mission.objectiveResults.filter((objective) => objective.completed).length;
+  cue(`章节目标 ${completedCount}/${mission.objectiveResults.length}：${newlyCompleted.map((objective) => objective.label).join("、")}`);
 }
 
 function fieldEffectMarkers(card, duelist) {
@@ -5310,6 +5437,8 @@ function render(animationKey = "") {
   const actions = currentPlayerActions();
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
   const musicMode = currentMusicMode();
+  const campaignMission = currentCampaignMission();
+  syncCampaignObjectiveFeedback(campaignMission);
   setMusicMode(musicMode);
   document.body.dataset.musicMode = musicMode;
   els.phaseText.textContent = phaseLabel(state);
@@ -5438,6 +5567,22 @@ function render(animationKey = "") {
   });
   scenarioHintsVisible = setupView.hintsVisible;
   preDuelPreviewModel = setupView.preview;
+  renderCampaignHub(document, els, campaignHubView({
+    progress: state.campaignProgress,
+    visible: !state.started && !state.gameOver && (!BROWSER_TEST_MODE || [
+      "campaign-hub-basic",
+      "campaign-objective-tracker-basic",
+      "campaign-reward-unlock-basic",
+      "trio-omega-ascension-opening-basic"
+    ].includes(BROWSER_SMOKE))
+  }));
+  renderCampaignMission(document, els, campaignMissionView({
+    campaign: campaignMission?.campaign,
+    chapter: campaignMission?.chapter,
+    objectiveResults: campaignMission?.objectiveResults,
+    visible: state.started && !state.gameOver,
+    win: state.gameOver && state.gameOverWinner === "player"
+  }));
   renderCurrentCombatHud();
 
   renderField(els.playerField, state.player, "player", animationKey);
@@ -5463,7 +5608,11 @@ function playScenarioScriptedSummons() {
   for (const entry of entries) {
     const key = entry.id || entry.summon?.cardId;
     if (!key || state.scriptedSummonsFired[key]) continue;
-    if (!events.some((event) => storyEventMatches(event, entry.when || {}))) continue;
+    const triggered = scenarioTriggerProgress(entry, {
+      events,
+      resolveCardId: resolveScenarioEventCardId
+    });
+    if (!triggered.completed) continue;
     const summon = entry.summon || {};
     const owner = summon.owner === "player" ? state.player : state.ai;
     const alreadyPresent = (owner.field || []).some((card) => card?.id === summon.cardId);
@@ -5528,10 +5677,12 @@ function playScenarioStoryBeats() {
   let cursor = state.storyBeatCursor;
   for (const beat of beats) {
     if (!beat || !beat.id || !beat.line || state.storyBeatsFired[beat.id]) continue;
-    const matched = events.some((event) =>
-      event.id > cursor && storyEventMatches(event, beat.when || {})
-    );
-    if (!matched) continue;
+    const progress = scenarioTriggerProgress(beat, {
+      events,
+      afterEventId: cursor,
+      resolveCardId: resolveScenarioEventCardId
+    });
+    if (!progress.completed) continue;
     state.storyBeatsFired[beat.id] = true;
     const speaker = beat.speaker === "player" ? "你" : "对手";
     addLog(`${speaker}：${beat.line}`, {
@@ -5544,13 +5695,8 @@ function playScenarioStoryBeats() {
   state.storyBeatCursor = events.reduce((max, event) => Math.max(max, Number(event.id) || 0), cursor);
 }
 
-function storyEventMatches(event, when) {
-  if (!event || !when) return false;
-  if (when.eventType && event.type !== when.eventType) return false;
-  if (when.playerId && event.playerId !== when.playerId) return false;
-  if (!when.cardId) return true;
-  const runtime = findRuntimeCard(event.cardId || event.attackerCardId || event.sourceCardId || "");
-  return Boolean(runtime?.card && runtime.card.id === when.cardId);
+function resolveScenarioEventCardId(cardId) {
+  return findRuntimeCard(cardId)?.card?.id || cardDefinitionById(cardId)?.id || cardId;
 }
 
 function renderBattlePreview() {
@@ -6162,11 +6308,25 @@ if (els.modalReviewLog) {
     if (select === els.scenarioSelect) {
       scenarioHintsVisible = true;
       closeDeckBrowser();
+      state.activeCampaign = null;
     }
     applySetupChoices();
     render();
   });
 });
+
+if (els.campaignList) {
+  els.campaignList.addEventListener("click", (event) => {
+    const reward = event.target.closest("[data-campaign-reward]");
+    if (reward && !reward.disabled) {
+      startCampaignReward(reward.dataset.campaignId, reward.dataset.campaignReward);
+      return;
+    }
+    const button = event.target.closest("[data-campaign-chapter]");
+    if (!button || button.disabled) return;
+    startCampaignChapter(button.dataset.campaignId, button.dataset.campaignChapter);
+  });
+}
 
 if (BROWSER_TEST_MODE) {
   window.__starDuelTest = Object.freeze({
