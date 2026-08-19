@@ -6168,6 +6168,12 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
     throw new Error(`trio-omega-full-duel: one destroyed tribute body and one exposed trap must not collapse the boss opening. ${smokeDebug(ctx)}`);
   }
 
+  assertCampaignObjectivesCompleted(ctx, "trio-full");
+  if (!["full-opening-tribute-broken", "full-trio-convergence", "full-snare-committed"]
+    .every((id) => ctx.state.storyBeatsFired?.[id])) {
+    throw new Error(`trio-omega-full-duel: campaign story beats incomplete. ${smokeDebug(ctx)}`);
+  }
+
   setSmokeStatus("passed", "trio-omega-full-duel");
 }
 

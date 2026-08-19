@@ -55,7 +55,7 @@ function fakeStorage(initial = null) {
 test("campaign definitions expose a playable star-trial campaign", () => {
   assert.ok(trialCampaign);
   assert.equal(trialCampaign.chapters.length, 6);
-  assert.deepEqual(trialCampaign.chapters.slice(0, 4).map((chapter) => chapter.objectives.length), [2, 2, 2, 2]);
+  assert.deepEqual(trialCampaign.chapters.slice(0, 5).map((chapter) => chapter.objectives.length), [2, 2, 2, 2, 2]);
   assert.equal(maxCampaignStars(trialCampaign), 18);
   assert.equal(campaignDefinitions.some((campaign) => campaign.id === "star-trial"), true);
 });
@@ -98,7 +98,7 @@ test("objective chapters award one star for victory and one per completed goal",
   assert.equal(starsForCampaignResult(chapter, { win: true, objectiveResults: chapterObjectiveResults(chapter, 0) }), 1);
   assert.equal(starsForCampaignResult(chapter, { win: true, objectiveResults: chapterObjectiveResults(chapter, 1) }), 2);
   assert.equal(starsForCampaignResult(chapter, { win: true, objectiveResults: chapterObjectiveResults(chapter, 2) }), 3);
-  assert.equal(starsForCampaignResult(trialCampaign.chapters[4], {
+  assert.equal(starsForCampaignResult(trialCampaign.chapters[5], {
     win: true,
     remainingLp: 800,
     maxLp: 1000
@@ -382,7 +382,7 @@ test("live campaign mission view keeps victory and challenge stars explicit", ()
     hidden: true,
     items: []
   });
-  assert.deepEqual(campaignMissionView({ campaign: trialCampaign, chapter: trialCampaign.chapters[4] }), {
+  assert.deepEqual(campaignMissionView({ campaign: trialCampaign, chapter: trialCampaign.chapters[5] }), {
     hidden: true,
     items: []
   });
@@ -544,4 +544,50 @@ test("trio challenge mission guides each classic finale decision", () => {
   });
   assert.equal(winReady.progressText, "2 / 3");
   assert.match(winReady.hintText, /余烁小卫对星曜的第二击/);
+});
+
+test("full duel mission tracks the opening disruption and first god wave", () => {
+  const chapter = trialCampaign.chapters.find((entry) => entry.id === "trio-full");
+  const opening = campaignMissionView({ campaign: trialCampaign, chapter });
+  assert.equal(opening.progressText, "0 / 3");
+  assert.match(opening.hintText, /步骤 1\/3.*星火信使/);
+
+  const tributeBroken = campaignMissionView({
+    campaign: trialCampaign,
+    chapter,
+    objectiveResults: [
+      { id: "break-tribute-and-arm-snare", completed: false, eventIds: [10] },
+      { id: "survive-first-convergence", completed: false, eventIds: [] }
+    ]
+  });
+  assert.match(tributeBroken.hintText, /盖下日冕诱锁/);
+
+  const openingComplete = { id: "break-tribute-and-arm-snare", completed: true, eventIds: [10, 11] };
+  const convergence = campaignMissionView({
+    campaign: trialCampaign,
+    chapter,
+    objectiveResults: [
+      openingComplete,
+      { id: "survive-first-convergence", completed: false, eventIds: [20] }
+    ]
+  });
+  assert.match(convergence.hintText, /逼出断链裁决/);
+
+  const snareCommitted = campaignMissionView({
+    campaign: trialCampaign,
+    chapter,
+    objectiveResults: [
+      openingComplete,
+      { id: "survive-first-convergence", completed: false, eventIds: [20, 21] }
+    ]
+  });
+  assert.match(snareCommitted.hintText, /回到自己的主要阶段/);
+
+  const counterattack = campaignMissionView({
+    campaign: trialCampaign,
+    chapter,
+    objectiveResults: chapterObjectiveResults(chapter)
+  });
+  assert.equal(counterattack.progressText, "2 / 3");
+  assert.match(counterattack.hintText, /逐一击破三神/);
 });

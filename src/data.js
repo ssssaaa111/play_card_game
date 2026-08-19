@@ -1848,7 +1848,27 @@ export const scenarioSetups = {
     playerGrave: [],
     aiGrave: [],
     playerDeck: deckPresets.protagonistTrioOmegaFull.ids,
-    aiDeck: deckPresets.trioOmegaRivalFull.ids
+    aiDeck: deckPresets.trioOmegaRivalFull.ids,
+    storyBeats: [
+      {
+        id: "full-opening-tribute-broken",
+        when: { eventType: "CARD_DESTROYED", cardId: "iron-guardian" },
+        speaker: "player",
+        line: "先削掉一只祭品——就算三曜仍会降临，也别想留下额外前线！"
+      },
+      {
+        id: "full-trio-convergence",
+        when: { eventType: "TRIO_CONVERGENCE_RESOLVED", playerId: "ai" },
+        speaker: "ai",
+        line: "三只祭品已经足够——日、月、星，三曜共降！"
+      },
+      {
+        id: "full-snare-committed",
+        when: { eventType: "CARD_ACTIVATED", playerId: "player", cardId: "trio-solar-snare" },
+        speaker: "player",
+        line: "就算有断链保护，我也要先逼你把它交出来——日冕诱锁！"
+      }
+    ]
   },
   protagonistTrioOmegaAscension: {
     label: "终局三曜完整对局 · 逐神降临",

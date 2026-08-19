@@ -23,7 +23,8 @@ const templateIds = new Map([
   ["pawn-runtime", "trio-ember-pawn"],
   ["counter-runtime", "trio-final-counter"],
   ["flare-runtime", "flare-titan"],
-  ["decoy-runtime", "trio-decoy-ward"]
+  ["decoy-runtime", "trio-decoy-ward"],
+  ["iron-runtime", "iron-guardian"]
 ]);
 const resolveCardId = (runtimeId) => templateIds.get(runtimeId) || runtimeId;
 
@@ -198,11 +199,30 @@ test("trio challenge reports early-attack and wrong-recall recovery guidance", (
   assert.deepEqual(wrongRecall[1].hintEventIds, [13]);
 });
 
+test("full duel objectives capture opening disruption and the first god wave", () => {
+  const chapter = trial.chapters.find((entry) => entry.id === "trio-full");
+  const results = evaluateScenarioObjectives(chapter.objectives, {
+    resolveCardId,
+    events: [
+      { id: 21, type: "CARD_DESTROYED", playerId: "ai", cardId: "iron-runtime" },
+      { id: 22, type: "TRAP_SET", playerId: "player", cardId: "solar-snare-runtime" },
+      { id: 23, type: "TRIO_CONVERGENCE_RESOLVED", playerId: "ai" },
+      { id: 24, type: "CARD_ACTIVATED", playerId: "player", cardId: "solar-snare-runtime" },
+      { id: 25, type: "TURN_STARTED", playerId: "player" }
+    ]
+  });
+
+  assert.deepEqual(results.map(({ completed, eventIds }) => ({ completed, eventIds })), [
+    { completed: true, eventIds: [21, 22] },
+    { completed: true, eventIds: [23, 24, 25] }
+  ]);
+});
+
 test("the authored campaign chapters expose two attainable event objectives", () => {
-  const [comeback, challenge, evolution, trioChallenge] = trial.chapters;
+  const [comeback, challenge, evolution, trioChallenge, trioFull] = trial.chapters;
   assert.deepEqual(
-    [comeback, challenge, evolution, trioChallenge].map((chapter) => chapter.objectives.length),
-    [2, 2, 2, 2]
+    [comeback, challenge, evolution, trioChallenge, trioFull].map((chapter) => chapter.objectives.length),
+    [2, 2, 2, 2, 2]
   );
 
   const comebackResults = evaluateScenarioObjectives(comeback.objectives, {
@@ -236,7 +256,7 @@ test("the authored campaign chapters expose two attainable event objectives", ()
 });
 
 test("the reworked campaign chapters provide story beats backed by the shared trigger schema", () => {
-  for (const chapter of trial.chapters.slice(0, 4)) {
+  for (const chapter of trial.chapters.slice(0, 5)) {
     const beats = scenarioSetups[chapter.scenarioId].storyBeats;
     assert.equal(beats.length, 3);
     assert.equal(new Set(beats.map((beat) => beat.id)).size, beats.length);

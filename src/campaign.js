@@ -150,7 +150,41 @@ export const campaignDefinitions = [
           }
         ]
       },
-      { id: "trio-full", scenarioId: "protagonistTrioOmegaFull", label: "三神·完整对局", phase: "高难" },
+      {
+        id: "trio-full",
+        scenarioId: "protagonistTrioOmegaFull",
+        label: "三神·完整对局",
+        phase: "高难",
+        winHint: "三曜已全部落位；清除月曜帷幕，保留低星墓地资源，逐一击破三神并赢得完整对局。",
+        objectives: [
+          {
+            id: "break-tribute-and-arm-snare",
+            label: "首回合击破祭品候选，并盖下日冕诱锁",
+            hint: "先用先知召见补牌，再召唤星火信使并用战斗狂热强化；击破钢壁守卫后盖下日冕诱锁。",
+            progressHints: {
+              1: "祭品候选已击破；结束回合前盖下日冕诱锁，准备试探对手的断链保护。"
+            },
+            sequence: [
+              { eventType: "CARD_DESTROYED", cardId: "iron-guardian" },
+              { eventType: "TRAP_SET", playerId: "player", cardId: "trio-solar-snare" }
+            ]
+          },
+          {
+            id: "survive-first-convergence",
+            label: "见证三曜共降，发动诱锁并撑过第一波神攻",
+            hint: "对手仍有三只祭品；进入其回合后观察完整的三祭品召唤与三曜共降。",
+            progressHints: {
+              1: "三曜已经共降；日曜攻击时发动盖好的日冕诱锁，逼出断链裁决。",
+              2: "断链保护已暴露；撑过这次攻击并回到自己的主要阶段。"
+            },
+            sequence: [
+              { eventType: "TRIO_CONVERGENCE_RESOLVED", playerId: "ai" },
+              { eventType: "CARD_ACTIVATED", playerId: "player", cardId: "trio-solar-snare" },
+              { eventType: "TURN_STARTED", playerId: "player" }
+            ]
+          }
+        ]
+      },
       { id: "trio-ascension", scenarioId: "protagonistTrioOmegaAscension", label: "三神·逐神降临", phase: "终局" }
     ],
     rewards: [

@@ -60,6 +60,7 @@ const DEFAULT_SMOKES = [
   "trio-gauntlet-preview-basic",
   "trio-gauntlet-demo",
   "trio-omega-challenge",
+  "trio-omega-full-duel",
   "trio-omega-autopilot-fails",
   "trio-omega-happy-clicker-fails",
   "protagonist-comeback-autopilot-fails",
