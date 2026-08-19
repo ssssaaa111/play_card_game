@@ -622,6 +622,18 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   white-space: nowrap;
 }
 
+.campaign-boss-intent {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: #ffe49b;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .campaign-boss-phase[data-boss-phase="3"] {
   border-color: rgba(246, 189, 96, 0.42);
   background:

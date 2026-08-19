@@ -1154,6 +1154,18 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
     `${smokeName}: exactly three tribute bodies remain. ${smokeDebug(ctx)}`,
     12000
   );
+  await waitForSmoke(
+    () => ctx.els.campaignMission?.querySelector(
+      '.campaign-boss-intent[data-boss-intent="rebuild-tributes"]'
+    )?.textContent.includes("祭品重建"),
+    `${smokeName}: destroying a tribute publishes the boss rebuild intent. ${smokeDebug(ctx)}`,
+    6000
+  );
+  if (!(ctx.state.log || []).some((entry) =>
+    logEntryMessage(entry).includes("Boss 反制意图：祭品重建")
+  )) {
+    throw new Error(`${smokeName}: public log must announce the rebuild counter plan. ${smokeDebug(ctx)}`);
+  }
   await finishPlayerTurn(ctx);
   await waitForSmoke(
     () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
@@ -1189,6 +1201,70 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   if (!ctx.state.storyBeatsFired?.["ascension-opening-tribute-broken"] ||
       !ctx.state.storyBeatsFired?.["ascension-sun-descends"]) {
     throw new Error(`${smokeName}: opening and first-descent story beats must fire. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioAdaptiveCounterBasicSmoke(ctx) {
+  const smokeName = "trio-adaptive-counter-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioAdaptiveCounterPlanning");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "solar-vanguard");
+  const moon = ctx.state.ai.field.find((card) => card?.id === "trio-moon-warden");
+  const negate = ctx.state.ai.traps.find((card) => card?.id === "void-lock");
+  if (!attacker || !moon || !negate) {
+    throw new Error(`${smokeName}: deterministic counter setup is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "solar-vanguard"), `${smokeName}: select the probing attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"),
+    `${smokeName}: moon becomes a real click target`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}: directly challenge moon`);
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.classList.contains("show") &&
+      ctx.els.aiRevealTitle?.textContent.includes("星界封锁"),
+    `${smokeName}: moon reveals its attack negate`,
+    12000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue the negate reveal`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.uid === attacker.uid && card.used) &&
+      ctx.state.ai.field.some((card) => card?.uid === moon.uid) &&
+      ctx.state.ai.grave.some((card) => card?.uid === negate.uid) &&
+      ctx.state.actionWindow === "battle" &&
+      !ctx.els.endTurnBtn.disabled,
+    `${smokeName}: the negate consumes the probe while moon survives. ${smokeDebug(ctx)}`,
+    14000
+  );
+  const godAttack = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "ATTACK_DECLARED" &&
+    event.playerId === "player" &&
+    event.attackerCardId === attacker.uid &&
+    event.targetCardId === moon.uid
+  );
+  if (!godAttack) {
+    throw new Error(`${smokeName}: direct god challenge must emit ATTACK_DECLARED. ${smokeDebug(ctx)}`);
+  }
+  if (!(ctx.state.log || []).some((entry) =>
+    logEntryMessage(entry).includes("Boss 反制意图：神体守护")
+  )) {
+    throw new Error(`${smokeName}: direct scenario entry must publish the fortification intent. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.uid === moon.uid && card.mode === "defense") &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "MONSTER_MODE_CHANGED" && event.playerId === "ai" && event.cardId === moon.uid
+      ),
+    `${smokeName}: adaptive boss changes moon to defense through the rules engine. ${smokeDebug(ctx)}`,
+    20000
+  );
+  if (!ctx.state.player.field.some((card) => card?.uid === attacker.uid) ||
+      !(ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("Boss 识破直攻路线"))) {
+    throw new Error(`${smokeName}: defense switch must answer the surviving 2300 ATK threat and be public. ${smokeDebug(ctx)}`);
   }
   setSmokeStatus("passed", smokeName);
 }
@@ -9753,6 +9829,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-staged-tribute-planning-basic": runTrioStagedTributePlanningBasicSmoke,
     "trio-live-turn-replanning-basic": runTrioLiveTurnReplanningBasicSmoke,
     "trio-omega-ascension-opening-basic": runTrioOmegaAscensionOpeningBasicSmoke,
+    "trio-adaptive-counter-basic": runTrioAdaptiveCounterBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "trio-trap-reserve-planning-basic": runTrioTrapReservePlanningBasicSmoke,
     "trio-direct-trap-planning-basic": runTrioDirectTrapPlanningBasicSmoke,

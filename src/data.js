@@ -786,6 +786,23 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioAdaptiveCounterPlanning: {
+    label: "三曜战中变招",
+    setupVisibility: "internal",
+    adaptiveBossCounter: true,
+    text: "规则测试场景：月曜用星界封锁挡下直接挑战后，仍面对一只可以击破攻击表示、却无法突破守备表示的威胁。",
+    goal: "用曜锋先锋攻击月曜，确认星界封锁后结束回合；观察 AI 公开神体守护意图并让月曜转为守备表示。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: ["solar-vanguard"],
+    aiField: ["trio-moon-warden"],
+    aiTraps: ["void-lock"],
+    aiHand: [],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trioTrapPlanning: {
     label: "三曜陷阱择优",
     text: "规则测试场景：AI 同时盖放弱化力场和星界封锁，弱化 500 后仍无法保住疾风术士。",
@@ -1873,6 +1890,7 @@ export const scenarioSetups = {
   protagonistTrioOmegaAscension: {
     label: "终局三曜完整对局 · 逐神降临",
     setupVisibility: "player",
+    adaptiveBossCounter: true,
     text: "长局型终局原型。三曜不会同时出现在对手起手；日曜、月曜、星曜必须分批积累三只祭品后逐一通常召唤。对手会利用分裂衍生物重建祭品线，玩家可以在每次降神前破坏其资源链。",
     goal: "阻止对手完成三次独立的三祭品召唤：判断该攻击神还是先清祭品，利用两次降神之间的建设回合建立自己的融合、墓地和反制资源。",
     difficulty: "challenge",

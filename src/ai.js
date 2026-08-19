@@ -681,6 +681,44 @@ export function shouldSwitchSummonedMonsterToDefense({
   return totalDef(monster) > totalAtk(monster) + 400 && ownerLp < rivalLp;
 }
 
+export function chooseAiGodDefenseAction({
+  field = [],
+  rivalField = [],
+  aiStyle = "balanced",
+  turnGoal = "pressure",
+  counterPlan = null,
+  canChangeMode = null
+} = {}) {
+  if (aiStyle !== "scriptedPressure" || turnGoal !== "protectGods" || counterPlan?.id !== "fortify-gods") {
+    return null;
+  }
+  const rivalPeak = Math.max(0, ...rivalField.filter(Boolean).map((card) => totalAtk(card)));
+  if (rivalPeak <= 0) return null;
+  const candidates = field
+    .map((card, fieldIndex) => ({ card, fieldIndex }))
+    .filter(({ card }) =>
+      isTrioPressureMonster(card) &&
+      card.mode !== "defense" &&
+      !card.used &&
+      !card.changedMode &&
+      totalAtk(card) < rivalPeak &&
+      totalDef(card) >= rivalPeak
+    )
+    .filter(({ card, fieldIndex }) =>
+      typeof canChangeMode === "function" && canChangeMode(card, fieldIndex)
+    )
+    .sort((a, b) => totalDef(b.card) - totalDef(a.card) || a.fieldIndex - b.fieldIndex);
+  const pick = candidates[0];
+  if (!pick) return null;
+  return {
+    type: "changeMode",
+    card: pick.card,
+    fieldIndex: pick.fieldIndex,
+    mode: "defense",
+    reason: "adaptiveGodGuard"
+  };
+}
+
 function aiAttackersList(field, { includeUsed = false } = {}) {
   return (field || [])
     .map((card, index) => ({ card, index }))
@@ -926,7 +964,8 @@ export function chooseAiTurnGoal({
   owner = null,
   rival = null,
   aiStyle = "balanced",
-  canSummon = null
+  canSummon = null,
+  counterPlan = null
 } = {}) {
   if (aiStyle !== "scriptedPressure") return "pressure";
   const liveHand = owner?.hand || hand;
@@ -944,7 +983,6 @@ export function chooseAiTurnGoal({
   if (summon?.tributeCost === 3 && isTrioPressureMonster(summon.card)) return "deployGod";
   const trioWaiting = liveHand.some((card) => isTrioPressureMonster(card));
   const tributeBodies = liveField.filter((card) => card && !isTrioPressureMonster(card)).length;
-  if (trioWaiting && tributeBodies < 3) return "buildTributes";
   if (owner && rival) {
     const rivalThreat = aiRivalLethalThreat({
       rivalField: rival.field || [],
@@ -953,7 +991,11 @@ export function chooseAiTurnGoal({
     });
     if ((Number(owner.lp) || 0) > 0 && rivalThreat >= owner.lp) return "survive";
   }
-  return liveField.some((card) => isTrioPressureMonster(card)) ? "protectGods" : "pressure";
+  const hasEstablishedGod = liveField.some((card) => isTrioPressureMonster(card));
+  if (counterPlan?.turnGoal === "protectGods" && hasEstablishedGod) return "protectGods";
+  if (counterPlan?.turnGoal === "buildTributes" && tributeBodies < 3) return "buildTributes";
+  if (trioWaiting && tributeBodies < 3) return "buildTributes";
+  return hasEstablishedGod ? "protectGods" : "pressure";
 }
 
 export function aiSupportZoneReserve({

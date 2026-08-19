@@ -312,6 +312,12 @@ test("staged trio finale separates each god draw and exposes a split-token tribu
   const replanning = scenarioSetups.trioLiveTurnReplanning;
   assert.deepEqual(replanning.aiField, ["trio-sun-judicator", "nova-squire"]);
   assert.deepEqual(replanning.aiHand, ["trio-moon-warden", "spark-split", "war-chant"]);
+
+  const counterPlanning = scenarioSetups.trioAdaptiveCounterPlanning;
+  assert.equal(counterPlanning.adaptiveBossCounter, true);
+  assert.deepEqual(counterPlanning.playerField, ["solar-vanguard"]);
+  assert.deepEqual(counterPlanning.aiField, ["trio-moon-warden"]);
+  assert.deepEqual(counterPlanning.aiTraps, ["void-lock"]);
 });
 
 test("trio attack planning scenario isolates an exclusive high-threat matchup", () => {

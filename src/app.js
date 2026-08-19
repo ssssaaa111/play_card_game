@@ -16,6 +16,7 @@ import {
   chooseAiAfterAttackSupportTarget,
   chooseAiAttackAction,
   chooseAiFusionAction,
+  chooseAiGodDefenseAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
   chooseAiSpellAction,
@@ -23,6 +24,7 @@ import {
   chooseAiTurnGoal,
   shouldSwitchSummonedMonsterToDefense
 } from './ai.js';
+import { trioBossCounterPlan } from './boss-tactics.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createBattleLogEntry, logEntryMessage } from './battle-log.js';
 import { renderBattlePreviewElement } from './battle-preview-renderer.js';
@@ -294,6 +296,7 @@ const state = {
   campaignProgress: loadCampaignProgress(),
   activeCampaign: null,
   campaignObjectivesAnnounced: {},
+  bossCounterAnnounced: {},
   stats: loadDuelStats(),
   statsRecorded: false,
   ...createAudioSettings({ testMode: BROWSER_TEST_MODE }),
@@ -979,6 +982,7 @@ function startGame() {
   state.storyBeatCursor = 0;
   state.storyBeatsFired = {};
   state.campaignObjectivesAnnounced = {};
+  state.bossCounterAnnounced = {};
   state.scriptedSummonsFired = {};
   state.pendingScriptedSummons = [];
   state.log = [];
@@ -1051,6 +1055,7 @@ function prepareGame() {
   state.aiRunning = false;
   state.resumeResolvers = [];
   state.campaignObjectivesAnnounced = {};
+  state.bossCounterAnnounced = {};
   state.log = ["先查看场景目标、提示和己方卡组，再点击“开始决斗”。"];
   state.logSequence = 0;
   state.timeline = [];
@@ -4587,12 +4592,14 @@ function scheduleOpeningDraw(delay = 700) {
 }
 
 function chooseLiveAiTurnGoal() {
+  const counterPlan = currentBossCounterPlan();
   return chooseAiTurnGoal({
     hand: state.ai.hand,
     field: state.ai.field,
     owner: state.ai,
     rival: state.player,
     aiStyle: state.aiStyle,
+    counterPlan,
     canSummon: (_card, handIndex, options) => explainSummonMonsterFromUiState(
       state,
       "ai",
@@ -4617,6 +4624,11 @@ async function runAiTurn() {
     render();
     await sleep(1500);
     let turnGoal = chooseLiveAiTurnGoal();
+    if (aiFortifyGods({ turnGoal, counterPlan: currentBossCounterPlan() })) {
+      render();
+      await sleep(1100);
+      turnGoal = chooseLiveAiTurnGoal();
+    }
     await aiPlaySpells({ turnGoal, timing: "beforeSummon", getTurnGoal: chooseLiveAiTurnGoal });
     if (state.gameOver) return;
     await sleep(850);
@@ -4850,6 +4862,33 @@ function aiSetTraps({ turnGoal = "pressure", getTurnGoal = null } = {}) {
   return setCount;
 }
 
+function aiFortifyGods({ turnGoal = "pressure", counterPlan = null } = {}) {
+  const action = chooseAiGodDefenseAction({
+    field: state.ai.field,
+    rivalField: state.player.field,
+    aiStyle: state.aiStyle,
+    turnGoal,
+    counterPlan,
+    canChangeMode: (_card, fieldIndex) =>
+      explainChangeMonsterModeFromUiState(state, "ai", fieldIndex, "defense").ok
+  });
+  if (!action) return false;
+  try {
+    dispatchChangeMonsterModeFromUiState(state, "ai", action.fieldIndex, action.mode);
+    addLog(
+      `Boss 识破直攻路线，将「${action.card.name}」切换为守备表示。`,
+      cardLogMeta(action.card, { actor: "ai", type: "decision" })
+    );
+    cue(`对手意图：神体守护。${action.card.name}转为守备表示。`);
+    speak(`对手将${action.card.name}切换为守备表示。`, false, "ai");
+    return true;
+  } catch (error) {
+    addLog(`${action.card.name} 无法执行神体守护：${error.message}`);
+    console.error(error);
+    return false;
+  }
+}
+
 async function aiAttack({ getTurnGoal = null } = {}) {
   const skippedAttackers = new Set();
   const maxAttackSteps = MONSTER_ZONE_SIZE * 3;
@@ -5078,11 +5117,20 @@ function currentCampaignMission() {
   return {
     campaign,
     chapter,
+    bossIntent: currentBossCounterPlan(),
     objectiveResults: evaluateScenarioObjectives(chapter.objectives, {
       events: state.gameEvents,
       resolveCardId: resolveScenarioEventCardId
     })
   };
+}
+
+function currentBossCounterPlan() {
+  if (!scenarioSetups[state.scenarioId]?.adaptiveBossCounter) return null;
+  return trioBossCounterPlan({
+    events: state.gameEvents,
+    resolveCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId)
+  });
 }
 
 function syncCampaignObjectiveFeedback(mission) {
@@ -5096,6 +5144,16 @@ function syncCampaignObjectiveFeedback(mission) {
   });
   const completedCount = mission.objectiveResults.filter((objective) => objective.completed).length;
   cue(`章节目标 ${completedCount}/${mission.objectiveResults.length}：${newlyCompleted.map((objective) => objective.label).join("、")}`);
+}
+
+function syncBossCounterFeedback(intent) {
+  if (!intent || !state.started || state.gameOver) return;
+  const announced = state.bossCounterAnnounced || (state.bossCounterAnnounced = {});
+  const key = `${intent.id}:${intent.eventId}`;
+  if (announced[key]) return;
+  announced[key] = true;
+  addLog(`Boss 反制意图：${intent.label}。${intent.text}`);
+  cue(`Boss 反制意图：${intent.label}`);
 }
 
 function fieldEffectMarkers(card, duelist) {
@@ -5437,8 +5495,10 @@ function render(animationKey = "") {
   const actions = currentPlayerActions();
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
   const musicMode = currentMusicMode();
+  const bossIntent = currentBossCounterPlan();
   const campaignMission = currentCampaignMission();
   syncCampaignObjectiveFeedback(campaignMission);
+  syncBossCounterFeedback(bossIntent);
   setMusicMode(musicMode);
   document.body.dataset.musicMode = musicMode;
   els.phaseText.textContent = phaseLabel(state);
@@ -5580,6 +5640,7 @@ function render(animationKey = "") {
     campaign: campaignMission?.campaign,
     chapter: campaignMission?.chapter,
     objectiveResults: campaignMission?.objectiveResults,
+    bossIntent: campaignMission?.bossIntent,
     visible: state.started && !state.gameOver,
     win: state.gameOver && state.gameOverWinner === "player"
   }));

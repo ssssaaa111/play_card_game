@@ -49,6 +49,7 @@ const DEFAULT_SMOKES = [
   "trio-staged-tribute-planning-basic",
   "trio-live-turn-replanning-basic",
   "trio-omega-ascension-opening-basic",
+  "trio-adaptive-counter-basic",
   "trio-omega-finale-demo",
   "trio-omega-finale-rush",
   "pre-duel-deck-preview",

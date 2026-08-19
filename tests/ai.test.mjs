@@ -11,6 +11,7 @@ import {
   chooseAiAttackAction,
   chooseAiAttackTarget,
   chooseAiFusionAction,
+  chooseAiGodDefenseAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
   chooseAiSpellAction,
@@ -1108,6 +1109,56 @@ test("scripted pressure AI replans lethal, survival, and god protection goals fr
     aiStyle: "scriptedPressure",
     canSummon: () => false
   }), "survive");
+});
+
+test("scripted boss protects a challenged high-defense god without overriding urgent goals", () => {
+  const moon = monster({
+    id: "trio-moon-warden",
+    name: "moon",
+    atk: 2100,
+    def: 2500,
+    archetype: "三曜神格"
+  });
+  const rivalThreat = monster({ id: "solar-vanguard", atk: 2300 });
+  const counterPlan = { id: "fortify-gods", turnGoal: "protectGods" };
+
+  const action = chooseAiGodDefenseAction({
+    field: [moon, null, null, null, null],
+    rivalField: [rivalThreat, null, null, null, null],
+    aiStyle: "scriptedPressure",
+    turnGoal: "protectGods",
+    counterPlan,
+    canChangeMode: () => true
+  });
+
+  assert.equal(action?.card, moon);
+  assert.equal(action?.mode, "defense");
+  assert.equal(action?.reason, "adaptiveGodGuard");
+  assert.equal(chooseAiGodDefenseAction({
+    field: [moon],
+    rivalField: [rivalThreat],
+    aiStyle: "scriptedPressure",
+    turnGoal: "lethal",
+    counterPlan,
+    canChangeMode: () => true
+  }), null);
+});
+
+test("tribute counter plan can prepare bodies before the next god reaches hand", () => {
+  const counterPlan = { id: "rebuild-tributes", turnGoal: "buildTributes" };
+  assert.equal(chooseAiTurnGoal({
+    owner: {
+      lp: 4000,
+      shield: 0,
+      directAttacks: 0,
+      hand: [],
+      field: [monster({ id: "nova-squire" }), null, null, null, null]
+    },
+    rival: { lp: 9000, shield: 0, field: [], traps: [] },
+    aiStyle: "scriptedPressure",
+    counterPlan,
+    canSummon: () => false
+  }), "buildTributes");
 });
 
 test("scripted pressure AI uses split tokens to build tribute bodies for a staged trio summon", () => {
