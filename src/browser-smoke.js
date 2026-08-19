@@ -11,6 +11,22 @@ function cardIds(list = []) {
   return list.map((card) => card?.id || null);
 }
 
+function campaignProgressWithClearedChapters(chapterIds = []) {
+  const chapters = Object.fromEntries(chapterIds.map((chapterId) => [chapterId, {
+    stars: 1,
+    remainingLp: 1,
+    attempts: 1,
+    clearedAt: "2026-08-20T00:00:00.000Z",
+    objectiveIds: []
+  }]));
+  return {
+    version: 1,
+    campaigns: {
+      "star-trial": { chapters }
+    }
+  };
+}
+
 function smokeRuntimeTemplateId(state, runtimeId) {
   for (const owner of ["player", "ai"]) {
     for (const zone of ["hand", "deck", "field", "traps", "grave"]) {
@@ -1052,7 +1068,37 @@ async function runTrioLiveTurnReplanningBasicSmoke(ctx) {
 async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   const smokeName = "trio-omega-ascension-opening-basic";
   setSmokeStatus("running", smokeName);
-  await startSmokeDuel(ctx, "protagonistTrioOmegaAscension");
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") && !ctx.els.campaignPanel?.hidden && !ctx.state.started,
+    `${smokeName}: campaign hub is visible`,
+    6000
+  );
+  ctx.state.campaignProgress = campaignProgressWithClearedChapters([
+    "comeback",
+    "comeback-challenge",
+    "ace-evolution",
+    "trio-challenge",
+    "trio-full"
+  ]);
+  ctx.render?.();
+  const chapterButton = ctx.els.campaignList?.querySelector('[data-campaign-chapter="trio-ascension"]');
+  if (!chapterButton || chapterButton.disabled) {
+    throw new Error(`${smokeName}: final campaign chapter should unlock after the first five clears`);
+  }
+  clickSmokeElement(chapterButton, `${smokeName}: start the unlocked final campaign chapter`);
+  await waitForSmoke(
+    () => ctx.state.started &&
+      ctx.state.scenarioId === "protagonistTrioOmegaAscension" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.pendingOpeningDraw &&
+      !ctx.els.campaignMission?.hidden,
+    `${smokeName}: final campaign chapter reaches the opening main phase`,
+    9000
+  );
+  const openingBossPhase = ctx.els.campaignMission?.querySelector('.campaign-boss-phase[data-boss-phase="1"]');
+  if (!openingBossPhase?.textContent.includes("PHASE I · 日曜裁决")) {
+    throw new Error(`${smokeName}: campaign tracker must open on the sun boss phase`);
+  }
   if (ctx.els.duelHint?.dataset.kind !== "objective" ||
       !ctx.els.duelHint?.title.includes("第一神降临准备") ||
       !ctx.els.duelHint?.title.includes("3/3")) {
@@ -1136,6 +1182,10 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
     6000
   );
   assertCampaignObjectiveCompleted(ctx, "trio-ascension", "force-sun-descent");
+  const moonBossPhase = ctx.els.campaignMission?.querySelector('.campaign-boss-phase[data-boss-phase="2"]');
+  if (!moonBossPhase?.textContent.includes("PHASE II · 月曜重建")) {
+    throw new Error(`${smokeName}: sun descent must advance the campaign tracker to the moon rebuild phase`);
+  }
   if (!ctx.state.storyBeatsFired?.["ascension-opening-tribute-broken"] ||
       !ctx.state.storyBeatsFired?.["ascension-sun-descends"]) {
     throw new Error(`${smokeName}: opening and first-descent story beats must fire. ${smokeDebug(ctx)}`);
@@ -8903,8 +8953,8 @@ async function runCampaignHubBasicSmoke(ctx) {
     throw new Error(`${smokeName}: opening chapter objectives should be visible before starting`);
   }
   const rewards = ctx.els.campaignList.querySelectorAll(".campaign-reward");
-  if (rewards.length !== 3) {
-    throw new Error(`${smokeName}: expected 3 campaign rewards, got ${rewards.length}`);
+  if (rewards.length !== 4) {
+    throw new Error(`${smokeName}: expected 4 campaign rewards, got ${rewards.length}`);
   }
 
   clickSmokeElement(chapters[0], `${smokeName}: start first chapter`);
@@ -8919,6 +8969,50 @@ async function runCampaignHubBasicSmoke(ctx) {
   if (ctx.state.player.lp !== 900 || ctx.els.scenarioSelect?.value !== "protagonistComeback") {
     throw new Error(`${smokeName}: campaign chapter did not use its authored scenario`);
   }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runCampaignRewardUnlockBasicSmoke(ctx) {
+  const smokeName = "campaign-reward-unlock-basic";
+  setSmokeStatus("running", smokeName);
+  await waitForSmoke(
+    () => ctx.els.modal?.classList.contains("show") && !ctx.els.campaignPanel?.hidden && !ctx.state.started,
+    `${smokeName}: campaign hub is visible`,
+    6000
+  );
+
+  const selector = '[data-campaign-reward="trio-finale-gauntlet"]';
+  const lockedReward = ctx.els.campaignList?.querySelector(selector);
+  if (!lockedReward || !lockedReward.disabled || !lockedReward.textContent.includes("三曜终焉连战")) {
+    throw new Error(`${smokeName}: playable gauntlet reward must start visibly locked`);
+  }
+
+  const campaign = campaignDefinitions.find((entry) => entry.id === "star-trial");
+  ctx.state.campaignProgress = campaignProgressWithClearedChapters(
+    campaign?.chapters?.map((chapter) => chapter.id) || []
+  );
+  ctx.render?.();
+  await waitForSmoke(
+    () => {
+      const reward = ctx.els.campaignList?.querySelector(selector);
+      return reward && !reward.disabled && reward.classList.contains("unlocked") && reward.textContent.includes("▶");
+    },
+    `${smokeName}: completing all chapters unlocks a playable reward`
+  );
+
+  clickSmokeElement(ctx.els.campaignList.querySelector(selector), `${smokeName}: start unlocked gauntlet reward`);
+  await waitForSmoke(
+    () => ctx.state.started &&
+      ctx.state.activeCampaign === null &&
+      ctx.state.gauntlet?.active === true &&
+      ctx.state.gauntlet?.sourceScenarioId === "protagonistTrioGauntlet" &&
+      ctx.state.gauntlet?.chapterIndex === 0 &&
+      ctx.state.scenarioId === "protagonistTrioOmegaStory" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.pendingOpeningDraw,
+    `${smokeName}: reward click launches the first gauntlet battle`,
+    9000
+  );
   setSmokeStatus("passed", smokeName);
 }
 
@@ -9779,6 +9873,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "campaign-hub-basic": runCampaignHubBasicSmoke,
     "campaign-objective-tracker-basic": runCampaignObjectiveTrackerBasicSmoke,
+    "campaign-reward-unlock-basic": runCampaignRewardUnlockBasicSmoke,
     "settings-menu-basic": runSettingsMenuBasicSmoke,
     "trio-gauntlet-preview-basic": runTrioGauntletPreviewBasicSmoke,
     "objective-hierarchy-mobile-basic": runObjectiveHierarchyMobileBasicSmoke,

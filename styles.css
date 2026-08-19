@@ -7411,3 +7411,20 @@ button.chain-stack-card:focus-visible {
   border-color: rgba(246, 189, 96, 0.35);
   background: rgba(246, 189, 96, 0.08);
 }
+
+.campaign-reward-action {
+  font: inherit;
+  cursor: pointer;
+}
+
+.campaign-reward-action:disabled {
+  cursor: not-allowed;
+}
+
+.campaign-reward-action.unlocked:hover,
+.campaign-reward-action.unlocked:focus-visible {
+  border-color: rgba(84, 210, 210, 0.62);
+  color: #bffafa;
+  background: rgba(84, 210, 210, 0.1);
+  outline: none;
+}

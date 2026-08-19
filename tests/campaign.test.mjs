@@ -216,7 +216,16 @@ test("clearing all chapters completes the campaign and unlocks every reward", ()
   assert.equal(summary.completed, true);
   assert.equal(summary.stars, 18);
   assert.equal(summary.nextChapterId, null);
-  assert.equal(unlockedCampaignRewards(trialCampaign, progress).length, 3);
+  const rewards = unlockedCampaignRewards(trialCampaign, progress);
+  assert.equal(rewards.length, 4);
+  assert.deepEqual(rewards.at(-1), {
+    id: "trio-finale-gauntlet",
+    requiresCompletion: true,
+    kind: "scenario",
+    scenarioId: "protagonistTrioGauntlet",
+    title: "三曜终焉连战",
+    text: "通关全部章节后解锁：连续挑战逆转篇、誓约篇与终焉篇。"
+  });
 });
 
 test("rewards unlock at star thresholds", () => {
@@ -246,7 +255,7 @@ test("completion reward follows chapter completion instead of requiring a perfec
   assert.equal(campaignProgressSummary(trialCampaign, progress).completed, true);
   assert.deepEqual(
     unlockedCampaignRewards(trialCampaign, progress).map((reward) => reward.title),
-    ["试炼者", "三神征服者"]
+    ["试炼者", "三神征服者", "三曜终焉连战"]
   );
 });
 
@@ -341,7 +350,10 @@ test("campaign hub view tracks progress and reward state", () => {
   assert.equal(panel.chapters[2].locked, true);
   assert.equal(panel.progressText, "进度 1/6 · 3/18 星");
   assert.equal(panel.completed, false);
+  assert.equal(panel.rewards.length, 4);
   assert.equal(panel.rewards[0].unlocked, false);
+  assert.equal(panel.rewards.at(-1).kind, "scenario");
+  assert.equal(panel.rewards.at(-1).unlocked, false);
 
   const hidden = campaignHubView({ progress, visible: false });
   assert.equal(hidden.hidden, true);
@@ -373,6 +385,24 @@ test("campaign game-over modal copy stays outside app orchestration", () => {
   assert.match(win.text, /已完成：用醒星回召让天穹逆星者从墓地归来/);
   assert.match(win.text, /下一章预告：初试 · 「逆袭·挑战」已解锁/);
   assert.equal(win.actionText, "查看下一章");
+  const rewardWin = campaignGameOverModalView({
+    win: true,
+    chapterLabel: "三神·逐神降临",
+    stars: 1,
+    remainingLp: 1,
+    totalStars: 6,
+    maxStars: 18,
+    unlockedChapterIds: [],
+    unlockedRewards: [
+      { kind: "title", title: "三神征服者" },
+      { kind: "scenario", title: "三曜终焉连战" }
+    ],
+    completed: true,
+    nextChapter: null,
+    objectiveResults: []
+  });
+  assert.match(rewardWin.text, /解锁称号「三神征服者」/);
+  assert.match(rewardWin.text, /解锁玩法「三曜终焉连战」/);
   assert.equal(campaignGameOverModalView({ win: false, chapterLabel: "逆袭觉醒" }).actionText, "再次挑战");
 });
 
@@ -597,6 +627,14 @@ test("ascension mission advances through independent sun and moon descents", () 
   const opening = campaignMissionView({ campaign: trialCampaign, chapter });
   assert.equal(opening.progressText, "0 / 3");
   assert.match(opening.hintText, /步骤 1\/3.*钢壁守卫/);
+  assert.deepEqual(opening.bossPhase, {
+    id: "sun-judgment",
+    label: "PHASE I · 日曜裁决",
+    text: "削减前线祭品，迫使第一神独立登场。",
+    index: 0,
+    step: 1,
+    total: 3
+  });
 
   const tributeBroken = campaignMissionView({
     campaign: trialCampaign,
@@ -618,6 +656,18 @@ test("ascension mission advances through independent sun and moon descents", () 
     ]
   });
   assert.match(moonRebuild.hintText, /月曜会消耗新的三只祭品/);
+  assert.equal(moonRebuild.bossPhase.id, "moon-rebuild");
+  assert.equal(moonRebuild.bossPhase.step, 2);
+
+  const moonReachedOffRoute = campaignMissionView({
+    campaign: trialCampaign,
+    chapter,
+    objectiveResults: [
+      { id: "force-sun-descent", completed: false, eventIds: [] },
+      { id: "read-moon-rebuild", completed: true, eventIds: [30, 31] }
+    ]
+  });
+  assert.equal(moonReachedOffRoute.bossPhase.id, "star-finale");
 
   const finalPhase = campaignMissionView({
     campaign: trialCampaign,
@@ -626,4 +676,6 @@ test("ascension mission advances through independent sun and moon descents", () 
   });
   assert.equal(finalPhase.progressText, "2 / 3");
   assert.match(finalPhase.hintText, /星曜凑齐第三批祭品前终结/);
+  assert.equal(finalPhase.bossPhase.id, "star-finale");
+  assert.equal(finalPhase.bossPhase.step, 3);
 });

@@ -583,6 +583,57 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   text-align: center;
 }
 
+.campaign-boss-phase {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1px 6px;
+  padding: 5px 6px;
+  border: 1px solid rgba(239, 71, 111, 0.3);
+  border-radius: 7px;
+  background:
+    linear-gradient(90deg, rgba(239, 71, 111, 0.12), transparent 72%),
+    rgba(255, 255, 255, 0.025);
+}
+
+.campaign-boss-phase strong {
+  overflow: hidden;
+  color: #ffc4cf;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaign-boss-phase > span {
+  color: var(--red);
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.campaign-boss-phase small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: rgba(255, 220, 226, 0.66);
+  font-size: 7px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaign-boss-phase[data-boss-phase="3"] {
+  border-color: rgba(246, 189, 96, 0.42);
+  background:
+    linear-gradient(90deg, rgba(246, 189, 96, 0.15), transparent 72%),
+    rgba(255, 255, 255, 0.025);
+}
+
+.campaign-boss-phase[data-boss-phase="3"] strong,
+.campaign-boss-phase[data-boss-phase="3"] > span {
+  color: var(--gold);
+}
+
 .campaign-mission-list {
   display: grid;
   gap: 3px;
@@ -2331,6 +2382,10 @@ body[data-duel-selection="playerField"] .hand-command-idle {
     display: none;
   }
 
+  #app .duel-table .campaign-boss-phase small {
+    display: none;
+  }
+
   #app .duel-table .campaign-mission-item.focused {
     display: grid;
   }
@@ -2881,6 +2936,10 @@ body[data-duel-selection="playerField"] .hand-command-idle {
 
   #app .duel-table .campaign-mission-list {
     display: none;
+  }
+
+  #app .duel-table .campaign-boss-phase {
+    padding: 3px 5px;
   }
 
   #app .duel-table .campaign-mission-head small {

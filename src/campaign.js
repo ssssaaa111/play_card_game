@@ -191,6 +191,23 @@ export const campaignDefinitions = [
         label: "三神·逐神降临",
         phase: "终局",
         winHint: "月曜已经独立降临；利用下一段建设回合完成融合或墓地回收，在星曜凑齐第三批祭品前终结长局。",
+        bossPhases: [
+          {
+            id: "sun-judgment",
+            label: "PHASE I · 日曜裁决",
+            text: "削减前线祭品，迫使第一神独立登场。"
+          },
+          {
+            id: "moon-rebuild",
+            label: "PHASE II · 月曜重建",
+            text: "识破星火分裂，读清第二轮三祭品路线。"
+          },
+          {
+            id: "star-finale",
+            label: "PHASE III · 星曜终战",
+            text: "利用建设回合，在第三批祭品完成前终结长局。"
+          }
+        ],
         objectives: [
           {
             id: "force-sun-descent",
@@ -222,7 +239,15 @@ export const campaignDefinitions = [
     rewards: [
       { id: "trialist", atStars: 6, kind: "title", title: "试炼者", text: "累积 6 星" },
       { id: "star-summoner", atStars: 12, kind: "title", title: "星魂唤者", text: "累积 12 星" },
-      { id: "trio-conqueror", requiresCompletion: true, kind: "title", title: "三神征服者", text: "通关全部章节" }
+      { id: "trio-conqueror", requiresCompletion: true, kind: "title", title: "三神征服者", text: "通关全部章节" },
+      {
+        id: "trio-finale-gauntlet",
+        requiresCompletion: true,
+        kind: "scenario",
+        scenarioId: "protagonistTrioGauntlet",
+        title: "三曜终焉连战",
+        text: "通关全部章节后解锁：连续挑战逆转篇、誓约篇与终焉篇。"
+      }
     ]
   }
 ];

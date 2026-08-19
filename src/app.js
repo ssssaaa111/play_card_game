@@ -63,7 +63,8 @@ import {
   campaignChapterRatingMaxLp,
   campaignDefinitionById,
   campaignChapterStates,
-  recordCampaignChapterResult
+  recordCampaignChapterResult,
+  unlockedCampaignRewards
 } from './campaign.js';
 import { loadCampaignProgress, saveCampaignProgress } from './campaign-storage.js';
 import {
@@ -868,7 +869,9 @@ function applySetupChoices() {
   state.roleId = els.roleSelect?.value || state.roleId;
   state.deckPreset = els.deckSelect?.value || state.deckPreset;
   state.aiStyle = els.aiSelect?.value || state.aiStyle;
-  state.scenarioId = els.scenarioSelect?.value || state.scenarioId;
+  state.scenarioId = state.gauntlet?.active && state.gauntlet.sourceScenarioId
+    ? state.gauntlet.sourceScenarioId
+    : els.scenarioSelect?.value || state.scenarioId;
   Object.assign(characterProfiles.player, roleProfiles[state.roleId] || roleProfiles.star);
   Object.assign(characterProfiles.ai, aiProfiles[state.aiStyle]?.profile || aiProfiles.balanced.profile);
 }
@@ -883,6 +886,7 @@ function currentBattleScenarioId() {
     if (!state.gauntlet?.active) {
       state.gauntlet = {
         active: true,
+        sourceScenarioId: state.scenarioId,
         chapters: [...scenario.gauntletChapters],
         chapterIndex: 0,
         score: 0,
@@ -5014,6 +5018,18 @@ function startCampaignChapter(campaignId, chapterId) {
   startGame();
 }
 
+function startCampaignReward(campaignId, rewardId) {
+  const campaign = campaignDefinitionById(campaignId);
+  const reward = unlockedCampaignRewards(campaign, state.campaignProgress)
+    .find((candidate) => candidate.id === rewardId);
+  if (!reward?.scenarioId || !scenarioSetups[reward.scenarioId]) return;
+  state.activeCampaign = null;
+  state.gauntlet = null;
+  if (els.scenarioSelect) els.scenarioSelect.value = reward.scenarioId;
+  state.scenarioId = reward.scenarioId;
+  startGame();
+}
+
 function recordCampaignResult(win) {
   if (!state.activeCampaign) return null;
   const campaign = campaignDefinitionById(state.activeCampaign.campaignId);
@@ -5553,7 +5569,12 @@ function render(animationKey = "") {
   preDuelPreviewModel = setupView.preview;
   renderCampaignHub(document, els, campaignHubView({
     progress: state.campaignProgress,
-    visible: !state.started && !state.gameOver && (!BROWSER_TEST_MODE || ["campaign-hub-basic", "campaign-objective-tracker-basic"].includes(BROWSER_SMOKE))
+    visible: !state.started && !state.gameOver && (!BROWSER_TEST_MODE || [
+      "campaign-hub-basic",
+      "campaign-objective-tracker-basic",
+      "campaign-reward-unlock-basic",
+      "trio-omega-ascension-opening-basic"
+    ].includes(BROWSER_SMOKE))
   }));
   renderCampaignMission(document, els, campaignMissionView({
     campaign: campaignMission?.campaign,
@@ -6296,6 +6317,11 @@ if (els.modalReviewLog) {
 
 if (els.campaignList) {
   els.campaignList.addEventListener("click", (event) => {
+    const reward = event.target.closest("[data-campaign-reward]");
+    if (reward && !reward.disabled) {
+      startCampaignReward(reward.dataset.campaignId, reward.dataset.campaignReward);
+      return;
+    }
     const button = event.target.closest("[data-campaign-chapter]");
     if (!button || button.disabled) return;
     startCampaignChapter(button.dataset.campaignId, button.dataset.campaignChapter);

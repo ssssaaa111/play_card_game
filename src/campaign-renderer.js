@@ -130,9 +130,18 @@ export function renderCampaignHub(doc, elements, view) {
       const rewards = doc.createElement("div");
       rewards.className = "campaign-rewards";
       panel.rewards.forEach((reward) => {
-        const item = doc.createElement("span");
+        const playable = reward.kind === "scenario" && reward.scenarioId;
+        const item = doc.createElement(playable ? "button" : "span");
         item.className = reward.unlocked ? "campaign-reward unlocked" : "campaign-reward";
-        item.textContent = `${reward.unlocked ? "✔" : "☆"} ${reward.title}`;
+        if (playable) {
+          item.type = "button";
+          item.classList.add("campaign-reward-action");
+          item.disabled = !reward.unlocked;
+          item.dataset.campaignId = panel.id;
+          item.dataset.campaignReward = reward.id;
+        }
+        const marker = reward.unlocked ? (playable ? "▶" : "✔") : "☆";
+        item.textContent = `${marker} ${reward.title}`;
         item.title = reward.text || "";
         rewards.appendChild(item);
       });
@@ -183,6 +192,13 @@ export function campaignMissionView({
     }
   ];
   const completedCount = items.filter((item) => item.completed).length;
+  const bossPhases = Array.isArray(chapter.bossPhases) ? chapter.bossPhases : [];
+  const furthestCompletedChallenge = challengeItems.reduce(
+    (furthest, item, index) => item.completed ? Math.max(furthest, index + 1) : furthest,
+    0
+  );
+  const bossPhaseIndex = Math.min(furthestCompletedChallenge, Math.max(0, bossPhases.length - 1));
+  const bossPhaseDefinition = bossPhases[bossPhaseIndex] || null;
   const focusIndex = items.findIndex((item) => !item.completed);
   items.forEach((item, index) => {
     item.step = index + 1;
@@ -200,6 +216,14 @@ export function campaignMissionView({
       : `步骤 ${focusedItem?.step || 1}/${items.length} · ${focusedItem?.hint || "继续推进章节路线。"}`,
     completedCount,
     totalCount: items.length,
+    bossPhase: bossPhaseDefinition
+      ? {
+          ...bossPhaseDefinition,
+          index: bossPhaseIndex,
+          step: bossPhaseIndex + 1,
+          total: bossPhases.length
+        }
+      : null,
     items
   };
 }
@@ -215,6 +239,27 @@ export function renderCampaignMission(doc, elements, view) {
   if (elements.campaignMissionTitle) elements.campaignMissionTitle.textContent = view.title;
   if (elements.campaignMissionProgress) elements.campaignMissionProgress.textContent = view.progressText;
   if (elements.campaignMissionHint) elements.campaignMissionHint.textContent = view.hintText;
+
+  let bossPhase = elements.campaignMission.querySelector(".campaign-boss-phase");
+  if (!view.bossPhase) {
+    bossPhase?.remove();
+  } else {
+    if (!bossPhase) {
+      bossPhase = doc.createElement("section");
+      bossPhase.className = "campaign-boss-phase";
+      bossPhase.setAttribute("aria-label", "Boss 阶段");
+      elements.campaignMission.insertBefore(bossPhase, elements.campaignMissionList);
+    }
+    bossPhase.dataset.bossPhase = String(view.bossPhase.step);
+    bossPhase.textContent = "";
+    const label = doc.createElement("strong");
+    label.textContent = view.bossPhase.label;
+    const progress = doc.createElement("span");
+    progress.textContent = `${view.bossPhase.step}/${view.bossPhase.total}`;
+    const text = doc.createElement("small");
+    text.textContent = view.bossPhase.text || "";
+    bossPhase.append(label, progress, text);
+  }
 
   const list = elements.campaignMissionList;
   list.textContent = "";
@@ -267,9 +312,12 @@ export function campaignGameOverModalView(result) {
     };
   }
 
-  const rewardText = result.unlockedRewards?.length
-    ? `解锁称号「${result.unlockedRewards.map((reward) => reward.title).join("、")}」！`
-    : "";
+  const titleRewards = (result.unlockedRewards || []).filter((reward) => reward.kind === "title");
+  const playableRewards = (result.unlockedRewards || []).filter((reward) => reward.kind === "scenario");
+  const rewardText = [
+    titleRewards.length ? `解锁称号「${titleRewards.map((reward) => reward.title).join("、")}」！` : "",
+    playableRewards.length ? `解锁玩法「${playableRewards.map((reward) => reward.title).join("、")}」！` : ""
+  ].filter(Boolean).join("");
   const unlockText = result.unlockedChapterIds?.length && !result.nextChapter ? " 新章节已解锁。" : "";
   const completionText = result.completed ? " 战役已通关——你征服了星魂试炼！" : "";
   const nextChapterText = result.nextChapter

@@ -10,8 +10,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260812-card-browser-hand-order"/);
-  assert.match(html, /src="src\/app\.js\?v=20260819-campaign-route"/);
+  assert.match(html, /href="duel-table\.css\?v=20260820-boss-phase-reward"/);
+  assert.match(html, /src="src\/app\.js\?v=20260820-boss-phase-reward"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -35,6 +35,8 @@ test("campaign chapters expose a live mission rail without stealing field clicks
   assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.campaign-mission-item\.focused\s*\{[\s\S]*display: grid;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.campaign-mission-list\s*\{[\s\S]*display: none;/);
   assert.match(css, /\.campaign-mission-next\s*\{[\s\S]*-webkit-line-clamp: 2;/);
+  assert.match(css, /\.campaign-boss-phase\s*\{[\s\S]*data-boss-phase/);
+  assert.match(app, /function startCampaignReward\(campaignId, rewardId\)/);
   assert.match(css, /\.hand-command > \.choice-actions\.target-choice\s*\{[\s\S]*top: calc\(max\(8px, var\(--safe-area-top\)\) \+ 116px\);/);
 });
 

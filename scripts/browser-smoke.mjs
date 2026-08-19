@@ -55,6 +55,7 @@ const DEFAULT_SMOKES = [
   "settings-menu-basic",
   "campaign-hub-basic",
   "campaign-objective-tracker-basic",
+  "campaign-reward-unlock-basic",
   "card-detail-viewer",
   "hand-reorder-basic",
   "trio-gauntlet-preview-basic",
