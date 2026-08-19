@@ -11,7 +11,7 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   const html = read("index.html");
 
   assert.match(html, /href="duel-table\.css\?v=20260812-card-browser-hand-order"/);
-  assert.match(html, /src="src\/app\.js\?v=20260812-unified-card-detail"/);
+  assert.match(html, /src="src\/app\.js\?v=20260819-campaign-route"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -19,7 +19,33 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   assert.match(html, /id="timelineDrawerToggle"[\s\S]*aria-controls="timelineDrawer"/);
   assert.match(html, /id="fieldActionBar"[\s\S]*id="fieldAttackBtn"[\s\S]*id="fieldModeBtn"[\s\S]*id="fieldDetailBtn"[\s\S]*id="fieldCancelBtn"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260802-passive-log-attention"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260819-settings-menu"/);
+});
+
+test("campaign chapters expose a live mission rail without stealing field clicks", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const app = read("src/app.js");
+
+  assert.match(html, /id="campaignMission"[\s\S]*id="campaignMissionProgress"[\s\S]*id="campaignMissionList"[\s\S]*id="campaignMissionHint"/);
+  assert.match(app, /function currentCampaignMission\(\)/);
+  assert.match(app, /syncCampaignObjectiveFeedback\(campaignMission\)/);
+  assert.match(app, /nextChapterState[\s\S]*unlocked: Boolean\(nextChapterState\?\.startable\)/);
+  assert.match(css, /#app \.duel-table \.campaign-mission\s*\{[\s\S]*pointer-events: none;/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.campaign-mission-item\.focused\s*\{[\s\S]*display: grid;/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.campaign-mission-list\s*\{[\s\S]*display: none;/);
+  assert.match(css, /\.campaign-mission-next\s*\{[\s\S]*-webkit-line-clamp: 2;/);
+  assert.match(css, /\.hand-command > \.choice-actions\.target-choice\s*\{[\s\S]*top: calc\(max\(8px, var\(--safe-area-top\)\) \+ 116px\);/);
+});
+
+test("new duels clear the previous result before opening an action window", () => {
+  const app = read("src/app.js");
+  const startGame = app.slice(app.indexOf("function startGame()"), app.indexOf("function prepareGame()"));
+  const prepareGame = app.slice(app.indexOf("function prepareGame()"), app.indexOf("function drawCard("));
+
+  assert.match(app, /function resetDuelResultState\(\)\s*\{[\s\S]*state\.gameOver = false;[\s\S]*state\.statsRecorded = false;[\s\S]*state\.gameEvents = \[\];/);
+  assert.ok(startGame.indexOf("resetDuelResultState();") < startGame.indexOf('setActionWindow("draw")'));
+  assert.ok(prepareGame.indexOf("resetDuelResultState();") < prepareGame.indexOf('setActionWindow("setup")'));
 });
 
 test("selected field monsters expose a unified contextual action dock", () => {
@@ -127,7 +153,7 @@ test("fusion chooser stays clear of selectable materials at every breakpoint", (
   const smoke = read("src/browser-smoke.js");
 
   assert.match(css, /\.hand-command > \.choice-actions\.fusion-choice,[\s\S]*\.choice-actions\.material-choice,[\s\S]*\.choice-actions\.split-choice\s*\{[\s\S]*align-content: start;[\s\S]*max-height: 100%;[\s\S]*overflow-y: auto;/);
-  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.hand-command > \.choice-actions\.fusion-choice,[\s\S]*\.choice-actions\.material-choice,[\s\S]*\.choice-actions\.split-choice\s*\{[\s\S]*top: calc\(var\(--safe-area-top\) \+ 12px\);[\s\S]*max-height: calc\(100dvh - clamp\(226px, 34dvh, 278px\) - 40px\);[\s\S]*overflow-y: auto;/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.hand-command > \.choice-actions\.fusion-choice,[\s\S]*\.choice-actions\.material-choice,[\s\S]*\.choice-actions\.split-choice\s*\{[\s\S]*top: calc\(max\(8px, var\(--safe-area-top\)\) \+ 116px\);[\s\S]*max-height: calc\(100dvh - clamp\(226px, 34dvh, 278px\) - max\(8px, var\(--safe-area-top\)\) - 132px\);[\s\S]*overflow-y: auto;/);
   assert.match(css, /@media \(orientation: landscape\) and \(max-height: 540px\) and \(max-width: 1040px\)[\s\S]*\.hand-command > \.choice-actions\.fusion-choice,[\s\S]*\.choice-actions\.material-choice,[\s\S]*\.choice-actions\.split-choice\s*\{[\s\S]*top: calc\(max\(8px, var\(--safe-area-top\)\) \+ 62px\);[\s\S]*max-height: calc\(100dvh - max\(8px, var\(--safe-area-top\)\) - 62px - clamp\(120px, 30dvh, 180px\)\);[\s\S]*overflow-y: auto;/);
   assert.match(smoke, /fusion-occlusion: panel covers materials/);
   assert.match(smoke, /"fusion-occlusion-desktop": runFusionOcclusionSmoke/);

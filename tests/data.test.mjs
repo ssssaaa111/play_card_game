@@ -486,6 +486,9 @@ test("protagonist ace evolution pack has rule-backed cards decks and scenarios",
   assert.deepEqual(scenarioSetups.protagonistAceEvolution.playerField, ["ember-soul-initiate", "lumen-gearlet"]);
   assert.equal(scenarioSetups.protagonistAceEvolution.playerHand[0], "soulforge-ascent");
   assert.equal(scenarioSetups.protagonistAceEvolution.playerDeck[0], "astral-forge-dragon");
+  assert.ok(scenarioSetups.protagonistAceEvolution.hints.some((entry) => entry.includes("星屑返轨")));
+  assert.ok(scenarioSetups.protagonistAceEvolution.hints.some((entry) => entry.includes("满星路线会中断")));
+  assert.ok(scenarioSetups.protagonistAceEvolution.recommendedLine.some((entry) => entry.includes("守护刻印")));
   assert.deepEqual(scenarioSetups.protagonistAceProtection.playerField, ["astral-forge-dragon"]);
   assert.ok(scenarioSetups.protagonistAceProtection.playerHand.includes("ace-vow-guard"));
   assert.ok(scenarioSetups.protagonistAceProtection.aiHand.includes("corebreak-edict"));

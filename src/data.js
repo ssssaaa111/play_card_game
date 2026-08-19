@@ -1091,7 +1091,27 @@ export const scenarioSetups = {
     playerGrave: ["astral-comet-ace"],
     aiField: ["flare-titan"],
     aiHand: [],
-    aiDeck: ["guard-sigil"]
+    aiDeck: ["guard-sigil"],
+    storyBeats: [
+      {
+        id: "last-spark-kindles",
+        when: { eventType: "CARD_ACTIVATED", cardId: "last-spark" },
+        speaker: "player",
+        line: "生命如残烛，星火才更耀眼——余烬星愿！"
+      },
+      {
+        id: "comet-ace-returns",
+        when: { eventType: "MONSTER_SUMMONED", playerId: "player", cardId: "astral-comet-ace", fromZone: "grave" },
+        speaker: "player",
+        line: "回应我吧，天穹逆星者！从墓地归来，点燃逆转的一击！"
+      },
+      {
+        id: "comet-ace-counterattacks",
+        when: { eventType: "ATTACK_DECLARED", playerId: "player", cardId: "astral-comet-ace" },
+        speaker: "ai",
+        line: "这股力量……竟然在绝境中继续攀升！"
+      }
+    ]
   },
   protagonistComebackChallenge: {
     label: "逆境觉醒挑战",
@@ -1126,7 +1146,27 @@ export const scenarioSetups = {
     aiField: ["flare-titan"],
     aiTraps: ["mirror-snare"],
     aiHand: [],
-    aiDeck: ["renewal"]
+    aiDeck: ["renewal"],
+    storyBeats: [
+      {
+        id: "challenge-guard-fires",
+        when: { eventType: "CARD_ACTIVATED", cardId: "last-light-guard" },
+        speaker: "player",
+        line: "真正的反击，要先守住这最后一道光！"
+      },
+      {
+        id: "mirror-snare-falls",
+        when: { eventType: "CARD_DESTROYED", cardId: "mirror-snare" },
+        speaker: "player",
+        line: "你的镜光反制已经看穿了——现在，通往胜利的路打开了！"
+      },
+      {
+        id: "challenge-counterattack",
+        when: { eventType: "ATTACK_DECLARED", playerId: "player", cardId: "astral-comet-ace" },
+        speaker: "ai",
+        line: "你竟把防守、破阵与反击连成了同一条战线……"
+      }
+    ]
   },
   protagonistFinalCounter: {
     label: "终局反击演示",
@@ -1153,13 +1193,44 @@ export const scenarioSetups = {
       "从卡组特殊召唤天炉星铠王。",
       "观察登场后压低对手场面并形成反击。"
     ],
+    hints: [
+      "尽量第一回合发动星魂铸升；素材被击破时，可用星屑返轨回收并重新召唤。",
+      "星屑返轨只能救回一张素材；若两张素材都被击破，本次满星路线会中断。",
+      "对手会用守护刻印挡住一次直接攻击；战斗狂热提供的第二次攻击正好用来穿过它。"
+    ],
+    recommendedLine: [
+      "立即发动星魂铸升，送墓两只素材并召唤天炉星铠王。",
+      "用天炉星铠王击破虚痕镇压者，利用攻击后成长提高攻击力。",
+      "下回合发动战斗狂热强化王牌，再召唤星井巡游者准备补刀。",
+      "王牌第一击消耗守护刻印、第二击压低生命，最后由星井巡游者直接攻击终结。"
+    ],
     playerHand: ["soulforge-ascent", "starwell-runner", "material-reclaim"],
     playerDeck: ["astral-forge-dragon", "ace-vow-guard", "battle-trance"],
     playerField: ["ember-soul-initiate", "lumen-gearlet"],
     playerGrave: ["spark-runner"],
     aiField: ["void-siege-breaker"],
     aiHand: [],
-    aiDeck: ["guard-sigil"]
+    aiDeck: ["guard-sigil"],
+    storyBeats: [
+      {
+        id: "soulforge-begins",
+        when: { eventType: "CARD_ACTIVATED", cardId: "soulforge-ascent" },
+        speaker: "player",
+        line: "两道星魂化作炉心——发动，星魂铸升！"
+      },
+      {
+        id: "forge-dragon-descends",
+        when: { eventType: "MONSTER_SUMMONED", playerId: "player", cardId: "astral-forge-dragon", summonType: "special" },
+        speaker: "player",
+        line: "披挂群星而生，天炉星铠王，降临！"
+      },
+      {
+        id: "forge-dragon-counterattacks",
+        when: { eventType: "ATTACK_DECLARED", playerId: "player", cardId: "astral-forge-dragon" },
+        speaker: "ai",
+        line: "新生的王牌……已经把战局彻底翻转了！"
+      }
+    ]
   },
   protagonistAceProtection: {
     label: "王牌守护演示",
@@ -1263,7 +1334,27 @@ export const scenarioSetups = {
       source: { owner: "ai", zone: "traps", index: 0 },
       target: { owner: "player", zone: "field", index: 0 },
       effectId: "lunarDominion"
-    }]
+    }],
+    storyBeats: [
+      {
+        id: "challenge-sun-ensnared",
+        when: { eventType: "CARD_ACTIVATED", cardId: "trio-solar-snare" },
+        speaker: "player",
+        line: "日曜越是耀眼，越看不见脚下的诱锁——发动，日冕诱锁！"
+      },
+      {
+        id: "challenge-dominion-broken",
+        when: { eventType: "CARD_DESTROYED", cardId: "trio-moon-dominion" },
+        speaker: "ai",
+        line: "月曜帷幕被撕开了……你一直在等这一刻？"
+      },
+      {
+        id: "challenge-pawn-finale",
+        when: { eventType: "CARD_ACTIVATED", cardId: "trio-final-counter" },
+        speaker: "player",
+        line: "终局不属于最强的怪兽——余烁小卫，接住三曜最后的光！"
+      }
+    ]
   },
   protagonistTrioOmegaStory: {
     label: "终局三曜 · 逆转篇",
