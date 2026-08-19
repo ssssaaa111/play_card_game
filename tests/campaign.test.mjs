@@ -55,7 +55,7 @@ function fakeStorage(initial = null) {
 test("campaign definitions expose a playable star-trial campaign", () => {
   assert.ok(trialCampaign);
   assert.equal(trialCampaign.chapters.length, 6);
-  assert.deepEqual(trialCampaign.chapters.slice(0, 5).map((chapter) => chapter.objectives.length), [2, 2, 2, 2, 2]);
+  assert.deepEqual(trialCampaign.chapters.map((chapter) => chapter.objectives.length), [2, 2, 2, 2, 2, 2]);
   assert.equal(maxCampaignStars(trialCampaign), 18);
   assert.equal(campaignDefinitions.some((campaign) => campaign.id === "star-trial"), true);
 });
@@ -98,7 +98,7 @@ test("objective chapters award one star for victory and one per completed goal",
   assert.equal(starsForCampaignResult(chapter, { win: true, objectiveResults: chapterObjectiveResults(chapter, 0) }), 1);
   assert.equal(starsForCampaignResult(chapter, { win: true, objectiveResults: chapterObjectiveResults(chapter, 1) }), 2);
   assert.equal(starsForCampaignResult(chapter, { win: true, objectiveResults: chapterObjectiveResults(chapter, 2) }), 3);
-  assert.equal(starsForCampaignResult(trialCampaign.chapters[5], {
+  assert.equal(starsForCampaignResult({}, {
     win: true,
     remainingLp: 800,
     maxLp: 1000
@@ -382,7 +382,7 @@ test("live campaign mission view keeps victory and challenge stars explicit", ()
     hidden: true,
     items: []
   });
-  assert.deepEqual(campaignMissionView({ campaign: trialCampaign, chapter: trialCampaign.chapters[5] }), {
+  assert.deepEqual(campaignMissionView({ campaign: trialCampaign, chapter: { id: "legacy" } }), {
     hidden: true,
     items: []
   });
@@ -590,4 +590,40 @@ test("full duel mission tracks the opening disruption and first god wave", () =>
   });
   assert.equal(counterattack.progressText, "2 / 3");
   assert.match(counterattack.hintText, /逐一击破三神/);
+});
+
+test("ascension mission advances through independent sun and moon descents", () => {
+  const chapter = trialCampaign.chapters.find((entry) => entry.id === "trio-ascension");
+  const opening = campaignMissionView({ campaign: trialCampaign, chapter });
+  assert.equal(opening.progressText, "0 / 3");
+  assert.match(opening.hintText, /步骤 1\/3.*钢壁守卫/);
+
+  const tributeBroken = campaignMissionView({
+    campaign: trialCampaign,
+    chapter,
+    objectiveResults: [
+      { id: "force-sun-descent", completed: false, eventIds: [10] },
+      { id: "read-moon-rebuild", completed: false, eventIds: [] }
+    ]
+  });
+  assert.match(tributeBroken.hintText, /正好还剩三只怪兽/);
+
+  const sunComplete = { id: "force-sun-descent", completed: true, eventIds: [10, 20] };
+  const moonRebuild = campaignMissionView({
+    campaign: trialCampaign,
+    chapter,
+    objectiveResults: [
+      sunComplete,
+      { id: "read-moon-rebuild", completed: false, eventIds: [30] }
+    ]
+  });
+  assert.match(moonRebuild.hintText, /月曜会消耗新的三只祭品/);
+
+  const finalPhase = campaignMissionView({
+    campaign: trialCampaign,
+    chapter,
+    objectiveResults: chapterObjectiveResults(chapter)
+  });
+  assert.equal(finalPhase.progressText, "2 / 3");
+  assert.match(finalPhase.hintText, /星曜凑齐第三批祭品前终结/);
 });

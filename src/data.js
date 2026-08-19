@@ -1906,7 +1906,27 @@ export const scenarioSetups = {
     aiGrave: [],
     playerDeck: deckPresets.protagonistTrioOmegaFull.ids,
     aiDeck: deckPresets.trioOmegaRivalAscension.ids,
-    aiDeckShuffleRange: [12, 40]
+    aiDeckShuffleRange: [12, 40],
+    storyBeats: [
+      {
+        id: "ascension-opening-tribute-broken",
+        when: { eventType: "CARD_DESTROYED", cardId: "iron-guardian" },
+        speaker: "player",
+        line: "先削掉一只祭品——这次三曜只能一尊一尊地走上来！"
+      },
+      {
+        id: "ascension-sun-descends",
+        when: { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "trio-sun-judicator", summonType: "tribute" },
+        speaker: "ai",
+        line: "第一轮祭品已经足够。先由日曜裁决你的防线！"
+      },
+      {
+        id: "ascension-moon-descends",
+        when: { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "trio-moon-warden", summonType: "tribute" },
+        speaker: "ai",
+        line: "星火重聚，第二轮祭品完成——月曜，独立降临！"
+      }
+    ]
   },
   target: {
     label: "目标选择",

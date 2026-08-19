@@ -23,13 +23,24 @@ function smokeRuntimeTemplateId(state, runtimeId) {
   return runtimeId;
 }
 
-function assertCampaignObjectivesCompleted(ctx, chapterId) {
+function campaignObjectiveResults(ctx, chapterId) {
   const campaign = campaignDefinitions.find((entry) => entry.id === "star-trial");
   const chapter = campaign?.chapters?.find((entry) => entry.id === chapterId);
-  const results = evaluateScenarioObjectives(chapter?.objectives, {
+  return evaluateScenarioObjectives(chapter?.objectives, {
     events: ctx.state.gameEvents,
     resolveCardId: (runtimeId) => smokeRuntimeTemplateId(ctx.state, runtimeId)
   });
+}
+
+function assertCampaignObjectiveCompleted(ctx, chapterId, objectiveId) {
+  const result = campaignObjectiveResults(ctx, chapterId).find((entry) => entry.id === objectiveId);
+  if (!result?.completed) {
+    throw new Error(`${chapterId}: campaign objective ${objectiveId} incomplete: ${JSON.stringify(result)}. ${smokeDebug(ctx)}`);
+  }
+}
+
+function assertCampaignObjectivesCompleted(ctx, chapterId) {
+  const results = campaignObjectiveResults(ctx, chapterId);
   const incomplete = results.filter((result) => !result.completed);
   if (results.length !== 2 || incomplete.length) {
     throw new Error(`${chapterId}: campaign objectives incomplete: ${JSON.stringify(results)}. ${smokeDebug(ctx)}`);
@@ -972,6 +983,7 @@ async function runTrioStagedTributePlanningBasicSmoke(ctx) {
   if (!decisionLog || decisionLog.cardId !== "spark-split") {
     throw new Error(`${smokeName}: public AI log must explain tribute development. ${smokeDebug(ctx)}`);
   }
+  assertCampaignObjectiveCompleted(ctx, "trio-ascension", "read-moon-rebuild");
   setSmokeStatus("passed", smokeName);
 }
 
@@ -1055,6 +1067,47 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   }
 
   const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
+  await clickSmokeElementTwiceAcrossRender(
+    () => handCard(ctx.els, "seer-call"),
+    `${smokeName}: use seer call before committing to battle`
+  );
+  await waitForSmoke(
+    () => handCard(ctx.els, "trio-ember-pawn") && handCard(ctx.els, "trio-final-counter"),
+    `${smokeName}: seer call exposes later low-star resources. ${smokeDebug(ctx)}`,
+    9000
+  );
+  clickSmokeElement(handCard(ctx.els, "spark-runner"), `${smokeName}: summon spark-runner`);
+  clickSmokeElement(fieldSlot(ctx.els, "player", 0), `${smokeName}: choose player monster slot 1`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "spark-runner") && Boolean(handCard(ctx.els, "battle-trance")),
+    `${smokeName}: spark-runner draws the battle setup card. ${smokeDebug(ctx)}`,
+    9000
+  );
+  clickSmokeElement(handCard(ctx.els, "battle-trance"), `${smokeName}: select battle trance`);
+  await waitForSmoke(
+    () => ctx.state.pendingTarget?.effect === "battleTrance" &&
+      Boolean(ctx.state.pendingTarget?.selectedTarget) &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: battle trance selects spark-runner. ${smokeDebug(ctx)}`
+  );
+  clickSmokeElement(ctx.els.choiceConfirmBtn, `${smokeName}: confirm battle trance`);
+  await waitForSmoke(
+    () => (ctx.state.player.field[0]?.tempAtk || 0) === 200,
+    `${smokeName}: spark-runner gains enough attack to break one tribute. ${smokeDebug(ctx)}`,
+    9000
+  );
+  clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), `${smokeName}: select spark-runner attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"),
+    `${smokeName}: iron guardian becomes a legal target. ${smokeDebug(ctx)}`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), `${smokeName}: destroy one tribute body`);
+  await waitForSmoke(
+    () => !ctx.state.ai.field.some((card) => card?.id === "iron-guardian") &&
+      ctx.state.ai.field.filter(Boolean).length === 3,
+    `${smokeName}: exactly three tribute bodies remain. ${smokeDebug(ctx)}`,
+    12000
+  );
   await finishPlayerTurn(ctx);
   await waitForSmoke(
     () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
@@ -1078,10 +1131,15 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue sun reveal`);
   await waitForSmoke(
     () => ctx.els.duelHint?.title.includes("第一神已降临") &&
-      ctx.els.duelHint?.title.includes("下一次降神重建 1/3"),
-    `${smokeName}: objective advances to the public 1/3 rebuild after sun. ${smokeDebug(ctx)}`,
+      ctx.els.duelHint?.title.includes("下一次降神重建 0/3"),
+    `${smokeName}: objective advances to the public 0/3 rebuild after all remaining bodies become sun tributes. ${smokeDebug(ctx)}`,
     6000
   );
+  assertCampaignObjectiveCompleted(ctx, "trio-ascension", "force-sun-descent");
+  if (!ctx.state.storyBeatsFired?.["ascension-opening-tribute-broken"] ||
+      !ctx.state.storyBeatsFired?.["ascension-sun-descends"]) {
+    throw new Error(`${smokeName}: opening and first-descent story beats must fire. ${smokeDebug(ctx)}`);
+  }
   setSmokeStatus("passed", smokeName);
 }
 

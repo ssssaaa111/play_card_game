@@ -185,7 +185,39 @@ export const campaignDefinitions = [
           }
         ]
       },
-      { id: "trio-ascension", scenarioId: "protagonistTrioOmegaAscension", label: "三神·逐神降临", phase: "终局" }
+      {
+        id: "trio-ascension",
+        scenarioId: "protagonistTrioOmegaAscension",
+        label: "三神·逐神降临",
+        phase: "终局",
+        winHint: "月曜已经独立降临；利用下一段建设回合完成融合或墓地回收，在星曜凑齐第三批祭品前终结长局。",
+        objectives: [
+          {
+            id: "force-sun-descent",
+            label: "削减一只祭品后，迫使日曜独立三祭品降临",
+            hint: "先用先知召见补牌，再召唤星火信使并用战斗狂热强化；击破钢壁守卫后结束回合。",
+            progressHints: {
+              1: "祭品候选已削减；对手正好还剩三只怪兽，结束回合并观察日曜独立降临。"
+            },
+            sequence: [
+              { eventType: "CARD_DESTROYED", cardId: "iron-guardian" },
+              { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "trio-sun-judicator", summonType: "tribute" }
+            ]
+          },
+          {
+            id: "read-moon-rebuild",
+            label: "识破星火分裂，并确认月曜独立降临",
+            hint: "日曜落地后观察公开祭品数；对手会用星火分裂补出两个衍生物，重新凑齐三只祭品。",
+            progressHints: {
+              1: "星火分裂已经补出祭品；月曜会消耗新的三只祭品独立登场，不会把星曜一并带出。"
+            },
+            sequence: [
+              { eventType: "CARD_ACTIVATED", playerId: "ai", cardId: "spark-split" },
+              { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "trio-moon-warden", summonType: "tribute" }
+            ]
+          }
+        ]
+      }
     ],
     rewards: [
       { id: "trialist", atStars: 6, kind: "title", title: "试炼者", text: "累积 6 星" },
