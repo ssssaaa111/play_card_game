@@ -77,6 +77,11 @@ test("AI chooses sunflare support targets from public information only", () => {
     attacker: sun,
     traps: [concealedTargets[0], spell("lunarDominion", { id: "trio-moon-dominion" })]
   }), 1);
+  assert.equal(chooseAiAfterAttackSupportTarget({
+    attacker: sun,
+    traps: [trap({ id: "guard-sigil", uid: "fresh-slot" }), spell("lunarDominion", { id: "trio-moon-dominion" })],
+    preferredCardUid: "fresh-slot"
+  }), 0, "the latest public slot can be targeted without revealing its trap identity");
   assert.equal(chooseAiAfterAttackSupportTarget({ attacker: monster(), traps: concealedTargets }), -1);
 });
 
@@ -877,6 +882,22 @@ test("scripted pressure AI protects trio pressure before generic traps", () => {
   assert.equal(action.card.id, "mirror-snare");
 });
 
+test("backrow counter plan prioritizes chain protection over the generic scripted trap order", () => {
+  const action = chooseAiSetTrapAction({
+    hand: [
+      trap({ id: "mirror-snare" }),
+      trap({ id: "chain-nullifier" })
+    ],
+    traps: [null],
+    aiStyle: "scriptedPressure",
+    counterPlan: { id: "guard-backrow", turnGoal: "guardBackrow" },
+    canSetTrap: () => true
+  });
+
+  assert.equal(action?.card.id, "chain-nullifier");
+  assert.equal(action?.reason, "counterChainProtection");
+});
+
 test("scripted pressure AI can fill its available backrow while other styles set once", () => {
   const traps = [null, trap({ id: "set-card" }), null, null, null];
 
@@ -1159,6 +1180,54 @@ test("tribute counter plan can prepare bodies before the next god reaches hand",
     counterPlan,
     canSummon: () => false
   }), "buildTributes");
+});
+
+test("phase-three counter plan accelerates offensive spells before defensive support", () => {
+  const star = monster({
+    id: "trio-star-herald",
+    atk: 2400,
+    def: 1400,
+    archetype: "三曜神格",
+    afterAttack: "starDoomCharge"
+  });
+  const owner = {
+    lp: 4000,
+    shield: 0,
+    directAttacks: 0,
+    hand: [spell("shield800", { id: "star-shield" }), spell("battleTrance", { id: "battle-trance" })],
+    deck: [],
+    field: [star, null, null, null, null],
+    traps: [null, null, null, null, null]
+  };
+  const rival = {
+    lp: 2600,
+    shield: 0,
+    hand: [],
+    deck: [],
+    field: [monster({ mode: "defense", def: 1900 }), null, null, null, null],
+    traps: []
+  };
+  const counterPlan = { id: "rush-finale", turnGoal: "finishPressure" };
+  const turnGoal = chooseAiTurnGoal({
+    owner,
+    rival,
+    aiStyle: "scriptedPressure",
+    counterPlan,
+    canSummon: () => false
+  });
+  const action = chooseAiSpellAction({
+    hand: owner.hand,
+    owner,
+    rival,
+    aiStyle: "scriptedPressure",
+    turnGoal,
+    timing: "beforeSummon",
+    canActivateSpell: () => true
+  });
+
+  assert.equal(turnGoal, "finishPressure");
+  assert.equal(action?.card.id, "battle-trance");
+  assert.equal(action?.reason, "finaleAcceleration");
 });
 
 test("scripted pressure AI uses split tokens to build tribute bodies for a staged trio summon", () => {

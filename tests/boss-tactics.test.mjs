@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { trioBossCounterPlan } from "../src/boss-tactics.js";
+import { trioBossCounterPlan, trioBossPhase } from "../src/boss-tactics.js";
 
 const cards = {
   "moon-runtime": { id: "trio-moon-warden", type: "monster" },
+  "sun-runtime": { id: "trio-sun-judicator", type: "monster" },
   "tribute-runtime": { id: "nova-squire", type: "monster" },
   "trap-runtime": { id: "mirror-snare", type: "trap" }
 };
@@ -58,4 +59,59 @@ test("trio boss discards stale signals when a new player turn begins", () => {
   });
 
   assert.equal(plan, null);
+});
+
+test("trio boss derives its public phase from independent tribute-summoned gods", () => {
+  assert.equal(trioBossPhase({
+    events: [
+      { id: 12, type: "MONSTER_SUMMONED", playerId: "ai", summonType: "tribute", cardId: "sun-runtime" },
+      { id: 13, type: "MONSTER_SUMMONED", playerId: "ai", summonType: "tribute", cardId: "moon-runtime" }
+    ],
+    resolveCard
+  }), 3);
+  assert.equal(trioBossPhase({ events: [], resolveCard, phase: 2 }), 2);
+});
+
+test("trio boss reacts to a newly set slot without inspecting the hidden card", () => {
+  const plan = trioBossCounterPlan({
+    events: [
+      { id: 14, type: "TURN_STARTED", playerId: "player" },
+      { id: 15, type: "TRAP_SET", playerId: "player", cardId: "fresh-hidden-runtime" }
+    ],
+    resolveCard,
+    phase: 1
+  });
+
+  assert.equal(plan?.id, "guard-backrow");
+  assert.equal(plan?.targetCardId, "fresh-hidden-runtime");
+  assert.match(plan?.counterHint || "", /断链/);
+});
+
+test("trio boss changes counter priority with each finale phase", () => {
+  const events = [
+    { id: 16, type: "TURN_STARTED", playerId: "player" },
+    { id: 17, type: "CARD_DESTROYED", playerId: "ai", cardId: "tribute-runtime" },
+    { id: 18, type: "ATTACK_DECLARED", playerId: "player", targetCardId: "moon-runtime" },
+    { id: 19, type: "TRAP_SET", playerId: "player", cardId: "fresh-hidden-runtime" }
+  ];
+
+  assert.equal(trioBossCounterPlan({ events, resolveCard, phase: 1 })?.id, "guard-backrow");
+  assert.equal(trioBossCounterPlan({ events, resolveCard, phase: 2 })?.id, "rebuild-tributes");
+  assert.equal(trioBossCounterPlan({ events, resolveCard, phase: 3 })?.id, "fortify-gods");
+});
+
+test("phase three boss publishes finish pressure only inside the effective-life line", () => {
+  const shared = {
+    events: [{ id: 20, type: "TURN_STARTED", playerId: "player" }],
+    resolveCard,
+    phase: 3,
+    ai: { field: [{ id: "trio-star-herald", type: "monster", mode: "attack" }] }
+  };
+
+  const rush = trioBossCounterPlan({ ...shared, player: { lp: 2400, shield: 300 } });
+  const shielded = trioBossCounterPlan({ ...shared, player: { lp: 2400, shield: 500 } });
+
+  assert.equal(rush?.id, "rush-finale");
+  assert.equal(rush?.turnGoal, "finishPressure");
+  assert.equal(shielded, null);
 });

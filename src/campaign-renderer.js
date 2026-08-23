@@ -267,6 +267,12 @@ export function renderCampaignMission(doc, elements, view) {
       intent.dataset.bossIntent = view.bossPhase.intent.id;
       intent.textContent = `AI 意图 · ${view.bossPhase.intent.label}：${view.bossPhase.intent.text}`;
       bossPhase.append(intent);
+      if (view.bossPhase.intent.counterHint) {
+        const counter = doc.createElement("b");
+        counter.className = "campaign-boss-counter";
+        counter.textContent = `破解 · ${view.bossPhase.intent.counterHint}`;
+        bossPhase.append(counter);
+      }
     }
   }
 

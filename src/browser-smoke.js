@@ -1161,6 +1161,9 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
     `${smokeName}: destroying a tribute publishes the boss rebuild intent. ${smokeDebug(ctx)}`,
     6000
   );
+  if (!ctx.els.campaignMission?.querySelector(".campaign-boss-counter")?.textContent.includes("继续清理衍生物")) {
+    throw new Error(`${smokeName}: campaign rail must publish a concrete counter hint. ${smokeDebug(ctx)}`);
+  }
   if (!(ctx.state.log || []).some((entry) =>
     logEntryMessage(entry).includes("Boss 反制意图：祭品重建")
   )) {
@@ -1265,6 +1268,73 @@ async function runTrioAdaptiveCounterBasicSmoke(ctx) {
   if (!ctx.state.player.field.some((card) => card?.uid === attacker.uid) ||
       !(ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("Boss 识破直攻路线"))) {
     throw new Error(`${smokeName}: defense switch must answer the surviving 2300 ATK threat and be public. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioBackrowCounterBasicSmoke(ctx) {
+  const smokeName = "trio-backrow-counter-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioBackrowCounterPlanning");
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}: select the new trap`);
+  clickSmokeElement(trapSlot(ctx.els, "player", 0), `${smokeName}: set it in the first support slot`);
+  await waitForSmoke(
+    () => ctx.state.player.traps.some((card) => card?.id === "trio-solar-snare") &&
+      (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("Boss 反制意图：后场戒备")),
+    `${smokeName}: the real set click publishes the backrow intent. ${smokeDebug(ctx)}`,
+    8000
+  );
+  const freshTrap = ctx.state.player.traps.find((card) => card?.id === "trio-solar-snare");
+  if (!(ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("先用低价值陷阱逼出断链"))) {
+    throw new Error(`${smokeName}: the public log must include the backrow counter hint. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.ai.traps.some((card) => card?.id === "chain-nullifier") &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "AFTER_ATTACK_TARGET_LOCKED" && event.targetCardId === freshTrap?.uid
+      ),
+    `${smokeName}: chain protection is set before sun locks the latest public slot. ${smokeDebug(ctx)}`,
+    26000
+  );
+  if (!ctx.state.ai.hand.some((card) => card?.id === "mirror-snare") ||
+      !(ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("为最新后场戒备建立断链保护"))) {
+    throw new Error(`${smokeName}: chain protection must outrank mirror snare and explain itself. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioRushFinaleBasicSmoke(ctx) {
+  const smokeName = "trio-rush-finale-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioRushFinalePlanning");
+  if (!(ctx.state.log || []).some((entry) =>
+    logEntryMessage(entry).includes("Boss 反制意图：抢攻终结") &&
+    logEntryMessage(entry).includes("先抬高护盾")
+  )) {
+    throw new Error(`${smokeName}: phase-three pressure and its answer must be public. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.classList.contains("show") &&
+      ctx.els.aiRevealTitle?.textContent.includes("战斗狂热"),
+    `${smokeName}: offensive acceleration is revealed before defensive support. ${smokeDebug(ctx)}`,
+    18000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue battle trance reveal`);
+  await waitForSmoke(
+    () => (ctx.state.ai.field.find((card) => card?.id === "trio-star-herald")?.tempAtk || 0) === 200 &&
+      (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("把资源转为立即进攻")),
+    `${smokeName}: battle trance resolves as the explained finale acceleration. ${smokeDebug(ctx)}`,
+    9000
+  );
+  const activations = (ctx.state.gameEvents || []).filter((event) =>
+    event.type === "CARD_ACTIVATED" && event.playerId === "ai"
+  );
+  if (!eventReferencesTemplate(activations[0], "battle-trance")) {
+    throw new Error(`${smokeName}: battle trance must be the first activated support. ${smokeDebug(ctx)}`);
   }
   setSmokeStatus("passed", smokeName);
 }
@@ -9830,6 +9900,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-live-turn-replanning-basic": runTrioLiveTurnReplanningBasicSmoke,
     "trio-omega-ascension-opening-basic": runTrioOmegaAscensionOpeningBasicSmoke,
     "trio-adaptive-counter-basic": runTrioAdaptiveCounterBasicSmoke,
+    "trio-backrow-counter-basic": runTrioBackrowCounterBasicSmoke,
+    "trio-rush-finale-basic": runTrioRushFinaleBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "trio-trap-reserve-planning-basic": runTrioTrapReservePlanningBasicSmoke,
     "trio-direct-trap-planning-basic": runTrioDirectTrapPlanningBasicSmoke,

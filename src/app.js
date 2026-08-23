@@ -3886,9 +3886,11 @@ async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
   if (!attacker || attacker.used) return;
   let afterAttackTargetCardId = options.afterAttackTargetCardId || null;
   if (!afterAttackTargetCardId && owner.owner === "ai") {
+    const counterPlan = currentBossCounterPlan();
     const supportTargetIndex = chooseAiAfterAttackSupportTarget({
       attacker,
-      traps: rival.traps
+      traps: rival.traps,
+      preferredCardUid: counterPlan?.id === "guard-backrow" ? counterPlan.targetCardId : ""
     });
     if (supportTargetIndex >= 0) {
       afterAttackTargetCardId = runtimeCardId(rival.traps[supportTargetIndex]);
@@ -4719,6 +4721,11 @@ async function aiPlaySpells({
         `对手发动「${playedCard.name}」补充祭品候选，为下一次三祭品降神做准备。`,
         cardLogMeta(playedCard, { actor: "ai", type: "decision" })
       );
+    } else if (action.reason === "finaleAcceleration") {
+      addLog(
+        `Boss 在终战压力线发动「${playedCard.name}」，把资源转为立即进攻。`,
+        cardLogMeta(playedCard, { actor: "ai", type: "decision" })
+      );
     }
     await sleep(1650);
     action = chooseAiSpellAction({
@@ -4853,10 +4860,17 @@ function aiSetTraps({ turnGoal = "pressure", getTurnGoal = null } = {}) {
       hand: state.ai.hand,
       traps: state.ai.traps,
       aiStyle: state.aiStyle,
+      counterPlan: currentBossCounterPlan(),
       canSetTrap: (_card, handIndex, trapIndex) =>
         explainSetTrapFromUiState(state, "ai", handIndex, trapIndex).ok
     });
     if (!action || !setTrap(state.ai, action.handIndex, action.trapIndex)) break;
+    if (action.reason === "counterChainProtection") {
+      addLog(
+        `Boss 优先盖放「${action.card.name}」，为最新后场戒备建立断链保护。`,
+        cardLogMeta(action.card, { actor: "ai", type: "decision" })
+      );
+    }
     setCount += 1;
   }
   return setCount;
@@ -5126,10 +5140,14 @@ function currentCampaignMission() {
 }
 
 function currentBossCounterPlan() {
-  if (!scenarioSetups[state.scenarioId]?.adaptiveBossCounter) return null;
+  const scenario = scenarioSetups[state.scenarioId];
+  if (!scenario?.adaptiveBossCounter) return null;
   return trioBossCounterPlan({
     events: state.gameEvents,
-    resolveCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId)
+    resolveCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId),
+    phase: scenario.adaptiveBossPhase,
+    player: state.player,
+    ai: state.ai
   });
 }
 
@@ -5152,7 +5170,8 @@ function syncBossCounterFeedback(intent) {
   const key = `${intent.id}:${intent.eventId}`;
   if (announced[key]) return;
   announced[key] = true;
-  addLog(`Boss 反制意图：${intent.label}。${intent.text}`);
+  const counterText = intent.counterHint ? ` 破解提示：${intent.counterHint}` : "";
+  addLog(`Boss 反制意图：${intent.label}。${intent.text}${counterText}`);
   cue(`Boss 反制意图：${intent.label}`);
 }
 
