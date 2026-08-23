@@ -9320,6 +9320,103 @@ async function runSettingsMenuBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
+  const smokeName = "responsive-workbench-wide-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioDirectTrapPlanning");
+
+  if (!window.matchMedia("(min-width: 1440px) and (min-height: 820px)").matches) {
+    throw new Error(`${smokeName}: expected spacious viewport, received ${window.innerWidth}x${window.innerHeight}`);
+  }
+
+  const arena = document.querySelector(".arena.duel-table");
+  const field = document.querySelector(".arena.duel-table .field");
+  const detailDrawer = document.querySelector("#detailDrawer");
+  const detailName = document.querySelector("#detailName");
+  const detailMeta = document.querySelector("#detailMeta");
+  const detailAttackBtn = document.querySelector("#detailAttackBtn");
+  const detailSelectionCancelBtn = document.querySelector("#detailSelectionCancelBtn");
+  const timelineDrawer = document.querySelector("#timelineDrawer");
+  const detailToggle = document.querySelector("#detailDrawerToggle");
+  const timelineToggle = document.querySelector("#timelineDrawerToggle");
+  const utilityToggle = document.querySelector("#utilityMenuToggle");
+  const utilityMenu = document.querySelector("#utilityMenu");
+  const requiredRegions = [arena, field, detailDrawer, detailName, detailMeta, detailAttackBtn, detailSelectionCancelBtn, timelineDrawer, detailToggle, timelineToggle, utilityToggle, utilityMenu];
+  if (requiredRegions.some((element) => !element)) {
+    throw new Error(`${smokeName}: required responsive regions are missing`);
+  }
+
+  await waitForSmoke(
+    () => document.body.dataset.workspaceLayout === "expanded" &&
+      detailDrawer.classList.contains("is-docked") &&
+      timelineDrawer.classList.contains("is-docked") &&
+      detailDrawer.getAttribute("aria-hidden") === "false" &&
+      timelineDrawer.getAttribute("aria-hidden") === "false",
+    `${smokeName}: detail and timeline workbench stays visible`
+  );
+  if (!detailToggle.hidden || !timelineToggle.hidden || !utilityToggle.hidden || utilityMenu.hidden) {
+    throw new Error(`${smokeName}: wide layout should expose panels and settings without secondary toggles`);
+  }
+  for (const button of [ctx.els.soundBtn, ctx.els.musicBtn, ctx.els.voiceBtn]) {
+    if (!button || !button.textContent.includes("关")) {
+      throw new Error(`${smokeName}: browser test audio should remain disabled: ${button?.textContent || "missing"}`);
+    }
+  }
+
+  const fieldRect = field.getBoundingClientRect();
+  const arenaRect = arena.getBoundingClientRect();
+  const detailRect = detailDrawer.getBoundingClientRect();
+  const timelineRect = timelineDrawer.getBoundingClientRect();
+  if (detailRect.width < 420 || timelineRect.width < 520 || detailRect.height < 160 || timelineRect.height < 160) {
+    throw new Error(`${smokeName}: docked workbench is too small (${detailRect.width}x${detailRect.height}; ${timelineRect.width}x${timelineRect.height})`);
+  }
+  if (fieldRect.bottom > Math.min(detailRect.top, timelineRect.top) + 2 ||
+      detailRect.left < arenaRect.left || timelineRect.right > arenaRect.right + 1 ||
+      detailRect.bottom > arenaRect.bottom + 1 || timelineRect.bottom > arenaRect.bottom + 1) {
+    throw new Error(`${smokeName}: docked workbench overlaps the battlefield or leaves the arena`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
+  await waitForSmoke(
+    () => detailName.textContent === "星轨枪兵" &&
+      !ctx.els.modeBtn.disabled &&
+      !detailAttackBtn.hidden &&
+      !detailSelectionCancelBtn.hidden &&
+      !ctx.els.fieldActionBar.hidden,
+    `${smokeName}: selected card exposes direct actions in the visible workbench`
+  );
+  const detailActionsRect = detailDrawer.querySelector(".detail-actions")?.getBoundingClientRect();
+  if (!detailActionsRect || detailActionsRect.width < 80 || detailActionsRect.right > detailRect.right + 1) {
+    throw new Error(`${smokeName}: selected card actions are not contained in the center workbench`);
+  }
+  clickSmokeElement(detailAttackBtn, `${smokeName}: enter attack targeting from docked actions`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex !== null && detailAttackBtn.textContent.includes("选目标"),
+    `${smokeName}: docked attack action opens target selection`
+  );
+  clickSmokeElement(detailSelectionCancelBtn, `${smokeName}: cancel attack targeting from docked actions`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === null && ctx.state.selected?.zone === "playerField",
+    `${smokeName}: docked cancel action restores the card selection`
+  );
+  clickSmokeElement(ctx.els.modeBtn, `${smokeName}: use docked mode action`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "star-lancer" && card.mode === "defense") &&
+      detailMeta.textContent.includes("守备表示"),
+    `${smokeName}: docked card action and inspector remain synchronized`
+  );
+
+  if (!ctx.els.timeline.textContent.trim()) {
+    throw new Error(`${smokeName}: battle log should be readable without opening a drawer`);
+  }
+  clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: pause from direct settings row`);
+  await waitForSmoke(() => ctx.state.paused, `${smokeName}: direct pause control works`);
+  clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: resume from direct settings row`);
+  await waitForSmoke(() => !ctx.state.paused, `${smokeName}: direct resume control works`);
+
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioGauntletPreviewBasicSmoke(ctx) {
   const smokeName = "trio-gauntlet-preview-basic";
   setSmokeStatus("running", smokeName);
@@ -10076,6 +10173,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "campaign-objective-tracker-basic": runCampaignObjectiveTrackerBasicSmoke,
     "campaign-reward-unlock-basic": runCampaignRewardUnlockBasicSmoke,
     "settings-menu-basic": runSettingsMenuBasicSmoke,
+    "responsive-workbench-wide-basic": runResponsiveWorkbenchWideBasicSmoke,
     "trio-gauntlet-preview-basic": runTrioGauntletPreviewBasicSmoke,
     "objective-hierarchy-mobile-basic": runObjectiveHierarchyMobileBasicSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,

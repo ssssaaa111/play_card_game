@@ -1139,7 +1139,7 @@ test("app uses extracted card details", () => {
   const html = readProjectFile("index.html");
 
   assert.match(app, /from '\.\/card-detail\.js'/);
-  assert.match(app, /cardInspectorViewModel\(card, \{ effectMarkers: focusedCardEffectMarkers\(card\) \}\)/);
+  assert.match(app, /cardInspectorViewModel\(currentCard, \{ effectMarkers: focusedCardEffectMarkers\(currentCard\) \}\)/);
   assert.match(app, /cardInspectorViewModel\(cardOrId, \{ effectMarkers: focusedCardEffectMarkers/);
   assert.doesNotMatch(app, /renderCurrentLog\(\{/);
   assert.doesNotMatch(html, /id="log"/);

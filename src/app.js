@@ -396,6 +396,8 @@ const els = {
   battlePreview: document.querySelector("#battlePreview"),
   handConfirmBtn: document.querySelector("#handConfirmBtn"),
   handCancelBtn: document.querySelector("#handCancelBtn"),
+  detailAttackBtn: document.querySelector("#detailAttackBtn"),
+  detailSelectionCancelBtn: document.querySelector("#detailSelectionCancelBtn"),
   modeBtn: document.querySelector("#modeBtn"),
   fieldActionBar: document.querySelector("#fieldActionBar"),
   fieldActionName: document.querySelector("#fieldActionName"),
@@ -5224,11 +5226,19 @@ function focusedCardEffectMarkers(card) {
   return [];
 }
 
+function renderFocusedCardInspector() {
+  if (!state.focusedCard) return false;
+  const runtimeId = state.focusedCard.uid || state.focusedCard.engineId;
+  const currentCard = runtimeId ? findRuntimeCard(runtimeId)?.card || state.focusedCard : state.focusedCard;
+  const view = cardInspectorViewModel(currentCard, { effectMarkers: focusedCardEffectMarkers(currentCard) });
+  if (!view) return false;
+  state.focusedCard = currentCard;
+  return renderCardInspector(document, cardInspectorElements, view);
+}
+
 function showDetail(card) {
-  const view = cardInspectorViewModel(card, { effectMarkers: focusedCardEffectMarkers(card) });
-  if (!view) return;
   state.focusedCard = card;
-  renderCardInspector(document, cardInspectorElements, view);
+  renderFocusedCardInspector();
 }
 
 function openCardDetail(cardOrId) {
@@ -5701,6 +5711,7 @@ function render(animationKey = "") {
   renderHand(animationKey);
   renderGraveTargets();
   renderTimeline();
+  renderFocusedCardInspector();
   renderBattlePreview();
   renderAiReveal();
   playScenarioStoryBeats();
@@ -6306,6 +6317,8 @@ els.choiceConfirmBtn.addEventListener("click", () => {
 });
 els.choiceCancelBtn.addEventListener("click", cancelSelectedHandAction);
 els.modeBtn.addEventListener("click", toggleSelectedMode);
+els.detailAttackBtn?.addEventListener("click", prepareSelectedMonsterAttack);
+els.detailSelectionCancelBtn?.addEventListener("click", cancelSelectedMonsterAction);
 els.fieldAttackBtn?.addEventListener("click", prepareSelectedMonsterAttack);
 els.fieldModeBtn?.addEventListener("click", toggleSelectedMode);
 els.fieldDetailBtn?.addEventListener("click", openSelectedMonsterDetail);

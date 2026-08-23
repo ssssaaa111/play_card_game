@@ -1,4 +1,6 @@
 const COMPACT_WORKSPACE_QUERY = "(max-width: 1040px)";
+const SPACIOUS_SETTINGS_QUERY = "(min-width: 1440px) and (min-height: 680px)";
+const SPACIOUS_WORKSPACE_QUERY = "(min-width: 1440px) and (min-height: 820px)";
 const EMPTY_DETAIL_TITLE = "选择一张卡";
 
 function setControlExpanded(control, expanded) {
@@ -43,6 +45,8 @@ export function createDuelTableController(documentRef = document) {
   const setupReadySummary = documentRef.querySelector("#setupReadySummary");
   const setupReadyMode = documentRef.querySelector("#setupReadyMode");
   const compactWorkspace = window.matchMedia(COMPACT_WORKSPACE_QUERY);
+  const spaciousSettings = window.matchMedia(SPACIOUS_SETTINGS_QUERY);
+  const spaciousWorkspace = window.matchMedia(SPACIOUS_WORKSPACE_QUERY);
   const drawers = {
     detail: { root: detailDrawer, toggle: detailToggle },
     timeline: { root: timelineDrawer, toggle: timelineToggle }
@@ -52,12 +56,14 @@ export function createDuelTableController(documentRef = document) {
   let chainHistoryVisible = Boolean(chainHistoryToggle && !chainHistoryToggle.hidden);
 
   function setUtilityMenu(open) {
-    const expanded = Boolean(open);
+    const expanded = spaciousSettings.matches || Boolean(open);
     if (utilityMenu) utilityMenu.hidden = !expanded;
+    if (utilityToggle) utilityToggle.hidden = spaciousSettings.matches;
     setControlExpanded(utilityToggle, expanded);
   }
 
   function setDrawer(name, open) {
+    if (spaciousWorkspace.matches) return false;
     const next = drawers[name];
     if (!next?.root) return false;
     const expanded = Boolean(open);
@@ -85,6 +91,26 @@ export function createDuelTableController(documentRef = document) {
   function toggleDrawer(name) {
     setUtilityMenu(false);
     setDrawer(name, openDrawer !== name);
+  }
+
+  function syncResponsiveWorkspace() {
+    const spacious = spaciousWorkspace.matches;
+    if (body) body.dataset.workspaceLayout = spacious ? "expanded" : "drawer";
+    for (const drawer of Object.values(drawers)) {
+      drawer.root?.classList.toggle("is-docked", spacious);
+      drawer.root?.classList.toggle("is-open", spacious);
+      drawer.root?.setAttribute("aria-hidden", String(!spacious));
+      if (drawer.toggle) {
+        drawer.toggle.hidden = spacious;
+        setControlExpanded(drawer.toggle, spacious);
+      }
+    }
+    for (const close of [detailClose, timelineClose]) {
+      if (close) close.hidden = spacious;
+    }
+    openDrawer = "";
+    if (body) body.dataset.workspaceDrawer = spacious ? "docked" : "none";
+    setUtilityMenu(false);
   }
 
   function syncTimelineBadge() {
@@ -247,7 +273,7 @@ export function createDuelTableController(documentRef = document) {
   });
 
   utilityMenu?.addEventListener("click", (event) => {
-    if (event.target.closest("button")) setUtilityMenu(false);
+    if (!spaciousSettings.matches && event.target.closest("button")) setUtilityMenu(false);
   });
 
   detailToggle?.addEventListener("click", () => toggleDrawer("detail"));
@@ -260,7 +286,7 @@ export function createDuelTableController(documentRef = document) {
   hand?.addEventListener("click", closeCompactDrawer);
 
   documentRef.addEventListener("pointerdown", (event) => {
-    if (!utilityMenu || utilityMenu.hidden) return;
+    if (spaciousSettings.matches || !utilityMenu || utilityMenu.hidden) return;
     if (utilityMenu.contains(event.target) || utilityToggle?.contains(event.target)) return;
     setUtilityMenu(false);
   });
@@ -343,14 +369,15 @@ export function createDuelTableController(documentRef = document) {
     select.addEventListener("change", setupChangeHandler);
   }
 
-  compactWorkspace.addEventListener("change", () => {
-    if (openDrawer) setDrawer(openDrawer, false);
-    setUtilityMenu(false);
-  });
+  const responsiveChangeHandler = () => syncResponsiveWorkspace();
+  compactWorkspace.addEventListener("change", responsiveChangeHandler);
+  spaciousSettings.addEventListener("change", responsiveChangeHandler);
+  spaciousWorkspace.addEventListener("change", responsiveChangeHandler);
 
   setUtilityMenu(false);
   setDrawer("detail", false);
   setDrawer("timeline", false);
+  syncResponsiveWorkspace();
   syncTimelineBadge();
   setTimelineFilter("all");
   syncDetailDrawer();
@@ -368,6 +395,9 @@ export function createDuelTableController(documentRef = document) {
       chainHistoryObserver.disconnect();
       attentionObserver.disconnect();
       setupObserver.disconnect();
+      compactWorkspace.removeEventListener("change", responsiveChangeHandler);
+      spaciousSettings.removeEventListener("change", responsiveChangeHandler);
+      spaciousWorkspace.removeEventListener("change", responsiveChangeHandler);
       for (const select of setupSelects) select.removeEventListener("change", setupChangeHandler);
       for (const button of timelineFilters) button.removeEventListener("click", timelineFilterHandler);
     },

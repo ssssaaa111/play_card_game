@@ -10,16 +10,17 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260820-boss-phase-reward"/);
-  assert.match(html, /src="src\/app\.js\?v=20260820-boss-phase-reward"/);
+  assert.match(html, /href="duel-table\.css\?v=20260824-responsive-workbench"/);
+  assert.match(html, /src="src\/app\.js\?v=20260824-responsive-workbench"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
   assert.match(html, /id="detailDrawerToggle"[\s\S]*aria-controls="detailDrawer"/);
   assert.match(html, /id="timelineDrawerToggle"[\s\S]*aria-controls="timelineDrawer"/);
   assert.match(html, /id="fieldActionBar"[\s\S]*id="fieldAttackBtn"[\s\S]*id="fieldModeBtn"[\s\S]*id="fieldDetailBtn"[\s\S]*id="fieldCancelBtn"/);
+  assert.match(html, /class="detail-actions"[\s\S]*id="detailAttackBtn"[\s\S]*id="modeBtn"[\s\S]*id="detailBtn"[\s\S]*id="detailSelectionCancelBtn"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260819-settings-menu"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260824-responsive-workbench"/);
 });
 
 test("campaign chapters expose a live mission rail without stealing field clicks", () => {
@@ -86,13 +87,33 @@ test("field selection exposes persistent target feedback and blank-area cancella
   assert.match(renderer, /selectionChip\.textContent = "当前操作"/);
 });
 
-test("low-frequency media and session controls live behind one utility menu", () => {
+test("settings stay compact on small screens and become direct controls when space allows", () => {
   const html = read("index.html");
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
 
   assert.match(html, /id="utilityMenuToggle"[\s\S]*aria-controls="utilityMenu"/);
   assert.match(html, /id="utilityMenu"[\s\S]*id="guideBtn"[\s\S]*id="pauseBtn"/);
   assert.match(html, /id="utilityMenu"[\s\S]*id="soundBtn"[\s\S]*id="musicBtn"[\s\S]*id="voiceBtn"/);
   assert.match(html, /class="actions" aria-label="回合操作"[\s\S]*id="skipAttackBtn"[\s\S]*id="endTurnBtn"/);
+  assert.match(css, /@media \(min-width: 1440px\) and \(min-height: 680px\)[\s\S]*\.utility-toggle\s*\{[\s\S]*display: none;[\s\S]*\.utility-menu:not\(\[hidden\]\)\s*\{[\s\S]*display: flex;/);
+  assert.match(controller, /const SPACIOUS_SETTINGS_QUERY = "\(min-width: 1440px\) and \(min-height: 680px\)"/);
+  assert.match(controller, /const expanded = spaciousSettings\.matches \|\| Boolean\(open\)/);
+});
+
+test("spacious screens dock details actions and battle logs in a central workbench", () => {
+  const css = read("duel-table.css");
+  const controller = read("src/duel-table.js");
+  const renderer = read("src/control-renderer.js");
+
+  assert.match(css, /@media \(min-width: 1440px\) and \(min-height: 820px\)[\s\S]*--spacious-workbench-height/);
+  assert.match(css, /@media \(min-width: 1440px\) and \(min-height: 820px\)[\s\S]*\.workspace-drawer\.is-docked[\s\S]*visibility: visible;[\s\S]*pointer-events: auto;/);
+  assert.match(css, /\.detail-drawer \{[\s\S]*width: calc\(44% - 15px\);[\s\S]*\.timeline-drawer \{[\s\S]*width: calc\(56% - 15px\);/);
+  assert.match(css, /\.detail-drawer \.detail-actions\s*\{[\s\S]*grid-column: 2;[\s\S]*grid-row: 1 \/ 4;/);
+  assert.match(renderer, /elements\.detailAttackBtn\.hidden = view\.fieldAction\.hidden/);
+  assert.match(controller, /const SPACIOUS_WORKSPACE_QUERY = "\(min-width: 1440px\) and \(min-height: 820px\)"/);
+  assert.match(controller, /function syncResponsiveWorkspace\(\)[\s\S]*body\.dataset\.workspaceLayout = spacious \? "expanded" : "drawer"/);
+  assert.match(controller, /drawer\.root\?\.classList\.toggle\("is-docked", spacious\)/);
 });
 
 test("desktop duel table promotes the field and overlays compact HUD rails", () => {

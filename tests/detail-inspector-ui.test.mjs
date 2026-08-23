@@ -15,8 +15,10 @@ test("selected-card details expose summary, complete effect, and metadata region
   assert.match(html, /id="detailSummary"/);
   assert.match(html, /id="detailEffect"/);
   assert.match(html, /id="detailMeta"/);
-  assert.match(app, /cardInspectorViewModel\(card, \{ effectMarkers: focusedCardEffectMarkers\(card\) \}\)/);
+  assert.match(app, /cardInspectorViewModel\(currentCard, \{ effectMarkers: focusedCardEffectMarkers\(currentCard\) \}\)/);
   assert.match(app, /function focusedCardEffectMarkers\(card\)/);
+  assert.match(app, /function renderFocusedCardInspector\(\)/);
+  assert.match(app, /renderTimeline\(\);\s*renderFocusedCardInspector\(\);\s*renderBattlePreview\(\);/);
   assert.match(app, /renderCardInspector\(document, cardInspectorElements, view\)/);
 });
 

@@ -2263,6 +2263,249 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   }
 }
 
+@media (min-width: 1440px) and (min-height: 680px) {
+  .topbar {
+    grid-template-columns: minmax(170px, 210px) minmax(280px, 1fr) auto minmax(420px, auto);
+  }
+
+  .phase {
+    min-width: 280px;
+  }
+
+  .actions .btn {
+    min-width: 72px;
+    padding-inline: 9px;
+  }
+
+  .header-utility {
+    min-width: 0;
+  }
+
+  .utility-toggle {
+    display: none;
+  }
+
+  .utility-menu:not([hidden]) {
+    position: static;
+    inset: auto;
+    width: auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px;
+    border-color: rgba(246, 189, 96, 0.18);
+    border-radius: 10px;
+    background: rgba(5, 8, 14, 0.62);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.018);
+    backdrop-filter: none;
+  }
+
+  .utility-menu::before,
+  .utility-menu-head {
+    display: none;
+  }
+
+  .utility-menu .btn,
+  .utility-menu .utility-danger {
+    width: auto;
+    min-width: 48px;
+    min-height: 34px;
+    padding: 5px 7px;
+    border-radius: 7px;
+    font-size: 10px;
+  }
+
+  .utility-menu .music-volume-control {
+    grid-column: auto;
+    width: 94px;
+    min-height: 34px;
+    padding-inline: 7px;
+  }
+
+  .utility-menu .utility-danger {
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 1440px) and (min-height: 820px) {
+  #app {
+    grid-template-rows: auto minmax(0, 1fr) clamp(184px, 21dvh, 218px);
+  }
+
+  #app .arena.duel-table {
+    --spacious-workbench-height: clamp(178px, 20dvh, 218px);
+  }
+
+  #app .arena.duel-table::after {
+    bottom: calc(var(--spacious-workbench-height) + 12px);
+  }
+
+  #app .duel-table .field {
+    bottom: calc(var(--spacious-workbench-height) + 12px);
+  }
+
+  #app .duel-table .side.duel-hud {
+    max-height: calc(100% - var(--spacious-workbench-height) - 30px);
+  }
+
+  .workspace-tabs {
+    display: none;
+  }
+
+  .workspace-drawer,
+  .workspace-drawer.is-open,
+  .workspace-drawer.is-docked {
+    top: auto;
+    bottom: 10px;
+    height: var(--spacious-workbench-height);
+    min-height: 0;
+    gap: 6px;
+    padding: 8px;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition: none;
+    backdrop-filter: blur(10px);
+  }
+
+  .detail-drawer {
+    left: 10px;
+    width: calc(44% - 15px);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .timeline-drawer {
+    right: 10px;
+    width: calc(56% - 15px);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+
+  .drawer-close,
+  .workspace-drawer .tip,
+  .timeline-overview {
+    display: none;
+  }
+
+  .workspace-drawer-head {
+    min-height: 30px;
+    padding-bottom: 5px;
+  }
+
+  .workspace-drawer-kicker {
+    font-size: 7px;
+  }
+
+  .workspace-drawer-head strong {
+    font-size: 12px;
+  }
+
+  .detail-drawer .detail-card {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 5px 8px;
+    overflow: hidden;
+  }
+
+  .detail-drawer #detailName {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+    font-size: 15px;
+  }
+
+  .detail-drawer #detailText,
+  .detail-drawer #detailInspector {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 0;
+    margin: 0;
+    overflow-y: auto;
+  }
+
+  .detail-drawer #detailText {
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .detail-drawer .detail-actions {
+    position: static;
+    z-index: auto;
+    grid-column: 2;
+    grid-row: 1 / 4;
+    align-content: start;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 0;
+  }
+
+  .detail-drawer .detail-actions .btn {
+    min-width: 84px;
+    min-height: 31px;
+    padding: 5px 7px;
+    font-size: 9px;
+  }
+
+  .detail-drawer #battlePreview {
+    grid-column: 1;
+    grid-row: 3;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .timeline-drawer .timeline-overview {
+    display: none;
+  }
+
+  .timeline-drawer .timeline-filters {
+    gap: 4px;
+    padding: 2px;
+  }
+
+  .timeline-drawer .timeline-filters button {
+    min-height: 25px;
+  }
+
+  .timeline-drawer .chain-history-toggle {
+    min-height: 30px;
+    padding: 4px 7px;
+  }
+
+  .timeline-drawer .chain-history-list {
+    max-height: 70px;
+  }
+
+  .timeline-drawer .timeline-list {
+    grid-row: auto;
+    gap: 0;
+  }
+
+  .timeline-drawer .timeline-item {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 6px;
+    padding: 3px 6px 5px 0;
+  }
+
+  .timeline-drawer .timeline-step {
+    width: 23px;
+    height: 23px;
+  }
+
+  .timeline-drawer .timeline-event {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 6px;
+    padding: 1px 0 5px;
+  }
+
+  .timeline-drawer .timeline-text {
+    font-size: 10px;
+    line-height: 1.4;
+  }
+}
+
 @media (max-width: 900px) {
   .setup-modal .modal-header {
     grid-template-columns: minmax(0, 1fr) minmax(240px, 0.75fr);
