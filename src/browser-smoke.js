@@ -9417,6 +9417,88 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runResponsiveWorkbench4kBasicSmoke(ctx) {
+  const smokeName = "responsive-workbench-4k-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioDirectTrapPlanning");
+
+  if (!window.matchMedia("(min-width: 2200px) and (min-height: 1200px)").matches) {
+    throw new Error(`${smokeName}: expected 4K workspace, received ${window.innerWidth}x${window.innerHeight}`);
+  }
+
+  const arena = document.querySelector(".arena.duel-table");
+  const handPanel = document.querySelector(".hand-panel");
+  const centerLine = document.querySelector(".duel-table .center-line");
+  const detailDrawer = document.querySelector("#detailDrawer");
+  const timelineDrawer = document.querySelector("#timelineDrawer");
+  const detailAttackBtn = document.querySelector("#detailAttackBtn");
+  const detailSelectionCancelBtn = document.querySelector("#detailSelectionCancelBtn");
+  const utilityMenu = document.querySelector("#utilityMenu");
+  const required = [arena, handPanel, centerLine, detailDrawer, timelineDrawer, detailAttackBtn, detailSelectionCancelBtn, utilityMenu];
+  if (required.some((element) => !element)) {
+    throw new Error(`${smokeName}: required ultra-wide regions are missing`);
+  }
+
+  const arenaRect = arena.getBoundingClientRect();
+  const handRect = handPanel.getBoundingClientRect();
+  const centerRect = centerLine.getBoundingClientRect();
+  const detailRect = detailDrawer.getBoundingClientRect();
+  const timelineRect = timelineDrawer.getBoundingClientRect();
+  const workbenchCenter = (Math.min(detailRect.top, timelineRect.top) + Math.max(detailRect.bottom, timelineRect.bottom)) / 2;
+  const arenaCenter = (arenaRect.top + arenaRect.bottom) / 2;
+
+  if (Math.abs(workbenchCenter - arenaCenter) > 4) {
+    throw new Error(`${smokeName}: workbench should occupy the arena center (${workbenchCenter}/${arenaCenter})`);
+  }
+  if (detailRect.top < centerRect.top - 1 || timelineRect.top < centerRect.top - 1 ||
+      detailRect.bottom > centerRect.bottom + 1 || timelineRect.bottom > centerRect.bottom + 1) {
+    throw new Error(`${smokeName}: central workbench should stay inside its reserved field track`);
+  }
+  if (handRect.top - Math.max(detailRect.bottom, timelineRect.bottom) < 240) {
+    throw new Error(`${smokeName}: central workbench is still visually attached to the hand panel`);
+  }
+  if (detailRect.width + timelineRect.width > arenaRect.width * 0.55 ||
+      detailRect.right > timelineRect.left - 8) {
+    throw new Error(`${smokeName}: central workbench is too wide or its panels overlap`);
+  }
+
+  const settingsButtons = [ctx.els.guideBtn, ctx.els.pauseBtn, ctx.els.soundBtn, ctx.els.musicBtn, ctx.els.voiceBtn, ctx.els.restartBtn];
+  if (settingsButtons.some((button) => !button)) {
+    throw new Error(`${smokeName}: direct setting buttons are missing`);
+  }
+  const settingRects = settingsButtons.map((button) => button.getBoundingClientRect());
+  const firstSettingRect = settingRects[0];
+  if (settingRects.some((rect) => Math.abs(rect.width - firstSettingRect.width) > 1 || Math.abs(rect.height - firstSettingRect.height) > 1)) {
+    throw new Error(`${smokeName}: direct setting buttons should share one visual size`);
+  }
+  if (utilityMenu.hidden || ctx.els.soundBtn.textContent !== "音效 关" ||
+      ctx.els.musicBtn.textContent !== "音乐 关" || ctx.els.voiceBtn.textContent !== "语音 关") {
+    throw new Error(`${smokeName}: 4K direct settings should stay visible with browser audio disabled`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
+  await waitForSmoke(
+    () => !detailAttackBtn.hidden && !detailSelectionCancelBtn.hidden,
+    `${smokeName}: card actions appear in the central workbench`
+  );
+  clickSmokeElement(detailAttackBtn, `${smokeName}: start attack from central workbench`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex !== null && detailAttackBtn.textContent.includes("选目标"),
+    `${smokeName}: central attack action remains interactive`
+  );
+  clickSmokeElement(detailSelectionCancelBtn, `${smokeName}: cancel central attack action`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === null && ctx.state.selected?.zone === "playerField",
+    `${smokeName}: central cancel returns to card selection`
+  );
+
+  clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: pause from uniform settings row`);
+  await waitForSmoke(() => ctx.state.paused, `${smokeName}: 4K pause works`);
+  clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: resume from uniform settings row`);
+  await waitForSmoke(() => !ctx.state.paused, `${smokeName}: 4K resume works`);
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioGauntletPreviewBasicSmoke(ctx) {
   const smokeName = "trio-gauntlet-preview-basic";
   setSmokeStatus("running", smokeName);
@@ -10174,6 +10256,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "campaign-reward-unlock-basic": runCampaignRewardUnlockBasicSmoke,
     "settings-menu-basic": runSettingsMenuBasicSmoke,
     "responsive-workbench-wide-basic": runResponsiveWorkbenchWideBasicSmoke,
+    "responsive-workbench-4k-basic": runResponsiveWorkbench4kBasicSmoke,
     "trio-gauntlet-preview-basic": runTrioGauntletPreviewBasicSmoke,
     "objective-hierarchy-mobile-basic": runObjectiveHierarchyMobileBasicSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,
