@@ -3,6 +3,7 @@ import { logEntryMessage } from "./battle-log.js";
 export const TIMELINE_LIMIT = Number.POSITIVE_INFINITY;
 
 export function timelineKind(text = "") {
+  if (/终章转场|第一神已降临|第二神已降临|最终神已降临|第二次建设开始|最终神窗口/.test(text)) return "phase";
   if (/连锁|陷阱|反制|反击阵列|弱化力场|护壁/.test(text)) return "trap";
   if (/攻击无效|规则拦截|没有发动|保留/.test(text)) return "warning";
   if (/召唤了|额外召唤机会|通常召唤/.test(text)) return "summon";

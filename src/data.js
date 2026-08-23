@@ -803,6 +803,23 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"],
     aiStyle: "scriptedPressure"
   },
+  trioPhaseTransitionPlanning: {
+    label: "三曜阶段转场",
+    setupVisibility: "internal",
+    adaptiveBossCounter: true,
+    adaptiveBossPhase: 1,
+    text: "规则测试场景：日曜将以普通怪兽、衍生物和融合怪兽各一只作为公开祭品独立降临。",
+    goal: "结束回合并确认日曜降临后出现独立转场节点，祭品来源按三种公开类型汇总，所有公开卡名仍可查看详情。",
+    playerLp: 9000,
+    aiLp: 4000,
+    playerHand: [],
+    playerDeck: ["guard-sigil"],
+    playerField: [{ id: "rift-bulwark", mode: "defense", changedMode: true }],
+    aiField: ["nova-squire", "spark-fragment-token", "flare-gale-archon"],
+    aiHand: ["trio-sun-judicator"],
+    aiDeck: ["guard-sigil"],
+    aiStyle: "scriptedPressure"
+  },
   trioBackrowCounterPlanning: {
     label: "三曜后场戒备",
     setupVisibility: "internal",

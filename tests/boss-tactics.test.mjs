@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { trioBossCounterPlan, trioBossPhase } from "../src/boss-tactics.js";
+import { trioBossCounterPlan, trioBossPhase, trioBossPhaseTransitions } from "../src/boss-tactics.js";
 
 const cards = {
-  "moon-runtime": { id: "trio-moon-warden", type: "monster" },
-  "sun-runtime": { id: "trio-sun-judicator", type: "monster" },
-  "tribute-runtime": { id: "nova-squire", type: "monster" },
+  "moon-runtime": { id: "trio-moon-warden", type: "monster", name: "月轮守望者" },
+  "sun-runtime": { id: "trio-sun-judicator", type: "monster", name: "曜冕裁决者" },
+  "tribute-runtime": { id: "nova-squire", type: "monster", name: "新星侍从" },
+  "token-runtime": { id: "spark-fragment-token", type: "monster", name: "星火衍生体", token: true },
+  "fusion-runtime": { id: "flare-gale-archon", type: "monster", name: "焰岚合星者", summonRoute: "fusion" },
   "trap-runtime": { id: "mirror-snare", type: "trap" }
 };
 
@@ -70,6 +72,30 @@ test("trio boss derives its public phase from independent tribute-summoned gods"
     resolveCard
   }), 3);
   assert.equal(trioBossPhase({ events: [], resolveCard, phase: 2 }), 2);
+});
+
+test("trio boss publishes a phase transition with inspectable mixed tribute sources", () => {
+  const transitions = trioBossPhaseTransitions({
+    events: [
+      { id: 21, type: "CARD_TRIBUTED", playerId: "ai", cardId: "tribute-runtime", cardTemplateId: "nova-squire", tributeKind: "normal", summonCardId: "sun-runtime" },
+      { id: 22, type: "CARD_TRIBUTED", playerId: "ai", cardId: "token-runtime", cardTemplateId: "spark-fragment-token", tributeKind: "token", summonCardId: "sun-runtime" },
+      { id: 23, type: "CARD_TRIBUTED", playerId: "ai", cardId: "fusion-runtime", cardTemplateId: "flare-gale-archon", tributeKind: "fusion", summonCardId: "sun-runtime" },
+      { id: 24, type: "MONSTER_SUMMONED", playerId: "ai", summonType: "tribute", cardId: "sun-runtime", cardTemplateId: "trio-sun-judicator" }
+    ],
+    resolveCard
+  });
+
+  assert.equal(transitions.length, 1);
+  assert.equal(transitions[0].label, "第一神已降临");
+  assert.equal(transitions[0].next, "PHASE II · 第二次建设开始");
+  assert.equal(transitions[0].sourceSummary, "普通怪兽 ×1 · 衍生物 ×1 · 融合怪兽 ×1");
+  assert.deepEqual(transitions[0].relatedCardIds, [
+    "nova-squire",
+    "spark-fragment-token",
+    "flare-gale-archon"
+  ]);
+  assert.match(transitions[0].text, /曜冕裁决者/);
+  assert.match(transitions[0].text, /新星侍从.*星火衍生体.*焰岚合星者/);
 });
 
 test("trio boss reacts to a newly set slot without inspecting the hidden card", () => {

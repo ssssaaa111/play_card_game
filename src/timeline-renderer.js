@@ -46,7 +46,8 @@ export function timelineKindLabel(kind = "") {
     draw: "抽卡",
     guard: "防御",
     turn: "回合",
-    warning: "提示"
+    warning: "提示",
+    phase: "转场"
   };
   return labels[kind] || "记录";
 }

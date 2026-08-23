@@ -1272,6 +1272,57 @@ async function runTrioAdaptiveCounterBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runTrioPhaseTransitionBasicSmoke(ctx) {
+  const smokeName = "trio-phase-transition-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioPhaseTransitionPlanning");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "trio-sun-judicator"),
+    `${smokeName}: sun reaches the public reveal`,
+    18000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue sun reveal`);
+  await waitForSmoke(
+    () => [...(ctx.els.timeline?.querySelectorAll(".timeline-item.phase") || [])]
+      .some((item) => item.textContent.includes("第一神已降临") && item.textContent.includes("第二次建设开始")),
+    `${smokeName}: phase transition enters the public timeline. ${smokeDebug(ctx)}`,
+    8000
+  );
+
+  const transitionItem = [...ctx.els.timeline.querySelectorAll(".timeline-item.phase")]
+    .find((item) => item.textContent.includes("第一神已降临"));
+  const transitionText = transitionItem?.textContent || "";
+  for (const fragment of [
+    "普通怪兽 ×1",
+    "衍生物 ×1",
+    "融合怪兽 ×1",
+    "新星侍从",
+    "星火衍生体",
+    "焰岚合星者"
+  ]) {
+    if (!transitionText.includes(fragment)) {
+      throw new Error(`${smokeName}: transition is missing ${fragment}. ${transitionText}`);
+    }
+  }
+  for (const cardId of [
+    "trio-sun-judicator",
+    "nova-squire",
+    "spark-fragment-token",
+    "flare-gale-archon"
+  ]) {
+    if (!transitionItem?.querySelector(`.timeline-card-link[data-card-id="${cardId}"]`)) {
+      throw new Error(`${smokeName}: public transition card ${cardId} is not inspectable.`);
+    }
+  }
+  clickSmokeElement(
+    transitionItem.querySelector('.timeline-card-link[data-card-id="flare-gale-archon"]'),
+    `${smokeName}: inspect fusion tribute from the timeline`
+  );
+  await assertCardDetailModal(ctx, cloneCardById("flare-gale-archon"), smokeName);
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioBackrowCounterBasicSmoke(ctx) {
   const smokeName = "trio-backrow-counter-basic";
   setSmokeStatus("running", smokeName);
@@ -9899,6 +9950,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-staged-tribute-planning-basic": runTrioStagedTributePlanningBasicSmoke,
     "trio-live-turn-replanning-basic": runTrioLiveTurnReplanningBasicSmoke,
     "trio-omega-ascension-opening-basic": runTrioOmegaAscensionOpeningBasicSmoke,
+    "trio-phase-transition-basic": runTrioPhaseTransitionBasicSmoke,
     "trio-adaptive-counter-basic": runTrioAdaptiveCounterBasicSmoke,
     "trio-backrow-counter-basic": runTrioBackrowCounterBasicSmoke,
     "trio-rush-finale-basic": runTrioRushFinaleBasicSmoke,

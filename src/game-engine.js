@@ -1284,7 +1284,13 @@ export class GameEngine {
       phase: state.turn.phase
     });
     tributeCardIds.forEach((tributeCardId) => {
-      const token = isTokenCard(requireCard(state, tributeCardId));
+      const tributeCard = requireCard(state, tributeCardId);
+      const token = isTokenCard(tributeCard);
+      const tributeKind = token
+        ? "token"
+        : tributeCard.summonRoute === "fusion"
+          ? "fusion"
+          : "normal";
       ctx.sendCardToGrave(tributeCardId, { playerId: action.playerId, zone: "monsterZone" }, {
         playerId: action.playerId,
         sourceCardId: action.cardId,
@@ -1293,6 +1299,8 @@ export class GameEngine {
       emit("CARD_TRIBUTED", {
         playerId: action.playerId,
         cardId: tributeCardId,
+        cardTemplateId: tributeCard.templateId || tributeCard.id,
+        tributeKind,
         summonCardId: action.cardId,
         tributeCost,
         destination: token ? "removed" : "grave"

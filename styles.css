@@ -1196,6 +1196,13 @@ button.chain-history-card:focus-visible {
   border-left-color: rgba(255, 159, 67, 0.92);
 }
 
+.timeline-item.phase {
+  border-left-color: rgba(255, 213, 106, 0.96);
+  background:
+    linear-gradient(90deg, rgba(255, 213, 106, 0.13), transparent 58%),
+    rgba(255, 255, 255, 0.045);
+}
+
 .timeline-step {
   width: 24px;
   height: 24px;

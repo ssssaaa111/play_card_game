@@ -50,10 +50,12 @@ test("timeline overview summarizes the latest node and key actions", () => {
     actionCount: 2
   });
   assert.equal(timelineKindLabel("trap"), "陷阱");
+  assert.equal(timelineKindLabel("phase"), "转场");
   assert.equal(timelineKindLabel("unknown"), "记录");
   assert.equal(timelineKindGroup("damage"), "battle");
   assert.equal(timelineKindGroup("draw"), "cards");
   assert.equal(timelineKindGroup("turn"), "system");
+  assert.equal(timelineKindGroup("phase"), "system");
 });
 
 test("chain history panel stays hidden until a completed chain is expanded", () => {

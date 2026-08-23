@@ -12,6 +12,36 @@ const PHASE_PRIORITIES = {
 
 const FINALE_RUSH_LIFE = 2800;
 
+const TRIO_PHASE_TRANSITIONS = {
+  "trio-sun-judicator": {
+    phase: 1,
+    id: "sun-descended",
+    label: "第一神已降临",
+    next: "PHASE II · 第二次建设开始",
+    epic: "PHASE II"
+  },
+  "trio-moon-warden": {
+    phase: 2,
+    id: "moon-descended",
+    label: "第二神已降临",
+    next: "PHASE III · 最终神窗口开启",
+    epic: "PHASE III"
+  },
+  "trio-star-herald": {
+    phase: 3,
+    id: "star-descended",
+    label: "最终神已降临",
+    next: "三次独立降神完成，终战开始",
+    epic: "终战开始"
+  }
+};
+
+const TRIBUTE_KIND_LABELS = {
+  normal: "普通怪兽",
+  token: "衍生物",
+  fusion: "融合怪兽"
+};
+
 function latestPlayerTurnEvents(events) {
   const list = Array.isArray(events) ? events : [];
   const turnStartIndex = list.findLastIndex((event) =>
@@ -28,6 +58,93 @@ function resolvedCard(resolveCard, cardId) {
 function trioCardId(resolveCard, cardId) {
   const card = resolvedCard(resolveCard, cardId);
   return TRIO_GOD_IDS.has(card?.id) ? card.id : "";
+}
+
+function publicEventCard(events, resolveCard, event = {}) {
+  const direct = resolvedCard(resolveCard, event.cardId) ||
+    resolvedCard(resolveCard, event.cardTemplateId);
+  if (direct) return direct;
+  const created = [...events].reverse().find((candidate) =>
+    candidate?.type === "CARD_CREATED" && candidate.cardId === event.cardId
+  );
+  return created?.card || resolvedCard(resolveCard, created?.templateId) || null;
+}
+
+function publicTemplateId(card, event = {}) {
+  return event.cardTemplateId || card?.templateId || card?.id || "";
+}
+
+function tributeKind(card, event = {}) {
+  if (TRIBUTE_KIND_LABELS[event.tributeKind]) return event.tributeKind;
+  if (card?.token || card?.isToken) return "token";
+  if (card?.summonRoute === "fusion") return "fusion";
+  return "normal";
+}
+
+function tributeSourceNames(sources) {
+  const grouped = new Map();
+  sources.forEach((source) => {
+    const key = source.cardId || source.name;
+    const current = grouped.get(key) || { ...source, count: 0 };
+    current.count += 1;
+    grouped.set(key, current);
+  });
+  return [...grouped.values()]
+    .map((source) => `「${source.name}」${source.count > 1 ? ` ×${source.count}` : ""}`)
+    .join("、");
+}
+
+function tributeKindSummary(sources) {
+  const counts = Object.fromEntries(Object.keys(TRIBUTE_KIND_LABELS).map((kind) => [kind, 0]));
+  sources.forEach((source) => { counts[source.kind] += 1; });
+  return Object.entries(TRIBUTE_KIND_LABELS)
+    .filter(([kind]) => counts[kind] > 0)
+    .map(([kind, label]) => `${label} ×${counts[kind]}`)
+    .join(" · ");
+}
+
+export function trioBossPhaseTransitions({ events = [], resolveCard = null } = {}) {
+  const list = Array.isArray(events) ? events : [];
+  const transitions = [];
+  const seenGods = new Set();
+  for (const [eventIndex, event] of list.entries()) {
+    if (event?.type !== "MONSTER_SUMMONED" || event.playerId !== "ai" || event.summonType !== "tribute") {
+      continue;
+    }
+    const god = publicEventCard(list, resolveCard, event);
+    const godId = publicTemplateId(god, event);
+    const transition = TRIO_PHASE_TRANSITIONS[godId];
+    if (!transition || seenGods.has(godId)) continue;
+    const tributes = list.slice(0, eventIndex)
+      .filter((candidate) =>
+        candidate?.type === "CARD_TRIBUTED" &&
+        candidate.playerId === "ai" &&
+        candidate.summonCardId === event.cardId
+      )
+      .slice(-3)
+      .map((tributeEvent) => {
+        const card = publicEventCard(list, resolveCard, tributeEvent);
+        return {
+          cardId: publicTemplateId(card, tributeEvent),
+          name: card?.name || "公开祭品",
+          kind: tributeKind(card, tributeEvent)
+        };
+      });
+    if (tributes.length !== 3) continue;
+    seenGods.add(godId);
+    const sourceNames = tributeSourceNames(tributes);
+    const sourceSummary = tributeKindSummary(tributes);
+    transitions.push({
+      ...transition,
+      eventId: event.id,
+      cardId: godId,
+      relatedCardIds: [...new Set(tributes.map((source) => source.cardId).filter(Boolean))],
+      sourceNames,
+      sourceSummary,
+      text: `终章转场：${transition.label}——「${god?.name || godId}」以三只祭品独立降临。祭品来源：${sourceNames}（${sourceSummary}）。${transition.next}。`
+    });
+  }
+  return transitions;
 }
 
 export function trioBossPhase({ events = [], resolveCard = null, phase = null } = {}) {

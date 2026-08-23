@@ -24,7 +24,7 @@ import {
   chooseAiTurnGoal,
   shouldSwitchSummonedMonsterToDefense
 } from './ai.js';
-import { trioBossCounterPlan } from './boss-tactics.js';
+import { trioBossCounterPlan, trioBossPhaseTransitions } from './boss-tactics.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createBattleLogEntry, logEntryMessage } from './battle-log.js';
 import { renderBattlePreviewElement } from './battle-preview-renderer.js';
@@ -297,6 +297,7 @@ const state = {
   activeCampaign: null,
   campaignObjectivesAnnounced: {},
   bossCounterAnnounced: {},
+  bossPhaseAnnounced: {},
   stats: loadDuelStats(),
   statsRecorded: false,
   ...createAudioSettings({ testMode: BROWSER_TEST_MODE }),
@@ -983,6 +984,7 @@ function startGame() {
   state.storyBeatsFired = {};
   state.campaignObjectivesAnnounced = {};
   state.bossCounterAnnounced = {};
+  state.bossPhaseAnnounced = {};
   state.scriptedSummonsFired = {};
   state.pendingScriptedSummons = [];
   state.log = [];
@@ -1056,6 +1058,7 @@ function prepareGame() {
   state.resumeResolvers = [];
   state.campaignObjectivesAnnounced = {};
   state.bossCounterAnnounced = {};
+  state.bossPhaseAnnounced = {};
   state.log = ["先查看场景目标、提示和己方卡组，再点击“开始决斗”。"];
   state.logSequence = 0;
   state.timeline = [];
@@ -5175,6 +5178,31 @@ function syncBossCounterFeedback(intent) {
   cue(`Boss 反制意图：${intent.label}`);
 }
 
+function syncTrioBossPhaseFeedback() {
+  const scenario = scenarioSetups[state.scenarioId];
+  if (!scenario?.adaptiveBossCounter || !state.started || state.gameOver) return;
+  const announced = state.bossPhaseAnnounced || (state.bossPhaseAnnounced = {});
+  const transitions = trioBossPhaseTransitions({
+    events: state.gameEvents,
+    resolveCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId)
+  });
+  const fresh = transitions.filter((transition) => !announced[`${transition.id}:${transition.eventId}`]);
+  fresh.forEach((transition) => {
+    announced[`${transition.id}:${transition.eventId}`] = true;
+    addLog(transition.text, {
+      actor: "ai",
+      type: "boss-phase",
+      public: true,
+      cardId: transition.cardId,
+      relatedCardIds: transition.relatedCardIds
+    });
+  });
+  const latest = fresh.at(-1);
+  if (!latest) return;
+  cue(`${latest.label} · ${latest.next}`);
+  playEpicAction(latest.epic, "summon", 1300);
+}
+
 function fieldEffectMarkers(card, duelist) {
   return effectMarkersForCard({
     card,
@@ -5518,6 +5546,7 @@ function render(animationKey = "") {
   const campaignMission = currentCampaignMission();
   syncCampaignObjectiveFeedback(campaignMission);
   syncBossCounterFeedback(bossIntent);
+  syncTrioBossPhaseFeedback();
   setMusicMode(musicMode);
   document.body.dataset.musicMode = musicMode;
   els.phaseText.textContent = phaseLabel(state);
