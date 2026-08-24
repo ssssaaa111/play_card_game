@@ -378,7 +378,14 @@ function selectScenario(els, scenarioId) {
 async function startSmokeDuel(ctx, scenarioId) {
   selectScenario(ctx.els, scenarioId);
   clickSmokeElement(ctx.els.modal?.classList.contains("show") ? ctx.els.modalRestart : ctx.els.startBtn, "开始按钮");
-  await waitForSmoke(() => ctx.state.started && ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.pendingOpeningDraw, "玩家主阶段");
+  await waitForSmoke(
+    () => ctx.state.started &&
+      ctx.state.scenarioId === scenarioId &&
+      ctx.state.turn === "player" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.pendingOpeningDraw,
+    "玩家主阶段"
+  );
 }
 
 function assertScenarioBrief(els, { difficulty, objectives = [], hints = [] }) {
@@ -9405,8 +9412,23 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   const workspaceRect = workspaceDeck.getBoundingClientRect();
   const detailRect = detailDrawer.getBoundingClientRect();
   const timelineRect = timelineDrawer.getBoundingClientRect();
+  const wideFieldCard = fieldCard(ctx.els, "player", "star-lancer");
+  const wideHandCard = handCard(ctx.els, "star-breach");
+  const wideFieldCardRect = wideFieldCard?.getBoundingClientRect();
+  const wideHandCardRect = wideHandCard?.getBoundingClientRect();
   if (detailRect.width < 420 || timelineRect.width < 520 || detailRect.height < 160 || timelineRect.height < 160) {
     throw new Error(`${smokeName}: docked workbench is too small (${detailRect.width}x${detailRect.height}; ${timelineRect.width}x${timelineRect.height})`);
+  }
+  if (!wideFieldCardRect || !wideHandCardRect ||
+      wideFieldCardRect.height < 100 || wideHandCardRect.height < 140 ||
+      wideHandCardRect.height / wideHandCardRect.width < 0.85 ||
+      Math.abs(wideFieldCardRect.height - wideHandCardRect.height) > 55 ||
+      workspaceRect.height > 200) {
+    throw new Error(
+      `${smokeName}: medium spacious density should preserve readable field and hand cards ` +
+      `(field=${wideFieldCardRect?.width}x${wideFieldCardRect?.height}, ` +
+      `hand=${wideHandCardRect?.width}x${wideHandCardRect?.height}, workbench=${workspaceRect.height})`
+    );
   }
   if (Math.abs((workspaceRect.top + workspaceRect.bottom) / 2 - (arenaRect.top + arenaRect.bottom) / 2) > 3 ||
       workspaceRect.top < centerRect.top - 1 || workspaceRect.bottom > centerRect.bottom + 1 ||
@@ -9522,6 +9544,24 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
     throw new Error(`${smokeName}: 4K direct settings should stay visible with browser audio disabled`);
   }
 
+  const ultraFieldCard = fieldCard(ctx.els, "player", "star-lancer");
+  const ultraHandCard = handCard(ctx.els, "star-breach");
+  const ultraFieldRect = ultraFieldCard?.getBoundingClientRect();
+  const ultraHandRect = ultraHandCard?.getBoundingClientRect();
+  const ultraSupportTrackRect = ctx.els.aiTraps.getBoundingClientRect();
+  const ultraFieldRatio = ultraFieldRect ? ultraFieldRect.height / ultraFieldRect.width : 0;
+  const ultraHandRatio = ultraHandRect ? ultraHandRect.height / ultraHandRect.width : 0;
+  if (!ultraFieldRect || !ultraHandRect ||
+      ultraHandRatio < 1.3 || Math.abs(ultraFieldRatio - ultraHandRatio) > 0.2 ||
+      ultraSupportTrackRect.height < 64 || handRect.height < 320) {
+    throw new Error(
+      `${smokeName}: 4K card density should keep hand and field proportions aligned ` +
+      `(field=${ultraFieldRect?.width}x${ultraFieldRect?.height}, ` +
+      `hand=${ultraHandRect?.width}x${ultraHandRect?.height}, ` +
+      `supportTrack=${ultraSupportTrackRect.height}, panel=${handRect.height})`
+    );
+  }
+
   clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
   await waitForSmoke(
     () => !detailAttackBtn.hidden && !detailSelectionCancelBtn.hidden,
@@ -9542,6 +9582,7 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   await waitForSmoke(() => ctx.state.paused, `${smokeName}: 4K pause works`);
   clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: resume from uniform settings row`);
   await waitForSmoke(() => !ctx.state.paused, `${smokeName}: 4K resume works`);
+
   setSmokeStatus("passed", smokeName);
 }
 

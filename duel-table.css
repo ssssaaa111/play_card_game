@@ -2483,18 +2483,27 @@ body[data-duel-selection="playerField"] .hand-command-idle {
 
 @media (min-width: 1600px) and (min-height: 900px) {
   #app {
-    --workspace-height: clamp(210px, 22dvh, 300px);
-    --workspace-track: calc(var(--workspace-height) + 64px);
-    grid-template-rows: auto minmax(0, 1fr) clamp(190px, 20dvh, 224px);
+    --workspace-height: clamp(160px, 18dvh, 240px);
+    --workspace-track: calc(var(--workspace-height) + 40px);
+    grid-template-rows: auto minmax(0, 1fr) clamp(224px, 22dvh, 260px);
   }
 
   #app .duel-table .field {
+    --support-track-size: clamp(48px, 5dvh, 56px);
     grid-template-rows:
       minmax(96px, 1fr)
       var(--support-track-size)
       var(--workspace-track)
       var(--support-track-size)
       minmax(96px, 1fr);
+  }
+
+  .hand .card {
+    flex-basis: clamp(154px, 9.5vw, 170px);
+  }
+
+  #app .duel-table .trap-slot .card.field-support-card {
+    width: min(100%, clamp(92px, 7dvh, 108px));
   }
 
   #app .duel-table .center-line {
@@ -2691,7 +2700,7 @@ body[data-duel-selection="playerField"] .hand-command-idle {
     --workspace-height: clamp(280px, 18dvh, 340px);
     --workspace-track: calc(var(--workspace-height) + 88px);
     width: min(calc(100% - 48px), 3200px);
-    grid-template-rows: 78px minmax(0, 1fr) clamp(230px, 13dvh, 280px);
+    grid-template-rows: 78px minmax(0, 1fr) clamp(280px, 16dvh, 340px);
     gap: 12px;
     margin-inline: auto;
     padding: 12px;
@@ -2747,9 +2756,32 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   }
 
   #app .duel-table .field {
-    --support-track-size: 60px;
+    --support-track-size: clamp(60px, 4dvh, 82px);
     padding: 16px calc(var(--table-hud-width) + 28px);
     gap: 9px;
+  }
+
+  .hand .card {
+    flex-basis: clamp(172px, 5vw, 188px);
+  }
+
+  #app .duel-table .trap-slot .card.field-support-card {
+    width: min(100%, clamp(100px, 6dvh, 124px));
+    grid-template-rows: 18px minmax(0, 1fr);
+    gap: 2px;
+    padding: 3px;
+  }
+
+  #app .duel-table .trap-slot .card.field-support-card .card-head {
+    min-height: 18px;
+  }
+
+  #app .duel-table .trap-slot .card.field-support-card .card-name {
+    font-size: 12px;
+  }
+
+  #app .duel-table .trap-slot .card.field-support-card .art {
+    font-size: 26px;
   }
 
   #app .duel-table .center-line {

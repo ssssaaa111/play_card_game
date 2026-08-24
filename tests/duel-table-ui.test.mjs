@@ -11,7 +11,7 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   const html = read("index.html");
 
   assert.match(html, /href="styles\.css\?v=20260825-field-intent"/);
-  assert.match(html, /href="duel-table\.css\?v=20260825-field-intent"/);
+  assert.match(html, /href="duel-table\.css\?v=20260825-card-density"/);
   assert.match(html, /src="src\/app\.js\?v=20260825-field-intent"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
@@ -124,6 +124,15 @@ test("spacious screens dock details actions and battle logs in a central workben
   assert.match(controller, /const SPACIOUS_WORKSPACE_QUERY = "\(min-width: 1600px\) and \(min-height: 900px\)"/);
   assert.match(controller, /function syncResponsiveWorkspace\(\)[\s\S]*body\.dataset\.workspaceLayout = spacious \? "expanded" : "drawer"/);
   assert.match(controller, /drawer\.root\?\.classList\.toggle\("is-docked", spacious\)/);
+});
+
+test("spacious card density keeps field hand and support scales related", () => {
+  const css = read("duel-table.css");
+
+  assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*--workspace-height: clamp\(160px, 18dvh, 240px\);[\s\S]*clamp\(224px, 22dvh, 260px\)/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*--support-track-size: clamp\(48px, 5dvh, 56px\);[\s\S]*\.hand \.card\s*\{[\s\S]*clamp\(154px, 9\.5vw, 170px\)/);
+  assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*clamp\(280px, 16dvh, 340px\);[\s\S]*--support-track-size: clamp\(60px, 4dvh, 82px\)/);
+  assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*\.hand \.card\s*\{[\s\S]*clamp\(172px, 5vw, 188px\)[\s\S]*\.field-support-card\s*\{[\s\S]*clamp\(100px, 6dvh, 124px\)/);
 });
 
 test("desktop duel table promotes the field and overlays compact HUD rails", () => {
