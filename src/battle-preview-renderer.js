@@ -46,8 +46,12 @@ function renderRows(doc, root, preview) {
 
 export function renderBattlePreviewElement(doc, root, preview) {
   if (!root) return false;
+  const variantClasses = String(root.dataset.previewVariant || "")
+    .split(/\s+/)
+    .filter(Boolean);
   root.textContent = "";
   root.className = `battle-preview${preview ? "" : " empty"}${preview?.tone ? ` ${preview.tone}` : ""}`;
+  root.classList.add(...variantClasses);
   root.dataset.previewMode = preview?.mode || "empty";
   if (!preview) return true;
 

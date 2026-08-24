@@ -1169,7 +1169,7 @@ body[data-duel-selection="playerField"] #app .duel-table #duelHint {
   box-shadow: 0 0 0 3px rgba(84, 210, 210, 0.08), 0 0 30px rgba(84, 210, 210, 0.17);
 }
 
-#app .duel-table .field-selection-chip {
+#app .duel-table .field-state-chip {
   position: absolute;
   top: -8px;
   left: 50%;
@@ -1177,11 +1177,11 @@ body[data-duel-selection="playerField"] #app .duel-table #duelHint {
   max-width: calc(100% - 10px);
   padding: 3px 8px;
   overflow: hidden;
-  border: 1px solid rgba(185, 255, 249, 0.72);
+  border: 1px solid rgba(185, 255, 249, 0.62);
   border-radius: 999px;
-  color: #effffe;
+  color: #d9fffc;
   background: rgba(8, 54, 59, 0.94);
-  box-shadow: 0 0 16px rgba(84, 210, 210, 0.35);
+  box-shadow: 0 0 16px rgba(84, 210, 210, 0.28);
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -1190,6 +1190,33 @@ body[data-duel-selection="playerField"] #app .duel-table #duelHint {
   white-space: nowrap;
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+#app .duel-table .field-state-chip.selected {
+  border-color: rgba(255, 226, 151, 0.82);
+  color: #fff3ce;
+  background: rgba(72, 49, 12, 0.96);
+  box-shadow: 0 0 18px rgba(246, 189, 96, 0.38);
+}
+
+#app .duel-table .field-state-chip.ready {
+  border-color: rgba(185, 255, 249, 0.72);
+  color: #effffe;
+}
+
+#app .duel-table .field-state-chip.locked,
+#app .duel-table .field-state-chip.spent {
+  border-color: rgba(187, 197, 213, 0.36);
+  color: rgba(226, 233, 243, 0.76);
+  background: rgba(25, 31, 42, 0.94);
+  box-shadow: none;
+}
+
+#app .duel-table .field-state-chip.defense {
+  border-color: rgba(151, 203, 255, 0.62);
+  color: #d8ecff;
+  background: rgba(17, 40, 66, 0.95);
+  box-shadow: 0 0 14px rgba(116, 174, 232, 0.24);
 }
 
 body[data-duel-targeting="attack"] #app .duel-table #aiField .slot:has(.card):not(.attack-target) {
@@ -1258,6 +1285,96 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
 .field-action-context > span {
   color: rgba(207, 255, 251, 0.72);
   font-size: 9px;
+}
+
+.field-battle-preview {
+  grid-column: 1 / -1;
+  min-width: 0;
+  max-height: 64px;
+  margin: 0;
+  padding: 4px 5px;
+  overflow: hidden;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.field-battle-preview .battle-preview-title {
+  gap: 5px;
+  font-size: 9px;
+}
+
+.field-battle-preview .battle-preview-title strong {
+  font-size: 9px;
+}
+
+.field-battle-preview .battle-preview-versus {
+  grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr);
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.field-battle-preview .battle-preview-side {
+  min-height: 26px;
+  padding: 2px 4px;
+}
+
+.field-battle-preview .battle-preview-side span {
+  font-size: 8px;
+}
+
+.field-battle-preview .battle-preview-side strong {
+  font-size: 14px;
+}
+
+.field-battle-preview .battle-preview-diff {
+  font-size: 12px;
+}
+
+.field-battle-preview .battle-preview-grid {
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.field-battle-preview .battle-preview-row {
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 4px;
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-battle-preview .battle-preview-result,
+.field-battle-preview[data-preview-mode="target"] .battle-preview-grid,
+.field-battle-preview[data-preview-mode="direct"] .battle-preview-row:nth-child(n + 3) {
+  display: none;
+}
+
+.field-battle-preview[data-preview-mode="target"] .battle-preview-title {
+  display: none;
+}
+
+.field-battle-preview[data-preview-mode="target"] {
+  padding-block: 2px;
+}
+
+.field-battle-preview[data-preview-mode="target"] .battle-preview-versus {
+  margin-top: 0;
+}
+
+.field-battle-preview[data-preview-mode="target"] .battle-preview-side {
+  min-height: 23px;
+  padding-block: 1px;
+}
+
+.field-battle-preview[data-preview-mode="target"] .battle-preview-side strong {
+  margin-top: 0;
+  font-size: 13px;
+}
+
+.field-battle-preview:not(.empty) ~ .field-action-btn {
+  min-height: 38px;
 }
 
 .field-action-btn {
@@ -2267,6 +2384,36 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   }
 }
 
+@media (min-width: 721px) and (max-width: 1599px),
+  (min-width: 721px) and (max-height: 899px) {
+  .field-action-bar:has(.field-battle-preview:not(.empty)) {
+    grid-template-rows: minmax(34px, auto) repeat(2, minmax(38px, 1fr));
+  }
+
+  .field-action-context:has(+ .field-battle-preview:not(.empty)) {
+    display: none;
+  }
+
+  .field-battle-preview[data-preview-mode="intent"],
+  .field-battle-preview[data-preview-mode="direct"] {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+  }
+
+  .field-battle-preview[data-preview-mode="intent"] .battle-preview-title,
+  .field-battle-preview[data-preview-mode="direct"] .battle-preview-title {
+    display: grid;
+    gap: 0;
+  }
+
+  .field-battle-preview[data-preview-mode="intent"] .battle-preview-grid,
+  .field-battle-preview[data-preview-mode="direct"] .battle-preview-grid {
+    margin-top: 0;
+  }
+}
+
 @media (min-width: 1440px) and (min-height: 680px) {
   .topbar {
     grid-template-columns: minmax(190px, 240px) minmax(320px, 1fr) auto auto;
@@ -2356,6 +2503,10 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   }
 
   .workspace-tabs {
+    display: none;
+  }
+
+  .field-battle-preview {
     display: none;
   }
 
@@ -2680,6 +2831,45 @@ body[data-duel-selection="playerField"] .hand-command-idle {
   .timeline-drawer .timeline-text {
     font-size: 12px;
     line-height: 1.48;
+  }
+
+  #app .duel-table .field-monster-card {
+    max-width: min(100%, 260px);
+    height: min(100%, clamp(300px, 20dvh, 380px));
+    grid-template-rows: 22px minmax(44px, 1fr) 24px 22px;
+    gap: 3px;
+    padding: 5px;
+  }
+
+  #app .duel-table .field-monster-card .card-name {
+    font-size: 12px;
+  }
+
+  #app .duel-table .field-monster-card .badge {
+    min-width: 26px;
+    height: 20px;
+    font-size: 10px;
+  }
+
+  #app .duel-table .field-monster-card .card-state-rail {
+    height: 24px;
+    gap: 4px;
+  }
+
+  #app .duel-table .field-monster-card .card-state-chip {
+    height: 21px;
+    padding-inline: 5px;
+    font-size: 10px;
+  }
+
+  #app .duel-table .field-monster-card .stats {
+    font-size: 11px;
+  }
+
+  #app .duel-table .field-state-chip {
+    top: -10px;
+    padding: 4px 10px;
+    font-size: 11px;
   }
 }
 
@@ -3487,6 +3677,26 @@ body[data-duel-selection="playerField"] .hand-command-idle {
     box-shadow: none;
     transform: none;
     backdrop-filter: none;
+  }
+
+  .field-battle-preview:not(.empty) {
+    position: fixed;
+    right: auto;
+    bottom: calc(max(6px, var(--safe-area-bottom)) + var(--mobile-hand-height) + 7px);
+    left: 50%;
+    z-index: 26;
+    width: min(360px, calc(100vw - 14px));
+    max-height: 58px;
+    transform: translateX(-50%);
+    backdrop-filter: blur(12px);
+  }
+
+  .field-battle-preview:not(.empty) ~ .field-action-btn {
+    min-height: 44px;
+  }
+
+  #app .duel-table .field-state-chip:not(.selected) {
+    display: none;
   }
 
   .field-action-context {

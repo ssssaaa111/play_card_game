@@ -10,8 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260824-command-deck"/);
-  assert.match(html, /src="src\/app\.js\?v=20260824-responsive-workbench"/);
+  assert.match(html, /href="styles\.css\?v=20260825-field-intent"/);
+  assert.match(html, /href="duel-table\.css\?v=20260825-field-intent"/);
+  assert.match(html, /src="src\/app\.js\?v=20260825-field-intent"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -56,12 +57,15 @@ test("selected field monsters expose a unified contextual action dock", () => {
   const css = read("duel-table.css");
   const app = read("src/app.js");
 
-  assert.match(html, /class="field-action-bar"[\s\S]*id="fieldActionName"[\s\S]*id="fieldAttackLabel">攻击/);
+  assert.match(html, /class="field-action-bar"[\s\S]*id="fieldActionName"[\s\S]*id="fieldBattlePreview"[\s\S]*id="fieldAttackLabel">攻击/);
   assert.match(html, /class="hand-command"[\s\S]*class="field-action-bar"/);
   assert.match(html, /class="field-action-btn field-mode-tab"[\s\S]*id="fieldModeLabel">转守备/);
   assert.match(css, /\.field-action-bar\s*\{[\s\S]*position: static;[\s\S]*grid-row: 2;[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(max-width: 1040px\)[\s\S]*body\[data-duel-selection="playerField"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 54px minmax\(0, 1fr\)/);
   assert.match(css, /\.field-mode-tab\.is-defense\s*\{[\s\S]*color: #ffe9a8/);
+  assert.match(css, /\.field-battle-preview\s*\{[\s\S]*grid-column: 1 \/ -1;[\s\S]*max-height: 64px/);
+  assert.match(css, /\.field-action-context:has\(\+ \.field-battle-preview:not\(\.empty\)\)\s*\{[\s\S]*display: none/);
+  assert.match(css, /\.field-battle-preview\[data-preview-mode="intent"\][\s\S]*grid-template-columns: max-content minmax\(0, 1fr\)/);
   assert.match(app, /fieldAttackBtn: document\.querySelector\("#fieldAttackBtn"\)/);
   assert.match(app, /fieldModeBtn: document\.querySelector\("#fieldModeBtn"\)/);
   assert.match(app, /els\.fieldAttackBtn\?\.addEventListener\("click", prepareSelectedMonsterAttack\)/);
@@ -82,9 +86,10 @@ test("field selection exposes persistent target feedback and blank-area cancella
   assert.match(app, /document\.body\.dataset\.duelTargeting/);
   assert.match(app, /els\.duelField\?\.addEventListener\("click", handleDuelFieldBackgroundClick\)/);
   assert.match(css, /body\[data-duel-selection="playerField"\][\s\S]*#duelHint/);
-  assert.match(css, /\.field-selection-chip\s*\{/);
+  assert.match(css, /\.field-state-chip\s*\{/);
+  assert.match(css, /\.field-state-chip\.selected\s*\{[\s\S]*rgba\(246, 189, 96/);
   assert.match(css, /body\[data-duel-targeting="attack"\][\s\S]*\.slot:has\(\.card\):not\(\.attack-target\)/);
-  assert.match(renderer, /selectionChip\.textContent = "当前操作"/);
+  assert.match(renderer, /stateChip\.textContent = view\.fieldStateLabel/);
 });
 
 test("settings stay compact on small screens and become direct controls when space allows", () => {
@@ -114,6 +119,7 @@ test("spacious screens dock details actions and battle logs in a central workben
   assert.match(css, /\.detail-drawer \.detail-actions\s*\{[\s\S]*grid-row: 3;[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(renderer, /elements\.detailAttackBtn\.hidden = view\.fieldAction\.hidden/);
   assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*width: min\(calc\(100% - 48px\), 3200px\)/);
+  assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*\.field-state-chip\s*\{[\s\S]*font-size: 11px/);
   assert.match(css, /\.utility-menu \.btn,[\s\S]*flex: 0 0 76px;[\s\S]*width: 76px;[\s\S]*min-height: 38px;/);
   assert.match(controller, /const SPACIOUS_WORKSPACE_QUERY = "\(min-width: 1600px\) and \(min-height: 900px\)"/);
   assert.match(controller, /function syncResponsiveWorkspace\(\)[\s\S]*body\.dataset\.workspaceLayout = spacious \? "expanded" : "drawer"/);

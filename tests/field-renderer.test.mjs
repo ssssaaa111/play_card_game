@@ -47,7 +47,10 @@ test("monster field view centralizes attack and selection states", () => {
   assert.equal(ready.materialCandidate, true);
   assert.equal(ready.materialSelected, true);
   assert.equal(ready.animationClass, "summon-flash");
-  assert.equal(ready.ariaLabel, "我方召唤区 3，当前选中，已选择为效果目标");
+  assert.equal(ready.ariaLabel, "我方召唤区 3，当前选中，已选择为效果目标，可作为攻击目标");
+  assert.equal(ready.fieldState, "selected");
+  assert.equal(ready.fieldStateLabel, "当前操作");
+  assert.ok(ready.slotClasses.includes("field-state-selected"));
   assert.ok(ready.slotClasses.includes("attack-target"));
   assert.ok(ready.slotClasses.includes("target-selected"));
   assert.ok(ready.cardClasses.includes("selected"));
@@ -76,6 +79,8 @@ test("monster field view locks skipped attacks and disables empty rival slots", 
 
   assert.equal(locked.attackReady, false);
   assert.equal(locked.attacksLocked, true);
+  assert.equal(locked.fieldState, "locked");
+  assert.equal(locked.fieldStateLabel, "攻击锁定");
   assert.ok(locked.cardClasses.includes("attack-locked"));
   assert.equal(emptyRival.disabled, true);
   assert.equal(emptyRival.ariaLabel, "敌方召唤区 5");
@@ -96,6 +101,28 @@ test("monster field view exposes convergence locks on either side", () => {
   assert.equal(converged.attacksLocked, true);
   assert.equal(converged.attackReady, false);
   assert.ok(converged.cardClasses.includes("attack-locked"));
+});
+
+test("monster field view gives player defense and spent states distinct labels", () => {
+  const defense = monsterFieldSlotView({
+    card: monster({ mode: "defense" }),
+    owner: "player",
+    state: { player: { attacksSkipped: false } }
+  });
+  const spent = monsterFieldSlotView({
+    card: monster({ used: true }),
+    owner: "player",
+    state: { player: { attacksSkipped: false } }
+  });
+
+  assert.deepEqual(
+    [defense.fieldState, defense.fieldStateLabel, spent.fieldState, spent.fieldStateLabel],
+    ["defense", "守备", "spent", "已行动"]
+  );
+  assert.ok(defense.slotClasses.includes("field-state-defense"));
+  assert.ok(spent.slotClasses.includes("field-state-spent"));
+  assert.match(defense.ariaLabel, /守备/);
+  assert.match(spent.ariaLabel, /已行动/);
 });
 
 test("mechanics targets expose candidate and failure reasons through field views", () => {
@@ -323,6 +350,9 @@ test("monster field view follows projected attack legality instead of guessing f
   });
 
   assert.equal(mainReady.attackReady, true);
+  assert.equal(mainReady.fieldState, "ready");
+  assert.equal(mainReady.fieldStateLabel, "可攻击");
+  assert.match(mainReady.ariaLabel, /可攻击/);
   assert.ok(mainReady.cardClasses.includes("attack-ready"));
   assert.equal(resolving.attackReady, false);
   assert.ok(!resolving.cardClasses.includes("attack-ready"));

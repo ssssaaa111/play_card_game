@@ -117,7 +117,10 @@ test("attack selection exposes intent and exact target comparisons", () => {
   assert.match(rules, /export function makeAttackIntentPreview/);
   assert.match(app, /state\.battlePreview \|\| selectedAttackPreview\(\)/);
   assert.match(app, /renderBattlePreviewElement\(document, els\.battlePreview, preview\)/);
+  assert.match(app, /renderBattlePreviewElement\(document, els\.fieldBattlePreview, preview\)/);
   assert.match(renderer, /battle-preview-versus/);
+  assert.match(renderer, /root\.dataset\.previewVariant/);
+  assert.match(renderer, /root\.classList\.add\(\.\.\.variantClasses\)/);
   assert.match(app, /function showSelectedAttackTargetPreview\(targetIndex\)/);
   assert.match(app, /onAttackPreview: showSelectedAttackTargetPreview/);
   assert.match(fieldRenderer, /slot\.addEventListener\("pointerenter"/);
@@ -126,6 +129,8 @@ test("attack selection exposes intent and exact target comparisons", () => {
   assert.match(css, /\.battle-preview-versus\s*\{/);
   assert.match(css, /\.battle-preview-diff\.positive/);
   assert.match(css, /\.battle-preview\.intent/);
+  assert.match(read("index.html"), /id="fieldBattlePreview"/);
+  assert.match(read("duel-table.css"), /\.field-battle-preview\[data-preview-mode="target"\] \.battle-preview-grid/);
 });
 
 test("clicking an attack target does not replace the selected attacker details", () => {

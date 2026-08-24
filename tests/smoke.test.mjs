@@ -1108,7 +1108,7 @@ test("browser test attacks preserve production timing and field portraits stay v
   assert.match(app, /window\.setTimeout\(resolve, ms\)/);
   assert.doesNotMatch(app, /BROWSER_TEST_SLEEP_CAP_MS/);
   assert.doesNotMatch(app, /!BROWSER_TEST_MODE\) await sleep/);
-  assert.match(css, /\.field-monster-card\s*\{[\s\S]*height: min\(100%, clamp\(190px, 20dvh, 320px\)\);[\s\S]*overflow: hidden;[\s\S]*aspect-ratio: 0\.68;[\s\S]*grid-template-rows: 18px minmax\(32px, 1fr\) 15px 18px;/);
+  assert.match(css, /\.field-monster-card\s*\{[\s\S]*height: min\(100%, clamp\(190px, 20dvh, 320px\)\);[\s\S]*overflow: hidden;[\s\S]*aspect-ratio: 0\.68;[\s\S]*grid-template-rows: 18px minmax\(32px, 1fr\) 20px 18px;/);
   assert.match(css, /\.field-monster-card \.art\s*\{[\s\S]*overflow: hidden;[\s\S]*isolation: isolate;/);
   assert.match(css, /\.field-monster-card \.monster-projection\s*\{[\s\S]*width: 100%;[\s\S]*height: 100%;/);
   assert.match(css, /\.field-monster-card \.card-text\s*\{[\s\S]*display: none;/);

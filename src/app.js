@@ -394,6 +394,7 @@ const els = {
   chainHistoryCount: document.querySelector("#chainHistoryCount"),
   chainHistoryList: document.querySelector("#chainHistoryList"),
   battlePreview: document.querySelector("#battlePreview"),
+  fieldBattlePreview: document.querySelector("#fieldBattlePreview"),
   handConfirmBtn: document.querySelector("#handConfirmBtn"),
   handCancelBtn: document.querySelector("#handCancelBtn"),
   detailAttackBtn: document.querySelector("#detailAttackBtn"),
@@ -5822,6 +5823,7 @@ function resolveScenarioEventCardId(cardId) {
 function renderBattlePreview() {
   const preview = state.battlePreview || selectedAttackPreview();
   renderBattlePreviewElement(document, els.battlePreview, preview);
+  renderBattlePreviewElement(document, els.fieldBattlePreview, preview);
 }
 
 function isAttackTargetSlot(ownerName, index) {

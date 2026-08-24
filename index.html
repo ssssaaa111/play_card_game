@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20260812-unified-card-detail" />
-  <link rel="stylesheet" href="duel-table.css?v=20260824-command-deck" />
+  <link rel="stylesheet" href="styles.css?v=20260825-field-intent" />
+  <link rel="stylesheet" href="duel-table.css?v=20260825-field-intent" />
 </head>
 <body>
   <div id="app">
@@ -264,6 +264,7 @@
             <strong id="fieldActionName">怪兽</strong>
             <span id="fieldActionStatus" aria-live="polite">选择下一步行动</span>
           </span>
+          <div class="battle-preview field-battle-preview empty" id="fieldBattlePreview" data-preview-variant="field-battle-preview" aria-live="polite"></div>
           <button class="field-action-btn field-attack-btn" id="fieldAttackBtn" type="button">
             <span class="field-action-icon" aria-hidden="true">⚔</span>
             <span id="fieldAttackLabel">攻击</span>
@@ -577,6 +578,6 @@
   </div>
 
   <script type="module" src="src/duel-table.js?v=20260824-responsive-workbench"></script>
-  <script type="module" src="src/app.js?v=20260824-responsive-workbench"></script>
+  <script type="module" src="src/app.js?v=20260825-field-intent"></script>
 </body>
 </html>

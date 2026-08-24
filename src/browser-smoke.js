@@ -3301,7 +3301,7 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
   const arena = document.querySelector(".arena.duel-table");
   const handPanel = document.querySelector(".hand-panel");
   const handCommand = document.querySelector("#handCommand");
-  if (!topbar || !brand || !arena || !handPanel || !handCommand) {
+  if (!topbar || !brand || !arena || !handPanel || !handCommand || !ctx.els.fieldBattlePreview) {
     throw new Error("duel-layout-density-basic: required desktop regions are missing");
   }
   if (window.innerWidth <= 1040) {
@@ -3397,6 +3397,38 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
     throw new Error(`duel-layout-density-basic: field action buttons leave the hand panel (${fieldActionBottom}/${handPanel.getBoundingClientRect().bottom})`);
   }
 
+  clickSmokeElement(ctx.els.fieldAttackBtn, "duel-layout-density-basic: enter attack target selection");
+  await waitForSmoke(
+    () => ["intent", "target"].includes(ctx.els.fieldBattlePreview.dataset.previewMode) &&
+      !ctx.els.fieldBattlePreview.classList.contains("empty"),
+    "duel-layout-density-basic: compact attack preview opens"
+  );
+  const attackTarget = ctx.els.aiField.querySelector(".slot.attack-target");
+  if (!attackTarget) {
+    throw new Error("duel-layout-density-basic: attack target highlight is missing");
+  }
+  attackTarget.focus();
+  await waitForSmoke(
+    () => ctx.els.fieldBattlePreview.dataset.previewMode === "target" &&
+      Boolean(ctx.els.fieldBattlePreview.querySelector(".battle-preview-versus")),
+    "duel-layout-density-basic: compact exact target comparison"
+  );
+  const compactPreviewRect = ctx.els.fieldBattlePreview.getBoundingClientRect();
+  if (compactPreviewRect.bottom > handPanel.getBoundingClientRect().bottom + 1 ||
+      ctx.els.fieldBattlePreview.scrollHeight > Math.ceil(compactPreviewRect.height) + 1) {
+    throw new Error(
+      `duel-layout-density-basic: compact attack preview overflows the command dock ` +
+      `(mode=${ctx.els.fieldBattlePreview.dataset.previewMode}, ` +
+      `height=${compactPreviewRect.height}, scrollHeight=${ctx.els.fieldBattlePreview.scrollHeight}, ` +
+      `bottom=${compactPreviewRect.bottom}, handBottom=${handPanel.getBoundingClientRect().bottom})`
+    );
+  }
+
+  clickSmokeElement(ctx.els.fieldCancelBtn, "duel-layout-density-basic: cancel attack target selection");
+  await waitForSmoke(
+    () => ctx.els.fieldBattlePreview.classList.contains("empty") && ctx.state.attackIntentIndex === null,
+    "duel-layout-density-basic: compact attack preview closes"
+  );
   clickSmokeElement(ctx.els.fieldCancelBtn, "duel-layout-density-basic: cancel field command");
   await waitForSmoke(
     () => handPanel.dataset.commandActive === "false" && ctx.els.fieldActionBar.hidden,

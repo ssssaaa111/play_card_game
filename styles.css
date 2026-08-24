@@ -1616,16 +1616,21 @@ button.chain-history-card:focus-visible {
 }
 
 .card.selected {
-  border-color: var(--cyan);
-  box-shadow: 0 0 0 3px rgba(84, 210, 210, 0.25), 0 18px 32px rgba(0, 0, 0, 0.46);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(246, 189, 96, 0.24), 0 18px 32px rgba(0, 0, 0, 0.46);
 }
 
 .slot:has(.card.selected) {
-  border-color: rgba(84, 210, 210, 0.78);
+  border-color: rgba(246, 189, 96, 0.86);
   background:
-    radial-gradient(ellipse at 50% 88%, rgba(84, 210, 210, 0.2), transparent 56%),
+    radial-gradient(ellipse at 50% 88%, rgba(246, 189, 96, 0.2), transparent 56%),
     linear-gradient(180deg, rgba(25, 31, 39, 0.98), rgba(8, 10, 16, 0.92));
-  box-shadow: inset 0 -3px 0 rgba(84, 210, 210, 0.58), 0 0 28px rgba(84, 210, 210, 0.16);
+  box-shadow: inset 0 -3px 0 rgba(246, 189, 96, 0.64), 0 0 28px rgba(246, 189, 96, 0.18);
+}
+
+.slot.field-state-ready:has(.field-monster-card) {
+  border-color: rgba(84, 210, 210, 0.78);
+  box-shadow: inset 0 -3px 0 rgba(84, 210, 210, 0.62), 0 0 24px rgba(84, 210, 210, 0.12);
 }
 
 body[data-duel-turn="player"] #playerField .slot,
@@ -1977,7 +1982,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   overflow: hidden;
   max-height: 100%;
   aspect-ratio: 0.68;
-  grid-template-rows: 18px minmax(32px, 1fr) 15px 18px;
+  grid-template-rows: 18px minmax(32px, 1fr) 20px 18px;
   gap: 2px;
   padding: 4px;
   transform: none;
@@ -2004,6 +2009,14 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   box-shadow:
     inset 0 -3px 0 rgba(var(--zone-accent, 84, 210, 210), 0.7),
     0 0 0 1px rgba(var(--zone-accent, 84, 210, 210), 0.18),
+    0 16px 30px rgba(0, 0, 0, 0.46);
+}
+
+.field-monster-card.selected {
+  border-color: rgba(246, 189, 96, 0.96);
+  box-shadow:
+    inset 0 -3px 0 rgba(246, 189, 96, 0.72),
+    0 0 0 2px rgba(246, 189, 96, 0.2),
     0 16px 30px rgba(0, 0, 0, 0.46);
 }
 
@@ -2256,7 +2269,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   position: relative;
   z-index: 5;
   min-width: 0;
-  height: 18px;
+  height: 20px;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -2266,7 +2279,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .card-state-chip {
   flex: 0 1 auto;
   min-width: 0;
-  height: 16px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   padding: 1px 4px;
@@ -2274,7 +2287,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   border-radius: 3px;
   background: rgba(6, 9, 14, 0.86);
   color: rgba(222, 231, 241, 0.7);
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1;
   font-weight: 900;
   white-space: nowrap;
@@ -2371,7 +2384,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .field-monster-card .card-name {
   min-width: 0;
   overflow: hidden;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2380,7 +2393,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .field-monster-card .badge {
   min-width: 23px;
   height: 16px;
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .field-monster-card .element-badge,
@@ -2392,7 +2405,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   min-width: 0;
   overflow: hidden;
   gap: 2px;
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .field-monster-card .stat {
@@ -6931,6 +6944,12 @@ button.chain-stack-card:focus-visible {
   .field-monster-card .card-state-rail {
     min-height: 0;
     height: 12px;
+  }
+
+  .field-monster-card .card-state-chip {
+    height: 12px;
+    padding-inline: 2px;
+    font-size: 7px;
   }
 
   .field-monster-card .card-name {
