@@ -10,7 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="duel-table\.css\?v=20260824-ultra-workbench"/);
+  assert.match(html, /href="duel-table\.css\?v=20260824-command-deck"/);
   assert.match(html, /src="src\/app\.js\?v=20260824-responsive-workbench"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
@@ -102,20 +102,20 @@ test("settings stay compact on small screens and become direct controls when spa
 });
 
 test("spacious screens dock details actions and battle logs in a central workbench", () => {
+  const html = read("index.html");
   const css = read("duel-table.css");
   const controller = read("src/duel-table.js");
   const renderer = read("src/control-renderer.js");
 
-  assert.match(css, /@media \(min-width: 1440px\) and \(min-height: 820px\)[\s\S]*--spacious-workbench-height/);
-  assert.match(css, /@media \(min-width: 1440px\) and \(min-height: 820px\)[\s\S]*\.workspace-drawer\.is-docked[\s\S]*visibility: visible;[\s\S]*pointer-events: auto;/);
-  assert.match(css, /\.detail-drawer \{[\s\S]*width: calc\(44% - 15px\);[\s\S]*\.timeline-drawer \{[\s\S]*width: calc\(56% - 15px\);/);
-  assert.match(css, /\.detail-drawer \.detail-actions\s*\{[\s\S]*grid-column: 2;[\s\S]*grid-row: 1 \/ 4;/);
+  assert.match(html, /id="workspaceDeck"[\s\S]*id="detailDrawer"[\s\S]*id="timelineDrawer"/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*--workspace-height/);
+  assert.match(css, /\.workspace-deck\s*\{[\s\S]*grid-template-columns: minmax\(0, 0\.9fr\) minmax\(0, 1\.1fr\);[\s\S]*transform: translate\(-50%, -50%\);/);
+  assert.match(css, /\.workspace-deck \.workspace-drawer\.is-docked[\s\S]*visibility: visible;[\s\S]*pointer-events: auto;/);
+  assert.match(css, /\.detail-drawer \.detail-actions\s*\{[\s\S]*grid-row: 3;[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(renderer, /elements\.detailAttackBtn\.hidden = view\.fieldAction\.hidden/);
-  assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*--ultra-workbench-height/);
-  assert.match(css, /\.workspace-drawer\.detail-drawer\s*\{[\s\S]*left: 50%;[\s\S]*transform: translate\(calc\(-100% - 8px\), -50%\);/);
-  assert.match(css, /\.workspace-drawer\.timeline-drawer\s*\{[\s\S]*left: 50%;[\s\S]*transform: translate\(8px, -50%\);/);
-  assert.match(css, /\.utility-menu \.btn,[\s\S]*flex: 0 0 84px;[\s\S]*width: 84px;[\s\S]*min-height: 44px;/);
-  assert.match(controller, /const SPACIOUS_WORKSPACE_QUERY = "\(min-width: 1440px\) and \(min-height: 820px\)"/);
+  assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*width: min\(calc\(100% - 48px\), 3200px\)/);
+  assert.match(css, /\.utility-menu \.btn,[\s\S]*flex: 0 0 76px;[\s\S]*width: 76px;[\s\S]*min-height: 38px;/);
+  assert.match(controller, /const SPACIOUS_WORKSPACE_QUERY = "\(min-width: 1600px\) and \(min-height: 900px\)"/);
   assert.match(controller, /function syncResponsiveWorkspace\(\)[\s\S]*body\.dataset\.workspaceLayout = spacious \? "expanded" : "drawer"/);
   assert.match(controller, /drawer\.root\?\.classList\.toggle\("is-docked", spacious\)/);
 });

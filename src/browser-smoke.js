@@ -9325,12 +9325,15 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "trioDirectTrapPlanning");
 
-  if (!window.matchMedia("(min-width: 1440px) and (min-height: 820px)").matches) {
+  if (!window.matchMedia("(min-width: 1600px) and (min-height: 900px)").matches) {
     throw new Error(`${smokeName}: expected spacious viewport, received ${window.innerWidth}x${window.innerHeight}`);
   }
 
   const arena = document.querySelector(".arena.duel-table");
   const field = document.querySelector(".arena.duel-table .field");
+  const handPanel = document.querySelector(".hand-panel");
+  const centerLine = document.querySelector(".duel-table .center-line");
+  const workspaceDeck = document.querySelector("#workspaceDeck");
   const detailDrawer = document.querySelector("#detailDrawer");
   const detailName = document.querySelector("#detailName");
   const detailMeta = document.querySelector("#detailMeta");
@@ -9341,7 +9344,7 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   const timelineToggle = document.querySelector("#timelineDrawerToggle");
   const utilityToggle = document.querySelector("#utilityMenuToggle");
   const utilityMenu = document.querySelector("#utilityMenu");
-  const requiredRegions = [arena, field, detailDrawer, detailName, detailMeta, detailAttackBtn, detailSelectionCancelBtn, timelineDrawer, detailToggle, timelineToggle, utilityToggle, utilityMenu];
+  const requiredRegions = [arena, field, handPanel, centerLine, workspaceDeck, detailDrawer, detailName, detailMeta, detailAttackBtn, detailSelectionCancelBtn, timelineDrawer, detailToggle, timelineToggle, utilityToggle, utilityMenu];
   if (requiredRegions.some((element) => !element)) {
     throw new Error(`${smokeName}: required responsive regions are missing`);
   }
@@ -9365,15 +9368,23 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
 
   const fieldRect = field.getBoundingClientRect();
   const arenaRect = arena.getBoundingClientRect();
+  const handRect = handPanel.getBoundingClientRect();
+  const centerRect = centerLine.getBoundingClientRect();
+  const workspaceRect = workspaceDeck.getBoundingClientRect();
   const detailRect = detailDrawer.getBoundingClientRect();
   const timelineRect = timelineDrawer.getBoundingClientRect();
   if (detailRect.width < 420 || timelineRect.width < 520 || detailRect.height < 160 || timelineRect.height < 160) {
     throw new Error(`${smokeName}: docked workbench is too small (${detailRect.width}x${detailRect.height}; ${timelineRect.width}x${timelineRect.height})`);
   }
-  if (fieldRect.bottom > Math.min(detailRect.top, timelineRect.top) + 2 ||
-      detailRect.left < arenaRect.left || timelineRect.right > arenaRect.right + 1 ||
-      detailRect.bottom > arenaRect.bottom + 1 || timelineRect.bottom > arenaRect.bottom + 1) {
-    throw new Error(`${smokeName}: docked workbench overlaps the battlefield or leaves the arena`);
+  if (Math.abs((workspaceRect.top + workspaceRect.bottom) / 2 - (arenaRect.top + arenaRect.bottom) / 2) > 3 ||
+      workspaceRect.top < centerRect.top - 1 || workspaceRect.bottom > centerRect.bottom + 1 ||
+      workspaceRect.left < fieldRect.left || workspaceRect.right > fieldRect.right ||
+      handRect.top - workspaceRect.bottom < 120) {
+    throw new Error(`${smokeName}: command deck should occupy the reserved battlefield center`);
+  }
+  if (Math.abs(detailRect.right - timelineRect.left) > 2 ||
+      Math.abs(detailRect.left - workspaceRect.left) > 2 || Math.abs(timelineRect.right - workspaceRect.right) > 2) {
+    throw new Error(`${smokeName}: detail and timeline should read as one shared command deck`);
   }
 
   clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
@@ -9429,12 +9440,13 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   const arena = document.querySelector(".arena.duel-table");
   const handPanel = document.querySelector(".hand-panel");
   const centerLine = document.querySelector(".duel-table .center-line");
+  const workspaceDeck = document.querySelector("#workspaceDeck");
   const detailDrawer = document.querySelector("#detailDrawer");
   const timelineDrawer = document.querySelector("#timelineDrawer");
   const detailAttackBtn = document.querySelector("#detailAttackBtn");
   const detailSelectionCancelBtn = document.querySelector("#detailSelectionCancelBtn");
   const utilityMenu = document.querySelector("#utilityMenu");
-  const required = [arena, handPanel, centerLine, detailDrawer, timelineDrawer, detailAttackBtn, detailSelectionCancelBtn, utilityMenu];
+  const required = [arena, handPanel, centerLine, workspaceDeck, detailDrawer, timelineDrawer, detailAttackBtn, detailSelectionCancelBtn, utilityMenu];
   if (required.some((element) => !element)) {
     throw new Error(`${smokeName}: required ultra-wide regions are missing`);
   }
@@ -9442,6 +9454,7 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   const arenaRect = arena.getBoundingClientRect();
   const handRect = handPanel.getBoundingClientRect();
   const centerRect = centerLine.getBoundingClientRect();
+  const workspaceRect = workspaceDeck.getBoundingClientRect();
   const detailRect = detailDrawer.getBoundingClientRect();
   const timelineRect = timelineDrawer.getBoundingClientRect();
   const workbenchCenter = (Math.min(detailRect.top, timelineRect.top) + Math.max(detailRect.bottom, timelineRect.bottom)) / 2;
@@ -9457,9 +9470,10 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   if (handRect.top - Math.max(detailRect.bottom, timelineRect.bottom) < 240) {
     throw new Error(`${smokeName}: central workbench is still visually attached to the hand panel`);
   }
-  if (detailRect.width + timelineRect.width > arenaRect.width * 0.55 ||
-      detailRect.right > timelineRect.left - 8) {
-    throw new Error(`${smokeName}: central workbench is too wide or its panels overlap`);
+  if (workspaceRect.width > arenaRect.width * 0.6 ||
+      Math.abs(detailRect.right - timelineRect.left) > 2 ||
+      Math.abs(detailRect.width + timelineRect.width - workspaceRect.width) > 3) {
+    throw new Error(`${smokeName}: central command deck should stay bounded and visually unified`);
   }
 
   const settingsButtons = [ctx.els.guideBtn, ctx.els.pauseBtn, ctx.els.soundBtn, ctx.els.musicBtn, ctx.els.voiceBtn, ctx.els.restartBtn];
