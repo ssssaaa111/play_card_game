@@ -9502,10 +9502,11 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "trioDirectTrapPlanning");
 
-  if (!window.matchMedia("(min-width: 2200px) and (min-height: 1200px)").matches) {
+  if (!window.matchMedia("(min-width: 2800px) and (min-height: 1400px)").matches) {
     throw new Error(`${smokeName}: expected 4K workspace, received ${window.innerWidth}x${window.innerHeight}`);
   }
 
+  const app = document.querySelector("#app");
   const arena = document.querySelector(".arena.duel-table");
   const handPanel = document.querySelector(".hand-panel");
   const centerLine = document.querySelector(".duel-table .center-line");
@@ -9515,34 +9516,34 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   const detailAttackBtn = document.querySelector("#detailAttackBtn");
   const detailSelectionCancelBtn = document.querySelector("#detailSelectionCancelBtn");
   const utilityMenu = document.querySelector("#utilityMenu");
-  const required = [arena, handPanel, centerLine, workspaceDeck, detailDrawer, timelineDrawer, detailAttackBtn, detailSelectionCancelBtn, utilityMenu];
+  const required = [app, arena, handPanel, centerLine, workspaceDeck, detailDrawer, timelineDrawer, detailAttackBtn, detailSelectionCancelBtn, utilityMenu];
   if (required.some((element) => !element)) {
     throw new Error(`${smokeName}: required ultra-wide regions are missing`);
   }
 
-  const arenaRect = arena.getBoundingClientRect();
+  const appRect = app.getBoundingClientRect();
   const handRect = handPanel.getBoundingClientRect();
   const centerRect = centerLine.getBoundingClientRect();
   const workspaceRect = workspaceDeck.getBoundingClientRect();
   const detailRect = detailDrawer.getBoundingClientRect();
   const timelineRect = timelineDrawer.getBoundingClientRect();
-  const workbenchCenter = (Math.min(detailRect.top, timelineRect.top) + Math.max(detailRect.bottom, timelineRect.bottom)) / 2;
-  const arenaCenter = (arenaRect.top + arenaRect.bottom) / 2;
-
-  if (Math.abs(workbenchCenter - arenaCenter) > 4) {
-    throw new Error(`${smokeName}: workbench should occupy the arena center (${workbenchCenter}/${arenaCenter})`);
+  if (document.body.dataset.workspaceLayout !== "gutter") {
+    throw new Error(`${smokeName}: expected gutter workspace mode`);
   }
-  if (detailRect.top < centerRect.top - 1 || timelineRect.top < centerRect.top - 1 ||
-      detailRect.bottom > centerRect.bottom + 1 || timelineRect.bottom > centerRect.bottom + 1) {
-    throw new Error(`${smokeName}: central workbench should stay inside its reserved field track`);
+  if (workspaceRect.width > 1 || workspaceRect.height > 1 || centerRect.height > 60) {
+    throw new Error(`${smokeName}: auxiliary workspace still reserves the battlefield center`);
   }
-  if (handRect.top - Math.max(detailRect.bottom, timelineRect.bottom) < 240) {
-    throw new Error(`${smokeName}: central workbench is still visually attached to the hand panel`);
+  if (detailRect.right > appRect.left - 8 || timelineRect.left < appRect.right + 8) {
+    throw new Error(
+      `${smokeName}: context rails must remain outside the central game surface ` +
+      `(detailRight=${detailRect.right}, app=${appRect.left}-${appRect.right}, timelineLeft=${timelineRect.left})`
+    );
   }
-  if (workspaceRect.width > arenaRect.width * 0.6 ||
-      Math.abs(detailRect.right - timelineRect.left) > 2 ||
-      Math.abs(detailRect.width + timelineRect.width - workspaceRect.width) > 3) {
-    throw new Error(`${smokeName}: central command deck should stay bounded and visually unified`);
+  const aiRect = ctx.els.aiField.getBoundingClientRect();
+  const playerRect = ctx.els.playerField.getBoundingClientRect();
+  if (aiRect.bottom > centerRect.top + 1 || playerRect.top < centerRect.bottom - 1 ||
+      aiRect.height < 480 || playerRect.height < 480) {
+    throw new Error(`${smokeName}: monster zones should own the restored center stage`);
   }
 
   const settingsButtons = [ctx.els.guideBtn, ctx.els.pauseBtn, ctx.els.soundBtn, ctx.els.musicBtn, ctx.els.voiceBtn, ctx.els.restartBtn];
@@ -9580,17 +9581,17 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
   await waitForSmoke(
     () => !detailAttackBtn.hidden && !detailSelectionCancelBtn.hidden,
-    `${smokeName}: card actions appear in the central workbench`
+    `${smokeName}: card actions appear in the left context rail`
   );
-  clickSmokeElement(detailAttackBtn, `${smokeName}: start attack from central workbench`);
+  clickSmokeElement(detailAttackBtn, `${smokeName}: start attack from left context rail`);
   await waitForSmoke(
     () => ctx.state.attackIntentIndex !== null && detailAttackBtn.textContent.includes("选目标"),
-    `${smokeName}: central attack action remains interactive`
+    `${smokeName}: gutter attack action remains interactive`
   );
-  clickSmokeElement(detailSelectionCancelBtn, `${smokeName}: cancel central attack action`);
+  clickSmokeElement(detailSelectionCancelBtn, `${smokeName}: cancel gutter attack action`);
   await waitForSmoke(
     () => ctx.state.attackIntentIndex === null && ctx.state.selected?.zone === "playerField",
-    `${smokeName}: central cancel returns to card selection`
+    `${smokeName}: gutter cancel returns to card selection`
   );
 
   clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: pause from uniform settings row`);

@@ -3159,6 +3159,102 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 }
 
+/* Ultra-wide layouts give utility context dedicated outer gutters so the duel
+   keeps the entire center stage. */
+@media (min-width: 2800px) and (min-height: 1400px) {
+  #app {
+    --workspace-height: 0px;
+    --workspace-track: 38px;
+    width: min(calc(100% - 640px), 3200px);
+  }
+
+  #app .duel-table .field {
+    grid-template-rows:
+      minmax(300px, 1fr)
+      var(--support-track-size)
+      var(--workspace-track)
+      var(--support-track-size)
+      minmax(300px, 1fr);
+  }
+
+  #app .duel-table .center-line {
+    align-items: center;
+    padding-top: 0;
+  }
+
+  .workspace-deck {
+    position: static;
+    width: auto;
+    height: auto;
+    display: contents;
+    overflow: visible;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    transform: none;
+    backdrop-filter: none;
+  }
+
+  .workspace-deck .workspace-drawer,
+  .workspace-deck .workspace-drawer.is-open,
+  .workspace-deck .workspace-drawer.is-docked {
+    position: fixed;
+    top: 50%;
+    bottom: auto;
+    z-index: 34;
+    width: clamp(288px, calc((100vw - 3200px) / 2 - 32px), 304px);
+    height: min(760px, calc(100dvh - 360px));
+    gap: 9px;
+    padding: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.045), transparent 28%),
+      rgba(7, 12, 20, 0.97);
+    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.4);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(-50%);
+    backdrop-filter: blur(18px);
+  }
+
+  .workspace-deck .detail-drawer,
+  .workspace-deck .detail-drawer.is-open,
+  .workspace-deck .detail-drawer.is-docked {
+    left: 16px;
+    right: auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    border-color: rgba(246, 189, 96, 0.28);
+  }
+
+  .workspace-deck .timeline-drawer,
+  .workspace-deck .timeline-drawer.is-open,
+  .workspace-deck .timeline-drawer.is-docked {
+    right: 16px;
+    left: auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    border-color: rgba(84, 210, 210, 0.28);
+    background:
+      radial-gradient(circle at 92% 2%, rgba(84, 210, 210, 0.12), transparent 28%),
+      linear-gradient(165deg, rgba(255, 255, 255, 0.045), transparent 28%),
+      rgba(7, 12, 20, 0.97);
+  }
+
+  .workspace-deck .detail-drawer .detail-card {
+    overflow-y: auto;
+  }
+
+  .workspace-deck .timeline-drawer .timeline-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-deck .timeline-drawer .timeline-list {
+    overflow-y: auto;
+  }
+}
+
 @media (max-width: 900px) {
   .setup-modal .modal-header {
     grid-template-columns: minmax(0, 1fr) minmax(240px, 0.75fr);

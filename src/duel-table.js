@@ -1,6 +1,7 @@
 const COMPACT_WORKSPACE_QUERY = "(max-width: 1040px)";
 const SPACIOUS_SETTINGS_QUERY = "(min-width: 1440px) and (min-height: 680px)";
 const SPACIOUS_WORKSPACE_QUERY = "(min-width: 1600px) and (min-height: 900px)";
+const GUTTER_WORKSPACE_QUERY = "(min-width: 2800px) and (min-height: 1400px)";
 const EMPTY_DETAIL_TITLE = "选择一张卡";
 
 function setControlExpanded(control, expanded) {
@@ -47,6 +48,7 @@ export function createDuelTableController(documentRef = document) {
   const compactWorkspace = window.matchMedia(COMPACT_WORKSPACE_QUERY);
   const spaciousSettings = window.matchMedia(SPACIOUS_SETTINGS_QUERY);
   const spaciousWorkspace = window.matchMedia(SPACIOUS_WORKSPACE_QUERY);
+  const gutterWorkspace = window.matchMedia(GUTTER_WORKSPACE_QUERY);
   const drawers = {
     detail: { root: detailDrawer, toggle: detailToggle },
     timeline: { root: timelineDrawer, toggle: timelineToggle }
@@ -95,7 +97,8 @@ export function createDuelTableController(documentRef = document) {
 
   function syncResponsiveWorkspace() {
     const spacious = spaciousWorkspace.matches;
-    if (body) body.dataset.workspaceLayout = spacious ? "expanded" : "drawer";
+    const gutter = spacious && gutterWorkspace.matches;
+    if (body) body.dataset.workspaceLayout = gutter ? "gutter" : spacious ? "expanded" : "drawer";
     for (const drawer of Object.values(drawers)) {
       drawer.root?.classList.toggle("is-docked", spacious);
       drawer.root?.classList.toggle("is-open", spacious);
@@ -373,6 +376,7 @@ export function createDuelTableController(documentRef = document) {
   compactWorkspace.addEventListener("change", responsiveChangeHandler);
   spaciousSettings.addEventListener("change", responsiveChangeHandler);
   spaciousWorkspace.addEventListener("change", responsiveChangeHandler);
+  gutterWorkspace.addEventListener("change", responsiveChangeHandler);
 
   setUtilityMenu(false);
   setDrawer("detail", false);
@@ -398,6 +402,7 @@ export function createDuelTableController(documentRef = document) {
       compactWorkspace.removeEventListener("change", responsiveChangeHandler);
       spaciousSettings.removeEventListener("change", responsiveChangeHandler);
       spaciousWorkspace.removeEventListener("change", responsiveChangeHandler);
+      gutterWorkspace.removeEventListener("change", responsiveChangeHandler);
       for (const select of setupSelects) select.removeEventListener("change", setupChangeHandler);
       for (const button of timelineFilters) button.removeEventListener("click", timelineFilterHandler);
     },

@@ -106,7 +106,7 @@ test("settings stay compact on small screens and become direct controls when spa
   assert.match(controller, /const expanded = spaciousSettings\.matches \|\| Boolean\(open\)/);
 });
 
-test("spacious screens dock details actions and battle logs in a central workbench", () => {
+test("spacious screens dock context while true 4K screens move it into edge gutters", () => {
   const html = read("index.html");
   const css = read("duel-table.css");
   const controller = read("src/duel-table.js");
@@ -122,8 +122,11 @@ test("spacious screens dock details actions and battle logs in a central workben
   assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*\.field-state-chip\s*\{[\s\S]*font-size: 11px/);
   assert.match(css, /\.utility-menu \.btn,[\s\S]*flex: 0 0 76px;[\s\S]*width: 76px;[\s\S]*min-height: 38px;/);
   assert.match(controller, /const SPACIOUS_WORKSPACE_QUERY = "\(min-width: 1600px\) and \(min-height: 900px\)"/);
-  assert.match(controller, /function syncResponsiveWorkspace\(\)[\s\S]*body\.dataset\.workspaceLayout = spacious \? "expanded" : "drawer"/);
+  assert.match(controller, /const GUTTER_WORKSPACE_QUERY = "\(min-width: 2800px\) and \(min-height: 1400px\)"/);
+  assert.match(controller, /function syncResponsiveWorkspace\(\)[\s\S]*const gutter = spacious && gutterWorkspace\.matches;[\s\S]*body\.dataset\.workspaceLayout = gutter \? "gutter" : spacious \? "expanded" : "drawer"/);
   assert.match(controller, /drawer\.root\?\.classList\.toggle\("is-docked", spacious\)/);
+  assert.match(css, /@media \(min-width: 2800px\) and \(min-height: 1400px\)[\s\S]*--workspace-track: 38px;[\s\S]*width: min\(calc\(100% - 640px\), 3200px\);[\s\S]*\.workspace-deck\s*\{[\s\S]*display: contents;/);
+  assert.match(css, /@media \(min-width: 2800px\) and \(min-height: 1400px\)[\s\S]*\.workspace-deck \.detail-drawer\.is-docked\s*\{[\s\S]*left: 16px;[\s\S]*\.workspace-deck \.timeline-drawer\.is-docked\s*\{[\s\S]*right: 16px;/);
 });
 
 test("spacious card density keeps field hand and support scales related", () => {
