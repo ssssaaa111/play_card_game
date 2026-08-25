@@ -146,6 +146,11 @@ import {
   projectBattleFromUiState
 } from './engine-adapter.js';
 import { renderChainHistoryPanel, renderTimelinePanel } from './timeline-renderer.js';
+import {
+  createPhaseStageController,
+  phaseStageCue,
+  phaseStageCuesFromEvents
+} from './phase-stage.js';
 import { spellDefinitions } from './spells.js';
 import { nextTimelineState } from './timeline.js';
 import { selectRedirectTarget, trapActivationText, trapCanResolve, trapConsumesAttack } from './traps.js';
@@ -413,6 +418,7 @@ const els = {
   detailBtn: document.querySelector("#detailBtn"),
   duelHint: document.querySelector("#duelHint"),
   toast: document.querySelector("#toast"),
+  phaseStage: document.querySelector("#phaseStage"),
   effectLayer: document.querySelector("#effectLayer"),
   choiceActions: document.querySelector("#choiceActions"),
   choiceText: document.querySelector("#choiceText"),
@@ -516,6 +522,19 @@ const els = {
 };
 
 const cardInspectorElements = bindCardInspector(document);
+
+const phaseStageController = createPhaseStageController({
+  root: els.phaseStage,
+  window
+});
+
+function queuePhaseStage(input) {
+  phaseStageController.enqueue(input);
+}
+
+function queuePhaseStageEvents(events = []) {
+  queuePhaseStage(phaseStageCuesFromEvents(events));
+}
 
 const musicController = createMusicController({
   getSettings: () => ({
@@ -961,6 +980,7 @@ function resetDuelResultState() {
 function startGame() {
   stopAll();
   stopMusic({ fadeMs: 80 });
+  phaseStageController.reset();
   closeTrapChoicePrompt();
   clearAiReveal(false);
   applySetupChoices();
@@ -1018,6 +1038,7 @@ function startGame() {
   playMusic(currentMusicMode());
   playVoice("player", "start", "决斗开始。轮到你，先抽卡。", true);
   render();
+  queuePhaseStage(phaseStageCue(PHASES.draw, "player"));
   if (!hasSeenGuide()) {
     window.setTimeout(showGuide, 250);
   } else {
@@ -1028,6 +1049,7 @@ function startGame() {
 function prepareGame() {
   stopAll();
   stopMusic({ fadeMs: 220 });
+  phaseStageController.reset();
   closeTrapChoicePrompt();
   clearAiReveal(false);
   scenarioHintsVisible = true;
@@ -4254,10 +4276,11 @@ function endPlayerTurn(reason = "manual") {
   clearBattlePreview();
   clearPlayerIdleTimers();
   try {
-    dispatchEndTurnFromUiState(state, "player", {
+    const endEvents = dispatchEndTurnFromUiState(state, "player", {
       reason,
       endedBy: reason === "manual" ? "manual" : "system"
     });
+    queuePhaseStageEvents(endEvents);
   } catch (error) {
     cue(error.message || "回合结束失败。");
     console.error(error);
@@ -4284,7 +4307,8 @@ function enterPlayerBattlePhase(reason = "战斗时点", { preserveSelection = f
   if (!preserveSelection) state.selected = null;
   clearBattlePreview();
   try {
-    dispatchChangePhaseFromUiState(state, "player", PHASES.battle);
+    const phaseEvents = dispatchChangePhaseFromUiState(state, "player", PHASES.battle);
+    queuePhaseStageEvents(phaseEvents);
   } catch (error) {
     cue(error.message || "无法进入战斗阶段。");
     console.error(error);
@@ -4413,10 +4437,11 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
     state.autoEndTimer = null;
     if (state.turn === "player" && state.autoEnding && state.actionWindow === "autoEnd" && !state.gameOver) {
       try {
-        dispatchCommitAutoEndFromUiState(state, "player", {
+        const endEvents = dispatchCommitAutoEndFromUiState(state, "player", {
           reason,
           now: Date.now()
         });
+        queuePhaseStageEvents(endEvents);
       } catch (error) {
         cue(error.message || "自动结束失败。");
         console.error(error);
@@ -4439,6 +4464,7 @@ function beginTurn(owner) {
     return false;
   }
   Object.assign(state, turnStartPatch(owner));
+  queuePhaseStageEvents(turnEvents);
   clearBattlePreview();
   cancelAutoEnd();
   clearPlayerIdleTimers();
@@ -4575,6 +4601,7 @@ function autoPlayerDraw() {
     console.error(error);
     return;
   }
+  queuePhaseStageEvents(events);
   applyDrawEventFeedback(state.player, events, true);
   if (state.gameOver) {
     render();
@@ -4625,6 +4652,7 @@ async function runAiTurn() {
   try {
     await sleep(950);
     const drawEvents = dispatchResolveTurnDrawFromUiState(state, "ai");
+    queuePhaseStageEvents(drawEvents);
     applyDrawEventFeedback(state.ai, drawEvents, true);
     if (state.gameOver) return;
     if (state.phase !== PHASES.main) return;
@@ -4676,15 +4704,17 @@ async function runAiTurn() {
     turnGoal = chooseLiveAiTurnGoal();
     await aiPlayFusion({ turnGoal });
     if (state.gameOver) return;
-    dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
+    const phaseEvents = dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
+    queuePhaseStageEvents(phaseEvents);
     await aiAttack({ getTurnGoal: chooseLiveAiTurnGoal });
     if (!state.gameOver) {
       await sleep(1150);
       try {
-        dispatchEndTurnFromUiState(state, "ai", {
+        const endEvents = dispatchEndTurnFromUiState(state, "ai", {
           reason: "ai-complete",
           endedBy: "system"
         });
+        queuePhaseStageEvents(endEvents);
       } catch (error) {
         cue(error.message || "AI 回合结束失败。");
         console.error(error);

@@ -8602,6 +8602,13 @@ async function runPhaseProgressionBasicSmoke(ctx) {
   const smokeName = "phase-progression-basic";
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "direct");
+  await waitForSmoke(
+    () => ctx.els.phaseStage?.dataset.phase === "main",
+    `${smokeName}: draw-to-main event reaches the stage cue`
+  );
+  if (getComputedStyle(ctx.els.phaseStage).pointerEvents !== "none") {
+    throw new Error(`${smokeName}: phase stage must not intercept duel clicks. ${smokeDebug(ctx)}`);
+  }
 
   const eventStart = (ctx.state.gameEvents || []).length;
   clickSmokeElement(ctx.els.skipAttackBtn, `${smokeName}: enter battle by skipping attacks`);
@@ -8614,6 +8621,10 @@ async function runPhaseProgressionBasicSmoke(ctx) {
         event.to === "battle"
       ),
     `${smokeName}: main phase advances to battle through PHASE_CHANGED`
+  );
+  await waitForSmoke(
+    () => ctx.els.phaseStage?.dataset.phase === "battle",
+    `${smokeName}: battle event reaches the stage cue`
   );
 
   const phaseEvents = (ctx.state.gameEvents || []).slice(eventStart)
@@ -8631,6 +8642,10 @@ async function runPhaseProgressionBasicSmoke(ctx) {
       event.fromPhase === "battle"
     ),
     `${smokeName}: battle phase ends through TURN_ENDED`
+  );
+  await waitForSmoke(
+    () => ctx.els.phaseStage?.dataset.phase === "end",
+    `${smokeName}: turn end event reaches the stage cue`
   );
 
   const events = (ctx.state.gameEvents || []).slice(eventStart);

@@ -10,9 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="styles\.css\?v=20260825-field-intent"/);
-  assert.match(html, /href="duel-table\.css\?v=20260825-card-density"/);
-  assert.match(html, /src="src\/app\.js\?v=20260825-field-intent"/);
+  assert.match(html, /href="styles\.css\?v=20260825-phase-stage"/);
+  assert.match(html, /href="duel-table\.css\?v=20260825-phase-stage"/);
+  assert.match(html, /src="src\/app\.js\?v=20260825-phase-stage"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -265,6 +265,22 @@ test("combat attention system exposes phase progress and hand readiness", () => 
   assert.match(app, /document\.body\.dataset\.duelPhase/);
   assert.match(app, /document\.body\.dataset\.duelSelection/);
   assert.match(app, /document\.body\.dataset\.duelCanAct/);
+});
+
+test("phase changes use a queued stage cue without blocking the duel table", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const app = read("src/app.js");
+
+  assert.match(html, /id="phaseStage"[\s\S]*data-phase-stage-code[\s\S]*data-phase-stage-title[\s\S]*data-phase-stage-detail/);
+  assert.match(css, /\.phase-stage\s*\{[\s\S]*position: fixed;[\s\S]*pointer-events: none;/);
+  assert.match(css, /\.phase-stage\[data-phase="battle"\][\s\S]*--phase-stage-accent: #ef476f/);
+  assert.match(css, /body:has\(\.phase-stage\.is-active\) \.toast\.show\s*\{[\s\S]*animation: none/);
+  assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*\.phase-stage\s*\{[\s\S]*width: min\(680px/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*phaseStagePresenceReduced/);
+  assert.match(app, /queuePhaseStageEvents\(turnEvents\)/);
+  assert.match(app, /queuePhaseStageEvents\(phaseEvents\)/);
+  assert.match(app, /queuePhaseStageEvents\(endEvents\)/);
 });
 
 test("pre-duel setup uses a responsive loadout and tactical intelligence cockpit", () => {

@@ -950,7 +950,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
   assert.match(smoke, /const smokeName = "turn-handoff-basic";[\s\S]*"TURN_ENDED:ai"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
-  assert.match(smoke, /const smokeName = "phase-progression-basic";[\s\S]*event\.from === "main"[\s\S]*event\.to === "battle"[\s\S]*event\.type === "TURN_ENDED"[\s\S]*event\.fromPhase === "battle"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "phase-progression-basic";[\s\S]*phaseStage\?\.dataset\.phase === "main"[\s\S]*event\.from === "main"[\s\S]*event\.to === "battle"[\s\S]*phaseStage\?\.dataset\.phase === "battle"[\s\S]*event\.type === "TURN_ENDED"[\s\S]*event\.fromPhase === "battle"[\s\S]*phaseStage\?\.dataset\.phase === "end"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /const smokeName = "phase-window-ownership-basic";[\s\S]*event\.reason === "phase-entered:main"[\s\S]*event\.reason === "phase-entered:battle"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
@@ -1224,7 +1224,7 @@ test("app uses extracted spell metadata", () => {
   assert.match(app, /canSummon: \(_card, handIndex, options\) => explainSummonMonsterFromUiState\(/);
   assert.match(app, /canSetTrap: \(_card, handIndex, trapIndex\) =>/);
   assert.match(app, /canAttackMonster: \(_card, fieldIndex\) =>/);
-  assert.match(app, /dispatchChangePhaseFromUiState\(state, "ai", PHASES\.battle\);\s+await aiAttack\(\{ getTurnGoal: chooseLiveAiTurnGoal \}\);/);
+  assert.match(app, /const phaseEvents = dispatchChangePhaseFromUiState\(state, "ai", PHASES\.battle\);\s+queuePhaseStageEvents\(phaseEvents\);\s+await aiAttack\(\{ getTurnGoal: chooseLiveAiTurnGoal \}\);/);
   assert.doesNotMatch(app, /setActionWindow\(ACTION_WINDOWS\.ai, \{ playerId: "ai", reason: "ai battle" \}\)/);
   assert.match(ai, /scoreSpellForAi\(card\.effect/);
   assert.doesNotMatch(app, /validateSpellCondition/);
