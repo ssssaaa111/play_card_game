@@ -9502,7 +9502,7 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "trioDirectTrapPlanning");
 
-  if (!window.matchMedia("(min-width: 2800px) and (min-height: 1400px)").matches) {
+  if (!window.matchMedia("(min-width: 2400px) and (min-height: 1200px)").matches) {
     throw new Error(`${smokeName}: expected 4K workspace, received ${window.innerWidth}x${window.innerHeight}`);
   }
 

@@ -3161,7 +3161,7 @@ body:has(.phase-stage.is-active) .toast.show {
 
 /* Ultra-wide layouts give utility context dedicated outer gutters so the duel
    keeps the entire center stage. */
-@media (min-width: 2800px) and (min-height: 1400px) {
+@media (min-width: 2400px) and (min-height: 1200px) {
   #app {
     --workspace-height: 0px;
     --workspace-track: 38px;

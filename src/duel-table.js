@@ -1,7 +1,7 @@
 const COMPACT_WORKSPACE_QUERY = "(max-width: 1040px)";
 const SPACIOUS_SETTINGS_QUERY = "(min-width: 1440px) and (min-height: 680px)";
 const SPACIOUS_WORKSPACE_QUERY = "(min-width: 1600px) and (min-height: 900px)";
-const GUTTER_WORKSPACE_QUERY = "(min-width: 2800px) and (min-height: 1400px)";
+const GUTTER_WORKSPACE_QUERY = "(min-width: 2400px) and (min-height: 1200px)";
 const EMPTY_DETAIL_TITLE = "选择一张卡";
 
 function setControlExpanded(control, expanded) {
