@@ -361,7 +361,8 @@ test("spacious field commands form one row directly above the hand", () => {
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.hand-panel\[data-command-active="false"\]\s*\{[\s\S]*grid-template-columns: 90px minmax\(0, 1fr\);/);
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.hand-command\[data-active="false"\]\s*\{[\s\S]*display: none;/);
   assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 44px minmax\(0, 1fr\);/);
-  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-command\[data-active="true"\] \.field-action-bar\s*\{[\s\S]*grid-template-columns: minmax\(220px, 1fr\) repeat\(4, minmax\(88px, 132px\)\);[\s\S]*grid-template-rows: minmax\(0, 1fr\);/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-command\[data-active="true"\] \.field-action-bar\s*\{[\s\S]*grid-template-columns: minmax\(220px, 1fr\) repeat\(4, minmax\(88px, 132px\)\) minmax\(220px, 1fr\);[\s\S]*grid-template-rows: minmax\(0, 1fr\);/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-command\[data-active="true"\] \.field-action-bar::after\s*\{[\s\S]*grid-column: 6;/);
   assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-stack\s*\{[\s\S]*grid-row: 2;/);
   assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-toolbar\s*\{[\s\S]*display: none;/);
 });

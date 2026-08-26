@@ -2824,10 +2824,16 @@ body:has(.phase-stage.is-active) .toast.show {
   body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-action-bar {
     grid-column: 1;
     grid-row: 1;
-    grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(88px, 132px));
+    grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(88px, 132px)) minmax(220px, 1fr);
     grid-template-rows: minmax(0, 1fr);
     gap: 5px;
     height: 100%;
+  }
+
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-action-bar::after {
+    content: "";
+    grid-column: 6;
+    grid-row: 1;
   }
 
   body[data-duel-selection="playerField"] .field-action-context {

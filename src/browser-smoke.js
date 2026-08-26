@@ -9473,8 +9473,11 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   const fieldActionRect = ctx.els.fieldActionBar.getBoundingClientRect();
   const fieldButtonRects = [ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldDetailBtn, ctx.els.fieldCancelBtn]
     .map((button) => button.getBoundingClientRect());
+  const fieldButtonCenter = (fieldButtonRects[0].left + fieldButtonRects.at(-1).right) / 2;
+  const fieldActionCenter = (fieldActionRect.left + fieldActionRect.right) / 2;
   if (!selectedHandCardRect || fieldActionRect.bottom > selectedHandCardRect.top + 1 ||
-      fieldButtonRects.some((rect) => Math.abs(rect.top - fieldButtonRects[0].top) > 1)) {
+      fieldButtonRects.some((rect) => Math.abs(rect.top - fieldButtonRects[0].top) > 1) ||
+      Math.abs(fieldButtonCenter - fieldActionCenter) > 3) {
     throw new Error(
       `${smokeName}: field commands should form one row above the hand cards ` +
       `(bar=${fieldActionRect.top}-${fieldActionRect.bottom}, cardTop=${selectedHandCardRect?.top}, ` +
@@ -9611,9 +9614,12 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   const commandRect = ctx.els.fieldActionBar.getBoundingClientRect();
   const commandButtons = [ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldDetailBtn, ctx.els.fieldCancelBtn]
     .map((button) => button.getBoundingClientRect());
+  const commandButtonCenter = (commandButtons[0].left + commandButtons.at(-1).right) / 2;
+  const commandCenter = (commandRect.left + commandRect.right) / 2;
   const selectedUltraHandRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
   if (!selectedUltraHandRect || commandRect.bottom > selectedUltraHandRect.top + 1 ||
-      commandButtons.some((rect) => Math.abs(rect.top - commandButtons[0].top) > 1)) {
+      commandButtons.some((rect) => Math.abs(rect.top - commandButtons[0].top) > 1) ||
+      Math.abs(commandButtonCenter - commandCenter) > 3) {
     throw new Error(
       `${smokeName}: 4K field commands should form one row above the hand cards ` +
       `(bar=${commandRect.top}-${commandRect.bottom}, cardTop=${selectedUltraHandRect?.top}, ` +
