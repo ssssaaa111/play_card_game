@@ -116,7 +116,7 @@ test("spacious screens dock context while scaled 4K and ultra-wide screens use e
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*--workspace-height/);
   assert.match(css, /\.workspace-deck\s*\{[\s\S]*grid-template-columns: minmax\(0, 0\.9fr\) minmax\(0, 1\.1fr\);[\s\S]*transform: translate\(-50%, -50%\);/);
   assert.match(css, /\.workspace-deck \.workspace-drawer\.is-docked[\s\S]*visibility: visible;[\s\S]*pointer-events: auto;/);
-  assert.match(css, /\.detail-drawer \.detail-actions\s*\{[\s\S]*grid-row: 3;[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.detail-drawer \.detail-actions\s*\{[\s\S]*display: none;[\s\S]*\.detail-drawer #battlePreview\s*\{[\s\S]*grid-row: 3;/);
   assert.match(renderer, /elements\.detailAttackBtn\.hidden = view\.fieldAction\.hidden/);
   assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*width: min\(calc\(100% - 48px\), 3200px\)/);
   assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*\.field-state-chip\s*\{[\s\S]*font-size: 11px/);
@@ -126,7 +126,7 @@ test("spacious screens dock context while scaled 4K and ultra-wide screens use e
   assert.match(controller, /function syncResponsiveWorkspace\(\)[\s\S]*const gutter = spacious && gutterWorkspace\.matches;[\s\S]*body\.dataset\.workspaceLayout = gutter \? "gutter" : spacious \? "expanded" : "drawer"/);
   assert.match(controller, /drawer\.root\?\.classList\.toggle\("is-docked", spacious\)/);
   assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*--workspace-track: 38px;[\s\S]*width: min\(calc\(100% - 640px\), 3200px\);[\s\S]*\.workspace-deck\s*\{[\s\S]*display: contents;/);
-  assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*\.workspace-deck \.detail-drawer\.is-docked\s*\{[\s\S]*left: 16px;[\s\S]*\.workspace-deck \.timeline-drawer\.is-docked\s*\{[\s\S]*right: 16px;/);
+  assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*top: calc\(\(100dvh - clamp\(280px, 16dvh, 340px\) \+ 78px\) \/ 2\);[\s\S]*\.workspace-deck \.detail-drawer\.is-docked\s*\{[\s\S]*right: min\(calc\(100% - 320px\), calc\(\(100% \+ 3200px\) \/ 2\)\);[\s\S]*\.workspace-deck \.timeline-drawer\.is-docked\s*\{[\s\S]*left: min\(calc\(100% - 320px\), calc\(\(100% \+ 3200px\) \/ 2\)\);/);
 });
 
 test("spacious card density keeps field hand and support scales related", () => {
@@ -143,7 +143,8 @@ test("desktop duel table promotes the field and overlays compact HUD rails", () 
 
   assert.match(css, /#app \.arena\.duel-table\s*\{[\s\S]*position: relative;[\s\S]*overflow: hidden;/);
   assert.match(css, /#app \.duel-table \.field\s*\{[\s\S]*position: absolute;[\s\S]*inset: 0;[\s\S]*calc\(var\(--table-hud-width\) \+ 18px\)/);
-  assert.match(css, /#app \.duel-table \.side\.duel-hud\s*\{[\s\S]*position: absolute;[\s\S]*width: var\(--table-hud-width\);/);
+  assert.match(css, /#app \.duel-table \.side\.duel-hud\s*\{[\s\S]*position: absolute;[\s\S]*top: auto;[\s\S]*bottom: 10px;[\s\S]*right: 10px;[\s\S]*width: var\(--table-hud-width\);/);
+  assert.match(css, /#app \.duel-table \.side\.enemy\.duel-hud\s*\{[\s\S]*top: 10px;[\s\S]*bottom: auto;[\s\S]*left: 10px;/);
   assert.match(css, /\.workspace-drawer\s*\{[\s\S]*position: absolute;[\s\S]*visibility: hidden;/);
   assert.match(css, /\.workspace-drawer\.is-open\s*\{[\s\S]*visibility: visible;[\s\S]*pointer-events: auto;/);
 });
@@ -352,6 +353,17 @@ test("desktop field actions expand the tactical command dock", () => {
   assert.match(controller, /const commandActive = choiceActive \|\| fieldActionActive/);
   assert.match(controller, /const attentionObserver = new MutationObserver\(syncCombatAttention\)/);
   assert.match(controller, /attentionObserver\.observe\(fieldActionBar,[\s\S]*attributeFilter: \["class", "hidden"\]/);
+});
+
+test("spacious field commands form one row directly above the hand", () => {
+  const css = read("duel-table.css");
+
+  assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.hand-panel\[data-command-active="false"\]\s*\{[\s\S]*grid-template-columns: 90px minmax\(0, 1fr\);/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.hand-command\[data-active="false"\]\s*\{[\s\S]*display: none;/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 44px minmax\(0, 1fr\);/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-command\[data-active="true"\] \.field-action-bar\s*\{[\s\S]*grid-template-columns: minmax\(220px, 1fr\) repeat\(4, minmax\(88px, 132px\)\);[\s\S]*grid-template-rows: minmax\(0, 1fr\);/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-stack\s*\{[\s\S]*grid-row: 2;/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-toolbar\s*\{[\s\S]*display: none;/);
 });
 
 test("battle chronicle uses full-height summaries filters and structured event nodes", () => {

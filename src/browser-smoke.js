@@ -9388,17 +9388,17 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   const handPanel = document.querySelector(".hand-panel");
   const centerLine = document.querySelector(".duel-table .center-line");
   const workspaceDeck = document.querySelector("#workspaceDeck");
+  const handCommand = document.querySelector("#handCommand");
   const detailDrawer = document.querySelector("#detailDrawer");
   const detailName = document.querySelector("#detailName");
   const detailMeta = document.querySelector("#detailMeta");
-  const detailAttackBtn = document.querySelector("#detailAttackBtn");
-  const detailSelectionCancelBtn = document.querySelector("#detailSelectionCancelBtn");
+  const detailActions = detailDrawer?.querySelector(".detail-actions");
   const timelineDrawer = document.querySelector("#timelineDrawer");
   const detailToggle = document.querySelector("#detailDrawerToggle");
   const timelineToggle = document.querySelector("#timelineDrawerToggle");
   const utilityToggle = document.querySelector("#utilityMenuToggle");
   const utilityMenu = document.querySelector("#utilityMenu");
-  const requiredRegions = [arena, field, handPanel, centerLine, workspaceDeck, detailDrawer, detailName, detailMeta, detailAttackBtn, detailSelectionCancelBtn, timelineDrawer, detailToggle, timelineToggle, utilityToggle, utilityMenu];
+  const requiredRegions = [arena, field, handPanel, centerLine, workspaceDeck, handCommand, detailDrawer, detailName, detailMeta, detailActions, ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldCancelBtn, timelineDrawer, detailToggle, timelineToggle, utilityToggle, utilityMenu];
   if (requiredRegions.some((element) => !element)) {
     throw new Error(`${smokeName}: required responsive regions are missing`);
   }
@@ -9413,6 +9413,9 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   );
   if (!detailToggle.hidden || !timelineToggle.hidden || !utilityToggle.hidden || utilityMenu.hidden) {
     throw new Error(`${smokeName}: wide layout should expose panels and settings without secondary toggles`);
+  }
+  if (getComputedStyle(handCommand).display !== "none") {
+    throw new Error(`${smokeName}: passive waiting command should not reserve hand space`);
   }
   for (const button of [ctx.els.soundBtn, ctx.els.musicBtn, ctx.els.voiceBtn]) {
     if (!button || !button.textContent.includes("关")) {
@@ -9459,27 +9462,36 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
   await waitForSmoke(
     () => detailName.textContent === "星轨枪兵" &&
-      !ctx.els.modeBtn.disabled &&
-      !detailAttackBtn.hidden &&
-      !detailSelectionCancelBtn.hidden &&
+      !ctx.els.fieldModeBtn.disabled &&
       !ctx.els.fieldActionBar.hidden,
-    `${smokeName}: selected card exposes direct actions in the visible workbench`
+    `${smokeName}: selected card exposes one direct command dock`
   );
-  const detailActionsRect = detailDrawer.querySelector(".detail-actions")?.getBoundingClientRect();
-  if (!detailActionsRect || detailActionsRect.width < 80 || detailActionsRect.right > detailRect.right + 1) {
-    throw new Error(`${smokeName}: selected card actions are not contained in the center workbench`);
+  if (getComputedStyle(detailActions).display !== "none") {
+    throw new Error(`${smokeName}: inspector should not duplicate the primary field commands`);
   }
-  clickSmokeElement(detailAttackBtn, `${smokeName}: enter attack targeting from docked actions`);
+  const selectedHandCardRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
+  const fieldActionRect = ctx.els.fieldActionBar.getBoundingClientRect();
+  const fieldButtonRects = [ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldDetailBtn, ctx.els.fieldCancelBtn]
+    .map((button) => button.getBoundingClientRect());
+  if (!selectedHandCardRect || fieldActionRect.bottom > selectedHandCardRect.top + 1 ||
+      fieldButtonRects.some((rect) => Math.abs(rect.top - fieldButtonRects[0].top) > 1)) {
+    throw new Error(
+      `${smokeName}: field commands should form one row above the hand cards ` +
+      `(bar=${fieldActionRect.top}-${fieldActionRect.bottom}, cardTop=${selectedHandCardRect?.top}, ` +
+      `buttonTops=${fieldButtonRects.map((rect) => rect.top).join(",")})`
+    );
+  }
+  clickSmokeElement(ctx.els.fieldAttackBtn, `${smokeName}: enter attack targeting from command dock`);
   await waitForSmoke(
-    () => ctx.state.attackIntentIndex !== null && detailAttackBtn.textContent.includes("选目标"),
-    `${smokeName}: docked attack action opens target selection`
+    () => ctx.state.attackIntentIndex !== null && ctx.els.fieldAttackLabel.textContent.includes("选目标"),
+    `${smokeName}: primary attack action opens target selection`
   );
-  clickSmokeElement(detailSelectionCancelBtn, `${smokeName}: cancel attack targeting from docked actions`);
+  clickSmokeElement(ctx.els.fieldCancelBtn, `${smokeName}: cancel attack targeting from command dock`);
   await waitForSmoke(
     () => ctx.state.attackIntentIndex === null && ctx.state.selected?.zone === "playerField",
-    `${smokeName}: docked cancel action restores the card selection`
+    `${smokeName}: primary cancel action restores the card selection`
   );
-  clickSmokeElement(ctx.els.modeBtn, `${smokeName}: use docked mode action`);
+  clickSmokeElement(ctx.els.fieldModeBtn, `${smokeName}: use primary mode action`);
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "star-lancer" && card.mode === "defense") &&
       detailMeta.textContent.includes("守备表示"),
@@ -9511,12 +9523,14 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   const handPanel = document.querySelector(".hand-panel");
   const centerLine = document.querySelector(".duel-table .center-line");
   const workspaceDeck = document.querySelector("#workspaceDeck");
+  const handCommand = document.querySelector("#handCommand");
   const detailDrawer = document.querySelector("#detailDrawer");
   const timelineDrawer = document.querySelector("#timelineDrawer");
-  const detailAttackBtn = document.querySelector("#detailAttackBtn");
-  const detailSelectionCancelBtn = document.querySelector("#detailSelectionCancelBtn");
+  const detailActions = detailDrawer?.querySelector(".detail-actions");
+  const enemyHud = document.querySelector(".side.enemy.duel-hud");
+  const playerHud = document.querySelector(".side.duel-hud:not(.enemy)");
   const utilityMenu = document.querySelector("#utilityMenu");
-  const required = [app, arena, handPanel, centerLine, workspaceDeck, detailDrawer, timelineDrawer, detailAttackBtn, detailSelectionCancelBtn, utilityMenu];
+  const required = [app, arena, handPanel, centerLine, workspaceDeck, handCommand, detailDrawer, timelineDrawer, detailActions, enemyHud, playerHud, ctx.els.fieldAttackBtn, ctx.els.fieldCancelBtn, utilityMenu];
   if (required.some((element) => !element)) {
     throw new Error(`${smokeName}: required ultra-wide regions are missing`);
   }
@@ -9533,11 +9547,18 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   if (workspaceRect.width > 1 || workspaceRect.height > 1 || centerRect.height > 60) {
     throw new Error(`${smokeName}: auxiliary workspace still reserves the battlefield center`);
   }
-  if (detailRect.right > appRect.left - 8 || timelineRect.left < appRect.right + 8) {
+  if (Math.abs(detailRect.right - appRect.left) > 2 || Math.abs(timelineRect.left - appRect.right) > 2) {
     throw new Error(
-      `${smokeName}: context rails must remain outside the central game surface ` +
+      `${smokeName}: context rails should connect to the central game surface ` +
       `(detailRight=${detailRect.right}, app=${appRect.left}-${appRect.right}, timelineLeft=${timelineRect.left})`
     );
+  }
+  const enemyHudRect = enemyHud.getBoundingClientRect();
+  const playerHudRect = playerHud.getBoundingClientRect();
+  if (Math.abs(enemyHudRect.top - (arena.getBoundingClientRect().top + 10)) > 2 ||
+      Math.abs(playerHudRect.bottom - (arena.getBoundingClientRect().bottom - 10)) > 2 ||
+      enemyHudRect.left >= playerHudRect.left || enemyHudRect.top >= playerHudRect.top) {
+    throw new Error(`${smokeName}: opponent and player HUDs should mirror across their battlefield sides`);
   }
   const aiRect = ctx.els.aiField.getBoundingClientRect();
   const playerRect = ctx.els.playerField.getBoundingClientRect();
@@ -9558,6 +9579,9 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   if (utilityMenu.hidden || ctx.els.soundBtn.textContent !== "音效 关" ||
       ctx.els.musicBtn.textContent !== "音乐 关" || ctx.els.voiceBtn.textContent !== "语音 关") {
     throw new Error(`${smokeName}: 4K direct settings should stay visible with browser audio disabled`);
+  }
+  if (getComputedStyle(handCommand).display !== "none") {
+    throw new Error(`${smokeName}: passive waiting command should collapse on 4K`);
   }
 
   const ultraFieldCard = fieldCard(ctx.els, "player", "star-lancer");
@@ -9580,15 +9604,28 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
 
   clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
   await waitForSmoke(
-    () => !detailAttackBtn.hidden && !detailSelectionCancelBtn.hidden,
-    `${smokeName}: card actions appear in the left context rail`
+    () => !ctx.els.fieldAttackBtn.hidden && !ctx.els.fieldCancelBtn.hidden &&
+      getComputedStyle(detailActions).display === "none",
+    `${smokeName}: card actions appear once in the primary command dock`
   );
-  clickSmokeElement(detailAttackBtn, `${smokeName}: start attack from left context rail`);
+  const commandRect = ctx.els.fieldActionBar.getBoundingClientRect();
+  const commandButtons = [ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldDetailBtn, ctx.els.fieldCancelBtn]
+    .map((button) => button.getBoundingClientRect());
+  const selectedUltraHandRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
+  if (!selectedUltraHandRect || commandRect.bottom > selectedUltraHandRect.top + 1 ||
+      commandButtons.some((rect) => Math.abs(rect.top - commandButtons[0].top) > 1)) {
+    throw new Error(
+      `${smokeName}: 4K field commands should form one row above the hand cards ` +
+      `(bar=${commandRect.top}-${commandRect.bottom}, cardTop=${selectedUltraHandRect?.top}, ` +
+      `buttonTops=${commandButtons.map((rect) => rect.top).join(",")})`
+    );
+  }
+  clickSmokeElement(ctx.els.fieldAttackBtn, `${smokeName}: start attack from primary command dock`);
   await waitForSmoke(
-    () => ctx.state.attackIntentIndex !== null && detailAttackBtn.textContent.includes("选目标"),
-    `${smokeName}: gutter attack action remains interactive`
+    () => ctx.state.attackIntentIndex !== null && ctx.els.fieldAttackLabel.textContent.includes("选目标"),
+    `${smokeName}: primary attack action remains interactive`
   );
-  clickSmokeElement(detailSelectionCancelBtn, `${smokeName}: cancel gutter attack action`);
+  clickSmokeElement(ctx.els.fieldCancelBtn, `${smokeName}: cancel primary attack action`);
   await waitForSmoke(
     () => ctx.state.attackIntentIndex === null && ctx.state.selected?.zone === "playerField",
     `${smokeName}: gutter cancel returns to card selection`
