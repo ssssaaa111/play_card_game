@@ -143,8 +143,9 @@ test("desktop duel table promotes the field and overlays compact HUD rails", () 
 
   assert.match(css, /#app \.arena\.duel-table\s*\{[\s\S]*position: relative;[\s\S]*overflow: hidden;/);
   assert.match(css, /#app \.duel-table \.field\s*\{[\s\S]*position: absolute;[\s\S]*inset: 0;[\s\S]*calc\(var\(--table-hud-width\) \+ 18px\)/);
-  assert.match(css, /#app \.duel-table \.side\.duel-hud\s*\{[\s\S]*position: absolute;[\s\S]*top: auto;[\s\S]*bottom: 10px;[\s\S]*right: 10px;[\s\S]*width: var\(--table-hud-width\);/);
+  assert.match(css, /#app \.duel-table \.side\.duel-hud\s*\{[\s\S]*position: absolute;[\s\S]*top: auto;[\s\S]*bottom: 10px;[\s\S]*left: 10px;[\s\S]*right: auto;[\s\S]*width: var\(--table-hud-width\);/);
   assert.match(css, /#app \.duel-table \.side\.enemy\.duel-hud\s*\{[\s\S]*top: 10px;[\s\S]*bottom: auto;[\s\S]*left: 10px;/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*#app \.duel-table \.side\.duel-hud\s*\{[\s\S]*left: auto;[\s\S]*right: 6px;[\s\S]*#app \.duel-table \.side\.enemy\.duel-hud\s*\{[\s\S]*left: 6px;[\s\S]*right: auto;/);
   assert.match(css, /\.workspace-drawer\s*\{[\s\S]*position: absolute;[\s\S]*visibility: hidden;/);
   assert.match(css, /\.workspace-drawer\.is-open\s*\{[\s\S]*visibility: visible;[\s\S]*pointer-events: auto;/);
 });

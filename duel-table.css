@@ -412,8 +412,8 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   position: absolute;
   top: auto;
   bottom: 10px;
-  left: auto;
-  right: 10px;
+  left: 10px;
+  right: auto;
   z-index: 6;
   width: var(--table-hud-width);
   min-width: 0;
@@ -3408,6 +3408,7 @@ body:has(.phase-stage.is-active) .toast.show {
   #app .duel-table .side.duel-hud {
     top: 6px;
     bottom: auto;
+    left: auto;
     right: 6px;
     width: calc(50% - 9px);
     max-height: 50px;
@@ -3418,6 +3419,7 @@ body:has(.phase-stage.is-active) .toast.show {
 
   #app .duel-table .side.enemy.duel-hud {
     left: 6px;
+    right: auto;
   }
 
   #app .duel-table .player-card {
@@ -4005,6 +4007,7 @@ body:has(.phase-stage.is-active) .toast.show {
   #app .duel-table .side.duel-hud {
     top: 4px;
     bottom: auto;
+    left: auto;
     right: 4px;
     width: calc(50% - 6px);
     max-height: 42px;
@@ -4013,6 +4016,7 @@ body:has(.phase-stage.is-active) .toast.show {
 
   #app .duel-table .side.enemy.duel-hud {
     left: 4px;
+    right: auto;
   }
 
   #app .duel-table .player-card {

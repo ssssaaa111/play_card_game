@@ -9560,8 +9560,8 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   const playerHudRect = playerHud.getBoundingClientRect();
   if (Math.abs(enemyHudRect.top - (arena.getBoundingClientRect().top + 10)) > 2 ||
       Math.abs(playerHudRect.bottom - (arena.getBoundingClientRect().bottom - 10)) > 2 ||
-      enemyHudRect.left >= playerHudRect.left || enemyHudRect.top >= playerHudRect.top) {
-    throw new Error(`${smokeName}: opponent and player HUDs should mirror across their battlefield sides`);
+      Math.abs(enemyHudRect.left - playerHudRect.left) > 2 || enemyHudRect.top >= playerHudRect.top) {
+    throw new Error(`${smokeName}: opponent and player HUDs should share one readable left status rail`);
   }
   const aiRect = ctx.els.aiField.getBoundingClientRect();
   const playerRect = ctx.els.playerField.getBoundingClientRect();
@@ -9602,6 +9602,12 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
       `(field=${ultraFieldRect?.width}x${ultraFieldRect?.height}, ` +
       `hand=${ultraHandRect?.width}x${ultraHandRect?.height}, ` +
       `supportTrack=${ultraSupportTrackRect.height}, panel=${handRect.height})`
+    );
+  }
+  if (playerHudRect.right > ultraFieldRect.left - 8) {
+    throw new Error(
+      `${smokeName}: lower-left player HUD should stay clear of the first monster card ` +
+      `(hudRight=${playerHudRect.right}, cardLeft=${ultraFieldRect.left})`
     );
   }
 
