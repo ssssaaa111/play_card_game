@@ -361,11 +361,16 @@ test("spacious field commands form one row directly above the hand", () => {
 
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.hand-panel\[data-command-active="false"\]\s*\{[\s\S]*grid-template-columns: 90px minmax\(0, 1fr\);/);
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.hand-command\[data-active="false"\]\s*\{[\s\S]*display: none;/);
-  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 44px minmax\(0, 1fr\);/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-panel,[\s\S]*body\[data-duel-selection="hand"\] \.hand-panel,[\s\S]*body\[data-duel-selection="target"\] \.hand-panel\s*\{[\s\S]*grid-template-rows: 52px minmax\(0, 1fr\);/);
   assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-command\[data-active="true"\] \.field-action-bar\s*\{[\s\S]*grid-template-columns: minmax\(220px, 1fr\) repeat\(4, minmax\(88px, 132px\)\) minmax\(220px, 1fr\);[\s\S]*grid-template-rows: minmax\(0, 1fr\);/);
   assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-command\[data-active="true"\] \.field-action-bar::after\s*\{[\s\S]*grid-column: 6;/);
-  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-stack\s*\{[\s\S]*grid-row: 2;/);
-  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-toolbar\s*\{[\s\S]*display: none;/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-stack,[\s\S]*body\[data-duel-selection="hand"\] \.hand-stack,[\s\S]*body\[data-duel-selection="target"\] \.hand-stack\s*\{[\s\S]*grid-row: 2;/);
+  assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-toolbar,[\s\S]*body\[data-duel-selection="hand"\] \.hand-toolbar,[\s\S]*body\[data-duel-selection="target"\] \.hand-toolbar\s*\{[\s\S]*display: none;/);
+  assert.match(css, /body\[data-duel-selection="hand"\] \.hand-command > \.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\),[\s\S]*body\[data-duel-selection="target"\] \.hand-command > \.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\)\s*\{[\s\S]*grid-template-columns: minmax\(220px, 1fr\) repeat\(2, minmax\(100px, 132px\)\) minmax\(220px, 1fr\);/);
+  assert.match(css, /body\[data-duel-selection="hand"\][\s\S]*#choiceConfirmBtn\s*\{[\s\S]*grid-column: 2;/);
+  assert.match(css, /body\[data-duel-selection="target"\][\s\S]*#choiceCancelBtn\s*\{[\s\S]*grid-column: 3;/);
+  assert.match(css, /body\[data-duel-selection="playerField"\][\s\S]*\.field-attack-btn:not\(:disabled\)[\s\S]*background: linear-gradient\(180deg, #ffe19b, #f6bd60\);/);
+  assert.match(css, /body\[data-duel-selection="playerField"\][\s\S]*\.field-action-btn:not\(\.field-attack-btn\)[\s\S]*border-color: rgba\(246, 189, 96, 0\.75\);/);
 });
 
 test("battle chronicle uses full-height summaries filters and structured event nodes", () => {

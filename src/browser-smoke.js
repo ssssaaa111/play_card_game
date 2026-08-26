@@ -9459,6 +9459,36 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
     throw new Error(`${smokeName}: detail and timeline should read as one shared command deck`);
   }
 
+  clickSmokeElement(handCard(ctx.els, "star-breach"), `${smokeName}: select hand card`);
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "hand" && !ctx.els.choiceActions.hidden,
+    `${smokeName}: hand selection opens the shared command row`
+  );
+  const selectedChoiceCardRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
+  const choiceActionRect = ctx.els.choiceActions.getBoundingClientRect();
+  const choiceButtonRects = [ctx.els.choiceConfirmBtn, ctx.els.choiceCancelBtn]
+    .map((button) => button.getBoundingClientRect());
+  const choiceButtonCenter = (choiceButtonRects[0].left + choiceButtonRects.at(-1).right) / 2;
+  const choiceActionCenter = (choiceActionRect.left + choiceActionRect.right) / 2;
+  const choicePrimaryStyle = {
+    backgroundImage: getComputedStyle(ctx.els.choiceConfirmBtn).backgroundImage,
+    borderRadius: getComputedStyle(ctx.els.choiceConfirmBtn).borderRadius
+  };
+  if (!selectedChoiceCardRect || choiceActionRect.bottom > selectedChoiceCardRect.top + 1 ||
+      choiceButtonRects.some((rect) => Math.abs(rect.top - choiceButtonRects[0].top) > 1) ||
+      Math.abs(choiceButtonCenter - choiceActionCenter) > 3) {
+    throw new Error(
+      `${smokeName}: hand commands should be centered directly above the hand cards ` +
+      `(bar=${choiceActionRect.top}-${choiceActionRect.bottom}, cardTop=${selectedChoiceCardRect?.top}, ` +
+      `buttons=${choiceButtonRects.map((rect) => `${rect.left}-${rect.right}`).join(",")})`
+    );
+  }
+  clickSmokeElement(ctx.els.choiceCancelBtn, `${smokeName}: cancel hand card from shared command row`);
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "none" && ctx.els.choiceActions.hidden,
+    `${smokeName}: shared hand command row closes cleanly`
+  );
+
   clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
   await waitForSmoke(
     () => detailName.textContent === "星轨枪兵" &&
@@ -9475,13 +9505,17 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
     .map((button) => button.getBoundingClientRect());
   const fieldButtonCenter = (fieldButtonRects[0].left + fieldButtonRects.at(-1).right) / 2;
   const fieldActionCenter = (fieldActionRect.left + fieldActionRect.right) / 2;
+  const fieldPrimaryStyle = getComputedStyle(ctx.els.fieldAttackBtn);
   if (!selectedHandCardRect || fieldActionRect.bottom > selectedHandCardRect.top + 1 ||
       fieldButtonRects.some((rect) => Math.abs(rect.top - fieldButtonRects[0].top) > 1) ||
-      Math.abs(fieldButtonCenter - fieldActionCenter) > 3) {
+      Math.abs(fieldButtonCenter - fieldActionCenter) > 3 ||
+      fieldPrimaryStyle.backgroundImage !== choicePrimaryStyle.backgroundImage ||
+      fieldPrimaryStyle.borderRadius !== choicePrimaryStyle.borderRadius) {
     throw new Error(
-      `${smokeName}: field commands should form one row above the hand cards ` +
+      `${smokeName}: field commands should match the centered hand command system ` +
       `(bar=${fieldActionRect.top}-${fieldActionRect.bottom}, cardTop=${selectedHandCardRect?.top}, ` +
-      `buttonTops=${fieldButtonRects.map((rect) => rect.top).join(",")})`
+      `buttonTops=${fieldButtonRects.map((rect) => rect.top).join(",")}, ` +
+      `primary=${fieldPrimaryStyle.backgroundImage})`
     );
   }
   clickSmokeElement(ctx.els.fieldAttackBtn, `${smokeName}: enter attack targeting from command dock`);
@@ -9611,6 +9645,36 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
     );
   }
 
+  clickSmokeElement(handCard(ctx.els, "star-breach"), `${smokeName}: select hand card`);
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "hand" && !ctx.els.choiceActions.hidden,
+    `${smokeName}: hand selection opens the shared command row`
+  );
+  const ultraSelectedChoiceCardRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
+  const ultraChoiceRect = ctx.els.choiceActions.getBoundingClientRect();
+  const ultraChoiceButtons = [ctx.els.choiceConfirmBtn, ctx.els.choiceCancelBtn]
+    .map((button) => button.getBoundingClientRect());
+  const ultraChoiceButtonCenter = (ultraChoiceButtons[0].left + ultraChoiceButtons.at(-1).right) / 2;
+  const ultraChoiceCenter = (ultraChoiceRect.left + ultraChoiceRect.right) / 2;
+  const ultraChoicePrimaryStyle = {
+    backgroundImage: getComputedStyle(ctx.els.choiceConfirmBtn).backgroundImage,
+    borderRadius: getComputedStyle(ctx.els.choiceConfirmBtn).borderRadius
+  };
+  if (!ultraSelectedChoiceCardRect || ultraChoiceRect.bottom > ultraSelectedChoiceCardRect.top + 1 ||
+      ultraChoiceButtons.some((rect) => Math.abs(rect.top - ultraChoiceButtons[0].top) > 1) ||
+      Math.abs(ultraChoiceButtonCenter - ultraChoiceCenter) > 3) {
+    throw new Error(
+      `${smokeName}: 4K hand commands should be centered directly above the hand cards ` +
+      `(bar=${ultraChoiceRect.top}-${ultraChoiceRect.bottom}, cardTop=${ultraSelectedChoiceCardRect?.top}, ` +
+      `buttons=${ultraChoiceButtons.map((rect) => `${rect.left}-${rect.right}`).join(",")})`
+    );
+  }
+  clickSmokeElement(ctx.els.choiceCancelBtn, `${smokeName}: cancel hand card from shared command row`);
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "none" && ctx.els.choiceActions.hidden,
+    `${smokeName}: shared hand command row closes cleanly`
+  );
+
   clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
   await waitForSmoke(
     () => !ctx.els.fieldAttackBtn.hidden && !ctx.els.fieldCancelBtn.hidden &&
@@ -9623,13 +9687,17 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   const commandButtonCenter = (commandButtons[0].left + commandButtons.at(-1).right) / 2;
   const commandCenter = (commandRect.left + commandRect.right) / 2;
   const selectedUltraHandRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
+  const ultraFieldPrimaryStyle = getComputedStyle(ctx.els.fieldAttackBtn);
   if (!selectedUltraHandRect || commandRect.bottom > selectedUltraHandRect.top + 1 ||
       commandButtons.some((rect) => Math.abs(rect.top - commandButtons[0].top) > 1) ||
-      Math.abs(commandButtonCenter - commandCenter) > 3) {
+      Math.abs(commandButtonCenter - commandCenter) > 3 ||
+      ultraFieldPrimaryStyle.backgroundImage !== ultraChoicePrimaryStyle.backgroundImage ||
+      ultraFieldPrimaryStyle.borderRadius !== ultraChoicePrimaryStyle.borderRadius) {
     throw new Error(
-      `${smokeName}: 4K field commands should form one row above the hand cards ` +
+      `${smokeName}: 4K field commands should match the centered hand command system ` +
       `(bar=${commandRect.top}-${commandRect.bottom}, cardTop=${selectedUltraHandRect?.top}, ` +
-      `buttonTops=${commandButtons.map((rect) => rect.top).join(",")})`
+      `buttonTops=${commandButtons.map((rect) => rect.top).join(",")}, ` +
+      `primary=${ultraFieldPrimaryStyle.backgroundImage})`
     );
   }
   clickSmokeElement(ctx.els.fieldAttackBtn, `${smokeName}: start attack from primary command dock`);

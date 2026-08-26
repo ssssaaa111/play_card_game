@@ -2784,26 +2784,41 @@ body:has(.phase-stage.is-active) .toast.show {
     display: none;
   }
 
-  body[data-duel-selection="playerField"] .hand-panel {
+  body[data-duel-selection="playerField"] .hand-panel,
+  body[data-duel-selection="hand"] .hand-panel,
+  body[data-duel-selection="target"] .hand-panel {
     grid-template-columns: 90px minmax(0, 1fr);
-    grid-template-rows: 44px minmax(0, 1fr);
+    grid-template-rows: 52px minmax(0, 1fr);
   }
 
-  body[data-duel-selection="playerField"] .hand-title {
+  body[data-duel-selection="playerField"] .hand-title,
+  body[data-duel-selection="hand"] .hand-title,
+  body[data-duel-selection="target"] .hand-title {
     grid-column: 1;
     grid-row: 1 / 3;
   }
 
-  body[data-duel-selection="playerField"] .hand-stack {
+  body[data-duel-selection="playerField"] .hand-stack,
+  body[data-duel-selection="hand"] .hand-stack,
+  body[data-duel-selection="target"] .hand-stack {
     grid-column: 2;
     grid-row: 2;
   }
 
-  body[data-duel-selection="playerField"] .hand-toolbar {
+  body[data-duel-selection="hand"] .hand-stack,
+  body[data-duel-selection="target"] .hand-stack {
+    padding-top: 12px;
+  }
+
+  body[data-duel-selection="playerField"] .hand-toolbar,
+  body[data-duel-selection="hand"] .hand-toolbar,
+  body[data-duel-selection="target"] .hand-toolbar {
     display: none;
   }
 
-  body[data-duel-selection="playerField"] .hand-command {
+  body[data-duel-selection="playerField"] .hand-command,
+  body[data-duel-selection="hand"] .hand-command,
+  body[data-duel-selection="target"] .hand-command {
     grid-column: 2;
     grid-row: 1;
     grid-template-rows: minmax(0, 1fr);
@@ -2816,8 +2831,14 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   body[data-duel-selection="playerField"] .hand-command::after,
+  body[data-duel-selection="hand"] .hand-command::after,
+  body[data-duel-selection="target"] .hand-command::after,
   body[data-duel-selection="playerField"] .hand-command-head,
-  body[data-duel-selection="playerField"] .hand-command-idle {
+  body[data-duel-selection="hand"] .hand-command-head,
+  body[data-duel-selection="target"] .hand-command-head,
+  body[data-duel-selection="playerField"] .hand-command-idle,
+  body[data-duel-selection="hand"] .hand-command-idle,
+  body[data-duel-selection="target"] .hand-command-idle {
     display: none;
   }
 
@@ -2848,11 +2869,111 @@ body:has(.phase-stage.is-active) .toast.show {
     display: none;
   }
 
-  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-action-btn,
-  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-action-bar:not(.empty) .field-action-btn {
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-action-btn {
     min-height: 0;
     height: 100%;
     padding: 4px 8px;
+    border-radius: 4px;
+    border-color: rgba(255, 255, 255, 0.18);
+    color: var(--ink);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.035)),
+      rgba(8, 10, 16, 0.72);
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-action-btn:not(.field-attack-btn) .field-action-icon {
+    color: var(--gold);
+  }
+
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-action-btn:not(.field-attack-btn):not(:disabled):hover,
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-action-btn:not(.field-attack-btn):not(:disabled):focus-visible {
+    color: var(--ink);
+    border-color: rgba(246, 189, 96, 0.75);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.055)),
+      rgba(8, 10, 16, 0.78);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.24);
+    transform: translateY(-1px);
+  }
+
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-attack-btn:not(:disabled),
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-attack-btn.is-active:not(:disabled) {
+    color: #10121a;
+    border-color: rgba(246, 189, 96, 0.9);
+    background: linear-gradient(180deg, #ffe19b, #f6bd60);
+    box-shadow: none;
+  }
+
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-attack-btn:not(:disabled) .field-action-icon {
+    color: #10121a;
+  }
+
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-attack-btn:not(:disabled):hover,
+  body[data-duel-selection="playerField"] .hand-command[data-active="true"] .field-attack-btn:not(:disabled):focus-visible {
+    border-color: #ffe19b;
+    background: linear-gradient(180deg, #ffebbc, #f6bd60);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.24), 0 0 18px rgba(246, 189, 96, 0.18);
+    transform: translateY(-1px);
+  }
+
+  body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice),
+  body[data-duel-selection="target"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) {
+    position: relative;
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(100px, 132px)) minmax(220px, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 5px;
+    height: 100%;
+  }
+
+  body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice)::after,
+  body[data-duel-selection="target"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice)::after {
+    content: "";
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) .timer-progress,
+  body[data-duel-selection="target"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) .timer-progress {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+    margin: 0;
+  }
+
+  body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceText,
+  body[data-duel-selection="target"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceText {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    padding-inline: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceConfirmBtn,
+  body[data-duel-selection="target"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceConfirmBtn {
+    grid-column: 2;
+  }
+
+  body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceCancelBtn,
+  body[data-duel-selection="target"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceCancelBtn {
+    grid-column: 3;
+  }
+
+  body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceConfirmBtn,
+  body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceCancelBtn,
+  body[data-duel-selection="target"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceConfirmBtn,
+  body[data-duel-selection="target"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) #choiceCancelBtn {
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    border-radius: 4px;
   }
 
   .workspace-deck {
