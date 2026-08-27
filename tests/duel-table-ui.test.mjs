@@ -10,9 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="styles\.css\?v=20260825-phase-stage"/);
-  assert.match(html, /href="duel-table\.css\?v=20260825-phase-stage"/);
-  assert.match(html, /src="src\/app\.js\?v=20260825-phase-stage"/);
+  assert.match(html, /href="styles\.css\?v=20260828-interaction-ux"/);
+  assert.match(html, /href="duel-table\.css\?v=20260828-interaction-ux"/);
+  assert.match(html, /src="src\/app\.js\?v=20260828-interaction-ux"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -21,7 +21,7 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   assert.match(html, /id="fieldActionBar"[\s\S]*id="fieldAttackBtn"[\s\S]*id="fieldModeBtn"[\s\S]*id="fieldDetailBtn"[\s\S]*id="fieldCancelBtn"/);
   assert.match(html, /class="detail-actions"[\s\S]*id="detailAttackBtn"[\s\S]*id="modeBtn"[\s\S]*id="detailBtn"[\s\S]*id="detailSelectionCancelBtn"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260824-responsive-workbench"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260828-interaction-ux"/);
 });
 
 test("campaign chapters expose a live mission rail without stealing field clicks", () => {
@@ -385,6 +385,7 @@ test("battle chronicle uses full-height summaries filters and structured event n
 
   assert.match(html, /BATTLE CHRONICLE[\s\S]*id="timelineLatestStep"[\s\S]*id="timelineLatestKind"[\s\S]*id="timelineActionCount"/);
   assert.match(html, /data-timeline-filter="all"[\s\S]*data-timeline-filter="battle"[\s\S]*data-timeline-filter="cards"[\s\S]*data-timeline-filter="system"/);
+  assert.match(html, /id="timelineZoomOut"[\s\S]*id="timelineZoomValue"[\s\S]*id="timelineZoomIn"/);
   assert.match(css, /\.timeline-drawer\s*\{[\s\S]*width: min\(390px,[\s\S]*max-height: none;[\s\S]*grid-template-rows:/);
   assert.match(css, /\.timeline-drawer \.chain-history-list\s*\{[\s\S]*position: static;/);
   assert.match(css, /\.timeline-drawer \.timeline-list\s*\{[\s\S]*grid-auto-rows: max-content;/);
@@ -393,6 +394,11 @@ test("battle chronicle uses full-height summaries filters and structured event n
   assert.match(html, /id="fieldDetailBtn"[\s\S]*<span>详情<\/span>/);
   assert.match(css, /\.timeline-node::after\s*\{[\s\S]*linear-gradient/);
   assert.match(controller, /function setTimelineFilter\(filter = "all"\)/);
+  assert.match(controller, /const timelineScales = \[85, 100, 115, 130\]/);
+  assert.match(controller, /function changeTimelineScale\(direction\)/);
+  assert.match(controller, /timeline\.scrollTop = timelineDrag\.scrollTop - dy/);
+  assert.match(css, /\.timeline-drawer\[data-timeline-scale="85"\]/);
+  assert.match(css, /\.timeline-drawer \.timeline-list\.is-dragging\s*\{[\s\S]*cursor: grabbing/);
   assert.match(controller, /timelineDrawer\.dataset\.timelineView = nextFilter/);
   assert.match(controller, /function syncChainHistoryAttention\(\)[\s\S]*timelineToggle\?\.classList\.add\("has-update"\)/);
   assert.doesNotMatch(controller, /syncChainHistoryAttention\(\)[\s\S]{0,300}setDrawer\("timeline", true\)/);
@@ -400,4 +406,31 @@ test("battle chronicle uses full-height summaries filters and structured event n
   assert.match(renderer, /item\.dataset\.timelineGroup = timelineKindGroup\(entry\.kind\)/);
   assert.match(renderer, /kind\.textContent = timelineKindLabel\(entry\.kind\)/);
   assert.doesNotMatch(read("src/app.js"), /cue\(`\$\{latest\.label\} · \$\{latest\.next\}`\)/);
+});
+
+test("hand organization exposes type sorting before entering drag mode", () => {
+  const html = read("index.html");
+  const app = read("src/app.js");
+  const css = read("duel-table.css");
+  const renderer = read("src/hand-renderer.js");
+
+  assert.match(html, /id="handSortType"[^>]*>按类型<\/button>/);
+  assert.match(html, /id="handReorderToggle"[^>]*>拖动排序<\/button>/);
+  assert.match(app, /els\.handSortType\.hidden = !showToolbar/);
+  assert.match(app, /els\.handReorderToggle\.textContent = handReorderMode \? "完成排序" : "拖动排序"/);
+  assert.match(css, /both one-click type sorting and manual drag sorting stay visible/);
+  assert.match(renderer, /cardEl\.addEventListener\("pointerdown"/);
+  assert.match(renderer, /document\.elementFromPoint\(event\.clientX, event\.clientY\)/);
+  assert.match(renderer, /onPlaceCard\(card\.uid, targetUid\)/);
+});
+
+test("spell-trap destruction reveals the selected set card on the field", () => {
+  const app = read("src/app.js");
+  const animation = read("src/animation.js");
+  const css = read("styles.css");
+
+  assert.match(app, /card\.effect === "destroySpellTrap"[\s\S]*trapElement\(targetInfo\.owner \|\| targetOwner, targetInfo\.index\)[\s\S]*playSupportReveal/);
+  assert.match(animation, /function playSupportReveal\(targetEl, card/);
+  assert.match(animation, /el\.dataset\.cardId = card\.id/);
+  assert.match(css, /\.support-reveal-card\s*\{[\s\S]*supportRevealFlip/);
 });

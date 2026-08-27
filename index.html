@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20260825-phase-stage" />
-  <link rel="stylesheet" href="duel-table.css?v=20260825-phase-stage" />
+  <link rel="stylesheet" href="styles.css?v=20260828-interaction-ux" />
+  <link rel="stylesheet" href="duel-table.css?v=20260828-interaction-ux" />
 </head>
 <body>
   <div id="app">
@@ -188,11 +188,19 @@
               <strong id="timelineActionCount">0</strong>
             </div>
           </div>
-          <div class="timeline-filters" aria-label="筛选战斗记录">
-            <button type="button" data-timeline-filter="all" aria-pressed="true">全部</button>
-            <button type="button" data-timeline-filter="battle" aria-pressed="false">战斗</button>
-            <button type="button" data-timeline-filter="cards" aria-pressed="false">卡牌</button>
-            <button type="button" data-timeline-filter="system" aria-pressed="false">系统</button>
+          <div class="timeline-toolbar">
+            <div class="timeline-filters" aria-label="筛选战斗记录">
+              <button type="button" data-timeline-filter="all" aria-pressed="true">全部</button>
+              <button type="button" data-timeline-filter="battle" aria-pressed="false">战斗</button>
+              <button type="button" data-timeline-filter="cards" aria-pressed="false">卡牌</button>
+              <button type="button" data-timeline-filter="system" aria-pressed="false">系统</button>
+            </div>
+            <div class="timeline-view-controls" aria-label="调整时间线显示">
+              <span>日志缩放</span>
+              <button id="timelineZoomOut" type="button" aria-label="缩小时间线文字">A−</button>
+              <output id="timelineZoomValue" for="timelineZoomOut timelineZoomIn" aria-live="polite">100%</output>
+              <button id="timelineZoomIn" type="button" aria-label="放大时间线文字">A＋</button>
+            </div>
           </div>
           <button class="chain-history-toggle" id="chainHistoryToggle" type="button" aria-expanded="false" hidden>
             <span class="chain-history-toggle-copy">
@@ -202,7 +210,7 @@
             <span class="chain-history-count" id="chainHistoryCount">0</span>
           </button>
           <div class="chain-history-list" id="chainHistoryList" hidden></div>
-          <div class="timeline-list" id="timeline"></div>
+          <div class="timeline-list" id="timeline" aria-label="战斗记录，可按住拖动浏览" tabindex="0"></div>
         </section>
       </section>
 
@@ -234,9 +242,9 @@
       <div class="hand-stack">
         <div class="hand-toolbar" id="handToolbar" hidden>
           <span id="handOrderStatus" hidden>拖动卡牌，或使用卡牌上的左右按钮调整顺序。</span>
-          <button class="btn ghost hand-order-shortcut" id="handSortType" type="button" hidden>按类型整理</button>
+          <button class="btn ghost hand-order-shortcut" id="handSortType" type="button" hidden title="按怪兽、魔法、陷阱快速整理">按类型</button>
           <button class="btn ghost hand-order-shortcut" id="handResetOrder" type="button" hidden>恢复摸牌顺序</button>
-          <button class="btn ghost hand-reorder-toggle" id="handReorderToggle" type="button" aria-pressed="false">整理手牌</button>
+          <button class="btn ghost hand-reorder-toggle" id="handReorderToggle" type="button" aria-pressed="false" title="进入后可直接拖动卡牌换位">拖动排序</button>
         </div>
         <div class="hand" id="hand"></div>
         <div class="grave-targets" id="graveTargets" hidden></div>
@@ -585,7 +593,7 @@
     </div>
   </div>
 
-  <script type="module" src="src/duel-table.js?v=20260824-responsive-workbench"></script>
-  <script type="module" src="src/app.js?v=20260825-phase-stage"></script>
+  <script type="module" src="src/duel-table.js?v=20260828-interaction-ux"></script>
+  <script type="module" src="src/app.js?v=20260828-interaction-ux"></script>
 </body>
 </html>

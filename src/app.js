@@ -595,6 +595,7 @@ const {
   playGuardShield,
   shakeScreen,
   playCenterCardEffect,
+  playSupportReveal,
   playAttackCutIn,
   playMonsterMotion,
   playMonsterPhantom,
@@ -2889,7 +2890,14 @@ async function playSpell(owner, rival, handIndex, targetInfo = null) {
     await waitForAiReveal({ ...spellLog, revealKind: "spell" });
   }
   result = resolveEngineSpellFeedback(owner, rival, card, engineEvents, targetInfo);
-  playSpellEffect(owner, rival, card, result.effectTarget || null, result.targetOwner || targetInfo?.owner || owner.owner);
+  playSpellEffect(
+    owner,
+    rival,
+    card,
+    result.effectTarget || null,
+    result.targetOwner || targetInfo?.owner || owner.owner,
+    targetInfo
+  );
   resolveElementCombos(owner, rival, "spell");
   clearPendingTarget();
   state.selected = null;
@@ -5508,11 +5516,21 @@ function handleActionWindowTimeout(windowId) {
   }
 }
 
-function playSpellEffect(owner, rival, card, targetCard = null, targetOwner = owner.owner) {
+function playSpellEffect(owner, rival, card, targetCard = null, targetOwner = owner.owner, targetInfo = null) {
   const source = panelElement(owner.owner);
   let target = panelElement(rival.owner);
   if (["heal700", "draw2", "shield800", "extraSummon", "elementEcho", "graveReturn", "battleTrance", "directStrike", "lightShadowCombo"].includes(card.effect)) {
     target = panelElement(owner.owner);
+  }
+  if (card.effect === "destroySpellTrap" && Number.isInteger(targetInfo?.index)) {
+    target = trapElement(targetInfo.owner || targetOwner, targetInfo.index) || target;
+    playArrow(source, target, "spell", card.name);
+    playSupportReveal(target, targetInfo.card || targetCard, {
+      owner: targetInfo.owner || targetOwner,
+      index: targetInfo.index,
+      sourceName: card.name
+    });
+    return;
   }
   if (targetCard) {
     const targetDuelist = targetOwner === rival.owner ? rival : owner;
@@ -6123,10 +6141,10 @@ function renderHand(animationKey) {
   const showToolbar = state.started && cards.length > 1;
   if (els.handToolbar) els.handToolbar.hidden = !showToolbar;
   if (els.handOrderStatus) els.handOrderStatus.hidden = !handReorderMode;
-  if (els.handSortType) els.handSortType.hidden = !handReorderMode;
+  if (els.handSortType) els.handSortType.hidden = !showToolbar;
   if (els.handResetOrder) els.handResetOrder.hidden = !handReorderMode;
   if (els.handReorderToggle) {
-    els.handReorderToggle.textContent = handReorderMode ? "完成整理" : "整理手牌";
+    els.handReorderToggle.textContent = handReorderMode ? "完成排序" : "拖动排序";
     els.handReorderToggle.setAttribute("aria-pressed", String(handReorderMode));
     els.handReorderToggle.disabled = !showToolbar;
   }

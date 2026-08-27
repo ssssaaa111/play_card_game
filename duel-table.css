@@ -963,6 +963,64 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   box-shadow: inset 0 -2px 0 rgba(84, 210, 210, 0.34);
 }
 
+.timeline-toolbar {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.timeline-view-controls {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px 48px 32px;
+  align-items: center;
+  gap: 4px;
+}
+
+.timeline-view-controls > span {
+  color: rgba(203, 214, 229, 0.52);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.timeline-view-controls button,
+.timeline-view-controls output {
+  min-width: 0;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(84, 210, 210, 0.2);
+  border-radius: 6px;
+  color: #c7ffff;
+  background: rgba(84, 210, 210, 0.07);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.timeline-view-controls button {
+  cursor: pointer;
+}
+
+.timeline-view-controls button:hover,
+.timeline-view-controls button:focus-visible {
+  border-color: rgba(84, 210, 210, 0.48);
+  background: rgba(84, 210, 210, 0.16);
+  outline: none;
+}
+
+.timeline-view-controls button:disabled {
+  opacity: 0.34;
+  cursor: default;
+}
+
+.timeline-view-controls output {
+  color: rgba(229, 255, 255, 0.78);
+  font-variant-numeric: tabular-nums;
+}
+
 .timeline-drawer .chain-history-toggle {
   min-height: 42px;
   padding: 7px 9px;
@@ -1003,9 +1061,35 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   grid-auto-rows: max-content;
   align-content: start;
   gap: 2px;
-  padding: 2px 3px 2px 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  padding: 2px 7px 12px 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(84, 210, 210, 0.52) rgba(255, 255, 255, 0.045);
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
+  cursor: grab;
+  touch-action: none;
+}
+
+.timeline-drawer .timeline-list.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.timeline-drawer .timeline-list::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.timeline-drawer .timeline-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.timeline-drawer .timeline-list::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(7, 12, 20, 0.96);
+  border-radius: 999px;
+  background: rgba(84, 210, 210, 0.52);
 }
 
 .timeline-drawer[data-timeline-view="battle"] .timeline-item:not([data-timeline-group="battle"]),
@@ -1094,6 +1178,57 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   font-size: 11px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.timeline-drawer[data-timeline-scale="85"] .timeline-item {
+  grid-template-columns: 29px minmax(0, 1fr);
+  gap: 6px;
+  padding-block: 3px 6px;
+}
+
+.timeline-drawer[data-timeline-scale="85"] .timeline-step {
+  width: 22px;
+  height: 22px;
+  font-size: 8px;
+}
+
+.timeline-drawer[data-timeline-scale="85"] .timeline-kind {
+  font-size: 6px;
+}
+
+.timeline-drawer[data-timeline-scale="85"] .timeline-text {
+  font-size: 9px;
+  line-height: 1.38;
+}
+
+.timeline-drawer[data-timeline-scale="115"] .timeline-text {
+  font-size: 13px;
+  line-height: 1.56;
+}
+
+.timeline-drawer[data-timeline-scale="115"] .timeline-kind {
+  font-size: 8px;
+}
+
+.timeline-drawer[data-timeline-scale="130"] .timeline-item {
+  grid-template-columns: 39px minmax(0, 1fr);
+  gap: 10px;
+  padding-block: 8px 12px;
+}
+
+.timeline-drawer[data-timeline-scale="130"] .timeline-step {
+  width: 31px;
+  height: 31px;
+  font-size: 10px;
+}
+
+.timeline-drawer[data-timeline-scale="130"] .timeline-kind {
+  font-size: 9px;
+}
+
+.timeline-drawer[data-timeline-scale="130"] .timeline-text {
+  font-size: 14px;
+  line-height: 1.62;
 }
 
 .timeline-drawer .timeline-card-link {
@@ -3579,9 +3714,9 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 }
 
-/* On desktop the permanent hand-sort affordance lives in the hand label rail,
-   leaving the full hand height to the cards. Expanded reorder controls return
-   to normal flow so their labels never cover cards. */
+/* On desktop both one-click type sorting and manual drag sorting stay visible
+   in the hand label rail. Expanded reorder controls return to normal flow so
+   their labels never cover cards. */
 @media (min-width: 1600px) and (min-height: 900px) {
   .hand-panel {
     position: relative;
@@ -3596,12 +3731,14 @@ body:has(.phase-stage.is-active) .toast.show {
     bottom: 10px;
     left: 10px;
     z-index: 5;
-    width: 70px;
+    width: 72px;
     min-height: 28px;
-    display: block;
+    display: grid;
+    gap: 4px;
   }
 
-  .hand-toolbar:not([hidden]):has(.hand-reorder-toggle[aria-pressed="false"]) .hand-reorder-toggle {
+  .hand-toolbar:not([hidden]):has(.hand-reorder-toggle[aria-pressed="false"]) .hand-reorder-toggle,
+  .hand-toolbar:not([hidden]):has(.hand-reorder-toggle[aria-pressed="false"]) .hand-order-shortcut {
     width: 100%;
     min-height: 28px;
     padding: 4px 5px;

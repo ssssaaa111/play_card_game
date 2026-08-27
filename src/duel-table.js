@@ -23,6 +23,10 @@ export function createDuelTableController(documentRef = document) {
   const detailDrawerTitle = documentRef.querySelector("#detailDrawerTitle");
   const timelineCount = documentRef.querySelector("#timelineCount");
   const timelineBadge = documentRef.querySelector("#timelineDrawerBadge");
+  const timeline = documentRef.querySelector("#timeline");
+  const timelineZoomOut = documentRef.querySelector("#timelineZoomOut");
+  const timelineZoomIn = documentRef.querySelector("#timelineZoomIn");
+  const timelineZoomValue = documentRef.querySelector("#timelineZoomValue");
   const timelineFilters = [...documentRef.querySelectorAll("[data-timeline-filter]")];
   const chainHistoryToggle = documentRef.querySelector("#chainHistoryToggle");
   const field = documentRef.querySelector(".duel-table .field");
@@ -56,6 +60,9 @@ export function createDuelTableController(documentRef = document) {
   let openDrawer = "";
   let lastDetailName = "";
   let chainHistoryVisible = Boolean(chainHistoryToggle && !chainHistoryToggle.hidden);
+  const timelineScales = [85, 100, 115, 130];
+  let timelineScaleIndex = 1;
+  let timelineDrag = null;
 
   function setUtilityMenu(open) {
     const expanded = spaciousSettings.matches || Boolean(open);
@@ -128,6 +135,51 @@ export function createDuelTableController(documentRef = document) {
     for (const button of timelineFilters) {
       button.setAttribute("aria-pressed", String(button.dataset.timelineFilter === nextFilter));
     }
+  }
+
+  function syncTimelineScale() {
+    const scale = timelineScales[timelineScaleIndex];
+    if (timelineDrawer) timelineDrawer.dataset.timelineScale = String(scale);
+    if (timelineZoomValue) timelineZoomValue.textContent = `${scale}%`;
+    if (timelineZoomOut) timelineZoomOut.disabled = timelineScaleIndex === 0;
+    if (timelineZoomIn) timelineZoomIn.disabled = timelineScaleIndex === timelineScales.length - 1;
+  }
+
+  function changeTimelineScale(direction) {
+    timelineScaleIndex = Math.max(0, Math.min(timelineScales.length - 1, timelineScaleIndex + direction));
+    syncTimelineScale();
+  }
+
+  function stopTimelineDrag(event) {
+    if (!timelineDrag || (event?.pointerId != null && event.pointerId !== timelineDrag.pointerId)) return;
+    timeline?.classList.remove("is-dragging");
+    timelineDrag = null;
+  }
+
+  function startTimelineDrag(event) {
+    if (!timeline || event.button !== 0 || event.target.closest("button, a, input, select")) return;
+    if (timeline.scrollHeight <= timeline.clientHeight && timeline.scrollWidth <= timeline.clientWidth) return;
+    timelineDrag = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: timeline.scrollLeft,
+      scrollTop: timeline.scrollTop,
+      moved: false
+    };
+    timeline.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveTimelineDrag(event) {
+    if (!timeline || !timelineDrag || event.pointerId !== timelineDrag.pointerId) return;
+    const dx = event.clientX - timelineDrag.x;
+    const dy = event.clientY - timelineDrag.y;
+    if (!timelineDrag.moved && Math.hypot(dx, dy) < 4) return;
+    timelineDrag.moved = true;
+    timeline.classList.add("is-dragging");
+    timeline.scrollLeft = timelineDrag.scrollLeft - dx;
+    timeline.scrollTop = timelineDrag.scrollTop - dy;
+    event.preventDefault();
   }
 
   function syncChainHistoryAttention() {
@@ -285,6 +337,14 @@ export function createDuelTableController(documentRef = document) {
   timelineClose?.addEventListener("click", () => setDrawer("timeline", false));
   const timelineFilterHandler = (event) => setTimelineFilter(event.currentTarget.dataset.timelineFilter);
   for (const button of timelineFilters) button.addEventListener("click", timelineFilterHandler);
+  const timelineZoomOutHandler = () => changeTimelineScale(-1);
+  const timelineZoomInHandler = () => changeTimelineScale(1);
+  timelineZoomOut?.addEventListener("click", timelineZoomOutHandler);
+  timelineZoomIn?.addEventListener("click", timelineZoomInHandler);
+  timeline?.addEventListener("pointerdown", startTimelineDrag);
+  timeline?.addEventListener("pointermove", moveTimelineDrag);
+  timeline?.addEventListener("pointerup", stopTimelineDrag);
+  timeline?.addEventListener("pointercancel", stopTimelineDrag);
   field?.addEventListener("click", closeCompactDrawer);
   hand?.addEventListener("click", closeCompactDrawer);
 
@@ -384,6 +444,7 @@ export function createDuelTableController(documentRef = document) {
   syncResponsiveWorkspace();
   syncTimelineBadge();
   setTimelineFilter("all");
+  syncTimelineScale();
   syncDetailDrawer();
   syncCombatAttention();
   syncSetupSummary();
@@ -405,6 +466,12 @@ export function createDuelTableController(documentRef = document) {
       gutterWorkspace.removeEventListener("change", responsiveChangeHandler);
       for (const select of setupSelects) select.removeEventListener("change", setupChangeHandler);
       for (const button of timelineFilters) button.removeEventListener("click", timelineFilterHandler);
+      timelineZoomOut?.removeEventListener("click", timelineZoomOutHandler);
+      timelineZoomIn?.removeEventListener("click", timelineZoomInHandler);
+      timeline?.removeEventListener("pointerdown", startTimelineDrag);
+      timeline?.removeEventListener("pointermove", moveTimelineDrag);
+      timeline?.removeEventListener("pointerup", stopTimelineDrag);
+      timeline?.removeEventListener("pointercancel", stopTimelineDrag);
     },
     openDrawer(name) {
       return setDrawer(name, true);

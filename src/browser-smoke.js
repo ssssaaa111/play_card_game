@@ -9565,6 +9565,22 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   if (!ctx.els.timeline.textContent.trim()) {
     throw new Error(`${smokeName}: battle log should be readable without opening a drawer`);
   }
+  const timelineZoomIn = document.querySelector("#timelineZoomIn");
+  const timelineZoomOut = document.querySelector("#timelineZoomOut");
+  const timelineZoomValue = document.querySelector("#timelineZoomValue");
+  if (!timelineZoomIn || !timelineZoomOut || !timelineZoomValue) {
+    throw new Error(`${smokeName}: timeline zoom controls are missing`);
+  }
+  clickSmokeElement(timelineZoomIn, `${smokeName}: enlarge timeline text`);
+  await waitForSmoke(
+    () => timelineDrawer.dataset.timelineScale === "115" && timelineZoomValue.textContent === "115%",
+    `${smokeName}: timeline zoom level increases`
+  );
+  clickSmokeElement(timelineZoomOut, `${smokeName}: restore timeline text scale`);
+  await waitForSmoke(
+    () => timelineDrawer.dataset.timelineScale === "100" && timelineZoomValue.textContent === "100%",
+    `${smokeName}: timeline zoom level resets`
+  );
   clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: pause from direct settings row`);
   await waitForSmoke(() => ctx.state.paused, `${smokeName}: direct pause control works`);
   clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: resume from direct settings row`);
@@ -9887,6 +9903,18 @@ async function runHandReorderBasicSmoke(ctx) {
   const displayBefore = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'))
     .map((card) => card.dataset.cardId);
   if (displayBefore.length < 2) throw new Error(`${smokeName}: scenario must expose at least two hand cards`);
+  if (ctx.els.handSortType.hidden || ctx.els.handReorderToggle.textContent !== "拖动排序") {
+    throw new Error(`${smokeName}: direct type sort and drag-sort entry should both be visible`);
+  }
+
+  clickSmokeElement(ctx.els.handSortType, `${smokeName}: sort directly without entering reorder mode`);
+  await waitForSmoke(() => {
+    const types = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardType);
+    return types.lastIndexOf("spell") < types.indexOf("trap");
+  }, `${smokeName}: direct type sort groups display cards`);
+  if (ctx.state.player.hand.some((card, index) => card.uid !== ruleOrderBefore[index])) {
+    throw new Error(`${smokeName}: direct type sort must not mutate the rule hand array`);
+  }
 
   clickSmokeElement(ctx.els.handReorderToggle, `${smokeName}: enter reorder mode`);
   await waitForSmoke(
@@ -9894,6 +9922,11 @@ async function runHandReorderBasicSmoke(ctx) {
       ctx.els.hand.querySelectorAll(".hand-reorder-controls").length === displayBefore.length,
     `${smokeName}: reorder controls appear`
   );
+  clickSmokeElement(ctx.els.handResetOrder, `${smokeName}: reset after direct type sort`);
+  await waitForSmoke(() => {
+    const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
+    return ids.every((id, index) => id === displayBefore[index]);
+  }, `${smokeName}: reset restores opening order after direct sort`);
   clickSmokeElement(ctx.els.handSortType, `${smokeName}: sort display cards by type`);
   await waitForSmoke(() => {
     const types = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardType);
@@ -10117,6 +10150,13 @@ async function runSupportTargetReadabilityBasicSmoke(ctx) {
 
   await selectSpellTarget(ctx, legalSlot, `${smokeName}：选择月曜帷幕`);
   confirmSpellTarget(ctx, `${smokeName}：确认发动碎月解幕`);
+  await waitForSmoke(
+    () => {
+      const reveal = document.querySelector('.support-reveal-effect[data-card-id="trio-moon-dominion"]');
+      return reveal?.dataset.owner === "ai" && reveal.dataset.index === "0" && reveal.textContent.includes("月曜帷幕");
+    },
+    `${smokeName}：目标盖牌在场上翻开并高亮`
+  );
   await waitForSmoke(
     () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.ai.grave.some((card) => card?.id === "trio-moon-dominion") &&

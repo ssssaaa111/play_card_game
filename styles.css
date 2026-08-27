@@ -2979,6 +2979,7 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   padding-bottom: 44px;
   border-color: rgba(84, 210, 210, 0.72);
   cursor: grab;
+  touch-action: none;
   user-select: none;
 }
 
@@ -5198,6 +5199,121 @@ button.chain-stack-card:focus-visible {
   pointer-events: none;
 }
 
+.support-reveal-effect {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 10;
+  width: var(--reveal-width);
+  height: var(--reveal-height);
+  display: grid;
+  place-items: center;
+  perspective: 1000px;
+  transform: translate(var(--reveal-x), var(--reveal-y));
+  pointer-events: none;
+}
+
+.support-reveal-halo {
+  position: absolute;
+  inset: -34%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 247, 188, 0.42), rgba(246, 189, 96, 0.13) 34%, transparent 68%),
+    conic-gradient(from 12deg, transparent, rgba(255, 255, 255, 0.82), transparent 18%, rgba(84, 210, 210, 0.74), transparent 42%, rgba(246, 189, 96, 0.82), transparent 70%);
+  filter: drop-shadow(0 0 24px rgba(246, 189, 96, 0.82));
+  animation: supportRevealHalo 1700ms ease-out both;
+}
+
+.support-reveal-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  animation: supportRevealFlip 1750ms cubic-bezier(0.19, 0.84, 0.22, 1) both;
+}
+
+.support-reveal-back,
+.support-reveal-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid rgba(255, 235, 167, 0.92);
+  border-radius: 12px;
+  backface-visibility: hidden;
+  box-shadow: 0 0 0 2px rgba(8, 10, 16, 0.88), 0 0 42px rgba(246, 189, 96, 0.68);
+}
+
+.support-reveal-back {
+  background:
+    radial-gradient(circle, rgba(84, 210, 210, 0.26), transparent 34%),
+    repeating-linear-gradient(45deg, rgba(246, 189, 96, 0.2) 0 7px, transparent 7px 15px),
+    #111827;
+  color: rgba(231, 252, 255, 0.72);
+  font-size: clamp(18px, 2vw, 28px);
+  font-weight: 1000;
+  letter-spacing: 0.22em;
+  transform: rotateY(180deg);
+}
+
+.support-reveal-face {
+  grid-template-rows: auto 1fr auto auto;
+  gap: 8px;
+  padding: 12px;
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.12), transparent 28%),
+    radial-gradient(circle at 50% 38%, rgba(183, 148, 244, 0.34), transparent 32%),
+    linear-gradient(160deg, #40245e, #161223 72%);
+  color: #fff;
+  text-align: center;
+}
+
+.support-reveal-face small {
+  width: 100%;
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffe8a8;
+  font-size: clamp(8px, 0.75vw, 11px);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.support-reveal-face b {
+  display: grid;
+  place-items: center;
+  width: min(78px, 54%);
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  background: rgba(8, 10, 16, 0.48);
+  color: #f0deff;
+  font-size: clamp(34px, 4vw, 62px);
+  font-weight: 900;
+  text-shadow: 0 0 18px rgba(183, 148, 244, 0.9);
+}
+
+.support-reveal-face strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: #fff4c9;
+  font-size: clamp(14px, 1.2vw, 20px);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.support-reveal-face em {
+  color: rgba(222, 208, 244, 0.74);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.support-reveal-source {
+  animation: supportRevealSource 1100ms ease-out both;
+}
+
 .center-card-effect strong {
   color: var(--gold);
   font-size: 24px;
@@ -7275,6 +7391,41 @@ button.chain-stack-card:focus-visible {
   .deck-editor-library-groups {
     max-height: 360px;
   }
+}
+
+@keyframes supportRevealFlip {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) rotateY(180deg) rotateZ(-6deg);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(0.82) rotateY(180deg) rotateZ(-3deg);
+  }
+  48% {
+    transform: scale(1.08) rotateY(0deg) rotateZ(1deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1) rotateY(0deg) rotateZ(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.94) rotateY(0deg) translateY(-18px);
+  }
+}
+
+@keyframes supportRevealHalo {
+  0% { opacity: 0; transform: scale(0.25) rotate(-30deg); }
+  26% { opacity: 1; }
+  72% { opacity: 0.82; transform: scale(1) rotate(18deg); }
+  100% { opacity: 0; transform: scale(1.28) rotate(40deg); }
+}
+
+@keyframes supportRevealSource {
+  0%, 100% { filter: none; }
+  30% { filter: brightness(2.1) drop-shadow(0 0 16px rgba(246, 189, 96, 0.96)); }
+  58% { filter: brightness(1.5) drop-shadow(0 0 24px rgba(84, 210, 210, 0.9)); }
 }
 
 .setup-campaign {

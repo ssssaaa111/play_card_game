@@ -8,6 +8,23 @@ export function lifeDeltaAnchor(rect = {}) {
   };
 }
 
+export function supportRevealPlacement(rect = {}, viewport = {}) {
+  const viewportWidth = Number.isFinite(viewport.width) ? viewport.width : 1280;
+  const viewportHeight = Number.isFinite(viewport.height) ? viewport.height : 720;
+  const anchorWidth = Number.isFinite(rect.width) ? rect.width : 96;
+  const anchorHeight = Number.isFinite(rect.height) ? rect.height : 132;
+  const width = Math.min(230, Math.max(154, anchorWidth * 1.55));
+  const height = Math.min(320, Math.max(216, anchorHeight * 1.55));
+  const centerX = (Number.isFinite(rect.left) ? rect.left : 0) + anchorWidth / 2;
+  const centerY = (Number.isFinite(rect.top) ? rect.top : 0) + anchorHeight / 2;
+  return {
+    left: Math.max(12, Math.min(viewportWidth - width - 12, centerX - width / 2)),
+    top: Math.max(64, Math.min(viewportHeight - height - 18, centerY - height / 2)),
+    width,
+    height
+  };
+}
+
 export function createAnimationController({
   document: doc = globalThis.document,
   window: win = globalThis.window,
@@ -259,6 +276,52 @@ export function createAnimationController({
     win.setTimeout(() => el.remove(), 1550);
   }
 
+  function playSupportReveal(targetEl, card, { owner = "ai", index = -1, sourceName = "卡牌效果" } = {}) {
+    if (!targetEl || !card || !els.effectLayer) return;
+    const rect = targetEl.getBoundingClientRect();
+    const placement = supportRevealPlacement(rect, {
+      width: win.innerWidth,
+      height: win.innerHeight
+    });
+    const el = doc.createElement("div");
+    el.className = "support-reveal-effect";
+    el.dataset.cardId = card.id || "";
+    el.dataset.owner = owner;
+    el.dataset.index = String(index);
+    el.style.setProperty("--reveal-x", `${placement.left}px`);
+    el.style.setProperty("--reveal-y", `${placement.top}px`);
+    el.style.setProperty("--reveal-width", `${placement.width}px`);
+    el.style.setProperty("--reveal-height", `${placement.height}px`);
+
+    const halo = doc.createElement("span");
+    halo.className = "support-reveal-halo";
+    const cardShell = doc.createElement("span");
+    cardShell.className = "support-reveal-card";
+    const back = doc.createElement("span");
+    back.className = "support-reveal-back";
+    back.textContent = "SET";
+    const face = doc.createElement("span");
+    face.className = "support-reveal-face";
+    const kicker = doc.createElement("small");
+    kicker.textContent = `${sourceName} · 盖牌识破`;
+    const icon = doc.createElement("b");
+    icon.textContent = card.icon || (card.type === "trap" ? "陷" : "魔");
+    const name = doc.createElement("strong");
+    name.textContent = card.name || "未知盖牌";
+    const type = doc.createElement("em");
+    type.textContent = card.type === "trap" ? "陷阱卡" : card.type === "spell" ? "魔法卡" : "支援卡";
+    face.append(kicker, icon, name, type);
+    cardShell.append(back, face);
+    el.append(halo, cardShell);
+    els.effectLayer.appendChild(el);
+
+    targetEl.classList.remove("support-reveal-source");
+    void targetEl.offsetWidth;
+    targetEl.classList.add("support-reveal-source");
+    win.setTimeout(() => targetEl.classList.remove("support-reveal-source"), 1250);
+    win.setTimeout(() => el.remove(), 1900);
+  }
+
   function playAttackCutIn(attacker, target, owner, rival) {
     const el = doc.createElement("div");
     el.className = "attack-cutin";
@@ -393,6 +456,7 @@ export function createAnimationController({
     playGuardShield,
     shakeScreen,
     playCenterCardEffect,
+    playSupportReveal,
     playAttackCutIn,
     playMonsterMotion,
     playMonsterPhantom,
