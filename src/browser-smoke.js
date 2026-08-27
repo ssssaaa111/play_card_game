@@ -1300,6 +1300,23 @@ async function runTrioPhaseTransitionBasicSmoke(ctx) {
   const transitionItem = [...ctx.els.timeline.querySelectorAll(".timeline-item.phase")]
     .find((item) => item.textContent.includes("第一神已降临"));
   const transitionText = transitionItem?.textContent || "";
+  const timelineRect = ctx.els.timeline.getBoundingClientRect();
+  const transitionRect = transitionItem?.getBoundingClientRect();
+  const transitionEventRect = transitionItem?.querySelector(".timeline-event")?.getBoundingClientRect();
+  const nextItemRect = transitionItem?.nextElementSibling?.getBoundingClientRect();
+  if (!transitionRect || !transitionEventRect ||
+      transitionRect.width > timelineRect.width + 1 ||
+      transitionEventRect.bottom > transitionRect.bottom + 1 ||
+      (nextItemRect && transitionRect.bottom > nextItemRect.top + 1)) {
+    throw new Error(
+      `${smokeName}: transition timeline node must contain its content without overlapping the next row ` +
+      `(timeline=${timelineRect.width}, item=${transitionRect?.width}x${transitionRect?.height}, ` +
+      `eventBottom=${transitionEventRect?.bottom}, itemBottom=${transitionRect?.bottom}, nextTop=${nextItemRect?.top})`
+    );
+  }
+  if (ctx.els.toast?.textContent.includes("第一神已降临")) {
+    throw new Error(`${smokeName}: boss transition should use one consolidated announcement instead of a duplicate toast`);
+  }
   for (const fragment of [
     "普通怪兽 ×1",
     "衍生物 ×1",

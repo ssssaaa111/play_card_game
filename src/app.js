@@ -5232,8 +5232,7 @@ function syncTrioBossPhaseFeedback() {
   });
   const latest = fresh.at(-1);
   if (!latest) return;
-  cue(`${latest.label} · ${latest.next}`);
-  playEpicAction(latest.epic, "summon", 1300);
+  playEpicAction(`${latest.epic} · ${latest.label}`, "summon", 1300);
 }
 
 function fieldEffectMarkers(card, duelist) {

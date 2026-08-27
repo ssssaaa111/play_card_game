@@ -12,6 +12,7 @@ const SMOKE_VIRTUAL_BUDGETS = {
 };
 const SMOKE_VIEWPORTS = {
   "duel-layout-density-basic": { width: 1280, height: 720 },
+  "trio-phase-transition-basic": { width: 1700, height: 1000 },
   "responsive-workbench-wide-basic": { width: 1700, height: 1000 },
   "responsive-workbench-4k-basic": { width: 3840, height: 2160 },
   "mobile-hand-choice-fit-basic": { width: 390, height: 844 },

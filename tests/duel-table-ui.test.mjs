@@ -387,6 +387,10 @@ test("battle chronicle uses full-height summaries filters and structured event n
   assert.match(html, /data-timeline-filter="all"[\s\S]*data-timeline-filter="battle"[\s\S]*data-timeline-filter="cards"[\s\S]*data-timeline-filter="system"/);
   assert.match(css, /\.timeline-drawer\s*\{[\s\S]*width: min\(390px,[\s\S]*max-height: none;[\s\S]*grid-template-rows:/);
   assert.match(css, /\.timeline-drawer \.chain-history-list\s*\{[\s\S]*position: static;/);
+  assert.match(css, /\.timeline-drawer \.timeline-list\s*\{[\s\S]*grid-auto-rows: max-content;/);
+  assert.match(css, /\.timeline-drawer \.timeline-item\s*\{[\s\S]*width: 100%;[\s\S]*min-width: 0;[\s\S]*height: max-content;/);
+  assert.match(css, /\.timeline-drawer \.timeline-item\.phase\s*\{[\s\S]*border-left: 3px solid rgba\(246, 189, 96, 0\.64\);/);
+  assert.match(html, /id="fieldDetailBtn"[\s\S]*<span>详情<\/span>/);
   assert.match(css, /\.timeline-node::after\s*\{[\s\S]*linear-gradient/);
   assert.match(controller, /function setTimelineFilter\(filter = "all"\)/);
   assert.match(controller, /timelineDrawer\.dataset\.timelineView = nextFilter/);
@@ -395,4 +399,5 @@ test("battle chronicle uses full-height summaries filters and structured event n
   assert.match(controller, /chainHistoryObserver\.observe\(chainHistoryToggle/);
   assert.match(renderer, /item\.dataset\.timelineGroup = timelineKindGroup\(entry\.kind\)/);
   assert.match(renderer, /kind\.textContent = timelineKindLabel\(entry\.kind\)/);
+  assert.doesNotMatch(read("src/app.js"), /cue\(`\$\{latest\.label\} · \$\{latest\.next\}`\)/);
 });
