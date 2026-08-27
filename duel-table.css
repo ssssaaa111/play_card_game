@@ -2920,12 +2920,15 @@ body:has(.phase-stage.is-active) .toast.show {
   body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice),
   body[data-duel-selection="target"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice) {
     position: relative;
+    inset: auto;
+    width: 100%;
     grid-column: 1;
     grid-row: 1;
     grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(100px, 132px)) minmax(220px, 1fr);
     grid-template-rows: minmax(0, 1fr);
     gap: 5px;
     height: 100%;
+    transform: none;
   }
 
   body[data-duel-selection="hand"] .hand-command > .choice-actions:not(.fusion-choice):not(.material-choice):not(.split-choice)::after,
@@ -3446,6 +3449,169 @@ body:has(.phase-stage.is-active) .toast.show {
 
   .workspace-deck .timeline-drawer .timeline-list {
     overflow-y: auto;
+  }
+}
+
+/* Desktop workbench: context belongs beside the board, never across its
+   center. The left rail continues the duelist HUD while the timeline becomes
+   a slim right-side instrument panel. */
+@media (min-width: 1600px) and (max-width: 2399px) and (min-height: 900px) {
+  #app {
+    --workspace-height: 0px;
+    --workspace-track: 34px;
+    --detail-rail-width: clamp(220px, 12vw, 250px);
+    --timeline-rail-width: clamp(260px, 15vw, 300px);
+  }
+
+  #app .duel-table .field {
+    grid-template-rows:
+      minmax(96px, 1fr)
+      var(--support-track-size)
+      var(--workspace-track)
+      var(--support-track-size)
+      minmax(96px, 1fr);
+    padding-left: calc(var(--table-hud-width) + var(--detail-rail-width) + 44px);
+    padding-right: calc(var(--timeline-rail-width) + 26px);
+  }
+
+  #app .duel-table .center-line {
+    align-items: center;
+    padding-top: 0;
+  }
+
+  .workspace-deck {
+    position: static;
+    width: auto;
+    height: auto;
+    display: contents;
+    overflow: visible;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    transform: none;
+    backdrop-filter: none;
+  }
+
+  .workspace-deck .workspace-drawer,
+  .workspace-deck .workspace-drawer.is-open,
+  .workspace-deck .workspace-drawer.is-docked {
+    position: absolute;
+    z-index: 24;
+    min-width: 0;
+    min-height: 0;
+    gap: 8px;
+    padding: 11px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 13px;
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.045), transparent 30%),
+      rgba(7, 12, 20, 0.9);
+    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    backdrop-filter: blur(14px);
+  }
+
+  .workspace-deck .detail-drawer,
+  .workspace-deck .detail-drawer.is-open,
+  .workspace-deck .detail-drawer.is-docked {
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: calc(var(--table-hud-width) + 24px);
+    width: var(--detail-rail-width);
+    height: min(380px, calc(100% - 380px));
+    min-height: 220px;
+    grid-template-rows: auto minmax(0, 1fr);
+    border-color: rgba(246, 189, 96, 0.22);
+    transform: translateY(-50%);
+  }
+
+  .workspace-deck .timeline-drawer,
+  .workspace-deck .timeline-drawer.is-open,
+  .workspace-deck .timeline-drawer.is-docked {
+    inset: 10px 10px 10px auto;
+    width: var(--timeline-rail-width);
+    height: auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    border-color: rgba(84, 210, 210, 0.22);
+    background:
+      radial-gradient(circle at 92% 2%, rgba(84, 210, 210, 0.1), transparent 28%),
+      linear-gradient(165deg, rgba(255, 255, 255, 0.04), transparent 30%),
+      rgba(7, 12, 20, 0.91);
+    transform: none;
+  }
+
+  .workspace-deck .detail-drawer .detail-card,
+  .workspace-deck .timeline-drawer .timeline-list {
+    overflow-y: auto;
+  }
+
+  .workspace-deck .timeline-drawer .timeline-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* On desktop the permanent hand-sort affordance lives in the hand label rail,
+   leaving the full hand height to the cards. Expanded reorder controls return
+   to normal flow so their labels never cover cards. */
+@media (min-width: 1600px) and (min-height: 900px) {
+  .hand-panel {
+    position: relative;
+  }
+
+  .hand-stack:has(> .hand-toolbar:not([hidden]) .hand-reorder-toggle[aria-pressed="false"]) {
+    grid-template-rows: minmax(0, 1fr) 0 0;
+  }
+
+  .hand-toolbar:not([hidden]):has(.hand-reorder-toggle[aria-pressed="false"]) {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 5;
+    width: 70px;
+    min-height: 28px;
+    display: block;
+  }
+
+  .hand-toolbar:not([hidden]):has(.hand-reorder-toggle[aria-pressed="false"]) .hand-reorder-toggle {
+    width: 100%;
+    min-height: 28px;
+    padding: 4px 5px;
+    font-size: 9px;
+  }
+
+  .phase-stage {
+    top: calc(max(8px, var(--safe-area-top, 0px)) + 70px);
+    width: min(480px, calc(100vw - 40px));
+  }
+
+  .phase-stage-frame {
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "code title actor"
+      "code detail detail";
+    align-items: center;
+    gap: 1px 10px;
+    min-height: 64px;
+    padding: 8px 16px 9px 22px;
+    border-radius: 5px 14px 5px 14px;
+  }
+
+  .phase-stage-code,
+  .phase-stage-actor,
+  .phase-stage-detail {
+    font-size: 9px;
+  }
+
+  .phase-stage-title {
+    overflow: hidden;
+    font-size: 21px;
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

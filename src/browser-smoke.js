@@ -9398,7 +9398,9 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   const timelineToggle = document.querySelector("#timelineDrawerToggle");
   const utilityToggle = document.querySelector("#utilityMenuToggle");
   const utilityMenu = document.querySelector("#utilityMenu");
-  const requiredRegions = [arena, field, handPanel, centerLine, workspaceDeck, handCommand, detailDrawer, detailName, detailMeta, detailActions, ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldCancelBtn, timelineDrawer, detailToggle, timelineToggle, utilityToggle, utilityMenu];
+  const enemyHud = document.querySelector(".side.enemy.duel-hud");
+  const playerHud = document.querySelector(".side.duel-hud:not(.enemy)");
+  const requiredRegions = [arena, field, handPanel, centerLine, workspaceDeck, handCommand, detailDrawer, detailName, detailMeta, detailActions, ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldCancelBtn, timelineDrawer, detailToggle, timelineToggle, utilityToggle, utilityMenu, enemyHud, playerHud];
   if (requiredRegions.some((element) => !element)) {
     throw new Error(`${smokeName}: required responsive regions are missing`);
   }
@@ -9430,33 +9432,38 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   const workspaceRect = workspaceDeck.getBoundingClientRect();
   const detailRect = detailDrawer.getBoundingClientRect();
   const timelineRect = timelineDrawer.getBoundingClientRect();
+  const enemyHudRect = enemyHud.getBoundingClientRect();
+  const playerHudRect = playerHud.getBoundingClientRect();
+  const aiZoneRect = ctx.els.aiField.getBoundingClientRect();
+  const playerZoneRect = ctx.els.playerField.getBoundingClientRect();
   const wideFieldCard = fieldCard(ctx.els, "player", "star-lancer");
   const wideHandCard = handCard(ctx.els, "star-breach");
   const wideFieldCardRect = wideFieldCard?.getBoundingClientRect();
   const wideHandCardRect = wideHandCard?.getBoundingClientRect();
-  if (detailRect.width < 420 || timelineRect.width < 520 || detailRect.height < 160 || timelineRect.height < 160) {
-    throw new Error(`${smokeName}: docked workbench is too small (${detailRect.width}x${detailRect.height}; ${timelineRect.width}x${timelineRect.height})`);
+  if (detailRect.width < 215 || detailRect.width > 255 || timelineRect.width < 255 || timelineRect.width > 305 ||
+      detailRect.height < 210 || timelineRect.height < arenaRect.height - 30) {
+    throw new Error(`${smokeName}: side context rails have the wrong density (${detailRect.width}x${detailRect.height}; ${timelineRect.width}x${timelineRect.height})`);
   }
   if (!wideFieldCardRect || !wideHandCardRect ||
-      wideFieldCardRect.height < 100 || wideHandCardRect.height < 140 ||
+      wideFieldCardRect.height < 100 || wideHandCardRect.height < 130 ||
       wideHandCardRect.height / wideHandCardRect.width < 0.85 ||
       Math.abs(wideFieldCardRect.height - wideHandCardRect.height) > 55 ||
-      workspaceRect.height > 200) {
+      workspaceRect.width > 1 || workspaceRect.height > 1) {
     throw new Error(
       `${smokeName}: medium spacious density should preserve readable field and hand cards ` +
       `(field=${wideFieldCardRect?.width}x${wideFieldCardRect?.height}, ` +
       `hand=${wideHandCardRect?.width}x${wideHandCardRect?.height}, workbench=${workspaceRect.height})`
     );
   }
-  if (Math.abs((workspaceRect.top + workspaceRect.bottom) / 2 - (arenaRect.top + arenaRect.bottom) / 2) > 3 ||
-      workspaceRect.top < centerRect.top - 1 || workspaceRect.bottom > centerRect.bottom + 1 ||
-      workspaceRect.left < fieldRect.left || workspaceRect.right > fieldRect.right ||
-      handRect.top - workspaceRect.bottom < 120) {
-    throw new Error(`${smokeName}: command deck should occupy the reserved battlefield center`);
+  if (centerRect.height > 60 || aiZoneRect.bottom > centerRect.top + 1 || playerZoneRect.top < centerRect.bottom - 1 ||
+      aiZoneRect.height < 190 || playerZoneRect.height < 190) {
+    throw new Error(`${smokeName}: monster zones should own the wide battlefield center`);
   }
-  if (Math.abs(detailRect.right - timelineRect.left) > 2 ||
-      Math.abs(detailRect.left - workspaceRect.left) > 2 || Math.abs(timelineRect.right - workspaceRect.right) > 2) {
-    throw new Error(`${smokeName}: detail and timeline should read as one shared command deck`);
+  if (detailRect.left < Math.max(enemyHudRect.right, playerHudRect.right) + 8 ||
+      detailRect.right > aiZoneRect.left + 2 ||
+      timelineRect.left < aiZoneRect.right - 12 ||
+      Math.abs(timelineRect.right - (arenaRect.right - 10)) > 2) {
+    throw new Error(`${smokeName}: context rails should flank the board without covering monsters`);
   }
 
   clickSmokeElement(handCard(ctx.els, "star-breach"), `${smokeName}: select hand card`);
@@ -9470,13 +9477,16 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
     .map((button) => button.getBoundingClientRect());
   const choiceButtonCenter = (choiceButtonRects[0].left + choiceButtonRects.at(-1).right) / 2;
   const choiceActionCenter = (choiceActionRect.left + choiceActionRect.right) / 2;
+  const handCommandRect = handCommand.getBoundingClientRect();
   const choicePrimaryStyle = {
     backgroundImage: getComputedStyle(ctx.els.choiceConfirmBtn).backgroundImage,
     borderRadius: getComputedStyle(ctx.els.choiceConfirmBtn).borderRadius
   };
   if (!selectedChoiceCardRect || choiceActionRect.bottom > selectedChoiceCardRect.top + 1 ||
       choiceButtonRects.some((rect) => Math.abs(rect.top - choiceButtonRects[0].top) > 1) ||
-      Math.abs(choiceButtonCenter - choiceActionCenter) > 3) {
+      Math.abs(choiceButtonCenter - choiceActionCenter) > 3 ||
+      Math.abs(choiceActionCenter - (handCommandRect.left + handCommandRect.right) / 2) > 3 ||
+      choiceActionRect.left < handCommandRect.left - 1 || choiceActionRect.right > handCommandRect.right + 1) {
     throw new Error(
       `${smokeName}: hand commands should be centered directly above the hand cards ` +
       `(bar=${choiceActionRect.top}-${choiceActionRect.bottom}, cardTop=${selectedChoiceCardRect?.top}, ` +
@@ -9656,13 +9666,16 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
     .map((button) => button.getBoundingClientRect());
   const ultraChoiceButtonCenter = (ultraChoiceButtons[0].left + ultraChoiceButtons.at(-1).right) / 2;
   const ultraChoiceCenter = (ultraChoiceRect.left + ultraChoiceRect.right) / 2;
+  const ultraHandCommandRect = handCommand.getBoundingClientRect();
   const ultraChoicePrimaryStyle = {
     backgroundImage: getComputedStyle(ctx.els.choiceConfirmBtn).backgroundImage,
     borderRadius: getComputedStyle(ctx.els.choiceConfirmBtn).borderRadius
   };
   if (!ultraSelectedChoiceCardRect || ultraChoiceRect.bottom > ultraSelectedChoiceCardRect.top + 1 ||
       ultraChoiceButtons.some((rect) => Math.abs(rect.top - ultraChoiceButtons[0].top) > 1) ||
-      Math.abs(ultraChoiceButtonCenter - ultraChoiceCenter) > 3) {
+      Math.abs(ultraChoiceButtonCenter - ultraChoiceCenter) > 3 ||
+      Math.abs(ultraChoiceCenter - (ultraHandCommandRect.left + ultraHandCommandRect.right) / 2) > 3 ||
+      ultraChoiceRect.left < ultraHandCommandRect.left - 1 || ultraChoiceRect.right > ultraHandCommandRect.right + 1) {
     throw new Error(
       `${smokeName}: 4K hand commands should be centered directly above the hand cards ` +
       `(bar=${ultraChoiceRect.top}-${ultraChoiceRect.bottom}, cardTop=${ultraSelectedChoiceCardRect?.top}, ` +

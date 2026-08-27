@@ -106,7 +106,7 @@ test("settings stay compact on small screens and become direct controls when spa
   assert.match(controller, /const expanded = spaciousSettings\.matches \|\| Boolean\(open\)/);
 });
 
-test("spacious screens dock context while scaled 4K and ultra-wide screens use edge gutters", () => {
+test("spacious screens keep context in side rails while scaled 4K uses edge gutters", () => {
   const html = read("index.html");
   const css = read("duel-table.css");
   const controller = read("src/duel-table.js");
@@ -114,7 +114,8 @@ test("spacious screens dock context while scaled 4K and ultra-wide screens use e
 
   assert.match(html, /id="workspaceDeck"[\s\S]*id="detailDrawer"[\s\S]*id="timelineDrawer"/);
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*--workspace-height/);
-  assert.match(css, /\.workspace-deck\s*\{[\s\S]*grid-template-columns: minmax\(0, 0\.9fr\) minmax\(0, 1\.1fr\);[\s\S]*transform: translate\(-50%, -50%\);/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*--workspace-track: 34px;[\s\S]*--detail-rail-width: clamp\(220px, 12vw, 250px\);[\s\S]*--timeline-rail-width: clamp\(260px, 15vw, 300px\);/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*\.workspace-deck\s*\{[\s\S]*display: contents;[\s\S]*\.detail-drawer\.is-docked\s*\{[\s\S]*left: calc\(var\(--table-hud-width\) \+ 24px\);[\s\S]*\.timeline-drawer\.is-docked\s*\{[\s\S]*inset: 10px 10px 10px auto;/);
   assert.match(css, /\.workspace-deck \.workspace-drawer\.is-docked[\s\S]*visibility: visible;[\s\S]*pointer-events: auto;/);
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.detail-drawer \.detail-actions\s*\{[\s\S]*display: none;[\s\S]*\.detail-drawer #battlePreview\s*\{[\s\S]*grid-row: 3;/);
   assert.match(renderer, /elements\.detailAttackBtn\.hidden = view\.fieldAction\.hidden/);
@@ -281,7 +282,7 @@ test("phase changes use a queued stage cue without blocking the duel table", () 
   assert.match(css, /\.phase-stage\s*\{[\s\S]*position: fixed;[\s\S]*pointer-events: none;/);
   assert.match(css, /\.phase-stage\[data-phase="battle"\][\s\S]*--phase-stage-accent: #ef476f/);
   assert.match(css, /body:has\(\.phase-stage\.is-active\) \.toast\.show\s*\{[\s\S]*animation: none/);
-  assert.match(css, /@media \(min-width: 2200px\) and \(min-height: 1200px\)[\s\S]*\.phase-stage\s*\{[\s\S]*width: min\(680px/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.phase-stage\s*\{[\s\S]*width: min\(480px[\s\S]*\.phase-stage-frame\s*\{[\s\S]*min-height: 64px/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*phaseStagePresenceReduced/);
   assert.match(app, /queuePhaseStageEvents\(turnEvents\)/);
   assert.match(app, /queuePhaseStageEvents\(phaseEvents\)/);
@@ -367,6 +368,9 @@ test("spacious field commands form one row directly above the hand", () => {
   assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-stack,[\s\S]*body\[data-duel-selection="hand"\] \.hand-stack,[\s\S]*body\[data-duel-selection="target"\] \.hand-stack\s*\{[\s\S]*grid-row: 2;/);
   assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-toolbar,[\s\S]*body\[data-duel-selection="hand"\] \.hand-toolbar,[\s\S]*body\[data-duel-selection="target"\] \.hand-toolbar\s*\{[\s\S]*display: none;/);
   assert.match(css, /body\[data-duel-selection="hand"\] \.hand-command > \.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\),[\s\S]*body\[data-duel-selection="target"\] \.hand-command > \.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\)\s*\{[\s\S]*grid-template-columns: minmax\(220px, 1fr\) repeat\(2, minmax\(100px, 132px\)\) minmax\(220px, 1fr\);/);
+  assert.match(css, /body\[data-duel-selection="hand"\] \.hand-command > \.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\),[\s\S]*inset: auto;[\s\S]*width: 100%;[\s\S]*transform: none;/);
+  assert.match(css, /\.hand-stack:has\(> \.hand-toolbar:not\(\[hidden\]\) \.hand-reorder-toggle\[aria-pressed="false"\]\)\s*\{[\s\S]*grid-template-rows: minmax\(0, 1fr\) 0 0;/);
+  assert.match(css, /\.hand-toolbar:not\(\[hidden\]\):has\(\.hand-reorder-toggle\[aria-pressed="false"\]\)\s*\{[\s\S]*position: absolute;[\s\S]*bottom: 10px;[\s\S]*left: 10px;/);
   assert.match(css, /body\[data-duel-selection="hand"\][\s\S]*#choiceConfirmBtn\s*\{[\s\S]*grid-column: 2;/);
   assert.match(css, /body\[data-duel-selection="target"\][\s\S]*#choiceCancelBtn\s*\{[\s\S]*grid-column: 3;/);
   assert.match(css, /body\[data-duel-selection="playerField"\][\s\S]*\.field-attack-btn:not\(:disabled\)[\s\S]*background: linear-gradient\(180deg, #ffe19b, #f6bd60\);/);
