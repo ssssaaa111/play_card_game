@@ -342,6 +342,9 @@ const combatHudDamageStage = createCombatHudDamageStage();
 const els = {
   phaseText: document.querySelector("#phaseText"),
   turnText: document.querySelector("#turnText"),
+  versusStage: document.querySelector("#versusStage"),
+  versusTurn: document.querySelector("#versusTurn"),
+  versusPhase: document.querySelector("#versusPhase"),
   timerText: document.querySelector("#timerText"),
   timerProgress: document.querySelector("#timerProgress"),
   timerProgressFill: document.querySelector("#timerProgressFill"),
@@ -5610,8 +5613,26 @@ function render(animationKey = "") {
   syncTrioBossPhaseFeedback();
   setMusicMode(musicMode);
   document.body.dataset.musicMode = musicMode;
-  els.phaseText.textContent = phaseLabel(state);
+  const currentPhaseLabel = phaseLabel(state);
+  els.phaseText.textContent = currentPhaseLabel;
   els.turnText.textContent = turnLabel(state);
+  if (els.versusPhase) els.versusPhase.textContent = currentPhaseLabel;
+  if (els.versusTurn) {
+    els.versusTurn.textContent = !state.started
+      ? "DUEL READY"
+      : state.gameOver
+        ? "DUEL END"
+        : state.paused
+          ? "PAUSED"
+          : state.turn === "player"
+            ? "PLAYER TURN"
+            : "RIVAL TURN";
+  }
+  if (els.versusStage) {
+    els.versusStage.dataset.actor = !state.started || state.gameOver || state.paused
+      ? "idle"
+      : state.turn;
+  }
   const duelHint = duelHintView({
     started: state.started,
     paused: state.paused,

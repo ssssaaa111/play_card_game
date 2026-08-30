@@ -10,9 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="styles\.css\?v=20260828-long-duel-ux2"/);
-  assert.match(html, /href="duel-table\.css\?v=20260828-long-duel-ux2"/);
-  assert.match(html, /src="src\/app\.js\?v=20260828-long-duel-ux2"/);
+  assert.match(html, /href="styles\.css\?v=20260830-versus-hud"/);
+  assert.match(html, /href="duel-table\.css\?v=20260830-versus-hud"/);
+  assert.match(html, /src="src\/app\.js\?v=20260830-versus-hud"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -21,7 +21,23 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   assert.match(html, /id="fieldActionBar"[\s\S]*id="fieldAttackBtn"[\s\S]*id="fieldModeBtn"[\s\S]*id="fieldDetailBtn"[\s\S]*id="fieldCancelBtn"/);
   assert.match(html, /class="detail-actions"[\s\S]*id="detailAttackBtn"[\s\S]*id="modeBtn"[\s\S]*id="detailBtn"[\s\S]*id="detailSelectionCancelBtn"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260828-long-duel-ux2"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260830-versus-hud"/);
+});
+
+test("duelist HUD reads like a fighting-game faceoff without covering the board", () => {
+  const html = read("index.html");
+  const css = read("duel-table.css");
+  const app = read("src/app.js");
+
+  assert.match(html, /id="versusStage"[\s\S]*id="versusTurn"[\s\S]*class="versus-mark"[\s\S]*id="versusPhase"/);
+  assert.match(html, /id="aiFigure"[\s\S]*id="aiLifeBar"[\s\S]*id="playerFigure"[\s\S]*id="playerLifeBar"/);
+  assert.match(app, /versusStage: document\.querySelector\("#versusStage"\)/);
+  assert.match(app, /els\.versusTurn\.textContent = !state\.started[\s\S]*"PLAYER TURN"[\s\S]*"RIVAL TURN"/);
+  assert.match(app, /els\.versusStage\.dataset\.actor/);
+  assert.match(css, /\.versus-stage\s*\{[\s\S]*left: 50%;[\s\S]*transform: translateX\(-50%\)/);
+  assert.match(css, /@media \(min-width: 1041px\)[\s\S]*#app \.duel-table \.field\s*\{[\s\S]*inset: 112px 0 0;/);
+  assert.match(css, /#app \.duel-table \.side:not\(\.enemy\) \.life-fill\s*\{[\s\S]*right: 0;[\s\S]*left: auto;/);
+  assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.versus-stage\s*\{[\s\S]*width: 54px;/);
 });
 
 test("campaign chapters expose a live mission rail without stealing field clicks", () => {

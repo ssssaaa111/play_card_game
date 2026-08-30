@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20260828-long-duel-ux2" />
-  <link rel="stylesheet" href="duel-table.css?v=20260828-long-duel-ux2" />
+  <link rel="stylesheet" href="styles.css?v=20260830-versus-hud" />
+  <link rel="stylesheet" href="duel-table.css?v=20260830-versus-hud" />
 </head>
 <body>
   <div id="app">
@@ -57,6 +57,11 @@
     </header>
 
     <main class="arena duel-table">
+      <section class="versus-stage" id="versusStage" aria-label="双方对战状态" data-actor="idle">
+        <span class="versus-turn" id="versusTurn">DUEL READY</span>
+        <strong class="versus-mark" aria-hidden="true"><i>V</i><i>S</i></strong>
+        <span class="versus-phase" id="versusPhase" aria-live="polite">准备决斗</span>
+      </section>
       <aside class="side enemy duel-hud" aria-label="对手状态">
         <section class="player-card" id="aiPanel">
           <div class="duelist-face">
@@ -598,7 +603,7 @@
     </div>
   </div>
 
-  <script type="module" src="src/duel-table.js?v=20260828-long-duel-ux2"></script>
-  <script type="module" src="src/app.js?v=20260828-long-duel-ux2"></script>
+  <script type="module" src="src/duel-table.js?v=20260830-versus-hud"></script>
+  <script type="module" src="src/app.js?v=20260830-versus-hud"></script>
 </body>
 </html>

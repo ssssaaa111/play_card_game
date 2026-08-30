@@ -5176,3 +5176,598 @@ body:has(.phase-stage.is-active) .toast.show {
     transition: none;
   }
 }
+
+/* Fighting-game duel HUD: portraits guard the outer edges, life bars point
+   toward the central VS crest, and the board begins below this score layer. */
+.versus-stage {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 8;
+  width: 124px;
+  height: 92px;
+  display: grid;
+  grid-template-rows: 17px minmax(0, 1fr) 20px;
+  place-items: center;
+  padding: 7px 8px 6px;
+  border: 1px solid rgba(246, 189, 96, 0.42);
+  border-radius: 12px 4px 12px 4px;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(246, 189, 96, 0.18), transparent 48%),
+    linear-gradient(145deg, rgba(239, 71, 111, 0.1), transparent 42%),
+    linear-gradient(215deg, rgba(84, 210, 210, 0.1), transparent 42%),
+    rgba(5, 8, 14, 0.94);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45), inset 0 0 22px rgba(246, 189, 96, 0.05);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.versus-stage::before,
+.versus-stage::after {
+  content: "";
+  position: absolute;
+  top: 44px;
+  width: 46px;
+  height: 2px;
+  opacity: 0.72;
+}
+
+.versus-stage::before {
+  right: 100%;
+  background: linear-gradient(90deg, transparent, rgba(239, 71, 111, 0.9));
+}
+
+.versus-stage::after {
+  left: 100%;
+  background: linear-gradient(90deg, rgba(84, 210, 210, 0.9), transparent);
+}
+
+.versus-turn,
+.versus-phase {
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.versus-turn {
+  color: rgba(246, 189, 96, 0.78);
+  font-size: 8px;
+}
+
+.versus-phase {
+  color: #f6f0df;
+  font-size: 9px;
+}
+
+.versus-mark {
+  display: flex;
+  align-items: center;
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: 40px;
+  font-style: italic;
+  line-height: 0.9;
+  letter-spacing: -0.14em;
+  transform: skewX(-8deg) translateX(-2px);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.55));
+}
+
+.versus-mark i {
+  font-style: inherit;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.24);
+}
+
+.versus-mark i:first-child {
+  color: #ff5d83;
+}
+
+.versus-mark i:last-child {
+  color: #5fe7e7;
+}
+
+.versus-stage[data-actor="ai"] {
+  border-color: rgba(239, 71, 111, 0.62);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45), 0 0 24px rgba(239, 71, 111, 0.12);
+}
+
+.versus-stage[data-actor="player"] {
+  border-color: rgba(84, 210, 210, 0.64);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45), 0 0 24px rgba(84, 210, 210, 0.12);
+}
+
+@media (min-width: 1041px) {
+  #app .duel-table .field {
+    inset: 112px 0 0;
+  }
+
+  #app .duel-table .side.duel-hud,
+  #app .duel-table .side.enemy.duel-hud {
+    top: 10px;
+    bottom: auto;
+    width: min(1400px, calc(50% - 74px));
+    max-height: none;
+    display: block;
+    overflow: visible;
+  }
+
+  #app .duel-table .side.duel-hud {
+    right: 12px;
+    left: auto;
+  }
+
+  #app .duel-table .side.enemy.duel-hud {
+    right: auto;
+    left: 12px;
+  }
+
+  #app .duel-table .player-card {
+    height: 82px;
+    padding: 5px 10px 5px 6px;
+    overflow: visible;
+    border-width: 1px 2px 2px 1px;
+    border-radius: 5px 18px 5px 15px;
+    background:
+      linear-gradient(100deg, rgba(239, 71, 111, 0.13), transparent 36%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 54%),
+      rgba(5, 8, 14, 0.94);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42), inset 0 -2px 0 rgba(239, 71, 111, 0.18);
+  }
+
+  #app .duel-table .side:not(.enemy) .player-card {
+    padding: 5px 6px 5px 10px;
+    border-width: 1px 1px 2px 2px;
+    border-radius: 18px 5px 15px 5px;
+    background:
+      linear-gradient(260deg, rgba(84, 210, 210, 0.14), transparent 36%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 54%),
+      rgba(5, 8, 14, 0.94);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42), inset 0 -2px 0 rgba(84, 210, 210, 0.2);
+  }
+
+  #app .duel-table .enemy .player-card.active-turn {
+    border-color: rgba(239, 71, 111, 0.78);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42), 0 0 24px rgba(239, 71, 111, 0.16), inset 0 -3px 0 rgba(239, 71, 111, 0.62);
+    transform: translateY(2px);
+  }
+
+  #app .duel-table .side:not(.enemy) .player-card.active-turn {
+    border-color: rgba(84, 210, 210, 0.82);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42), 0 0 24px rgba(84, 210, 210, 0.17), inset 0 -3px 0 rgba(84, 210, 210, 0.68);
+    transform: translateY(2px);
+  }
+
+  #app .duel-table .enemy .player-card.direct-target {
+    cursor: crosshair;
+    border-color: rgba(246, 189, 96, 0.94);
+    box-shadow: 0 0 0 2px rgba(246, 189, 96, 0.18), 0 16px 38px rgba(239, 71, 111, 0.28), inset 0 -3px 0 rgba(246, 189, 96, 0.74);
+    transform: translateY(2px) scale(1.008);
+  }
+
+  #app .duel-table .player-card[data-life-tone="critical"] .life-bar {
+    animation: versusCriticalPulse 900ms ease-in-out infinite alternate;
+  }
+
+  #app .duel-table .duelist-face {
+    height: 70px;
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-face {
+    grid-template-columns: minmax(0, 1fr) 78px;
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-face > .duelist-figure {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-face > div:last-child {
+    grid-column: 1;
+    grid-row: 1;
+    text-align: right;
+  }
+
+  #app .duel-table .duelist-figure {
+    width: 78px;
+    height: 78px;
+    align-self: end;
+    overflow: hidden;
+    border: 1px solid rgba(239, 71, 111, 0.48);
+    border-radius: 5px 18px 5px 15px;
+    background:
+      radial-gradient(circle at 50% 22%, rgba(239, 71, 111, 0.22), transparent 54%),
+      rgba(12, 8, 18, 0.96);
+    filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.45));
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-figure {
+    border-color: rgba(84, 210, 210, 0.52);
+    border-radius: 18px 5px 15px 5px;
+    background:
+      radial-gradient(circle at 50% 22%, rgba(84, 210, 210, 0.24), transparent 54%),
+      rgba(6, 14, 19, 0.96);
+  }
+
+  #app .duel-table .duelist-figure::before {
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 38%);
+    transform: none;
+  }
+
+  #app .duel-table .duelist-figure::after {
+    right: 8px;
+    bottom: 4px;
+    left: 8px;
+    width: auto;
+    height: 2px;
+    border-radius: 0;
+    background: linear-gradient(90deg, transparent, rgba(239, 71, 111, 0.76), transparent);
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-figure::after {
+    background: linear-gradient(90deg, transparent, rgba(84, 210, 210, 0.8), transparent);
+  }
+
+  #app .duel-table .duelist-sprite {
+    width: 128%;
+    height: auto;
+    min-height: 118px;
+    object-fit: contain;
+    object-position: center top;
+    transform: translateY(-5px);
+  }
+
+  #app .duel-table .player-title {
+    min-height: 22px;
+    font-size: 14px;
+    letter-spacing: 0.03em;
+  }
+
+  #app .duel-table .side:not(.enemy) .player-title {
+    flex-direction: row-reverse;
+  }
+
+  #app .duel-table .life-caption {
+    padding: 2px 5px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+    color: rgba(255, 255, 255, 0.62);
+    background: rgba(0, 0, 0, 0.26);
+    font-size: 8px;
+    letter-spacing: 0.12em;
+  }
+
+  #app .duel-table .life-bar {
+    height: 25px;
+    margin-top: 1px;
+    border-color: rgba(239, 71, 111, 0.42);
+    border-radius: 3px 10px 3px 3px;
+    background: rgba(20, 4, 9, 0.76);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.34), 0 0 16px rgba(239, 71, 111, 0.08);
+  }
+
+  #app .duel-table .side:not(.enemy) .life-bar {
+    border-color: rgba(84, 210, 210, 0.46);
+    border-radius: 10px 3px 3px 3px;
+    background: rgba(3, 16, 19, 0.78);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.34), 0 0 16px rgba(84, 210, 210, 0.08);
+  }
+
+  #app .duel-table .enemy .life-fill {
+    background: linear-gradient(90deg, #972843, #ef476f 62%, #ffb052);
+  }
+
+  #app .duel-table .side:not(.enemy) .life-fill {
+    right: 0;
+    left: auto;
+    background: linear-gradient(270deg, #147e8a, #54d2d2 62%, #d6ffdd);
+  }
+
+  #app .duel-table .life-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 48%),
+      repeating-linear-gradient(90deg, transparent 0 9.7%, rgba(0, 0, 0, 0.2) 10%);
+    pointer-events: none;
+  }
+
+  #app .duel-table .life-value {
+    z-index: 3;
+    padding-inline: 10px;
+    font-size: 13px;
+    font-weight: 950;
+    letter-spacing: 0.05em;
+    text-align: right;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  }
+
+  #app .duel-table .side:not(.enemy) .life-value {
+    text-align: left;
+  }
+
+  #app .duel-table .skill-line {
+    max-height: 17px;
+    margin-top: 3px;
+    color: rgba(221, 228, 238, 0.64);
+    font-size: 8px;
+    line-height: 1.5;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #app .duel-table .vital-status {
+    position: absolute;
+    top: 5px;
+    right: 9px;
+    margin: 0;
+  }
+
+  #app .duel-table .side:not(.enemy) .vital-status {
+    right: auto;
+    left: 9px;
+  }
+
+  #app .duel-table .vital-chip {
+    min-height: 16px;
+    padding: 2px 5px;
+    font-size: 7px;
+  }
+
+  #app .duel-table .piles {
+    position: absolute;
+    top: 85px;
+    left: 88px;
+    width: 154px;
+    height: 23px;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+
+  #app .duel-table .side:not(.enemy) .piles {
+    right: 88px;
+    left: auto;
+  }
+
+  #app .duel-table .pile {
+    min-height: 23px;
+    display: grid;
+    place-items: center;
+    padding: 2px 6px;
+    border-radius: 3px 8px 3px 3px;
+    background: rgba(5, 8, 14, 0.9);
+    color: rgba(203, 214, 229, 0.58);
+    font-size: 8px;
+  }
+
+  #app .duel-table .side:not(.enemy) .pile {
+    border-radius: 8px 3px 3px 3px;
+  }
+
+  #app .duel-table .pile span {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+  }
+
+  #app .duel-table .pile strong {
+    display: inline;
+    margin: 0;
+    font-size: 11px;
+  }
+
+  #app .duel-table .side:not(.enemy) .campaign-mission {
+    position: absolute;
+    top: 114px;
+    right: 0;
+    width: min(320px, 42vw);
+  }
+}
+
+@media (min-width: 1041px) and (max-width: 1599px),
+  (min-width: 1041px) and (max-height: 899px) {
+  #app .duel-table .field {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}
+
+@media (min-width: 1600px) and (max-width: 2399px) and (min-height: 900px) {
+  #app .duel-table .field {
+    padding-left: calc(var(--detail-rail-width) + 30px);
+    padding-right: calc(var(--timeline-rail-width) + 26px);
+  }
+}
+
+@media (min-width: 2400px) and (min-height: 1200px) {
+  #app .duel-table .field {
+    padding-right: 32px;
+    padding-left: 32px;
+  }
+
+  .versus-stage {
+    top: 12px;
+    width: 152px;
+    height: 104px;
+  }
+
+  .versus-mark {
+    font-size: 48px;
+  }
+
+  #app .duel-table .side.duel-hud,
+  #app .duel-table .side.enemy.duel-hud {
+    top: 14px;
+  }
+}
+
+@media (min-width: 1041px) and (max-height: 820px) {
+  #app .duel-table .field {
+    top: 76px;
+  }
+
+  .versus-stage {
+    width: 104px;
+    height: 62px;
+    grid-template-rows: 12px minmax(0, 1fr) 14px;
+    padding: 4px 6px;
+  }
+
+  .versus-mark {
+    font-size: 28px;
+  }
+
+  .versus-turn,
+  .versus-phase {
+    font-size: 7px;
+  }
+
+  #app .duel-table .player-card {
+    height: 60px;
+  }
+
+  #app .duel-table .duelist-face {
+    height: 49px;
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-face {
+    grid-template-columns: minmax(0, 1fr) 56px;
+  }
+
+  #app .duel-table .duelist-figure {
+    width: 56px;
+    height: 56px;
+  }
+
+  #app .duel-table .duelist-sprite {
+    min-height: 88px;
+  }
+
+  #app .duel-table .player-title {
+    min-height: 17px;
+    font-size: 11px;
+  }
+
+  #app .duel-table .life-bar {
+    height: 21px;
+  }
+
+  #app .duel-table .skill-line,
+  #app .duel-table .piles {
+    display: none;
+  }
+}
+
+@media (max-width: 1040px) {
+  .versus-stage {
+    top: 5px;
+    width: 54px;
+    height: 50px;
+    grid-template-rows: 9px minmax(0, 1fr) 11px;
+    padding: 3px 4px;
+    border-radius: 7px 2px 7px 2px;
+  }
+
+  .versus-stage::before,
+  .versus-stage::after {
+    top: 24px;
+    width: 12px;
+  }
+
+  .versus-turn {
+    display: none;
+  }
+
+  .versus-mark {
+    font-size: 24px;
+  }
+
+  .versus-phase {
+    font-size: 6px;
+    letter-spacing: 0.02em;
+  }
+
+  #app .duel-table .side.duel-hud {
+    width: calc(50% - 34px);
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-face {
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-face > .duelist-figure {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-face > div:last-child {
+    grid-column: 1;
+    grid-row: 1;
+    text-align: right;
+  }
+
+  #app .duel-table .side:not(.enemy) .player-title {
+    flex-direction: row-reverse;
+  }
+
+  #app .duel-table .side:not(.enemy) .life-fill {
+    right: 0;
+    left: auto;
+    background: linear-gradient(270deg, #147e8a, #54d2d2 62%, #d6ffdd);
+  }
+
+  #app .duel-table .enemy .life-fill {
+    background: linear-gradient(90deg, #972843, #ef476f 62%, #ffb052);
+  }
+}
+
+@media (max-width: 600px) {
+  .versus-stage {
+    top: 4px;
+    width: 42px;
+    height: 40px;
+  }
+
+  .versus-mark {
+    font-size: 20px;
+  }
+
+  .versus-phase {
+    max-width: 38px;
+    font-size: 5px;
+  }
+
+  #app .duel-table .side.duel-hud {
+    width: calc(50% - 27px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .versus-stage,
+  #app .duel-table .player-card,
+  #app .duel-table .life-fill {
+    transition: none;
+  }
+
+  #app .duel-table .player-card[data-life-tone="critical"] .life-bar {
+    animation: none;
+  }
+}
+
+@keyframes versusCriticalPulse {
+  from {
+    filter: brightness(0.9);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.34), 0 0 8px rgba(239, 71, 111, 0.12);
+  }
+  to {
+    filter: brightness(1.18);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.34), 0 0 20px rgba(239, 71, 111, 0.34);
+  }
+}
