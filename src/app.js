@@ -332,6 +332,7 @@ let preDuelPreviewModel = null;
 let deckBrowserIndex = 0;
 let deckBrowserPointerStartX = null;
 let handDisplayOrder = [];
+let handOrderMode = "draw";
 let handReorderMode = false;
 let handPlacementUid = "";
 let chainHistoryExpanded = false;
@@ -1017,6 +1018,7 @@ function startGame() {
   state.timelineStep = 0;
   chainHistoryExpanded = false;
   handDisplayOrder = [];
+  handOrderMode = "draw";
   handReorderMode = false;
   handPlacementUid = "";
   closeDeckBrowser();
@@ -1057,6 +1059,7 @@ function prepareGame() {
   preDuelPreviewModel = null;
   deckBrowserIndex = 0;
   handDisplayOrder = [];
+  handOrderMode = "draw";
   handReorderMode = false;
   handPlacementUid = "";
   closeDeckBrowser();
@@ -6073,13 +6076,16 @@ function handActionInfo(card, handIndex) {
 }
 
 function orderedPlayerHand() {
-  const cards = reconcileHandOrder(state.player.hand, handDisplayOrder);
+  const cards = handOrderMode === "type"
+    ? sortHandCardsByType(state.player.hand, handDisplayOrder)
+    : reconcileHandOrder(state.player.hand, handDisplayOrder);
   handDisplayOrder = cards.map((card) => card.uid);
   if (handPlacementUid && !handDisplayOrder.includes(handPlacementUid)) handPlacementUid = "";
   return cards;
 }
 
 function moveDisplayedHandCard(card, direction) {
+  handOrderMode = "custom";
   handDisplayOrder = shiftHandCard(handDisplayOrder, card.uid, direction);
   handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = `已移动「${card.name}」。拖动卡牌或继续使用左右按钮。`;
@@ -6088,6 +6094,7 @@ function moveDisplayedHandCard(card, direction) {
 
 function placeDisplayedHandCard(sourceUid, targetUid) {
   const source = state.player.hand.find((card) => card?.uid === sourceUid);
+  handOrderMode = "custom";
   handDisplayOrder = placeHandCard(handDisplayOrder, sourceUid, targetUid);
   handPlacementUid = "";
   if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已移动「${source.name}」。`;
@@ -6111,6 +6118,7 @@ function tapDisplayedHandCard(card) {
 
 function sortDisplayedHandByType() {
   const cards = sortHandCardsByType(state.player.hand, handDisplayOrder);
+  handOrderMode = "type";
   handDisplayOrder = cards.map((card) => card.uid);
   handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = "已按怪兽、魔法、陷阱整理；怪兽按星级从高到低排列。";
@@ -6118,6 +6126,7 @@ function sortDisplayedHandByType() {
 }
 
 function resetDisplayedHandOrder() {
+  handOrderMode = "draw";
   handDisplayOrder = state.player.hand.map((card) => card.uid);
   handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = "已恢复当前手牌的摸牌顺序。";
@@ -6126,6 +6135,7 @@ function resetDisplayedHandOrder() {
 
 function toggleHandReorder() {
   handReorderMode = !handReorderMode;
+  if (handReorderMode) handOrderMode = "custom";
   handPlacementUid = "";
   if (els.handOrderStatus) {
     els.handOrderStatus.textContent = handReorderMode
@@ -6141,14 +6151,24 @@ function renderHand(animationKey) {
   const showToolbar = state.started && cards.length > 1;
   if (els.handToolbar) els.handToolbar.hidden = !showToolbar;
   if (els.handOrderStatus) els.handOrderStatus.hidden = !handReorderMode;
-  if (els.handSortType) els.handSortType.hidden = !showToolbar;
+  if (els.handSortType) {
+    const typeSorting = handOrderMode === "type";
+    els.handSortType.hidden = !showToolbar;
+    els.handSortType.textContent = typeSorting ? "类型排序中" : "按类型";
+    els.handSortType.setAttribute("aria-pressed", String(typeSorting));
+    els.handSortType.title = typeSorting
+      ? "后续抽牌会继续按怪兽、魔法、陷阱归位；进入拖动排序可改为自定义顺序"
+      : "按怪兽、魔法、陷阱快速整理；后续抽牌会继续按类型归位";
+  }
   if (els.handResetOrder) els.handResetOrder.hidden = !handReorderMode;
   if (els.handReorderToggle) {
     els.handReorderToggle.textContent = handReorderMode ? "完成排序" : "拖动排序";
     els.handReorderToggle.setAttribute("aria-pressed", String(handReorderMode));
     els.handReorderToggle.disabled = !showToolbar;
   }
+  els.handToolbar?.setAttribute("data-order-mode", handOrderMode);
   els.hand?.setAttribute("data-reorder-mode", String(handReorderMode));
+  els.hand?.setAttribute("data-order-mode", handOrderMode);
   renderHandCards({
     document,
     root: els.hand,

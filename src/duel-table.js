@@ -27,6 +27,8 @@ export function createDuelTableController(documentRef = document) {
   const timelineZoomOut = documentRef.querySelector("#timelineZoomOut");
   const timelineZoomIn = documentRef.querySelector("#timelineZoomIn");
   const timelineZoomValue = documentRef.querySelector("#timelineZoomValue");
+  const timelineFollowLatest = documentRef.querySelector("#timelineFollowLatest");
+  const timelinePendingCount = documentRef.querySelector("#timelinePendingCount");
   const timelineFilters = [...documentRef.querySelectorAll("[data-timeline-filter]")];
   const chainHistoryToggle = documentRef.querySelector("#chainHistoryToggle");
   const field = documentRef.querySelector(".duel-table .field");
@@ -63,6 +65,8 @@ export function createDuelTableController(documentRef = document) {
   const timelineScales = [85, 100, 115, 130];
   let timelineScaleIndex = 1;
   let timelineDrag = null;
+  let latestTimelineStep = Number(timeline?.dataset.timelineLatestStep) || 0;
+  let pendingTimelineCount = 0;
 
   function setUtilityMenu(open) {
     const expanded = spaciousSettings.matches || Boolean(open);
@@ -135,6 +139,61 @@ export function createDuelTableController(documentRef = document) {
     for (const button of timelineFilters) {
       button.setAttribute("aria-pressed", String(button.dataset.timelineFilter === nextFilter));
     }
+    if (timeline?.scrollTo) timeline.scrollTo({ top: 0, left: 0 });
+    else if (timeline) {
+      timeline.scrollTop = 0;
+      timeline.scrollLeft = 0;
+    }
+    clearPendingTimeline();
+  }
+
+  function clearPendingTimeline() {
+    pendingTimelineCount = 0;
+    if (timelinePendingCount) timelinePendingCount.textContent = "0";
+    if (timelineFollowLatest) timelineFollowLatest.hidden = true;
+  }
+
+  function showPendingTimeline(count) {
+    pendingTimelineCount += Math.max(1, Number(count) || 1);
+    if (timelinePendingCount) timelinePendingCount.textContent = String(pendingTimelineCount);
+    if (timelineFollowLatest) {
+      timelineFollowLatest.hidden = false;
+      timelineFollowLatest.setAttribute("aria-label", `回到最新，${pendingTimelineCount} 条新记录`);
+    }
+  }
+
+  function followLatestTimeline() {
+    if (timeline?.scrollTo) {
+      timeline.scrollTo({ top: 0, left: timeline.scrollLeft });
+    } else if (timeline) {
+      timeline.scrollTop = 0;
+    }
+    clearPendingTimeline();
+  }
+
+  function syncTimelineFollow() {
+    const nextStep = Number(timeline?.dataset.timelineLatestStep) || 0;
+    if (!latestTimelineStep) {
+      latestTimelineStep = nextStep;
+      return;
+    }
+    if (!nextStep || nextStep < latestTimelineStep) {
+      latestTimelineStep = nextStep;
+      clearPendingTimeline();
+      return;
+    }
+    if (nextStep === latestTimelineStep) return;
+    const addedCount = nextStep - latestTimelineStep;
+    latestTimelineStep = nextStep;
+    if (timeline?.dataset.timelineWasFollowing === "true" || (timeline?.scrollTop || 0) <= 12) {
+      clearPendingTimeline();
+      return;
+    }
+    showPendingTimeline(addedCount);
+  }
+
+  function syncTimelineScrollPosition() {
+    if ((timeline?.scrollTop || 0) <= 12) clearPendingTimeline();
   }
 
   function syncTimelineScale() {
@@ -341,10 +400,12 @@ export function createDuelTableController(documentRef = document) {
   const timelineZoomInHandler = () => changeTimelineScale(1);
   timelineZoomOut?.addEventListener("click", timelineZoomOutHandler);
   timelineZoomIn?.addEventListener("click", timelineZoomInHandler);
+  timelineFollowLatest?.addEventListener("click", followLatestTimeline);
   timeline?.addEventListener("pointerdown", startTimelineDrag);
   timeline?.addEventListener("pointermove", moveTimelineDrag);
   timeline?.addEventListener("pointerup", stopTimelineDrag);
   timeline?.addEventListener("pointercancel", stopTimelineDrag);
+  timeline?.addEventListener("scroll", syncTimelineScrollPosition, { passive: true });
   field?.addEventListener("click", closeCompactDrawer);
   hand?.addEventListener("click", closeCompactDrawer);
 
@@ -378,8 +439,17 @@ export function createDuelTableController(documentRef = document) {
     });
   }
 
-  const timelineObserver = new MutationObserver(syncTimelineBadge);
+  const timelineObserver = new MutationObserver(() => {
+    syncTimelineBadge();
+    syncTimelineFollow();
+  });
   if (timelineCount) timelineObserver.observe(timelineCount, { childList: true, subtree: true });
+  if (timeline) {
+    timelineObserver.observe(timeline, {
+      attributes: true,
+      attributeFilter: ["data-timeline-latest-step"]
+    });
+  }
 
   const chainHistoryObserver = new MutationObserver(syncChainHistoryAttention);
   if (chainHistoryToggle) {
@@ -468,10 +538,12 @@ export function createDuelTableController(documentRef = document) {
       for (const button of timelineFilters) button.removeEventListener("click", timelineFilterHandler);
       timelineZoomOut?.removeEventListener("click", timelineZoomOutHandler);
       timelineZoomIn?.removeEventListener("click", timelineZoomInHandler);
+      timelineFollowLatest?.removeEventListener("click", followLatestTimeline);
       timeline?.removeEventListener("pointerdown", startTimelineDrag);
       timeline?.removeEventListener("pointermove", moveTimelineDrag);
       timeline?.removeEventListener("pointerup", stopTimelineDrag);
       timeline?.removeEventListener("pointercancel", stopTimelineDrag);
+      timeline?.removeEventListener("scroll", syncTimelineScrollPosition);
     },
     openDrawer(name) {
       return setDrawer(name, true);

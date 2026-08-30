@@ -68,6 +68,42 @@ export function timelineOverviewView(timeline = []) {
   };
 }
 
+export function captureTimelineViewport(root, threshold = 12) {
+  if (!root) return null;
+  const scrollTop = Number(root.scrollTop) || 0;
+  const items = [...(root.children || [])];
+  const anchor = items.find((item) => {
+    const top = Number(item.offsetTop) || 0;
+    const height = Number(item.offsetHeight) || 0;
+    return height > 0 && top + height > scrollTop;
+  });
+  return {
+    scrollTop,
+    scrollLeft: Number(root.scrollLeft) || 0,
+    scrollHeight: Number(root.scrollHeight) || 0,
+    wasAtLatest: scrollTop <= threshold,
+    anchorStep: anchor?.dataset?.timelineStep || "",
+    anchorOffset: anchor ? scrollTop - (Number(anchor.offsetTop) || 0) : 0
+  };
+}
+
+export function restoreTimelineViewport(root, viewport) {
+  if (!root || !viewport) return;
+  root.scrollLeft = viewport.scrollLeft;
+  if (viewport.wasAtLatest) {
+    root.scrollTop = 0;
+    return;
+  }
+  const anchor = [...(root.children || [])]
+    .find((item) => item.dataset?.timelineStep === viewport.anchorStep);
+  if (anchor) {
+    root.scrollTop = Math.max(0, (Number(anchor.offsetTop) || 0) + viewport.anchorOffset);
+    return;
+  }
+  const addedHeight = Math.max(0, (Number(root.scrollHeight) || 0) - viewport.scrollHeight);
+  root.scrollTop = viewport.scrollTop + addedHeight;
+}
+
 export function chainHistoryPanelView({
   events = [],
   findCard = () => null,
@@ -186,6 +222,7 @@ export function renderTimelinePanel({
 } = {}) {
   const root = elements.timeline;
   if (!root) return;
+  const viewport = captureTimelineViewport(root);
   root.replaceChildren();
   if (elements.timelineCount) {
     elements.timelineCount.textContent = String(timeline.length);
@@ -220,6 +257,7 @@ export function renderTimelinePanel({
   timeline.forEach((entry) => {
     const item = document.createElement("div");
     item.className = `timeline-item ${entry.kind}`;
+    item.dataset.timelineStep = String(entry.step);
     item.dataset.timelineGroup = timelineKindGroup(entry.kind);
     item.dataset.timelineKind = entry.kind || "default";
 
@@ -253,4 +291,7 @@ export function renderTimelinePanel({
     fragment.appendChild(item);
   });
   root.appendChild(fragment);
+  root.dataset.timelineLatestStep = String(timeline[0]?.step || "");
+  root.dataset.timelineWasFollowing = String(viewport?.wasAtLatest ?? true);
+  restoreTimelineViewport(root, viewport);
 }

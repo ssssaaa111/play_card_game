@@ -1021,6 +1021,54 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   font-variant-numeric: tabular-nums;
 }
 
+.timeline-follow-latest {
+  position: absolute;
+  right: 22px;
+  bottom: 18px;
+  z-index: 4;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border: 1px solid rgba(84, 210, 210, 0.58);
+  border-radius: 999px;
+  color: #dfffff;
+  background: rgba(8, 21, 29, 0.94);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34), inset 0 0 18px rgba(84, 210, 210, 0.08);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.timeline-follow-latest[hidden] {
+  display: none;
+}
+
+.timeline-follow-latest:hover,
+.timeline-follow-latest:focus-visible {
+  border-color: rgba(246, 189, 96, 0.78);
+  color: #fff0b8;
+  outline: none;
+}
+
+.timeline-follow-latest strong {
+  min-width: 18px;
+  display: inline-grid;
+  place-items: center;
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: #061013;
+  background: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-follow-latest small {
+  color: rgba(223, 255, 255, 0.68);
+  font-size: 8px;
+}
+
 .timeline-drawer .chain-history-toggle {
   min-height: 42px;
   padding: 7px 9px;
@@ -1090,6 +1138,13 @@ body[data-duel-action-window="targetSelect"] #app .duel-table #duelHint {
   border: 2px solid rgba(7, 12, 20, 0.96);
   border-radius: 999px;
   background: rgba(84, 210, 210, 0.52);
+}
+
+.hand-order-shortcut[aria-pressed="true"] {
+  border-color: rgba(84, 210, 210, 0.72);
+  color: #dfffff;
+  background: rgba(84, 210, 210, 0.14);
+  box-shadow: inset 0 -2px 0 rgba(84, 210, 210, 0.34);
 }
 
 .timeline-drawer[data-timeline-view="battle"] .timeline-item:not([data-timeline-group="battle"]),

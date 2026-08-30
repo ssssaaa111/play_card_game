@@ -3,12 +3,18 @@ import assert from "node:assert/strict";
 
 import {
   auditIssueLabel,
+  captureTimelineViewport,
   chainHistoryPanelView,
+  restoreTimelineViewport,
   timelineAuditView,
   timelineKindGroup,
   timelineKindLabel,
   timelineOverviewView
 } from "../src/timeline-renderer.js";
+
+function timelineItem(step, offsetTop, offsetHeight = 40) {
+  return { dataset: { timelineStep: String(step) }, offsetTop, offsetHeight };
+}
 
 test("timeline audit view exposes healthy status and localized issue labels", () => {
   const view = timelineAuditView([
@@ -86,4 +92,38 @@ test("chain history panel stays hidden until a completed chain is expanded", () 
   assert.equal(collapsed.expanded, false);
   assert.equal(expanded.expanded, true);
   assert.equal(expanded.histories[0].links[0].name, "反击阵列");
+});
+
+test("timeline viewport follows the latest only when the player was already at the top", () => {
+  const browsingRoot = {
+    scrollTop: 122,
+    scrollLeft: 7,
+    scrollHeight: 500,
+    children: [timelineItem(12, 0), timelineItem(11, 40), timelineItem(10, 100, 60)]
+  };
+  const browsing = captureTimelineViewport(browsingRoot);
+
+  assert.equal(browsing.wasAtLatest, false);
+  assert.equal(browsing.anchorStep, "10");
+  assert.equal(browsing.anchorOffset, 22);
+
+  const rerenderedRoot = {
+    scrollTop: 0,
+    scrollLeft: 0,
+    scrollHeight: 560,
+    children: [timelineItem(13, 0), timelineItem(12, 40), timelineItem(11, 80), timelineItem(10, 140, 60)]
+  };
+  restoreTimelineViewport(rerenderedRoot, browsing);
+  assert.equal(rerenderedRoot.scrollTop, 162, "the same event should stay under the pointer after new entries prepend");
+  assert.equal(rerenderedRoot.scrollLeft, 7);
+
+  const following = captureTimelineViewport({
+    scrollTop: 8,
+    scrollLeft: 0,
+    scrollHeight: 400,
+    children: [timelineItem(12, 0)]
+  });
+  rerenderedRoot.scrollTop = 80;
+  restoreTimelineViewport(rerenderedRoot, following);
+  assert.equal(rerenderedRoot.scrollTop, 0);
 });
