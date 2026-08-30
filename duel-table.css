@@ -3747,7 +3747,10 @@ body:has(.phase-stage.is-active) .toast.show {
   .workspace-deck .timeline-drawer,
   .workspace-deck .timeline-drawer.is-open,
   .workspace-deck .timeline-drawer.is-docked {
-    inset: 10px 10px 10px auto;
+    /* Keep the always-visible battle log below the versus HUD. At this
+       breakpoint the right player portrait reaches into the former 10px
+       top rail, so a full-height drawer could cover the face and LP edge. */
+    inset: 122px 10px 10px auto;
     width: var(--timeline-rail-width);
     height: auto;
     grid-template-rows: auto auto auto minmax(0, 1fr);
@@ -5587,6 +5590,7 @@ body:has(.phase-stage.is-active) .toast.show {
 
 @media (min-width: 2400px) and (min-height: 1200px) {
   #app .duel-table .field {
+    top: 122px;
     padding-right: 32px;
     padding-left: 32px;
   }
