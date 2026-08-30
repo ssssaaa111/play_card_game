@@ -3735,7 +3735,7 @@ body:has(.phase-stage.is-active) .toast.show {
     top: 50%;
     right: auto;
     bottom: auto;
-    left: calc(var(--table-hud-width) + 24px);
+    left: 10px;
     width: var(--detail-rail-width);
     height: min(380px, calc(100% - 380px));
     min-height: 220px;
@@ -5354,12 +5354,12 @@ body:has(.phase-stage.is-active) .toast.show {
 
   #app .duel-table .duelist-face {
     height: 70px;
-    grid-template-columns: 78px minmax(0, 1fr);
+    grid-template-columns: 88px minmax(0, 1fr);
     gap: 10px;
   }
 
   #app .duel-table .side:not(.enemy) .duelist-face {
-    grid-template-columns: minmax(0, 1fr) 78px;
+    grid-template-columns: minmax(0, 1fr) 88px;
   }
 
   #app .duel-table .side:not(.enemy) .duelist-face > .duelist-figure {
@@ -5374,7 +5374,7 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   #app .duel-table .duelist-figure {
-    width: 78px;
+    width: 88px;
     height: 78px;
     align-self: end;
     overflow: hidden;
@@ -5416,12 +5416,21 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   #app .duel-table .duelist-sprite {
-    width: 128%;
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    width: 170%;
+    max-width: none;
     height: auto;
-    min-height: 118px;
+    min-height: 0;
     object-fit: contain;
     object-position: center top;
-    transform: translateY(-5px);
+    transform: translateX(-50%);
+    animation: none;
+  }
+
+  #app .duel-table #aiFigure .duelist-sprite {
+    left: 35%;
   }
 
   #app .duel-table .player-title {
@@ -5496,11 +5505,16 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   #app .duel-table .skill-line {
+    height: 17px;
     max-height: 17px;
-    margin-top: 3px;
-    color: rgba(221, 228, 238, 0.64);
-    font-size: 8px;
-    line-height: 1.5;
+    margin-top: 2px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 3px;
+    background: linear-gradient(90deg, rgba(246, 189, 96, 0.08), transparent 58%);
+    color: rgba(221, 228, 238, 0.78);
+    font-size: 9px;
+    line-height: 17px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -5525,16 +5539,16 @@ body:has(.phase-stage.is-active) .toast.show {
 
   #app .duel-table .piles {
     position: absolute;
-    top: 85px;
-    left: 88px;
-    width: 154px;
+    top: 82px;
+    left: 98px;
+    width: 140px;
     height: 23px;
     grid-template-columns: 1fr 1fr;
     gap: 4px;
   }
 
   #app .duel-table .side:not(.enemy) .piles {
-    right: 88px;
+    right: 98px;
     left: auto;
   }
 
@@ -5563,6 +5577,13 @@ body:has(.phase-stage.is-active) .toast.show {
     display: inline;
     margin: 0;
     font-size: 11px;
+  }
+
+  #app .duel-table .pile small {
+    color: rgba(203, 214, 229, 0.48);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
   }
 
   #app .duel-table .side:not(.enemy) .campaign-mission {
@@ -5651,7 +5672,8 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   #app .duel-table .duelist-sprite {
-    min-height: 88px;
+    height: auto;
+    min-height: 0;
   }
 
   #app .duel-table .player-title {
@@ -5700,6 +5722,28 @@ body:has(.phase-stage.is-active) .toast.show {
 
   #app .duel-table .side.duel-hud {
     width: calc(50% - 34px);
+  }
+
+  #app .duel-table .duelist-figure {
+    overflow: hidden;
+  }
+
+  #app .duel-table .duelist-sprite {
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    width: 170%;
+    max-width: none;
+    height: auto;
+    min-height: 0;
+    object-fit: contain;
+    object-position: center top;
+    transform: translateX(-50%);
+    animation: none;
+  }
+
+  #app .duel-table #aiFigure .duelist-sprite {
+    left: 35%;
   }
 
   #app .duel-table .side:not(.enemy) .duelist-face {

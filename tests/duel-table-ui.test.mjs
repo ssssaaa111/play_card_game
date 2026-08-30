@@ -10,9 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="styles\.css\?v=20260830-versus-hud-2"/);
-  assert.match(html, /href="duel-table\.css\?v=20260830-versus-hud-2"/);
-  assert.match(html, /src="src\/app\.js\?v=20260830-versus-hud-2"/);
+  assert.match(html, /href="styles\.css\?v=20260830-versus-hud-3"/);
+  assert.match(html, /href="duel-table\.css\?v=20260830-versus-hud-3"/);
+  assert.match(html, /src="src\/app\.js\?v=20260830-versus-hud-3"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -21,7 +21,7 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   assert.match(html, /id="fieldActionBar"[\s\S]*id="fieldAttackBtn"[\s\S]*id="fieldModeBtn"[\s\S]*id="fieldDetailBtn"[\s\S]*id="fieldCancelBtn"/);
   assert.match(html, /class="detail-actions"[\s\S]*id="detailAttackBtn"[\s\S]*id="modeBtn"[\s\S]*id="detailBtn"[\s\S]*id="detailSelectionCancelBtn"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260830-versus-hud-2"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260830-versus-hud-3"/);
 });
 
 test("duelist HUD reads like a fighting-game faceoff without covering the board", () => {
@@ -31,12 +31,17 @@ test("duelist HUD reads like a fighting-game faceoff without covering the board"
 
   assert.match(html, /id="versusStage"[\s\S]*id="versusTurn"[\s\S]*class="versus-mark"[\s\S]*id="versusPhase"/);
   assert.match(html, /id="aiFigure"[\s\S]*id="aiLifeBar"[\s\S]*id="playerFigure"[\s\S]*id="playerLifeBar"/);
+  assert.match(html, /<small>牌库<\/small><strong id="aiDeckCount">[\s\S]*<small>墓地<\/small><strong id="playerGraveCount">/);
   assert.match(app, /versusStage: document\.querySelector\("#versusStage"\)/);
   assert.match(app, /els\.versusTurn\.textContent = !state\.started[\s\S]*"PLAYER TURN"[\s\S]*"RIVAL TURN"/);
   assert.match(app, /els\.versusStage\.dataset\.actor/);
   assert.match(css, /\.versus-stage\s*\{[\s\S]*left: 50%;[\s\S]*transform: translateX\(-50%\)/);
   assert.match(css, /@media \(min-width: 1041px\)[\s\S]*#app \.duel-table \.field\s*\{[\s\S]*inset: 112px 0 0;/);
   assert.match(css, /#app \.duel-table \.side:not\(\.enemy\) \.life-fill\s*\{[\s\S]*right: 0;[\s\S]*left: auto;/);
+  assert.match(css, /#app \.duel-table \.duelist-sprite\s*\{[\s\S]*top: -4px;[\s\S]*left: 50%;[\s\S]*width: 170%;[\s\S]*height: auto;[\s\S]*object-position: center top;[\s\S]*transform: translateX\(-50%\);[\s\S]*animation: none;/);
+  assert.match(css, /#app \.duel-table #aiFigure \.duelist-sprite\s*\{[\s\S]*left: 35%;/);
+  assert.match(css, /#app \.duel-table \.skill-line\s*\{[\s\S]*height: 17px;[\s\S]*padding: 0 4px;[\s\S]*line-height: 17px;/);
+  assert.match(css, /#app \.duel-table \.piles\s*\{[\s\S]*top: 82px;[\s\S]*width: 140px;/);
   assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*\.timeline-drawer\.is-docked\s*\{[\s\S]*inset: 122px 10px 10px auto;/);
   assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*#app \.duel-table \.field\s*\{[\s\S]*top: 122px;/);
   assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.versus-stage\s*\{[\s\S]*width: 54px;/);
@@ -133,7 +138,7 @@ test("spacious screens keep context in side rails while scaled 4K uses edge gutt
   assert.match(html, /id="workspaceDeck"[\s\S]*id="detailDrawer"[\s\S]*id="timelineDrawer"/);
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*--workspace-height/);
   assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*--workspace-track: 34px;[\s\S]*--detail-rail-width: clamp\(220px, 12vw, 250px\);[\s\S]*--timeline-rail-width: clamp\(260px, 15vw, 300px\);/);
-  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*\.workspace-deck\s*\{[\s\S]*display: contents;[\s\S]*\.detail-drawer\.is-docked\s*\{[\s\S]*left: calc\(var\(--table-hud-width\) \+ 24px\);[\s\S]*\.timeline-drawer\.is-docked\s*\{[\s\S]*inset: 122px 10px 10px auto;/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*\.workspace-deck\s*\{[\s\S]*display: contents;[\s\S]*\.detail-drawer\.is-docked\s*\{[\s\S]*left: 10px;[\s\S]*\.timeline-drawer\.is-docked\s*\{[\s\S]*inset: 122px 10px 10px auto;/);
   assert.match(css, /\.workspace-deck \.workspace-drawer\.is-docked[\s\S]*visibility: visible;[\s\S]*pointer-events: auto;/);
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.detail-drawer \.detail-actions\s*\{[\s\S]*display: none;[\s\S]*\.detail-drawer #battlePreview\s*\{[\s\S]*grid-row: 3;/);
   assert.match(renderer, /elements\.detailAttackBtn\.hidden = view\.fieldAction\.hidden/);

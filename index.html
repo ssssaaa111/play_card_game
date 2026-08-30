@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20260830-versus-hud-2" />
-  <link rel="stylesheet" href="duel-table.css?v=20260830-versus-hud-2" />
+  <link rel="stylesheet" href="styles.css?v=20260830-versus-hud-3" />
+  <link rel="stylesheet" href="duel-table.css?v=20260830-versus-hud-3" />
 </head>
 <body>
   <div id="app">
@@ -83,8 +83,8 @@
           </div>
         </section>
         <section class="piles">
-          <div class="pile"><span><strong id="aiDeckCount">0</strong>卡组</span></div>
-          <div class="pile"><span><strong id="aiGraveCount">0</strong>墓地</span></div>
+          <div class="pile"><span><small>牌库</small><strong id="aiDeckCount">0</strong></span></div>
+          <div class="pile"><span><small>墓地</small><strong id="aiGraveCount">0</strong></span></div>
         </section>
       </aside>
 
@@ -118,8 +118,8 @@
           </div>
         </section>
         <section class="piles">
-          <div class="pile"><span><strong id="playerDeckCount">0</strong>卡组</span></div>
-          <div class="pile"><span><strong id="playerGraveCount">0</strong>墓地</span></div>
+          <div class="pile"><span><small>牌库</small><strong id="playerDeckCount">0</strong></span></div>
+          <div class="pile"><span><small>墓地</small><strong id="playerGraveCount">0</strong></span></div>
         </section>
         <section class="campaign-mission" id="campaignMission" aria-label="章节目标" aria-live="polite" hidden>
           <div class="campaign-mission-head">
@@ -603,7 +603,7 @@
     </div>
   </div>
 
-  <script type="module" src="src/duel-table.js?v=20260830-versus-hud-2"></script>
-  <script type="module" src="src/app.js?v=20260830-versus-hud-2"></script>
+  <script type="module" src="src/duel-table.js?v=20260830-versus-hud-3"></script>
+  <script type="module" src="src/app.js?v=20260830-versus-hud-3"></script>
 </body>
 </html>
