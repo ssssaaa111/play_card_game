@@ -1569,6 +1569,18 @@ body[data-duel-targeting="attack"] #app .duel-table #aiField .slot.attack-target
   display: none;
 }
 
+.field-battle-preview[data-preview-mode="target"] .battle-preview-result,
+.field-battle-preview[data-preview-mode="direct"] .battle-preview-result {
+  display: -webkit-box;
+  margin-top: 3px;
+  overflow: hidden;
+  color: rgba(242, 247, 252, 0.82);
+  font-size: 8px;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
 .field-battle-preview[data-preview-mode="target"] .battle-preview-title {
   display: none;
 }
@@ -5871,15 +5883,227 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 }
 
+/* Attack intent stays on the battlefield instead of living only in the command panel. */
+.attack-route-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.attack-route-layer[hidden] {
+  display: none;
+}
+
+.attack-route {
+  --route-color: 239, 71, 111;
+  position: absolute;
+  left: var(--attack-route-x);
+  top: var(--attack-route-y);
+  width: var(--attack-route-length);
+  height: 3px;
+  border-radius: 999px;
+  opacity: 0.36;
+  background: linear-gradient(90deg, rgba(var(--route-color), 0.18), rgba(var(--route-color), 0.92));
+  box-shadow: 0 0 10px rgba(var(--route-color), 0.42);
+  transform: translateY(-50%) rotate(var(--attack-route-angle));
+  transform-origin: left center;
+}
+
+.attack-route::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 8%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(var(--route-color), 1);
+  box-shadow: 0 0 16px rgba(var(--route-color), 0.9);
+  transform: translate(-50%, -50%);
+  animation: attackRoutePulse 1.15s linear infinite;
+}
+
+.attack-route::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -1px;
+  width: 12px;
+  height: 12px;
+  border-top: 3px solid rgba(var(--route-color), 0.94);
+  border-right: 3px solid rgba(var(--route-color), 0.94);
+  transform: translateY(-50%) rotate(45deg);
+  filter: drop-shadow(0 0 5px rgba(var(--route-color), 0.78));
+}
+
+.attack-route.is-active {
+  --route-color: 246, 189, 96;
+  height: 4px;
+  opacity: 0.96;
+  box-shadow: 0 0 18px rgba(var(--route-color), 0.72);
+}
+
+.attack-route.is-direct {
+  --route-color: 84, 210, 210;
+}
+
+.attack-route.is-direct.is-active {
+  --route-color: 246, 189, 96;
+}
+
+/* A response window is a tactical command dock; the duel field remains visible. */
+#chainModal {
+  place-items: end center;
+  padding: 12px;
+  overflow: hidden;
+  background: linear-gradient(0deg, rgba(3, 6, 12, 0.82), rgba(3, 6, 12, 0.16) 42%, transparent 72%);
+  backdrop-filter: none;
+  pointer-events: none;
+}
+
+#chainModal .modal-box.chain {
+  width: min(1180px, calc(100vw - 24px));
+  max-height: min(42dvh, 360px);
+  display: grid;
+  grid-template-columns: minmax(220px, 0.78fr) minmax(260px, 1fr) minmax(320px, 1.18fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "heading stack choices"
+    "prompt stack choices"
+    "actions stack choices";
+  gap: 8px 12px;
+  padding: 12px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(8, 13, 23, 0.97);
+  pointer-events: auto;
+}
+
+#chainModal .chain-heading {
+  grid-area: heading;
+  margin: 0;
+}
+
+#chainModal #chainText {
+  grid-area: prompt;
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  color: #cbd7e7;
+  font-size: 11px;
+  line-height: 1.42;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+#chainModal .chain-stack {
+  grid-area: stack;
+  min-height: 0;
+  margin: 0;
+  overflow-y: auto;
+}
+
+#chainModal .chain-choices {
+  grid-area: choices;
+  min-height: 0;
+  margin: 0;
+  overflow-y: auto;
+}
+
+#chainModal .chain-actions {
+  grid-area: actions;
+  margin: 0;
+}
+
+#chainModal .trap-choice-card {
+  min-height: 58px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 9px;
+  padding: 6px;
+}
+
+#chainModal .trap-choice-art {
+  width: 64px;
+  height: 44px;
+}
+
+@media (max-width: 1040px) {
+  #chainModal {
+    padding: 8px;
+  }
+
+  #chainModal .modal-box.chain {
+    width: calc(100vw - 16px);
+    max-height: min(46dvh, 330px);
+    grid-template-columns: minmax(190px, 0.8fr) minmax(240px, 1.2fr);
+    grid-template-areas:
+      "heading choices"
+      "prompt choices"
+      "stack choices"
+      "actions choices";
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+}
+
+@media (max-width: 720px) {
+  #chainModal .modal-box.chain {
+    max-height: min(48dvh, 340px);
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "heading"
+      "prompt"
+      "choices"
+      "stack"
+      "actions";
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    gap: 7px;
+    overflow-y: auto;
+  }
+
+  #chainModal #chainText {
+    -webkit-line-clamp: 2;
+  }
+
+  #chainModal .chain-stack-entry {
+    grid-template-columns: 34px 42px minmax(0, 1fr) auto;
+    min-height: 40px;
+    padding: 4px;
+  }
+
+  #chainModal .chain-stack-art {
+    width: 42px;
+    height: 28px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .versus-stage,
   #app .duel-table .player-card,
-  #app .duel-table .life-fill {
+  #app .duel-table .life-fill,
+  .attack-route::before {
     transition: none;
+    animation: none;
   }
 
   #app .duel-table .player-card[data-life-tone="critical"] .life-bar {
     animation: none;
+  }
+}
+
+@keyframes attackRoutePulse {
+  from {
+    left: 8%;
+    opacity: 0.25;
+  }
+  35% {
+    opacity: 1;
+  }
+  to {
+    left: 92%;
+    opacity: 0.2;
   }
 }
 

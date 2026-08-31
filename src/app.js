@@ -28,6 +28,7 @@ import { trioBossCounterPlan, trioBossPhaseTransitions } from './boss-tactics.js
 import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createBattleLogEntry, logEntryMessage } from './battle-log.js';
 import { renderBattlePreviewElement } from './battle-preview-renderer.js';
+import { renderAttackRouteLayer } from './attack-route-renderer.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { getCardEffectDefinition } from './game-engine.js';
 import { cardDefinitionById, cardInspectorViewModel } from './card-detail.js';
@@ -279,6 +280,7 @@ const state = {
   ...createSelectionState(),
   focusedCard: null,
   attackIntentIndex: null,
+  attackPreviewTargetIndex: null,
   autoEnding: false,
   autoEndTimer: null,
   actionWindow: ACTION_WINDOWS.setup,
@@ -404,6 +406,8 @@ const els = {
   chainHistoryList: document.querySelector("#chainHistoryList"),
   battlePreview: document.querySelector("#battlePreview"),
   fieldBattlePreview: document.querySelector("#fieldBattlePreview"),
+  duelArena: document.querySelector(".arena.duel-table"),
+  attackRouteLayer: document.querySelector("#attackRouteLayer"),
   handConfirmBtn: document.querySelector("#handConfirmBtn"),
   handCancelBtn: document.querySelector("#handCancelBtn"),
   detailAttackBtn: document.querySelector("#detailAttackBtn"),
@@ -627,6 +631,7 @@ function showBattlePreview(attacker, target, owner = null, rival = null) {
 
 function clearBattlePreview({ preserveAttackIntent = false } = {}) {
   state.battlePreview = null;
+  state.attackPreviewTargetIndex = null;
   if (!preserveAttackIntent) state.attackIntentIndex = null;
 }
 
@@ -5785,6 +5790,7 @@ function render(animationKey = "") {
   renderTimeline();
   renderFocusedCardInspector();
   renderBattlePreview();
+  renderAttackRoutes();
   renderAiReveal();
   playScenarioStoryBeats();
   playScenarioScriptedSummons();
@@ -5897,6 +5903,31 @@ function renderBattlePreview() {
   renderBattlePreviewElement(document, els.fieldBattlePreview, preview);
 }
 
+function renderAttackRoutes() {
+  if (!els.attackRouteLayer || !els.duelArena || !hasSelectedAttackIntent()) {
+    return renderAttackRouteLayer({ document, root: els.attackRouteLayer });
+  }
+  const attackerIndex = state.selected.index;
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex });
+  const attacker = els.playerField.querySelector(`[data-index="${attackerIndex}"]`);
+  const targets = projection.attackActions
+    .map((action) => ({
+      targetIndex: action.targetIndex,
+      element: action.targetIndex < 0
+        ? els.aiPanel
+        : els.aiField.querySelector(`[data-index="${action.targetIndex}"]`)
+    }))
+    .filter((entry) => entry.element);
+  return renderAttackRouteLayer({
+    document,
+    root: els.attackRouteLayer,
+    reference: els.duelArena,
+    attacker,
+    targets,
+    activeTargetIndex: state.attackPreviewTargetIndex
+  });
+}
+
 function isAttackTargetSlot(ownerName, index) {
   if (ownerName !== "ai" || state.pendingTarget) return false;
   if (!canPlayerAct() || state.selected?.zone !== "playerField") return false;
@@ -5917,14 +5948,17 @@ function showSelectedAttackTargetPreview(targetIndex) {
   const projection = projectBattleFromUiState(state, "player", { attackerIndex });
   if (!attacker || !projection.attackActions.some((action) => action.targetIndex === targetIndex)) return;
   const target = targetIndex >= 0 ? state.ai.field[targetIndex] : null;
+  state.attackPreviewTargetIndex = targetIndex;
   showBattlePreview(attacker, target, state.player, state.ai);
   renderBattlePreview();
+  renderAttackRoutes();
 }
 
 function restoreSelectedAttackPreview() {
   if (!hasSelectedAttackIntent()) return;
   clearBattlePreview({ preserveAttackIntent: true });
   renderBattlePreview();
+  renderAttackRoutes();
 }
 
 function renderField(root, duelist, owner, animationKey) {
@@ -6426,6 +6460,7 @@ els.aiPanel.addEventListener("pointerenter", () => showSelectedAttackTargetPrevi
 els.aiPanel.addEventListener("pointerleave", restoreSelectedAttackPreview);
 els.aiPanel.addEventListener("focus", () => showSelectedAttackTargetPreview(-1));
 els.aiPanel.addEventListener("blur", restoreSelectedAttackPreview);
+window.addEventListener("resize", () => window.requestAnimationFrame(renderAttackRoutes));
 els.aiPanel.addEventListener("keydown", (event) => {
   if (!canPlayerTargetAiPanel() || !["Enter", " "].includes(event.key)) return;
   event.preventDefault();
