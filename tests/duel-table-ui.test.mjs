@@ -10,9 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="styles\.css\?v=20260901-battle-flow-1"/);
-  assert.match(html, /href="duel-table\.css\?v=20260901-battle-flow-1"/);
-  assert.match(html, /src="src\/app\.js\?v=20260901-battle-flow-1"/);
+  assert.match(html, /href="styles\.css\?v=20260901-field-clearance-1"/);
+  assert.match(html, /href="duel-table\.css\?v=20260901-field-clearance-1"/);
+  assert.match(html, /src="src\/app\.js\?v=20260901-field-clearance-1"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -21,7 +21,7 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   assert.match(html, /id="fieldActionBar"[\s\S]*id="fieldAttackBtn"[\s\S]*id="fieldModeBtn"[\s\S]*id="fieldDetailBtn"[\s\S]*id="fieldCancelBtn"/);
   assert.match(html, /class="detail-actions"[\s\S]*id="detailAttackBtn"[\s\S]*id="modeBtn"[\s\S]*id="detailBtn"[\s\S]*id="detailSelectionCancelBtn"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260901-battle-flow-1"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260901-field-clearance-1"/);
 });
 
 test("attack intent draws battlefield routes and keeps the exact outcome in the command row", () => {
@@ -177,6 +177,7 @@ test("spacious screens keep context in side rails while scaled 4K uses edge gutt
   assert.match(controller, /function syncResponsiveWorkspace\(\)[\s\S]*const gutter = spacious && gutterWorkspace\.matches;[\s\S]*body\.dataset\.workspaceLayout = gutter \? "gutter" : spacious \? "expanded" : "drawer"/);
   assert.match(controller, /drawer\.root\?\.classList\.toggle\("is-docked", spacious\)/);
   assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*--workspace-track: 38px;[\s\S]*width: min\(calc\(100% - 640px\), 3200px\);[\s\S]*\.workspace-deck\s*\{[\s\S]*display: contents;/);
+  assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*#app \.duel-table \.field\s*\{[\s\S]*minmax\(0, 1fr\)[\s\S]*var\(--workspace-track\)[\s\S]*minmax\(0, 1fr\);/);
   assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*top: calc\(\(100dvh - clamp\(280px, 16dvh, 340px\) \+ 78px\) \/ 2\);[\s\S]*\.workspace-deck \.detail-drawer\.is-docked\s*\{[\s\S]*right: min\(calc\(100% - 320px\), calc\(\(100% \+ 3200px\) \/ 2\)\);[\s\S]*\.workspace-deck \.timeline-drawer\.is-docked\s*\{[\s\S]*left: min\(calc\(100% - 320px\), calc\(\(100% \+ 3200px\) \/ 2\)\);/);
 });
 
