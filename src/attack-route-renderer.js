@@ -10,6 +10,14 @@ function rectCenter(rect = {}) {
   };
 }
 
+function distanceToRectEdge(rect, unitX, unitY) {
+  const halfWidth = Math.max(0, finiteNumber(rect?.width) / 2);
+  const halfHeight = Math.max(0, finiteNumber(rect?.height) / 2);
+  const horizontal = Math.abs(unitX) > 0.0001 ? halfWidth / Math.abs(unitX) : Infinity;
+  const vertical = Math.abs(unitY) > 0.0001 ? halfHeight / Math.abs(unitY) : Infinity;
+  return Math.min(horizontal, vertical);
+}
+
 export function buildAttackRouteSegment(referenceRect, attackerRect, targetRect, options = {}) {
   if (!referenceRect || !attackerRect || !targetRect) return null;
   const referenceLeft = finiteNumber(referenceRect.left ?? referenceRect.x);
@@ -18,11 +26,19 @@ export function buildAttackRouteSegment(referenceRect, attackerRect, targetRect,
   const end = rectCenter(targetRect);
   const deltaX = end.x - start.x;
   const deltaY = end.y - start.y;
-  const length = Math.hypot(deltaX, deltaY);
+  const centerDistance = Math.hypot(deltaX, deltaY);
+  if (centerDistance < 1) return null;
+  const unitX = deltaX / centerDistance;
+  const unitY = deltaY / centerDistance;
+  const endpointGap = Math.max(0, finiteNumber(options.endpointGap ?? 10));
+  const attackerEdge = distanceToRectEdge(attackerRect, unitX, unitY);
+  const targetEdge = distanceToRectEdge(targetRect, unitX, unitY);
+  const length = centerDistance - attackerEdge - targetEdge - endpointGap * 2;
   if (length < 1) return null;
+  const startOffset = attackerEdge + endpointGap;
   return {
-    x: start.x - referenceLeft,
-    y: start.y - referenceTop,
+    x: start.x + unitX * startOffset - referenceLeft,
+    y: start.y + unitY * startOffset - referenceTop,
     length,
     angle: Math.atan2(deltaY, deltaX) * 180 / Math.PI,
     targetIndex: Number.isInteger(options.targetIndex) ? options.targetIndex : -1,

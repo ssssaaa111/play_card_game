@@ -5909,13 +5909,14 @@ function renderAttackRoutes() {
   }
   const attackerIndex = state.selected.index;
   const projection = projectBattleFromUiState(state, "player", { attackerIndex });
-  const attacker = els.playerField.querySelector(`[data-index="${attackerIndex}"]`);
+  const attackerSlot = els.playerField.querySelector(`[data-index="${attackerIndex}"]`);
+  const attacker = attackerSlot?.querySelector(".field-monster-card") || attackerSlot;
   const targets = projection.attackActions
     .map((action) => ({
       targetIndex: action.targetIndex,
       element: action.targetIndex < 0
         ? els.aiPanel
-        : els.aiField.querySelector(`[data-index="${action.targetIndex}"]`)
+        : els.aiField.querySelector(`[data-index="${action.targetIndex}"] .field-monster-card`)
     }))
     .filter((entry) => entry.element);
   return renderAttackRouteLayer({

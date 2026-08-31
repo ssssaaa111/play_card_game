@@ -31,6 +31,7 @@ test("attack intent draws battlefield routes and keeps the exact outcome in the 
 
   assert.match(html, /id="attackRouteLayer"[\s\S]*aria-hidden="true"/);
   assert.match(app, /renderAttackRouteLayer[\s\S]*function renderAttackRoutes\(\)/);
+  assert.match(app, /attackerSlot\?\.querySelector\("\.field-monster-card"\)[\s\S]*els\.aiField\.querySelector\(`\[data-index="\$\{action\.targetIndex\}"\] \.field-monster-card`\)/);
   assert.match(app, /state\.attackPreviewTargetIndex = targetIndex;[\s\S]*renderAttackRoutes\(\);/);
   assert.match(css, /\.attack-route-layer\s*\{[\s\S]*pointer-events: none;/);
   assert.match(css, /\.attack-route\.is-active\s*\{[\s\S]*--route-color: 246, 189, 96;/);
