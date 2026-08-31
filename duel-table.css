@@ -3528,9 +3528,10 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   #app .duel-table .field-monster-card {
+    --field-stats-height: 28px;
     max-width: min(100%, 260px);
     height: min(100%, clamp(300px, 20dvh, 380px));
-    grid-template-rows: 22px minmax(44px, 1fr) 24px 22px;
+    grid-template-rows: 22px minmax(44px, 1fr) 24px var(--field-stats-height);
     gap: 3px;
     padding: 5px;
   }
@@ -3557,6 +3558,9 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   #app .duel-table .field-monster-card .stats {
+    height: var(--field-stats-height);
+    min-height: var(--field-stats-height);
+    padding: 3px;
     font-size: 11px;
   }
 
@@ -4511,6 +4515,43 @@ body:has(.phase-stage.is-active) .toast.show {
       minmax(76px, 1fr);
   }
 
+  #app .duel-table .zone-row,
+  #app .duel-table .slot {
+    min-height: 0;
+  }
+
+  #app .duel-table .field-monster-card {
+    --field-defense-stats-space: 20px;
+    --field-stats-height: 18px;
+    grid-template-rows: 12px minmax(0, 1fr) 11px var(--field-stats-height);
+    gap: 1px;
+    padding: 2px;
+  }
+
+  #app .duel-table .field-monster-card .card-head,
+  #app .duel-table .field-monster-card .card-state-rail {
+    min-height: 0;
+    height: 11px;
+  }
+
+  #app .duel-table .field-monster-card .art {
+    min-height: 0;
+  }
+
+  #app .duel-table .field-monster-card .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
+    padding: 1px;
+  }
+
+  #app .duel-table .field-monster-card .stat {
+    min-height: 0;
+    height: 14px;
+    padding: 0 1px;
+    font-size: 7px;
+    line-height: 1;
+  }
+
   #app .duel-table .side.duel-hud {
     top: 4px;
     bottom: auto;
@@ -5180,27 +5221,26 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 }
 
-/* Fighting-game duel HUD: portraits guard the outer edges, life bars point
-   toward the central VS crest, and the board begins below this score layer. */
+/* The center badge is a quiet joint between both status rails. Portrait frames
+   carry duelist identity; health itself keeps one shared semantic palette. */
 .versus-stage {
   position: absolute;
   top: 8px;
   left: 50%;
   z-index: 8;
-  width: 124px;
-  height: 92px;
+  width: 92px;
+  height: 68px;
   display: grid;
-  grid-template-rows: 17px minmax(0, 1fr) 20px;
+  grid-template-rows: 13px minmax(0, 1fr) 15px;
   place-items: center;
-  padding: 7px 8px 6px;
-  border: 1px solid rgba(246, 189, 96, 0.42);
-  border-radius: 12px 4px 12px 4px;
+  padding: 6px 8px 5px;
+  border: 1px solid rgba(215, 223, 210, 0.24);
+  border-radius: 999px;
   background:
-    radial-gradient(circle at 50% 46%, rgba(246, 189, 96, 0.18), transparent 48%),
-    linear-gradient(145deg, rgba(239, 71, 111, 0.1), transparent 42%),
-    linear-gradient(215deg, rgba(84, 210, 210, 0.1), transparent 42%),
-    rgba(5, 8, 14, 0.94);
-  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45), inset 0 0 22px rgba(246, 189, 96, 0.05);
+    radial-gradient(circle at 50% 46%, rgba(246, 189, 96, 0.1), transparent 52%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent 58%),
+    rgba(5, 8, 14, 0.92);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.38), inset 0 0 16px rgba(255, 255, 255, 0.025);
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -5209,20 +5249,20 @@ body:has(.phase-stage.is-active) .toast.show {
 .versus-stage::after {
   content: "";
   position: absolute;
-  top: 44px;
-  width: 46px;
-  height: 2px;
-  opacity: 0.72;
+  top: 33px;
+  width: 30px;
+  height: 1px;
+  opacity: 0.56;
 }
 
 .versus-stage::before {
   right: 100%;
-  background: linear-gradient(90deg, transparent, rgba(239, 71, 111, 0.9));
+  background: linear-gradient(90deg, transparent, rgba(220, 230, 218, 0.58));
 }
 
 .versus-stage::after {
   left: 100%;
-  background: linear-gradient(90deg, rgba(84, 210, 210, 0.9), transparent);
+  background: linear-gradient(90deg, rgba(220, 230, 218, 0.58), transparent);
 }
 
 .versus-turn,
@@ -5236,25 +5276,25 @@ body:has(.phase-stage.is-active) .toast.show {
 }
 
 .versus-turn {
-  color: rgba(246, 189, 96, 0.78);
-  font-size: 8px;
+  color: rgba(225, 232, 223, 0.58);
+  font-size: 7px;
 }
 
 .versus-phase {
-  color: #f6f0df;
-  font-size: 9px;
+  color: rgba(236, 240, 233, 0.8);
+  font-size: 8px;
 }
 
 .versus-mark {
   display: flex;
   align-items: center;
   font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
-  font-size: 40px;
+  font-size: 27px;
   font-style: italic;
   line-height: 0.9;
-  letter-spacing: -0.14em;
-  transform: skewX(-8deg) translateX(-2px);
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.55));
+  letter-spacing: -0.1em;
+  transform: skewX(-7deg) translateX(-1px);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 
 .versus-mark i {
@@ -5263,21 +5303,21 @@ body:has(.phase-stage.is-active) .toast.show {
 }
 
 .versus-mark i:first-child {
-  color: #ff5d83;
+  color: #e8dfc8;
 }
 
 .versus-mark i:last-child {
-  color: #5fe7e7;
+  color: #e8dfc8;
 }
 
 .versus-stage[data-actor="ai"] {
-  border-color: rgba(239, 71, 111, 0.62);
-  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45), 0 0 24px rgba(239, 71, 111, 0.12);
+  border-color: rgba(239, 124, 143, 0.42);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.38), 0 0 16px rgba(239, 71, 111, 0.07);
 }
 
 .versus-stage[data-actor="player"] {
-  border-color: rgba(84, 210, 210, 0.64);
-  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45), 0 0 24px rgba(84, 210, 210, 0.12);
+  border-color: rgba(122, 214, 203, 0.44);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.38), 0 0 16px rgba(84, 210, 210, 0.07);
 }
 
 @media (min-width: 1041px) {
@@ -5453,30 +5493,28 @@ body:has(.phase-stage.is-active) .toast.show {
     letter-spacing: 0.12em;
   }
 
-  #app .duel-table .life-bar {
+  #app .duel-table .life-bar,
+  #app .duel-table .side:not(.enemy) .life-bar {
     height: 25px;
     margin-top: 1px;
-    border-color: rgba(239, 71, 111, 0.42);
+    border-color: rgba(167, 210, 151, 0.38);
     border-radius: 3px 10px 3px 3px;
-    background: rgba(20, 4, 9, 0.76);
-    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.34), 0 0 16px rgba(239, 71, 111, 0.08);
+    background: rgba(4, 16, 11, 0.8);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.34), 0 0 14px rgba(112, 193, 123, 0.07);
   }
 
   #app .duel-table .side:not(.enemy) .life-bar {
-    border-color: rgba(84, 210, 210, 0.46);
     border-radius: 10px 3px 3px 3px;
-    background: rgba(3, 16, 19, 0.78);
-    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.34), 0 0 16px rgba(84, 210, 210, 0.08);
   }
 
   #app .duel-table .enemy .life-fill {
-    background: linear-gradient(90deg, #972843, #ef476f 62%, #ffb052);
+    background: linear-gradient(90deg, #267653, #66c987 62%, #d7e69a);
   }
 
   #app .duel-table .side:not(.enemy) .life-fill {
     right: 0;
     left: auto;
-    background: linear-gradient(270deg, #147e8a, #54d2d2 62%, #d6ffdd);
+    background: linear-gradient(270deg, #267653, #66c987 62%, #d7e69a);
   }
 
   #app .duel-table .life-bar::after {
@@ -5617,13 +5655,13 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   .versus-stage {
-    top: 12px;
-    width: 152px;
-    height: 104px;
+    top: 18px;
+    width: 104px;
+    height: 72px;
   }
 
   .versus-mark {
-    font-size: 48px;
+    font-size: 30px;
   }
 
   #app .duel-table .side.duel-hud,
@@ -5698,7 +5736,7 @@ body:has(.phase-stage.is-active) .toast.show {
     height: 50px;
     grid-template-rows: 9px minmax(0, 1fr) 11px;
     padding: 3px 4px;
-    border-radius: 7px 2px 7px 2px;
+    border-radius: 999px;
   }
 
   .versus-stage::before,
@@ -5712,7 +5750,7 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   .versus-mark {
-    font-size: 24px;
+    font-size: 20px;
   }
 
   .versus-phase {
@@ -5768,11 +5806,47 @@ body:has(.phase-stage.is-active) .toast.show {
   #app .duel-table .side:not(.enemy) .life-fill {
     right: 0;
     left: auto;
-    background: linear-gradient(270deg, #147e8a, #54d2d2 62%, #d6ffdd);
+    background: linear-gradient(270deg, #267653, #66c987 62%, #d7e69a);
   }
 
   #app .duel-table .enemy .life-fill {
-    background: linear-gradient(90deg, #972843, #ef476f 62%, #ffb052);
+    background: linear-gradient(90deg, #267653, #66c987 62%, #d7e69a);
+  }
+}
+
+@media (min-width: 721px) and (max-height: 800px) {
+  #app .duel-table .field-monster-card {
+    --field-stats-height: 18px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 15px minmax(0, 1fr) 13px var(--field-stats-height);
+    gap: 1px;
+    padding: 3px;
+  }
+
+  #app .duel-table .field-monster-card .card-head,
+  #app .duel-table .field-monster-card .card-state-rail {
+    min-height: 0;
+    height: 13px;
+  }
+
+  #app .duel-table .field-monster-card .art {
+    min-height: 0;
+  }
+
+  #app .duel-table .field-monster-card .stats {
+    height: var(--field-stats-height);
+    min-height: var(--field-stats-height);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
+    padding: 1px;
+  }
+
+  #app .duel-table .field-monster-card .stat {
+    min-height: 0;
+    height: 14px;
+    padding: 0 1px;
+    font-size: 8px;
+    line-height: 1;
   }
 }
 

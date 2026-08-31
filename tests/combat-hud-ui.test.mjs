@@ -38,7 +38,16 @@ test("field monsters expose a compact fixed-height state rail", () => {
   assert.match(css, /\.card-state-rail\s*\{[\s\S]*height: 18px;/);
   assert.match(css, /\.card-state-chip\.ready/);
   assert.match(css, /\.field-monster-card\.attack-ready/);
-  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field-monster-card \.stats\s*\{[\s\S]*grid-template-columns: 1fr;/);
+  assert.match(css, /\.field-monster-card \.stats\s*\{[\s\S]*z-index: 7;[\s\S]*background: rgba\(4, 7, 12, 0\.94\);/);
+  assert.match(read("duel-table.css"), /@media \(max-width: 720px\)[\s\S]*#app \.duel-table \.field-monster-card \.stats\s*\{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+});
+
+test("short desktop fields keep combat stats inside the monster card", () => {
+  const css = read("styles.css");
+  const tableCss = read("duel-table.css");
+
+  assert.match(css, /\.field-monster-card\s*\{[\s\S]*grid-template-columns: minmax\(0, 1fr\);/);
+  assert.match(tableCss, /@media \(min-width: 721px\) and \(max-height: 800px\)[\s\S]*--field-stats-height: 18px;[\s\S]*grid-template-rows: 15px minmax\(0, 1fr\) 13px var\(--field-stats-height\);/);
 });
 
 test("short desktop layouts reserve enough height for both field rows", () => {
@@ -103,7 +112,8 @@ test("mobile field tracks preserve both monster stats and horizontal support nam
   const css = read("styles.css");
 
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field\s*\{[\s\S]*--support-track-size: 52px;[\s\S]*grid-template-rows: 112px var\(--support-track-size\) 28px var\(--support-track-size\) 112px;/);
-  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.field-monster-card\s*\{[\s\S]*height: 100%;[\s\S]*aspect-ratio: auto;[\s\S]*grid-template-rows: 15px minmax\(24px, 1fr\) 14px 30px;/);
+  assert.match(css, /\.field-monster-card\s*\{\s*--field-defense-stats-space: 34px;\s*--field-stats-height: 36px;[\s\S]*grid-template-rows: 15px minmax\(24px, 1fr\) 14px var\(--field-stats-height\);/);
+  assert.match(read("duel-table.css"), /@media \(max-width: 720px\)[\s\S]*#app \.duel-table \.zone-row,[\s\S]*#app \.duel-table \.slot\s*\{[\s\S]*min-height: 0;[\s\S]*--field-stats-height: 18px;/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.trap-slot \.card\.field-support-card \.card-name\s*\{[\s\S]*white-space: nowrap;/);
 });
 

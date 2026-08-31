@@ -10,9 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="styles\.css\?v=20260830-versus-hud-3"/);
-  assert.match(html, /href="duel-table\.css\?v=20260830-versus-hud-3"/);
-  assert.match(html, /src="src\/app\.js\?v=20260830-versus-hud-3"/);
+  assert.match(html, /href="styles\.css\?v=20260831-hud-readability-1"/);
+  assert.match(html, /href="duel-table\.css\?v=20260831-hud-readability-1"/);
+  assert.match(html, /src="src\/app\.js\?v=20260831-hud-readability-1"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -21,7 +21,7 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   assert.match(html, /id="fieldActionBar"[\s\S]*id="fieldAttackBtn"[\s\S]*id="fieldModeBtn"[\s\S]*id="fieldDetailBtn"[\s\S]*id="fieldCancelBtn"/);
   assert.match(html, /class="detail-actions"[\s\S]*id="detailAttackBtn"[\s\S]*id="modeBtn"[\s\S]*id="detailBtn"[\s\S]*id="detailSelectionCancelBtn"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260830-versus-hud-3"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=20260831-hud-readability-1"/);
 });
 
 test("duelist HUD reads like a fighting-game faceoff without covering the board", () => {
@@ -38,6 +38,11 @@ test("duelist HUD reads like a fighting-game faceoff without covering the board"
   assert.match(css, /\.versus-stage\s*\{[\s\S]*left: 50%;[\s\S]*transform: translateX\(-50%\)/);
   assert.match(css, /@media \(min-width: 1041px\)[\s\S]*#app \.duel-table \.field\s*\{[\s\S]*inset: 112px 0 0;/);
   assert.match(css, /#app \.duel-table \.side:not\(\.enemy\) \.life-fill\s*\{[\s\S]*right: 0;[\s\S]*left: auto;/);
+  assert.match(css, /#app \.duel-table \.enemy \.life-fill\s*\{[\s\S]*#267653[\s\S]*#66c987[\s\S]*#d7e69a/);
+  assert.match(css, /#app \.duel-table \.side:not\(\.enemy\) \.life-fill\s*\{[\s\S]*#267653[\s\S]*#66c987[\s\S]*#d7e69a/);
+  assert.doesNotMatch(css, /#app \.duel-table \.side:not\(\.enemy\) \.life-fill\s*\{[\s\S]*#147e8a/);
+  assert.doesNotMatch(css, /#app \.duel-table \.enemy \.life-fill\s*\{[\s\S]*#972843/);
+  assert.match(css, /\.versus-mark i:first-child\s*\{[\s\S]*color: #e8dfc8;[\s\S]*\.versus-mark i:last-child\s*\{[\s\S]*color: #e8dfc8;/);
   assert.match(css, /#app \.duel-table \.duelist-sprite\s*\{[\s\S]*top: -4px;[\s\S]*left: 50%;[\s\S]*width: 170%;[\s\S]*height: auto;[\s\S]*object-position: center top;[\s\S]*transform: translateX\(-50%\);[\s\S]*animation: none;/);
   assert.match(css, /#app \.duel-table #aiFigure \.duelist-sprite\s*\{[\s\S]*left: 35%;/);
   assert.match(css, /#app \.duel-table \.skill-line\s*\{[\s\S]*height: 17px;[\s\S]*padding: 0 4px;[\s\S]*line-height: 17px;/);

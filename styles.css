@@ -1976,13 +1976,15 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .field-monster-card {
   --field-defense-stats-space: 24px;
+  --field-stats-height: 24px;
   width: auto;
   max-width: min(100%, 220px);
   height: min(100%, clamp(190px, 20dvh, 320px));
   overflow: hidden;
   max-height: 100%;
   aspect-ratio: 0.68;
-  grid-template-rows: 18px minmax(32px, 1fr) 20px 18px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 18px minmax(32px, 1fr) 20px var(--field-stats-height);
   gap: 2px;
   padding: 4px;
   transform: none;
@@ -2402,15 +2404,28 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 }
 
 .field-monster-card .stats {
+  position: relative;
+  z-index: 7;
+  height: var(--field-stats-height);
+  min-height: var(--field-stats-height);
   min-width: 0;
   overflow: hidden;
   gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  background: rgba(4, 7, 12, 0.94);
+  box-shadow: 0 -5px 14px rgba(0, 0, 0, 0.3);
   font-size: 10px;
+  isolation: isolate;
 }
 
 .field-monster-card .stat {
-  min-height: 18px;
+  min-height: 0;
+  height: 100%;
   padding: 1px 2px;
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .field-monster-card .monster-element-chip {
@@ -6712,13 +6727,14 @@ button.chain-stack-card:focus-visible {
 
   .field-monster-card {
     --field-defense-stats-space: 34px;
+    --field-stats-height: 36px;
     width: 100%;
     max-width: none;
     height: 100%;
     min-height: 0;
     max-height: none;
     aspect-ratio: auto;
-    grid-template-rows: 15px minmax(24px, 1fr) 14px 30px;
+    grid-template-rows: 15px minmax(24px, 1fr) 14px var(--field-stats-height);
     gap: 1px;
     padding: 3px;
   }
@@ -6732,11 +6748,13 @@ button.chain-stack-card:focus-visible {
   .field-monster-card .stats {
     grid-template-columns: 1fr;
     gap: 2px;
+    padding: 1px;
     font-size: 8px;
   }
 
   .field-monster-card .stat {
-    min-height: 16px;
+    min-height: 0;
+    height: 16px;
     padding: 1px 2px;
     white-space: nowrap;
   }
