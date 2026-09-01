@@ -9457,8 +9457,11 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   const wideHandCard = handCard(ctx.els, "star-breach");
   const wideFieldCardRect = wideFieldCard?.getBoundingClientRect();
   const wideHandCardRect = wideHandCard?.getBoundingClientRect();
+  // Headless Chrome applies the requested window size to its outer window, so
+  // the 1700x1000 CI case has an inner height near 913px. The timeline is
+  // intentionally aligned to the monster zones instead of covering the HUD.
   if (detailRect.width < 215 || detailRect.width > 255 || timelineRect.width < 255 || timelineRect.width > 305 ||
-      detailRect.height < 210 || timelineRect.height < arenaRect.height - 30) {
+      detailRect.height < 210 || timelineRect.height < 360) {
     throw new Error(`${smokeName}: side context rails have the wrong density (${detailRect.width}x${detailRect.height}; ${timelineRect.width}x${timelineRect.height})`);
   }
   if (!wideFieldCardRect || !wideHandCardRect ||
@@ -9473,13 +9476,16 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
     );
   }
   if (centerRect.height > 60 || aiZoneRect.bottom > centerRect.top + 1 || playerZoneRect.top < centerRect.bottom - 1 ||
-      aiZoneRect.height < 190 || playerZoneRect.height < 190) {
+      aiZoneRect.height < 145 || playerZoneRect.height < 145) {
     throw new Error(`${smokeName}: monster zones should own the wide battlefield center`);
   }
-  if (detailRect.left < Math.max(enemyHudRect.right, playerHudRect.right) + 8 ||
+  if (Math.abs(detailRect.left - (arenaRect.left + 10)) > 2 ||
       detailRect.right > aiZoneRect.left + 2 ||
+      detailRect.top < Math.max(enemyHudRect.bottom, playerHudRect.bottom) + 8 ||
       timelineRect.left < aiZoneRect.right - 12 ||
-      Math.abs(timelineRect.right - (arenaRect.right - 10)) > 2) {
+      Math.abs(timelineRect.right - (arenaRect.right - 10)) > 2 ||
+      Math.abs(timelineRect.top - aiZoneRect.top) > 2 ||
+      Math.abs(timelineRect.bottom - playerZoneRect.bottom) > 2) {
     throw new Error(`${smokeName}: context rails should flank the board without covering monsters`);
   }
 
@@ -9635,10 +9641,15 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   }
   const enemyHudRect = enemyHud.getBoundingClientRect();
   const playerHudRect = playerHud.getBoundingClientRect();
-  if (Math.abs(enemyHudRect.top - (arena.getBoundingClientRect().top + 10)) > 2 ||
-      Math.abs(playerHudRect.bottom - (arena.getBoundingClientRect().bottom - 10)) > 2 ||
-      Math.abs(enemyHudRect.left - playerHudRect.left) > 2 || enemyHudRect.top >= playerHudRect.top) {
-    throw new Error(`${smokeName}: opponent and player HUDs should share one readable left status rail`);
+  const arenaRect = arena.getBoundingClientRect();
+  if (Math.abs(enemyHudRect.top - (arenaRect.top + 14)) > 2 ||
+      Math.abs(playerHudRect.top - (arenaRect.top + 14)) > 2 ||
+      Math.abs(enemyHudRect.left - (arenaRect.left + 12)) > 2 ||
+      Math.abs(playerHudRect.right - (arenaRect.right - 12)) > 2 ||
+      Math.abs(enemyHudRect.width - playerHudRect.width) > 2 ||
+      Math.abs(enemyHudRect.height - playerHudRect.height) > 2 ||
+      enemyHudRect.right >= playerHudRect.left) {
+    throw new Error(`${smokeName}: opponent and player HUDs should form balanced top versus rails`);
   }
   const aiRect = ctx.els.aiField.getBoundingClientRect();
   const playerRect = ctx.els.playerField.getBoundingClientRect();
@@ -9681,10 +9692,10 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
       `supportTrack=${ultraSupportTrackRect.height}, panel=${handRect.height})`
     );
   }
-  if (playerHudRect.right > ultraFieldRect.left - 8) {
+  if (Math.max(enemyHudRect.bottom, playerHudRect.bottom) > aiRect.top - 8) {
     throw new Error(
-      `${smokeName}: lower-left player HUD should stay clear of the first monster card ` +
-      `(hudRight=${playerHudRect.right}, cardLeft=${ultraFieldRect.left})`
+      `${smokeName}: top versus HUD should stay clear of the monster zones ` +
+      `(hudBottom=${Math.max(enemyHudRect.bottom, playerHudRect.bottom)}, zoneTop=${aiRect.top})`
     );
   }
 
