@@ -16,6 +16,7 @@ import {
   chooseAiAfterAttackSupportTarget,
   chooseAiAttackAction,
   chooseAiFusionAction,
+  chooseAiGodDefenseAction,
   chooseAiTrapResponseAction,
   chooseAiSetTrapAction,
   chooseAiSpellAction,
@@ -23,9 +24,11 @@ import {
   chooseAiTurnGoal,
   shouldSwitchSummonedMonsterToDefense
 } from './ai.js';
+import { trioBossCounterPlan, trioBossPhaseTransitions } from './boss-tactics.js';
 import { battleLogText, describeBattleOutcome } from './battle.js';
 import { createBattleLogEntry, logEntryMessage } from './battle-log.js';
 import { renderBattlePreviewElement } from './battle-preview-renderer.js';
+import { renderAttackRouteLayer } from './attack-route-renderer.js';
 import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { getCardEffectDefinition } from './game-engine.js';
 import { cardDefinitionById, cardInspectorViewModel } from './card-detail.js';
@@ -144,6 +147,11 @@ import {
   projectBattleFromUiState
 } from './engine-adapter.js';
 import { renderChainHistoryPanel, renderTimelinePanel } from './timeline-renderer.js';
+import {
+  createPhaseStageController,
+  phaseStageCue,
+  phaseStageCuesFromEvents
+} from './phase-stage.js';
 import { spellDefinitions } from './spells.js';
 import { nextTimelineState } from './timeline.js';
 import { selectRedirectTarget, trapActivationText, trapCanResolve, trapConsumesAttack } from './traps.js';
@@ -272,6 +280,7 @@ const state = {
   ...createSelectionState(),
   focusedCard: null,
   attackIntentIndex: null,
+  attackPreviewTargetIndex: null,
   autoEnding: false,
   autoEndTimer: null,
   actionWindow: ACTION_WINDOWS.setup,
@@ -294,6 +303,8 @@ const state = {
   campaignProgress: loadCampaignProgress(),
   activeCampaign: null,
   campaignObjectivesAnnounced: {},
+  bossCounterAnnounced: {},
+  bossPhaseAnnounced: {},
   stats: loadDuelStats(),
   statsRecorded: false,
   ...createAudioSettings({ testMode: BROWSER_TEST_MODE }),
@@ -323,6 +334,7 @@ let preDuelPreviewModel = null;
 let deckBrowserIndex = 0;
 let deckBrowserPointerStartX = null;
 let handDisplayOrder = [];
+let handOrderMode = "draw";
 let handReorderMode = false;
 let handPlacementUid = "";
 let chainHistoryExpanded = false;
@@ -332,6 +344,9 @@ const combatHudDamageStage = createCombatHudDamageStage();
 const els = {
   phaseText: document.querySelector("#phaseText"),
   turnText: document.querySelector("#turnText"),
+  versusStage: document.querySelector("#versusStage"),
+  versusTurn: document.querySelector("#versusTurn"),
+  versusPhase: document.querySelector("#versusPhase"),
   timerText: document.querySelector("#timerText"),
   timerProgress: document.querySelector("#timerProgress"),
   timerProgressFill: document.querySelector("#timerProgressFill"),
@@ -390,8 +405,13 @@ const els = {
   chainHistoryCount: document.querySelector("#chainHistoryCount"),
   chainHistoryList: document.querySelector("#chainHistoryList"),
   battlePreview: document.querySelector("#battlePreview"),
+  fieldBattlePreview: document.querySelector("#fieldBattlePreview"),
+  duelArena: document.querySelector(".arena.duel-table"),
+  attackRouteLayer: document.querySelector("#attackRouteLayer"),
   handConfirmBtn: document.querySelector("#handConfirmBtn"),
   handCancelBtn: document.querySelector("#handCancelBtn"),
+  detailAttackBtn: document.querySelector("#detailAttackBtn"),
+  detailSelectionCancelBtn: document.querySelector("#detailSelectionCancelBtn"),
   modeBtn: document.querySelector("#modeBtn"),
   fieldActionBar: document.querySelector("#fieldActionBar"),
   fieldActionName: document.querySelector("#fieldActionName"),
@@ -406,6 +426,7 @@ const els = {
   detailBtn: document.querySelector("#detailBtn"),
   duelHint: document.querySelector("#duelHint"),
   toast: document.querySelector("#toast"),
+  phaseStage: document.querySelector("#phaseStage"),
   effectLayer: document.querySelector("#effectLayer"),
   choiceActions: document.querySelector("#choiceActions"),
   choiceText: document.querySelector("#choiceText"),
@@ -510,6 +531,19 @@ const els = {
 
 const cardInspectorElements = bindCardInspector(document);
 
+const phaseStageController = createPhaseStageController({
+  root: els.phaseStage,
+  window
+});
+
+function queuePhaseStage(input) {
+  phaseStageController.enqueue(input);
+}
+
+function queuePhaseStageEvents(events = []) {
+  queuePhaseStage(phaseStageCuesFromEvents(events));
+}
+
 const musicController = createMusicController({
   getSettings: () => ({
     musicOn: state.musicOn,
@@ -569,6 +603,7 @@ const {
   playGuardShield,
   shakeScreen,
   playCenterCardEffect,
+  playSupportReveal,
   playAttackCutIn,
   playMonsterMotion,
   playMonsterPhantom,
@@ -596,6 +631,7 @@ function showBattlePreview(attacker, target, owner = null, rival = null) {
 
 function clearBattlePreview({ preserveAttackIntent = false } = {}) {
   state.battlePreview = null;
+  state.attackPreviewTargetIndex = null;
   if (!preserveAttackIntent) state.attackIntentIndex = null;
 }
 
@@ -954,6 +990,7 @@ function resetDuelResultState() {
 function startGame() {
   stopAll();
   stopMusic({ fadeMs: 80 });
+  phaseStageController.reset();
   closeTrapChoicePrompt();
   clearAiReveal(false);
   applySetupChoices();
@@ -979,6 +1016,8 @@ function startGame() {
   state.storyBeatCursor = 0;
   state.storyBeatsFired = {};
   state.campaignObjectivesAnnounced = {};
+  state.bossCounterAnnounced = {};
+  state.bossPhaseAnnounced = {};
   state.scriptedSummonsFired = {};
   state.pendingScriptedSummons = [];
   state.log = [];
@@ -987,6 +1026,7 @@ function startGame() {
   state.timelineStep = 0;
   chainHistoryExpanded = false;
   handDisplayOrder = [];
+  handOrderMode = "draw";
   handReorderMode = false;
   handPlacementUid = "";
   closeDeckBrowser();
@@ -1009,6 +1049,7 @@ function startGame() {
   playMusic(currentMusicMode());
   playVoice("player", "start", "决斗开始。轮到你，先抽卡。", true);
   render();
+  queuePhaseStage(phaseStageCue(PHASES.draw, "player"));
   if (!hasSeenGuide()) {
     window.setTimeout(showGuide, 250);
   } else {
@@ -1019,12 +1060,14 @@ function startGame() {
 function prepareGame() {
   stopAll();
   stopMusic({ fadeMs: 220 });
+  phaseStageController.reset();
   closeTrapChoicePrompt();
   clearAiReveal(false);
   scenarioHintsVisible = true;
   preDuelPreviewModel = null;
   deckBrowserIndex = 0;
   handDisplayOrder = [];
+  handOrderMode = "draw";
   handReorderMode = false;
   handPlacementUid = "";
   closeDeckBrowser();
@@ -1051,6 +1094,8 @@ function prepareGame() {
   state.aiRunning = false;
   state.resumeResolvers = [];
   state.campaignObjectivesAnnounced = {};
+  state.bossCounterAnnounced = {};
+  state.bossPhaseAnnounced = {};
   state.log = ["先查看场景目标、提示和己方卡组，再点击“开始决斗”。"];
   state.logSequence = 0;
   state.timeline = [];
@@ -2856,7 +2901,14 @@ async function playSpell(owner, rival, handIndex, targetInfo = null) {
     await waitForAiReveal({ ...spellLog, revealKind: "spell" });
   }
   result = resolveEngineSpellFeedback(owner, rival, card, engineEvents, targetInfo);
-  playSpellEffect(owner, rival, card, result.effectTarget || null, result.targetOwner || targetInfo?.owner || owner.owner);
+  playSpellEffect(
+    owner,
+    rival,
+    card,
+    result.effectTarget || null,
+    result.targetOwner || targetInfo?.owner || owner.owner,
+    targetInfo
+  );
   resolveElementCombos(owner, rival, "spell");
   clearPendingTarget();
   state.selected = null;
@@ -3881,9 +3933,11 @@ async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
   if (!attacker || attacker.used) return;
   let afterAttackTargetCardId = options.afterAttackTargetCardId || null;
   if (!afterAttackTargetCardId && owner.owner === "ai") {
+    const counterPlan = currentBossCounterPlan();
     const supportTargetIndex = chooseAiAfterAttackSupportTarget({
       attacker,
-      traps: rival.traps
+      traps: rival.traps,
+      preferredCardUid: counterPlan?.id === "guard-backrow" ? counterPlan.targetCardId : ""
     });
     if (supportTargetIndex >= 0) {
       afterAttackTargetCardId = runtimeCardId(rival.traps[supportTargetIndex]);
@@ -4241,10 +4295,11 @@ function endPlayerTurn(reason = "manual") {
   clearBattlePreview();
   clearPlayerIdleTimers();
   try {
-    dispatchEndTurnFromUiState(state, "player", {
+    const endEvents = dispatchEndTurnFromUiState(state, "player", {
       reason,
       endedBy: reason === "manual" ? "manual" : "system"
     });
+    queuePhaseStageEvents(endEvents);
   } catch (error) {
     cue(error.message || "回合结束失败。");
     console.error(error);
@@ -4271,7 +4326,8 @@ function enterPlayerBattlePhase(reason = "战斗时点", { preserveSelection = f
   if (!preserveSelection) state.selected = null;
   clearBattlePreview();
   try {
-    dispatchChangePhaseFromUiState(state, "player", PHASES.battle);
+    const phaseEvents = dispatchChangePhaseFromUiState(state, "player", PHASES.battle);
+    queuePhaseStageEvents(phaseEvents);
   } catch (error) {
     cue(error.message || "无法进入战斗阶段。");
     console.error(error);
@@ -4400,10 +4456,11 @@ function scheduleAutoEnd(reason = "操作完成", force = false) {
     state.autoEndTimer = null;
     if (state.turn === "player" && state.autoEnding && state.actionWindow === "autoEnd" && !state.gameOver) {
       try {
-        dispatchCommitAutoEndFromUiState(state, "player", {
+        const endEvents = dispatchCommitAutoEndFromUiState(state, "player", {
           reason,
           now: Date.now()
         });
+        queuePhaseStageEvents(endEvents);
       } catch (error) {
         cue(error.message || "自动结束失败。");
         console.error(error);
@@ -4426,6 +4483,7 @@ function beginTurn(owner) {
     return false;
   }
   Object.assign(state, turnStartPatch(owner));
+  queuePhaseStageEvents(turnEvents);
   clearBattlePreview();
   cancelAutoEnd();
   clearPlayerIdleTimers();
@@ -4562,6 +4620,7 @@ function autoPlayerDraw() {
     console.error(error);
     return;
   }
+  queuePhaseStageEvents(events);
   applyDrawEventFeedback(state.player, events, true);
   if (state.gameOver) {
     render();
@@ -4587,12 +4646,14 @@ function scheduleOpeningDraw(delay = 700) {
 }
 
 function chooseLiveAiTurnGoal() {
+  const counterPlan = currentBossCounterPlan();
   return chooseAiTurnGoal({
     hand: state.ai.hand,
     field: state.ai.field,
     owner: state.ai,
     rival: state.player,
     aiStyle: state.aiStyle,
+    counterPlan,
     canSummon: (_card, handIndex, options) => explainSummonMonsterFromUiState(
       state,
       "ai",
@@ -4610,6 +4671,7 @@ async function runAiTurn() {
   try {
     await sleep(950);
     const drawEvents = dispatchResolveTurnDrawFromUiState(state, "ai");
+    queuePhaseStageEvents(drawEvents);
     applyDrawEventFeedback(state.ai, drawEvents, true);
     if (state.gameOver) return;
     if (state.phase !== PHASES.main) return;
@@ -4617,6 +4679,11 @@ async function runAiTurn() {
     render();
     await sleep(1500);
     let turnGoal = chooseLiveAiTurnGoal();
+    if (aiFortifyGods({ turnGoal, counterPlan: currentBossCounterPlan() })) {
+      render();
+      await sleep(1100);
+      turnGoal = chooseLiveAiTurnGoal();
+    }
     await aiPlaySpells({ turnGoal, timing: "beforeSummon", getTurnGoal: chooseLiveAiTurnGoal });
     if (state.gameOver) return;
     await sleep(850);
@@ -4656,15 +4723,17 @@ async function runAiTurn() {
     turnGoal = chooseLiveAiTurnGoal();
     await aiPlayFusion({ turnGoal });
     if (state.gameOver) return;
-    dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
+    const phaseEvents = dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
+    queuePhaseStageEvents(phaseEvents);
     await aiAttack({ getTurnGoal: chooseLiveAiTurnGoal });
     if (!state.gameOver) {
       await sleep(1150);
       try {
-        dispatchEndTurnFromUiState(state, "ai", {
+        const endEvents = dispatchEndTurnFromUiState(state, "ai", {
           reason: "ai-complete",
           endedBy: "system"
         });
+        queuePhaseStageEvents(endEvents);
       } catch (error) {
         cue(error.message || "AI 回合结束失败。");
         console.error(error);
@@ -4705,6 +4774,11 @@ async function aiPlaySpells({
     } else if (action.reason === "tributeDevelopment") {
       addLog(
         `对手发动「${playedCard.name}」补充祭品候选，为下一次三祭品降神做准备。`,
+        cardLogMeta(playedCard, { actor: "ai", type: "decision" })
+      );
+    } else if (action.reason === "finaleAcceleration") {
+      addLog(
+        `Boss 在终战压力线发动「${playedCard.name}」，把资源转为立即进攻。`,
         cardLogMeta(playedCard, { actor: "ai", type: "decision" })
       );
     }
@@ -4841,13 +4915,47 @@ function aiSetTraps({ turnGoal = "pressure", getTurnGoal = null } = {}) {
       hand: state.ai.hand,
       traps: state.ai.traps,
       aiStyle: state.aiStyle,
+      counterPlan: currentBossCounterPlan(),
       canSetTrap: (_card, handIndex, trapIndex) =>
         explainSetTrapFromUiState(state, "ai", handIndex, trapIndex).ok
     });
     if (!action || !setTrap(state.ai, action.handIndex, action.trapIndex)) break;
+    if (action.reason === "counterChainProtection") {
+      addLog(
+        `Boss 优先盖放「${action.card.name}」，为最新后场戒备建立断链保护。`,
+        cardLogMeta(action.card, { actor: "ai", type: "decision" })
+      );
+    }
     setCount += 1;
   }
   return setCount;
+}
+
+function aiFortifyGods({ turnGoal = "pressure", counterPlan = null } = {}) {
+  const action = chooseAiGodDefenseAction({
+    field: state.ai.field,
+    rivalField: state.player.field,
+    aiStyle: state.aiStyle,
+    turnGoal,
+    counterPlan,
+    canChangeMode: (_card, fieldIndex) =>
+      explainChangeMonsterModeFromUiState(state, "ai", fieldIndex, "defense").ok
+  });
+  if (!action) return false;
+  try {
+    dispatchChangeMonsterModeFromUiState(state, "ai", action.fieldIndex, action.mode);
+    addLog(
+      `Boss 识破直攻路线，将「${action.card.name}」切换为守备表示。`,
+      cardLogMeta(action.card, { actor: "ai", type: "decision" })
+    );
+    cue(`对手意图：神体守护。${action.card.name}转为守备表示。`);
+    speak(`对手将${action.card.name}切换为守备表示。`, false, "ai");
+    return true;
+  } catch (error) {
+    addLog(`${action.card.name} 无法执行神体守护：${error.message}`);
+    console.error(error);
+    return false;
+  }
 }
 
 async function aiAttack({ getTurnGoal = null } = {}) {
@@ -5078,11 +5186,24 @@ function currentCampaignMission() {
   return {
     campaign,
     chapter,
+    bossIntent: currentBossCounterPlan(),
     objectiveResults: evaluateScenarioObjectives(chapter.objectives, {
       events: state.gameEvents,
       resolveCardId: resolveScenarioEventCardId
     })
   };
+}
+
+function currentBossCounterPlan() {
+  const scenario = scenarioSetups[state.scenarioId];
+  if (!scenario?.adaptiveBossCounter) return null;
+  return trioBossCounterPlan({
+    events: state.gameEvents,
+    resolveCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId),
+    phase: scenario.adaptiveBossPhase,
+    player: state.player,
+    ai: state.ai
+  });
 }
 
 function syncCampaignObjectiveFeedback(mission) {
@@ -5096,6 +5217,41 @@ function syncCampaignObjectiveFeedback(mission) {
   });
   const completedCount = mission.objectiveResults.filter((objective) => objective.completed).length;
   cue(`章节目标 ${completedCount}/${mission.objectiveResults.length}：${newlyCompleted.map((objective) => objective.label).join("、")}`);
+}
+
+function syncBossCounterFeedback(intent) {
+  if (!intent || !state.started || state.gameOver) return;
+  const announced = state.bossCounterAnnounced || (state.bossCounterAnnounced = {});
+  const key = `${intent.id}:${intent.eventId}`;
+  if (announced[key]) return;
+  announced[key] = true;
+  const counterText = intent.counterHint ? ` 破解提示：${intent.counterHint}` : "";
+  addLog(`Boss 反制意图：${intent.label}。${intent.text}${counterText}`);
+  cue(`Boss 反制意图：${intent.label}`);
+}
+
+function syncTrioBossPhaseFeedback() {
+  const scenario = scenarioSetups[state.scenarioId];
+  if (!scenario?.adaptiveBossCounter || !state.started || state.gameOver) return;
+  const announced = state.bossPhaseAnnounced || (state.bossPhaseAnnounced = {});
+  const transitions = trioBossPhaseTransitions({
+    events: state.gameEvents,
+    resolveCard: (cardId) => findRuntimeCard(cardId)?.card || cardDefinitionById(cardId)
+  });
+  const fresh = transitions.filter((transition) => !announced[`${transition.id}:${transition.eventId}`]);
+  fresh.forEach((transition) => {
+    announced[`${transition.id}:${transition.eventId}`] = true;
+    addLog(transition.text, {
+      actor: "ai",
+      type: "boss-phase",
+      public: true,
+      cardId: transition.cardId,
+      relatedCardIds: transition.relatedCardIds
+    });
+  });
+  const latest = fresh.at(-1);
+  if (!latest) return;
+  playEpicAction(`${latest.epic} · ${latest.label}`, "summon", 1300);
 }
 
 function fieldEffectMarkers(card, duelist) {
@@ -5119,11 +5275,19 @@ function focusedCardEffectMarkers(card) {
   return [];
 }
 
+function renderFocusedCardInspector() {
+  if (!state.focusedCard) return false;
+  const runtimeId = state.focusedCard.uid || state.focusedCard.engineId;
+  const currentCard = runtimeId ? findRuntimeCard(runtimeId)?.card || state.focusedCard : state.focusedCard;
+  const view = cardInspectorViewModel(currentCard, { effectMarkers: focusedCardEffectMarkers(currentCard) });
+  if (!view) return false;
+  state.focusedCard = currentCard;
+  return renderCardInspector(document, cardInspectorElements, view);
+}
+
 function showDetail(card) {
-  const view = cardInspectorViewModel(card, { effectMarkers: focusedCardEffectMarkers(card) });
-  if (!view) return;
   state.focusedCard = card;
-  renderCardInspector(document, cardInspectorElements, view);
+  renderFocusedCardInspector();
 }
 
 function openCardDetail(cardOrId) {
@@ -5363,11 +5527,21 @@ function handleActionWindowTimeout(windowId) {
   }
 }
 
-function playSpellEffect(owner, rival, card, targetCard = null, targetOwner = owner.owner) {
+function playSpellEffect(owner, rival, card, targetCard = null, targetOwner = owner.owner, targetInfo = null) {
   const source = panelElement(owner.owner);
   let target = panelElement(rival.owner);
   if (["heal700", "draw2", "shield800", "extraSummon", "elementEcho", "graveReturn", "battleTrance", "directStrike", "lightShadowCombo"].includes(card.effect)) {
     target = panelElement(owner.owner);
+  }
+  if (card.effect === "destroySpellTrap" && Number.isInteger(targetInfo?.index)) {
+    target = trapElement(targetInfo.owner || targetOwner, targetInfo.index) || target;
+    playArrow(source, target, "spell", card.name);
+    playSupportReveal(target, targetInfo.card || targetCard, {
+      owner: targetInfo.owner || targetOwner,
+      index: targetInfo.index,
+      sourceName: card.name
+    });
+    return;
   }
   if (targetCard) {
     const targetDuelist = targetOwner === rival.owner ? rival : owner;
@@ -5437,12 +5611,33 @@ function render(animationKey = "") {
   const actions = currentPlayerActions();
   const activeTurn = state.started && !state.gameOver ? state.turn : "idle";
   const musicMode = currentMusicMode();
+  const bossIntent = currentBossCounterPlan();
   const campaignMission = currentCampaignMission();
   syncCampaignObjectiveFeedback(campaignMission);
+  syncBossCounterFeedback(bossIntent);
+  syncTrioBossPhaseFeedback();
   setMusicMode(musicMode);
   document.body.dataset.musicMode = musicMode;
-  els.phaseText.textContent = phaseLabel(state);
+  const currentPhaseLabel = phaseLabel(state);
+  els.phaseText.textContent = currentPhaseLabel;
   els.turnText.textContent = turnLabel(state);
+  if (els.versusPhase) els.versusPhase.textContent = currentPhaseLabel;
+  if (els.versusTurn) {
+    els.versusTurn.textContent = !state.started
+      ? "DUEL READY"
+      : state.gameOver
+        ? "DUEL END"
+        : state.paused
+          ? "PAUSED"
+          : state.turn === "player"
+            ? "PLAYER TURN"
+            : "RIVAL TURN";
+  }
+  if (els.versusStage) {
+    els.versusStage.dataset.actor = !state.started || state.gameOver || state.paused
+      ? "idle"
+      : state.turn;
+  }
   const duelHint = duelHintView({
     started: state.started,
     paused: state.paused,
@@ -5580,6 +5775,7 @@ function render(animationKey = "") {
     campaign: campaignMission?.campaign,
     chapter: campaignMission?.chapter,
     objectiveResults: campaignMission?.objectiveResults,
+    bossIntent: campaignMission?.bossIntent,
     visible: state.started && !state.gameOver,
     win: state.gameOver && state.gameOverWinner === "player"
   }));
@@ -5592,7 +5788,9 @@ function render(animationKey = "") {
   renderHand(animationKey);
   renderGraveTargets();
   renderTimeline();
+  renderFocusedCardInspector();
   renderBattlePreview();
+  renderAttackRoutes();
   renderAiReveal();
   playScenarioStoryBeats();
   playScenarioScriptedSummons();
@@ -5702,6 +5900,33 @@ function resolveScenarioEventCardId(cardId) {
 function renderBattlePreview() {
   const preview = state.battlePreview || selectedAttackPreview();
   renderBattlePreviewElement(document, els.battlePreview, preview);
+  renderBattlePreviewElement(document, els.fieldBattlePreview, preview);
+}
+
+function renderAttackRoutes() {
+  if (!els.attackRouteLayer || !els.duelArena || !hasSelectedAttackIntent()) {
+    return renderAttackRouteLayer({ document, root: els.attackRouteLayer });
+  }
+  const attackerIndex = state.selected.index;
+  const projection = projectBattleFromUiState(state, "player", { attackerIndex });
+  const attackerSlot = els.playerField.querySelector(`[data-index="${attackerIndex}"]`);
+  const attacker = attackerSlot?.querySelector(".field-monster-card") || attackerSlot;
+  const targets = projection.attackActions
+    .map((action) => ({
+      targetIndex: action.targetIndex,
+      element: action.targetIndex < 0
+        ? els.aiPanel
+        : els.aiField.querySelector(`[data-index="${action.targetIndex}"] .field-monster-card`)
+    }))
+    .filter((entry) => entry.element);
+  return renderAttackRouteLayer({
+    document,
+    root: els.attackRouteLayer,
+    reference: els.duelArena,
+    attacker,
+    targets,
+    activeTargetIndex: state.attackPreviewTargetIndex
+  });
 }
 
 function isAttackTargetSlot(ownerName, index) {
@@ -5724,14 +5949,17 @@ function showSelectedAttackTargetPreview(targetIndex) {
   const projection = projectBattleFromUiState(state, "player", { attackerIndex });
   if (!attacker || !projection.attackActions.some((action) => action.targetIndex === targetIndex)) return;
   const target = targetIndex >= 0 ? state.ai.field[targetIndex] : null;
+  state.attackPreviewTargetIndex = targetIndex;
   showBattlePreview(attacker, target, state.player, state.ai);
   renderBattlePreview();
+  renderAttackRoutes();
 }
 
 function restoreSelectedAttackPreview() {
   if (!hasSelectedAttackIntent()) return;
   clearBattlePreview({ preserveAttackIntent: true });
   renderBattlePreview();
+  renderAttackRoutes();
 }
 
 function renderField(root, duelist, owner, animationKey) {
@@ -5904,13 +6132,16 @@ function handActionInfo(card, handIndex) {
 }
 
 function orderedPlayerHand() {
-  const cards = reconcileHandOrder(state.player.hand, handDisplayOrder);
+  const cards = handOrderMode === "type"
+    ? sortHandCardsByType(state.player.hand, handDisplayOrder)
+    : reconcileHandOrder(state.player.hand, handDisplayOrder);
   handDisplayOrder = cards.map((card) => card.uid);
   if (handPlacementUid && !handDisplayOrder.includes(handPlacementUid)) handPlacementUid = "";
   return cards;
 }
 
 function moveDisplayedHandCard(card, direction) {
+  handOrderMode = "custom";
   handDisplayOrder = shiftHandCard(handDisplayOrder, card.uid, direction);
   handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = `已移动「${card.name}」。拖动卡牌或继续使用左右按钮。`;
@@ -5919,6 +6150,7 @@ function moveDisplayedHandCard(card, direction) {
 
 function placeDisplayedHandCard(sourceUid, targetUid) {
   const source = state.player.hand.find((card) => card?.uid === sourceUid);
+  handOrderMode = "custom";
   handDisplayOrder = placeHandCard(handDisplayOrder, sourceUid, targetUid);
   handPlacementUid = "";
   if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已移动「${source.name}」。`;
@@ -5942,6 +6174,7 @@ function tapDisplayedHandCard(card) {
 
 function sortDisplayedHandByType() {
   const cards = sortHandCardsByType(state.player.hand, handDisplayOrder);
+  handOrderMode = "type";
   handDisplayOrder = cards.map((card) => card.uid);
   handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = "已按怪兽、魔法、陷阱整理；怪兽按星级从高到低排列。";
@@ -5949,6 +6182,7 @@ function sortDisplayedHandByType() {
 }
 
 function resetDisplayedHandOrder() {
+  handOrderMode = "draw";
   handDisplayOrder = state.player.hand.map((card) => card.uid);
   handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = "已恢复当前手牌的摸牌顺序。";
@@ -5957,6 +6191,7 @@ function resetDisplayedHandOrder() {
 
 function toggleHandReorder() {
   handReorderMode = !handReorderMode;
+  if (handReorderMode) handOrderMode = "custom";
   handPlacementUid = "";
   if (els.handOrderStatus) {
     els.handOrderStatus.textContent = handReorderMode
@@ -5972,14 +6207,24 @@ function renderHand(animationKey) {
   const showToolbar = state.started && cards.length > 1;
   if (els.handToolbar) els.handToolbar.hidden = !showToolbar;
   if (els.handOrderStatus) els.handOrderStatus.hidden = !handReorderMode;
-  if (els.handSortType) els.handSortType.hidden = !handReorderMode;
+  if (els.handSortType) {
+    const typeSorting = handOrderMode === "type";
+    els.handSortType.hidden = !showToolbar;
+    els.handSortType.textContent = typeSorting ? "类型排序中" : "按类型";
+    els.handSortType.setAttribute("aria-pressed", String(typeSorting));
+    els.handSortType.title = typeSorting
+      ? "后续抽牌会继续按怪兽、魔法、陷阱归位；进入拖动排序可改为自定义顺序"
+      : "按怪兽、魔法、陷阱快速整理；后续抽牌会继续按类型归位";
+  }
   if (els.handResetOrder) els.handResetOrder.hidden = !handReorderMode;
   if (els.handReorderToggle) {
-    els.handReorderToggle.textContent = handReorderMode ? "完成整理" : "整理手牌";
+    els.handReorderToggle.textContent = handReorderMode ? "完成排序" : "拖动排序";
     els.handReorderToggle.setAttribute("aria-pressed", String(handReorderMode));
     els.handReorderToggle.disabled = !showToolbar;
   }
+  els.handToolbar?.setAttribute("data-order-mode", handOrderMode);
   els.hand?.setAttribute("data-reorder-mode", String(handReorderMode));
+  els.hand?.setAttribute("data-order-mode", handOrderMode);
   renderHandCards({
     document,
     root: els.hand,
@@ -6197,6 +6442,8 @@ els.choiceConfirmBtn.addEventListener("click", () => {
 });
 els.choiceCancelBtn.addEventListener("click", cancelSelectedHandAction);
 els.modeBtn.addEventListener("click", toggleSelectedMode);
+els.detailAttackBtn?.addEventListener("click", prepareSelectedMonsterAttack);
+els.detailSelectionCancelBtn?.addEventListener("click", cancelSelectedMonsterAction);
 els.fieldAttackBtn?.addEventListener("click", prepareSelectedMonsterAttack);
 els.fieldModeBtn?.addEventListener("click", toggleSelectedMode);
 els.fieldDetailBtn?.addEventListener("click", openSelectedMonsterDetail);
@@ -6214,6 +6461,7 @@ els.aiPanel.addEventListener("pointerenter", () => showSelectedAttackTargetPrevi
 els.aiPanel.addEventListener("pointerleave", restoreSelectedAttackPreview);
 els.aiPanel.addEventListener("focus", () => showSelectedAttackTargetPreview(-1));
 els.aiPanel.addEventListener("blur", restoreSelectedAttackPreview);
+window.addEventListener("resize", () => window.requestAnimationFrame(renderAttackRoutes));
 els.aiPanel.addEventListener("keydown", (event) => {
   if (!canPlayerTargetAiPanel() || !["Enter", " "].includes(event.key)) return;
   event.preventDefault();

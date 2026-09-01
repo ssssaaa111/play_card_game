@@ -110,9 +110,11 @@ export function renderHandCards({
     });
     const cardEl = createCardElement(document, card, { asset: assetForCard(card), handSummary: true });
     const detailEntry = handDetailEntryView(card, { reorderMode });
+    let suppressClick = false;
     cardEl.dataset.zone = "hand";
+    cardEl.dataset.cardUid = card.uid || "";
     cardEl.dataset.displayIndex = String(index);
-    cardEl.draggable = reorderMode;
+    cardEl.draggable = false;
     cardEl.classList.toggle("hand-reorder-card", reorderMode);
     cardEl.classList.toggle("hand-reorder-selected", reorderMode && reorderSelectedUid === card.uid);
     cardEl.setAttribute("aria-grabbed", "false");
@@ -173,28 +175,63 @@ export function renderHandCards({
       controls.append(left, right);
       cardEl.appendChild(controls);
 
-      cardEl.addEventListener("dragstart", (event) => {
-        event.dataTransfer?.setData("text/plain", card.uid);
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      let pointerDrag = null;
+      const clearPointerTargets = () => {
+        root.querySelectorAll(".is-drop-target").forEach((element) => element.classList.remove("is-drop-target"));
+      };
+      const beginPointerDrag = (event) => {
+        pointerDrag = {
+          pointerId: event.pointerId ?? null,
+          x: event.clientX,
+          y: event.clientY,
+          targetUid: "",
+          active: false
+        };
+      };
+      const updatePointerDrag = (event) => {
+        if (!pointerDrag) return;
+        if (!pointerDrag.active && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) < 6) return;
+        pointerDrag.active = true;
+        suppressClick = true;
         cardEl.classList.add("is-dragging");
         cardEl.setAttribute("aria-grabbed", "true");
+        clearPointerTargets();
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-zone="hand"]');
+        pointerDrag.targetUid = target && target !== cardEl ? target.dataset.cardUid || "" : "";
+        target?.classList.toggle("is-drop-target", Boolean(pointerDrag.targetUid));
+        event.preventDefault();
+      };
+      cardEl.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || event.target.closest("button")) return;
+        beginPointerDrag(event);
+        cardEl.setPointerCapture?.(event.pointerId);
       });
-      cardEl.addEventListener("dragend", () => {
+      cardEl.addEventListener("pointermove", (event) => {
+        if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+        updatePointerDrag(event);
+      });
+      const finishPointerDrag = (event) => {
+        if (!pointerDrag || (event.pointerId != null && pointerDrag.pointerId !== event.pointerId)) return;
+        const targetUid = pointerDrag.active ? pointerDrag.targetUid : "";
+        pointerDrag = null;
         cardEl.classList.remove("is-dragging");
         cardEl.setAttribute("aria-grabbed", "false");
-        root.querySelectorAll(".is-drop-target").forEach((element) => element.classList.remove("is-drop-target"));
-      });
-      cardEl.addEventListener("dragover", (event) => {
-        event.preventDefault();
-        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-        cardEl.classList.add("is-drop-target");
-      });
-      cardEl.addEventListener("dragleave", () => cardEl.classList.remove("is-drop-target"));
-      cardEl.addEventListener("drop", (event) => {
-        event.preventDefault();
-        cardEl.classList.remove("is-drop-target");
-        const sourceUid = event.dataTransfer?.getData("text/plain") || "";
-        onPlaceCard(sourceUid, card.uid);
+        clearPointerTargets();
+        if (targetUid) onPlaceCard(card.uid, targetUid);
+      };
+      cardEl.addEventListener("pointerup", finishPointerDrag);
+      cardEl.addEventListener("pointercancel", finishPointerDrag);
+      const mouseMoveHandler = (event) => updatePointerDrag(event);
+      const mouseUpHandler = (event) => {
+        finishPointerDrag(event);
+        document.removeEventListener("mousemove", mouseMoveHandler);
+        document.removeEventListener("mouseup", mouseUpHandler);
+      };
+      cardEl.addEventListener("mousedown", (event) => {
+        if (event.button !== 0 || event.target.closest("button")) return;
+        if (!pointerDrag) beginPointerDrag(event);
+        document.addEventListener("mousemove", mouseMoveHandler);
+        document.addEventListener("mouseup", mouseUpHandler, { once: true });
       });
       cardEl.addEventListener("keydown", (event) => {
         if (!["Enter", " "].includes(event.key)) return;
@@ -204,6 +241,10 @@ export function renderHandCards({
     }
 
     cardEl.addEventListener("click", () => {
+      if (reorderMode && suppressClick) {
+        suppressClick = false;
+        return;
+      }
       if (reorderMode) onTapCard(card);
       else onCardClick(card, index);
     });

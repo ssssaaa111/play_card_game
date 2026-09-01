@@ -636,6 +636,20 @@ test("ascension mission advances through independent sun and moon descents", () 
     total: 3
   });
 
+  const counterIntent = {
+    id: "rebuild-tributes",
+    eventId: 12,
+    turnGoal: "buildTributes",
+    label: "祭品重建",
+    text: "你切断了祭品；对手将优先补充公开祭品候选。"
+  };
+  const counteredOpening = campaignMissionView({
+    campaign: trialCampaign,
+    chapter,
+    bossIntent: counterIntent
+  });
+  assert.equal(counteredOpening.bossPhase.intent, counterIntent);
+
   const tributeBroken = campaignMissionView({
     campaign: trialCampaign,
     chapter,

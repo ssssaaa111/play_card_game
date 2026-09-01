@@ -1950,6 +1950,42 @@ test("tribute summon supports exact three-material divine costs", () => {
   assertValidGameState(next);
 });
 
+test("tribute events preserve public source templates and material kinds", () => {
+  const state = makeState({
+    cards: [
+      card("normal-1", { templateId: "nova-squire", type: "monster", atk: 1250, def: 1100 }),
+      card("token-1", { templateId: "spark-fragment-token", type: "monster", atk: 500, def: 500, token: true }),
+      card("fusion-1", { templateId: "flare-gale-archon", type: "monster", atk: 2400, def: 1800, summonRoute: "fusion" }),
+      card("divine-1", { templateId: "trio-sun-judicator", type: "monster", stars: 10, atk: 3600, def: 3000, tributeCost: 3 })
+    ],
+    player: {
+      hand: ["divine-1"],
+      monsterZone: ["normal-1", "token-1", "fusion-1"]
+    }
+  });
+  const engine = new GameEngine(state);
+
+  const events = engine.dispatch({
+    type: "SUMMON_MONSTER",
+    playerId: PLAYER,
+    cardId: "divine-1",
+    index: 0,
+    tributeCardIds: ["normal-1", "token-1", "fusion-1"]
+  });
+  const tributes = events.filter((event) => event.type === "CARD_TRIBUTED");
+
+  assert.deepEqual(tributes.map((event) => ({
+    cardTemplateId: event.cardTemplateId,
+    tributeKind: event.tributeKind,
+    destination: event.destination
+  })), [
+    { cardTemplateId: "nova-squire", tributeKind: "normal", destination: "grave" },
+    { cardTemplateId: "spark-fragment-token", tributeKind: "token", destination: "removed" },
+    { cardTemplateId: "flare-gale-archon", tributeKind: "fusion", destination: "grave" }
+  ]);
+  assertValidGameState(engine.getState());
+});
+
 test("three-material divine summon rejects partial tribute selection without changing state", () => {
   const state = makeState({
     cards: [

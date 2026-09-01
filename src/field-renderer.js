@@ -79,6 +79,39 @@ export function monsterFieldSlotView({
       && !attacksLocked
     );
   const attackReason = attackReadiness?.reason || "";
+  const fieldStateSuppressed = Boolean(
+    targetable
+    || targetSelected
+    || materialCandidate
+    || materialUnavailable
+    || splitCandidate
+    || splitUnavailable
+    || effectTargetState
+  ) && !selected;
+  const fieldState = owner !== "player" || !card || fieldStateSuppressed
+    ? ""
+    : selected
+      ? "selected"
+      : attackReady
+        ? "ready"
+        : attacksLocked
+          ? "locked"
+          : card.mode === "defense"
+            ? "defense"
+            : card.used
+              ? "spent"
+              : "";
+  const fieldStateLabel = fieldState === "selected"
+    ? "当前操作"
+    : fieldState === "ready"
+      ? "可攻击"
+      : fieldState === "locked"
+        ? card.attackLockReason ? "本回合禁攻" : "攻击锁定"
+        : fieldState === "defense"
+          ? "守备"
+          : fieldState === "spent"
+            ? "已行动"
+            : "";
   const animationClass = animationKey === `summon-${owner}-${index}`
     ? "summon-flash"
     : animationKey === `hit-${owner}-${index}`
@@ -95,6 +128,8 @@ export function monsterFieldSlotView({
     attacksLocked,
     attackReady,
     attackReason,
+    fieldState,
+    fieldStateLabel,
     animationClass,
     materialTarget,
     materialCandidate,
@@ -113,8 +148,9 @@ export function monsterFieldSlotView({
       ? (materialCandidate ? (materialSelected ? "selected" : "candidate") : "unavailable")
       : "",
     materialReason: materialTarget?.reason || "",
-    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${selected ? "，当前选中" : ""}${targetSelected ? "，已选择为效果目标" : ""}${interactionTarget?.reason ? `，${interactionTarget.reason}` : ""}`,
+    ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${selected ? "，当前选中" : fieldStateLabel ? `，${fieldStateLabel}` : ""}${targetSelected ? "，已选择为效果目标" : ""}${attackTargetable ? "，可作为攻击目标" : ""}${interactionTarget?.reason ? `，${interactionTarget.reason}` : ""}`,
     slotClasses: enabledClassEntries({
+      [`field-state-${fieldState}`]: Boolean(fieldState),
       targetable,
       "target-selected": targetSelected,
       "attack-target": attackTargetable,
@@ -303,6 +339,7 @@ export function renderMonsterZones({
     if (view.effectTargetState) slot.dataset.effectTargetState = view.effectTargetState;
     if (view.effectTargetReason) slot.dataset.effectTargetReason = view.effectTargetReason;
     if (view.effectTargetLabel) slot.dataset.effectTargetLabel = view.effectTargetLabel;
+    if (view.fieldState) slot.dataset.fieldState = view.fieldState;
     if (view.title) slot.title = view.title;
     if (attackReadiness) {
       slot.dataset.attackState = view.attackReady ? "ready" : "unavailable";
@@ -356,12 +393,12 @@ export function renderMonsterZones({
         onCardClick(index);
       });
       slot.appendChild(cardEl);
-      if (view.cardClasses.includes("selected")) {
-        const selectionChip = document.createElement("span");
-        selectionChip.className = "field-selection-chip";
-        selectionChip.textContent = "当前操作";
-        selectionChip.setAttribute("aria-hidden", "true");
-        slot.appendChild(selectionChip);
+      if (view.fieldStateLabel) {
+        const stateChip = document.createElement("span");
+        stateChip.className = `field-state-chip ${view.fieldState}${view.fieldState === "selected" ? " field-selection-chip" : ""}`;
+        stateChip.textContent = view.fieldStateLabel;
+        stateChip.setAttribute("aria-hidden", "true");
+        slot.appendChild(stateChip);
       }
     }
     fragment.appendChild(slot);

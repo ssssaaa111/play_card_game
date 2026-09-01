@@ -950,7 +950,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "triple-counter-chain"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "chain-resolution-review"\)/);
   assert.match(smoke, /const smokeName = "turn-handoff-basic";[\s\S]*"TURN_ENDED:ai"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
-  assert.match(smoke, /const smokeName = "phase-progression-basic";[\s\S]*event\.from === "main"[\s\S]*event\.to === "battle"[\s\S]*event\.type === "TURN_ENDED"[\s\S]*event\.fromPhase === "battle"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "phase-progression-basic";[\s\S]*phaseStage\?\.dataset\.phase === "main"[\s\S]*event\.from === "main"[\s\S]*event\.to === "battle"[\s\S]*phaseStage\?\.dataset\.phase === "battle"[\s\S]*event\.type === "TURN_ENDED"[\s\S]*event\.fromPhase === "battle"[\s\S]*phaseStage\?\.dataset\.phase === "end"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /const smokeName = "phase-window-ownership-basic";[\s\S]*event\.reason === "phase-entered:main"[\s\S]*event\.reason === "phase-entered:battle"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "mode-auto-end"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "ai-mode-event"\)/);
@@ -1108,7 +1108,7 @@ test("browser test attacks preserve production timing and field portraits stay v
   assert.match(app, /window\.setTimeout\(resolve, ms\)/);
   assert.doesNotMatch(app, /BROWSER_TEST_SLEEP_CAP_MS/);
   assert.doesNotMatch(app, /!BROWSER_TEST_MODE\) await sleep/);
-  assert.match(css, /\.field-monster-card\s*\{[\s\S]*height: min\(100%, clamp\(190px, 20dvh, 320px\)\);[\s\S]*overflow: hidden;[\s\S]*aspect-ratio: 0\.68;[\s\S]*grid-template-rows: 18px minmax\(32px, 1fr\) 15px 18px;/);
+  assert.match(css, /\.field-monster-card\s*\{[\s\S]*--field-stats-height: 24px;[\s\S]*height: min\(100%, clamp\(190px, 20dvh, 320px\)\);[\s\S]*overflow: hidden;[\s\S]*aspect-ratio: 0\.68;[\s\S]*grid-template-columns: minmax\(0, 1fr\);[\s\S]*grid-template-rows: 18px minmax\(32px, 1fr\) 20px var\(--field-stats-height\);/);
   assert.match(css, /\.field-monster-card \.art\s*\{[\s\S]*overflow: hidden;[\s\S]*isolation: isolate;/);
   assert.match(css, /\.field-monster-card \.monster-projection\s*\{[\s\S]*width: 100%;[\s\S]*height: 100%;/);
   assert.match(css, /\.field-monster-card \.card-text\s*\{[\s\S]*display: none;/);
@@ -1139,7 +1139,7 @@ test("app uses extracted card details", () => {
   const html = readProjectFile("index.html");
 
   assert.match(app, /from '\.\/card-detail\.js'/);
-  assert.match(app, /cardInspectorViewModel\(card, \{ effectMarkers: focusedCardEffectMarkers\(card\) \}\)/);
+  assert.match(app, /cardInspectorViewModel\(currentCard, \{ effectMarkers: focusedCardEffectMarkers\(currentCard\) \}\)/);
   assert.match(app, /cardInspectorViewModel\(cardOrId, \{ effectMarkers: focusedCardEffectMarkers/);
   assert.doesNotMatch(app, /renderCurrentLog\(\{/);
   assert.doesNotMatch(html, /id="log"/);
@@ -1224,7 +1224,7 @@ test("app uses extracted spell metadata", () => {
   assert.match(app, /canSummon: \(_card, handIndex, options\) => explainSummonMonsterFromUiState\(/);
   assert.match(app, /canSetTrap: \(_card, handIndex, trapIndex\) =>/);
   assert.match(app, /canAttackMonster: \(_card, fieldIndex\) =>/);
-  assert.match(app, /dispatchChangePhaseFromUiState\(state, "ai", PHASES\.battle\);\s+await aiAttack\(\{ getTurnGoal: chooseLiveAiTurnGoal \}\);/);
+  assert.match(app, /const phaseEvents = dispatchChangePhaseFromUiState\(state, "ai", PHASES\.battle\);\s+queuePhaseStageEvents\(phaseEvents\);\s+await aiAttack\(\{ getTurnGoal: chooseLiveAiTurnGoal \}\);/);
   assert.doesNotMatch(app, /setActionWindow\(ACTION_WINDOWS\.ai, \{ playerId: "ai", reason: "ai battle" \}\)/);
   assert.match(ai, /scoreSpellForAi\(card\.effect/);
   assert.doesNotMatch(app, /validateSpellCondition/);

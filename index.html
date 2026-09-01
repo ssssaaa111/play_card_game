@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20260812-unified-card-detail" />
-  <link rel="stylesheet" href="duel-table.css?v=20260820-boss-phase-reward" />
+  <link rel="stylesheet" href="styles.css?v=20260901-field-clearance-1" />
+  <link rel="stylesheet" href="duel-table.css?v=20260901-field-clearance-1" />
 </head>
 <body>
   <div id="app">
@@ -57,6 +57,11 @@
     </header>
 
     <main class="arena duel-table">
+      <section class="versus-stage" id="versusStage" aria-label="双方对战状态" data-actor="idle">
+        <span class="versus-turn" id="versusTurn">DUEL READY</span>
+        <strong class="versus-mark" aria-hidden="true"><i>V</i><i>S</i></strong>
+        <span class="versus-phase" id="versusPhase" aria-live="polite">准备决斗</span>
+      </section>
       <aside class="side enemy duel-hud" aria-label="对手状态">
         <section class="player-card" id="aiPanel">
           <div class="duelist-face">
@@ -78,8 +83,8 @@
           </div>
         </section>
         <section class="piles">
-          <div class="pile"><span><strong id="aiDeckCount">0</strong>卡组</span></div>
-          <div class="pile"><span><strong id="aiGraveCount">0</strong>墓地</span></div>
+          <div class="pile"><span><small>牌库</small><strong id="aiDeckCount">0</strong></span></div>
+          <div class="pile"><span><small>墓地</small><strong id="aiGraveCount">0</strong></span></div>
         </section>
       </aside>
 
@@ -90,6 +95,7 @@
         <div class="trap-row" id="playerTraps"></div>
         <div class="zone-row" id="playerField"></div>
       </section>
+      <div class="attack-route-layer" id="attackRouteLayer" aria-hidden="true" hidden></div>
 
       <aside class="side duel-hud" aria-label="玩家状态">
         <section class="player-card" id="playerPanel">
@@ -113,8 +119,8 @@
           </div>
         </section>
         <section class="piles">
-          <div class="pile"><span><strong id="playerDeckCount">0</strong>卡组</span></div>
-          <div class="pile"><span><strong id="playerGraveCount">0</strong>墓地</span></div>
+          <div class="pile"><span><small>牌库</small><strong id="playerDeckCount">0</strong></span></div>
+          <div class="pile"><span><small>墓地</small><strong id="playerGraveCount">0</strong></span></div>
         </section>
         <section class="campaign-mission" id="campaignMission" aria-label="章节目标" aria-live="polite" hidden>
           <div class="campaign-mission-head">
@@ -129,77 +135,94 @@
         </section>
       </aside>
 
-      <section class="detail workspace-drawer detail-drawer" id="detailDrawer" aria-label="卡牌与战斗详情">
-        <div class="workspace-drawer-head">
-          <div>
-            <span class="workspace-drawer-kicker">战术面板</span>
-            <strong id="detailDrawerTitle">卡牌详情</strong>
-          </div>
-          <button class="drawer-close" id="detailDrawerClose" type="button" aria-label="收起卡牌详情">×</button>
-        </div>
-        <div class="detail-card">
-          <h2 id="detailName">选择一张卡</h2>
-          <p id="detailText">点击手牌可以查看效果。选择怪兽后点自己的空召唤区召唤，选择场上怪兽后点敌方怪兽攻击；可直击时点敌方角色发动直接攻击。</p>
-          <div class="detail-inspector" id="detailInspector" hidden>
-            <div class="detail-summary" id="detailSummary"></div>
-            <div class="detail-effect-block">
-              <span class="detail-section-label">完整效果</span>
-              <p class="detail-effect" id="detailEffect"></p>
+      <section class="workspace-deck" id="workspaceDeck" aria-label="战术指挥台">
+        <section class="detail workspace-drawer detail-drawer" id="detailDrawer" aria-label="卡牌与战斗详情">
+          <div class="workspace-drawer-head">
+            <div>
+              <span class="workspace-drawer-kicker">战术面板</span>
+              <strong id="detailDrawerTitle">卡牌详情</strong>
             </div>
-            <dl class="detail-meta" id="detailMeta"></dl>
+            <button class="drawer-close" id="detailDrawerClose" type="button" aria-label="收起卡牌详情">×</button>
           </div>
-          <div class="detail-actions">
-            <button class="btn small-action primary" id="handConfirmBtn" type="button" hidden>确认</button>
-            <button class="btn small-action" id="handCancelBtn" type="button" hidden>取消</button>
-            <button class="btn small-action" id="modeBtn" type="button">切换表示</button>
-            <button class="btn small-action" id="detailBtn" type="button">查看详情</button>
+          <div class="detail-card">
+            <h2 id="detailName">选择一张卡</h2>
+            <p id="detailText">点击手牌可以查看效果。选择怪兽后点自己的空召唤区召唤，选择场上怪兽后点敌方怪兽攻击；可直击时点敌方角色发动直接攻击。</p>
+            <div class="detail-inspector" id="detailInspector" hidden>
+              <div class="detail-summary" id="detailSummary"></div>
+              <div class="detail-effect-block">
+                <span class="detail-section-label">完整效果</span>
+                <p class="detail-effect" id="detailEffect"></p>
+              </div>
+              <dl class="detail-meta" id="detailMeta"></dl>
+            </div>
+            <div class="detail-actions">
+              <button class="btn small-action primary" id="handConfirmBtn" type="button" hidden>确认</button>
+              <button class="btn small-action" id="handCancelBtn" type="button" hidden>取消</button>
+              <button class="btn small-action primary" id="detailAttackBtn" type="button" hidden>攻击</button>
+              <button class="btn small-action" id="modeBtn" type="button">切换表示</button>
+              <button class="btn small-action" id="detailBtn" type="button">查看详情</button>
+              <button class="btn small-action" id="detailSelectionCancelBtn" type="button" hidden>取消</button>
+            </div>
+            <div class="battle-preview empty" id="battlePreview" aria-live="polite"></div>
           </div>
-          <div class="battle-preview empty" id="battlePreview" aria-live="polite"></div>
-        </div>
-        <p class="tip">每回合可通常召唤 1 只怪兽。怪兽召唤当回合即可攻击，魔法卡可从手牌发动。</p>
-      </section>
+          <p class="tip">每回合可通常召唤 1 只怪兽。怪兽召唤当回合即可攻击，魔法卡可从手牌发动。</p>
+        </section>
 
-      <section class="timeline workspace-drawer timeline-drawer" id="timelineDrawer" aria-label="战斗记录">
-        <div class="timeline-head workspace-drawer-head">
-          <div>
-            <span class="workspace-drawer-kicker">BATTLE CHRONICLE</span>
-            <strong>战局时间线</strong>
+        <section class="timeline workspace-drawer timeline-drawer" id="timelineDrawer" aria-label="战斗记录">
+          <div class="timeline-head workspace-drawer-head">
+            <div>
+              <span class="workspace-drawer-kicker">BATTLE CHRONICLE</span>
+              <strong>战局时间线</strong>
+            </div>
+            <span class="timeline-meta">
+              <span class="timeline-audit ok" id="timelineAudit">审计 OK</span>
+              <span class="timeline-total"><strong id="timelineCount">0</strong> 条</span>
+            </span>
+            <button class="drawer-close" id="timelineDrawerClose" type="button" aria-label="收起战斗记录">×</button>
           </div>
-          <span class="timeline-meta">
-            <span class="timeline-audit ok" id="timelineAudit">审计 OK</span>
-            <span class="timeline-total"><strong id="timelineCount">0</strong> 条</span>
-          </span>
-          <button class="drawer-close" id="timelineDrawerClose" type="button" aria-label="收起战斗记录">×</button>
-        </div>
-        <div class="timeline-overview" aria-label="战局摘要">
-          <div>
-            <span>最新节点</span>
-            <strong id="timelineLatestStep">—</strong>
+          <div class="timeline-overview" aria-label="战局摘要">
+            <div>
+              <span>最新节点</span>
+              <strong id="timelineLatestStep">—</strong>
+            </div>
+            <div>
+              <span>最近事件</span>
+              <strong id="timelineLatestKind">等待开局</strong>
+            </div>
+            <div>
+              <span>关键行动</span>
+              <strong id="timelineActionCount">0</strong>
+            </div>
           </div>
-          <div>
-            <span>最近事件</span>
-            <strong id="timelineLatestKind">等待开局</strong>
+          <div class="timeline-toolbar">
+            <div class="timeline-filters" aria-label="筛选战斗记录">
+              <button type="button" data-timeline-filter="all" aria-pressed="true">全部</button>
+              <button type="button" data-timeline-filter="battle" aria-pressed="false">战斗</button>
+              <button type="button" data-timeline-filter="cards" aria-pressed="false">卡牌</button>
+              <button type="button" data-timeline-filter="system" aria-pressed="false">系统</button>
+            </div>
+            <div class="timeline-view-controls" aria-label="调整时间线显示">
+              <span>日志缩放</span>
+              <button id="timelineZoomOut" type="button" aria-label="缩小时间线文字">A−</button>
+              <output id="timelineZoomValue" for="timelineZoomOut timelineZoomIn" aria-live="polite">100%</output>
+              <button id="timelineZoomIn" type="button" aria-label="放大时间线文字">A＋</button>
+            </div>
           </div>
-          <div>
-            <span>关键行动</span>
-            <strong id="timelineActionCount">0</strong>
-          </div>
-        </div>
-        <div class="timeline-filters" aria-label="筛选战斗记录">
-          <button type="button" data-timeline-filter="all" aria-pressed="true">全部</button>
-          <button type="button" data-timeline-filter="battle" aria-pressed="false">战斗</button>
-          <button type="button" data-timeline-filter="cards" aria-pressed="false">卡牌</button>
-          <button type="button" data-timeline-filter="system" aria-pressed="false">系统</button>
-        </div>
-        <button class="chain-history-toggle" id="chainHistoryToggle" type="button" aria-expanded="false" hidden>
-          <span class="chain-history-toggle-copy">
-            <strong>连锁复盘</strong>
-            <small>查看发动顺序与逆序结算</small>
-          </span>
-          <span class="chain-history-count" id="chainHistoryCount">0</span>
-        </button>
-        <div class="chain-history-list" id="chainHistoryList" hidden></div>
-        <div class="timeline-list" id="timeline"></div>
+          <button class="chain-history-toggle" id="chainHistoryToggle" type="button" aria-expanded="false" hidden>
+            <span class="chain-history-toggle-copy">
+              <strong>连锁复盘</strong>
+              <small>查看发动顺序与逆序结算</small>
+            </span>
+            <span class="chain-history-count" id="chainHistoryCount">0</span>
+          </button>
+          <div class="chain-history-list" id="chainHistoryList" hidden></div>
+          <div class="timeline-list" id="timeline" aria-label="战斗记录，可按住拖动浏览" tabindex="0"></div>
+          <button class="timeline-follow-latest" id="timelineFollowLatest" type="button" hidden>
+            <span>回到最新</span>
+            <strong id="timelinePendingCount">0</strong>
+            <small>条新记录</small>
+          </button>
+        </section>
       </section>
 
       <nav class="workspace-tabs" aria-label="战术面板">
@@ -230,9 +253,9 @@
       <div class="hand-stack">
         <div class="hand-toolbar" id="handToolbar" hidden>
           <span id="handOrderStatus" hidden>拖动卡牌，或使用卡牌上的左右按钮调整顺序。</span>
-          <button class="btn ghost hand-order-shortcut" id="handSortType" type="button" hidden>按类型整理</button>
+          <button class="btn ghost hand-order-shortcut" id="handSortType" type="button" hidden aria-pressed="false" title="按怪兽、魔法、陷阱快速整理；后续抽牌会继续按类型归位">按类型</button>
           <button class="btn ghost hand-order-shortcut" id="handResetOrder" type="button" hidden>恢复摸牌顺序</button>
-          <button class="btn ghost hand-reorder-toggle" id="handReorderToggle" type="button" aria-pressed="false">整理手牌</button>
+          <button class="btn ghost hand-reorder-toggle" id="handReorderToggle" type="button" aria-pressed="false" title="进入后可直接拖动卡牌换位">拖动排序</button>
         </div>
         <div class="hand" id="hand"></div>
         <div class="grave-targets" id="graveTargets" hidden></div>
@@ -260,6 +283,7 @@
             <strong id="fieldActionName">怪兽</strong>
             <span id="fieldActionStatus" aria-live="polite">选择下一步行动</span>
           </span>
+          <div class="battle-preview field-battle-preview empty" id="fieldBattlePreview" data-preview-variant="field-battle-preview" aria-live="polite"></div>
           <button class="field-action-btn field-attack-btn" id="fieldAttackBtn" type="button">
             <span class="field-action-icon" aria-hidden="true">⚔</span>
             <span id="fieldAttackLabel">攻击</span>
@@ -270,7 +294,7 @@
           </button>
           <button class="field-action-btn field-detail-btn" id="fieldDetailBtn" type="button" aria-label="查看所选怪兽详情">
             <span class="field-action-icon" aria-hidden="true">◇</span>
-            <span>卡牌</span>
+            <span>详情</span>
           </button>
           <button class="field-action-btn field-cancel-btn" id="fieldCancelBtn" type="button">
             <span class="field-action-icon" aria-hidden="true">×</span>
@@ -300,6 +324,14 @@
   </div>
 
     <div class="toast" id="toast"></div>
+    <div class="phase-stage" id="phaseStage" data-active="false" hidden aria-live="polite" aria-atomic="true">
+      <div class="phase-stage-frame">
+        <span class="phase-stage-code" data-phase-stage-code>DRAW PHASE</span>
+        <strong class="phase-stage-title" data-phase-stage-title>抽卡阶段</strong>
+        <span class="phase-stage-actor" data-phase-stage-actor>你的回合</span>
+        <span class="phase-stage-detail" data-phase-stage-detail>确认新抽卡，规划本回合突破口</span>
+      </div>
+    </div>
     <div class="effect-layer" id="effectLayer"></div>
     <div class="ace-overlay" id="aceOverlay">
     <div class="ace-card">
@@ -572,7 +604,7 @@
     </div>
   </div>
 
-  <script type="module" src="src/duel-table.js?v=20260819-settings-menu"></script>
-  <script type="module" src="src/app.js?v=20260820-boss-phase-reward"></script>
+  <script type="module" src="src/duel-table.js?v=20260901-field-clearance-1"></script>
+  <script type="module" src="src/app.js?v=20260901-field-clearance-1"></script>
 </body>
 </html>

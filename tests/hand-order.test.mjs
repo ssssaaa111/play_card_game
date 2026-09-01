@@ -47,6 +47,21 @@ test("type sorting groups the displayed hand while preserving relative order and
   assert.deepEqual(ruleHand, before, "type sorting must not mutate the engine hand array");
 });
 
+test("type sorting places a newly drawn card into its group without disturbing prior group order", () => {
+  const initial = [
+    { ...card("monster"), type: "monster", stars: 4 },
+    { ...card("spell-a"), type: "spell" },
+    { ...card("trap"), type: "trap" }
+  ];
+  const preferredOrder = sortHandCardsByType(initial).map((entry) => entry.uid);
+  const afterDraw = [...initial, { ...card("spell-b"), type: "spell" }];
+
+  assert.deepEqual(
+    sortHandCardsByType(afterDraw, preferredOrder).map((entry) => entry.uid),
+    ["monster", "spell-a", "spell-b", "trap"]
+  );
+});
+
 test("tap placement selects, cancels, then emits an explicit source and target", () => {
   assert.deepEqual(handPlacementTap("", "a"), { selectedUid: "a", placement: null });
   assert.deepEqual(handPlacementTap("a", "a"), { selectedUid: "", placement: null });

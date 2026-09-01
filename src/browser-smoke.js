@@ -375,10 +375,17 @@ function selectScenario(els, scenarioId) {
   els.scenarioSelect.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-async function startSmokeDuel(ctx, scenarioId) {
+async function startSmokeDuel(ctx, scenarioId, { battleScenarioId = scenarioId } = {}) {
   selectScenario(ctx.els, scenarioId);
   clickSmokeElement(ctx.els.modal?.classList.contains("show") ? ctx.els.modalRestart : ctx.els.startBtn, "开始按钮");
-  await waitForSmoke(() => ctx.state.started && ctx.state.turn === "player" && ctx.state.phase === "main" && !ctx.state.pendingOpeningDraw, "玩家主阶段");
+  await waitForSmoke(
+    () => ctx.state.started &&
+      ctx.state.scenarioId === battleScenarioId &&
+      ctx.state.turn === "player" &&
+      ctx.state.phase === "main" &&
+      !ctx.state.pendingOpeningDraw,
+    `玩家主阶段（${battleScenarioId}）`
+  );
 }
 
 function assertScenarioBrief(els, { difficulty, objectives = [], hints = [] }) {
@@ -1154,6 +1161,21 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
     `${smokeName}: exactly three tribute bodies remain. ${smokeDebug(ctx)}`,
     12000
   );
+  await waitForSmoke(
+    () => ctx.els.campaignMission?.querySelector(
+      '.campaign-boss-intent[data-boss-intent="rebuild-tributes"]'
+    )?.textContent.includes("祭品重建"),
+    `${smokeName}: destroying a tribute publishes the boss rebuild intent. ${smokeDebug(ctx)}`,
+    6000
+  );
+  if (!ctx.els.campaignMission?.querySelector(".campaign-boss-counter")?.textContent.includes("继续清理衍生物")) {
+    throw new Error(`${smokeName}: campaign rail must publish a concrete counter hint. ${smokeDebug(ctx)}`);
+  }
+  if (!(ctx.state.log || []).some((entry) =>
+    logEntryMessage(entry).includes("Boss 反制意图：祭品重建")
+  )) {
+    throw new Error(`${smokeName}: public log must announce the rebuild counter plan. ${smokeDebug(ctx)}`);
+  }
   await finishPlayerTurn(ctx);
   await waitForSmoke(
     () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
@@ -1189,6 +1211,205 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
   if (!ctx.state.storyBeatsFired?.["ascension-opening-tribute-broken"] ||
       !ctx.state.storyBeatsFired?.["ascension-sun-descends"]) {
     throw new Error(`${smokeName}: opening and first-descent story beats must fire. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioAdaptiveCounterBasicSmoke(ctx) {
+  const smokeName = "trio-adaptive-counter-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioAdaptiveCounterPlanning");
+  const attacker = ctx.state.player.field.find((card) => card?.id === "solar-vanguard");
+  const moon = ctx.state.ai.field.find((card) => card?.id === "trio-moon-warden");
+  const negate = ctx.state.ai.traps.find((card) => card?.id === "void-lock");
+  if (!attacker || !moon || !negate) {
+    throw new Error(`${smokeName}: deterministic counter setup is incomplete. ${smokeDebug(ctx)}`);
+  }
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "solar-vanguard"), `${smokeName}: select the probing attacker`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"),
+    `${smokeName}: moon becomes a real click target`
+  );
+  clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}: directly challenge moon`);
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.classList.contains("show") &&
+      ctx.els.aiRevealTitle?.textContent.includes("星界封锁"),
+    `${smokeName}: moon reveals its attack negate`,
+    12000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue the negate reveal`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.uid === attacker.uid && card.used) &&
+      ctx.state.ai.field.some((card) => card?.uid === moon.uid) &&
+      ctx.state.ai.grave.some((card) => card?.uid === negate.uid) &&
+      ctx.state.actionWindow === "battle" &&
+      !ctx.els.endTurnBtn.disabled,
+    `${smokeName}: the negate consumes the probe while moon survives. ${smokeDebug(ctx)}`,
+    14000
+  );
+  const godAttack = (ctx.state.gameEvents || []).find((event) =>
+    event.type === "ATTACK_DECLARED" &&
+    event.playerId === "player" &&
+    event.attackerCardId === attacker.uid &&
+    event.targetCardId === moon.uid
+  );
+  if (!godAttack) {
+    throw new Error(`${smokeName}: direct god challenge must emit ATTACK_DECLARED. ${smokeDebug(ctx)}`);
+  }
+  if (!(ctx.state.log || []).some((entry) =>
+    logEntryMessage(entry).includes("Boss 反制意图：神体守护")
+  )) {
+    throw new Error(`${smokeName}: direct scenario entry must publish the fortification intent. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.ai.field.some((card) => card?.uid === moon.uid && card.mode === "defense") &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "MONSTER_MODE_CHANGED" && event.playerId === "ai" && event.cardId === moon.uid
+      ),
+    `${smokeName}: adaptive boss changes moon to defense through the rules engine. ${smokeDebug(ctx)}`,
+    20000
+  );
+  if (!ctx.state.player.field.some((card) => card?.uid === attacker.uid) ||
+      !(ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("Boss 识破直攻路线"))) {
+    throw new Error(`${smokeName}: defense switch must answer the surviving 2300 ATK threat and be public. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioPhaseTransitionBasicSmoke(ctx) {
+  const smokeName = "trio-phase-transition-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioPhaseTransitionPlanning");
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => aiRevealVisible(ctx.els, "trio-sun-judicator"),
+    `${smokeName}: sun reaches the public reveal`,
+    18000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue sun reveal`);
+  await waitForSmoke(
+    () => [...(ctx.els.timeline?.querySelectorAll(".timeline-item.phase") || [])]
+      .some((item) => item.textContent.includes("第一神已降临") && item.textContent.includes("第二次建设开始")),
+    `${smokeName}: phase transition enters the public timeline. ${smokeDebug(ctx)}`,
+    8000
+  );
+
+  const transitionItem = [...ctx.els.timeline.querySelectorAll(".timeline-item.phase")]
+    .find((item) => item.textContent.includes("第一神已降临"));
+  const transitionText = transitionItem?.textContent || "";
+  const timelineRect = ctx.els.timeline.getBoundingClientRect();
+  const transitionRect = transitionItem?.getBoundingClientRect();
+  const transitionEventRect = transitionItem?.querySelector(".timeline-event")?.getBoundingClientRect();
+  const nextItemRect = transitionItem?.nextElementSibling?.getBoundingClientRect();
+  if (!transitionRect || !transitionEventRect ||
+      transitionRect.width > timelineRect.width + 1 ||
+      transitionEventRect.bottom > transitionRect.bottom + 1 ||
+      (nextItemRect && transitionRect.bottom > nextItemRect.top + 1)) {
+    throw new Error(
+      `${smokeName}: transition timeline node must contain its content without overlapping the next row ` +
+      `(timeline=${timelineRect.width}, item=${transitionRect?.width}x${transitionRect?.height}, ` +
+      `eventBottom=${transitionEventRect?.bottom}, itemBottom=${transitionRect?.bottom}, nextTop=${nextItemRect?.top})`
+    );
+  }
+  if (ctx.els.toast?.textContent.includes("第一神已降临")) {
+    throw new Error(`${smokeName}: boss transition should use one consolidated announcement instead of a duplicate toast`);
+  }
+  for (const fragment of [
+    "普通怪兽 ×1",
+    "衍生物 ×1",
+    "融合怪兽 ×1",
+    "新星侍从",
+    "星火衍生体",
+    "焰岚合星者"
+  ]) {
+    if (!transitionText.includes(fragment)) {
+      throw new Error(`${smokeName}: transition is missing ${fragment}. ${transitionText}`);
+    }
+  }
+  for (const cardId of [
+    "trio-sun-judicator",
+    "nova-squire",
+    "spark-fragment-token",
+    "flare-gale-archon"
+  ]) {
+    if (!transitionItem?.querySelector(`.timeline-card-link[data-card-id="${cardId}"]`)) {
+      throw new Error(`${smokeName}: public transition card ${cardId} is not inspectable.`);
+    }
+  }
+  clickSmokeElement(
+    transitionItem.querySelector('.timeline-card-link[data-card-id="flare-gale-archon"]'),
+    `${smokeName}: inspect fusion tribute from the timeline`
+  );
+  await assertCardDetailModal(ctx, cloneCardById("flare-gale-archon"), smokeName);
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioBackrowCounterBasicSmoke(ctx) {
+  const smokeName = "trio-backrow-counter-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioBackrowCounterPlanning");
+  clickSmokeElement(handCard(ctx.els, "trio-solar-snare"), `${smokeName}: select the new trap`);
+  clickSmokeElement(trapSlot(ctx.els, "player", 0), `${smokeName}: set it in the first support slot`);
+  await waitForSmoke(
+    () => ctx.state.player.traps.some((card) => card?.id === "trio-solar-snare") &&
+      (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("Boss 反制意图：后场戒备")),
+    `${smokeName}: the real set click publishes the backrow intent. ${smokeDebug(ctx)}`,
+    8000
+  );
+  const freshTrap = ctx.state.player.traps.find((card) => card?.id === "trio-solar-snare");
+  if (!(ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("先用低价值陷阱逼出断链"))) {
+    throw new Error(`${smokeName}: the public log must include the backrow counter hint. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.state.ai.traps.some((card) => card?.id === "chain-nullifier") &&
+      (ctx.state.gameEvents || []).some((event) =>
+        event.type === "AFTER_ATTACK_TARGET_LOCKED" && event.targetCardId === freshTrap?.uid
+      ),
+    `${smokeName}: chain protection is set before sun locks the latest public slot. ${smokeDebug(ctx)}`,
+    26000
+  );
+  if (!ctx.state.ai.hand.some((card) => card?.id === "mirror-snare") ||
+      !(ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("为最新后场戒备建立断链保护"))) {
+    throw new Error(`${smokeName}: chain protection must outrank mirror snare and explain itself. ${smokeDebug(ctx)}`);
+  }
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runTrioRushFinaleBasicSmoke(ctx) {
+  const smokeName = "trio-rush-finale-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioRushFinalePlanning");
+  if (!(ctx.state.log || []).some((entry) =>
+    logEntryMessage(entry).includes("Boss 反制意图：抢攻终结") &&
+    logEntryMessage(entry).includes("先抬高护盾")
+  )) {
+    throw new Error(`${smokeName}: phase-three pressure and its answer must be public. ${smokeDebug(ctx)}`);
+  }
+
+  await finishPlayerTurn(ctx);
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.classList.contains("show") &&
+      ctx.els.aiRevealTitle?.textContent.includes("战斗狂热"),
+    `${smokeName}: offensive acceleration is revealed before defensive support. ${smokeDebug(ctx)}`,
+    18000
+  );
+  clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue battle trance reveal`);
+  await waitForSmoke(
+    () => (ctx.state.ai.field.find((card) => card?.id === "trio-star-herald")?.tempAtk || 0) === 200 &&
+      (ctx.state.log || []).some((entry) => logEntryMessage(entry).includes("把资源转为立即进攻")),
+    `${smokeName}: battle trance resolves as the explained finale acceleration. ${smokeDebug(ctx)}`,
+    9000
+  );
+  const activations = (ctx.state.gameEvents || []).filter((event) =>
+    event.type === "CARD_ACTIVATED" && event.playerId === "ai"
+  );
+  if (!eventReferencesTemplate(activations[0], "battle-trance")) {
+    throw new Error(`${smokeName}: battle trance must be the first activated support. ${smokeDebug(ctx)}`);
   }
   setSmokeStatus("passed", smokeName);
 }
@@ -3104,7 +3325,7 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
   const arena = document.querySelector(".arena.duel-table");
   const handPanel = document.querySelector(".hand-panel");
   const handCommand = document.querySelector("#handCommand");
-  if (!topbar || !brand || !arena || !handPanel || !handCommand) {
+  if (!topbar || !brand || !arena || !handPanel || !handCommand || !ctx.els.fieldBattlePreview) {
     throw new Error("duel-layout-density-basic: required desktop regions are missing");
   }
   if (window.innerWidth <= 1040) {
@@ -3200,6 +3421,38 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
     throw new Error(`duel-layout-density-basic: field action buttons leave the hand panel (${fieldActionBottom}/${handPanel.getBoundingClientRect().bottom})`);
   }
 
+  clickSmokeElement(ctx.els.fieldAttackBtn, "duel-layout-density-basic: enter attack target selection");
+  await waitForSmoke(
+    () => ["intent", "target"].includes(ctx.els.fieldBattlePreview.dataset.previewMode) &&
+      !ctx.els.fieldBattlePreview.classList.contains("empty"),
+    "duel-layout-density-basic: compact attack preview opens"
+  );
+  const attackTarget = ctx.els.aiField.querySelector(".slot.attack-target");
+  if (!attackTarget) {
+    throw new Error("duel-layout-density-basic: attack target highlight is missing");
+  }
+  attackTarget.focus();
+  await waitForSmoke(
+    () => ctx.els.fieldBattlePreview.dataset.previewMode === "target" &&
+      Boolean(ctx.els.fieldBattlePreview.querySelector(".battle-preview-versus")),
+    "duel-layout-density-basic: compact exact target comparison"
+  );
+  const compactPreviewRect = ctx.els.fieldBattlePreview.getBoundingClientRect();
+  if (compactPreviewRect.bottom > handPanel.getBoundingClientRect().bottom + 1 ||
+      ctx.els.fieldBattlePreview.scrollHeight > Math.ceil(compactPreviewRect.height) + 1) {
+    throw new Error(
+      `duel-layout-density-basic: compact attack preview overflows the command dock ` +
+      `(mode=${ctx.els.fieldBattlePreview.dataset.previewMode}, ` +
+      `height=${compactPreviewRect.height}, scrollHeight=${ctx.els.fieldBattlePreview.scrollHeight}, ` +
+      `bottom=${compactPreviewRect.bottom}, handBottom=${handPanel.getBoundingClientRect().bottom})`
+    );
+  }
+
+  clickSmokeElement(ctx.els.fieldCancelBtn, "duel-layout-density-basic: cancel attack target selection");
+  await waitForSmoke(
+    () => ctx.els.fieldBattlePreview.classList.contains("empty") && ctx.state.attackIntentIndex === null,
+    "duel-layout-density-basic: compact attack preview closes"
+  );
   clickSmokeElement(ctx.els.fieldCancelBtn, "duel-layout-density-basic: cancel field command");
   await waitForSmoke(
     () => handPanel.dataset.commandActive === "false" && ctx.els.fieldActionBar.hidden,
@@ -5615,7 +5868,9 @@ async function runTrioOmegaFinaleRushSmoke(ctx) {
 async function runTrioGauntletSmoke(ctx) {
   const smokeName = "trio-gauntlet-demo";
   setSmokeStatus("running", smokeName);
-  await startSmokeDuel(ctx, "protagonistTrioGauntlet");
+  await startSmokeDuel(ctx, "protagonistTrioGauntlet", {
+    battleScenarioId: "protagonistTrioOmegaStory"
+  });
   const storyLog = () => (ctx.state.log || []).map(logEntryMessage).join(" ");
   const waitChapter = (scenarioId, chapterIndex) => waitForSmoke(
     () => ctx.state.scenarioId === scenarioId &&
@@ -8366,6 +8621,13 @@ async function runPhaseProgressionBasicSmoke(ctx) {
   const smokeName = "phase-progression-basic";
   setSmokeStatus("running", smokeName);
   await startSmokeDuel(ctx, "direct");
+  await waitForSmoke(
+    () => ctx.els.phaseStage?.dataset.phase === "main",
+    `${smokeName}: draw-to-main event reaches the stage cue`
+  );
+  if (getComputedStyle(ctx.els.phaseStage).pointerEvents !== "none") {
+    throw new Error(`${smokeName}: phase stage must not intercept duel clicks. ${smokeDebug(ctx)}`);
+  }
 
   const eventStart = (ctx.state.gameEvents || []).length;
   clickSmokeElement(ctx.els.skipAttackBtn, `${smokeName}: enter battle by skipping attacks`);
@@ -8378,6 +8640,10 @@ async function runPhaseProgressionBasicSmoke(ctx) {
         event.to === "battle"
       ),
     `${smokeName}: main phase advances to battle through PHASE_CHANGED`
+  );
+  await waitForSmoke(
+    () => ctx.els.phaseStage?.dataset.phase === "battle",
+    `${smokeName}: battle event reaches the stage cue`
   );
 
   const phaseEvents = (ctx.state.gameEvents || []).slice(eventStart)
@@ -8395,6 +8661,10 @@ async function runPhaseProgressionBasicSmoke(ctx) {
       event.fromPhase === "battle"
     ),
     `${smokeName}: battle phase ends through TURN_ENDED`
+  );
+  await waitForSmoke(
+    () => ctx.els.phaseStage?.dataset.phase === "end",
+    `${smokeName}: turn end event reaches the stage cue`
   );
 
   const events = (ctx.state.gameEvents || []).slice(eventStart);
@@ -9123,6 +9393,391 @@ async function runSettingsMenuBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
+  const smokeName = "responsive-workbench-wide-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioDirectTrapPlanning");
+
+  if (!window.matchMedia("(min-width: 1600px) and (min-height: 900px)").matches) {
+    throw new Error(`${smokeName}: expected spacious viewport, received ${window.innerWidth}x${window.innerHeight}`);
+  }
+
+  const arena = document.querySelector(".arena.duel-table");
+  const field = document.querySelector(".arena.duel-table .field");
+  const handPanel = document.querySelector(".hand-panel");
+  const centerLine = document.querySelector(".duel-table .center-line");
+  const workspaceDeck = document.querySelector("#workspaceDeck");
+  const handCommand = document.querySelector("#handCommand");
+  const detailDrawer = document.querySelector("#detailDrawer");
+  const detailName = document.querySelector("#detailName");
+  const detailMeta = document.querySelector("#detailMeta");
+  const detailActions = detailDrawer?.querySelector(".detail-actions");
+  const timelineDrawer = document.querySelector("#timelineDrawer");
+  const detailToggle = document.querySelector("#detailDrawerToggle");
+  const timelineToggle = document.querySelector("#timelineDrawerToggle");
+  const utilityToggle = document.querySelector("#utilityMenuToggle");
+  const utilityMenu = document.querySelector("#utilityMenu");
+  const enemyHud = document.querySelector(".side.enemy.duel-hud");
+  const playerHud = document.querySelector(".side.duel-hud:not(.enemy)");
+  const requiredRegions = [arena, field, handPanel, centerLine, workspaceDeck, handCommand, detailDrawer, detailName, detailMeta, detailActions, ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldCancelBtn, timelineDrawer, detailToggle, timelineToggle, utilityToggle, utilityMenu, enemyHud, playerHud];
+  if (requiredRegions.some((element) => !element)) {
+    throw new Error(`${smokeName}: required responsive regions are missing`);
+  }
+
+  await waitForSmoke(
+    () => document.body.dataset.workspaceLayout === "expanded" &&
+      detailDrawer.classList.contains("is-docked") &&
+      timelineDrawer.classList.contains("is-docked") &&
+      detailDrawer.getAttribute("aria-hidden") === "false" &&
+      timelineDrawer.getAttribute("aria-hidden") === "false",
+    `${smokeName}: detail and timeline workbench stays visible`
+  );
+  if (!detailToggle.hidden || !timelineToggle.hidden || !utilityToggle.hidden || utilityMenu.hidden) {
+    throw new Error(`${smokeName}: wide layout should expose panels and settings without secondary toggles`);
+  }
+  if (getComputedStyle(handCommand).display !== "none") {
+    throw new Error(`${smokeName}: passive waiting command should not reserve hand space`);
+  }
+  for (const button of [ctx.els.soundBtn, ctx.els.musicBtn, ctx.els.voiceBtn]) {
+    if (!button || !button.textContent.includes("关")) {
+      throw new Error(`${smokeName}: browser test audio should remain disabled: ${button?.textContent || "missing"}`);
+    }
+  }
+
+  const fieldRect = field.getBoundingClientRect();
+  const arenaRect = arena.getBoundingClientRect();
+  const handRect = handPanel.getBoundingClientRect();
+  const centerRect = centerLine.getBoundingClientRect();
+  const workspaceRect = workspaceDeck.getBoundingClientRect();
+  const detailRect = detailDrawer.getBoundingClientRect();
+  const timelineRect = timelineDrawer.getBoundingClientRect();
+  const enemyHudRect = enemyHud.getBoundingClientRect();
+  const playerHudRect = playerHud.getBoundingClientRect();
+  const aiZoneRect = ctx.els.aiField.getBoundingClientRect();
+  const playerZoneRect = ctx.els.playerField.getBoundingClientRect();
+  const wideFieldCard = fieldCard(ctx.els, "player", "star-lancer");
+  const wideHandCard = handCard(ctx.els, "star-breach");
+  const wideFieldCardRect = wideFieldCard?.getBoundingClientRect();
+  const wideHandCardRect = wideHandCard?.getBoundingClientRect();
+  // Headless Chrome applies the requested window size to its outer window, so
+  // the 1700x1000 CI case has an inner height near 913px. The timeline is
+  // intentionally aligned to the monster zones instead of covering the HUD.
+  if (detailRect.width < 215 || detailRect.width > 255 || timelineRect.width < 255 || timelineRect.width > 305 ||
+      detailRect.height < 210 || timelineRect.height < 360) {
+    throw new Error(`${smokeName}: side context rails have the wrong density (${detailRect.width}x${detailRect.height}; ${timelineRect.width}x${timelineRect.height})`);
+  }
+  if (!wideFieldCardRect || !wideHandCardRect ||
+      wideFieldCardRect.height < 100 || wideHandCardRect.height < 130 ||
+      wideHandCardRect.height / wideHandCardRect.width < 0.85 ||
+      Math.abs(wideFieldCardRect.height - wideHandCardRect.height) > 55 ||
+      workspaceRect.width > 1 || workspaceRect.height > 1) {
+    throw new Error(
+      `${smokeName}: medium spacious density should preserve readable field and hand cards ` +
+      `(field=${wideFieldCardRect?.width}x${wideFieldCardRect?.height}, ` +
+      `hand=${wideHandCardRect?.width}x${wideHandCardRect?.height}, workbench=${workspaceRect.height})`
+    );
+  }
+  if (centerRect.height > 60 || aiZoneRect.bottom > centerRect.top + 1 || playerZoneRect.top < centerRect.bottom - 1 ||
+      aiZoneRect.height < 145 || playerZoneRect.height < 145) {
+    throw new Error(`${smokeName}: monster zones should own the wide battlefield center`);
+  }
+  if (Math.abs(detailRect.left - (arenaRect.left + 10)) > 2 ||
+      detailRect.right > aiZoneRect.left + 2 ||
+      detailRect.top < Math.max(enemyHudRect.bottom, playerHudRect.bottom) + 8 ||
+      timelineRect.left < aiZoneRect.right - 12 ||
+      Math.abs(timelineRect.right - (arenaRect.right - 10)) > 2 ||
+      Math.abs(timelineRect.top - aiZoneRect.top) > 2 ||
+      Math.abs(timelineRect.bottom - playerZoneRect.bottom) > 2) {
+    throw new Error(`${smokeName}: context rails should flank the board without covering monsters`);
+  }
+
+  clickSmokeElement(handCard(ctx.els, "star-breach"), `${smokeName}: select hand card`);
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "hand" && !ctx.els.choiceActions.hidden,
+    `${smokeName}: hand selection opens the shared command row`
+  );
+  const selectedChoiceCardRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
+  const choiceActionRect = ctx.els.choiceActions.getBoundingClientRect();
+  const choiceButtonRects = [ctx.els.choiceConfirmBtn, ctx.els.choiceCancelBtn]
+    .map((button) => button.getBoundingClientRect());
+  const choiceButtonCenter = (choiceButtonRects[0].left + choiceButtonRects.at(-1).right) / 2;
+  const choiceActionCenter = (choiceActionRect.left + choiceActionRect.right) / 2;
+  const handCommandRect = handCommand.getBoundingClientRect();
+  const choicePrimaryStyle = {
+    backgroundImage: getComputedStyle(ctx.els.choiceConfirmBtn).backgroundImage,
+    borderRadius: getComputedStyle(ctx.els.choiceConfirmBtn).borderRadius
+  };
+  if (!selectedChoiceCardRect || choiceActionRect.bottom > selectedChoiceCardRect.top + 1 ||
+      choiceButtonRects.some((rect) => Math.abs(rect.top - choiceButtonRects[0].top) > 1) ||
+      Math.abs(choiceButtonCenter - choiceActionCenter) > 3 ||
+      Math.abs(choiceActionCenter - (handCommandRect.left + handCommandRect.right) / 2) > 3 ||
+      choiceActionRect.left < handCommandRect.left - 1 || choiceActionRect.right > handCommandRect.right + 1) {
+    throw new Error(
+      `${smokeName}: hand commands should be centered directly above the hand cards ` +
+      `(bar=${choiceActionRect.top}-${choiceActionRect.bottom}, cardTop=${selectedChoiceCardRect?.top}, ` +
+      `buttons=${choiceButtonRects.map((rect) => `${rect.left}-${rect.right}`).join(",")})`
+    );
+  }
+  clickSmokeElement(ctx.els.choiceCancelBtn, `${smokeName}: cancel hand card from shared command row`);
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "none" && ctx.els.choiceActions.hidden,
+    `${smokeName}: shared hand command row closes cleanly`
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
+  await waitForSmoke(
+    () => detailName.textContent === "星轨枪兵" &&
+      !ctx.els.fieldModeBtn.disabled &&
+      !ctx.els.fieldActionBar.hidden,
+    `${smokeName}: selected card exposes one direct command dock`
+  );
+  if (getComputedStyle(detailActions).display !== "none") {
+    throw new Error(`${smokeName}: inspector should not duplicate the primary field commands`);
+  }
+  const selectedHandCardRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
+  const fieldActionRect = ctx.els.fieldActionBar.getBoundingClientRect();
+  const fieldButtonRects = [ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldDetailBtn, ctx.els.fieldCancelBtn]
+    .map((button) => button.getBoundingClientRect());
+  const fieldButtonCenter = (fieldButtonRects[0].left + fieldButtonRects.at(-1).right) / 2;
+  const fieldActionCenter = (fieldActionRect.left + fieldActionRect.right) / 2;
+  const fieldPrimaryStyle = getComputedStyle(ctx.els.fieldAttackBtn);
+  if (!selectedHandCardRect || fieldActionRect.bottom > selectedHandCardRect.top + 1 ||
+      fieldButtonRects.some((rect) => Math.abs(rect.top - fieldButtonRects[0].top) > 1) ||
+      Math.abs(fieldButtonCenter - fieldActionCenter) > 3 ||
+      fieldPrimaryStyle.backgroundImage !== choicePrimaryStyle.backgroundImage ||
+      fieldPrimaryStyle.borderRadius !== choicePrimaryStyle.borderRadius) {
+    throw new Error(
+      `${smokeName}: field commands should match the centered hand command system ` +
+      `(bar=${fieldActionRect.top}-${fieldActionRect.bottom}, cardTop=${selectedHandCardRect?.top}, ` +
+      `buttonTops=${fieldButtonRects.map((rect) => rect.top).join(",")}, ` +
+      `primary=${fieldPrimaryStyle.backgroundImage})`
+    );
+  }
+  clickSmokeElement(ctx.els.fieldAttackBtn, `${smokeName}: enter attack targeting from command dock`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex !== null && ctx.els.fieldAttackLabel.textContent.includes("选目标"),
+    `${smokeName}: primary attack action opens target selection`
+  );
+  clickSmokeElement(ctx.els.fieldCancelBtn, `${smokeName}: cancel attack targeting from command dock`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === null && ctx.state.selected?.zone === "playerField",
+    `${smokeName}: primary cancel action restores the card selection`
+  );
+  clickSmokeElement(ctx.els.fieldModeBtn, `${smokeName}: use primary mode action`);
+  await waitForSmoke(
+    () => ctx.state.player.field.some((card) => card?.id === "star-lancer" && card.mode === "defense") &&
+      detailMeta.textContent.includes("守备表示"),
+    `${smokeName}: docked card action and inspector remain synchronized`
+  );
+
+  if (!ctx.els.timeline.textContent.trim()) {
+    throw new Error(`${smokeName}: battle log should be readable without opening a drawer`);
+  }
+  const timelineZoomIn = document.querySelector("#timelineZoomIn");
+  const timelineZoomOut = document.querySelector("#timelineZoomOut");
+  const timelineZoomValue = document.querySelector("#timelineZoomValue");
+  if (!timelineZoomIn || !timelineZoomOut || !timelineZoomValue) {
+    throw new Error(`${smokeName}: timeline zoom controls are missing`);
+  }
+  clickSmokeElement(timelineZoomIn, `${smokeName}: enlarge timeline text`);
+  await waitForSmoke(
+    () => timelineDrawer.dataset.timelineScale === "115" && timelineZoomValue.textContent === "115%",
+    `${smokeName}: timeline zoom level increases`
+  );
+  clickSmokeElement(timelineZoomOut, `${smokeName}: restore timeline text scale`);
+  await waitForSmoke(
+    () => timelineDrawer.dataset.timelineScale === "100" && timelineZoomValue.textContent === "100%",
+    `${smokeName}: timeline zoom level resets`
+  );
+  clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: pause from direct settings row`);
+  await waitForSmoke(() => ctx.state.paused, `${smokeName}: direct pause control works`);
+  clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: resume from direct settings row`);
+  await waitForSmoke(() => !ctx.state.paused, `${smokeName}: direct resume control works`);
+
+  setSmokeStatus("passed", smokeName);
+}
+
+async function runResponsiveWorkbench4kBasicSmoke(ctx) {
+  const smokeName = "responsive-workbench-4k-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "trioDirectTrapPlanning");
+
+  if (!window.matchMedia("(min-width: 2400px) and (min-height: 1200px)").matches) {
+    throw new Error(`${smokeName}: expected 4K workspace, received ${window.innerWidth}x${window.innerHeight}`);
+  }
+
+  const app = document.querySelector("#app");
+  const arena = document.querySelector(".arena.duel-table");
+  const handPanel = document.querySelector(".hand-panel");
+  const centerLine = document.querySelector(".duel-table .center-line");
+  const workspaceDeck = document.querySelector("#workspaceDeck");
+  const handCommand = document.querySelector("#handCommand");
+  const detailDrawer = document.querySelector("#detailDrawer");
+  const timelineDrawer = document.querySelector("#timelineDrawer");
+  const detailActions = detailDrawer?.querySelector(".detail-actions");
+  const enemyHud = document.querySelector(".side.enemy.duel-hud");
+  const playerHud = document.querySelector(".side.duel-hud:not(.enemy)");
+  const utilityMenu = document.querySelector("#utilityMenu");
+  const required = [app, arena, handPanel, centerLine, workspaceDeck, handCommand, detailDrawer, timelineDrawer, detailActions, enemyHud, playerHud, ctx.els.fieldAttackBtn, ctx.els.fieldCancelBtn, utilityMenu];
+  if (required.some((element) => !element)) {
+    throw new Error(`${smokeName}: required ultra-wide regions are missing`);
+  }
+
+  const appRect = app.getBoundingClientRect();
+  const handRect = handPanel.getBoundingClientRect();
+  const centerRect = centerLine.getBoundingClientRect();
+  const workspaceRect = workspaceDeck.getBoundingClientRect();
+  const detailRect = detailDrawer.getBoundingClientRect();
+  const timelineRect = timelineDrawer.getBoundingClientRect();
+  if (document.body.dataset.workspaceLayout !== "gutter") {
+    throw new Error(`${smokeName}: expected gutter workspace mode`);
+  }
+  if (workspaceRect.width > 1 || workspaceRect.height > 1 || centerRect.height > 60) {
+    throw new Error(`${smokeName}: auxiliary workspace still reserves the battlefield center`);
+  }
+  if (Math.abs(detailRect.right - appRect.left) > 2 || Math.abs(timelineRect.left - appRect.right) > 2) {
+    throw new Error(
+      `${smokeName}: context rails should connect to the central game surface ` +
+      `(detailRight=${detailRect.right}, app=${appRect.left}-${appRect.right}, timelineLeft=${timelineRect.left})`
+    );
+  }
+  const enemyHudRect = enemyHud.getBoundingClientRect();
+  const playerHudRect = playerHud.getBoundingClientRect();
+  const arenaRect = arena.getBoundingClientRect();
+  if (Math.abs(enemyHudRect.top - (arenaRect.top + 14)) > 2 ||
+      Math.abs(playerHudRect.top - (arenaRect.top + 14)) > 2 ||
+      Math.abs(enemyHudRect.left - (arenaRect.left + 12)) > 2 ||
+      Math.abs(playerHudRect.right - (arenaRect.right - 12)) > 2 ||
+      Math.abs(enemyHudRect.width - playerHudRect.width) > 2 ||
+      Math.abs(enemyHudRect.height - playerHudRect.height) > 2 ||
+      enemyHudRect.right >= playerHudRect.left) {
+    throw new Error(`${smokeName}: opponent and player HUDs should form balanced top versus rails`);
+  }
+  const aiRect = ctx.els.aiField.getBoundingClientRect();
+  const playerRect = ctx.els.playerField.getBoundingClientRect();
+  if (aiRect.bottom > centerRect.top + 1 || playerRect.top < centerRect.bottom - 1 ||
+      aiRect.height < 480 || playerRect.height < 480) {
+    throw new Error(`${smokeName}: monster zones should own the restored center stage`);
+  }
+
+  const settingsButtons = [ctx.els.guideBtn, ctx.els.pauseBtn, ctx.els.soundBtn, ctx.els.musicBtn, ctx.els.voiceBtn, ctx.els.restartBtn];
+  if (settingsButtons.some((button) => !button)) {
+    throw new Error(`${smokeName}: direct setting buttons are missing`);
+  }
+  const settingRects = settingsButtons.map((button) => button.getBoundingClientRect());
+  const firstSettingRect = settingRects[0];
+  if (settingRects.some((rect) => Math.abs(rect.width - firstSettingRect.width) > 1 || Math.abs(rect.height - firstSettingRect.height) > 1)) {
+    throw new Error(`${smokeName}: direct setting buttons should share one visual size`);
+  }
+  if (utilityMenu.hidden || ctx.els.soundBtn.textContent !== "音效 关" ||
+      ctx.els.musicBtn.textContent !== "音乐 关" || ctx.els.voiceBtn.textContent !== "语音 关") {
+    throw new Error(`${smokeName}: 4K direct settings should stay visible with browser audio disabled`);
+  }
+  if (getComputedStyle(handCommand).display !== "none") {
+    throw new Error(`${smokeName}: passive waiting command should collapse on 4K`);
+  }
+
+  const ultraFieldCard = fieldCard(ctx.els, "player", "star-lancer");
+  const ultraHandCard = handCard(ctx.els, "star-breach");
+  const ultraFieldRect = ultraFieldCard?.getBoundingClientRect();
+  const ultraHandRect = ultraHandCard?.getBoundingClientRect();
+  const ultraSupportTrackRect = ctx.els.aiTraps.getBoundingClientRect();
+  const ultraFieldRatio = ultraFieldRect ? ultraFieldRect.height / ultraFieldRect.width : 0;
+  const ultraHandRatio = ultraHandRect ? ultraHandRect.height / ultraHandRect.width : 0;
+  if (!ultraFieldRect || !ultraHandRect ||
+      ultraHandRatio < 1.3 || Math.abs(ultraFieldRatio - ultraHandRatio) > 0.2 ||
+      ultraSupportTrackRect.height < 64 || handRect.height < 320) {
+    throw new Error(
+      `${smokeName}: 4K card density should keep hand and field proportions aligned ` +
+      `(field=${ultraFieldRect?.width}x${ultraFieldRect?.height}, ` +
+      `hand=${ultraHandRect?.width}x${ultraHandRect?.height}, ` +
+      `supportTrack=${ultraSupportTrackRect.height}, panel=${handRect.height})`
+    );
+  }
+  if (Math.max(enemyHudRect.bottom, playerHudRect.bottom) > aiRect.top - 8) {
+    throw new Error(
+      `${smokeName}: top versus HUD should stay clear of the monster zones ` +
+      `(hudBottom=${Math.max(enemyHudRect.bottom, playerHudRect.bottom)}, zoneTop=${aiRect.top})`
+    );
+  }
+
+  clickSmokeElement(handCard(ctx.els, "star-breach"), `${smokeName}: select hand card`);
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "hand" && !ctx.els.choiceActions.hidden,
+    `${smokeName}: hand selection opens the shared command row`
+  );
+  const ultraSelectedChoiceCardRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
+  const ultraChoiceRect = ctx.els.choiceActions.getBoundingClientRect();
+  const ultraChoiceButtons = [ctx.els.choiceConfirmBtn, ctx.els.choiceCancelBtn]
+    .map((button) => button.getBoundingClientRect());
+  const ultraChoiceButtonCenter = (ultraChoiceButtons[0].left + ultraChoiceButtons.at(-1).right) / 2;
+  const ultraChoiceCenter = (ultraChoiceRect.left + ultraChoiceRect.right) / 2;
+  const ultraHandCommandRect = handCommand.getBoundingClientRect();
+  const ultraChoicePrimaryStyle = {
+    backgroundImage: getComputedStyle(ctx.els.choiceConfirmBtn).backgroundImage,
+    borderRadius: getComputedStyle(ctx.els.choiceConfirmBtn).borderRadius
+  };
+  if (!ultraSelectedChoiceCardRect || ultraChoiceRect.bottom > ultraSelectedChoiceCardRect.top + 1 ||
+      ultraChoiceButtons.some((rect) => Math.abs(rect.top - ultraChoiceButtons[0].top) > 1) ||
+      Math.abs(ultraChoiceButtonCenter - ultraChoiceCenter) > 3 ||
+      Math.abs(ultraChoiceCenter - (ultraHandCommandRect.left + ultraHandCommandRect.right) / 2) > 3 ||
+      ultraChoiceRect.left < ultraHandCommandRect.left - 1 || ultraChoiceRect.right > ultraHandCommandRect.right + 1) {
+    throw new Error(
+      `${smokeName}: 4K hand commands should be centered directly above the hand cards ` +
+      `(bar=${ultraChoiceRect.top}-${ultraChoiceRect.bottom}, cardTop=${ultraSelectedChoiceCardRect?.top}, ` +
+      `buttons=${ultraChoiceButtons.map((rect) => `${rect.left}-${rect.right}`).join(",")})`
+    );
+  }
+  clickSmokeElement(ctx.els.choiceCancelBtn, `${smokeName}: cancel hand card from shared command row`);
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "none" && ctx.els.choiceActions.hidden,
+    `${smokeName}: shared hand command row closes cleanly`
+  );
+
+  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), `${smokeName}: select field card`);
+  await waitForSmoke(
+    () => !ctx.els.fieldAttackBtn.hidden && !ctx.els.fieldCancelBtn.hidden &&
+      getComputedStyle(detailActions).display === "none",
+    `${smokeName}: card actions appear once in the primary command dock`
+  );
+  const commandRect = ctx.els.fieldActionBar.getBoundingClientRect();
+  const commandButtons = [ctx.els.fieldAttackBtn, ctx.els.fieldModeBtn, ctx.els.fieldDetailBtn, ctx.els.fieldCancelBtn]
+    .map((button) => button.getBoundingClientRect());
+  const commandButtonCenter = (commandButtons[0].left + commandButtons.at(-1).right) / 2;
+  const commandCenter = (commandRect.left + commandRect.right) / 2;
+  const selectedUltraHandRect = handCard(ctx.els, "star-breach")?.getBoundingClientRect();
+  const ultraFieldPrimaryStyle = getComputedStyle(ctx.els.fieldAttackBtn);
+  if (!selectedUltraHandRect || commandRect.bottom > selectedUltraHandRect.top + 1 ||
+      commandButtons.some((rect) => Math.abs(rect.top - commandButtons[0].top) > 1) ||
+      Math.abs(commandButtonCenter - commandCenter) > 3 ||
+      ultraFieldPrimaryStyle.backgroundImage !== ultraChoicePrimaryStyle.backgroundImage ||
+      ultraFieldPrimaryStyle.borderRadius !== ultraChoicePrimaryStyle.borderRadius) {
+    throw new Error(
+      `${smokeName}: 4K field commands should match the centered hand command system ` +
+      `(bar=${commandRect.top}-${commandRect.bottom}, cardTop=${selectedUltraHandRect?.top}, ` +
+      `buttonTops=${commandButtons.map((rect) => rect.top).join(",")}, ` +
+      `primary=${ultraFieldPrimaryStyle.backgroundImage})`
+    );
+  }
+  clickSmokeElement(ctx.els.fieldAttackBtn, `${smokeName}: start attack from primary command dock`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex !== null && ctx.els.fieldAttackLabel.textContent.includes("选目标"),
+    `${smokeName}: primary attack action remains interactive`
+  );
+  clickSmokeElement(ctx.els.fieldCancelBtn, `${smokeName}: cancel primary attack action`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === null && ctx.state.selected?.zone === "playerField",
+    `${smokeName}: gutter cancel returns to card selection`
+  );
+
+  clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: pause from uniform settings row`);
+  await waitForSmoke(() => ctx.state.paused, `${smokeName}: 4K pause works`);
+  clickSmokeElement(ctx.els.pauseBtn, `${smokeName}: resume from uniform settings row`);
+  await waitForSmoke(() => !ctx.state.paused, `${smokeName}: 4K resume works`);
+
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runTrioGauntletPreviewBasicSmoke(ctx) {
   const smokeName = "trio-gauntlet-preview-basic";
   setSmokeStatus("running", smokeName);
@@ -9180,7 +9835,9 @@ async function runObjectiveHierarchyMobileBasicSmoke(ctx) {
   const defendedGoal = "当前目标：防御准备完成：结束回合";
   const defendedTitle = "当前目标：防御准备完成：结束回合，让日冕诱锁处理曜冕裁决者。";
   setSmokeStatus("running", smokeName);
-  await startSmokeDuel(ctx, "protagonistTrioGauntlet");
+  await startSmokeDuel(ctx, "protagonistTrioGauntlet", {
+    battleScenarioId: "protagonistTrioOmegaStory"
+  });
   await waitForSmoke(
     () => ctx.state.scenarioId === "protagonistTrioOmegaStory" &&
       ctx.els.duelHint?.dataset.kind === "objective" &&
@@ -9261,6 +9918,18 @@ async function runHandReorderBasicSmoke(ctx) {
   const displayBefore = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'))
     .map((card) => card.dataset.cardId);
   if (displayBefore.length < 2) throw new Error(`${smokeName}: scenario must expose at least two hand cards`);
+  if (ctx.els.handSortType.hidden || ctx.els.handReorderToggle.textContent !== "拖动排序") {
+    throw new Error(`${smokeName}: direct type sort and drag-sort entry should both be visible`);
+  }
+
+  clickSmokeElement(ctx.els.handSortType, `${smokeName}: sort directly without entering reorder mode`);
+  await waitForSmoke(() => {
+    const types = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardType);
+    return types.lastIndexOf("spell") < types.indexOf("trap");
+  }, `${smokeName}: direct type sort groups display cards`);
+  if (ctx.state.player.hand.some((card, index) => card.uid !== ruleOrderBefore[index])) {
+    throw new Error(`${smokeName}: direct type sort must not mutate the rule hand array`);
+  }
 
   clickSmokeElement(ctx.els.handReorderToggle, `${smokeName}: enter reorder mode`);
   await waitForSmoke(
@@ -9268,6 +9937,11 @@ async function runHandReorderBasicSmoke(ctx) {
       ctx.els.hand.querySelectorAll(".hand-reorder-controls").length === displayBefore.length,
     `${smokeName}: reorder controls appear`
   );
+  clickSmokeElement(ctx.els.handResetOrder, `${smokeName}: reset after direct type sort`);
+  await waitForSmoke(() => {
+    const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
+    return ids.every((id, index) => id === displayBefore[index]);
+  }, `${smokeName}: reset restores opening order after direct sort`);
   clickSmokeElement(ctx.els.handSortType, `${smokeName}: sort display cards by type`);
   await waitForSmoke(() => {
     const types = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardType);
@@ -9491,6 +10165,13 @@ async function runSupportTargetReadabilityBasicSmoke(ctx) {
 
   await selectSpellTarget(ctx, legalSlot, `${smokeName}：选择月曜帷幕`);
   confirmSpellTarget(ctx, `${smokeName}：确认发动碎月解幕`);
+  await waitForSmoke(
+    () => {
+      const reveal = document.querySelector('.support-reveal-effect[data-card-id="trio-moon-dominion"]');
+      return reveal?.dataset.owner === "ai" && reveal.dataset.index === "0" && reveal.textContent.includes("月曜帷幕");
+    },
+    `${smokeName}：目标盖牌在场上翻开并高亮`
+  );
   await waitForSmoke(
     () => !ctx.state.ai.traps.some((card) => card?.id === "trio-moon-dominion") &&
       ctx.state.ai.grave.some((card) => card?.id === "trio-moon-dominion") &&
@@ -9753,6 +10434,10 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "trio-staged-tribute-planning-basic": runTrioStagedTributePlanningBasicSmoke,
     "trio-live-turn-replanning-basic": runTrioLiveTurnReplanningBasicSmoke,
     "trio-omega-ascension-opening-basic": runTrioOmegaAscensionOpeningBasicSmoke,
+    "trio-phase-transition-basic": runTrioPhaseTransitionBasicSmoke,
+    "trio-adaptive-counter-basic": runTrioAdaptiveCounterBasicSmoke,
+    "trio-backrow-counter-basic": runTrioBackrowCounterBasicSmoke,
+    "trio-rush-finale-basic": runTrioRushFinaleBasicSmoke,
     "trio-trap-planning-basic": runTrioTrapPlanningBasicSmoke,
     "trio-trap-reserve-planning-basic": runTrioTrapReservePlanningBasicSmoke,
     "trio-direct-trap-planning-basic": runTrioDirectTrapPlanningBasicSmoke,
@@ -9875,6 +10560,8 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "campaign-objective-tracker-basic": runCampaignObjectiveTrackerBasicSmoke,
     "campaign-reward-unlock-basic": runCampaignRewardUnlockBasicSmoke,
     "settings-menu-basic": runSettingsMenuBasicSmoke,
+    "responsive-workbench-wide-basic": runResponsiveWorkbenchWideBasicSmoke,
+    "responsive-workbench-4k-basic": runResponsiveWorkbench4kBasicSmoke,
     "trio-gauntlet-preview-basic": runTrioGauntletPreviewBasicSmoke,
     "objective-hierarchy-mobile-basic": runObjectiveHierarchyMobileBasicSmoke,
     "pre-duel-deck-scroll-preview": runPreDuelDeckScrollPreviewSmoke,

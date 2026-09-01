@@ -211,6 +211,18 @@ export function renderDuelControls(elements, view) {
   elements.modeBtn.disabled = view.modeDisabled;
   elements.modeBtn.title = view.modeTitle;
   elements.modeBtn.textContent = view.modeText;
+  if (elements.detailAttackBtn) {
+    elements.detailAttackBtn.hidden = view.fieldAction.hidden;
+    elements.detailAttackBtn.disabled = view.fieldAction.attack.disabled;
+    elements.detailAttackBtn.title = view.fieldAction.attack.title;
+    elements.detailAttackBtn.classList.toggle("is-active", view.fieldAction.attack.active);
+    elements.detailAttackBtn.setAttribute("aria-pressed", String(view.fieldAction.attack.active));
+    elements.detailAttackBtn.textContent = view.fieldAction.attack.text;
+  }
+  if (elements.detailSelectionCancelBtn) {
+    elements.detailSelectionCancelBtn.hidden = view.fieldAction.hidden;
+    elements.detailSelectionCancelBtn.textContent = view.fieldAction.cancelText;
+  }
   if (elements.fieldActionBar) {
     elements.fieldActionBar.hidden = view.fieldAction.hidden;
     elements.fieldActionName.textContent = view.fieldAction.name;

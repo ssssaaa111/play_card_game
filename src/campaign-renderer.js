@@ -157,6 +157,7 @@ export function campaignMissionView({
   campaign = null,
   chapter = null,
   objectiveResults = [],
+  bossIntent = null,
   visible = true,
   win = false
 } = {}) {
@@ -221,7 +222,8 @@ export function campaignMissionView({
           ...bossPhaseDefinition,
           index: bossPhaseIndex,
           step: bossPhaseIndex + 1,
-          total: bossPhases.length
+          total: bossPhases.length,
+          ...(bossIntent ? { intent: bossIntent } : {})
         }
       : null,
     items
@@ -259,6 +261,19 @@ export function renderCampaignMission(doc, elements, view) {
     const text = doc.createElement("small");
     text.textContent = view.bossPhase.text || "";
     bossPhase.append(label, progress, text);
+    if (view.bossPhase.intent) {
+      const intent = doc.createElement("em");
+      intent.className = "campaign-boss-intent";
+      intent.dataset.bossIntent = view.bossPhase.intent.id;
+      intent.textContent = `AI 意图 · ${view.bossPhase.intent.label}：${view.bossPhase.intent.text}`;
+      bossPhase.append(intent);
+      if (view.bossPhase.intent.counterHint) {
+        const counter = doc.createElement("b");
+        counter.className = "campaign-boss-counter";
+        counter.textContent = `破解 · ${view.bossPhase.intent.counterHint}`;
+        bossPhase.append(counter);
+      }
+    }
   }
 
   const list = elements.campaignMissionList;

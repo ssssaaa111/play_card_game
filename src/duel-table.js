@@ -1,4 +1,7 @@
 const COMPACT_WORKSPACE_QUERY = "(max-width: 1040px)";
+const SPACIOUS_SETTINGS_QUERY = "(min-width: 1440px) and (min-height: 680px)";
+const SPACIOUS_WORKSPACE_QUERY = "(min-width: 1600px) and (min-height: 900px)";
+const GUTTER_WORKSPACE_QUERY = "(min-width: 2400px) and (min-height: 1200px)";
 const EMPTY_DETAIL_TITLE = "选择一张卡";
 
 function setControlExpanded(control, expanded) {
@@ -20,6 +23,12 @@ export function createDuelTableController(documentRef = document) {
   const detailDrawerTitle = documentRef.querySelector("#detailDrawerTitle");
   const timelineCount = documentRef.querySelector("#timelineCount");
   const timelineBadge = documentRef.querySelector("#timelineDrawerBadge");
+  const timeline = documentRef.querySelector("#timeline");
+  const timelineZoomOut = documentRef.querySelector("#timelineZoomOut");
+  const timelineZoomIn = documentRef.querySelector("#timelineZoomIn");
+  const timelineZoomValue = documentRef.querySelector("#timelineZoomValue");
+  const timelineFollowLatest = documentRef.querySelector("#timelineFollowLatest");
+  const timelinePendingCount = documentRef.querySelector("#timelinePendingCount");
   const timelineFilters = [...documentRef.querySelectorAll("[data-timeline-filter]")];
   const chainHistoryToggle = documentRef.querySelector("#chainHistoryToggle");
   const field = documentRef.querySelector(".duel-table .field");
@@ -43,6 +52,9 @@ export function createDuelTableController(documentRef = document) {
   const setupReadySummary = documentRef.querySelector("#setupReadySummary");
   const setupReadyMode = documentRef.querySelector("#setupReadyMode");
   const compactWorkspace = window.matchMedia(COMPACT_WORKSPACE_QUERY);
+  const spaciousSettings = window.matchMedia(SPACIOUS_SETTINGS_QUERY);
+  const spaciousWorkspace = window.matchMedia(SPACIOUS_WORKSPACE_QUERY);
+  const gutterWorkspace = window.matchMedia(GUTTER_WORKSPACE_QUERY);
   const drawers = {
     detail: { root: detailDrawer, toggle: detailToggle },
     timeline: { root: timelineDrawer, toggle: timelineToggle }
@@ -50,14 +62,21 @@ export function createDuelTableController(documentRef = document) {
   let openDrawer = "";
   let lastDetailName = "";
   let chainHistoryVisible = Boolean(chainHistoryToggle && !chainHistoryToggle.hidden);
+  const timelineScales = [85, 100, 115, 130];
+  let timelineScaleIndex = 1;
+  let timelineDrag = null;
+  let latestTimelineStep = Number(timeline?.dataset.timelineLatestStep) || 0;
+  let pendingTimelineCount = 0;
 
   function setUtilityMenu(open) {
-    const expanded = Boolean(open);
+    const expanded = spaciousSettings.matches || Boolean(open);
     if (utilityMenu) utilityMenu.hidden = !expanded;
+    if (utilityToggle) utilityToggle.hidden = spaciousSettings.matches;
     setControlExpanded(utilityToggle, expanded);
   }
 
   function setDrawer(name, open) {
+    if (spaciousWorkspace.matches) return false;
     const next = drawers[name];
     if (!next?.root) return false;
     const expanded = Boolean(open);
@@ -87,6 +106,27 @@ export function createDuelTableController(documentRef = document) {
     setDrawer(name, openDrawer !== name);
   }
 
+  function syncResponsiveWorkspace() {
+    const spacious = spaciousWorkspace.matches;
+    const gutter = spacious && gutterWorkspace.matches;
+    if (body) body.dataset.workspaceLayout = gutter ? "gutter" : spacious ? "expanded" : "drawer";
+    for (const drawer of Object.values(drawers)) {
+      drawer.root?.classList.toggle("is-docked", spacious);
+      drawer.root?.classList.toggle("is-open", spacious);
+      drawer.root?.setAttribute("aria-hidden", String(!spacious));
+      if (drawer.toggle) {
+        drawer.toggle.hidden = spacious;
+        setControlExpanded(drawer.toggle, spacious);
+      }
+    }
+    for (const close of [detailClose, timelineClose]) {
+      if (close) close.hidden = spacious;
+    }
+    openDrawer = "";
+    if (body) body.dataset.workspaceDrawer = spacious ? "docked" : "none";
+    setUtilityMenu(false);
+  }
+
   function syncTimelineBadge() {
     if (!timelineBadge || !timelineCount) return;
     timelineBadge.textContent = timelineCount.textContent?.trim() || "0";
@@ -99,6 +139,106 @@ export function createDuelTableController(documentRef = document) {
     for (const button of timelineFilters) {
       button.setAttribute("aria-pressed", String(button.dataset.timelineFilter === nextFilter));
     }
+    if (timeline?.scrollTo) timeline.scrollTo({ top: 0, left: 0 });
+    else if (timeline) {
+      timeline.scrollTop = 0;
+      timeline.scrollLeft = 0;
+    }
+    clearPendingTimeline();
+  }
+
+  function clearPendingTimeline() {
+    pendingTimelineCount = 0;
+    if (timelinePendingCount) timelinePendingCount.textContent = "0";
+    if (timelineFollowLatest) timelineFollowLatest.hidden = true;
+  }
+
+  function showPendingTimeline(count) {
+    pendingTimelineCount += Math.max(1, Number(count) || 1);
+    if (timelinePendingCount) timelinePendingCount.textContent = String(pendingTimelineCount);
+    if (timelineFollowLatest) {
+      timelineFollowLatest.hidden = false;
+      timelineFollowLatest.setAttribute("aria-label", `回到最新，${pendingTimelineCount} 条新记录`);
+    }
+  }
+
+  function followLatestTimeline() {
+    if (timeline?.scrollTo) {
+      timeline.scrollTo({ top: 0, left: timeline.scrollLeft });
+    } else if (timeline) {
+      timeline.scrollTop = 0;
+    }
+    clearPendingTimeline();
+  }
+
+  function syncTimelineFollow() {
+    const nextStep = Number(timeline?.dataset.timelineLatestStep) || 0;
+    if (!latestTimelineStep) {
+      latestTimelineStep = nextStep;
+      return;
+    }
+    if (!nextStep || nextStep < latestTimelineStep) {
+      latestTimelineStep = nextStep;
+      clearPendingTimeline();
+      return;
+    }
+    if (nextStep === latestTimelineStep) return;
+    const addedCount = nextStep - latestTimelineStep;
+    latestTimelineStep = nextStep;
+    if (timeline?.dataset.timelineWasFollowing === "true" || (timeline?.scrollTop || 0) <= 12) {
+      clearPendingTimeline();
+      return;
+    }
+    showPendingTimeline(addedCount);
+  }
+
+  function syncTimelineScrollPosition() {
+    if ((timeline?.scrollTop || 0) <= 12) clearPendingTimeline();
+  }
+
+  function syncTimelineScale() {
+    const scale = timelineScales[timelineScaleIndex];
+    if (timelineDrawer) timelineDrawer.dataset.timelineScale = String(scale);
+    if (timelineZoomValue) timelineZoomValue.textContent = `${scale}%`;
+    if (timelineZoomOut) timelineZoomOut.disabled = timelineScaleIndex === 0;
+    if (timelineZoomIn) timelineZoomIn.disabled = timelineScaleIndex === timelineScales.length - 1;
+  }
+
+  function changeTimelineScale(direction) {
+    timelineScaleIndex = Math.max(0, Math.min(timelineScales.length - 1, timelineScaleIndex + direction));
+    syncTimelineScale();
+  }
+
+  function stopTimelineDrag(event) {
+    if (!timelineDrag || (event?.pointerId != null && event.pointerId !== timelineDrag.pointerId)) return;
+    timeline?.classList.remove("is-dragging");
+    timelineDrag = null;
+  }
+
+  function startTimelineDrag(event) {
+    if (!timeline || event.button !== 0 || event.target.closest("button, a, input, select")) return;
+    if (timeline.scrollHeight <= timeline.clientHeight && timeline.scrollWidth <= timeline.clientWidth) return;
+    timelineDrag = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: timeline.scrollLeft,
+      scrollTop: timeline.scrollTop,
+      moved: false
+    };
+    timeline.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveTimelineDrag(event) {
+    if (!timeline || !timelineDrag || event.pointerId !== timelineDrag.pointerId) return;
+    const dx = event.clientX - timelineDrag.x;
+    const dy = event.clientY - timelineDrag.y;
+    if (!timelineDrag.moved && Math.hypot(dx, dy) < 4) return;
+    timelineDrag.moved = true;
+    timeline.classList.add("is-dragging");
+    timeline.scrollLeft = timelineDrag.scrollLeft - dx;
+    timeline.scrollTop = timelineDrag.scrollTop - dy;
+    event.preventDefault();
   }
 
   function syncChainHistoryAttention() {
@@ -247,7 +387,7 @@ export function createDuelTableController(documentRef = document) {
   });
 
   utilityMenu?.addEventListener("click", (event) => {
-    if (event.target.closest("button")) setUtilityMenu(false);
+    if (!spaciousSettings.matches && event.target.closest("button")) setUtilityMenu(false);
   });
 
   detailToggle?.addEventListener("click", () => toggleDrawer("detail"));
@@ -256,11 +396,21 @@ export function createDuelTableController(documentRef = document) {
   timelineClose?.addEventListener("click", () => setDrawer("timeline", false));
   const timelineFilterHandler = (event) => setTimelineFilter(event.currentTarget.dataset.timelineFilter);
   for (const button of timelineFilters) button.addEventListener("click", timelineFilterHandler);
+  const timelineZoomOutHandler = () => changeTimelineScale(-1);
+  const timelineZoomInHandler = () => changeTimelineScale(1);
+  timelineZoomOut?.addEventListener("click", timelineZoomOutHandler);
+  timelineZoomIn?.addEventListener("click", timelineZoomInHandler);
+  timelineFollowLatest?.addEventListener("click", followLatestTimeline);
+  timeline?.addEventListener("pointerdown", startTimelineDrag);
+  timeline?.addEventListener("pointermove", moveTimelineDrag);
+  timeline?.addEventListener("pointerup", stopTimelineDrag);
+  timeline?.addEventListener("pointercancel", stopTimelineDrag);
+  timeline?.addEventListener("scroll", syncTimelineScrollPosition, { passive: true });
   field?.addEventListener("click", closeCompactDrawer);
   hand?.addEventListener("click", closeCompactDrawer);
 
   documentRef.addEventListener("pointerdown", (event) => {
-    if (!utilityMenu || utilityMenu.hidden) return;
+    if (spaciousSettings.matches || !utilityMenu || utilityMenu.hidden) return;
     if (utilityMenu.contains(event.target) || utilityToggle?.contains(event.target)) return;
     setUtilityMenu(false);
   });
@@ -289,8 +439,17 @@ export function createDuelTableController(documentRef = document) {
     });
   }
 
-  const timelineObserver = new MutationObserver(syncTimelineBadge);
+  const timelineObserver = new MutationObserver(() => {
+    syncTimelineBadge();
+    syncTimelineFollow();
+  });
   if (timelineCount) timelineObserver.observe(timelineCount, { childList: true, subtree: true });
+  if (timeline) {
+    timelineObserver.observe(timeline, {
+      attributes: true,
+      attributeFilter: ["data-timeline-latest-step"]
+    });
+  }
 
   const chainHistoryObserver = new MutationObserver(syncChainHistoryAttention);
   if (chainHistoryToggle) {
@@ -343,16 +502,19 @@ export function createDuelTableController(documentRef = document) {
     select.addEventListener("change", setupChangeHandler);
   }
 
-  compactWorkspace.addEventListener("change", () => {
-    if (openDrawer) setDrawer(openDrawer, false);
-    setUtilityMenu(false);
-  });
+  const responsiveChangeHandler = () => syncResponsiveWorkspace();
+  compactWorkspace.addEventListener("change", responsiveChangeHandler);
+  spaciousSettings.addEventListener("change", responsiveChangeHandler);
+  spaciousWorkspace.addEventListener("change", responsiveChangeHandler);
+  gutterWorkspace.addEventListener("change", responsiveChangeHandler);
 
   setUtilityMenu(false);
   setDrawer("detail", false);
   setDrawer("timeline", false);
+  syncResponsiveWorkspace();
   syncTimelineBadge();
   setTimelineFilter("all");
+  syncTimelineScale();
   syncDetailDrawer();
   syncCombatAttention();
   syncSetupSummary();
@@ -368,8 +530,20 @@ export function createDuelTableController(documentRef = document) {
       chainHistoryObserver.disconnect();
       attentionObserver.disconnect();
       setupObserver.disconnect();
+      compactWorkspace.removeEventListener("change", responsiveChangeHandler);
+      spaciousSettings.removeEventListener("change", responsiveChangeHandler);
+      spaciousWorkspace.removeEventListener("change", responsiveChangeHandler);
+      gutterWorkspace.removeEventListener("change", responsiveChangeHandler);
       for (const select of setupSelects) select.removeEventListener("change", setupChangeHandler);
       for (const button of timelineFilters) button.removeEventListener("click", timelineFilterHandler);
+      timelineZoomOut?.removeEventListener("click", timelineZoomOutHandler);
+      timelineZoomIn?.removeEventListener("click", timelineZoomInHandler);
+      timelineFollowLatest?.removeEventListener("click", followLatestTimeline);
+      timeline?.removeEventListener("pointerdown", startTimelineDrag);
+      timeline?.removeEventListener("pointermove", moveTimelineDrag);
+      timeline?.removeEventListener("pointerup", stopTimelineDrag);
+      timeline?.removeEventListener("pointercancel", stopTimelineDrag);
+      timeline?.removeEventListener("scroll", syncTimelineScrollPosition);
     },
     openDrawer(name) {
       return setDrawer(name, true);
