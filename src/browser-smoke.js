@@ -375,16 +375,16 @@ function selectScenario(els, scenarioId) {
   els.scenarioSelect.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-async function startSmokeDuel(ctx, scenarioId) {
+async function startSmokeDuel(ctx, scenarioId, { battleScenarioId = scenarioId } = {}) {
   selectScenario(ctx.els, scenarioId);
   clickSmokeElement(ctx.els.modal?.classList.contains("show") ? ctx.els.modalRestart : ctx.els.startBtn, "开始按钮");
   await waitForSmoke(
     () => ctx.state.started &&
-      ctx.state.scenarioId === scenarioId &&
+      ctx.state.scenarioId === battleScenarioId &&
       ctx.state.turn === "player" &&
       ctx.state.phase === "main" &&
       !ctx.state.pendingOpeningDraw,
-    "玩家主阶段"
+    `玩家主阶段（${battleScenarioId}）`
   );
 }
 
@@ -5868,7 +5868,9 @@ async function runTrioOmegaFinaleRushSmoke(ctx) {
 async function runTrioGauntletSmoke(ctx) {
   const smokeName = "trio-gauntlet-demo";
   setSmokeStatus("running", smokeName);
-  await startSmokeDuel(ctx, "protagonistTrioGauntlet");
+  await startSmokeDuel(ctx, "protagonistTrioGauntlet", {
+    battleScenarioId: "protagonistTrioOmegaStory"
+  });
   const storyLog = () => (ctx.state.log || []).map(logEntryMessage).join(" ");
   const waitChapter = (scenarioId, chapterIndex) => waitForSmoke(
     () => ctx.state.scenarioId === scenarioId &&
@@ -9833,7 +9835,9 @@ async function runObjectiveHierarchyMobileBasicSmoke(ctx) {
   const defendedGoal = "当前目标：防御准备完成：结束回合";
   const defendedTitle = "当前目标：防御准备完成：结束回合，让日冕诱锁处理曜冕裁决者。";
   setSmokeStatus("running", smokeName);
-  await startSmokeDuel(ctx, "protagonistTrioGauntlet");
+  await startSmokeDuel(ctx, "protagonistTrioGauntlet", {
+    battleScenarioId: "protagonistTrioOmegaStory"
+  });
   await waitForSmoke(
     () => ctx.state.scenarioId === "protagonistTrioOmegaStory" &&
       ctx.els.duelHint?.dataset.kind === "objective" &&
