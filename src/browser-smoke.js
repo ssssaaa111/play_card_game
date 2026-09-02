@@ -27,6 +27,11 @@ function campaignProgressWithClearedChapters(chapterIds = []) {
   };
 }
 
+function setCampaignSmokeProgress(ctx, chapterIds = []) {
+  ctx.state.campaignProgress = campaignProgressWithClearedChapters(chapterIds);
+  ctx.render?.();
+}
+
 function smokeRuntimeTemplateId(state, runtimeId) {
   for (const owner of ["player", "ai"]) {
     for (const zone of ["hand", "deck", "field", "traps", "grave"]) {
@@ -1080,14 +1085,13 @@ async function runTrioOmegaAscensionOpeningBasicSmoke(ctx) {
     `${smokeName}: campaign hub is visible`,
     6000
   );
-  ctx.state.campaignProgress = campaignProgressWithClearedChapters([
+  setCampaignSmokeProgress(ctx, [
     "comeback",
     "comeback-challenge",
     "ace-evolution",
     "trio-challenge",
     "trio-full"
   ]);
-  ctx.render?.();
   const chapterButton = ctx.els.campaignList?.querySelector('[data-campaign-chapter="trio-ascension"]');
   if (!chapterButton || chapterButton.disabled) {
     throw new Error(`${smokeName}: final campaign chapter should unlock after the first five clears`);
@@ -9199,6 +9203,7 @@ async function runPreDuelDeckPreviewSmoke(ctx) {
 async function runCampaignHubBasicSmoke(ctx) {
   const smokeName = "campaign-hub-basic";
   setSmokeStatus("running", smokeName);
+  setCampaignSmokeProgress(ctx);
   await waitForSmoke(
     () => ctx.els.modal?.classList.contains("show") &&
       !ctx.els.campaignPanel?.hidden &&
@@ -9245,6 +9250,7 @@ async function runCampaignHubBasicSmoke(ctx) {
 async function runCampaignRewardUnlockBasicSmoke(ctx) {
   const smokeName = "campaign-reward-unlock-basic";
   setSmokeStatus("running", smokeName);
+  setCampaignSmokeProgress(ctx);
   await waitForSmoke(
     () => ctx.els.modal?.classList.contains("show") && !ctx.els.campaignPanel?.hidden && !ctx.state.started,
     `${smokeName}: campaign hub is visible`,
@@ -9258,10 +9264,7 @@ async function runCampaignRewardUnlockBasicSmoke(ctx) {
   }
 
   const campaign = campaignDefinitions.find((entry) => entry.id === "star-trial");
-  ctx.state.campaignProgress = campaignProgressWithClearedChapters(
-    campaign?.chapters?.map((chapter) => chapter.id) || []
-  );
-  ctx.render?.();
+  setCampaignSmokeProgress(ctx, campaign?.chapters?.map((chapter) => chapter.id) || []);
   await waitForSmoke(
     () => {
       const reward = ctx.els.campaignList?.querySelector(selector);
@@ -9289,6 +9292,7 @@ async function runCampaignRewardUnlockBasicSmoke(ctx) {
 async function runCampaignObjectiveTrackerBasicSmoke(ctx) {
   const smokeName = "campaign-objective-tracker-basic";
   setSmokeStatus("running", smokeName);
+  setCampaignSmokeProgress(ctx);
   await waitForSmoke(
     () => ctx.els.modal?.classList.contains("show") &&
       !ctx.els.campaignPanel?.hidden &&

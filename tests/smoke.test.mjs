@@ -728,7 +728,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /pendingAiRevealQueue = \[\]/);
   assert.match(app, /withAiRevealQueuePosition\(/);
   assert.match(app, /function waitForAiReveal/);
-  assert.match(app, /\["ai-card-reveal-confirm", "ai-card-reveal-queue"\]\.includes\(BROWSER_SMOKE\)/);
+  assert.match(app, /setTimeout\(confirmAiRevealContinue, 320\)/);
+  assert.match(app, /"ai-card-reveal-confirm",[\s\S]*"ai-card-reveal-queue",[\s\S]*"finale-sunflare-target-lock-basic"[\s\S]*\.includes\(BROWSER_SMOKE\)/);
   assert.match(app, /buildAiCardReveal\(/);
   assert.match(setupRenderer, /buildPreDuelPreview\(\{/);
   assert.match(deckBrowser, /cardInspectorViewModel\(entry\.id\)/);

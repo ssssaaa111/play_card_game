@@ -827,7 +827,9 @@ function renderNextAiReveal() {
   pendingAiRevealResolver = next.resolve;
   renderAiReveal();
   if (shouldAutoContinueAiReveal()) {
-    window.setTimeout(confirmAiRevealContinue, 70);
+    // Browser smoke polls every 80 ms. Keep automatic reveals visible across
+    // several polls so assertions cannot miss the entire public reveal window.
+    window.setTimeout(confirmAiRevealContinue, 320);
   }
 }
 
@@ -865,7 +867,11 @@ function confirmAiRevealContinue() {
 }
 
 function shouldAutoContinueAiReveal() {
-  const revealNeedsManualClick = ["ai-card-reveal-confirm", "ai-card-reveal-queue"].includes(BROWSER_SMOKE) ||
+  const revealNeedsManualClick = [
+    "ai-card-reveal-confirm",
+    "ai-card-reveal-queue",
+    "finale-sunflare-target-lock-basic"
+  ].includes(BROWSER_SMOKE) ||
     ["trio-after-attack-lethal-planning-basic", "trio-combined-lethal-planning-basic"].includes(BROWSER_SMOKE);
   return Boolean(BROWSER_SMOKE) && !revealNeedsManualClick;
 }
