@@ -966,7 +966,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /const smokeName = "campaign-reward-unlock-basic";[\s\S]*playable gauntlet reward must start visibly locked[\s\S]*reward click launches the first gauntlet battle[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(app, /state\.gauntlet\?\.active && state\.gauntlet\.sourceScenarioId[\s\S]*state\.gauntlet\.sourceScenarioId[\s\S]*els\.scenarioSelect\?\.value/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-scroll-preview"\)/);
-  assert.match(smoke, /const smokeName = "hand-reorder-basic";[\s\S]*direct type sort must not mutate the rule hand array[\s\S]*direct card drag changes display order[\s\S]*UI reorder must not mutate the rule hand array[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "hand-reorder-basic";[\s\S]*direct type sort must not mutate the rule hand array[\s\S]*right-to-left drag[\s\S]*left-to-right drag[\s\S]*UI reorder must not mutate the rule hand array[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);
   assert.match(smoke, /const lockedBefore = lockedRulesSnapshot\(\);[\s\S]*finished duel should expose no player actions[\s\S]*inspecting a hand card after game over changed rules state/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);

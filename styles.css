@@ -2992,8 +2992,9 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .hand .card.hand-direct-reorder {
   cursor: grab;
-  touch-action: pan-x;
+  touch-action: none;
   user-select: none;
+  will-change: transform;
 }
 
 .hand .card.hand-direct-reorder:active {
@@ -3001,15 +3002,85 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 }
 
 .hand .card.hand-direct-reorder.is-dragging {
-  z-index: 9;
-  opacity: 0.45;
-  filter: saturate(0.7);
-  transform: translateY(-2px) scale(0.97);
+  z-index: 2;
+  opacity: 0.2;
+  filter: saturate(0.45);
+  transform: scale(0.94);
+  border-style: dashed;
+  box-shadow: inset 0 0 0 2px rgba(84, 210, 210, 0.2);
 }
 
 .hand .card.hand-direct-reorder.is-drop-target {
   border-color: rgba(246, 189, 96, 0.98);
-  box-shadow: 0 0 0 3px rgba(246, 189, 96, 0.24), 0 16px 30px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 0 0 3px rgba(246, 189, 96, 0.24), 0 20px 36px rgba(0, 0, 0, 0.5);
+  filter: brightness(1.08);
+}
+
+.hand .card.hand-direct-reorder.is-drop-target.swap-preview-left {
+  transform: translateX(-12px) translateY(-6px) scale(1.025) rotate(-1deg);
+}
+
+.hand .card.hand-direct-reorder.is-drop-target.swap-preview-right {
+  transform: translateX(12px) translateY(-6px) scale(1.025) rotate(1deg);
+}
+
+.hand-drag-ghost {
+  --hand-drag-tilt: 0deg;
+  position: fixed;
+  z-index: 10020;
+  box-sizing: border-box;
+  margin: 0;
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: auto;
+  grid-template-rows: auto minmax(54px, 0.8fr) minmax(28px, auto) 24px 20px;
+  gap: 4px;
+  padding: 8px;
+  pointer-events: none;
+  opacity: 0.98;
+  transform: translateY(-12px) scale(1.055) rotate(var(--hand-drag-tilt));
+  transform-origin: 50% 78%;
+  filter: saturate(1.08) brightness(1.06);
+  box-shadow:
+    0 30px 52px rgba(0, 0, 0, 0.64),
+    0 10px 18px rgba(0, 0, 0, 0.42),
+    0 0 0 2px rgba(246, 189, 96, 0.32),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  will-change: left, top, transform;
+}
+
+.hand-drag-ghost::after {
+  content: "换位";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  z-index: 8;
+  padding: 3px 9px;
+  border: 1px solid rgba(246, 189, 96, 0.62);
+  border-radius: 999px;
+  background: rgba(14, 18, 25, 0.94);
+  color: #ffe2a3;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.36);
+}
+
+.hand-drag-ghost .card-detail-entry {
+  visibility: hidden;
+}
+
+.hand-drag-ghost.is-settling {
+  opacity: 0.9;
+  transform: translateY(-2px) scale(1.01) rotate(0deg);
+  transition:
+    left 110ms cubic-bezier(0.22, 0.88, 0.38, 1),
+    top 110ms cubic-bezier(0.22, 0.88, 0.38, 1),
+    transform 110ms ease-out,
+    opacity 110ms ease-out;
 }
 
 .hand .card .art {

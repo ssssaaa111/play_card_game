@@ -481,7 +481,10 @@ test("hand organization uses one-click type sorting and modeless direct drag", (
   assert.match(renderer, /cardEl\.classList\.toggle\("hand-direct-reorder", directReorder\)/);
   assert.match(renderer, /cardEl\.addEventListener\("pointerdown"/);
   assert.match(renderer, /document\.elementFromPoint\(event\.clientX, event\.clientY\)/);
-  assert.match(renderer, /onPlaceCard\(card\.uid, targetUid\)/);
+  assert.match(renderer, /onSwapCard\(card\.uid, targetUid\)/);
+  assert.match(renderer, /classList\.add\("hand-drag-ghost"\)/);
+  assert.match(renderer, /swap-preview-left/);
+  assert.match(renderer, /swap-preview-right/);
   assert.match(renderer, /event\.altKey[\s\S]*"ArrowLeft", "ArrowRight"/);
 });
 

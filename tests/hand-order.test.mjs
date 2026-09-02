@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  placeHandCard,
   reconcileHandOrder,
   shiftHandCard,
-  sortHandCardsByType
+  sortHandCardsByType,
+  swapHandCards
 } from "../src/hand-order.js";
 
 function card(uid) {
@@ -22,13 +22,15 @@ test("hand display order ignores stale ids and appends newly drawn cards without
   assert.notEqual(ordered, ruleHand);
 });
 
-test("hand display order supports accessible one-step moves and drag placement", () => {
+test("hand display order supports accessible one-step moves and two-way drag swaps", () => {
   const order = ["a", "b", "c", "d"];
 
   assert.deepEqual(shiftHandCard(order, "c", -1), ["a", "c", "b", "d"]);
   assert.deepEqual(shiftHandCard(order, "a", -1), order, "left edge should clamp");
   assert.deepEqual(shiftHandCard(order, "d", 1), order, "right edge should clamp");
-  assert.deepEqual(placeHandCard(order, "a", "d"), ["b", "c", "a", "d"]);
+  assert.deepEqual(swapHandCards(order, "a", "d"), ["d", "b", "c", "a"], "left-to-right drag swaps both slots");
+  assert.deepEqual(swapHandCards(order, "d", "a"), ["d", "b", "c", "a"], "right-to-left drag uses the same swap rule");
+  assert.deepEqual(swapHandCards(order, "b", "c"), ["a", "c", "b", "d"], "adjacent cards can swap");
   assert.deepEqual(order, ["a", "b", "c", "d"], "reordering helpers must be immutable");
 });
 

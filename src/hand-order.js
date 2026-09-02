@@ -33,14 +33,13 @@ export function shiftHandCard(order = [], uid, direction = 0) {
   return next;
 }
 
-export function placeHandCard(order = [], sourceUid, targetUid) {
+export function swapHandCards(order = [], sourceUid, targetUid) {
   const next = [...order];
   if (!sourceUid || !targetUid || sourceUid === targetUid) return next;
   const sourceIndex = next.indexOf(sourceUid);
-  if (sourceIndex < 0 || !next.includes(targetUid)) return next;
-  next.splice(sourceIndex, 1);
   const targetIndex = next.indexOf(targetUid);
-  next.splice(targetIndex, 0, sourceUid);
+  if (sourceIndex < 0 || targetIndex < 0) return next;
+  [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
   return next;
 }
 

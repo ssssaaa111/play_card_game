@@ -48,9 +48,9 @@ import {
 import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
 import { renderHandCards } from './hand-renderer.js';
 import {
-  placeHandCard,
   reconcileHandOrder,
   shiftHandCard,
+  swapHandCards,
   sortHandCardsByType
 } from './hand-order.js';
 import {
@@ -6144,11 +6144,11 @@ function moveDisplayedHandCard(card, direction) {
   renderHand();
 }
 
-function placeDisplayedHandCard(sourceUid, targetUid) {
+function swapDisplayedHandCards(sourceUid, targetUid) {
   const source = state.player.hand.find((card) => card?.uid === sourceUid);
   handOrderMode = "custom";
-  handDisplayOrder = placeHandCard(handDisplayOrder, sourceUid, targetUid);
-  if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已移动「${source.name}」。`;
+  handDisplayOrder = swapHandCards(handDisplayOrder, sourceUid, targetUid);
+  if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已交换「${source.name}」的位置。`;
   renderHand();
 }
 
@@ -6205,7 +6205,7 @@ function renderHand(animationKey) {
     fusionSelectedUids: state.pendingFusion ? selectedFusionHandUids() : [],
     directReorder: showToolbar,
     onMoveCard: moveDisplayedHandCard,
-    onPlaceCard: placeDisplayedHandCard,
+    onSwapCard: swapDisplayedHandCards,
     onCardDetail: openCardDetail,
     onCardClick: (card) => selectHandCard(card.uid, {
       directActivate: directActivationTracker.register(`hand:${card.uid}`)

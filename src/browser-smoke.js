@@ -9963,47 +9963,79 @@ async function runHandReorderBasicSmoke(ctx) {
     return ids.every((id, index) => id === displayBefore[index]);
   }, `${smokeName}: reset restores opening order after direct sort`);
 
-  const cardsForDrag = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
-  const dragSource = cardsForDrag.at(-1);
-  const dragTarget = cardsForDrag[0];
-  const sourceRect = dragSource.getBoundingClientRect();
-  const targetRect = dragTarget.getBoundingClientRect();
   const PointerCtor = window.PointerEvent || window.MouseEvent;
-  const pointerId = 73;
-  dragSource.dispatchEvent(new PointerCtor("pointerdown", {
-    bubbles: true,
-    cancelable: true,
-    pointerId,
-    pointerType: "mouse",
-    button: 0,
-    buttons: 1,
-    clientX: sourceRect.left + sourceRect.width / 2,
-    clientY: sourceRect.top + sourceRect.height / 2
-  }));
-  dragSource.dispatchEvent(new PointerCtor("pointermove", {
-    bubbles: true,
-    cancelable: true,
-    pointerId,
-    pointerType: "mouse",
-    button: 0,
-    buttons: 1,
-    clientX: targetRect.left + targetRect.width / 2,
-    clientY: targetRect.top + targetRect.height / 2
-  }));
-  dragSource.dispatchEvent(new PointerCtor("pointerup", {
-    bubbles: true,
-    cancelable: true,
-    pointerId,
-    pointerType: "mouse",
-    button: 0,
-    buttons: 0,
-    clientX: targetRect.left + targetRect.width / 2,
-    clientY: targetRect.top + targetRect.height / 2
-  }));
-  await waitForSmoke(() => {
-    const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
-    return ids[0] === displayBefore.at(-1);
-  }, `${smokeName}: direct card drag changes display order`);
+  const dragSwap = async ({ source, target, pointerId, expectedIds, previewClass, label }) => {
+    const sourceRect = source.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    source.dispatchEvent(new PointerCtor("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+      pointerId,
+      pointerType: "mouse",
+      button: 0,
+      buttons: 1,
+      clientX: sourceRect.left + sourceRect.width / 2,
+      clientY: sourceRect.top + sourceRect.height / 2
+    }));
+    source.dispatchEvent(new PointerCtor("pointermove", {
+      bubbles: true,
+      cancelable: true,
+      pointerId,
+      pointerType: "mouse",
+      button: 0,
+      buttons: 1,
+      clientX: targetRect.left + targetRect.width / 2,
+      clientY: targetRect.top + targetRect.height / 2
+    }));
+    const ghost = document.querySelector(".hand-drag-ghost");
+    const ghostRect = ghost?.getBoundingClientRect();
+    if (!source.classList.contains("is-dragging") || !target.classList.contains("is-drop-target") ||
+        !target.classList.contains(previewClass) || !ghostRect ||
+        ghostRect.width < sourceRect.width * 0.9 || ghostRect.height < sourceRect.height * 0.9) {
+      throw new Error(`${smokeName}: ${label} should lift a full-size card ghost and preview the swap target`);
+    }
+    source.dispatchEvent(new PointerCtor("pointerup", {
+      bubbles: true,
+      cancelable: true,
+      pointerId,
+      pointerType: "mouse",
+      button: 0,
+      buttons: 0,
+      clientX: targetRect.left + targetRect.width / 2,
+      clientY: targetRect.top + targetRect.height / 2
+    }));
+    await waitForSmoke(() => {
+      const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
+      return ids.every((id, index) => id === expectedIds[index]) && !document.querySelector(".hand-drag-ghost");
+    }, `${smokeName}: ${label} swaps both card slots`);
+  };
+
+  let cardsForDrag = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
+  const rightToLeftOrder = [...displayBefore];
+  [rightToLeftOrder[0], rightToLeftOrder[rightToLeftOrder.length - 1]] = [
+    rightToLeftOrder.at(-1),
+    rightToLeftOrder[0]
+  ];
+  await dragSwap({
+    source: cardsForDrag.at(-1),
+    target: cardsForDrag[0],
+    pointerId: 73,
+    expectedIds: rightToLeftOrder,
+    previewClass: "swap-preview-right",
+    label: "right-to-left drag"
+  });
+
+  cardsForDrag = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
+  const leftToRightOrder = [...rightToLeftOrder];
+  [leftToRightOrder[0], leftToRightOrder[1]] = [leftToRightOrder[1], leftToRightOrder[0]];
+  await dragSwap({
+    source: cardsForDrag[0],
+    target: cardsForDrag[1],
+    pointerId: 74,
+    expectedIds: leftToRightOrder,
+    previewClass: "swap-preview-left",
+    label: "left-to-right drag"
+  });
   if (ctx.state.player.hand.some((card, index) => card.uid !== ruleOrderBefore[index])) {
     throw new Error(`${smokeName}: UI reorder must not mutate the rule hand array`);
   }
