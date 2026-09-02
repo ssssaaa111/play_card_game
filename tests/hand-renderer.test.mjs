@@ -106,13 +106,9 @@ test("invalid fusion hand materials keep their exact reason after renderer extra
   assert.ok(!view.cardClasses.includes("action-ready"));
 });
 
-test("hand detail entry stays independent from action and reorder semantics", () => {
-  assert.deepEqual(handDetailEntryView(card(), { reorderMode: false }), {
+test("hand detail entry stays available while cards support direct dragging", () => {
+  assert.deepEqual(handDetailEntryView(card()), {
     visible: true,
-    label: "查看预见之召详情"
-  });
-  assert.deepEqual(handDetailEntryView(card(), { reorderMode: true }), {
-    visible: false,
     label: "查看预见之召详情"
   });
 });

@@ -64,13 +64,3 @@ export function sortHandCardsByType(cards = [], preferredOrder = []) {
     })
     .map(({ card }) => card);
 }
-
-export function handPlacementTap(selectedUid = "", tappedUid = "") {
-  if (!tappedUid) return { selectedUid, placement: null };
-  if (!selectedUid) return { selectedUid: tappedUid, placement: null };
-  if (selectedUid === tappedUid) return { selectedUid: "", placement: null };
-  return {
-    selectedUid: "",
-    placement: { sourceUid: selectedUid, targetUid: tappedUid }
-  };
-}

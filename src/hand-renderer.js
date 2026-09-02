@@ -63,9 +63,9 @@ export function handCardView({
   };
 }
 
-export function handDetailEntryView(card = {}, { reorderMode = false } = {}) {
+export function handDetailEntryView(card = {}) {
   return {
-    visible: !reorderMode,
+    visible: true,
     label: `查看${card.name || "卡牌"}详情`
   };
 }
@@ -84,11 +84,9 @@ export function renderHandCards({
   fusionCandidateForCard = () => false,
   fusionTargetForCard = () => null,
   fusionSelectedUids = [],
-  reorderMode = false,
-  reorderSelectedUid = "",
+  directReorder = false,
   onMoveCard = () => {},
   onPlaceCard = () => {},
-  onTapCard = () => {},
   onCardDetail = () => {},
   onCardClick = () => {},
   onCardDoubleClick = () => {}
@@ -109,14 +107,13 @@ export function renderHandCards({
       drawHighlighted: animationKey === "draw-player" && index === cards.length - 1
     });
     const cardEl = createCardElement(document, card, { asset: assetForCard(card), handSummary: true });
-    const detailEntry = handDetailEntryView(card, { reorderMode });
+    const detailEntry = handDetailEntryView(card);
     let suppressClick = false;
     cardEl.dataset.zone = "hand";
     cardEl.dataset.cardUid = card.uid || "";
     cardEl.dataset.displayIndex = String(index);
     cardEl.draggable = false;
-    cardEl.classList.toggle("hand-reorder-card", reorderMode);
-    cardEl.classList.toggle("hand-reorder-selected", reorderMode && reorderSelectedUid === card.uid);
+    cardEl.classList.toggle("hand-direct-reorder", directReorder);
     cardEl.setAttribute("aria-grabbed", "false");
     view.cardClasses.forEach((className) => cardEl.classList.add(className));
     cardEl.title = view.title;
@@ -146,35 +143,9 @@ export function renderHandCards({
       cardEl.appendChild(detailButton);
     }
 
-    if (reorderMode) {
-      cardEl.setAttribute("role", "button");
+    if (directReorder) {
       cardEl.tabIndex = 0;
-      cardEl.setAttribute("aria-pressed", String(reorderSelectedUid === card.uid));
-      const controls = document.createElement("span");
-      controls.className = "hand-reorder-controls";
-      const left = document.createElement("button");
-      left.type = "button";
-      left.className = "hand-reorder-step";
-      left.textContent = "←";
-      left.disabled = index === 0;
-      left.setAttribute("aria-label", `将${card.name}左移`);
-      left.addEventListener("click", (event) => {
-        event.stopPropagation();
-        onMoveCard(card, -1);
-      });
-      const right = document.createElement("button");
-      right.type = "button";
-      right.className = "hand-reorder-step";
-      right.textContent = "→";
-      right.disabled = index === cards.length - 1;
-      right.setAttribute("aria-label", `将${card.name}右移`);
-      right.addEventListener("click", (event) => {
-        event.stopPropagation();
-        onMoveCard(card, 1);
-      });
-      controls.append(left, right);
-      cardEl.appendChild(controls);
-
+      cardEl.setAttribute("aria-description", "可直接拖动换位；按住 Alt 再按左右方向键可微调顺序");
       let pointerDrag = null;
       const clearPointerTargets = () => {
         root.querySelectorAll(".is-drop-target").forEach((element) => element.classList.remove("is-drop-target"));
@@ -218,39 +189,29 @@ export function renderHandCards({
         cardEl.setAttribute("aria-grabbed", "false");
         clearPointerTargets();
         if (targetUid) onPlaceCard(card.uid, targetUid);
+        document.defaultView?.setTimeout(() => {
+          suppressClick = false;
+        }, 0);
       };
       cardEl.addEventListener("pointerup", finishPointerDrag);
       cardEl.addEventListener("pointercancel", finishPointerDrag);
-      const mouseMoveHandler = (event) => updatePointerDrag(event);
-      const mouseUpHandler = (event) => {
-        finishPointerDrag(event);
-        document.removeEventListener("mousemove", mouseMoveHandler);
-        document.removeEventListener("mouseup", mouseUpHandler);
-      };
-      cardEl.addEventListener("mousedown", (event) => {
-        if (event.button !== 0 || event.target.closest("button")) return;
-        if (!pointerDrag) beginPointerDrag(event);
-        document.addEventListener("mousemove", mouseMoveHandler);
-        document.addEventListener("mouseup", mouseUpHandler, { once: true });
-      });
       cardEl.addEventListener("keydown", (event) => {
-        if (!["Enter", " "].includes(event.key)) return;
+        if (!event.altKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
         event.preventDefault();
-        onTapCard(card);
+        onMoveCard(card, event.key === "ArrowLeft" ? -1 : 1);
       });
     }
 
     cardEl.addEventListener("click", () => {
-      if (reorderMode && suppressClick) {
+      if (directReorder && suppressClick) {
         suppressClick = false;
         return;
       }
-      if (reorderMode) onTapCard(card);
-      else onCardClick(card, index);
+      onCardClick(card, index);
     });
     cardEl.addEventListener("dblclick", (event) => {
       event.preventDefault();
-      if (!reorderMode) onCardDoubleClick(card, index);
+      onCardDoubleClick(card, index);
     });
     fragment.appendChild(cardEl);
   });

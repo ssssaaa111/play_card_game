@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  handPlacementTap,
   placeHandCard,
   reconcileHandOrder,
   shiftHandCard,
@@ -60,14 +59,4 @@ test("type sorting places a newly drawn card into its group without disturbing p
     sortHandCardsByType(afterDraw, preferredOrder).map((entry) => entry.uid),
     ["monster", "spell-a", "spell-b", "trap"]
   );
-});
-
-test("tap placement selects, cancels, then emits an explicit source and target", () => {
-  assert.deepEqual(handPlacementTap("", "a"), { selectedUid: "a", placement: null });
-  assert.deepEqual(handPlacementTap("a", "a"), { selectedUid: "", placement: null });
-  assert.deepEqual(handPlacementTap("a", "c"), {
-    selectedUid: "",
-    placement: { sourceUid: "a", targetUid: "c" }
-  });
-  assert.deepEqual(handPlacementTap("a", ""), { selectedUid: "a", placement: null });
 });

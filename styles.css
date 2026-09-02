@@ -2836,10 +2836,11 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 .hand-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 8px;
   min-height: 30px;
-  flex-wrap: wrap;
+  padding-inline: 2px;
+  flex-wrap: nowrap;
 }
 
 .hand-toolbar[hidden] {
@@ -2847,10 +2848,22 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 }
 
 #handOrderStatus {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: #bfeff0;
   font-size: 11px;
   font-weight: 800;
   margin-right: auto;
+  white-space: nowrap;
+}
+
+#handOrderStatus::before {
+  content: "↔";
+  color: var(--cyan);
+  font-size: 14px;
+  line-height: 1;
 }
 
 .hand-order-shortcut {
@@ -2862,19 +2875,6 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
 
 .hand-order-shortcut[hidden] {
   display: none;
-}
-
-.hand-reorder-toggle {
-  min-height: 30px;
-  padding: 5px 10px;
-  border-color: rgba(84, 210, 210, 0.4);
-  font-size: 11px;
-}
-
-.hand-reorder-toggle[aria-pressed="true"] {
-  border-color: rgba(246, 189, 96, 0.75);
-  color: #fff0b8;
-  background: rgba(246, 189, 96, 0.12);
 }
 
 .hand {
@@ -2990,89 +2990,26 @@ body[data-duel-turn="ai"] #aiTraps .trap-slot {
   padding: 8px;
 }
 
-.hand .card.hand-reorder-card {
-  padding-bottom: 44px;
-  border-color: rgba(84, 210, 210, 0.72);
+.hand .card.hand-direct-reorder {
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-x;
   user-select: none;
 }
 
-.hand .card.hand-reorder-card:active {
+.hand .card.hand-direct-reorder:active {
   cursor: grabbing;
 }
 
-.hand .card.hand-reorder-card .action-tag,
-.hand .card.hand-reorder-card .action-reason {
-  display: none;
-}
-
-.hand .card.hand-reorder-card.is-dragging {
+.hand .card.hand-direct-reorder.is-dragging {
+  z-index: 9;
   opacity: 0.45;
-  transform: scale(0.97);
+  filter: saturate(0.7);
+  transform: translateY(-2px) scale(0.97);
 }
 
-.hand .card.hand-reorder-card.is-drop-target {
+.hand .card.hand-direct-reorder.is-drop-target {
   border-color: rgba(246, 189, 96, 0.98);
   box-shadow: 0 0 0 3px rgba(246, 189, 96, 0.24), 0 16px 30px rgba(0, 0, 0, 0.42);
-}
-
-.hand .card.hand-reorder-card.hand-reorder-selected {
-  border-color: rgba(246, 189, 96, 0.98);
-  box-shadow: 0 0 0 3px rgba(246, 189, 96, 0.26), 0 18px 34px rgba(0, 0, 0, 0.46);
-  transform: translateY(-4px);
-}
-
-.hand .card.hand-reorder-card.hand-reorder-selected::after {
-  content: "已选移动起点";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 48%;
-  z-index: 7;
-  padding: 6px;
-  border-radius: 999px;
-  color: #2c1b05;
-  background: rgba(255, 214, 130, 0.96);
-  font-size: 11px;
-  font-weight: 900;
-  text-align: center;
-  pointer-events: none;
-}
-
-.hand-reorder-controls {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 7px;
-  z-index: 6;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.hand-reorder-step {
-  min-width: 36px;
-  min-height: 32px;
-  border: 1px solid rgba(84, 210, 210, 0.46);
-  border-radius: 4px;
-  color: #bffafa;
-  background: rgba(7, 18, 26, 0.94);
-  font: inherit;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.hand-reorder-step:hover:not(:disabled),
-.hand-reorder-step:focus-visible {
-  border-color: rgba(246, 189, 96, 0.82);
-  color: #fff0b8;
-  outline: none;
-}
-
-.hand-reorder-step:disabled {
-  cursor: default;
-  opacity: 0.34;
 }
 
 .hand .card .art {

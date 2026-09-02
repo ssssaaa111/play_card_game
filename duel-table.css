@@ -3311,6 +3311,35 @@ body:has(.phase-stage.is-active) .toast.show {
     line-height: 1.45;
   }
 
+  .detail-drawer #detailText:not([hidden]) {
+    display: grid;
+    place-content: center;
+    gap: 10px;
+    padding: 18px;
+    border: 1px dashed rgba(246, 189, 96, 0.2);
+    border-radius: 12px;
+    color: rgba(220, 228, 239, 0.68);
+    background:
+      radial-gradient(circle at 50% 34%, rgba(246, 189, 96, 0.08), transparent 38%),
+      rgba(4, 8, 14, 0.36);
+    text-align: center;
+  }
+
+  .detail-drawer #detailText:not([hidden])::before {
+    content: "◇";
+    color: rgba(246, 189, 96, 0.72);
+    font-size: 34px;
+    line-height: 1;
+    text-shadow: 0 0 22px rgba(246, 189, 96, 0.22);
+  }
+
+  .detail-drawer #detailInspector:not([hidden]) {
+    padding: 9px;
+    border: 1px solid rgba(var(--detail-accent), 0.14);
+    border-radius: 11px;
+    background: rgba(var(--detail-accent), 0.025);
+  }
+
   .detail-drawer .detail-actions {
     display: none;
   }
@@ -3607,67 +3636,68 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   .workspace-deck {
-    position: static;
-    width: auto;
-    height: auto;
-    display: contents;
-    overflow: visible;
-    border: 0;
-    background: none;
-    box-shadow: none;
-    transform: none;
-    backdrop-filter: none;
+    position: fixed;
+    top: 50%;
+    right: max(8px, calc((100vw - 3200px) / 2 - 312px));
+    bottom: auto;
+    left: auto;
+    z-index: 34;
+    width: 304px;
+    height: min(1400px, calc(100dvh - clamp(280px, 16dvh, 340px) - 150px));
+    min-height: 620px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(250px, 0.62fr) minmax(0, 1.38fr);
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid rgba(132, 230, 224, 0.24);
+    border-radius: 18px;
+    background:
+      radial-gradient(circle at 14% 0%, rgba(246, 189, 96, 0.11), transparent 30%),
+      radial-gradient(circle at 88% 100%, rgba(84, 210, 210, 0.11), transparent 34%),
+      rgba(7, 12, 20, 0.96);
+    box-shadow: 0 24px 68px rgba(0, 0, 0, 0.46), inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+    transform: translateY(-50%);
+    backdrop-filter: blur(18px);
   }
 
   .workspace-deck .workspace-drawer,
   .workspace-deck .workspace-drawer.is-open,
   .workspace-deck .workspace-drawer.is-docked {
-    position: fixed;
-    top: calc((100dvh - clamp(280px, 16dvh, 340px) + 78px) / 2);
-    bottom: auto;
-    z-index: 34;
-    width: 304px;
-    height: min(clamp(900px, 72dvh, 1500px), calc(100dvh - clamp(280px, 16dvh, 340px) - 160px));
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
     gap: 9px;
     padding: 14px;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 16px;
-    background:
-      linear-gradient(165deg, rgba(255, 255, 255, 0.045), transparent 28%),
-      rgba(7, 12, 20, 0.97);
-    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.4);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    transform: translateY(-50%);
-    backdrop-filter: blur(18px);
+    transform: none;
+    backdrop-filter: none;
   }
 
   .workspace-deck .detail-drawer,
   .workspace-deck .detail-drawer.is-open,
   .workspace-deck .detail-drawer.is-docked {
-    left: auto;
-    right: min(calc(100% - 320px), calc((100% + 3200px) / 2));
     grid-template-rows: auto minmax(0, 1fr);
-    border-color: rgba(246, 189, 96, 0.28);
-    border-radius: 16px 4px 4px 16px;
-    box-shadow: -16px 20px 48px rgba(0, 0, 0, 0.34), inset -1px 0 rgba(246, 189, 96, 0.16);
+    border-bottom: 1px solid rgba(132, 230, 224, 0.18);
+    background: linear-gradient(180deg, rgba(246, 189, 96, 0.035), transparent 58%);
   }
 
   .workspace-deck .timeline-drawer,
   .workspace-deck .timeline-drawer.is-open,
   .workspace-deck .timeline-drawer.is-docked {
-    right: auto;
-    left: min(calc(100% - 320px), calc((100% + 3200px) / 2));
     grid-template-rows: auto auto auto minmax(0, 1fr);
-    border-color: rgba(84, 210, 210, 0.28);
-    border-radius: 4px 16px 16px 4px;
-    background:
-      radial-gradient(circle at 92% 2%, rgba(84, 210, 210, 0.12), transparent 28%),
-      linear-gradient(165deg, rgba(255, 255, 255, 0.045), transparent 28%),
-      rgba(7, 12, 20, 0.97);
-    box-shadow: 16px 20px 48px rgba(0, 0, 0, 0.34), inset 1px 0 rgba(84, 210, 210, 0.16);
+    background: linear-gradient(180deg, rgba(84, 210, 210, 0.025), transparent 44%);
   }
 
   .workspace-deck .detail-drawer .detail-card {
@@ -3683,15 +3713,13 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 }
 
-/* Desktop workbench: context belongs beside the board, never across its
-   center. The left rail continues the duelist HUD while the timeline becomes
-   a slim right-side instrument panel. */
+/* Desktop workbench: current-card context and battle history share one
+   right-side intelligence rail, leaving the center stage entirely to play. */
 @media (min-width: 1600px) and (max-width: 2399px) and (min-height: 900px) {
   #app {
     --workspace-height: 0px;
     --workspace-track: 34px;
-    --detail-rail-width: clamp(220px, 12vw, 250px);
-    --timeline-rail-width: clamp(260px, 15vw, 300px);
+    --workspace-rail-width: clamp(300px, 18vw, 360px);
   }
 
   #app .duel-table .field {
@@ -3701,8 +3729,8 @@ body:has(.phase-stage.is-active) .toast.show {
       var(--workspace-track)
       var(--support-track-size)
       minmax(96px, 1fr);
-    padding-left: calc(var(--table-hud-width) + var(--detail-rail-width) + 44px);
-    padding-right: calc(var(--timeline-rail-width) + 26px);
+    padding-left: calc(var(--table-hud-width) + 26px);
+    padding-right: calc(var(--workspace-rail-width) + 26px);
   }
 
   #app .duel-table .center-line {
@@ -3711,71 +3739,65 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 
   .workspace-deck {
-    position: static;
-    width: auto;
+    position: absolute;
+    inset: 122px 10px 10px auto;
+    z-index: 24;
+    width: var(--workspace-rail-width);
     height: auto;
-    display: contents;
-    overflow: visible;
-    border: 0;
-    background: none;
-    box-shadow: none;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(260px, 0.72fr) minmax(0, 1.28fr);
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid rgba(132, 230, 224, 0.22);
+    border-radius: 15px;
+    background:
+      radial-gradient(circle at 12% 0%, rgba(246, 189, 96, 0.09), transparent 30%),
+      radial-gradient(circle at 88% 100%, rgba(84, 210, 210, 0.09), transparent 34%),
+      rgba(7, 12, 20, 0.94);
+    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.36), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
     transform: none;
-    backdrop-filter: none;
+    backdrop-filter: blur(16px);
   }
 
   .workspace-deck .workspace-drawer,
   .workspace-deck .workspace-drawer.is-open,
   .workspace-deck .workspace-drawer.is-docked {
-    position: absolute;
-    z-index: 24;
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    width: 100%;
+    height: 100%;
     min-width: 0;
     min-height: 0;
     gap: 8px;
-    padding: 11px;
+    padding: 12px;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 13px;
-    background:
-      linear-gradient(165deg, rgba(255, 255, 255, 0.045), transparent 30%),
-      rgba(7, 12, 20, 0.9);
-    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    backdrop-filter: blur(14px);
+    transform: none;
+    backdrop-filter: none;
   }
 
   .workspace-deck .detail-drawer,
   .workspace-deck .detail-drawer.is-open,
   .workspace-deck .detail-drawer.is-docked {
-    top: 50%;
-    right: auto;
-    bottom: auto;
-    left: 10px;
-    width: var(--detail-rail-width);
-    height: min(380px, calc(100% - 380px));
-    min-height: 220px;
     grid-template-rows: auto minmax(0, 1fr);
-    border-color: rgba(246, 189, 96, 0.22);
-    transform: translateY(-50%);
+    border-bottom: 1px solid rgba(132, 230, 224, 0.16);
+    background: linear-gradient(180deg, rgba(246, 189, 96, 0.032), transparent 58%);
   }
 
   .workspace-deck .timeline-drawer,
   .workspace-deck .timeline-drawer.is-open,
   .workspace-deck .timeline-drawer.is-docked {
-    /* Keep the always-visible battle log below the versus HUD. At this
-       breakpoint the right player portrait reaches into the former 10px
-       top rail, so a full-height drawer could cover the face and LP edge. */
-    inset: 122px 10px 10px auto;
-    width: var(--timeline-rail-width);
-    height: auto;
     grid-template-rows: auto auto auto minmax(0, 1fr);
-    border-color: rgba(84, 210, 210, 0.22);
-    background:
-      radial-gradient(circle at 92% 2%, rgba(84, 210, 210, 0.1), transparent 28%),
-      linear-gradient(165deg, rgba(255, 255, 255, 0.04), transparent 30%),
-      rgba(7, 12, 20, 0.91);
-    transform: none;
+    background: linear-gradient(180deg, rgba(84, 210, 210, 0.024), transparent 44%);
   }
 
   .workspace-deck .detail-drawer .detail-card,
@@ -3788,34 +3810,22 @@ body:has(.phase-stage.is-active) .toast.show {
   }
 }
 
-/* On desktop both one-click type sorting and manual drag sorting stay visible
-   in the hand label rail. Expanded reorder controls return to normal flow so
-   their labels never cover cards. */
+/* Desktop hand organization is deliberately modeless: type sorting is a
+   single command and every card remains directly draggable. */
 @media (min-width: 1600px) and (min-height: 900px) {
   .hand-panel {
     position: relative;
   }
 
-  .hand-stack:has(> .hand-toolbar:not([hidden]) .hand-reorder-toggle[aria-pressed="false"]) {
-    grid-template-rows: minmax(0, 1fr) 0 0;
+  .hand-toolbar:not([hidden]) {
+    min-height: 30px;
+    padding: 0 2px;
   }
 
-  .hand-toolbar:not([hidden]):has(.hand-reorder-toggle[aria-pressed="false"]) {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    z-index: 5;
-    width: 72px;
+  .hand-toolbar:not([hidden]) .hand-order-shortcut {
+    min-width: 72px;
     min-height: 28px;
-    display: grid;
-    gap: 4px;
-  }
-
-  .hand-toolbar:not([hidden]):has(.hand-reorder-toggle[aria-pressed="false"]) .hand-reorder-toggle,
-  .hand-toolbar:not([hidden]):has(.hand-reorder-toggle[aria-pressed="false"]) .hand-order-shortcut {
-    width: 100%;
-    min-height: 28px;
-    padding: 4px 5px;
+    padding: 4px 8px;
     font-size: 9px;
   }
 
@@ -5654,8 +5664,8 @@ body:has(.phase-stage.is-active) .toast.show {
 
 @media (min-width: 1600px) and (max-width: 2399px) and (min-height: 900px) {
   #app .duel-table .field {
-    padding-left: calc(var(--detail-rail-width) + 30px);
-    padding-right: calc(var(--timeline-rail-width) + 26px);
+    padding-left: calc(var(--table-hud-width) + 26px);
+    padding-right: calc(var(--workspace-rail-width) + 26px);
   }
 }
 

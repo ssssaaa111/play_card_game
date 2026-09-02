@@ -139,14 +139,14 @@
         <section class="detail workspace-drawer detail-drawer" id="detailDrawer" aria-label="卡牌与战斗详情">
           <div class="workspace-drawer-head">
             <div>
-              <span class="workspace-drawer-kicker">战术面板</span>
+              <span class="workspace-drawer-kicker">CARD INSPECTOR</span>
               <strong id="detailDrawerTitle">卡牌详情</strong>
             </div>
             <button class="drawer-close" id="detailDrawerClose" type="button" aria-label="收起卡牌详情">×</button>
           </div>
           <div class="detail-card">
             <h2 id="detailName">选择一张卡</h2>
-            <p id="detailText">点击手牌可以查看效果。选择怪兽后点自己的空召唤区召唤，选择场上怪兽后点敌方怪兽攻击；可直击时点敌方角色发动直接攻击。</p>
+            <p id="detailText">选择手牌、场上卡牌或时间线中的卡名，这里会显示效果、属性与战斗预览。行动按钮会在手牌上方集中出现。</p>
             <div class="detail-inspector" id="detailInspector" hidden>
               <div class="detail-summary" id="detailSummary"></div>
               <div class="detail-effect-block">
@@ -252,10 +252,9 @@
       </div>
       <div class="hand-stack">
         <div class="hand-toolbar" id="handToolbar" hidden>
-          <span id="handOrderStatus" hidden>拖动卡牌，或使用卡牌上的左右按钮调整顺序。</span>
-          <button class="btn ghost hand-order-shortcut" id="handSortType" type="button" hidden aria-pressed="false" title="按怪兽、魔法、陷阱快速整理；后续抽牌会继续按类型归位">按类型</button>
-          <button class="btn ghost hand-order-shortcut" id="handResetOrder" type="button" hidden>恢复摸牌顺序</button>
-          <button class="btn ghost hand-reorder-toggle" id="handReorderToggle" type="button" aria-pressed="false" title="进入后可直接拖动卡牌换位">拖动排序</button>
+          <span id="handOrderStatus">直接拖动卡牌换位</span>
+          <button class="btn ghost hand-order-shortcut" id="handSortType" type="button" hidden aria-pressed="false" title="立即按怪兽、魔法、陷阱整理；后续抽牌会继续按类型归位">按类型</button>
+          <button class="btn ghost hand-order-shortcut" id="handResetOrder" type="button" hidden>恢复顺序</button>
         </div>
         <div class="hand" id="hand"></div>
         <div class="grave-targets" id="graveTargets" hidden></div>

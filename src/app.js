@@ -48,7 +48,6 @@ import {
 import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
 import { renderHandCards } from './hand-renderer.js';
 import {
-  handPlacementTap,
   placeHandCard,
   reconcileHandOrder,
   shiftHandCard,
@@ -335,8 +334,6 @@ let deckBrowserIndex = 0;
 let deckBrowserPointerStartX = null;
 let handDisplayOrder = [];
 let handOrderMode = "draw";
-let handReorderMode = false;
-let handPlacementUid = "";
 let chainHistoryExpanded = false;
 const directActivationTracker = createDirectActivationTracker();
 const combatHudDamageStage = createCombatHudDamageStage();
@@ -393,7 +390,6 @@ const els = {
   handOrderStatus: document.querySelector("#handOrderStatus"),
   handSortType: document.querySelector("#handSortType"),
   handResetOrder: document.querySelector("#handResetOrder"),
-  handReorderToggle: document.querySelector("#handReorderToggle"),
   graveTargets: document.querySelector("#graveTargets"),
   timeline: document.querySelector("#timeline"),
   timelineCount: document.querySelector("#timelineCount"),
@@ -1033,8 +1029,6 @@ function startGame() {
   chainHistoryExpanded = false;
   handDisplayOrder = [];
   handOrderMode = "draw";
-  handReorderMode = false;
-  handPlacementUid = "";
   closeDeckBrowser();
   resetDuelModal(els);
   if (state.scenarioId === "normal") {
@@ -1074,8 +1068,6 @@ function prepareGame() {
   deckBrowserIndex = 0;
   handDisplayOrder = [];
   handOrderMode = "draw";
-  handReorderMode = false;
-  handPlacementUid = "";
   closeDeckBrowser();
   chainHistoryExpanded = false;
   if (BROWSER_MANUAL_SCENARIO && state.scenarioId === BROWSER_MANUAL_SCENARIO) {
@@ -6142,15 +6134,13 @@ function orderedPlayerHand() {
     ? sortHandCardsByType(state.player.hand, handDisplayOrder)
     : reconcileHandOrder(state.player.hand, handDisplayOrder);
   handDisplayOrder = cards.map((card) => card.uid);
-  if (handPlacementUid && !handDisplayOrder.includes(handPlacementUid)) handPlacementUid = "";
   return cards;
 }
 
 function moveDisplayedHandCard(card, direction) {
   handOrderMode = "custom";
   handDisplayOrder = shiftHandCard(handDisplayOrder, card.uid, direction);
-  handPlacementUid = "";
-  if (els.handOrderStatus) els.handOrderStatus.textContent = `已移动「${card.name}」。拖动卡牌或继续使用左右按钮。`;
+  if (els.handOrderStatus) els.handOrderStatus.textContent = `已移动「${card.name}」。`;
   renderHand();
 }
 
@@ -6158,23 +6148,7 @@ function placeDisplayedHandCard(sourceUid, targetUid) {
   const source = state.player.hand.find((card) => card?.uid === sourceUid);
   handOrderMode = "custom";
   handDisplayOrder = placeHandCard(handDisplayOrder, sourceUid, targetUid);
-  handPlacementUid = "";
   if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已移动「${source.name}」。`;
-  renderHand();
-}
-
-function tapDisplayedHandCard(card) {
-  const result = handPlacementTap(handPlacementUid, card.uid);
-  handPlacementUid = result.selectedUid;
-  if (result.placement) {
-    placeDisplayedHandCard(result.placement.sourceUid, result.placement.targetUid);
-    return;
-  }
-  if (els.handOrderStatus) {
-    els.handOrderStatus.textContent = handPlacementUid
-      ? `已选择「${card.name}」，再点另一张卡即可移动到它前面。`
-      : "已取消移动选择。点一张卡，再点目标位置即可移动。";
-  }
   renderHand();
 }
 
@@ -6182,7 +6156,6 @@ function sortDisplayedHandByType() {
   const cards = sortHandCardsByType(state.player.hand, handDisplayOrder);
   handOrderMode = "type";
   handDisplayOrder = cards.map((card) => card.uid);
-  handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = "已按怪兽、魔法、陷阱整理；怪兽按星级从高到低排列。";
   renderHand();
 }
@@ -6190,46 +6163,27 @@ function sortDisplayedHandByType() {
 function resetDisplayedHandOrder() {
   handOrderMode = "draw";
   handDisplayOrder = state.player.hand.map((card) => card.uid);
-  handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = "已恢复当前手牌的摸牌顺序。";
-  renderHand();
-}
-
-function toggleHandReorder() {
-  handReorderMode = !handReorderMode;
-  if (handReorderMode) handOrderMode = "custom";
-  handPlacementUid = "";
-  if (els.handOrderStatus) {
-    els.handOrderStatus.textContent = handReorderMode
-      ? "拖动卡牌、点选起点与落点，或使用左右按钮调整顺序。"
-      : "手牌顺序已保存到本局显示。";
-  }
   renderHand();
 }
 
 function renderHand(animationKey) {
   const cards = orderedPlayerHand();
-  if (cards.length < 2) handReorderMode = false;
   const showToolbar = state.started && cards.length > 1;
   if (els.handToolbar) els.handToolbar.hidden = !showToolbar;
-  if (els.handOrderStatus) els.handOrderStatus.hidden = !handReorderMode;
+  if (els.handOrderStatus) els.handOrderStatus.hidden = !showToolbar;
   if (els.handSortType) {
     const typeSorting = handOrderMode === "type";
     els.handSortType.hidden = !showToolbar;
-    els.handSortType.textContent = typeSorting ? "类型排序中" : "按类型";
+    els.handSortType.textContent = "按类型";
     els.handSortType.setAttribute("aria-pressed", String(typeSorting));
     els.handSortType.title = typeSorting
-      ? "后续抽牌会继续按怪兽、魔法、陷阱归位；进入拖动排序可改为自定义顺序"
-      : "按怪兽、魔法、陷阱快速整理；后续抽牌会继续按类型归位";
+      ? "当前按怪兽、魔法、陷阱排列；直接拖动任意卡牌可改为自定义顺序"
+      : "立即按怪兽、魔法、陷阱整理；后续抽牌会继续按类型归位";
   }
-  if (els.handResetOrder) els.handResetOrder.hidden = !handReorderMode;
-  if (els.handReorderToggle) {
-    els.handReorderToggle.textContent = handReorderMode ? "完成排序" : "拖动排序";
-    els.handReorderToggle.setAttribute("aria-pressed", String(handReorderMode));
-    els.handReorderToggle.disabled = !showToolbar;
-  }
+  if (els.handResetOrder) els.handResetOrder.hidden = !showToolbar || handOrderMode === "draw";
   els.handToolbar?.setAttribute("data-order-mode", handOrderMode);
-  els.hand?.setAttribute("data-reorder-mode", String(handReorderMode));
+  els.hand?.setAttribute("data-direct-reorder", String(showToolbar));
   els.hand?.setAttribute("data-order-mode", handOrderMode);
   renderHandCards({
     document,
@@ -6249,11 +6203,9 @@ function renderHand(animationKey) {
         : null;
     },
     fusionSelectedUids: state.pendingFusion ? selectedFusionHandUids() : [],
-    reorderMode: handReorderMode,
-    reorderSelectedUid: handPlacementUid,
+    directReorder: showToolbar,
     onMoveCard: moveDisplayedHandCard,
     onPlaceCard: placeDisplayedHandCard,
-    onTapCard: tapDisplayedHandCard,
     onCardDetail: openCardDetail,
     onCardClick: (card) => selectHandCard(card.uid, {
       directActivate: directActivationTracker.register(`hand:${card.uid}`)
@@ -6541,7 +6493,6 @@ if (els.deckBrowserStage) {
     deckBrowserPointerStartX = null;
   });
 }
-if (els.handReorderToggle) els.handReorderToggle.addEventListener("click", toggleHandReorder);
 if (els.handSortType) els.handSortType.addEventListener("click", sortDisplayedHandByType);
 if (els.handResetOrder) els.handResetOrder.addEventListener("click", resetDisplayedHandOrder);
 els.modalRestart.addEventListener("click", () => {

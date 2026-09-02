@@ -9463,18 +9463,20 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
   const wideHandCard = handCard(ctx.els, "star-breach");
   const wideFieldCardRect = wideFieldCard?.getBoundingClientRect();
   const wideHandCardRect = wideHandCard?.getBoundingClientRect();
-  // Headless Chrome applies the requested window size to its outer window, so
-  // the 1700x1000 CI case has an inner height near 913px. The timeline is
-  // intentionally aligned to the monster zones instead of covering the HUD.
-  if (detailRect.width < 215 || detailRect.width > 255 || timelineRect.width < 255 || timelineRect.width > 305 ||
-      detailRect.height < 210 || timelineRect.height < 360) {
-    throw new Error(`${smokeName}: side context rails have the wrong density (${detailRect.width}x${detailRect.height}; ${timelineRect.width}x${timelineRect.height})`);
+  // The standalone CI runner sizes Chrome's outer window, so its usable inner
+  // height can be about 80px shorter than the in-app 1700x1000 viewport.
+  if (workspaceRect.width < 280 || workspaceRect.width > 370 || workspaceRect.height < 420 ||
+      detailRect.height < 240 || timelineRect.height < 170) {
+    throw new Error(
+      `${smokeName}: unified workbench has the wrong density ` +
+      `(workspace=${workspaceRect.width}x${workspaceRect.height}, ` +
+      `detail=${detailRect.width}x${detailRect.height}, timeline=${timelineRect.width}x${timelineRect.height})`
+    );
   }
   if (!wideFieldCardRect || !wideHandCardRect ||
       wideFieldCardRect.height < 100 || wideHandCardRect.height < 130 ||
       wideHandCardRect.height / wideHandCardRect.width < 0.85 ||
-      Math.abs(wideFieldCardRect.height - wideHandCardRect.height) > 55 ||
-      workspaceRect.width > 1 || workspaceRect.height > 1) {
+      Math.abs(wideFieldCardRect.height - wideHandCardRect.height) > 55) {
     throw new Error(
       `${smokeName}: medium spacious density should preserve readable field and hand cards ` +
       `(field=${wideFieldCardRect?.width}x${wideFieldCardRect?.height}, ` +
@@ -9485,14 +9487,21 @@ async function runResponsiveWorkbenchWideBasicSmoke(ctx) {
       aiZoneRect.height < 145 || playerZoneRect.height < 145) {
     throw new Error(`${smokeName}: monster zones should own the wide battlefield center`);
   }
-  if (Math.abs(detailRect.left - (arenaRect.left + 10)) > 2 ||
-      detailRect.right > aiZoneRect.left + 2 ||
+  if (Math.abs(detailRect.left - timelineRect.left) > 2 ||
+      Math.abs(detailRect.width - timelineRect.width) > 2 ||
+      Math.abs(detailRect.top - workspaceRect.top) > 2 ||
+      Math.abs(detailRect.bottom - timelineRect.top) > 2 ||
+      Math.abs(timelineRect.bottom - workspaceRect.bottom) > 2 ||
       detailRect.top < Math.max(enemyHudRect.bottom, playerHudRect.bottom) + 8 ||
-      timelineRect.left < aiZoneRect.right - 12 ||
-      Math.abs(timelineRect.right - (arenaRect.right - 10)) > 2 ||
-      Math.abs(timelineRect.top - aiZoneRect.top) > 2 ||
-      Math.abs(timelineRect.bottom - playerZoneRect.bottom) > 2) {
-    throw new Error(`${smokeName}: context rails should flank the board without covering monsters`);
+      workspaceRect.left < aiZoneRect.right - 12 ||
+      Math.abs(workspaceRect.right - (arenaRect.right - 10)) > 2 ||
+      workspaceRect.bottom > handRect.top + 2) {
+    throw new Error(
+      `${smokeName}: detail and timeline should form one right-side workbench without covering the board ` +
+      `(workspace=${workspaceRect.left},${workspaceRect.top}-${workspaceRect.right},${workspaceRect.bottom}; ` +
+      `detail=${detailRect.left},${detailRect.top}-${detailRect.right},${detailRect.bottom}; ` +
+      `timeline=${timelineRect.left},${timelineRect.top}-${timelineRect.right},${timelineRect.bottom})`
+    );
   }
 
   clickSmokeElement(handCard(ctx.els, "star-breach"), `${smokeName}: select hand card`);
@@ -9636,13 +9645,20 @@ async function runResponsiveWorkbench4kBasicSmoke(ctx) {
   if (document.body.dataset.workspaceLayout !== "gutter") {
     throw new Error(`${smokeName}: expected gutter workspace mode`);
   }
-  if (workspaceRect.width > 1 || workspaceRect.height > 1 || centerRect.height > 60) {
-    throw new Error(`${smokeName}: auxiliary workspace still reserves the battlefield center`);
+  if (workspaceRect.width < 280 || workspaceRect.width > 320 || workspaceRect.height < 900 ||
+      centerRect.height > 60) {
+    throw new Error(`${smokeName}: unified gutter workbench has the wrong 4K density`);
   }
-  if (Math.abs(detailRect.right - appRect.left) > 2 || Math.abs(timelineRect.left - appRect.right) > 2) {
+  if (Math.abs(detailRect.left - timelineRect.left) > 2 ||
+      Math.abs(detailRect.width - timelineRect.width) > 2 ||
+      Math.abs(detailRect.top - workspaceRect.top) > 2 ||
+      Math.abs(detailRect.bottom - timelineRect.top) > 2 ||
+      Math.abs(timelineRect.bottom - workspaceRect.bottom) > 2 ||
+      workspaceRect.left < appRect.right + 4 || workspaceRect.right > window.innerWidth - 4) {
     throw new Error(
-      `${smokeName}: context rails should connect to the central game surface ` +
-      `(detailRight=${detailRect.right}, app=${appRect.left}-${appRect.right}, timelineLeft=${timelineRect.left})`
+      `${smokeName}: detail and timeline should stack in one gutter workbench ` +
+      `(appRight=${appRect.right}, workspace=${workspaceRect.left}-${workspaceRect.right}, ` +
+      `detail=${detailRect.top}-${detailRect.bottom}, timeline=${timelineRect.top}-${timelineRect.bottom})`
     );
   }
   const enemyHudRect = enemyHud.getBoundingClientRect();
@@ -9922,73 +9938,78 @@ async function runHandReorderBasicSmoke(ctx) {
   const displayBefore = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'))
     .map((card) => card.dataset.cardId);
   if (displayBefore.length < 2) throw new Error(`${smokeName}: scenario must expose at least two hand cards`);
-  if (ctx.els.handSortType.hidden || ctx.els.handReorderToggle.textContent !== "拖动排序") {
-    throw new Error(`${smokeName}: direct type sort and drag-sort entry should both be visible`);
+  if (ctx.els.handSortType.hidden || ctx.els.hand.querySelectorAll(".hand-direct-reorder").length !== displayBefore.length) {
+    throw new Error(`${smokeName}: one-click type sort and modeless drag sorting should both be available`);
+  }
+  if (ctx.els.hand.querySelector(".hand-reorder-controls")) {
+    throw new Error(`${smokeName}: direct drag sorting should not render arrow controls`);
   }
 
-  clickSmokeElement(ctx.els.handSortType, `${smokeName}: sort directly without entering reorder mode`);
+  clickSmokeElement(ctx.els.handSortType, `${smokeName}: sort immediately with one click`);
   await waitForSmoke(() => {
     const types = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardType);
     return types.lastIndexOf("spell") < types.indexOf("trap");
-  }, `${smokeName}: direct type sort groups display cards`);
+  }, `${smokeName}: one-click type sort groups display cards`);
   if (ctx.state.player.hand.some((card, index) => card.uid !== ruleOrderBefore[index])) {
     throw new Error(`${smokeName}: direct type sort must not mutate the rule hand array`);
   }
-
-  clickSmokeElement(ctx.els.handReorderToggle, `${smokeName}: enter reorder mode`);
   await waitForSmoke(
-    () => ctx.els.hand.dataset.reorderMode === "true" &&
-      ctx.els.hand.querySelectorAll(".hand-reorder-controls").length === displayBefore.length,
-    `${smokeName}: reorder controls appear`
+    () => !ctx.els.handResetOrder.hidden && ctx.els.hand.dataset.orderMode === "type",
+    `${smokeName}: reset command appears after sorting`
   );
   clickSmokeElement(ctx.els.handResetOrder, `${smokeName}: reset after direct type sort`);
   await waitForSmoke(() => {
     const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
     return ids.every((id, index) => id === displayBefore[index]);
   }, `${smokeName}: reset restores opening order after direct sort`);
-  clickSmokeElement(ctx.els.handSortType, `${smokeName}: sort display cards by type`);
-  await waitForSmoke(() => {
-    const types = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardType);
-    return types.lastIndexOf("spell") < types.indexOf("trap");
-  }, `${smokeName}: type shortcut groups spells before traps`);
-  if (ctx.state.player.hand.some((card, index) => card.uid !== ruleOrderBefore[index])) {
-    throw new Error(`${smokeName}: type sort must not mutate the rule hand array`);
-  }
-  clickSmokeElement(ctx.els.handResetOrder, `${smokeName}: reset display to draw order`);
-  await waitForSmoke(() => {
-    const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
-    return ids.every((id, index) => id === displayBefore[index]);
-  }, `${smokeName}: reset restores draw order`);
 
-  const cardsForTap = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
-  clickSmokeElement(cardsForTap.at(-1), `${smokeName}: choose tap-move source`);
-  await waitForSmoke(
-    () => ctx.els.hand.querySelector(".hand-reorder-selected")?.dataset.cardId === displayBefore.at(-1),
-    `${smokeName}: tap-move source is visible`
-  );
-  clickSmokeElement(ctx.els.hand.querySelector('[data-zone="hand"]'), `${smokeName}: choose tap-move destination`);
+  const cardsForDrag = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
+  const dragSource = cardsForDrag.at(-1);
+  const dragTarget = cardsForDrag[0];
+  const sourceRect = dragSource.getBoundingClientRect();
+  const targetRect = dragTarget.getBoundingClientRect();
+  const PointerCtor = window.PointerEvent || window.MouseEvent;
+  const pointerId = 73;
+  dragSource.dispatchEvent(new PointerCtor("pointerdown", {
+    bubbles: true,
+    cancelable: true,
+    pointerId,
+    pointerType: "mouse",
+    button: 0,
+    buttons: 1,
+    clientX: sourceRect.left + sourceRect.width / 2,
+    clientY: sourceRect.top + sourceRect.height / 2
+  }));
+  dragSource.dispatchEvent(new PointerCtor("pointermove", {
+    bubbles: true,
+    cancelable: true,
+    pointerId,
+    pointerType: "mouse",
+    button: 0,
+    buttons: 1,
+    clientX: targetRect.left + targetRect.width / 2,
+    clientY: targetRect.top + targetRect.height / 2
+  }));
+  dragSource.dispatchEvent(new PointerCtor("pointerup", {
+    bubbles: true,
+    cancelable: true,
+    pointerId,
+    pointerType: "mouse",
+    button: 0,
+    buttons: 0,
+    clientX: targetRect.left + targetRect.width / 2,
+    clientY: targetRect.top + targetRect.height / 2
+  }));
   await waitForSmoke(() => {
     const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
-    return ids[0] === displayBefore.at(-1) && !ctx.els.hand.querySelector(".hand-reorder-selected");
-  }, `${smokeName}: tap placement moves the display card`);
-  clickSmokeElement(ctx.els.handResetOrder, `${smokeName}: reset after tap placement`);
-  await waitForSmoke(() => ctx.els.hand.querySelector('[data-zone="hand"]')?.dataset.cardId === displayBefore[0], `${smokeName}: second reset restores draw order`);
-
-  const firstCard = ctx.els.hand.querySelector('[data-zone="hand"]');
-  const moveRight = firstCard?.querySelector('.hand-reorder-step[aria-label$="右移"]');
-  clickSmokeElement(moveRight, `${smokeName}: move first display card right`);
-  await waitForSmoke(() => {
-    const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
-    return ids[0] === displayBefore[1] && ids[1] === displayBefore[0];
-  }, `${smokeName}: display order changes`);
+    return ids[0] === displayBefore.at(-1);
+  }, `${smokeName}: direct card drag changes display order`);
   if (ctx.state.player.hand.some((card, index) => card.uid !== ruleOrderBefore[index])) {
     throw new Error(`${smokeName}: UI reorder must not mutate the rule hand array`);
   }
-  clickSmokeElement(ctx.els.handReorderToggle, `${smokeName}: finish reorder mode`);
-  await waitForSmoke(
-    () => ctx.els.hand.dataset.reorderMode === "false" && !ctx.els.hand.querySelector(".hand-reorder-controls"),
-    `${smokeName}: reorder controls close without resetting display order`
-  );
+  if (ctx.els.handResetOrder.hidden || ctx.els.hand.dataset.orderMode !== "custom") {
+    throw new Error(`${smokeName}: direct drag should switch to custom order and expose reset`);
+  }
   setSmokeStatus("passed", smokeName);
 }
 
