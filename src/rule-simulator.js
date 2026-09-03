@@ -11,7 +11,7 @@ import {
   tributeCostForCard
 } from "./game-engine.js";
 import { deckPresets, library } from "./data.js";
-import { MAX_LP, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from "./rules.js";
+import { STARTING_LP, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from "./rules.js";
 
 const PLAYER = "player";
 const AI = "ai";
@@ -34,9 +34,9 @@ const EXPANSION_CARD_IDS = Object.freeze([
 ]);
 const EXPANSION_SUCCESS_EVENT_TYPES = Object.freeze({
   "star-soul-apprentice": new Set(["CARDS_DRAWN"]),
-  "rift-bulwark": new Set(["SHIELD_GAINED"]),
+  "rift-bulwark": new Set(["LP_HEALED"]),
   "soul-resonance": new Set(["STAT_MODIFIED"]),
-  "soul-parry": new Set(["STAT_MODIFIED", "SHIELD_GAINED"])
+  "soul-parry": new Set(["STAT_MODIFIED", "LP_HEALED"])
 });
 const ATTACK_RESPONSE_TRIGGERS = new Set(["attackDestroy", "weakenAttack", "redirectAttack", "soulParry", "aceGuard"]);
 const TRAP_CLASS_BY_TRIGGER = Object.freeze({
@@ -1246,8 +1246,7 @@ function scenarioCard(id, templateId, ownerId, overrides = {}) {
 function basePlayer(id, deck) {
   return {
     id,
-    lp: MAX_LP,
-    shield: 0,
+    lp: STARTING_LP,
     deck,
     hand: [],
     monsterZone: [],
@@ -1337,7 +1336,6 @@ function snapshotState(state) {
       const player = state.players[playerId];
       return [playerId, {
         lp: player.lp,
-        shield: player.shield || 0,
         deck: player.deck.length,
         hand: player.hand.length,
         monsterZone: player.monsterZone.slice(),
@@ -1480,7 +1478,6 @@ function createDamageSourceCounter(source = {}) {
   return {
     events: Math.max(0, Number(source?.events) || 0),
     requested: Math.max(0, Number(source?.requested) || 0),
-    shieldBlocked: Math.max(0, Number(source?.shieldBlocked) || 0),
     dealt: Math.max(0, Number(source?.dealt) || 0)
   };
 }
@@ -1599,7 +1596,6 @@ function summarizeBoardState(state) {
     const player = state.players[playerId];
     return [playerId, {
       lp: player.lp,
-      shield: player.shield || 0,
       deck: player.deck.length,
       hand: player.hand.length,
       grave: player.grave.length,
@@ -1710,7 +1706,6 @@ function recordDamageSource(stats, event, action = null) {
   const entry = stats.diagnostics.damageSources[type] || stats.diagnostics.damageSources.unknown;
   entry.events += 1;
   entry.requested += Math.max(0, Number(event.requested) || Number(event.amount) || 0);
-  entry.shieldBlocked += Math.max(0, Number(event.blocked) || 0);
   entry.dealt += Math.max(0, Number(event.amount) || 0);
 }
 

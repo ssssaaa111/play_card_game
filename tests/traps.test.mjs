@@ -74,11 +74,11 @@ test("marks which cancelled traps consume the attack chance", () => {
 
 test("summarizes trap trigger timing and effect", () => {
   assert.equal(trapSummaryText("counterBoost"), "对手攻击时 / 取消攻击并强化防线 / 消耗攻击");
-  assert.equal(trapSummaryText("attackShift"), "对手攻击时 / 取消攻击并获得护盾 / 消耗攻击");
+  assert.equal(trapSummaryText("attackShift"), "对手攻击时 / 取消攻击并回复生命 / 消耗攻击");
   assert.equal(trapSummaryText("attackNegate"), "对手攻击时 / 无效本次攻击 / 消耗攻击");
   assert.equal(trapSummaryText("aceGuard"), "对手攻击时 / 无效攻击并强化王牌 / 消耗攻击");
   assert.equal(trapSummaryText("redirectAttack"), "对手攻击时 / 改为攻击另一只怪兽");
-  assert.equal(trapSummaryText("soulParry"), "对手攻击时 / 削弱攻击怪兽并获得护盾");
+  assert.equal(trapSummaryText("soulParry"), "对手攻击时 / 削弱攻击怪兽并回复生命");
   assert.equal(trapSummaryText("attackDestroy"), "对手攻击时 / 破坏攻击怪兽");
   assert.equal(trapSummaryText("chainNegate"), "对手发动陷阱时 / 无效该陷阱效果");
   assert.equal(trapSummaryText("missingTrigger"), "未知触发");

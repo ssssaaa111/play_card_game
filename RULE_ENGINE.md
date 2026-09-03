@@ -37,7 +37,6 @@ Card effects should only use these methods:
 - `drawCards`
 - `dealDamage`
 - `heal`
-- `gainShield`
 - `moveCard`
 - `destroyCard`
 - `summonMonster`
@@ -76,7 +75,6 @@ The current event applier handles:
 - `CARDS_DRAWN`
 - `DAMAGE_DEALT`
 - `LP_HEALED`
-- `SHIELD_GAINED`
 - `STAT_MODIFIED`
 - `CONTINUOUS_EFFECT_REGISTERED`
 - `CONTINUOUS_EFFECT_RELEASED`

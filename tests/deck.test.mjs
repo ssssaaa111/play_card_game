@@ -12,13 +12,13 @@ import {
   loadCardList,
   shuffle
 } from "../src/deck.js";
-import { MAX_LP, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from "../src/rules.js";
+import { STARTING_LP, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from "../src/rules.js";
 
 test("creates fresh duelists with empty zones and resources", () => {
   const duelist = createDuelist("player");
 
   assert.equal(duelist.owner, "player");
-  assert.equal(duelist.lp, MAX_LP);
+  assert.equal(duelist.lp, STARTING_LP);
   assert.equal(duelist.field.length, MONSTER_ZONE_SIZE);
   assert.equal(duelist.traps.length, SPELL_TRAP_ZONE_SIZE);
   assert.deepEqual(duelist.field, Array(MONSTER_ZONE_SIZE).fill(null));

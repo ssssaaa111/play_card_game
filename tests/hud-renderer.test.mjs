@@ -10,7 +10,6 @@ function duelist(owner, overrides = {}) {
   return {
     owner,
     lp: 4000,
-    shield: 0,
     extraSummon: 0,
     deck: [],
     grave: [],
@@ -22,7 +21,6 @@ test("player HUD view combines life resources turn state and pile counts", () =>
   const view = buildDuelistHudView({
     duelist: duelist("player", {
       lp: 2000,
-      shield: 600,
       extraSummon: 1,
       deck: [{}, {}, {}],
       grave: [{}]
@@ -37,16 +35,14 @@ test("player HUD view combines life resources turn state and pile counts", () =>
 
   assert.equal(view.name, "星辉使者（你）");
   assert.match(view.skillHtml, /<strong>星辉<\/strong>/);
-  assert.equal(view.life.text, "2000 / 4000");
-  assert.equal(view.life.ariaLabel, "生命值 2000 / 4000，护盾 600");
+  assert.equal(view.life.text, "2000");
+  assert.equal(view.life.ariaLabel, "生命值 2000");
   assert.equal(view.life.tone, "warning");
-  assert.equal(view.shield, 600);
   assert.equal(view.deckCount, 3);
   assert.equal(view.graveCount, 1);
   assert.equal(view.active, true);
   assert.deepEqual(view.vitalItems, [
     { label: "你的回合", tone: "turn" },
-    { label: "护盾 600", tone: "shield" },
     { label: "额外召唤 1", tone: "resource" },
     { label: "生命警戒", tone: "warning" }
   ]);

@@ -52,6 +52,16 @@ test("accepts spell logs with matching resolution", () => {
   assert.equal(audit.ok, true);
 });
 
+test("audits the renamed life recovery spell against its LP resolution", () => {
+  const audit = auditLogEntries([
+    { step: 1, text: "你 发动魔法卡 星命增幅。" },
+    { step: 2, text: "星命增幅 为 你回复 800 LP。" }
+  ]);
+
+  assert.equal(audit.ok, true);
+  assert.deepEqual(audit.issues, []);
+});
+
 test("flags direct attacks that happen right after direct attack was blocked", () => {
   const audit = auditLogEntries([
     { step: 1, text: "攻击无效：对手场上还有怪兽，必须先攻击怪兽；除非卡牌效果允许直接攻击。" },
@@ -91,7 +101,7 @@ test("flags attack previews that are followed by another action without resoluti
 test("accepts attack previews followed by battle or trap resolution", () => {
   assert.equal(auditLogEntries([
     { step: 1, text: "AI 攻击预判：星轨枪兵 直接攻击，预计造成 1800 点伤害。" },
-    { step: 2, text: "风暴转移 转移了攻击，获得 400 护盾。攻击机会已消耗。" }
+    { step: 2, text: "风暴转移 转移了攻击，回复 400 LP。攻击机会已消耗。" }
   ]).ok, true);
 
   assert.equal(auditLogEntries([

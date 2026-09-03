@@ -480,15 +480,15 @@ test("sunflare hidden target choice scenario keeps two non-attack traps conceale
   }));
 });
 
-test("trio shield lethal planning scenario isolates a shielded false lethal", () => {
+test("trio life planning scenario isolates a non-lethal attack route", () => {
   const setup = buildScenarioState(scenarioSetups.trioShieldLethalPlanning, {
     playerPreset: "protagonistTrioOmegaFull",
     aiPreset: "trioOmegaRivalFull"
   });
 
   assert.equal(scenarioSetups.trioShieldLethalPlanning.aiStyle, "scriptedPressure");
-  assert.equal(setup.player.lp, 2000);
-  assert.equal(setup.player.shield, 2000);
+  assert.equal(setup.player.lp, 4000);
+  assert.equal(setup.player.shield, undefined);
   assert.deepEqual(setup.player.field.filter(Boolean).map((card) => card.id), ["prism-saint"]);
   assert.deepEqual(setup.ai.field.filter(Boolean).map((card) => card.id), ["trio-sun-judicator"]);
   assert.deepEqual(setup.ai.hand.map((card) => card.id), ["star-breach"]);
@@ -680,7 +680,7 @@ test("trio omega full duel has multiple setup routes and no opening high-attack 
   const highestOpeningAtk = Math.max(...openingMonsters.map((card) => card.atk));
 
   assert.ok(playerOpening.includes("trio-solar-snare"), "defensive trap route is available");
-  assert.ok(playerOpening.includes("star-shield"), "shield route is available");
+  assert.ok(playerOpening.includes("star-shield"), "life recovery route is available");
   assert.ok(playerOpening.includes("seer-call"), "draw/filter route is available");
   assert.ok(nextSeven.includes("trio-moonbreaker-ray"), "clear-pressure route is drawn into, not opened with");
   assert.ok(nextSeven.includes("trio-ember-pawn"), "low-star resource route is drawn into, not opened with");
@@ -701,8 +701,8 @@ test("trio omega full duel first turn can build resources but cannot convert int
 
   state = engine.getState();
   assert.ok(state.players[PLAYER].hand.some((cardId) => state.cards[cardId].templateId === "trio-moonbreaker-ray"));
-  const shieldId = findCardId(state, PLAYER, "hand", "star-shield");
-  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: shieldId });
+  const lifeBoostId = findCardId(state, PLAYER, "hand", "star-shield");
+  engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: lifeBoostId });
   const snareId = findCardId(engine.getState(), PLAYER, "hand", "trio-solar-snare");
   engine.dispatch({ type: "SET_TRAP", playerId: PLAYER, cardId: snareId, index: 0 });
 

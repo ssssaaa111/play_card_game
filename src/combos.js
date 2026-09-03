@@ -14,10 +14,10 @@ export const elementComboDefinitions = [
   {
     flag: "lightShadow",
     title: "晨昏结界",
-    text: "光属性和暗属性共鸣，获得 600 护盾并抽 1 张卡。",
+    text: "光属性和暗属性共鸣，回复 600 LP 并抽 1 张卡。",
     requires: ["light", "shadow"],
     operations: [
-      { op: "gainShield", player: "self", amount: 600 },
+      { op: "heal", player: "self", amount: 600 },
       { op: "drawCards", player: "self", count: 1 }
     ]
   },
@@ -33,10 +33,10 @@ export const elementComboDefinitions = [
   {
     flag: "shadowAmbush",
     title: "暗影伏击",
-    text: "暗属性怪兽掩护陷阱，获得 300 护盾。",
+    text: "暗属性怪兽掩护陷阱，回复 300 LP。",
     requires: ["shadow"],
     source: "trap",
-    operations: [{ op: "gainShield", player: "self", amount: 300 }]
+    operations: [{ op: "heal", player: "self", amount: 300 }]
   }
 ];
 

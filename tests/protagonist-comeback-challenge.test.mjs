@@ -34,7 +34,6 @@ function basePlayer(id, overrides = {}) {
   return {
     id,
     lp: 4000,
-    shield: 0,
     deck: [],
     hand: [],
     monsterZone: [],

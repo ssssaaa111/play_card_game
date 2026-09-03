@@ -1,6 +1,6 @@
 import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents, tributeCostForCard } from './game-engine.js';
 import { library } from './data.js';
-import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, canEffectTargetCard, totalAtk } from './rules.js';
+import { MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, canEffectTargetCard, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { trapDefinition } from './traps.js';
 import { ACTION_WINDOWS, PHASES, TIMINGS } from './turn-state.js';
@@ -200,7 +200,6 @@ function uiDuelistToEngine(duelist) {
   return {
     id: duelist.owner,
     lp: duelist.lp,
-    shield: duelist.shield || 0,
     deck: compactCardIds(duelist.deck),
     hand: compactCardIds(duelist.hand),
     monsterZone: compactCardIds(duelist.field),
@@ -610,13 +609,10 @@ export function applyUiGameEvents(uiState, events = []) {
     }
     if (event.type === "LP_HEALED") {
       const duelist = uiDuelist(uiState, event.playerId);
-      duelist.lp = Math.min(MAX_LP, duelist.lp + Math.max(0, Number(event.amount) || 0));
+      duelist.lp += Math.max(0, Number(event.amount) || 0);
     }
     if (event.type === "DAMAGE_DEALT") {
       const duelist = uiDuelist(uiState, event.playerId);
-      const pierced = Math.max(0, Number(event.shieldPierced) || 0);
-      const blocked = Math.max(0, Number(event.blocked) || 0);
-      duelist.shield = Math.max(0, (Number(duelist.shield) || 0) - pierced - blocked);
       duelist.lp = Math.max(0, duelist.lp - Math.max(0, Number(event.amount) || 0));
     }
     if (event.type === "GAME_OVER_DECLARED") {
@@ -630,10 +626,6 @@ export function applyUiGameEvents(uiState, events = []) {
       uiState.actionWindowReason = event.reason || "game-over";
       uiState.actionDeadline = 0;
       uiState.timing = uiTimingByActionWindow.gameOver;
-    }
-    if (event.type === "SHIELD_GAINED") {
-      const duelist = uiDuelist(uiState, event.playerId);
-      duelist.shield = Math.min(MAX_SHIELD, (Number(duelist.shield) || 0) + Math.max(0, Number(event.amount) || 0));
     }
     if (event.type === "STAT_MODIFIED") {
       const card = findUiCard(uiState, event.cardId);

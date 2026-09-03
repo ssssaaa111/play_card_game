@@ -75,7 +75,7 @@ test("fusion cards declare known materials and result from unified card data", (
   assert.deepEqual(fusionSpell.fusion.options.map((option) => option.result), ["flare-gale-archon", "tempest-aegis-archon"]);
   assert.equal(fusionResult.type, "monster");
   assert.equal(defensiveResult.type, "monster");
-  assert.equal(defensiveResult.onSummon, "shield400");
+  assert.equal(defensiveResult.onSummon, "heal400");
   fusionSpell.fusion.materials.forEach((id) => {
     assert.equal(cardsById.get(id)?.type, "monster", `fusion material should be a monster: ${id}`);
   });
@@ -348,7 +348,7 @@ test("equipment starter pack has rule-backed cards", () => {
   const cardsById = new Map(library.map((card) => [card.id, card]));
   expectedIds.forEach((id) => assert.ok(cardsById.has(id), `missing new card ${id}`));
 
-  assert.equal(cardsById.get("aegis-mender").onSummon, "shield400");
+  assert.equal(cardsById.get("aegis-mender").onSummon, "heal400");
   [
     ["blade-sigil", "equipBlade", "tempAtk", 300],
     ["aegis-plate", "equipAegis", "tempDef", 500],
@@ -384,11 +384,11 @@ test("basic star soul expansion pack has rule-backed cards and a preset deck", (
   assert.equal(cardsById.get("soul-parry").trigger, "soulParry");
 
   assert.deepEqual(getCardEffectDefinition("starSoulSurvey").operations, [{ op: "drawCards", player: "self", count: 1 }]);
-  assert.deepEqual(getCardEffectDefinition("riftShelter").operations, [{ op: "gainShield", player: "self", amount: 300 }]);
+  assert.deepEqual(getCardEffectDefinition("riftShelter").operations, [{ op: "heal", player: "self", amount: 300 }]);
   assert.deepEqual(getCardEffectDefinition("soulResonance").target, { player: "self", zone: "monsterZone", rule: "strongestAtk" });
   assert.deepEqual(getCardEffectDefinition("soulParry").operations, [
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -300 },
-    { op: "gainShield", player: "self", amount: 300 }
+    { op: "heal", player: "self", amount: 300 }
   ]);
 
   assert.ok(deckPresets.basicExpansion, "basic expansion preset should exist");
@@ -470,7 +470,7 @@ test("protagonist ace evolution pack has rule-backed cards decks and scenarios",
     { op: "specialSummonFromDeckOrHand", player: "self", templateId: "astral-forge-dragon" },
     { op: "modifyStat", cardId: { playerId: "$action.rivalId", zone: "monsterZone" }, stat: "tempAtk", amount: -500 },
     { op: "modifyStat", cardId: { playerId: "$action.rivalId", zone: "monsterZone" }, stat: "tempDef", amount: -500 },
-    { op: "gainShield", player: "self", amount: 300 }
+    { op: "heal", player: "self", amount: 300 }
   ]);
   assert.deepEqual(getCardEffectDefinition("aceCrackdown").target, { player: "rival", zone: "monsterZone", rule: "strongestAtk" });
   assert.deepEqual(getCardEffectDefinition("aceGuard").operations, [
@@ -586,7 +586,7 @@ test("role and AI profile presets are complete", () => {
     assert.ok(profile.name, `${key} role needs name`);
     assert.ok(profile.skill, `${key} role needs skill`);
     assert.ok(profile.text, `${key} role needs text`);
-    assert.ok(["draw", "buff", "burn", "shield"].includes(profile.kind), `${key} role has invalid kind`);
+    assert.ok(["draw", "buff", "burn", "heal"].includes(profile.kind), `${key} role has invalid kind`);
   });
 
   Object.entries(aiProfiles).forEach(([key, profile]) => {

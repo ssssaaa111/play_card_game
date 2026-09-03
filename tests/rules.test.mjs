@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   FIELD_SIZE,
-  MAX_LP,
+  STARTING_LP,
   MONSTER_ZONE_SIZE,
   SPELL_TRAP_ZONE_SIZE,
   battlePreviewText,
@@ -16,7 +16,6 @@ import {
   legalAttackTargets,
   makeAttackIntentPreview,
   makeBattlePreview,
-  shieldPreview,
   spellTargetPrompt,
   strongestMonster,
   totalAtk,
@@ -51,7 +50,7 @@ function duelist(overrides = {}) {
 }
 
 test("exports core rule constants", () => {
-  assert.equal(MAX_LP, 4000);
+  assert.equal(STARTING_LP, 4000);
   assert.equal(MONSTER_ZONE_SIZE, 5);
   assert.equal(SPELL_TRAP_ZONE_SIZE, 5);
   assert.equal(FIELD_SIZE, MONSTER_ZONE_SIZE);
@@ -178,11 +177,11 @@ test("describes battle preview outcomes", () => {
   assert.match(battlePreviewText(attacker, equalDefenseTarget), /守备怪兽挡下攻击/);
 });
 
-test("describes shield-adjusted life damage in battle preview text", () => {
+test("describes direct LP damage without a separate shield resource", () => {
   const attacker = monster({ name: "曜冕裁决者", atk: 3000 });
   const target = monster({ name: "辉棱圣徒", atk: 1000 });
-  const owner = duelist({ owner: "ai", shield: 0 });
-  const rival = duelist({ owner: "player", shield: 2000 });
+  const owner = duelist({ owner: "ai" });
+  const rival = duelist({ owner: "player" });
   const preview = battlePreviewText(
     attacker,
     target,
@@ -190,45 +189,25 @@ test("describes shield-adjusted life damage in battle preview text", () => {
     rival
   );
 
-  assert.match(preview, /护盾预计吸收 2000/);
-  assert.match(preview, /最终生命值伤害 0/);
-  assert.doesNotMatch(preview, /预计造成 2000 点伤害/);
+  assert.match(preview, /预计造成 2000 点伤害/);
 
-  const directPreview = battlePreviewText(attacker, null, owner, duelist({ shield: 1000 }));
-  assert.match(directPreview, /护盾预计吸收 1000/);
-  assert.match(directPreview, /最终生命值伤害 2000/);
+  const directPreview = battlePreviewText(attacker, null, owner, rival);
+  assert.match(directPreview, /预计造成 3000 点伤害/);
 
   const counterPreview = battlePreviewText(
     monster({ name: "进攻者", atk: 1800 }),
     monster({ name: "反击者", atk: 2200 }),
-    duelist({ shield: 300 }),
-    duelist({ owner: "ai", shield: 0 })
+    duelist(),
+    duelist({ owner: "ai" })
   );
-  assert.match(counterPreview, /攻击方护盾预计吸收 300/);
-  assert.match(counterPreview, /最终生命值伤害 100/);
+  assert.match(counterPreview, /攻击方预计承受 400 点伤害/);
 });
 
-test("builds structured battle previews with shield math", () => {
+test("builds structured battle previews with direct LP damage", () => {
   const attacker = monster({ name: "星轨枪兵", atk: 1800 });
   const target = monster({ name: "铁壁守卫", atk: 900 });
 
-  assert.deepEqual(shieldPreview(900, 400), {
-    shieldPierced: 0,
-    blocked: 400,
-    shieldAfter: 0,
-    finalDamage: 500,
-    text: "护盾预计吸收 400 点，最终生命值伤害 500。"
-  });
-
-  assert.deepEqual(shieldPreview(900, 800, { shieldPierce: { type: "divinePressure", amount: 500 } }), {
-    shieldPierced: 500,
-    blocked: 300,
-    shieldAfter: 0,
-    finalDamage: 600,
-    text: "神格威压先消解 500 点护盾，护盾预计吸收 300 点，最终生命值伤害 600。"
-  });
-
-  const preview = makeBattlePreview(attacker, target, duelist(), duelist({ shield: 400 }));
+  const preview = makeBattlePreview(attacker, target, duelist(), duelist());
   assert.equal(preview.badge, "优势");
   assert.equal(preview.mode, "target");
   assert.equal(preview.tone, "advantage");
@@ -239,26 +218,18 @@ test("builds structured battle previews with shield math", () => {
     targetValue: 900,
     diff: 900
   });
-  assert.equal(preview.rows.at(-1).value, "吸收 400 / 实伤 500");
-  assert.match(preview.result, /最终生命值伤害 500/);
+  assert.equal(preview.rows.at(-1).value, "900");
+  assert.match(preview.result, /预计造成 900 点生命值伤害/);
 
-  const directPreview = makeBattlePreview(attacker, null, duelist(), duelist({ shield: 2000 }));
+  const directPreview = makeBattlePreview(attacker, null, duelist(), duelist());
   assert.equal(directPreview.badge, "直击");
   assert.equal(directPreview.mode, "direct");
-  assert.match(directPreview.rows.at(-1).value, /最终生命值伤害 0/);
-
-  const divinePreview = makeBattlePreview(
-    monster({ name: "创星神龙", atk: 4000, shieldPierce: { type: "divinePressure", amount: 500 } }),
-    null,
-    duelist(),
-    duelist({ shield: 800 })
-  );
-  assert.equal(divinePreview.rows.at(-1).value, "神格威压先消解 500 点护盾，护盾预计吸收 300 点，最终生命值伤害 3700。");
+  assert.match(directPreview.rows.at(-1).value, /预计造成 1800 点生命值伤害/);
 
   const guardPreview = makeBattlePreview(
     attacker,
     monster({ name: "铁壁守卫", mode: "defense", def: 2100 }),
-    duelist({ shield: 100 }),
+    duelist(),
     duelist()
   );
   assert.equal(guardPreview.badge, "守备反击");

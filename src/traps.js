@@ -18,9 +18,9 @@ export const trapDefinitions = {
     consumesAttack: true
   },
   attackShift: {
-    handSummary: "取消攻击 · 护盾 +400",
+    handSummary: "取消攻击 · LP +400",
     event: "attack",
-    caption: "取消攻击并获得护盾",
+    caption: "取消攻击并回复生命",
     triggerText: "对手攻击时",
     cancelsEvent: true,
     consumesAttack: true
@@ -58,9 +58,9 @@ export const trapDefinitions = {
     consumesAttack: false
   },
   soulParry: {
-    handSummary: "攻击继续 · 敌方 ATK -300 · 护盾 +300",
+    handSummary: "攻击继续 · 敌方 ATK -300 · LP +300",
     event: "attack",
-    caption: "削弱攻击怪兽并获得护盾",
+    caption: "削弱攻击怪兽并回复生命",
     triggerText: "对手攻击时",
     cancelsEvent: false,
     consumesAttack: false

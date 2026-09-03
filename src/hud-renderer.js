@@ -17,7 +17,6 @@ export function vitalStatusItems({
       : { label: "待机", tone: "idle" };
   return [
     turnStatus,
-    duelist.shield > 0 ? { label: `护盾 ${duelist.shield}`, tone: "shield" } : null,
     duelist.extraSummon > 0
       ? { label: `额外召唤 ${duelist.extraSummon}`, tone: "resource" }
       : null,
@@ -34,17 +33,10 @@ export function buildDuelistHudView({
   profile = {},
   activeTurn = "idle",
   paused = false,
-  maxLife = 4000,
+  startingLife = 4000,
   directTargetReady = false
 } = {}) {
-  const baseLife = buildLifeDisplay(duelist.lp, maxLife);
-  const shield = Math.max(0, Math.round(Number(duelist.shield) || 0));
-  const life = shield > 0
-    ? {
-      ...baseLife,
-      ariaLabel: `${baseLife.ariaLabel}，护盾 ${shield}`
-    }
-    : baseLife;
+  const life = buildLifeDisplay(duelist.lp, startingLife);
   const isAi = duelist.owner === "ai";
   const targetReady = isAi && Boolean(directTargetReady);
   return {
@@ -52,7 +44,6 @@ export function buildDuelistHudView({
     name: duelist.owner === "player" ? `${profile.name || ""}（你）` : profile.name || "",
     skillHtml: `<strong>${profile.skill || ""}</strong>：${profile.text || ""}`,
     life,
-    shield,
     vitalItems: vitalStatusItems({
       duelist,
       lifeTone: life.tone,
@@ -98,7 +89,6 @@ function applyDuelistHud(document, elements, view) {
   if (lifeFill) lifeFill.style.width = `${view.life.percent}%`;
   if (lifeBar) {
     lifeBar.dataset.tone = view.life.tone;
-    lifeBar.dataset.shield = view.shield > 0 ? "true" : "false";
   }
   if (panel) {
     panel.dataset.lifeTone = view.life.tone;
@@ -128,7 +118,7 @@ export function renderCombatHud({
   aiProfile = {},
   activeTurn = "idle",
   paused = false,
-  maxLife = 4000,
+  startingLife = 4000,
   directTargetReady = false
 } = {}) {
   const playerView = buildDuelistHudView({
@@ -136,14 +126,14 @@ export function renderCombatHud({
     profile: playerProfile,
     activeTurn,
     paused,
-    maxLife
+    startingLife
   });
   const aiView = buildDuelistHudView({
     duelist: ai,
     profile: aiProfile,
     activeTurn,
     paused,
-    maxLife,
+    startingLife,
     directTargetReady
   });
 

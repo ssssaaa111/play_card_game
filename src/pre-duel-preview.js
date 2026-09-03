@@ -1,6 +1,6 @@
 import { characterProfiles, deckPresets, scenarioSetups } from "./data.js";
 import { cardDefinitionById, cardDetailViewModel } from "./card-detail.js";
-import { MAX_LP } from "./rules.js";
+import { STARTING_LP } from "./rules.js";
 import { resolveDeckDefinition } from "./custom-decks.js";
 import { scenarioReservedIds } from "./scenario-state.js";
 
@@ -21,7 +21,7 @@ function scenarioList(scenario, key) {
 }
 
 function finiteLp(value) {
-  return Number.isFinite(value) ? Math.max(0, value) : MAX_LP;
+  return Number.isFinite(value) ? Math.max(0, value) : STARTING_LP;
 }
 
 function removeReservedDeckIds(ids, scenario, owner) {

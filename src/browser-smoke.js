@@ -159,8 +159,7 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
         playerId: event.playerId || null,
         cardId: event.cardId || event.attackerCardId || event.sourceCardId || null,
         targetCardId: event.targetCardId || null,
-        reason: event.reason || null,
-        shieldPierced: event.shieldPierced || 0
+        reason: event.reason || null
       })),
       machine: {
         phase: machine.phase,
@@ -235,7 +234,6 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       } : null,
       player: {
         lp: state.player.lp,
-        shield: state.player.shield,
         attacksSkipped: state.player.attacksSkipped,
         directAttacks: state.player.directAttacks,
         hand: cardIds(state.player.hand),
@@ -244,7 +242,6 @@ export function createTestSnapshot({ testMode = false, state, els, currentPlayer
       },
       ai: {
         lp: state.ai.lp,
-        shield: state.ai.shield,
         handCount: state.ai.hand.length,
         field: cardIds(state.ai.field),
         traps: cardIds(state.ai.traps)
@@ -551,9 +548,6 @@ function eventSnapshot(event) {
     declarationEventId: event.declarationEventId || null,
     requested: event.requested ?? null,
     amount: event.amount ?? null,
-    blocked: event.blocked ?? null,
-    shieldBefore: event.shieldBefore ?? null,
-    shieldAfter: event.shieldAfter ?? null,
     outcome: event.outcome ? {
       kind: event.outcome.kind,
       attack: event.outcome.attack,
@@ -561,7 +555,6 @@ function eventSnapshot(event) {
       diff: event.outcome.diff,
       rawDamage: event.outcome.rawDamage,
       finalDamage: event.outcome.finalDamage,
-      shieldBlocked: event.outcome.shieldBlocked,
       damagePlayerId: event.outcome.damagePlayerId || null
     } : null
   };
@@ -590,14 +583,12 @@ function phantomRedirectDiagnostics(ctx, markers = {}) {
     battleResolved: eventSnapshot(battleResolved),
     player: {
       lp: ctx.state.player.lp,
-      shield: ctx.state.player.shield,
       field: ctx.state.player.field.map(cardSnapshot),
       grave: ctx.state.player.grave.map(cardSnapshot),
       traps: ctx.state.player.traps.map(cardSnapshot)
     },
     ai: {
       lp: ctx.state.ai.lp,
-      shield: ctx.state.ai.shield,
       field: ctx.state.ai.field.map(cardSnapshot),
       grave: ctx.state.ai.grave.map(cardSnapshot)
     },
@@ -1390,7 +1381,7 @@ async function runTrioRushFinaleBasicSmoke(ctx) {
   await startSmokeDuel(ctx, "trioRushFinalePlanning");
   if (!(ctx.state.log || []).some((entry) =>
     logEntryMessage(entry).includes("Boss 反制意图：抢攻终结") &&
-    logEntryMessage(entry).includes("先抬高护盾")
+    logEntryMessage(entry).includes("先回复生命值")
   )) {
     throw new Error(`${smokeName}: phase-three pressure and its answer must be public. ${smokeDebug(ctx)}`);
   }
@@ -1658,8 +1649,8 @@ async function runTrioChainLifecycleBasicSmoke(ctx) {
 
   if (!ctx.state.player.grave.some((card) => card?.uid === solarSnare.uid) ||
       !ctx.state.ai.grave.some((card) => card?.uid === nullifier.uid) ||
-      ctx.els.playerLp.textContent.trim() !== "850 / 4000" ||
-      lpDisplaySamples.some((text) => text.startsWith("0 /"))) {
+      ctx.els.playerLp.textContent.trim() !== "850" ||
+      lpDisplaySamples.includes("0")) {
     throw new Error(`${smokeName}: resolved chain or LP HUD is inconsistent. ${smokeDebug(ctx)}`);
   }
   lpDisplayObserver.disconnect();
@@ -1674,7 +1665,7 @@ async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
   const sun = ctx.state.ai.field.find((card) => card?.id === "trio-sun-judicator");
   const saint = ctx.state.player.field.find((card) => card?.id === "prism-saint");
   const eventIdBefore = Number(ctx.state.gameEvents?.at(-1)?.id) || 0;
-  if (!breach || !sun || !saint || ctx.state.player.lp !== 2000 || ctx.state.player.shield !== 2000) {
+  if (!breach || !sun || !saint || ctx.state.player.lp !== 4000) {
     throw new Error(`${smokeName}: deterministic opening is incomplete. ${smokeDebug(ctx)}`);
   }
 
@@ -1684,7 +1675,7 @@ async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
       ctx.state.phase === "main" &&
       ctx.state.actionWindow === "main" &&
       !ctx.state.aiRunning,
-    `${smokeName}: AI completes the shield-aware attack turn. ${smokeDebug(ctx)}`,
+    `${smokeName}: AI completes the non-lethal attack turn. ${smokeDebug(ctx)}`,
     30000
   );
 
@@ -1699,17 +1690,15 @@ async function runTrioShieldLethalPlanningBasicSmoke(ctx) {
     .map(logEntryMessage)
     .find((message) => message.includes("对手攻击预判：") && message.includes("曜冕裁决者")) || "";
   if (!attack || attack.targetCardId !== saint.uid || breachActivated) {
-    throw new Error(`${smokeName}: shielded false lethal must not spend direct strike or bypass the monster. ${smokeDebug(ctx)}`);
+    throw new Error(`${smokeName}: non-lethal pressure must not spend direct strike or bypass the monster. ${smokeDebug(ctx)}`);
   }
   if (!ctx.state.player.grave.some((card) => card?.uid === saint.uid) ||
       !ctx.state.ai.hand.some((card) => card?.uid === breach.uid) ||
-      ctx.state.player.lp !== 2000 || ctx.state.player.shield !== 0 || ctx.state.gameOver) {
-    throw new Error(`${smokeName}: sun should clear the monster into shield without dealing LP damage. ${smokeDebug(ctx)}`);
+      ctx.state.player.lp !== 2000 || ctx.state.gameOver) {
+    throw new Error(`${smokeName}: sun should clear the monster and deal the 2000 battle difference. ${smokeDebug(ctx)}`);
   }
-  if (!previewMessage.includes("护盾预计吸收 2000") ||
-      !previewMessage.includes("最终生命值伤害 0") ||
-      previewMessage.includes("预计造成 2000 点伤害")) {
-    throw new Error(`${smokeName}: attack preview must show shield-adjusted life damage instead of the raw battle difference. ${smokeDebug(ctx)}`);
+  if (!previewMessage.includes("预计造成 2000 点伤害") || previewMessage.includes("护盾")) {
+    throw new Error(`${smokeName}: attack preview must show direct LP damage without a shield layer. ${smokeDebug(ctx)}`);
   }
   setSmokeStatus("passed", smokeName);
 }
@@ -1738,7 +1727,7 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
     `${smokeName}: AI reveals star after-attack effect`,
     12000
   );
-  if (ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "300 / 4000") {
+  if (ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "300") {
     throw new Error(`${smokeName}: the HUD must stage base attack damage before revealing the lethal star effect. ${smokeDebug(ctx)}`);
   }
   const soundWasOn = ctx.state.soundOn;
@@ -1747,7 +1736,7 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
     () => ctx.state.soundOn !== soundWasOn,
     `${smokeName}: sound preference should update during the reveal`
   );
-  if (ctx.els.playerLp?.textContent.trim() !== "300 / 4000") {
+  if (ctx.els.playerLp?.textContent.trim() !== "300") {
     throw new Error(`${smokeName}: unrelated settings renders must preserve the staged LP display. ${smokeDebug(ctx)}`);
   }
   const starEffectSummary = ctx.els.aiRevealSummary?.textContent || "";
@@ -1791,7 +1780,7 @@ async function runTrioAfterAttackLethalPlanningBasicSmoke(ctx) {
   }
   if (damage.length !== 2 || damage[0] !== 2400 || damage[1] !== 300 ||
       !ctx.state.player.field.some((card) => card?.uid === saint.uid) ||
-      ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "0 / 4000" ||
+      ctx.state.player.lp !== 0 || ctx.els.playerLp?.textContent.trim() !== "0" ||
       star.tempAtk !== 300) {
     throw new Error(`${smokeName}: star must deal 2400 plus 300 while leaving the bypassed monster in play. ${smokeDebug(ctx)}`);
   }
@@ -2821,49 +2810,34 @@ async function runDivinePierceSmoke(ctx) {
 async function runDivinePressureSmoke(ctx) {
   setSmokeStatus("running", "divine-pressure");
   await startSmokeDuel(ctx, "divinePressure");
-  const divineCard = cloneCardById("celestial-origin-dragon");
-  if (!divineCard) throw new Error("divine-pressure: divine monster definition should exist");
   const dragon = ctx.state.player.field[0];
-  if (dragon?.id !== "celestial-origin-dragon" || !dragon.shieldPierce) {
-    throw new Error("divine-pressure: celestial origin dragon should start with shield pierce");
+  if (dragon?.id !== "celestial-origin-dragon") {
+    throw new Error("divine-pressure: celestial origin dragon should start on the field");
   }
-  if (ctx.state.ai.shield !== 800 || ctx.state.ai.field.some(Boolean)) {
-    throw new Error("divine-pressure: AI should start with 800 shield and no monsters");
+  if (ctx.state.ai.lp !== 4800 || ctx.els.aiLp.textContent.trim() !== "4800" || ctx.state.ai.field.some(Boolean)) {
+    throw new Error("divine-pressure: AI should expose 4800 current LP and no monsters");
   }
   const aiLpBefore = ctx.state.ai.lp;
   clickSmokeElement(fieldCard(ctx.els, "player", "celestial-origin-dragon"), "divine-pressure: select dragon");
   await waitForSmoke(() => ctx.els.aiPanel.classList.contains("direct-target"), "divine-pressure: AI panel direct target");
   clickSmokeElement(ctx.els.aiPanel, "divine-pressure: direct attack AI");
   await waitForSmoke(
-    () => ctx.state.ai.lp === aiLpBefore - 3700 &&
-      ctx.state.ai.shield === 0 &&
+    () => ctx.state.ai.lp === aiLpBefore - 4000 &&
+      ctx.els.aiLp.textContent.trim() === "800" &&
       ctx.state.gameEvents.some((event) =>
         event.type === "DAMAGE_DEALT" &&
         event.playerId === "ai" &&
         event.requested === 4000 &&
-        event.shieldPierced === 500 &&
-        event.blocked === 300 &&
-        event.amount === 3700
+        event.amount === 4000
       ) &&
       ctx.state.gameEvents.some((event) =>
         event.type === "BATTLE_RESOLVED" &&
         event.outcome?.kind === "direct" &&
-        event.outcome?.shieldPierced === 500
+        event.outcome?.finalDamage === 4000
       ),
-    `divine-pressure: direct attack should pierce shield before damage. ${smokeDebug(ctx)}`,
+    `divine-pressure: direct attack should subtract from uncapped current LP. ${smokeDebug(ctx)}`,
     12000
   );
-  if (!ctx.state.log.some((entry) => logEntryMessage(entry).includes("神格威压"))) {
-    throw new Error("divine-pressure: battle log should explain divine pressure");
-  }
-  await waitForSmoke(() => logCardLink(ctx.els, "celestial-origin-dragon"), "divine-pressure: log should expose divine monster detail link", 6000);
-  clickSmokeElement(logCardLink(ctx.els, "celestial-origin-dragon"), "divine-pressure: open divine detail from log");
-  await assertCardDetailModal(ctx, divineCard, "divine-pressure");
-  if (!ctx.els.cardModal.textContent.includes("神格威压")) {
-    throw new Error("divine-pressure: detail should include divine pressure effect text");
-  }
-  clickSmokeElement(ctx.els.zoomClose, "divine-pressure: close divine detail");
-  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "divine-pressure: detail closes");
   if (!ctx.currentPlayerActions().endTurn && !ctx.currentPlayerActions().attack && !ctx.currentPlayerActions().spell && !ctx.currentPlayerActions().trap) {
     throw new Error("divine-pressure: duel should continue after direct attack resolves");
   }
@@ -3178,7 +3152,8 @@ async function runFusionResultChoiceSmoke(ctx) {
     () => ctx.state.player.field.some((card) => card?.id === "tempest-aegis-archon") &&
       ctx.state.player.deck.some((card) => card?.id === "flare-gale-archon") &&
       !ctx.state.player.deck.some((card) => card?.id === "tempest-aegis-archon") &&
-      ctx.state.player.shield === 400 &&
+      ctx.state.player.lp === 4400 &&
+      countGameEvents(ctx.state, "LP_HEALED") >= 1 &&
       !ctx.state.pendingFusion,
     `fusion-result-choice: selected result should resolve with its summon effect. ${smokeDebug(ctx)}`,
     9000
@@ -3268,9 +3243,9 @@ async function runSummonShieldSmoke(ctx) {
   clickSmokeElement(fieldSlot(ctx.els, "player", 0), "prism saint slot");
   await waitForSmoke(
     () => ctx.state.player.field[0]?.id === "prism-saint" &&
-      ctx.state.player.shield === 400 &&
-      countGameEvents(ctx.state, "SHIELD_GAINED") >= 1,
-    "prism saint on-summon shield through event",
+      ctx.state.player.lp === 4400 &&
+      countGameEvents(ctx.state, "LP_HEALED") >= 1,
+    "prism saint on-summon healing through event",
     9000
   );
   setSmokeStatus("passed", "summon-shield");
@@ -3648,9 +3623,9 @@ async function runBasicExpansionSmoke(ctx) {
   clickSmokeElement(fieldSlot(ctx.els, "player", 1), "裂隙壁卫召唤区");
   await waitForSmoke(
     () => ctx.state.player.field[1]?.id === "rift-bulwark" &&
-      ctx.state.player.shield === 300 &&
-      countGameEvents(ctx.state, "SHIELD_GAINED") >= 1,
-    "裂隙壁卫召唤护盾通过规则事件结算",
+      ctx.state.player.lp === 4300 &&
+      countGameEvents(ctx.state, "LP_HEALED") >= 1,
+    "裂隙壁卫召唤回复通过规则事件结算",
     9000
   );
 
@@ -3681,7 +3656,7 @@ async function runBasicExpansionSmoke(ctx) {
   clickSmokeElement(ctx.els.playerTraps.querySelector(".trap-slot.empty"), "盖放星魂格挡");
   await waitForSmoke(() => ctx.state.player.traps.some((card) => card?.id === "soul-parry"), "星魂格挡盖放成功");
 
-  const shieldEventsBeforeTrap = countGameEvents(ctx.state, "SHIELD_GAINED");
+  const healEventsBeforeTrap = countGameEvents(ctx.state, "LP_HEALED");
   await finishPlayerTurn(ctx);
   await waitForSmoke(() => ctx.els.chainModal.classList.contains("show"), "星魂格挡攻击响应窗口", 18000);
   if (!ctx.els.chainText.textContent.includes("星魂格挡")) {
@@ -3689,13 +3664,13 @@ async function runBasicExpansionSmoke(ctx) {
   }
   clickSmokeElement(ctx.els.chainYes, "确认发动星魂格挡");
   await waitForSmoke(
-    () => countGameEvents(ctx.state, "SHIELD_GAINED") > shieldEventsBeforeTrap &&
+    () => countGameEvents(ctx.state, "LP_HEALED") > healEventsBeforeTrap &&
       (ctx.state.gameEvents || []).some((event) =>
         event.type === "STAT_MODIFIED" && event.amount === -300 && event.stat === "tempAtk"
       ) &&
       !ctx.state.player.traps.some((card) => card?.id === "soul-parry") &&
       ctx.state.log.some((entry) => entry.includes("星魂格挡") && entry.includes("攻击继续结算")),
-    "星魂格挡削弱攻击怪兽并获得护盾",
+    "星魂格挡削弱攻击怪兽并回复生命",
     12000
   );
   if (!ctx.state.log.some((entry) => entry.includes("星魂格挡") && entry.includes("攻击继续结算"))) {
@@ -4944,8 +4919,8 @@ async function runAiFusionPlanningBasicSmoke(ctx) {
   }
   if (!ctx.state.ai.field.some((card) => card?.id === "tempest-aegis-archon") ||
       ctx.state.ai.field.some((card) => card?.id === "flare-gale-archon") ||
-      ctx.state.ai.shield !== 400) {
-    throw new Error(`${smokeName}: low-life AI must choose the guard result and gain 400 shield. ${smokeDebug(ctx)}`);
+      ctx.state.ai.lp !== 1600) {
+    throw new Error(`${smokeName}: low-life AI must choose the guard result and recover 400 LP. ${smokeDebug(ctx)}`);
   }
 
   clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue fusion reveal`);
@@ -6975,12 +6950,10 @@ async function runPhantomSwitchRedirectSmoke(ctx) {
   }
   dusk.tempAtk = 50;
   iron.tempDef = 100;
-  ctx.state.player.shield = 550;
   ctx.render?.();
   await waitForSmoke(
     () => ctx.state.player.field[0]?.tempAtk === 50 &&
-      ctx.state.player.field[1]?.tempDef === 100 &&
-      ctx.state.player.shield === 550,
+      ctx.state.player.field[1]?.tempDef === 100,
     "幻影换位复现场景数值校准"
   );
 
@@ -7005,7 +6978,7 @@ async function runPhantomSwitchRedirectSmoke(ctx) {
   if (!promptText.includes("幻影换位") || !promptText.includes("暮影炼术师") || !promptText.includes("铁壁守卫")) {
     throw new Error(`幻影换位响应提示缺少原目标或新目标：${phantomRedirectDiagnostics(ctx, { attackDeclared, pendingBeforeTrap, promptText, trapCardId })}`);
   }
-  const playerShieldBeforeRedirect = ctx.state.player.shield;
+  const playerLpBeforeRedirect = ctx.state.player.lp;
 
   clickSmokeElement(ctx.els.chainYes, "确认发动幻影换位");
   await waitForSmoke(
@@ -7032,10 +7005,7 @@ async function runPhantomSwitchRedirectSmoke(ctx) {
     event.targetCardId === redirectedTargetCardId
   );
   const oldTargetDamage = (ctx.state.gameEvents || []).some((event) =>
-    event.type === "DAMAGE_DEALT" &&
-    event.playerId === "player" &&
-    event.requested === 550 &&
-    event.blocked === 550
+    event.type === "DAMAGE_DEALT" && event.playerId === "player"
   );
   const duskStillOnField = ctx.state.player.field.some((card) => card?.uid === originalTargetCardId);
   const ironStillOnField = ctx.state.player.field.some((card) => card?.uid === redirectedTargetCardId);
@@ -7048,14 +7018,14 @@ async function runPhantomSwitchRedirectSmoke(ctx) {
     pendingAfterRedirect,
     promptText,
     trapCardId,
-    playerShieldBeforeRedirect
+    playerLpBeforeRedirect
   });
   if (!targetChanged ||
       battleResolved?.targetCardId !== redirectedTargetCardId ||
       oldTargetDamage ||
       !duskStillOnField ||
       !ironStillOnField ||
-      ctx.state.player.shield !== playerShieldBeforeRedirect ||
+      ctx.state.player.lp !== playerLpBeforeRedirect ||
       !finalLogUsesIron) {
     throw new Error(`幻影换位重定向后仍未按新目标结算：${diagnostics}`);
   }
@@ -10367,7 +10337,6 @@ async function runGameOverEventSmoke(ctx) {
   if (!burst) throw new Error("爆裂符文测试卡不存在");
   ctx.state.player.hand = [burst];
   ctx.state.ai.lp = 400;
-  ctx.state.ai.shield = 0;
   ctx.render?.();
   await waitForSmoke(() => handCard(ctx.els, "burst-rune"), "致命爆裂符文出现在手牌");
   clickSmokeElement(handCard(ctx.els, "burst-rune"), "致命爆裂符文手牌");
@@ -10391,7 +10360,6 @@ async function runPostDuelLogReviewSmoke(ctx) {
   const attacker = cloneCardById("star-lancer");
   if (!attacker) throw new Error("post-duel-log-review: star-lancer definition should exist");
   ctx.state.ai.lp = 400;
-  ctx.state.ai.shield = 0;
   ctx.render?.();
   clickSmokeElement(handCard(ctx.els, "star-breach"), "post-duel-log-review: select direct attack spell");
   await waitForSmoke(
@@ -10431,7 +10399,6 @@ async function runPostDuelLogReviewSmoke(ctx) {
     gameOverWinner: ctx.state.gameOverWinner,
     player: {
       lp: ctx.state.player.lp,
-      shield: ctx.state.player.shield,
       hand: cardIds(ctx.state.player.hand),
       deck: cardIds(ctx.state.player.deck),
       field: cardIds(ctx.state.player.field),
@@ -10440,7 +10407,6 @@ async function runPostDuelLogReviewSmoke(ctx) {
     },
     ai: {
       lp: ctx.state.ai.lp,
-      shield: ctx.state.ai.shield,
       hand: cardIds(ctx.state.ai.hand),
       deck: cardIds(ctx.state.ai.deck),
       field: cardIds(ctx.state.ai.field),

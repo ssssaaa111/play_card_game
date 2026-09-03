@@ -1,25 +1,25 @@
 export const library = [
   { id: "solar-vanguard", type: "monster", name: "曜锋先锋", element: "light", stars: 5, atk: 2300, def: 1700, icon: "曜", text: "需要 1 只我方场上怪兽作为祭品才能通常召唤。第一版祭品召唤验证用高阶怪兽。", tributeCost: 1 },
   { id: "starfall-colossus", type: "monster", name: "坠星巨卫", element: "light", stars: 8, atk: 3200, def: 2600, icon: "坠", text: "需要 2 只我方场上怪兽作为祭品才能通常召唤。用于验证大型怪兽的双祭品流程。", tributeCost: 2 },
-  { id: "celestial-origin-dragon", type: "monster", name: "创星神龙", element: "light", stars: 10, atk: 4000, def: 4000, icon: "神", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。神格守护：每个己方回合首次将被战斗或效果破坏时，改为防止该次破坏。神格贯穿：攻击守备怪兽并击破时，对对手造成攻击力超出守备力的战斗伤害。神格威压：此卡造成战斗或效果伤害时，先消解对手最多 500 点护盾。神格抗性：不能成为对手非破神效果的指定目标。", summary: "三祭品登场，拥有每己方回合一次的破坏防护，并能贯穿守备、压穿护盾，免疫对手普通指定效果。", tributeCost: 3, destructionProtection: { type: "divineGuard", uses: 1, refresh: "controllerTurn" }, piercingDamage: { type: "divinePierce" }, shieldPierce: { type: "divinePressure", amount: 500 }, targetResistance: { type: "divineTarget" }, rarity: "UR", archetype: "神格" },
+  { id: "celestial-origin-dragon", type: "monster", name: "创星神龙", element: "light", stars: 10, atk: 4000, def: 4000, icon: "神", text: "需要 3 只我方场上怪兽作为祭品才能通常召唤。神格守护：每个己方回合首次将被战斗或效果破坏时，改为防止该次破坏。神格贯穿：攻击守备怪兽并击破时，对对手造成攻击力超出守备力的战斗伤害。神格抗性：不能成为对手非破神效果的指定目标。", summary: "三祭品登场，拥有每己方回合一次的破坏防护，并能贯穿守备，免疫对手普通指定效果。", tributeCost: 3, destructionProtection: { type: "divineGuard", uses: 1, refresh: "controllerTurn" }, piercingDamage: { type: "divinePierce" }, targetResistance: { type: "divineTarget" }, rarity: "UR", archetype: "神格" },
   { id: "ember-drake", type: "monster", name: "赤焰幼龙", element: "fire", stars: 4, atk: 1500, def: 900, icon: "炎", text: "被召唤时，对对手造成 200 点伤害。", onSummon: "burn200" },
   { id: "solar-knight", type: "monster", name: "日冕骑士", element: "light", stars: 4, atk: 1700, def: 1200, icon: "光", text: "稳健的光属性战士，适合抢节奏。" },
   { id: "gale-mage", type: "monster", name: "疾风术士", element: "wind", stars: 3, atk: 1200, def: 1400, icon: "风", text: "召唤时抽 1 张卡。", onSummon: "draw1" },
   { id: "flare-gale-archon", type: "monster", name: "焰岚合星者", element: "fire", stars: 6, atk: 2400, def: 1800, icon: "融", text: "由赤焰幼龙和疾风术士融合召唤。攻击后自身攻击力提升 200。", summary: "指定素材融合登场的高阶进攻怪兽。", summonRoute: "fusion", afterAttack: "grow200" },
-  { id: "tempest-aegis-archon", type: "monster", name: "岚耀守星者", element: "wind", stars: 6, atk: 2000, def: 2600, icon: "守", text: "由赤焰幼龙和疾风术士融合召唤。召唤时获得 400 护盾。", summary: "与焰岚合星者共用素材的防御形态，登场后立即建立护盾。", summonRoute: "fusion", onSummon: "shield400" },
+  { id: "tempest-aegis-archon", type: "monster", name: "岚耀守星者", element: "wind", stars: 6, atk: 2000, def: 2600, icon: "守", text: "由赤焰幼龙和疾风术士融合召唤。召唤时回复 400 LP。", summary: "与焰岚合星者共用素材的防御形态，登场后立即回复生命值。", summonRoute: "fusion", onSummon: "heal400" },
   { id: "void-hound", type: "monster", name: "虚影猎犬", element: "shadow", stars: 4, atk: 1600, def: 800, icon: "影", text: "攻击后自身攻击力提升 200。", afterAttack: "grow200" },
   { id: "iron-guardian", type: "monster", name: "铁壁守卫", element: "light", stars: 4, atk: 900, def: 2100, icon: "盾", text: "光属性。守备表示时用守备力结算，适合挡住高攻击怪兽。" },
   { id: "star-lancer", type: "monster", name: "星轨枪兵", element: "wind", stars: 4, atk: 1800, def: 1000, icon: "星", text: "风属性。高攻击力的前线怪兽。" },
   { id: "night-oracle", type: "monster", name: "夜幕司祭", element: "shadow", stars: 3, atk: 1100, def: 1600, icon: "月", text: "召唤时回复 300 点生命值。", onSummon: "heal300" },
   { id: "flare-titan", type: "monster", name: "熔核巨像", element: "fire", stars: 5, atk: 2200, def: 1500, icon: "核", text: "需要 1 只我方场上怪兽作为祭品才能通常召唤。火属性高阶进攻怪兽。", tributeCost: 1 },
   { id: "flame-captain", type: "monster", name: "焰心指挥官", element: "fire", stars: 4, atk: 1400, def: 1300, icon: "令", text: "召唤时，如果你场上还有火属性怪兽，我方攻击力最高怪兽提升 300。", onSummon: "fireBuff" },
-  { id: "prism-saint", type: "monster", name: "辉棱圣徒", element: "light", stars: 3, atk: 1000, def: 1800, icon: "棱", text: "召唤时获得 400 护盾。" , onSummon: "shield400" },
+  { id: "prism-saint", type: "monster", name: "辉棱圣徒", element: "light", stars: 3, atk: 1000, def: 1800, icon: "棱", text: "召唤时回复 400 LP。" , onSummon: "heal400" },
   { id: "sky-raider", type: "monster", name: "天岚突袭者", element: "wind", stars: 4, atk: 1550, def: 900, icon: "岚", text: "攻击后，如果你场上有风属性怪兽，抽 1 张卡。", afterAttack: "windDraw" },
   { id: "dusk-alchemist", type: "monster", name: "暮影炼术师", element: "shadow", stars: 4, atk: 1450, def: 1500, icon: "炼", text: "召唤时，如果你场上有暗属性怪兽，对手受到 300 伤害。", onSummon: "shadowBurn" },
   { id: "nova-squire", type: "monster", name: "新星侍从", element: "fire", stars: 3, atk: 1250, def: 1100, icon: "新", text: "用于装备练习的火属性新手怪兽。" },
-  { id: "aegis-mender", type: "monster", name: "庇护修补师", element: "light", stars: 3, atk: 900, def: 1700, icon: "护", text: "召唤时获得 400 护盾。", onSummon: "shield400" },
+  { id: "aegis-mender", type: "monster", name: "庇护修补师", element: "light", stars: 3, atk: 900, def: 1700, icon: "护", text: "召唤时回复 400 LP。", onSummon: "heal400" },
   { id: "star-soul-apprentice", type: "monster", name: "星魂学徒", element: "light", stars: 3, atk: 1100, def: 1300, icon: "魂", text: "召唤时，若我方场上有至少 2 种属性的怪兽，抽 1 张卡。", onSummon: "starSoulSurvey" },
-  { id: "rift-bulwark", type: "monster", name: "裂隙壁卫", element: "shadow", stars: 4, atk: 1300, def: 1900, icon: "壁", text: "召唤时，若我方场上有至少 2 只暗属性怪兽，获得 300 护盾。", onSummon: "riftShelter" },
+  { id: "rift-bulwark", type: "monster", name: "裂隙壁卫", element: "shadow", stars: 4, atk: 1300, def: 1900, icon: "壁", text: "召唤时，若我方场上有至少 2 只暗属性怪兽，回复 300 LP。", onSummon: "riftShelter" },
   { id: "burst-rune", type: "spell", name: "爆裂符文", icon: "爆", text: "对对手造成 500 点伤害。", effect: "burn500" },
   { id: "renewal", type: "spell", name: "星泉再生", icon: "泉", text: "回复 700 点生命值。", effect: "heal700" },
   { id: "war-chant", type: "spell", name: "战意高扬", icon: "战", text: "你场上攻击力最高的怪兽提升 500 攻击力。", effect: "buff500" },
@@ -27,7 +27,7 @@ export const library = [
   { id: "element-echo", type: "spell", name: "元素共鸣", icon: "鸣", text: "若你场上有至少 2 种属性，全体怪兽攻击力提升 200，并抽 1 张卡。", effect: "elementEcho" },
   { id: "twin-summon", type: "spell", name: "双重召唤", icon: "双", text: "本回合可以额外通常召唤 1 次。", effect: "extraSummon" },
   { id: "rally-strike", type: "spell", name: "连携突击", icon: "突", text: "让我方攻击力最高怪兽提升 300，并获得 1 次攻击重置；若已有怪兽攻击过，会优先让它再次可攻击。", effect: "rallyAttack" },
-  { id: "star-shield", type: "spell", name: "星盾展开", icon: "盾", text: "获得 800 护盾，护盾会优先抵挡伤害。", effect: "shield800" },
+  { id: "star-shield", type: "spell", name: "星命增幅", icon: "命", text: "回复 800 LP。生命值可以超过初始值。", effect: "heal800" },
   { id: "pierce-line", type: "spell", name: "破阵星芒", icon: "破", text: "让对手攻击力最高的怪兽攻击力和守备力下降 400，并对对手造成 200 点伤害。", effect: "pierceLine" },
   { id: "godbreaker-spear", type: "spell", name: "破神星矛", icon: "弑", text: "破神：选择对手攻击力最高的怪兽，无视神格目标抗性，使其攻击力和守备力下降 400，并对对手造成 200 点伤害。", summary: "可越过神格目标抗性的指定削弱魔法。", effect: "pierceLine", targetResistanceBypass: "divineTarget", rarity: "SR", archetype: "破神" },
   { id: "grave-return", type: "spell", name: "星尘回收", icon: "收", text: "将墓地 1 张非本卡的卡放回卡组顶，然后抽 1 张卡。", effect: "graveReturn" },
@@ -35,7 +35,7 @@ export const library = [
   { id: "star-breach", type: "spell", name: "星隙穿透", icon: "隙", text: "本回合获得 1 次直接攻击许可：即使对手有怪兽，也可以点击敌方角色造成直接伤害。", effect: "directStrike" },
   { id: "flame-gale-burst", type: "spell", name: "炎岚合击", icon: "岚", text: "需要我方场上有火和风属性怪兽；对对手造成 400 点伤害，并让我方全体怪兽攻击力提升 200。", effect: "fireWindCombo" },
   { id: "starforge-fusion", type: "spell", name: "星魂融合", icon: "融", text: "选择我方手牌或场上的赤焰幼龙和疾风术士作为融合素材送入墓地，从手牌或卡组融合召唤焰岚合星者或岚耀守星者。", summary: "把手牌或场上的指定素材送入墓地，在进攻与防御两种融合形态中选择其一。", effect: "fusionSummon", fusion: { result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"], options: [{ result: "flare-gale-archon", materials: ["ember-drake", "gale-mage"] }, { result: "tempest-aegis-archon", materials: ["ember-drake", "gale-mage"] }] } },
-  { id: "eclipse-barrier", type: "spell", name: "晨昏星界", icon: "界", text: "需要我方场上有光和暗属性怪兽；获得 600 护盾，并抽 1 张卡。", effect: "lightShadowCombo" },
+  { id: "eclipse-barrier", type: "spell", name: "晨昏星界", icon: "界", text: "需要我方场上有光和暗属性怪兽；回复 600 LP，并抽 1 张卡。", effect: "lightShadowCombo" },
   { id: "blade-sigil", type: "spell", name: "锋刃刻印", icon: "刃", text: "装备给我方 1 只怪兽。只要此卡留在魔陷区，目标攻击力 +300。", effect: "equipBlade" },
   { id: "aegis-plate", type: "spell", name: "庇护甲片", icon: "甲", text: "装备给我方 1 只怪兽。只要此卡留在魔陷区，目标守备力 +500。", effect: "equipAegis" },
   { id: "prism-drive", type: "spell", name: "棱光驱动", icon: "棱", text: "装备给我方 1 只怪兽。目标攻击力 +200、守备力 +200。", effect: "equipPrism" },
@@ -46,11 +46,11 @@ export const library = [
   { id: "guard-sigil", type: "trap", name: "守护刻印", icon: "印", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并抽 1 张卡。", trigger: "directShield" },
   { id: "summon-flare", type: "trap", name: "召雷陷阵", icon: "雷", text: "盖放后自动触发：对手召唤怪兽时，对其造成 400 点伤害。", trigger: "summonBurn" },
   { id: "counter-array", type: "trap", name: "反击阵列", icon: "阵", text: "盖放后自动触发：对手攻击时，取消攻击并让我方攻击力最低怪兽提升 400。", trigger: "counterBoost" },
-  { id: "storm-shift", type: "trap", name: "风暴转移", icon: "转", text: "盖放后自动触发：对手攻击时，取消攻击并获得 400 护盾。", trigger: "attackShift" },
+  { id: "storm-shift", type: "trap", name: "风暴转移", icon: "转", text: "盖放后自动触发：对手攻击时，取消攻击并回复 400 LP。", trigger: "attackShift" },
   { id: "void-lock", type: "trap", name: "星界封锁", icon: "封", text: "盖放后自动触发：对手攻击时，无效本次攻击并消耗攻击机会。", trigger: "attackNegate" },
   { id: "phantom-switch", type: "trap", name: "幻影换位", icon: "换", text: "盖放后自动触发：对手攻击时，将攻击目标改为我方另一只守备力最高的怪兽。", trigger: "redirectAttack" },
   { id: "weakening-web", type: "trap", name: "弱化力场", icon: "弱", text: "盖放后自动触发：对手攻击时，攻击怪兽攻击力和守备力下降 500，攻击继续结算。", trigger: "weakenAttack" },
-  { id: "soul-parry", type: "trap", name: "星魂格挡", icon: "格", text: "盖放后自动触发：对手攻击时，攻击怪兽攻击力下降 300，并获得 300 护盾，攻击继续结算。", trigger: "soulParry" },
+  { id: "soul-parry", type: "trap", name: "星魂格挡", icon: "格", text: "盖放后自动触发：对手攻击时，攻击怪兽攻击力下降 300，并回复 300 LP，攻击继续结算。", trigger: "soulParry" },
   { id: "reversal-flare", type: "trap", name: "逆焰护壁", icon: "返", text: "盖放后自动触发：你将受到直接攻击时，伤害变为 0，并反弹 500 点伤害。", trigger: "directRebound" },
   { id: "chain-nullifier", type: "trap", name: "断链裁决", icon: "断", text: "对手发动陷阱时可以连锁发动：无效那张陷阱的效果。", trigger: "chainNegate" }
   ,
@@ -155,14 +155,14 @@ export const roleProfiles = {
   guard: {
     name: "辉棱守望者",
     skill: "棱光庇护",
-    kind: "shield",
+    kind: "heal",
     amount: 500,
     passive: {
       id: "prismGuard",
       name: "棱光庇护",
-      operations: [{ op: "gainShield", player: "self", amount: 500 }]
+      operations: [{ op: "heal", player: "self", amount: 500 }]
     },
-    text: "每回合首次触发组合技时，获得 500 护盾。"
+    text: "每回合首次触发组合技时，回复 500 LP。"
   }
 };
 
@@ -205,14 +205,14 @@ export const aiProfiles = {
     profile: {
       name: "棱镜守卫",
       skill: "镜域稳固",
-      kind: "shield",
+      kind: "heal",
       amount: 450,
       passive: {
         id: "mirrorStability",
         name: "镜域稳固",
-        operations: [{ op: "gainShield", player: "self", amount: 450 }]
+        operations: [{ op: "heal", player: "self", amount: 450 }]
       },
-      text: "每回合首次触发组合技时获得 450 护盾。"
+      text: "每回合首次触发组合技时回复 450 LP。"
     }
   }
 };
@@ -519,16 +519,16 @@ export const scenarioSetups = {
     aiDeck: []
   },
   divinePressure: {
-    label: "神格威压测试",
+    label: "超额生命测试",
     difficulty: "demo",
-    text: "创星神龙已经在场，AI 拥有 800 护盾但没有怪兽，用来验证神格威压会先消解护盾再结算伤害。",
-    goal: "用创星神龙直接攻击 AI，确认神格威压先消解 500 护盾，剩余护盾再吸收伤害。",
-    objectives: ["选择场上的创星神龙。", "直接攻击 AI。", "确认战斗日志写出神格威压并造成正确生命值伤害。"],
-    hints: ["普通伤害会先被护盾完整吸收。", "神格威压只消解护盾，不会在没有造成伤害时凭空扣生命值。"],
+    text: "创星神龙已经在场，AI 的当前生命值为 4800，用来验证生命值可高于 4000 且伤害直接扣减当前值。",
+    goal: "用创星神龙直接攻击 AI，确认 4800 LP 扣除 4000 后剩余 800。",
+    objectives: ["确认 AI 当前显示 4800 LP。", "选择场上的创星神龙并直接攻击 AI。", "确认 AI 剩余 800 LP。"],
+    hints: ["4000 是初始生命值，不是生命值上限。", "伤害会直接从当前生命值扣除。"],
     playerHand: ["war-chant"],
     playerField: ["celestial-origin-dragon"],
     playerDeck: ["solar-knight"],
-    aiShield: 800,
+    aiLp: 4800,
     aiField: [],
     aiHand: [],
     aiDeck: []
@@ -595,7 +595,7 @@ export const scenarioSetups = {
     text: "同一组素材可融合为进攻或防御形态，用来验证玩家明确选择融合结果。",
     goal: "发动星魂融合，选择岚耀守星者，再以赤焰幼龙和疾风术士作为素材完成融合召唤。",
     objectives: ["选择手牌中的星魂融合。", "选择岚耀守星者作为融合结果。", "选择场上与手牌中的指定素材并确认融合召唤。"],
-    hints: ["焰岚合星者擅长持续进攻；岚耀守星者拥有更高守备力并在登场时获得护盾。", "选择结果不会改变素材要求，也不会消耗通常召唤次数。"],
+    hints: ["焰岚合星者擅长持续进攻；岚耀守星者拥有更高守备力并在登场时回复生命。", "选择结果不会改变素材要求，也不会消耗通常召唤次数。"],
     recommendedLine: ["选择岚耀守星者，使用场上的赤焰幼龙和手牌中的疾风术士作为素材。"],
     playerHand: ["starforge-fusion", "gale-mage", "war-chant"],
     playerField: ["ember-drake"],
@@ -844,7 +844,7 @@ export const scenarioSetups = {
     adaptiveBossCounter: true,
     adaptiveBossPhase: 3,
     text: "规则测试场景：终战阶段的玩家有效生命进入压力线，但星曜当前还没有直接斩杀。",
-    goal: "结束回合，观察 AI 公开抢攻终结意图，并优先发动战斗狂热而不是星盾展开。",
+    goal: "结束回合，观察 AI 公开抢攻终结意图，并优先发动战斗狂热而不是星命增幅。",
     playerLp: 2600,
     aiLp: 4000,
     playerHand: [],
@@ -951,11 +951,10 @@ export const scenarioSetups = {
     aiDeck: ["guard-sigil"]
   },
   trioShieldLethalPlanning: {
-    label: "三曜护盾斩杀",
-    text: "规则测试场景：玩家生命值看似进入日曜直击斩杀线，但现有护盾足以让直击无法终结对局。",
+    label: "三曜斩杀线判断",
+    text: "规则测试场景：玩家当前有 4000 LP，日曜单次直击无法终结对局。",
     goal: "结束回合，观察 AI 不为伪斩杀发动星隙穿透，而是先用日曜清理辉棱圣徒。",
-    playerLp: 2000,
-    playerShield: 2000,
+    playerLp: 4000,
     aiLp: 4000,
     playerHand: [],
     playerDeck: ["guard-sigil", "mirror-snare"],
@@ -1033,11 +1032,11 @@ export const scenarioSetups = {
     aiDeck: []
   },
   summonShield: {
-    label: "召唤护盾",
-    text: "手牌含辉棱圣徒，用来验证召唤护盾效果由引擎事件结算。",
-    goal: "召唤后应通过规则事件增加我方护盾。",
+    label: "召唤回复",
+    text: "手牌含辉棱圣徒，用来验证召唤回复效果由引擎事件结算。",
+    goal: "召唤后应通过规则事件让当前生命值增加 400。",
     playerHand: ["prism-saint"],
-    playerDeck: [],
+    playerDeck: ["solar-knight"],
     aiHand: [],
     aiDeck: []
   },
@@ -1126,17 +1125,17 @@ export const scenarioSetups = {
   },
   expansionParry: {
     label: "扩展格挡演示",
-    text: "起手包含裂隙壁卫和星魂格挡，场上已有暗属性怪兽，用来验证基础扩展的护盾与攻击响应。",
-    goal: "召唤裂隙壁卫获得护盾，盖放星魂格挡后让对手攻击，陷阱应削弱攻击怪兽并继续结算。",
+    text: "起手包含裂隙壁卫和星魂格挡，场上已有暗属性怪兽，用来验证生命回复与攻击响应。",
+    goal: "召唤裂隙壁卫回复生命，盖放星魂格挡后让对手攻击，陷阱应削弱攻击怪兽并继续结算。",
     difficulty: "demo",
     objectives: [
-      "召唤裂隙壁卫，确认护盾获得由规则事件结算。",
+      "召唤裂隙壁卫，确认生命回复由规则事件结算。",
       "发动星魂共鸣，强化当前最高攻击的我方怪兽。",
       "盖下星魂格挡，展示攻击响应和减攻结算。"
     ],
     playerHand: ["rift-bulwark", "soul-resonance", "soul-parry"],
     playerField: ["night-oracle"],
-    playerDeck: [],
+    playerDeck: ["solar-knight"],
     aiField: ["star-lancer"],
     aiHand: [],
     aiDeck: ["guard-sigil"]

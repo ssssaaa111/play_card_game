@@ -20,7 +20,7 @@ test("combat HUD keeps life tone and turn resources in dedicated status rails", 
   assert.match(hudRenderer, /panel\.dataset\.lifeTone = view\.life\.tone/);
   assert.match(css, /\.life-bar\[data-tone="critical"\]/);
   assert.match(css, /\.vital-chip\.turn/);
-  assert.match(css, /\.vital-chip\.shield/);
+  assert.doesNotMatch(css, /\.vital-chip\.shield/);
 });
 
 test("field monsters expose a compact fixed-height state rail", () => {

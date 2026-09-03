@@ -88,14 +88,12 @@ test("AI chooses sunflare support targets from public information only", () => {
 test("lookahead computes the AI's maximum damage this turn", () => {
   assert.equal(aiMaxDamageThisTurn({
     attackers: [monster({ name: "lancer", atk: 1800 }), monster({ name: "raider", atk: 1600 })],
-    targets: [],
-    shield: 0
+    targets: []
   }), 3400);
   assert.equal(aiMaxDamageThisTurn({
     attackers: [monster({ name: "god", atk: 3000 })],
-    targets: [],
-    shield: 800
-  }), 2200);
+    targets: []
+  }), 3000);
 });
 
 test("lookahead estimates the rival lethal threat through a wall", () => {
@@ -250,20 +248,18 @@ test("AI uses direct attack permission when the board blocks normal attacks", ()
   assert.equal(target, -1);
 });
 
-test("scripted pressure AI does not mistake shielded direct damage for lethal", () => {
+test("scripted pressure AI uses direct permission when it deals more LP damage", () => {
   const action = chooseAiAttackAction({
     owner: { directAttacks: 1 },
     field: [monster({ uid: "attacker", atk: 3000 })],
     rivalField: [monster({ uid: "target", atk: 1000 })],
-    rivalLp: 2000,
-    rivalShield: 2000,
+    rivalLp: 4000,
     aiStyle: "scriptedPressure",
     canAttackMonster: () => true
   });
 
   assert.equal(action.type, "attack");
-  assert.equal(action.targetIndex, 0);
-  assert.equal(action.target?.uid, "target");
+  assert.equal(action.targetIndex, -1);
 });
 
 test("scripted pressure AI includes guaranteed after-attack damage in direct lethal planning", () => {
@@ -499,7 +495,7 @@ test("scripted pressure AI spends its hard negate on a current lethal attack", (
   assert.equal(action?.trapIndex, 0);
 });
 
-test("scripted pressure AI preserves a negate when its shield already absorbs direct damage", () => {
+test("scripted pressure AI uses a negate when direct damage threatens LP", () => {
   const voidLock = trap({ id: "void-lock", trigger: "attackNegate" });
   const attacker = monster({ uid: "attacker", atk: 1800 });
 
@@ -507,15 +503,16 @@ test("scripted pressure AI preserves a negate when its shield already absorbs di
     aiStyle: "scriptedPressure",
     candidates: [{ card: voidLock, index: 1 }],
     eventName: "attack",
-    owner: { field: [], lp: 4000, shield: 2000 },
-    rival: { field: [attacker], lp: 4000, shield: 0 },
+    owner: { field: [], lp: 4000 },
+    rival: { field: [attacker], lp: 4000 },
     context: { attackerIndex: 0, targetIndex: -1 }
   });
 
-  assert.equal(action, null);
+  assert.equal(action?.card, voidLock);
+  assert.equal(action?.trapIndex, 1);
 });
 
-test("scripted pressure AI preserves direct traps when its shield already absorbs the hit", () => {
+test("scripted pressure AI uses a direct trap to prevent LP damage", () => {
   const guard = trap({ id: "guard-sigil", trigger: "directShield" });
   const attacker = monster({ uid: "attacker", atk: 1800 });
 
@@ -523,15 +520,16 @@ test("scripted pressure AI preserves direct traps when its shield already absorb
     aiStyle: "scriptedPressure",
     candidates: [{ card: guard, index: 0 }],
     eventName: "direct",
-    owner: { field: [], lp: 4000, shield: 2000, deck: [monster()] },
-    rival: { field: [attacker], lp: 4000, shield: 0 },
+    owner: { field: [], lp: 4000, deck: [monster()] },
+    rival: { field: [attacker], lp: 4000 },
     context: { attackerIndex: 0, targetIndex: -1 }
   });
 
-  assert.equal(action, null);
+  assert.equal(action?.card, guard);
+  assert.equal(action?.trapIndex, 0);
 });
 
-test("scripted pressure AI uses a direct trap when after-attack damage pierces the remaining shield", () => {
+test("scripted pressure AI includes after-attack damage when valuing a direct trap", () => {
   const guard = trap({ id: "guard-sigil", trigger: "directShield" });
   const attacker = monster({
     uid: "attacker",
@@ -544,8 +542,8 @@ test("scripted pressure AI uses a direct trap when after-attack damage pierces t
     aiStyle: "scriptedPressure",
     candidates: [{ card: guard, index: 0 }],
     eventName: "direct",
-    owner: { field: [], lp: 4000, shield: 2500, deck: [monster()] },
-    rival: { field: [attacker], lp: 4000, shield: 0 },
+    owner: { field: [], lp: 4000, deck: [monster()] },
+    rival: { field: [attacker], lp: 4000 },
     context: { attackerIndex: 0, targetIndex: -1 }
   });
 
@@ -1194,7 +1192,7 @@ test("phase-three counter plan accelerates offensive spells before defensive sup
     lp: 4000,
     shield: 0,
     directAttacks: 0,
-    hand: [spell("shield800", { id: "star-shield" }), spell("battleTrance", { id: "battle-trance" })],
+    hand: [spell("heal800", { id: "star-shield" }), spell("battleTrance", { id: "battle-trance" })],
     deck: [],
     field: [star, null, null, null, null],
     traps: [null, null, null, null, null]
@@ -1268,7 +1266,7 @@ test("AI selects a complete defensive fusion action when its life is under press
   const ember = monster({ id: "ember-drake", uid: "ember-1", atk: 1400 });
   const gale = monster({ id: "gale-mage", uid: "gale-1", atk: 1200 });
   const attackResult = monster({ id: "flare-gale-archon", uid: "attack-result", atk: 2400, def: 1800 });
-  const guardResult = monster({ id: "tempest-aegis-archon", uid: "guard-result", atk: 2000, def: 2600, onSummon: "shield400" });
+  const guardResult = monster({ id: "tempest-aegis-archon", uid: "guard-result", atk: 2000, def: 2600, onSummon: "heal400" });
   const shared = {
     type: "fusion",
     card: fusion,

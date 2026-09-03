@@ -1,8 +1,7 @@
-export const MAX_LP = 4000;
+export const STARTING_LP = 4000;
 export const MONSTER_ZONE_SIZE = 5;
 export const SPELL_TRAP_ZONE_SIZE = 5;
 export const FIELD_SIZE = MONSTER_ZONE_SIZE;
-export const MAX_SHIELD = 2400;
 
 export function fieldCards(duelist) {
   return duelist.field.filter(Boolean);
@@ -37,18 +36,6 @@ export function hasPiercingDamage(card) {
   return Boolean(card?.piercingDamage || card?.divinePierce);
 }
 
-export function shieldPierceAmount(card) {
-  const config = card?.shieldPierce || card?.divinePressure;
-  if (config === true) return 500;
-  if (typeof config === "number") return Math.max(0, config);
-  if (config && typeof config === "object") return Math.max(0, Number(config.amount) || 0);
-  return 0;
-}
-
-export function hasShieldPierce(card) {
-  return shieldPierceAmount(card) > 0;
-}
-
 export function targetResistanceType(card) {
   const config = card?.targetResistance || card?.divineTargetResistance || card?.targetImmunity;
   if (config === true) return "targetResistance";
@@ -78,43 +65,23 @@ export function canEffectTargetCard(sourceCard, targetCard, { sourceOwner = "", 
   return bypassesTargetResistance(sourceCard, targetCard);
 }
 
-function shieldAdjustedPreviewText(amount, duelist, sourceCard) {
-  const shield = shieldPreview(amount, duelist?.shield || 0, sourceCard);
-  return shield.blocked > 0 || shield.shieldPierced > 0 ? shield.text : "";
-}
-
 export function battlePreviewText(attacker, target, owner = null, rival = null) {
   if (!attacker) return "还没有选择攻击怪兽。";
   if (!target) {
-    const shieldText = shieldAdjustedPreviewText(totalAtk(attacker), rival, attacker);
-    if (shieldText) return `${attacker.name} 直接攻击，${shieldText}`;
-    const pressure = hasShieldPierce(attacker) ? `神格威压会先消解至多 ${shieldPierceAmount(attacker)} 点护盾。` : "";
-    return `${attacker.name} 直接攻击，预计造成 ${totalAtk(attacker)} 点伤害。${pressure}`;
+    return `${attacker.name} 直接攻击，预计造成 ${totalAtk(attacker)} 点伤害。`;
   }
   const attackerStat = `攻击 ${totalAtk(attacker)}`;
   const targetStat = target.mode === "defense" ? `守备 ${totalDef(target)}` : `攻击 ${totalAtk(target)}`;
   const diff = totalAtk(attacker) - battleValue(target);
   if (diff > 0) {
     if (target.mode === "defense" && hasPiercingDamage(attacker)) {
-      const shieldText = shieldAdjustedPreviewText(diff, rival, attacker);
-      if (shieldText) {
-        return `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破并贯穿；${shieldText}`;
-      }
-      const pressure = hasShieldPierce(attacker) ? `神格威压会先消解至多 ${shieldPierceAmount(attacker)} 点护盾。` : "";
-      return `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破并贯穿造成 ${diff} 点伤害。${pressure}`;
+      return `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破并贯穿造成 ${diff} 点伤害。`;
     }
-    const shieldText = shieldAdjustedPreviewText(diff, rival, attacker);
     return target.mode === "defense"
       ? `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，可击破但不造成战斗伤害。`
-      : `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，${shieldText || `预计造成 ${diff} 点伤害。`}`;
+      : `${attacker.name} ${attackerStat} 对 ${target.name} ${targetStat}，预计造成 ${diff} 点伤害。`;
   }
   if (diff < 0) {
-    const shieldText = shieldAdjustedPreviewText(Math.abs(diff), owner, target);
-    if (shieldText) {
-      return target.mode === "defense"
-        ? `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方${shieldText}双方怪兽保留。`
-        : `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方${shieldText}`;
-    }
     return target.mode === "defense"
       ? `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害，双方怪兽保留。`
       : `${attacker.name} ${attackerStat} 低于 ${target.name} ${targetStat}，攻击方预计承受 ${Math.abs(diff)} 点伤害。`;
@@ -122,25 +89,6 @@ export function battlePreviewText(attacker, target, owner = null, rival = null) 
   return target.mode === "defense"
     ? `${attacker.name} 与 ${target.name} 数值相同，守备怪兽挡下攻击，双方怪兽保留。`
     : `${attacker.name} 与 ${target.name} 数值相同，预计同归于尽。`;
-}
-
-export function shieldPreview(amount, shield = 0, sourceCard = null) {
-  if (amount <= 0) return { blocked: 0, finalDamage: 0, text: "不造成生命值伤害。" };
-  const shieldBefore = Math.max(0, Number(shield) || 0);
-  const shieldPierced = Math.min(shieldBefore, shieldPierceAmount(sourceCard));
-  const shieldAfterPierce = Math.max(0, shieldBefore - shieldPierced);
-  const blocked = Math.min(shieldAfterPierce, amount);
-  const finalDamage = amount - blocked;
-  const pressureText = shieldPierced > 0 ? `神格威压先消解 ${shieldPierced} 点护盾，` : "";
-  return {
-    shieldPierced,
-    blocked,
-    shieldAfter: shieldAfterPierce - blocked,
-    finalDamage,
-    text: blocked > 0
-      ? `${pressureText}护盾预计吸收 ${blocked} 点，最终生命值伤害 ${finalDamage}。`
-      : `${pressureText}预计造成 ${finalDamage} 点生命值伤害。`
-  };
 }
 
 export function makeAttackIntentPreview(attacker, { targetCount = 0, canDirectAttack = false } = {}) {
@@ -172,17 +120,16 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
     { label: "攻击方", value: `${attacker.name} / 攻击 ${attack}` }
   ];
   if (!target) {
-    const shield = shieldPreview(attack, rival?.shield || 0, attacker);
     rows.push(
       { label: "目标", value: "对方玩家 / 直接伤害" },
-      { label: "结算", value: shield.text }
+      { label: "结算", value: `预计造成 ${attack} 点生命值伤害。` }
     );
     return {
       mode: "direct",
       badge: "直击",
       tone: "",
       rows,
-      result: `${attacker.name} 将直接攻击玩家。${shield.blocked > 0 ? "护盾会先吸收伤害。" : ""}`
+      result: `${attacker.name} 将直接攻击玩家。`
     };
   }
   const targetMode = target.mode === "defense" ? "守备" : "攻击";
@@ -202,13 +149,7 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
   if (diff > 0) {
     const piercesDefense = target.mode === "defense" && hasPiercingDamage(attacker);
     const rawDamage = piercesDefense || target.mode !== "defense" ? diff : 0;
-    const shield = shieldPreview(rawDamage, rival?.shield || 0, attacker);
-    if (shield.blocked > 0) {
-      rows.push({ label: "护盾", value: `吸收 ${shield.blocked} / 实伤 ${shield.finalDamage}` });
-    }
-    if (shield.shieldPierced > 0) {
-      rows.push({ label: "威压", value: `消解护盾 ${shield.shieldPierced}` });
-    }
+    if (rawDamage > 0) rows.push({ label: "生命伤害", value: String(rawDamage) });
     return {
       badge: piercesDefense ? "贯穿" : target.mode === "defense" ? "破防" : "优势",
       mode: "target",
@@ -216,20 +157,14 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
       tone: target.mode === "defense" ? "guard" : "advantage",
       rows,
       result: piercesDefense
-        ? `目标会被击破；神格贯穿会造成差值伤害。${shield.text}`
+        ? `目标会被击破；神格贯穿会造成 ${rawDamage} 点差值伤害。`
         : target.mode === "defense"
         ? "目标会被击破；守备表示不造成生命值伤害。"
-        : `目标会被击破；${shield.text}`
+        : `目标会被击破；预计造成 ${rawDamage} 点生命值伤害。`
     };
   }
   if (diff < 0) {
-    const shield = shieldPreview(Math.abs(diff), owner?.shield || 0, target);
-    if (shield.blocked > 0) {
-      rows.push({ label: "护盾", value: `吸收 ${shield.blocked} / 实伤 ${shield.finalDamage}` });
-    }
-    if (shield.shieldPierced > 0) {
-      rows.push({ label: "威压", value: `消解护盾 ${shield.shieldPierced}` });
-    }
+    rows.push({ label: "生命伤害", value: String(Math.abs(diff)) });
     if (target.mode === "defense") {
       return {
         badge: "守备反击",
@@ -237,7 +172,7 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
         compare,
         tone: "guard",
         rows,
-        result: `攻击方承受守备力差值伤害；${shield.text}双方怪兽保留，目标会产生战斗损耗。`
+        result: `攻击方承受 ${Math.abs(diff)} 点守备力差值伤害；双方怪兽保留，目标会产生战斗损耗。`
       };
     }
     return {
@@ -246,7 +181,7 @@ export function makeBattlePreview(attacker, target, owner = null, rival = null) 
       compare,
       tone: "danger",
       rows,
-      result: `攻击方会被破坏；${shield.text}目标会产生战斗损耗。`
+      result: `攻击方会被破坏并承受 ${Math.abs(diff)} 点生命值伤害；目标会产生战斗损耗。`
     };
   }
   if (target.mode === "defense") {

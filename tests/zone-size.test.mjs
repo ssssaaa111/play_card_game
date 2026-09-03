@@ -18,7 +18,7 @@ import {
   projectBattleFromUiState
 } from "../src/engine-adapter.js";
 import {
-  MAX_LP,
+  STARTING_LP,
   MONSTER_ZONE_SIZE,
   SPELL_TRAP_ZONE_SIZE,
   legalAttackTargets
@@ -59,8 +59,7 @@ function engineTrap(id, ownerId = PLAYER, overrides = {}) {
 function baseEnginePlayer(id, overrides = {}) {
   return {
     id,
-    lp: MAX_LP,
-    shield: 0,
+    lp: STARTING_LP,
     deck: [],
     hand: [],
     monsterZone: [],

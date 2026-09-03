@@ -141,7 +141,7 @@ test("conditional summon scenarios expose engine-backed summon triggers", () => 
   assert.deepEqual(ids(fire.player.hand), ["flame-captain"]);
   assert.equal(fire.player.hand[0].onSummon, "fireBuff");
   assert.deepEqual(ids(shield.player.hand), ["prism-saint"]);
-  assert.equal(shield.player.hand[0].onSummon, "shield400");
+  assert.equal(shield.player.hand[0].onSummon, "heal400");
   assert.deepEqual(ids(shadow.player.field).slice(0, 1), ["night-oracle"]);
   assert.deepEqual(ids(shadow.player.hand), ["dusk-alchemist"]);
   assert.equal(shadow.player.hand[0].onSummon, "shadowBurn");

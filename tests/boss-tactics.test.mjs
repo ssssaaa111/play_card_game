@@ -126,7 +126,7 @@ test("trio boss changes counter priority with each finale phase", () => {
   assert.equal(trioBossCounterPlan({ events, resolveCard, phase: 3 })?.id, "fortify-gods");
 });
 
-test("phase three boss publishes finish pressure only inside the effective-life line", () => {
+test("phase three boss publishes finish pressure only inside the current-life line", () => {
   const shared = {
     events: [{ id: 20, type: "TURN_STARTED", playerId: "player" }],
     resolveCard,
@@ -134,10 +134,10 @@ test("phase three boss publishes finish pressure only inside the effective-life 
     ai: { field: [{ id: "trio-star-herald", type: "monster", mode: "attack" }] }
   };
 
-  const rush = trioBossCounterPlan({ ...shared, player: { lp: 2400, shield: 300 } });
-  const shielded = trioBossCounterPlan({ ...shared, player: { lp: 2400, shield: 500 } });
+  const rush = trioBossCounterPlan({ ...shared, player: { lp: 2400 } });
+  const safe = trioBossCounterPlan({ ...shared, player: { lp: 2900 } });
 
   assert.equal(rush?.id, "rush-finale");
   assert.equal(rush?.turnGoal, "finishPressure");
-  assert.equal(shielded, null);
+  assert.equal(safe, null);
 });

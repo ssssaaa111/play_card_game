@@ -740,11 +740,6 @@ body[data-duel-turn="ai"] .phase span {
   color: #ffc2ce;
 }
 
-.vital-chip.shield {
-  border-color: rgba(84, 210, 210, 0.38);
-  color: #b8e9ff;
-}
-
 .vital-chip.resource {
   border-color: rgba(183, 148, 244, 0.42);
   color: #e2d5ff;

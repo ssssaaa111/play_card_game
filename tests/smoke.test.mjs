@@ -401,7 +401,7 @@ test("app dispatches battle state changes through the engine adapter", () => {
   assert.match(attackSource, /targetEffectId = attackEvent\.id/);
   assert.match(attackSource, /declarationEventId: attackContext\.targetEffectId/);
   assert.match(attackSource, /consumeAttack: trapResult\.consumesAttack/);
-  assert.match(attackSource, /consumeAttack: shield\.consumesAttack/);
+  assert.match(attackSource, /consumeAttack: defenseResult\.consumesAttack/);
   assert.match(attackSource, /resolveBattleWithEngine\(owner, rival, attackerIndex, resolvedTargetIndex, \{/);
   assert.doesNotMatch(attackSource, /const dealt = damage\(/);
   assert.doesNotMatch(attackSource, /rival\.field\[resolvedTargetIndex\]\s*=/);
@@ -575,7 +575,7 @@ test("app uses extracted log audit module", () => {
   assert.match(css, /\.timeline-audit\.error/);
   assert.match(app, /if \(event\.type === "LP_HEALED" && event\.amount > 0\)/);
   assert.match(app, /if \(event\.type === "DAMAGE_DEALT"\)/);
-  assert.match(app, /playLifeDelta\(owner\.owner, event\.amount\)/);
+  assert.match(app, /playLifeDelta\(target\.owner, event\.amount\)/);
   assert.match(app, /playLifeDelta\(target\.owner, -dealt\)/);
 });
 
@@ -596,7 +596,7 @@ test("after-attack feedback stages base damage before revealing effect damage", 
   assert.doesNotMatch(feedbackSource, /attacker\.afterAttack && events\.some\(\(event\) => event\.sourceCardId === attackerId\)/);
   assert.match(
     smoke,
-    /aiRevealVisible\(ctx\.els, "trio-star-herald"\)[\s\S]*ctx\.els\.playerLp\?\.textContent\.trim\(\) !== "300 \/ 4000"/
+    /aiRevealVisible\(ctx\.els, "trio-star-herald"\)[\s\S]*ctx\.els\.playerLp\?\.textContent\.trim\(\) !== "300"/
   );
   assert.match(smoke, /sun must not reveal an after-attack effect without a declaration target/);
 });
@@ -651,7 +651,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-happy-clicker-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-full-duel"\)/);
-  assert.match(smoke, /const smokeName = "trio-chain-lifecycle-basic";[\s\S]*committed solar snare remains visible[\s\S]*"850 \/ 4000"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "trio-chain-lifecycle-basic";[\s\S]*committed solar snare remains visible[\s\S]*"850"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
 
   assert.match(html, /id="graveTargets"/);
   assert.match(html, /id="scenarioBrief"/);
@@ -886,7 +886,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /the public log should explain why only sun attacks this turn/);
   assert.match(smoke, /trio should assign sun to the exclusive high threat/);
   assert.match(smoke, /normal summon should not be described as self-triggered special summon/);
-  assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
+  assert.match(smoke, /星魂格挡削弱攻击怪兽并回复生命/);
   assert.match(smoke, /targetChangedEvents/);
   assert.match(smoke, /幻影换位重定向后仍未按新目标结算/);
   assert.match(smoke, /醒星回召把墓地王牌移回怪兽区/);

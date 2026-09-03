@@ -50,7 +50,7 @@ import {
   explainFusionSummonFromUiState
 } from "../src/engine-adapter.js";
 import { ACTION_WINDOWS, PHASES } from "../src/turn-state.js";
-import { MAX_LP } from "../src/rules.js";
+import { STARTING_LP } from "../src/rules.js";
 import { spellDefinitions } from "../src/spells.js";
 import { trapDefinitions } from "../src/traps.js";
 
@@ -212,7 +212,7 @@ test("replays combo and character passive events into UI state", () => {
 
   assert.equal(state.player.comboFlags.fireWind, true);
   assert.equal(state.player.comboThisTurn, true);
-  assert.equal(state.ai.lp, MAX_LP - 300);
+  assert.equal(state.ai.lp, STARTING_LP - 300);
   assert.equal(fire.tempAtk, 100);
   assert.equal(wind.tempAtk, 100);
   assert.deepEqual(state.player.hand, [draw]);
@@ -500,7 +500,7 @@ test("dispatches the explicitly selected result for a multi-result fusion", () =
   const gale = uiMonster("fusion-gale", "gale-mage");
   const attackArchon = uiMonster("fusion-attack", "flare-gale-archon");
   const guardArchon = uiMonster("fusion-guard", "tempest-aegis-archon");
-  guardArchon.onSummon = "shield400";
+  guardArchon.onSummon = "heal400";
   const state = appState();
   state.player.hand = [fusion, gale];
   state.player.field[0] = ember;
@@ -521,7 +521,7 @@ test("dispatches the explicitly selected result for a multi-result fusion", () =
 
   assert.equal(state.player.field[0], guardArchon);
   assert.deepEqual(state.player.deck, [attackArchon]);
-  assert.equal(state.player.shield, 400);
+  assert.equal(state.player.lp, 4400);
   assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.resultTemplateId === "tempest-aegis-archon"));
 });
 
@@ -580,17 +580,15 @@ test("dispatches turn draws and replays deck-out damage into UI state", () => {
   const second = uiMonster("ui-draw-second", "iron-guardian");
   const state = appState({ phase: PHASES.draw, turn: "player" });
   state.player.lp = 4000;
-  state.player.shield = 200;
   state.player.deck = [first, second];
 
   const events = dispatchDrawCardsFromUiState(state, "player", 3, { reason: "turn" });
 
   assert.deepEqual(state.player.deck, []);
   assert.deepEqual(state.player.hand, [first, second]);
-  assert.equal(state.player.shield, 0);
-  assert.equal(state.player.lp, 3700);
+  assert.equal(state.player.lp, 3500);
   assert.ok(events.some((event) => event.type === "DRAW_FAILED" && event.missing === 1));
-  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.blocked === 200 && event.amount === 300));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 500));
 });
 
 test("dispatches turn draw resolution and advances surviving turns to main", () => {
@@ -671,7 +669,7 @@ test("dispatches conditional on-summon effects through engine events", () => {
   captain.atk = 1400;
   captain.onSummon = "fireBuff";
   const saint = uiMonster("saint-summon", "prism-saint");
-  saint.onSummon = "shield400";
+  saint.onSummon = "heal400";
   const oracle = uiMonster("oracle-ally", "night-oracle");
   oracle.element = "shadow";
   const alchemist = uiMonster("alchemist-summon", "dusk-alchemist");
@@ -695,10 +693,10 @@ test("dispatches conditional on-summon effects through engine events", () => {
   const burnEvents = dispatchSummonMonsterFromUiState(burnState, "player", 0, 1);
 
   assert.equal(buffState.player.field[0].tempAtk, 300);
-  assert.equal(shieldState.player.shield, 400);
+  assert.equal(shieldState.player.lp, 4400);
   assert.equal(burnState.ai.lp, 3700);
   assert.ok(buffEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === ember.uid && event.sourceCardId === captain.uid));
-  assert.ok(shieldEvents.some((event) => event.type === "SHIELD_GAINED" && event.amount === 400 && event.sourceCardId === saint.uid));
+  assert.ok(shieldEvents.some((event) => event.type === "LP_HEALED" && event.amount === 400 && event.sourceCardId === saint.uid));
   assert.ok(burnEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 300 && event.sourceCardId === alchemist.uid));
 });
 
@@ -756,11 +754,10 @@ test("dispatches engine-backed resource traps through UI event replay", () => {
 
   const shieldState = appState({ phase: PHASES.battle, turn: "ai" });
   shieldState.player.traps[0] = shift;
-  shieldState.player.shield = 2200;
   const shieldEvents = dispatchActivateTrapFromUiState(shieldState, "player", "ai", 0, {});
-  assert.equal(shieldState.player.shield, 2400);
+  assert.equal(shieldState.player.lp, 4400);
   assert.deepEqual(shieldState.player.grave, [shift]);
-  assert.ok(shieldEvents.some((event) => event.type === "SHIELD_GAINED" && event.amount === 200 && event.sourceCardId === shift.uid));
+  assert.ok(shieldEvents.some((event) => event.type === "LP_HEALED" && event.amount === 400 && event.sourceCardId === shift.uid));
 
   const reboundState = appState({ phase: PHASES.battle, turn: "ai" });
   reboundState.player.traps[0] = rebound;
@@ -901,18 +898,16 @@ test("dispatches battle resolution and applies direct damage to UI state", () =>
   attacker.atk = 1500;
   const state = appState({ phase: PHASES.battle });
   state.player.field[0] = attacker;
-  state.ai.shield = 500;
 
   const events = dispatchResolveBattleFromUiState(state, "player", "ai", 0, -1);
 
   assert.equal(attacker.used, true);
-  assert.equal(state.ai.shield, 0);
-  assert.equal(state.ai.lp, 3000);
+  assert.equal(state.ai.lp, 2500);
   assert.equal(state.actionWindow, ACTION_WINDOWS.battle);
   assert.equal(state.actionWindowReason, "battle-resolved");
   assert.ok(events.some((event) => event.type === "ATTACK_DECLARED" && event.direct === true));
   assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === attacker.uid));
-  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 1000));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === "ai" && event.amount === 1500));
 });
 
 test("dispatches attack declaration as a response-window event without resolving battle", () => {
@@ -1122,7 +1117,6 @@ test("redirect trap response updates pending attack before UI battle resolution"
   guard.def = 2100;
   guard.tempDef = 100;
   const state = appState({ phase: PHASES.battle, turn: "ai" });
-  state.player.shield = 550;
   state.player.traps[0] = trap;
   state.player.field[0] = original;
   state.player.field[1] = guard;
@@ -1149,7 +1143,6 @@ test("redirect trap response updates pending attack before UI battle resolution"
   assert.equal(battleResolved.outcome.diff, -150);
   assert.equal(state.player.field[0], original);
   assert.equal(state.player.field[1], guard);
-  assert.equal(state.player.shield, 550);
   assert.equal(state.ai.lp, 3850);
   assert.equal(state.actionWindow, ACTION_WINDOWS.ai);
   assert.equal(state.actionWindowReason, "battle-resolved");
@@ -1370,14 +1363,12 @@ test("dispatches battle resolution and applies guard counter wear to UI state", 
   guard.battleWear = 0;
   const state = appState({ phase: PHASES.battle });
   state.player.field[0] = attacker;
-  state.player.shield = 100;
   state.ai.field[0] = guard;
 
   const events = dispatchResolveBattleFromUiState(state, "player", "ai", 0, 0);
 
   assert.equal(attacker.used, true);
-  assert.equal(state.player.shield, 0);
-  assert.equal(state.player.lp, 3800);
+  assert.equal(state.player.lp, 3700);
   assert.equal(state.player.field[0], attacker);
   assert.equal(state.ai.field[0], guard);
   assert.equal(guard.battleWear, 150);
@@ -1813,12 +1804,12 @@ test("dispatches engine-backed healing and stat spells without direct UI mutatio
   const healEvents = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
   const buffEvents = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: strongest });
 
-  assert.equal(state.player.lp, 4000);
+  assert.equal(state.player.lp, 4200);
   assert.deepEqual(state.player.hand, []);
   assert.deepEqual(state.player.grave, [renewal, chant]);
   assert.equal(strongest.tempAtk, 500);
   assert.equal(weaker.tempAtk || 0, 0);
-  assert.ok(healEvents.some((event) => event.type === "LP_HEALED" && event.amount === 500));
+  assert.ok(healEvents.some((event) => event.type === "LP_HEALED" && event.amount === 700));
   assert.ok(buffEvents.some((event) => event.type === "STAT_MODIFIED" && event.cardId === strongest.uid));
 });
 
@@ -1920,26 +1911,23 @@ test("dispatches spell/trap removal spells against explicit rival trap targets",
   ));
 });
 
-test("dispatches engine-backed damage spells with shield absorption", () => {
+test("dispatches engine-backed damage spells directly against LP", () => {
   const burst = uiSpell("spell-burn", "burn500", "burst-rune");
   const state = appState();
   state.player.hand = [burst];
   state.ai.lp = 4000;
-  state.ai.shield = 300;
 
   assert.equal(canDispatchSpellFromUiState(burst), true);
   const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
 
-  assert.equal(state.ai.shield, 0);
-  assert.equal(state.ai.lp, 3800);
+  assert.equal(state.ai.lp, 3500);
   assert.deepEqual(state.player.hand, []);
   assert.deepEqual(state.player.grave, [burst]);
   assert.ok(events.some((event) =>
     event.type === "DAMAGE_DEALT" &&
     event.playerId === "ai" &&
     event.requested === 500 &&
-    event.blocked === 300 &&
-    event.amount === 200
+    event.amount === 500
   ));
 });
 
@@ -1959,7 +1947,7 @@ test("replays lethal spell damage as a game-over UI event", () => {
   assert.ok(events.some((event) => event.type === "GAME_OVER_DECLARED" && event.winnerId === "player"));
 });
 
-test("dispatches engine-backed pierce-line with target stat loss and shielded damage", () => {
+test("dispatches engine-backed pierce-line with target stat loss and direct damage", () => {
   const pierce = uiSpell("spell-pierce", "pierceLine", "pierce-line");
   const strongest = uiMonster("enemy-strongest", "star-lancer");
   const weaker = uiMonster("enemy-weaker", "ember-drake");
@@ -1971,7 +1959,6 @@ test("dispatches engine-backed pierce-line with target stat loss and shielded da
   state.player.hand = [pierce];
   state.ai.field[0] = weaker;
   state.ai.field[1] = strongest;
-  state.ai.shield = 50;
 
   assert.equal(canDispatchSpellFromUiState(pierce), true);
   const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0, { card: strongest, owner: "ai" });
@@ -1982,15 +1969,13 @@ test("dispatches engine-backed pierce-line with target stat loss and shielded da
   assert.equal(strongest.tempDef, -400);
   assert.equal(weaker.tempAtk || 0, 0);
   assert.equal(weaker.tempDef || 0, 0);
-  assert.equal(state.ai.shield, 0);
-  assert.equal(state.ai.lp, 3850);
+  assert.equal(state.ai.lp, 3800);
   assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === strongest.uid).length, 2);
   assert.ok(events.some((event) =>
     event.type === "DAMAGE_DEALT" &&
     event.playerId === "ai" &&
     event.requested === 200 &&
-    event.blocked === 50 &&
-    event.amount === 150
+    event.amount === 200
   ));
 });
 
@@ -2040,25 +2025,22 @@ test("dispatches engine-backed extra-summon as an ability grant", () => {
   ));
 });
 
-test("dispatches engine-backed shield spells with capped shield gain", () => {
-  const shield = uiSpell("spell-shield", "shield800", "star-shield");
+test("dispatches engine-backed life spells above the starting LP", () => {
+  const shield = uiSpell("spell-shield", "heal800", "star-shield");
   const state = appState();
   state.player.hand = [shield];
-  state.player.shield = 2000;
 
   assert.equal(canDispatchSpellFromUiState(shield), true);
   const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
 
   assert.deepEqual(state.player.hand, []);
   assert.deepEqual(state.player.grave, [shield]);
-  assert.equal(state.player.shield, 2400);
+  assert.equal(state.player.lp, 4800);
   assert.ok(events.some((event) =>
-    event.type === "SHIELD_GAINED" &&
+    event.type === "LP_HEALED" &&
     event.playerId === "player" &&
     event.requested === 800 &&
-    event.amount === 400 &&
-    event.before === 2000 &&
-    event.after === 2400 &&
+    event.amount === 800 &&
     event.sourceCardId === shield.uid
   ));
 });
@@ -2235,13 +2217,12 @@ test("dispatches engine-backed rally-attack as stat buff plus immediate monster 
   ));
 });
 
-test("dispatches engine-backed light-shadow combo as shield gain plus draw", () => {
+test("dispatches engine-backed light-shadow combo as life gain plus draw", () => {
   const eclipse = uiSpell("spell-eclipse", "lightShadowCombo", "eclipse-barrier");
   const deckCard = uiMonster("eclipse-draw", "solar-knight");
   const state = appState();
   state.player.hand = [eclipse];
   state.player.deck = [deckCard];
-  state.player.shield = 2100;
 
   assert.equal(canDispatchSpellFromUiState(eclipse), true);
   const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
@@ -2249,14 +2230,12 @@ test("dispatches engine-backed light-shadow combo as shield gain plus draw", () 
   assert.deepEqual(state.player.hand, [deckCard]);
   assert.deepEqual(state.player.deck, []);
   assert.deepEqual(state.player.grave, [eclipse]);
-  assert.equal(state.player.shield, 2400);
+  assert.equal(state.player.lp, 4600);
   assert.ok(events.some((event) =>
-    event.type === "SHIELD_GAINED" &&
+    event.type === "LP_HEALED" &&
     event.playerId === "player" &&
     event.requested === 600 &&
-    event.amount === 300 &&
-    event.before === 2100 &&
-    event.after === 2400 &&
+    event.amount === 600 &&
     event.sourceCardId === eclipse.uid
   ));
   assert.ok(events.some((event) =>
@@ -2306,23 +2285,20 @@ test("dispatches engine-backed fire-wind combo as damage plus all-field stat buf
   state.player.hand = [combo];
   state.player.field[0] = fire;
   state.player.field[1] = wind;
-  state.ai.shield = 100;
 
   assert.equal(canDispatchSpellFromUiState(combo), true);
   const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);
 
   assert.deepEqual(state.player.hand, []);
   assert.deepEqual(state.player.grave, [combo]);
-  assert.equal(state.ai.shield, 0);
-  assert.equal(state.ai.lp, 3700);
+  assert.equal(state.ai.lp, 3600);
   assert.equal(fire.tempAtk, 200);
   assert.equal(wind.tempAtk, 200);
   assert.ok(events.some((event) =>
     event.type === "DAMAGE_DEALT" &&
     event.playerId === "ai" &&
     event.requested === 400 &&
-    event.blocked === 100 &&
-    event.amount === 300 &&
+    event.amount === 400 &&
     event.sourceCardId === combo.uid
   ));
   assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.amount === 200).length, 2);

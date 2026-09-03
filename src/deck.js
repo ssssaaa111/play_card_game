@@ -1,18 +1,17 @@
 import { deckPresets, library } from './data.js';
 import { inferArchetype, inferRarity } from './cards.js';
-import { MAX_LP, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from './rules.js';
+import { STARTING_LP, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE } from './rules.js';
 import { resolveDeckDefinition } from './custom-decks.js';
 
 export function createDuelist(owner, comboPassive = null) {
   return {
     owner,
-    lp: MAX_LP,
+    lp: STARTING_LP,
     deck: [],
     hand: [],
     field: Array(MONSTER_ZONE_SIZE).fill(null),
     traps: Array(SPELL_TRAP_ZONE_SIZE).fill(null),
     grave: [],
-    shield: 0,
     extraSummon: 0,
     attackResets: 0,
     attackResetEntries: [],
