@@ -5,6 +5,7 @@ import { deckPresets, library, scenarioSetups } from "../src/data.js";
 import { cloneCardById, createDuelist } from "../src/deck.js";
 import { buildEngineStateFromUiState, canDispatchSpellFromUiState, canDispatchTrapFromUiState } from "../src/engine-adapter.js";
 import { EffectDuration, GameEngine, Phase, Timing, assertValidGameState, getCardEffectDefinition } from "../src/game-engine.js";
+import { TRIO_COMEBACK_LP_THRESHOLD } from "../src/rules.js";
 import { buildScenarioState } from "../src/scenario-state.js";
 
 const PLAYER = "player";
@@ -146,7 +147,7 @@ test("trio omega finale pack has rule-backed cards, decks, and scenarios", () =>
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempDef", amount: -900 }
   ]);
   assert.deepEqual(getCardEffectDefinition("trioFinalCounter").requirements, [
-    { type: "maxLp", player: "self", amount: 1600 },
+    { type: "maxLp", player: "self", amount: TRIO_COMEBACK_LP_THRESHOLD },
     { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
     { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
   ]);
@@ -688,7 +689,7 @@ test("trio omega full duel has multiple setup routes and no opening high-attack 
   assert.ok(highestOpeningAtk < cardByTemplate("trio-sun-judicator").atk);
   assert.equal(opened.player.lp, 4000);
   assert.deepEqual(getCardEffectDefinition("trioFinalCounter").requirements.slice(0, 2), [
-    { type: "maxLp", player: "self", amount: 1600 },
+    { type: "maxLp", player: "self", amount: TRIO_COMEBACK_LP_THRESHOLD },
     { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] }
   ]);
 });

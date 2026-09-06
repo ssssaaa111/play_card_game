@@ -50,7 +50,7 @@ import {
   explainFusionSummonFromUiState
 } from "../src/engine-adapter.js";
 import { ACTION_WINDOWS, PHASES } from "../src/turn-state.js";
-import { STARTING_LP } from "../src/rules.js";
+import { STARTING_LP, TRIO_COMEBACK_LP_THRESHOLD } from "../src/rules.js";
 import { spellDefinitions } from "../src/spells.js";
 import { trapDefinitions } from "../src/traps.js";
 
@@ -2470,13 +2470,13 @@ test("explains active rival continuous pressure and allows the spell after that 
   assert.ok(state.player.hand.includes(finalCounter));
 });
 
-test("trio vow counter applies a field-scoped boost to the weakest monster", () => {
+test("trio vow counter remains legal with gauntlet life supply and applies a field-scoped boost", () => {
   const vow = uiSpell("vow-permanent", "trioFinalCounterVow", "trio-final-counter-vow");
   const pawn = uiMonster("vow-pawn", "trio-ember-pawn");
   pawn.atk = 600;
   pawn.def = 600;
   const state = appState();
-  state.player.lp = 1300;
+  state.player.lp = 2100;
   state.player.hand = [vow];
   state.player.field[0] = pawn;
 
@@ -2495,12 +2495,12 @@ test("explains each trio final counter blocker with actionable copy", () => {
   const pawn = uiMonster("pawn-blocker", "trio-ember-pawn");
 
   const highLpState = appState();
-  highLpState.player.lp = 2000;
+  highLpState.player.lp = TRIO_COMEBACK_LP_THRESHOLD + 100;
   highLpState.player.hand = [finalCounter];
   highLpState.player.field[0] = pawn;
   const highLp = explainActivateSpellFromUiState(highLpState, "player", "ai", 0);
   assert.equal(highLp.ok, false);
-  assert.equal(highLp.reason, "生命值还需要降到 1600 以下才能发动三曜终断。");
+  assert.equal(highLp.reason, `生命值还需要降到 ${TRIO_COMEBACK_LP_THRESHOLD} 以下才能发动三曜终断。`);
 
   const missingPawnState = appState();
   missingPawnState.player.lp = 1300;

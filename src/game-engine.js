@@ -1,4 +1,4 @@
-import { MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, canEffectTargetCard } from "./rules.js";
+import { MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, TRIO_COMEBACK_LP_THRESHOLD, canEffectTargetCard } from "./rules.js";
 import { matchingElementCombos } from "./combos.js";
 import { fusionOptionForResult, fusionOptionsForCard } from "./fusion.js";
 
@@ -176,7 +176,7 @@ export const defaultCardEffects = Object.freeze({
     }
   ], {
     requirements: [
-      { type: "maxLp", player: "self", amount: 1600 },
+      { type: "maxLp", player: "self", amount: TRIO_COMEBACK_LP_THRESHOLD },
       { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
       { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
     ]
@@ -193,7 +193,7 @@ export const defaultCardEffects = Object.freeze({
     }
   ], {
     requirements: [
-      { type: "maxLp", player: "self", amount: 1600 },
+      { type: "maxLp", player: "self", amount: TRIO_COMEBACK_LP_THRESHOLD },
       { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
       { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
     ]

@@ -1,3 +1,5 @@
+import { TRIO_COMEBACK_LP_THRESHOLD } from "./rules.js";
+
 export const library = [
   { id: "solar-vanguard", type: "monster", name: "曜锋先锋", element: "light", stars: 5, atk: 2300, def: 1700, icon: "曜", text: "需要 1 只我方场上怪兽作为祭品才能通常召唤。第一版祭品召唤验证用高阶怪兽。", tributeCost: 1 },
   { id: "starfall-colossus", type: "monster", name: "坠星巨卫", element: "light", stars: 8, atk: 3200, def: 2600, icon: "坠", text: "需要 2 只我方场上怪兽作为祭品才能通常召唤。用于验证大型怪兽的双祭品流程。", tributeCost: 2 },
@@ -84,8 +86,8 @@ export const library = [
   { id: "trio-moonbreaker-ray", type: "spell", name: "碎月解幕", icon: "碎", text: "选择对手魔陷区 1 张卡破坏。用于清除持续压制后再展开墓地资源。", effect: "destroySpellTrap" },
   { id: "trio-ember-recall", type: "spell", name: "余烁归轨", icon: "归", text: "选择我方墓地 1 只怪兽，特殊回到怪兽区。终局战中用来让低星关键怪回场。", effect: "graveRevive" },
   { id: "trio-chain-veil", type: "trap", name: "星线护续", icon: "续", text: "盖放后自动触发：对手攻击时，无效本次攻击并消耗攻击机会。", trigger: "attackNegate" },
-  { id: "trio-final-counter", type: "spell", name: "三曜终断", icon: "断", text: "生命值 1600 以下、余烁小卫在场，且我方怪兽未受到对手持续效果影响时才能发动；使攻击力最低的我方怪兽攻击力提升 2100。若其已经攻击则立即重置为可攻击，否则获得 1 次追加攻击机会。", effect: "trioFinalCounter" },
-  { id: "trio-final-counter-vow", type: "spell", name: "终局反击·誓约", icon: "誓", text: "生命值 1600 以下、余烁小卫在场，且我方怪兽未受到对手持续效果影响时才能发动；使攻击力最低的我方怪兽攻击力提升 2100（持续到该怪兽离场），并立即重置其攻击或给予 1 次追加攻击机会。誓约之力不会随回合结束消散，用来逐尊瓦解三曜。", effect: "trioFinalCounterVow" }
+  { id: "trio-final-counter", type: "spell", name: "三曜终断", icon: "断", text: `生命值 ${TRIO_COMEBACK_LP_THRESHOLD} 以下、余烁小卫在场，且我方怪兽未受到对手持续效果影响时才能发动；使攻击力最低的我方怪兽攻击力提升 2100。若其已经攻击则立即重置为可攻击，否则获得 1 次追加攻击机会。`, effect: "trioFinalCounter" },
+  { id: "trio-final-counter-vow", type: "spell", name: "终局反击·誓约", icon: "誓", text: `生命值 ${TRIO_COMEBACK_LP_THRESHOLD} 以下、余烁小卫在场，且我方怪兽未受到对手持续效果影响时才能发动；使攻击力最低的我方怪兽攻击力提升 2100（持续到该怪兽离场），并立即重置其攻击或给予 1 次追加攻击机会。誓约之力不会随回合结束消散，用来逐尊瓦解三曜。`, effect: "trioFinalCounterVow" }
 ];
 
 export const monsterAssets = {

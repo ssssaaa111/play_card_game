@@ -1,6 +1,6 @@
 import { Ability, GameEngine, Phase, explainActionLegality, getCardEffectDefinition, getLegalActions, projectMachineStateFromEvents, tributeCostForCard } from './game-engine.js';
 import { library } from './data.js';
-import { MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, canEffectTargetCard, totalAtk } from './rules.js';
+import { MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, TRIO_COMEBACK_LP_THRESHOLD, canEffectTargetCard, totalAtk } from './rules.js';
 import { spellDefinition } from './spells.js';
 import { trapDefinition } from './traps.js';
 import { ACTION_WINDOWS, PHASES, TIMINGS } from './turn-state.js';
@@ -1018,7 +1018,9 @@ function explainUiAction(engineState, action, actionLabel) {
 }
 
 function localizeEngineRuleReason(message = "", actionLabel = "操作") {
-  if (/requires LP at most 1600/.test(message)) return "生命值还需要降到 1600 以下才能发动三曜终断。";
+  if (message.includes(`requires LP at most ${TRIO_COMEBACK_LP_THRESHOLD}`)) {
+    return `生命值还需要降到 ${TRIO_COMEBACK_LP_THRESHOLD} 以下才能发动三曜终断。`;
+  }
   if (/requires field materials trio-ember-pawn/.test(message)) return "余烁小卫不在场，无法发动三曜终断。";
   if (/requires no active continuous effect/.test(message)) return "月曜帷幕仍在压制我方怪兽，先清除它再发动三曜终断。";
   if (/not legal during/.test(message)) return `当前阶段不能${actionLabel}。`;

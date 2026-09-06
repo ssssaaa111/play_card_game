@@ -1,4 +1,5 @@
 export const STARTING_LP = 4000;
+export const TRIO_COMEBACK_LP_THRESHOLD = 2200;
 export const MONSTER_ZONE_SIZE = 5;
 export const SPELL_TRAP_ZONE_SIZE = 5;
 export const FIELD_SIZE = MONSTER_ZONE_SIZE;

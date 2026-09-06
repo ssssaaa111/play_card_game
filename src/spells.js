@@ -1,4 +1,4 @@
-import { battleValue, fieldCards, fieldElements, totalAtk } from './rules.js';
+import { TRIO_COMEBACK_LP_THRESHOLD, battleValue, fieldCards, fieldElements, totalAtk } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
 import { fusionOptionsForCard } from './fusion.js';
 import { getCardEffectDefinition } from './game-engine.js';
@@ -363,11 +363,11 @@ export const spellDefinitions = {
     target: "enemyMonster"
   },
   trioFinalCounter: {
-    handSummary: "LP≤1600 · 强化最低攻并重置攻击",
+    handSummary: `LP≤${TRIO_COMEBACK_LP_THRESHOLD} · 强化最低攻并重置攻击`,
     caption: "终局三曜反击"
   },
   trioFinalCounterVow: {
-    handSummary: "LP≤1600 · 最低攻 +2100 持续 · 重置攻击",
+    handSummary: `LP≤${TRIO_COMEBACK_LP_THRESHOLD} · 最低攻 +2100 持续 · 重置攻击`,
     caption: "终局誓约反击"
   },
   heal800: {
@@ -570,7 +570,7 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       }
       return { ok: true };
     case "trioFinalCounter":
-      if (owner.lp > 1600) return { ok: false, reason: "生命值还没有进入终局反击条件。" };
+      if (owner.lp > TRIO_COMEBACK_LP_THRESHOLD) return { ok: false, reason: "生命值还没有进入终局反击条件。" };
       if (!fieldCards(owner).some((card) => cardTemplateId(card) === "trio-ember-pawn")) {
         return { ok: false, reason: "余烁小卫不在场，不能发动终局反击。" };
       }
@@ -579,7 +579,7 @@ export function validateSpellCondition(effect, { owner, rival, handIndex = -1 } 
       }
       return { ok: true };
     case "trioFinalCounterVow":
-      if (owner.lp > 1600) return { ok: false, reason: "生命值还没有进入终局誓约的条件。" };
+      if (owner.lp > TRIO_COMEBACK_LP_THRESHOLD) return { ok: false, reason: "生命值还没有进入终局誓约的条件。" };
       if (!fieldCards(owner).some((card) => cardTemplateId(card) === "trio-ember-pawn")) {
         return { ok: false, reason: "余烁小卫不在场，不能立下终局誓约。" };
       }

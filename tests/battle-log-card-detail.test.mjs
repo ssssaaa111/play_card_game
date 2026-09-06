@@ -9,6 +9,7 @@ import {
 } from "../src/battle-log.js";
 import { cardDefinitionById, cardDetailViewModel } from "../src/card-detail.js";
 import { getCardEffectDefinition } from "../src/game-engine.js";
+import { TRIO_COMEBACK_LP_THRESHOLD } from "../src/rules.js";
 
 test("public battle log events can carry one inspectable card id", () => {
   const entry = createBattleLogEntry("AI 发动魔法卡 月曜帷幕。", {
@@ -70,7 +71,7 @@ test("campaign key card definitions and victory route effects remain rule-backed
   assert.equal(cardDefinitionById("trio-final-counter").effect, "trioFinalCounter");
   assert.equal(cardDefinitionById("trio-ember-pawn").atk, 600);
   assert.deepEqual(getCardEffectDefinition("trioFinalCounter").requirements, [
-    { type: "maxLp", player: "self", amount: 1600 },
+    { type: "maxLp", player: "self", amount: TRIO_COMEBACK_LP_THRESHOLD },
     { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
     { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
   ]);
