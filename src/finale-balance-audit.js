@@ -5,7 +5,7 @@ import {
   Timing,
   assertValidGameState
 } from "./game-engine.js";
-import { MAX_LP } from "./rules.js";
+import { STARTING_LP } from "./rules.js";
 
 const PLAYER = "player";
 const AI = "ai";
@@ -264,7 +264,7 @@ function runFinaleDeployment({
   openingHandSize = 5,
   tributeBodies = (scenarioSetups[FINALE_SCENARIO_ID]?.aiField || []).length,
   includeAttackDestroyTrap = false,
-  playerLp = MAX_LP,
+  playerLp = STARTING_LP,
   playerMonsterTemplates = ["trio-decoy-ward"],
   sampleId = "deployment"
 } = {}) {
@@ -704,8 +704,7 @@ function createRuntimeCards(templateIds, ownerId, prefix, cards) {
 function basePlayer(id, overrides = {}) {
   return {
     id,
-    lp: MAX_LP,
-    shield: 0,
+    lp: STARTING_LP,
     deck: [],
     hand: [],
     monsterZone: [],
@@ -786,8 +785,7 @@ function trioProtectionProfiles() {
       tributeCost: Number(card.tributeCost) || 0,
       destructionProtection: Boolean(card.destructionProtection || card.divineGuard),
       targetResistance: Boolean(card.targetResistance),
-      piercingDamage: Boolean(card.piercingDamage || card.divinePierce),
-      shieldPierce: Boolean(card.shieldPierce || card.divinePressure)
+      piercingDamage: Boolean(card.piercingDamage || card.divinePierce)
     };
   });
 }

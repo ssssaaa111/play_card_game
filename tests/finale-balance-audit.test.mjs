@@ -213,6 +213,5 @@ test("trio protection audit confirms high tribute cost without inherited divine 
     assert.equal(card.destructionProtection, false);
     assert.equal(card.targetResistance, false);
     assert.equal(card.piercingDamage, false);
-    assert.equal(card.shieldPierce, false);
   }
 });

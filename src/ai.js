@@ -1,4 +1,4 @@
-import { battleValue, canDirectAttack, shieldPreview, totalAtk, totalDef } from './rules.js';
+import { battleValue, canDirectAttack, totalAtk, totalDef } from './rules.js';
 import { describeBattleOutcome } from './battle.js';
 import { findAiAttackSequence, findAiDirectLethalAttacker, findAiNextTurnLethalSetup, maximumRemainingAttackDamage, previewAiDirectDamage, scoreSpellForAi } from './spells.js';
 import { trapCanResolve } from './traps.js';
@@ -190,24 +190,19 @@ function adjustedAttacker(attacker, atkDelta) {
   };
 }
 
-function scoreContinuingAttackTrap(details, { atkDelta = 0, shieldDelta = 0 } = {}) {
+function scoreContinuingAttackTrap(details, { atkDelta = 0, lpGain = 0 } = {}) {
   const attacker = details.rival?.field?.[details.context?.attackerIndex];
   if (!attacker) return 0;
   const baseline = attackOutcome(details);
-  const adjustedDefender = {
-    ...details.owner,
-    shield: (details.owner?.shield || 0) + shieldDelta
-  };
   const adjusted = attackOutcome(details, {
-    attacker: adjustedAttacker(attacker, atkDelta),
-    defender: adjustedDefender
+    attacker: adjustedAttacker(attacker, atkDelta)
   });
   const beforeCost = defenderOutcomeCost(baseline.outcome, baseline.target);
   const afterCost = defenderOutcomeCost(adjusted.outcome, adjusted.target);
   if (beforeCost <= afterCost) return 0;
 
   const ownerLp = Math.max(0, Number(details.owner?.lp) || 0);
-  const preventsLethal = baseline.outcome?.finalDamage >= ownerLp && adjusted.outcome?.finalDamage < ownerLp;
+  const preventsLethal = baseline.outcome?.finalDamage >= ownerLp && adjusted.outcome?.finalDamage < ownerLp + lpGain;
   const savesTarget = Boolean(baseline.outcome?.destroysTarget && !adjusted.outcome?.destroysTarget);
   if (!savesTarget && !preventsLethal && baseline.target) return 0;
   if (!baseline.target && !preventsLethal) {
@@ -241,22 +236,15 @@ function guaranteedAfterAttackDamage(attacker) {
 
 function publicAttackThreat(attacker, target, attackerOwner, defender) {
   const outcome = describeBattleOutcome(attacker, target, attackerOwner, defender);
-  if (!outcome) return { value: 0, damage: 0, shieldAfter: defender?.shield || 0, lethal: false, outcome: null };
+  if (!outcome) return { value: 0, damage: 0, lethal: false, outcome: null };
 
-  let remainingShield = Math.max(0, Number(defender?.shield) || 0);
   let damage = 0;
   if (defenderDamageKinds.has(outcome.kind)) {
     damage += Math.max(0, Number(outcome.finalDamage) || 0);
-    remainingShield = Math.max(
-      0,
-      remainingShield - (Number(outcome.shieldPierced) || 0) - (Number(outcome.shieldBlocked) || 0)
-    );
   }
   if (!outcome.destroysAttacker) {
     for (const amount of guaranteedAfterAttackDamage(attacker)) {
-      const preview = shieldPreview(amount, remainingShield, attacker);
-      damage += preview.finalDamage;
-      remainingShield = preview.shieldAfter;
+      damage += amount;
     }
   }
 
@@ -268,7 +256,6 @@ function publicAttackThreat(attacker, target, attackerOwner, defender) {
   return {
     value: targetLoss + damage + (lethal ? 20000 : 0),
     damage,
-    shieldAfter: remainingShield,
     lethal,
     outcome
   };
@@ -282,8 +269,7 @@ function largestFuturePublicAttackThreat(details, current) {
   const defender = {
     ...details.owner,
     field: remainingTargets,
-    lp: Math.max(0, (Number(details.owner?.lp) || 0) - current.damage),
-    shield: current.shieldAfter
+    lp: Math.max(0, (Number(details.owner?.lp) || 0) - current.damage)
   };
   const futureAttackers = (details.rival?.field || [])
     .filter((attacker, index) =>
@@ -343,7 +329,7 @@ function scoreScriptedPressureAttackTrap(card, details) {
     return scoreContinuingAttackTrap(details, { atkDelta: -500 });
   }
   if (card.trigger === "soulParry") {
-    return scoreContinuingAttackTrap(details, { atkDelta: -300, shieldDelta: 300 });
+    return scoreContinuingAttackTrap(details, { atkDelta: -300, lpGain: 300 });
   }
   if (card.trigger === "redirectAttack") {
     return scoreRedirectAttack(details);
@@ -372,7 +358,7 @@ function directTrapEffectValue(card, details) {
 function scoreScriptedPressureDirectTrap(card, details) {
   const { outcome } = attackOutcome(details);
   const attacker = details.rival?.field?.[details.context?.attackerIndex];
-  const incomingDamage = previewAiDirectDamage(attacker, details.owner?.shield);
+  const incomingDamage = previewAiDirectDamage(attacker);
   if (outcome?.kind !== "direct" || incomingDamage <= 0) return 0;
 
   const ownerLp = Math.max(0, Number(details.owner?.lp) || 0);
@@ -429,7 +415,6 @@ export function chooseAiAttackTarget({
   attacker,
   targets = [],
   playerLp = 0,
-  playerShield = 0,
   aiStyle = "balanced",
   canUseDirect = false
 } = {}) {
@@ -445,7 +430,7 @@ export function chooseAiAttackTarget({
   const usefulTargets = targetEntries.filter(isUsefulAttackTarget);
   const blockedByBoard = usefulTargets.length === 0;
   const directDamage = aiStyle === "scriptedPressure"
-    ? previewAiDirectDamage(attacker, playerShield)
+    ? previewAiDirectDamage(attacker)
     : attackerAtk;
   const shouldDirect = canUseDirect && (
     directDamage >= playerLp ||
@@ -538,10 +523,10 @@ export function chooseAiSpellAction({
   return candidates[0] || null;
 }
 
-function fusionShieldGain(card) {
+function fusionLifeGain(card) {
   const definition = getCardEffectDefinition(card?.onSummon);
   return (definition?.operations || [])
-    .filter((operation) => operation.op === "gainShield" && operation.player === "self")
+    .filter((operation) => operation.op === "heal" && operation.player === "self")
     .reduce((total, operation) => total + Math.max(0, Number(operation.amount) || 0), 0);
 }
 
@@ -555,7 +540,7 @@ export function chooseAiFusionAction({
   if (!Array.isArray(candidates) || candidates.length === 0) return null;
   const rivalPeak = Math.max(0, ...(rival?.field || []).filter(Boolean).map((card) => battleValue(card)));
   const ownerLp = Math.max(0, Number(owner?.lp) || 0);
-  const defensiveNeed = turnGoal === "survive" || ownerLp <= 1600 || rivalPeak >= ownerLp + (Number(owner?.shield) || 0);
+  const defensiveNeed = turnGoal === "survive" || ownerLp <= 1600 || rivalPeak >= ownerLp;
   const ranked = candidates
     .map((candidate) => {
       const result = candidate.resultCard;
@@ -563,14 +548,14 @@ export function chooseAiFusionAction({
       const fieldMaterialCount = (candidate.materialZones || []).filter((zone) => zone === "field").length;
       const fieldBodyDelta = 1 - fieldMaterialCount;
       if (turnGoal === "buildTributes" && fieldBodyDelta < 0) return null;
-      const shieldGain = fusionShieldGain(result);
+      const lifeGain = fusionLifeGain(result);
       const attack = totalAtk(result);
       const defense = totalDef(result);
       const baseScore = turnGoal === "buildTributes"
-        ? 3000 + fieldBodyDelta * 1000 + attack + Math.floor(defense / 4) + shieldGain
+        ? 3000 + fieldBodyDelta * 1000 + attack + Math.floor(defense / 4) + lifeGain
         : defensiveNeed
-          ? defense + Math.floor(attack / 6) + shieldGain * 2
-          : attack + Math.floor(defense / 4) + Math.floor(shieldGain / 4);
+          ? defense + Math.floor(attack / 6) + lifeGain * 2
+          : attack + Math.floor(defense / 4) + Math.floor(lifeGain / 4);
       const score = turnGoal === "buildTributes" ? baseScore : baseScore + fieldBodyDelta * 120;
       return {
         ...candidate,
@@ -764,23 +749,21 @@ function aiAttackersList(field, { includeUsed = false } = {}) {
     );
 }
 
-export function aiMaxDamageThisTurn({ attackers = [], targets = [], shield = 0, directAttacks = 0 } = {}) {
+export function aiMaxDamageThisTurn({ attackers = [], targets = [], directAttacks = 0 } = {}) {
   const activeAttackers = attackers.filter(Boolean);
   const activeTargets = targets.filter(Boolean);
   if (!activeAttackers.length) return 0;
   return maximumRemainingAttackDamage(
     activeAttackers,
     activeTargets,
-    Math.max(0, Number(shield) || 0),
     Math.max(0, Number(directAttacks) || 0)
   );
 }
 
-export function aiRivalLethalThreat({ rivalField = [], ownerField = [], ownerShield = 0 } = {}) {
+export function aiRivalLethalThreat({ rivalField = [], ownerField = [] } = {}) {
   return aiMaxDamageThisTurn({
     attackers: aiAttackersList(rivalField, { includeUsed: true }).map((entry) => entry.card),
-    targets: ownerField.filter(Boolean),
-    shield: ownerShield
+    targets: ownerField.filter(Boolean)
   });
 }
 
@@ -811,7 +794,6 @@ export function chooseAiAttackAction({
   rivalField = [],
   rivalTraps = [],
   rivalLp = 0,
-  rivalShield = 0,
   aiStyle = "balanced",
   turnGoal = "pressure",
   skippedAttackers = new Set(),
@@ -844,7 +826,6 @@ export function chooseAiAttackAction({
           attacker: bait.card,
           targets: rivalField,
           playerLp: rivalLp,
-          playerShield: rivalShield,
           aiStyle,
           canUseDirect: owner ? canDirectAttack(owner, bait.card) : false
         });
@@ -864,14 +845,12 @@ export function chooseAiAttackAction({
   const lethalDamage = aiMaxDamageThisTurn({
     attackers: attackers.map((entry) => entry.card),
     targets: rivalField,
-    shield: rivalShield,
     directAttacks: owner?.directAttacks || 0
   });
   const canKillNow = turnGoal === "lethal" || lethalDamage >= rivalLp;
   const rivalThreat = aiRivalLethalThreat({
     rivalField,
     ownerField: field,
-    ownerShield: owner?.shield || 0
   });
   const underLethalThreat = !canKillNow && (
     turnGoal === "survive" || rivalThreat >= (owner?.lp || 0)
@@ -883,7 +862,6 @@ export function chooseAiAttackAction({
   const sequencePlan = findAiAttackSequence({
     attackers: attackers.map((entry) => entry.card),
     targets: targetEntries.map((entry) => entry.card),
-    shield: rivalShield,
     directAttacks: owner?.directAttacks || 0,
     damageGoal: rivalLp
   });
@@ -903,7 +881,6 @@ export function chooseAiAttackAction({
   const nextTurnSetup = findAiNextTurnLethalSetup({
     attackers: attackers.map((entry) => entry.card),
     targets: targetEntries.map((entry) => entry.card),
-    shield: rivalShield,
     directAttacks: owner?.directAttacks || 0,
     rivalLp
   });
@@ -926,7 +903,6 @@ export function chooseAiAttackAction({
       attackers: attackers.map((entry) => entry.card),
       targets: rivalField,
       rivalLp,
-      shield: rivalShield,
       directAttacks: owner?.directAttacks || 0
     });
     if (lethalDirect) {
@@ -955,7 +931,6 @@ export function chooseAiAttackAction({
     attacker: pick.card,
     targets: rivalField,
     playerLp: rivalLp,
-    playerShield: rivalShield,
     aiStyle,
     canUseDirect: owner ? canDirectAttack(owner, pick.card) : false
   });
@@ -1009,7 +984,6 @@ export function chooseAiTurnGoal({
     const lethalDamage = aiMaxDamageThisTurn({
       attackers: aiAttackersList(liveField).map((entry) => entry.card),
       targets: rival.field || [],
-      shield: rival.shield || 0,
       directAttacks: owner.directAttacks || 0
     });
     if ((Number(rival.lp) || 0) > 0 && lethalDamage >= rival.lp) return "lethal";
@@ -1022,7 +996,6 @@ export function chooseAiTurnGoal({
     const rivalThreat = aiRivalLethalThreat({
       rivalField: rival.field || [],
       ownerField: liveField,
-      ownerShield: owner.shield || 0
     });
     if ((Number(owner.lp) || 0) > 0 && rivalThreat >= owner.lp) return "survive";
   }

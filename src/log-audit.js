@@ -13,9 +13,9 @@ const spellExpectations = {
     pattern: /抽了 2 张卡/,
     message: "预见之召发动后应记录抽 2 张。"
   },
-  "星盾展开": {
-    pattern: /获得 800 点护盾|护盾/,
-    message: "星盾展开发动后应记录护盾结算。"
+  "星命增幅": {
+    pattern: /回复 800 (?:点生命值|LP)/,
+    message: "星命增幅发动后应记录生命值回复。"
   },
   "双重召唤": {
     pattern: /额外通常召唤/,

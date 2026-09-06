@@ -13,13 +13,13 @@ import {
 } from "../src/rule-simulator.js";
 import { library } from "../src/data.js";
 import { ActionWindow, GameEngine, Phase, Timing } from "../src/game-engine.js";
-import { FIELD_SIZE, MAX_LP } from "../src/rules.js";
+import { FIELD_SIZE, STARTING_LP } from "../src/rules.js";
 
 test("random duel simulator exercises core rules through dispatch", () => {
   const result = simulateRandomDuels({
     games: 20,
     seed: "rule-sim-baseline",
-    maxStepsPerGame: 260
+    maxStepsPerGame: 360
   });
 
   assert.equal(result.games, 20);
@@ -124,7 +124,7 @@ test("balance stats expose and accumulate basic expansion card fields", () => {
     { id: 2, type: "MONSTER_SUMMONED", cardId: "apprentice" },
     { id: 3, type: "CARDS_DRAWN", cardIds: ["draw"], sourceCardId: "apprentice" },
     { id: 4, type: "MONSTER_SUMMONED", cardId: "bulwark" },
-    { id: 5, type: "SHIELD_GAINED", amount: 300, sourceCardId: "bulwark" },
+    { id: 5, type: "LP_HEALED", amount: 300, sourceCardId: "bulwark" },
     { id: 6, type: "CARD_ACTIVATED", cardId: "resonance", cardType: "spell" },
     { id: 7, type: "STAT_MODIFIED", cardId: "target", sourceCardId: "resonance" },
     { id: 8, type: "CARD_ACTIVATED", cardId: "parry", cardType: "trap" },
@@ -239,19 +239,19 @@ test("diagnostics accumulate damage source distribution", () => {
   };
 
   recordBalanceEvents(stats, [
-    { id: 1, type: "DAMAGE_DEALT", sourceCardId: "attacker", requested: 900, blocked: 200, amount: 700 }
+    { id: 1, type: "DAMAGE_DEALT", sourceCardId: "attacker", requested: 900, amount: 900 }
   ], { state, action: { type: "RESOLVE_BATTLE", attackerCardId: "attacker" } });
   recordBalanceEvents(stats, [
-    { id: 2, type: "DAMAGE_DEALT", sourceCardId: "spell", requested: 500, blocked: 0, amount: 500 }
+    { id: 2, type: "DAMAGE_DEALT", sourceCardId: "spell", requested: 500, amount: 500 }
   ], { state, action: { type: "ACTIVATE_CARD", cardId: "spell" } });
   recordBalanceEvents(stats, [
-    { id: 3, type: "DAMAGE_DEALT", requested: 500, blocked: 100, amount: 400 }
+    { id: 3, type: "DAMAGE_DEALT", requested: 500, amount: 500 }
   ], { state, action: { type: "RESOLVE_TURN_DRAW" } });
 
   const damage = finalizeBalanceReport(stats).diagnostics.damageSources;
-  assert.deepEqual(damage.battle, { events: 1, requested: 900, shieldBlocked: 200, dealt: 700 });
-  assert.deepEqual(damage.effect, { events: 1, requested: 500, shieldBlocked: 0, dealt: 500 });
-  assert.deepEqual(damage.deckOut, { events: 1, requested: 500, shieldBlocked: 100, dealt: 400 });
+  assert.deepEqual(damage.battle, { events: 1, requested: 900, dealt: 900 });
+  assert.deepEqual(damage.effect, { events: 1, requested: 500, dealt: 500 });
+  assert.deepEqual(damage.deckOut, { events: 1, requested: 500, dealt: 500 });
 });
 
 test("diagnostics track draw-to-use delay in event distance", () => {
@@ -495,8 +495,7 @@ function simulatorTestState({
 function testPlayer(id, overrides = {}) {
   return {
     id,
-    lp: MAX_LP,
-    shield: 0,
+    lp: STARTING_LP,
     deck: [],
     hand: [],
     monsterZone: [],

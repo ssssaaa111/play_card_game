@@ -82,13 +82,10 @@ export function findAfterAttackDamageAndGrowthEvents(events = [], { attackerId =
 export function rewindDamageForHud(duelist = {}, event = {}) {
   if (event?.type !== "DAMAGE_DEALT" || event.playerId !== duelist.owner) return duelist;
   const amount = Math.max(0, Number(event.amount) || 0);
-  const blocked = Math.max(0, Number(event.blocked) || 0);
-  const shieldPierced = Math.max(0, Number(event.shieldPierced) || 0);
-  if (amount === 0 && blocked === 0 && shieldPierced === 0) return duelist;
+  if (amount === 0) return duelist;
   return {
     ...duelist,
-    lp: Math.max(0, Number(duelist.lp) || 0) + amount,
-    shield: Math.max(0, Number(duelist.shield) || 0) + blocked + shieldPierced
+    lp: Math.max(0, Number(duelist.lp) || 0) + amount
   };
 }
 

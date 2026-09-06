@@ -1,4 +1,4 @@
-import { MAX_LP, MAX_SHIELD, MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, canEffectTargetCard } from "./rules.js";
+import { MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, TRIO_COMEBACK_LP_THRESHOLD, canEffectTargetCard } from "./rules.js";
 import { matchingElementCombos } from "./combos.js";
 import { fusionOptionForResult, fusionOptionsForCard } from "./fusion.js";
 
@@ -91,14 +91,14 @@ export const defaultCardEffects = Object.freeze({
   burn500: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
   heal300: oneShot([{ op: "heal", player: "self", amount: 300 }]),
   heal700: oneShot([{ op: "heal", player: "self", amount: 700 }]),
-  shield400: oneShot([{ op: "gainShield", player: "self", amount: 400 }]),
-  shield800: oneShot([{ op: "gainShield", player: "self", amount: 800 }]),
+  heal400: oneShot([{ op: "heal", player: "self", amount: 400 }]),
+  heal800: oneShot([{ op: "heal", player: "self", amount: 800 }]),
   starSoulSurvey: oneShot(
     [{ op: "drawCards", player: "self", count: 1 }],
     { requirements: [{ type: "minDistinctElements", player: "self", count: 2 }] }
   ),
   riftShelter: oneShot(
-    [{ op: "gainShield", player: "self", amount: 300 }],
+    [{ op: "heal", player: "self", amount: 300 }],
     { requirements: [{ type: "minElementCount", player: "self", element: "shadow", count: 2 }] }
   ),
   fireBuff: oneShot(
@@ -138,7 +138,7 @@ export const defaultCardEffects = Object.freeze({
     { op: "specialSummonFromDeckOrHand", player: "self", templateId: "astral-forge-dragon" },
     { op: "modifyStat", cardId: { playerId: "$action.rivalId", zone: "monsterZone" }, stat: "tempAtk", amount: -500 },
     { op: "modifyStat", cardId: { playerId: "$action.rivalId", zone: "monsterZone" }, stat: "tempDef", amount: -500 },
-    { op: "gainShield", player: "self", amount: 300 }
+    { op: "heal", player: "self", amount: 300 }
   ], { requirements: [{ type: "requireFieldCards", player: "self", materials: ["ember-soul-initiate", "lumen-gearlet"] }] }),
   fusionSummon: oneShot([]),
   aceCrackdown: oneShot([
@@ -176,7 +176,7 @@ export const defaultCardEffects = Object.freeze({
     }
   ], {
     requirements: [
-      { type: "maxLp", player: "self", amount: 1600 },
+      { type: "maxLp", player: "self", amount: TRIO_COMEBACK_LP_THRESHOLD },
       { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
       { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
     ]
@@ -193,7 +193,7 @@ export const defaultCardEffects = Object.freeze({
     }
   ], {
     requirements: [
-      { type: "maxLp", player: "self", amount: 1600 },
+      { type: "maxLp", player: "self", amount: TRIO_COMEBACK_LP_THRESHOLD },
       { type: "requireFieldCards", player: "self", materials: ["trio-ember-pawn"] },
       { type: "noActiveContinuousEffect", sourcePlayer: "rival", targetPlayer: "self" }
     ]
@@ -236,7 +236,7 @@ export const defaultCardEffects = Object.freeze({
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone" }, stat: "tempAtk", amount: 200 }
   ], { requirements: [{ type: "requiredElements", player: "self", elements: ["fire", "wind"] }] }),
   lightShadowCombo: oneShot([
-    { op: "gainShield", player: "self", amount: 600 },
+    { op: "heal", player: "self", amount: 600 },
     { op: "drawCards", player: "self", count: 1 }
   ]),
   splitToken: oneShot(
@@ -277,7 +277,7 @@ export const defaultCardEffects = Object.freeze({
   counterBoost: oneShot([
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "tempAtk", amount: 400 }
   ]),
-  attackShift: oneShot([{ op: "gainShield", player: "self", amount: 400 }]),
+  attackShift: oneShot([{ op: "heal", player: "self", amount: 400 }]),
   attackNegate: oneShot([{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }]),
   redirectAttack: oneShot([{ op: "redirectAttackTarget", targetCardId: "$action.targetCardId" }]),
   weakenAttack: oneShot([
@@ -286,7 +286,7 @@ export const defaultCardEffects = Object.freeze({
   ]),
   soulParry: oneShot([
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -300 },
-    { op: "gainShield", player: "self", amount: 300 }
+    { op: "heal", player: "self", amount: 300 }
   ]),
   directShield: oneShot([{ op: "drawCards", player: "self", count: 1 }]),
   directRebound: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
@@ -334,22 +334,12 @@ export class EffectContext {
   dealDamage(playerId, amount, options = {}) {
     const player = requirePlayer(this.#state, playerId);
     const rawAmount = Math.max(0, Number(amount) || 0);
-    const shieldBefore = Math.max(0, Number(player.shield) || 0);
-    const sourceCard = options.sourceCardId ? this.#state.cards?.[options.sourceCardId] || null : null;
-    const shieldPierced = Math.min(shieldBefore, cardShieldPierceAmount(sourceCard));
-    const shieldAfterPierce = Math.max(0, shieldBefore - shieldPierced);
-    const blocked = Math.min(shieldAfterPierce, rawAmount);
-    const damageAfterShield = Math.max(0, rawAmount - blocked);
-    const actual = Math.min(player.lp, damageAfterShield);
+    const actual = Math.min(player.lp, rawAmount);
 
     const damageEvent = this.#emit("DAMAGE_DEALT", {
       playerId,
       amount: actual,
       requested: rawAmount,
-      shieldPierced,
-      blocked,
-      shieldBefore,
-      shieldAfter: shieldAfterPierce - blocked,
       sourceCardId: options.sourceCardId || null
     });
     emitGameOverIfNeeded(this.#state, this.#emit, {
@@ -361,34 +351,16 @@ export class EffectContext {
   }
 
   heal(playerId, amount, options = {}) {
-    const player = requirePlayer(this.#state, playerId);
+    requirePlayer(this.#state, playerId);
     const rawAmount = Math.max(0, Number(amount) || 0);
-    const actual = Math.max(0, Math.min(MAX_LP - player.lp, rawAmount));
 
     this.#emit("LP_HEALED", {
       playerId,
-      amount: actual,
+      amount: rawAmount,
       requested: rawAmount,
       sourceCardId: options.sourceCardId || null
     });
-    return actual;
-  }
-
-  gainShield(playerId, amount, options = {}) {
-    const player = requirePlayer(this.#state, playerId);
-    const rawAmount = Math.max(0, Number(amount) || 0);
-    const before = Math.max(0, Number(player.shield) || 0);
-    const actual = Math.max(0, Math.min(MAX_SHIELD - before, rawAmount));
-
-    this.#emit("SHIELD_GAINED", {
-      playerId,
-      amount: actual,
-      requested: rawAmount,
-      before,
-      after: before + actual,
-      sourceCardId: options.sourceCardId || null
-    });
-    return actual;
+    return rawAmount;
   }
 
   moveCard(cardId, from, to) {
@@ -2670,9 +2642,6 @@ export function assertValidGameState(state) {
     if (!Number.isFinite(player.lp)) {
       throw new GameStateValidationError(`Player ${player.id} LP must be a finite number`);
     }
-    if (player.shield !== undefined && !Number.isFinite(Number(player.shield))) {
-      throw new GameStateValidationError(`Player ${player.id} shield must be a finite number`);
-    }
     if (!Number.isInteger(player.normalSummonsUsed) || player.normalSummonsUsed < 0) {
       throw new GameStateValidationError(`Player ${player.id} normal summon count must be a non-negative integer`);
     }
@@ -2811,9 +2780,6 @@ export function applyGameEvent(state, event, options = {}) {
       break;
     case "LP_HEALED":
       applyLpHealed(state, event);
-      break;
-    case "SHIELD_GAINED":
-      applyShieldGained(state, event);
       break;
     case "STAT_MODIFIED":
       applyStatModified(state, event);
@@ -3079,11 +3045,6 @@ function applyCardsDrawn(state, event) {
 function applyDamageDealt(state, event) {
   const player = requirePlayer(state, event.playerId);
   const amount = Math.max(0, Number(event.amount) || 0);
-  const pierced = Math.max(0, Number(event.shieldPierced) || 0);
-  const blocked = Math.max(0, Number(event.blocked) || 0);
-  if (pierced > 0 || blocked > 0 || player.shield !== undefined) {
-    player.shield = Math.max(0, (Number(player.shield) || 0) - pierced - blocked);
-  }
   player.lp = Math.max(0, player.lp - amount);
 }
 
@@ -3239,13 +3200,7 @@ function applyAttackCanceled(state, event) {
 function applyLpHealed(state, event) {
   const player = requirePlayer(state, event.playerId);
   const amount = Math.max(0, Number(event.amount) || 0);
-  player.lp = Math.min(MAX_LP, player.lp + amount);
-}
-
-function applyShieldGained(state, event) {
-  const player = requirePlayer(state, event.playerId);
-  const amount = Math.max(0, Number(event.amount) || 0);
-  player.shield = Math.min(MAX_SHIELD, (Number(player.shield) || 0) + amount);
+  player.lp += amount;
 }
 
 function applyStatModified(state, event) {
@@ -3887,8 +3842,6 @@ function runEffectOperation(operation, ctx, action, card, options = {}) {
       return ctx.dealDamage(resolvePlayerRef(operation.player, action), operation.amount, source);
     case "heal":
       return ctx.heal(resolvePlayerRef(operation.player, action), operation.amount, source);
-    case "gainShield":
-      return ctx.gainShield(resolvePlayerRef(operation.player, action), operation.amount, source);
     case "moveCard":
       return ctx.moveCard(resolveValue(operation.cardId, action, card), resolveValue(operation.from, action, card), resolveValue(operation.to, action, card));
     case "specialSummonFromGrave":
@@ -4273,16 +4226,13 @@ function shouldSpendDirectAttackAbility(state, playerId, rivalId, attacker) {
 function describeEngineBattleOutcome(state, playerId, rivalId, attacker, target) {
   const attack = engineTotalAtk(attacker);
   if (!target) {
-    const shield = engineShieldPreview(attack, requirePlayer(state, rivalId).shield, attacker);
     return {
       kind: "direct",
       attack,
       targetValue: 0,
       diff: attack,
       rawDamage: attack,
-      finalDamage: shield.finalDamage,
-      shieldPierced: shield.shieldPierced,
-      shieldBlocked: shield.blocked,
+      finalDamage: attack,
       damagePlayerId: rivalId,
       damageSourceCardId: attacker.id,
       destroysAttacker: false,
@@ -4296,16 +4246,13 @@ function describeEngineBattleOutcome(state, playerId, rivalId, attacker, target)
   if (diff > 0) {
     const piercesDefense = target.mode === "defense" && cardHasPiercingDamage(attacker);
     const rawDamage = piercesDefense || target.mode !== "defense" ? diff : 0;
-    const shield = engineShieldPreview(rawDamage, requirePlayer(state, rivalId).shield, attacker);
     return {
       kind: piercesDefense ? "pierceDefense" : target.mode === "defense" ? "breakDefense" : "attackWin",
       attack,
       targetValue,
       diff,
       rawDamage,
-      finalDamage: shield.finalDamage,
-      shieldPierced: shield.shieldPierced,
-      shieldBlocked: shield.blocked,
+      finalDamage: rawDamage,
       piercing: piercesDefense,
       damagePlayerId: rawDamage > 0 ? rivalId : null,
       damageSourceCardId: rawDamage > 0 ? attacker.id : null,
@@ -4317,16 +4264,13 @@ function describeEngineBattleOutcome(state, playerId, rivalId, attacker, target)
 
   if (diff < 0) {
     const rawDamage = Math.abs(diff);
-    const shield = engineShieldPreview(rawDamage, requirePlayer(state, playerId).shield, target);
     return {
       kind: target.mode === "defense" ? "guardCounter" : "countered",
       attack,
       targetValue,
       diff,
       rawDamage,
-      finalDamage: shield.finalDamage,
-      shieldPierced: shield.shieldPierced,
-      shieldBlocked: shield.blocked,
+      finalDamage: rawDamage,
       damagePlayerId: playerId,
       damageSourceCardId: target.id,
       destroysAttacker: target.mode !== "defense",
@@ -4343,8 +4287,6 @@ function describeEngineBattleOutcome(state, playerId, rivalId, attacker, target)
       diff,
       rawDamage: 0,
       finalDamage: 0,
-      shieldPierced: 0,
-      shieldBlocked: 0,
       damagePlayerId: null,
       damageSourceCardId: null,
       destroysAttacker: false,
@@ -4360,8 +4302,6 @@ function describeEngineBattleOutcome(state, playerId, rivalId, attacker, target)
     diff,
     rawDamage: 0,
     finalDamage: 0,
-    shieldPierced: 0,
-    shieldBlocked: 0,
     damagePlayerId: null,
     damageSourceCardId: null,
     destroysAttacker: true,
@@ -4390,14 +4330,6 @@ function applyBattleWear(emit, card, amount, sourceCardId) {
 
 function cardHasPiercingDamage(card) {
   return Boolean(card?.piercingDamage || card?.divinePierce);
-}
-
-function cardShieldPierceAmount(card) {
-  const config = card?.shieldPierce || card?.divinePressure;
-  if (config === true) return 500;
-  if (typeof config === "number") return Math.max(0, config);
-  if (config && typeof config === "object") return Math.max(0, Number(config.amount) || 0);
-  return 0;
 }
 
 function resolveAfterAttackDeclarationTarget(
@@ -4491,19 +4423,6 @@ function resolveAfterAttackEffect(effects, state, ctx, emit, playerId, rivalId, 
     targetCardId: effectAction.afterAttackTargetCardId || null,
     resultEventIds
   });
-}
-
-function engineShieldPreview(amount, shield = 0, sourceCard = null) {
-  const rawAmount = Math.max(0, Number(amount) || 0);
-  const shieldBefore = Math.max(0, Number(shield) || 0);
-  const shieldPierced = Math.min(shieldBefore, cardShieldPierceAmount(sourceCard));
-  const shieldAfterPierce = Math.max(0, shieldBefore - shieldPierced);
-  const blocked = Math.min(shieldAfterPierce, rawAmount);
-  return {
-    shieldPierced,
-    blocked,
-    finalDamage: rawAmount - blocked
-  };
 }
 
 function engineBattleWearAmount(diff) {

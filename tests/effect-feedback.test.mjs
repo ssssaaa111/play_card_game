@@ -124,23 +124,21 @@ test("pairs effect damage with growth only for the matching after-attack effect"
 });
 
 test("rewinds one resolved damage event for staged HUD feedback without mutating rules state", () => {
-  const player = { owner: "player", lp: 0, shield: 0, deck: [], grave: [] };
+  const player = { owner: "player", lp: 0, deck: [], grave: [] };
   const staged = rewindDamageForHud(player, {
     type: "DAMAGE_DEALT",
     playerId: "player",
-    amount: 200,
-    blocked: 100,
-    shieldPierced: 50
+    amount: 200
   });
 
-  assert.deepEqual(staged, { ...player, lp: 200, shield: 150 });
-  assert.deepEqual(player, { owner: "player", lp: 0, shield: 0, deck: [], grave: [] });
+  assert.deepEqual(staged, { ...player, lp: 200 });
+  assert.deepEqual(player, { owner: "player", lp: 0, deck: [], grave: [] });
   assert.equal(rewindDamageForHud(player, null), player);
   assert.equal(rewindDamageForHud(player, { type: "DAMAGE_DEALT", playerId: "ai", amount: 300 }), player);
 });
 
 test("keeps staged damage projected through unrelated HUD renders until its reveal ends", () => {
-  const player = { owner: "player", lp: 0, shield: 0, deck: [], grave: [] };
+  const player = { owner: "player", lp: 0, deck: [], grave: [] };
   const damageEvent = {
     id: 42,
     type: "DAMAGE_DEALT",
@@ -158,5 +156,5 @@ test("keeps staged damage projected through unrelated HUD renders until its reve
 
   stage.end(damageEvent);
   assert.equal(stage.project(player), player);
-  assert.deepEqual(player, { owner: "player", lp: 0, shield: 0, deck: [], grave: [] });
+  assert.deepEqual(player, { owner: "player", lp: 0, deck: [], grave: [] });
 });

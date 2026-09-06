@@ -171,18 +171,17 @@ function planPriority(plan, phase) {
 function rushFinalePlan({ phase, player, ai }) {
   if (phase !== 3 || !player || !ai) return null;
   const playerLp = Math.max(0, Number(player.lp) || 0);
-  const effectiveLife = playerLp + Math.max(0, Number(player.shield) || 0);
   const hasAttacker = (ai.field || []).some((card) =>
     card?.type === "monster" && card.mode !== "defense"
   );
-  if (playerLp <= 0 || effectiveLife > FINALE_RUSH_LIFE || !hasAttacker) return null;
+  if (playerLp <= 0 || playerLp > FINALE_RUSH_LIFE || !hasAttacker) return null;
   return {
     id: "rush-finale",
     eventId: "phase-3-low-life",
     turnGoal: "finishPressure",
     label: "抢攻终结",
-    text: "你的有效生命已进入终战压力线；对手将优先投入强化、贯穿与再攻。",
-    counterHint: "先抬高护盾或封住可攻击神格，再考虑继续展开。"
+    text: "你的当前生命已进入终战压力线；对手将优先投入强化、贯穿与再攻。",
+    counterHint: "先回复生命值或封住可攻击神格，再考虑继续展开。"
   };
 }
 

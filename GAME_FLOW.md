@@ -80,7 +80,7 @@ flowchart LR
     Resolved -->|生命值归零| Stop[GAME_OVER_DECLARED]
 ```
 
-`TURN_DRAW_RESOLVED` 只描述本次回合抽卡是否允许推进阶段；实际抽卡、卡组耗尽伤害和护盾消耗仍由 `CARDS_DRAWN`、`DRAW_FAILED`、`DAMAGE_DEALT` 等事件记录。若生命值归零，引擎会继续派生 `GAME_OVER_DECLARED`，UI 只负责按该事件展示结算。
+`TURN_DRAW_RESOLVED` 只描述本次回合抽卡是否允许推进阶段；实际抽卡和卡组耗尽伤害仍由 `CARDS_DRAWN`、`DRAW_FAILED`、`DAMAGE_DEALT` 等事件记录。若生命值归零，引擎会继续派生 `GAME_OVER_DECLARED`，UI 只负责按该事件展示结算。
 
 ## UI 行动窗口
 
@@ -211,7 +211,7 @@ flowchart TD
     Cancelled -->|取消| CancelAttack[CANCEL_ATTACK]
     Cancelled -->|未取消| Battle
     CancelAttack --> ResetCheck{有 attackReset 且怪兽仍在场}
-    Battle --> BattleEvents[伤害 护盾 战损 破坏 攻后效果]
+    Battle --> BattleEvents[生命伤害 战损 破坏 攻后效果]
     BattleEvents --> ResetCheck
     ResetCheck -->|是| Reset[ABILITY_SPENT 加 MONSTER_READIED]
     ResetCheck -->|否| Open[回到 battleOpen]
@@ -258,7 +258,7 @@ flowchart TD
     PassiveEvent --> PassiveOps[执行声明式被动 operations]
     Passive -->|否| ComboOps[执行组合 operations]
     PassiveOps --> ComboOps
-    ComboOps --> RuleEvents[抽卡 伤害 护盾 属性修改事件]
+    ComboOps --> RuleEvents[抽卡 伤害 生命回复 属性修改事件]
     RuleEvents --> More{还有其他匹配组合}
     More -->|是| ComboEvent
     More -->|否| Feedback[UI 根据事件播放动画 音效和日志]

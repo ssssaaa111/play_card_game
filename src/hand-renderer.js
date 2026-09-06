@@ -1,5 +1,7 @@
 import { createCardElement } from "./card-renderer.js";
 
+const HAND_DRAG_SETTLE_MS = 110;
+
 function enabledClassEntries(entries = {}) {
   return Object.entries(entries)
     .filter(([, enabled]) => Boolean(enabled))
@@ -63,9 +65,9 @@ export function handCardView({
   };
 }
 
-export function handDetailEntryView(card = {}, { reorderMode = false } = {}) {
+export function handDetailEntryView(card = {}) {
   return {
-    visible: !reorderMode,
+    visible: true,
     label: `查看${card.name || "卡牌"}详情`
   };
 }
@@ -84,11 +86,9 @@ export function renderHandCards({
   fusionCandidateForCard = () => false,
   fusionTargetForCard = () => null,
   fusionSelectedUids = [],
-  reorderMode = false,
-  reorderSelectedUid = "",
+  directReorder = false,
   onMoveCard = () => {},
-  onPlaceCard = () => {},
-  onTapCard = () => {},
+  onSwapCard = () => {},
   onCardDetail = () => {},
   onCardClick = () => {},
   onCardDoubleClick = () => {}
@@ -109,14 +109,13 @@ export function renderHandCards({
       drawHighlighted: animationKey === "draw-player" && index === cards.length - 1
     });
     const cardEl = createCardElement(document, card, { asset: assetForCard(card), handSummary: true });
-    const detailEntry = handDetailEntryView(card, { reorderMode });
+    const detailEntry = handDetailEntryView(card);
     let suppressClick = false;
     cardEl.dataset.zone = "hand";
     cardEl.dataset.cardUid = card.uid || "";
     cardEl.dataset.displayIndex = String(index);
     cardEl.draggable = false;
-    cardEl.classList.toggle("hand-reorder-card", reorderMode);
-    cardEl.classList.toggle("hand-reorder-selected", reorderMode && reorderSelectedUid === card.uid);
+    cardEl.classList.toggle("hand-direct-reorder", directReorder);
     cardEl.setAttribute("aria-grabbed", "false");
     view.cardClasses.forEach((className) => cardEl.classList.add(className));
     cardEl.title = view.title;
@@ -146,44 +145,54 @@ export function renderHandCards({
       cardEl.appendChild(detailButton);
     }
 
-    if (reorderMode) {
-      cardEl.setAttribute("role", "button");
+    if (directReorder) {
       cardEl.tabIndex = 0;
-      cardEl.setAttribute("aria-pressed", String(reorderSelectedUid === card.uid));
-      const controls = document.createElement("span");
-      controls.className = "hand-reorder-controls";
-      const left = document.createElement("button");
-      left.type = "button";
-      left.className = "hand-reorder-step";
-      left.textContent = "←";
-      left.disabled = index === 0;
-      left.setAttribute("aria-label", `将${card.name}左移`);
-      left.addEventListener("click", (event) => {
-        event.stopPropagation();
-        onMoveCard(card, -1);
-      });
-      const right = document.createElement("button");
-      right.type = "button";
-      right.className = "hand-reorder-step";
-      right.textContent = "→";
-      right.disabled = index === cards.length - 1;
-      right.setAttribute("aria-label", `将${card.name}右移`);
-      right.addEventListener("click", (event) => {
-        event.stopPropagation();
-        onMoveCard(card, 1);
-      });
-      controls.append(left, right);
-      cardEl.appendChild(controls);
-
+      cardEl.setAttribute("aria-description", "可直接拖动换位；按住 Alt 再按左右方向键可微调顺序");
       let pointerDrag = null;
+      let dragGhost = null;
       const clearPointerTargets = () => {
-        root.querySelectorAll(".is-drop-target").forEach((element) => element.classList.remove("is-drop-target"));
+        root.querySelectorAll(".is-drop-target").forEach((element) => {
+          element.classList.remove("is-drop-target", "swap-preview-left", "swap-preview-right");
+        });
+      };
+      const removeDragGhost = () => {
+        dragGhost?.remove();
+        dragGhost = null;
+        root.classList.remove("is-reordering");
+      };
+      const positionDragGhost = (event) => {
+        if (!dragGhost || !pointerDrag) return;
+        dragGhost.style.left = `${event.clientX - pointerDrag.offsetX}px`;
+        dragGhost.style.top = `${event.clientY - pointerDrag.offsetY}px`;
+        const tilt = Math.max(-4, Math.min(4, (event.clientX - pointerDrag.lastX) * 0.12));
+        dragGhost.style.setProperty("--hand-drag-tilt", `${tilt}deg`);
+        pointerDrag.lastX = event.clientX;
+      };
+      const createDragGhost = (event) => {
+        if (dragGhost || !pointerDrag) return;
+        const ghost = cardEl.cloneNode(true);
+        ghost.classList.remove("is-dragging", "is-drop-target", "swap-preview-left", "swap-preview-right");
+        ghost.classList.add("hand-drag-ghost");
+        ghost.removeAttribute("tabindex");
+        ghost.setAttribute("aria-hidden", "true");
+        ghost.querySelectorAll("button").forEach((button) => button.setAttribute("tabindex", "-1"));
+        ghost.style.width = `${pointerDrag.sourceRect.width}px`;
+        ghost.style.height = `${pointerDrag.sourceRect.height}px`;
+        document.body.appendChild(ghost);
+        dragGhost = ghost;
+        root.classList.add("is-reordering");
+        positionDragGhost(event);
       };
       const beginPointerDrag = (event) => {
+        const sourceRect = cardEl.getBoundingClientRect();
         pointerDrag = {
           pointerId: event.pointerId ?? null,
           x: event.clientX,
           y: event.clientY,
+          lastX: event.clientX,
+          offsetX: event.clientX - sourceRect.left,
+          offsetY: event.clientY - sourceRect.top,
+          sourceRect,
           targetUid: "",
           active: false
         };
@@ -191,20 +200,35 @@ export function renderHandCards({
       const updatePointerDrag = (event) => {
         if (!pointerDrag) return;
         if (!pointerDrag.active && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) < 6) return;
-        pointerDrag.active = true;
+        if (!pointerDrag.active) {
+          pointerDrag.active = true;
+          createDragGhost(event);
+        }
         suppressClick = true;
         cardEl.classList.add("is-dragging");
         cardEl.setAttribute("aria-grabbed", "true");
-        clearPointerTargets();
+        positionDragGhost(event);
         const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-zone="hand"]');
-        pointerDrag.targetUid = target && target !== cardEl ? target.dataset.cardUid || "" : "";
-        target?.classList.toggle("is-drop-target", Boolean(pointerDrag.targetUid));
+        const targetUid = target && target !== cardEl ? target.dataset.cardUid || "" : "";
+        if (targetUid !== pointerDrag.targetUid) {
+          clearPointerTargets();
+          pointerDrag.targetUid = targetUid;
+          if (targetUid) {
+            const sourceIndex = Number(cardEl.dataset.displayIndex);
+            const targetIndex = Number(target.dataset.displayIndex);
+            target.classList.add("is-drop-target", sourceIndex < targetIndex ? "swap-preview-left" : "swap-preview-right");
+          }
+        }
         event.preventDefault();
       };
       cardEl.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 || event.target.closest("button")) return;
         beginPointerDrag(event);
-        cardEl.setPointerCapture?.(event.pointerId);
+        try {
+          cardEl.setPointerCapture?.(event.pointerId);
+        } catch {
+          // Synthetic browser smoke events do not own a native pointer capture.
+        }
       });
       cardEl.addEventListener("pointermove", (event) => {
         if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
@@ -212,45 +236,51 @@ export function renderHandCards({
       });
       const finishPointerDrag = (event) => {
         if (!pointerDrag || (event.pointerId != null && pointerDrag.pointerId !== event.pointerId)) return;
-        const targetUid = pointerDrag.active ? pointerDrag.targetUid : "";
+        const activeDrag = pointerDrag.active;
+        const targetUid = activeDrag && event.type !== "pointercancel" ? pointerDrag.targetUid : "";
+        const target = targetUid
+          ? root.querySelector(`[data-zone="hand"][data-card-uid="${targetUid}"]`)
+          : null;
+        const settleRect = target?.getBoundingClientRect() || pointerDrag.sourceRect;
         pointerDrag = null;
-        cardEl.classList.remove("is-dragging");
         cardEl.setAttribute("aria-grabbed", "false");
-        clearPointerTargets();
-        if (targetUid) onPlaceCard(card.uid, targetUid);
+        const completeDrag = () => {
+          cardEl.classList.remove("is-dragging");
+          clearPointerTargets();
+          removeDragGhost();
+          if (targetUid) onSwapCard(card.uid, targetUid);
+          suppressClick = false;
+        };
+        if (activeDrag && dragGhost) {
+          dragGhost.getBoundingClientRect();
+          dragGhost.classList.add("is-settling");
+          dragGhost.style.left = `${settleRect.left}px`;
+          dragGhost.style.top = `${settleRect.top}px`;
+          dragGhost.style.setProperty("--hand-drag-tilt", "0deg");
+          document.defaultView?.setTimeout(completeDrag, HAND_DRAG_SETTLE_MS);
+        } else {
+          completeDrag();
+        }
       };
       cardEl.addEventListener("pointerup", finishPointerDrag);
       cardEl.addEventListener("pointercancel", finishPointerDrag);
-      const mouseMoveHandler = (event) => updatePointerDrag(event);
-      const mouseUpHandler = (event) => {
-        finishPointerDrag(event);
-        document.removeEventListener("mousemove", mouseMoveHandler);
-        document.removeEventListener("mouseup", mouseUpHandler);
-      };
-      cardEl.addEventListener("mousedown", (event) => {
-        if (event.button !== 0 || event.target.closest("button")) return;
-        if (!pointerDrag) beginPointerDrag(event);
-        document.addEventListener("mousemove", mouseMoveHandler);
-        document.addEventListener("mouseup", mouseUpHandler, { once: true });
-      });
       cardEl.addEventListener("keydown", (event) => {
-        if (!["Enter", " "].includes(event.key)) return;
+        if (!event.altKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
         event.preventDefault();
-        onTapCard(card);
+        onMoveCard(card, event.key === "ArrowLeft" ? -1 : 1);
       });
     }
 
     cardEl.addEventListener("click", () => {
-      if (reorderMode && suppressClick) {
+      if (directReorder && suppressClick) {
         suppressClick = false;
         return;
       }
-      if (reorderMode) onTapCard(card);
-      else onCardClick(card, index);
+      onCardClick(card, index);
     });
     cardEl.addEventListener("dblclick", (event) => {
       event.preventDefault();
-      if (!reorderMode) onCardDoubleClick(card, index);
+      onCardDoubleClick(card, index);
     });
     fragment.appendChild(cardEl);
   });

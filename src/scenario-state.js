@@ -79,8 +79,6 @@ function scenarioDuelistState(scenario, owner, preset, customDecks = [], shuffle
   };
   const lp = Number(scenario[`${prefix}Lp`]);
   if (Number.isFinite(lp)) state.lp = Math.max(0, lp);
-  const shield = Number(scenario[`${prefix}Shield`]);
-  if (Number.isFinite(shield)) state.shield = Math.max(0, shield);
   return state;
 }
 

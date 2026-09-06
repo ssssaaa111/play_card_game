@@ -14,7 +14,6 @@ function basePlayer(id, overrides = {}) {
   return {
     id,
     lp: 4000,
-    shield: 0,
     deck: [],
     hand: [],
     monsterZone: [],
@@ -117,7 +116,7 @@ test("ace evolution succeeds by sending materials to grave and special summoning
   assert.equal(next.cards["ace-deck"].mode, "attack");
   assert.equal(next.cards["enemy-breaker"].tempAtk, -500);
   assert.equal(next.cards["enemy-breaker"].tempDef, -500);
-  assert.equal(next.players[PLAYER].shield, 300);
+  assert.equal(next.players[PLAYER].lp, 4300);
   assert.ok(events.some((event) =>
     event.type === "MATERIALS_SENT" &&
     event.materialCardIds.includes("mat-fire") &&

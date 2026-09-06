@@ -16,24 +16,19 @@ function monster(overrides = {}) {
   };
 }
 
-function duelist(overrides = {}) {
-  return { shield: 0, ...overrides };
-}
-
 test("labels battle stats by monster mode", () => {
   assert.equal(battleStatLabel(monster({ atk: 1500 })), "攻击 1500");
   assert.equal(battleStatLabel(monster({ mode: "defense", def: 1800 })), "守备 1800");
 });
 
-test("describes direct attacks with shield math", () => {
+test("describes direct attacks as direct LP damage", () => {
   const attacker = monster({ name: "星轨枪兵", atk: 1800 });
-  const outcome = describeBattleOutcome(attacker, null, duelist(), duelist({ shield: 600 }));
+  const outcome = describeBattleOutcome(attacker, null);
 
   assert.equal(outcome.kind, "direct");
   assert.equal(outcome.rawDamage, 1800);
-  assert.equal(outcome.shieldBlocked, 600);
-  assert.equal(outcome.finalDamage, 1200);
-  assert.match(battleLogText(attacker, null, outcome, outcome.finalDamage), /攻击 1800，护盾吸收 600，造成 1200/);
+  assert.equal(outcome.finalDamage, 1800);
+  assert.match(battleLogText(attacker, null, outcome, outcome.finalDamage), /攻击 1800，造成 1800/);
 });
 
 test("describes attack wins, guard breaks, counters, and clashes", () => {
@@ -57,37 +52,33 @@ test("describes attack wins, guard breaks, counters, and clashes", () => {
 test("describes divine piercing damage against defense monsters", () => {
   const attacker = monster({ name: "创星神龙", atk: 4000, piercingDamage: { type: "divinePierce" } });
   const guard = monster({ name: "铁壁守卫", mode: "defense", def: 2100 });
-  const outcome = describeBattleOutcome(attacker, guard, duelist(), duelist({ shield: 300 }));
+  const outcome = describeBattleOutcome(attacker, guard);
 
   assert.equal(outcome.kind, "pierceDefense");
   assert.equal(outcome.rawDamage, 1900);
-  assert.equal(outcome.shieldBlocked, 300);
-  assert.equal(outcome.finalDamage, 1600);
+  assert.equal(outcome.finalDamage, 1900);
   assert.equal(outcome.destroysTarget, true);
-  assert.match(battleLogText(attacker, guard, outcome, outcome.finalDamage), /神格贯穿差值 1900，护盾吸收 300，造成 1600/);
+  assert.match(battleLogText(attacker, guard, outcome, outcome.finalDamage), /神格贯穿差值 1900，造成 1900/);
 });
 
-test("describes divine pressure shield piercing on direct attacks", () => {
-  const attacker = monster({ name: "创星神龙", atk: 4000, shieldPierce: { type: "divinePressure", amount: 500 } });
-  const outcome = describeBattleOutcome(attacker, null, duelist(), duelist({ shield: 800 }));
+test("legacy shield fields no longer alter direct damage", () => {
+  const attacker = monster({ name: "创星神龙", atk: 4000 });
+  const outcome = describeBattleOutcome(attacker, null, { shield: 800 }, { shield: 800 });
 
   assert.equal(outcome.kind, "direct");
   assert.equal(outcome.rawDamage, 4000);
-  assert.equal(outcome.shieldPierced, 500);
-  assert.equal(outcome.shieldBlocked, 300);
-  assert.equal(outcome.finalDamage, 3700);
-  assert.match(battleLogText(attacker, null, outcome, outcome.finalDamage), /神格威压消解护盾 500，护盾吸收 300，造成 3700/);
+  assert.equal(outcome.finalDamage, 4000);
+  assert.match(battleLogText(attacker, null, outcome, outcome.finalDamage), /造成 4000/);
 });
 
 test("keeps attackers alive when they fail to break defense mode monsters", () => {
   const attacker = monster({ name: "星轨枪兵", atk: 1800 });
   const highGuard = monster({ name: "铁壁守卫", mode: "defense", def: 2100 });
-  const outcome = describeBattleOutcome(attacker, highGuard, duelist({ shield: 100 }), duelist());
+  const outcome = describeBattleOutcome(attacker, highGuard);
 
   assert.equal(outcome.kind, "guardCounter");
   assert.equal(outcome.rawDamage, 300);
-  assert.equal(outcome.finalDamage, 200);
-  assert.equal(outcome.shieldBlocked, 100);
+  assert.equal(outcome.finalDamage, 300);
   assert.equal(outcome.destroysAttacker, false);
   assert.equal(outcome.destroysTarget, false);
   assert.equal(outcome.wear, 150);

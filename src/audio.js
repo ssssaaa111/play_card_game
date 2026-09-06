@@ -27,7 +27,6 @@ export function createAudioController({ getSettings, setSettings, announce, onVo
       hit: "assets/voice/player-hit.wav",
       break: "assets/voice/player-break.wav",
       combo: "assets/voice/player-combo.wav",
-      shield: "assets/voice/player-shield.wav",
       win: "assets/voice/player-win.wav",
       lose: "assets/voice/player-lose.wav"
     },
@@ -43,7 +42,6 @@ export function createAudioController({ getSettings, setSettings, announce, onVo
       hit: "assets/voice/ai-hit.wav",
       break: "assets/voice/ai-break.wav",
       combo: "assets/voice/ai-combo.wav",
-      shield: "assets/voice/ai-shield.wav",
       win: "assets/voice/ai-win.wav",
       lose: "assets/voice/ai-lose.wav"
     },
@@ -305,8 +303,9 @@ export function createAudioController({ getSettings, setSettings, announce, onVo
       noiseSweep(0.04, 0.28, 2400, 560, 0.08, "bandpass");
       sweep(220, 1100, 0.12, 0.28, "sine", 0.06);
     }
-    if (name === "spell-shield800") {
-      playSound("guard");
+    if (name === "spell-heal800") {
+      chord([392, 523, 659], 0, 0.24, "triangle", 0.05);
+      sweep(330, 880, 0.04, 0.24, "sine", 0.05);
     }
     if (name === "attack") {
       noiseSweep(0, 0.2, 180, 2400, 0.1, "bandpass");
@@ -523,7 +522,6 @@ export function createAudioController({ getSettings, setSettings, announce, onVo
       spell: 5,
       summon: 5,
       turn: 4,
-      shield: 4,
       hit: 3,
       draw: 2,
       start: 2

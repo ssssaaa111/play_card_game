@@ -99,7 +99,7 @@ test("index keeps critical app mount points wired", () => {
   assert.match(html, /id="deckBrowserStage"/);
   assert.match(html, /id="deckBrowserPrev"/);
   assert.match(html, /id="deckBrowserNext"/);
-  assert.match(html, /id="handReorderToggle"/);
+  assert.doesNotMatch(html, /id="handReorderToggle"/);
   assert.match(html, /id="handSortType"/);
   assert.match(html, /id="handResetOrder"/);
   assert.match(html, /id="aiRevealModal"/);
@@ -401,7 +401,7 @@ test("app dispatches battle state changes through the engine adapter", () => {
   assert.match(attackSource, /targetEffectId = attackEvent\.id/);
   assert.match(attackSource, /declarationEventId: attackContext\.targetEffectId/);
   assert.match(attackSource, /consumeAttack: trapResult\.consumesAttack/);
-  assert.match(attackSource, /consumeAttack: shield\.consumesAttack/);
+  assert.match(attackSource, /consumeAttack: defenseResult\.consumesAttack/);
   assert.match(attackSource, /resolveBattleWithEngine\(owner, rival, attackerIndex, resolvedTargetIndex, \{/);
   assert.doesNotMatch(attackSource, /const dealt = damage\(/);
   assert.doesNotMatch(attackSource, /rival\.field\[resolvedTargetIndex\]\s*=/);
@@ -575,7 +575,7 @@ test("app uses extracted log audit module", () => {
   assert.match(css, /\.timeline-audit\.error/);
   assert.match(app, /if \(event\.type === "LP_HEALED" && event\.amount > 0\)/);
   assert.match(app, /if \(event\.type === "DAMAGE_DEALT"\)/);
-  assert.match(app, /playLifeDelta\(owner\.owner, event\.amount\)/);
+  assert.match(app, /playLifeDelta\(target\.owner, event\.amount\)/);
   assert.match(app, /playLifeDelta\(target\.owner, -dealt\)/);
 });
 
@@ -596,7 +596,7 @@ test("after-attack feedback stages base damage before revealing effect damage", 
   assert.doesNotMatch(feedbackSource, /attacker\.afterAttack && events\.some\(\(event\) => event\.sourceCardId === attackerId\)/);
   assert.match(
     smoke,
-    /aiRevealVisible\(ctx\.els, "trio-star-herald"\)[\s\S]*ctx\.els\.playerLp\?\.textContent\.trim\(\) !== "300 \/ 4000"/
+    /aiRevealVisible\(ctx\.els, "trio-star-herald"\)[\s\S]*ctx\.els\.playerLp\?\.textContent\.trim\(\) !== "300"/
   );
   assert.match(smoke, /sun must not reveal an after-attack effect without a declaration target/);
 });
@@ -651,7 +651,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-happy-clicker-fails"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-full-duel"\)/);
-  assert.match(smoke, /const smokeName = "trio-chain-lifecycle-basic";[\s\S]*committed solar snare remains visible[\s\S]*"850 \/ 4000"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "trio-chain-lifecycle-basic";[\s\S]*committed solar snare remains visible[\s\S]*"850"[\s\S]*setSmokeStatus\("passed", smokeName\)/);
 
   assert.match(html, /id="graveTargets"/);
   assert.match(html, /id="scenarioBrief"/);
@@ -703,7 +703,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /preDuelDeckToggle: document\.querySelector\("#preDuelDeckToggle"\)/);
   assert.match(app, /deckBrowserModal: document\.querySelector\("#deckBrowserModal"\)/);
   assert.match(app, /els\.preDuelDeckToggle\.addEventListener\("click", openDeckBrowser\)/);
-  assert.match(app, /handReorderToggle: document\.querySelector\("#handReorderToggle"\)/);
+  assert.doesNotMatch(app, /handReorderToggle|handReorderMode/);
   assert.match(app, /handSortType: document\.querySelector\("#handSortType"\)/);
   assert.match(app, /handResetOrder: document\.querySelector\("#handResetOrder"\)/);
   assert.match(app, /reconcileHandOrder\(state\.player\.hand, handDisplayOrder\)/);
@@ -728,7 +728,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /pendingAiRevealQueue = \[\]/);
   assert.match(app, /withAiRevealQueuePosition\(/);
   assert.match(app, /function waitForAiReveal/);
-  assert.match(app, /\["ai-card-reveal-confirm", "ai-card-reveal-queue"\]\.includes\(BROWSER_SMOKE\)/);
+  assert.match(app, /setTimeout\(confirmAiRevealContinue, 320\)/);
+  assert.match(app, /"ai-card-reveal-confirm",[\s\S]*"ai-card-reveal-queue",[\s\S]*"finale-sunflare-target-lock-basic"[\s\S]*\.includes\(BROWSER_SMOKE\)/);
   assert.match(app, /buildAiCardReveal\(/);
   assert.match(setupRenderer, /buildPreDuelPreview\(\{/);
   assert.match(deckBrowser, /cardInspectorViewModel\(entry\.id\)/);
@@ -885,7 +886,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /the public log should explain why only sun attacks this turn/);
   assert.match(smoke, /trio should assign sun to the exclusive high threat/);
   assert.match(smoke, /normal summon should not be described as self-triggered special summon/);
-  assert.match(smoke, /星魂格挡削弱攻击怪兽并获得护盾/);
+  assert.match(smoke, /星魂格挡削弱攻击怪兽并回复生命/);
   assert.match(smoke, /targetChangedEvents/);
   assert.match(smoke, /幻影换位重定向后仍未按新目标结算/);
   assert.match(smoke, /醒星回召把墓地王牌移回怪兽区/);
@@ -965,7 +966,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /const smokeName = "campaign-reward-unlock-basic";[\s\S]*playable gauntlet reward must start visibly locked[\s\S]*reward click launches the first gauntlet battle[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(app, /state\.gauntlet\?\.active && state\.gauntlet\.sourceScenarioId[\s\S]*state\.gauntlet\.sourceScenarioId[\s\S]*els\.scenarioSelect\?\.value/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-scroll-preview"\)/);
-  assert.match(smoke, /const smokeName = "hand-reorder-basic";[\s\S]*type sort must not mutate the rule hand array[\s\S]*tap placement moves the display card[\s\S]*UI reorder must not mutate the rule hand array[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "hand-reorder-basic";[\s\S]*direct type sort must not mutate the rule hand array[\s\S]*right-to-left drag[\s\S]*left-to-right drag[\s\S]*UI reorder must not mutate the rule hand array[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "post-duel-log-review"\)/);
   assert.match(smoke, /const lockedBefore = lockedRulesSnapshot\(\);[\s\S]*finished duel should expose no player actions[\s\S]*inspecting a hand card after game over changed rules state/);
   assert.match(smoke, /await startSmokeDuel\(ctx, "counterChain"\)/);

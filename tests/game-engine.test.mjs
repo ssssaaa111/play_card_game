@@ -19,7 +19,7 @@ import {
   hasAbility,
   projectMachineStateFromEvents
 } from "../src/game-engine.js";
-import { FIELD_SIZE, MAX_LP } from "../src/rules.js";
+import { FIELD_SIZE, STARTING_LP } from "../src/rules.js";
 
 const PLAYER = "player";
 const AI = "ai";
@@ -27,7 +27,7 @@ const AI = "ai";
 function basePlayer(overrides = {}) {
   return {
     id: PLAYER,
-    lp: MAX_LP,
+    lp: STARTING_LP,
     deck: [],
     hand: [],
     monsterZone: [],
@@ -295,7 +295,7 @@ test("divine break source bypasses matching target resistance without weakening 
   assert.equal(next.cards["dragon-1"].tempDef, -400);
   assert.equal(next.cards["colossus-1"].tempAtk || 0, 0);
   assert.equal(next.cards["colossus-1"].tempDef || 0, 0);
-  assert.equal(next.players[AI].lp, MAX_LP - 200);
+  assert.equal(next.players[AI].lp, STARTING_LP - 200);
   assert.ok(events.some((event) => event.type === "CARD_ACTIVATED" && event.cardId === "breaker-1"));
 });
 
@@ -329,7 +329,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const fireBuff = getCardEffectDefinition("fireBuff");
   const burn500 = getCardEffectDefinition("burn500");
   const heal300 = getCardEffectDefinition("heal300");
-  const shield400 = getCardEffectDefinition("shield400");
+  const shield400 = getCardEffectDefinition("heal400");
   const shadowBurn = getCardEffectDefinition("shadowBurn");
   const heal700 = getCardEffectDefinition("heal700");
   const attackDestroy = getCardEffectDefinition("attackDestroy");
@@ -344,7 +344,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   const chainNegate = getCardEffectDefinition("chainNegate");
   const directStrike = getCardEffectDefinition("directStrike");
   const extraSummon = getCardEffectDefinition("extraSummon");
-  const shield800 = getCardEffectDefinition("shield800");
+  const shield800 = getCardEffectDefinition("heal800");
   const graveReturn = getCardEffectDefinition("graveReturn");
   const graveRevive = getCardEffectDefinition("graveRevive");
   const dawnEdge = getCardEffectDefinition("dawnEdge");
@@ -374,14 +374,14 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   ]);
   assert.deepEqual(burn500.operations, [{ op: "dealDamage", player: "rival", amount: 500 }]);
   assert.deepEqual(heal300.operations, [{ op: "heal", player: "self", amount: 300 }]);
-  assert.deepEqual(shield400.operations, [{ op: "gainShield", player: "self", amount: 400 }]);
+  assert.deepEqual(shield400.operations, [{ op: "heal", player: "self", amount: 400 }]);
   assert.deepEqual(shadowBurn.operations, [{ op: "dealDamage", player: "rival", amount: 300 }]);
   assert.deepEqual(heal700.operations, [{ op: "heal", player: "self", amount: 700 }]);
   assert.deepEqual(attackDestroy.operations, [{ op: "destroyCard", cardId: "$action.attackerCardId" }]);
   assert.deepEqual(counterBoost.operations, [
     { op: "modifyStat", cardId: { playerId: "$action.playerId", zone: "monsterZone", rule: "weakestAtk" }, stat: "tempAtk", amount: 400 }
   ]);
-  assert.deepEqual(attackShift.operations, [{ op: "gainShield", player: "self", amount: 400 }]);
+  assert.deepEqual(attackShift.operations, [{ op: "heal", player: "self", amount: 400 }]);
   assert.deepEqual(attackNegate.operations, [{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }]);
   assert.deepEqual(redirectAttack.operations, [{ op: "redirectAttackTarget", targetCardId: "$action.targetCardId" }]);
   assert.deepEqual(weakenAttack.operations, [
@@ -394,7 +394,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.deepEqual(chainNegate.operations, [{ op: "negateEffect", targetEffectId: "$action.targetEffectId" }]);
   assert.deepEqual(directStrike.operations, [{ op: "grantAbility", player: "self", ability: Ability.directAttack, uses: 1, duration: "turn" }]);
   assert.deepEqual(extraSummon.operations, [{ op: "grantAbility", player: "self", ability: Ability.extraSummon, uses: 1, duration: "turn" }]);
-  assert.deepEqual(shield800.operations, [{ op: "gainShield", player: "self", amount: 800 }]);
+  assert.deepEqual(shield800.operations, [{ op: "heal", player: "self", amount: 800 }]);
   assert.deepEqual(graveReturn.operations, [
     {
       op: "moveCard",
@@ -443,7 +443,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
     }
   ]);
   assert.deepEqual(lightShadowCombo.operations, [
-    { op: "gainShield", player: "self", amount: 600 },
+    { op: "heal", player: "self", amount: 600 },
     { op: "drawCards", player: "self", count: 1 }
   ]);
   assert.deepEqual(elementEcho.requirements, [
@@ -474,7 +474,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   assert.deepEqual(riftShelter.requirements, [
     { type: "minElementCount", player: "self", element: "shadow", count: 2 }
   ]);
-  assert.deepEqual(riftShelter.operations, [{ op: "gainShield", player: "self", amount: 300 }]);
+  assert.deepEqual(riftShelter.operations, [{ op: "heal", player: "self", amount: 300 }]);
   assert.deepEqual(soulResonance.target, { player: "self", zone: "monsterZone", rule: "strongestAtk" });
   assert.deepEqual(soulResonance.operations, [
     { op: "modifyStat", cardId: "$action.targetCardId", stat: "tempAtk", amount: 200 },
@@ -482,7 +482,7 @@ test("default card effects are declarative one-shot DSL definitions", () => {
   ]);
   assert.deepEqual(soulParry.operations, [
     { op: "modifyStat", cardId: "$action.attackerCardId", stat: "tempAtk", amount: -300 },
-    { op: "gainShield", player: "self", amount: 300 }
+    { op: "heal", player: "self", amount: 300 }
   ]);
   assert.notEqual(typeof draw2, "function");
 });
@@ -823,7 +823,7 @@ test("dispelling ray destroys rival spell/trap cards and releases equipment bonu
   assertValidGameState(next);
 });
 
-test("burst-rune deals damage and renewal heals with max LP cap", () => {
+test("burst-rune deals damage and renewal can heal above starting LP", () => {
   const state = makeState({
     cards: [
       card("burst-1", { templateId: "burst-rune", effect: "burn500" }),
@@ -841,13 +841,13 @@ test("burst-rune deals damage and renewal heals with max LP cap", () => {
   const next = engine.getState();
 
   assert.equal(next.players[AI].lp, 3500);
-  assert.equal(next.players[PLAYER].lp, MAX_LP);
+  assert.equal(next.players[PLAYER].lp, 4300);
   assert.deepEqual(next.players[PLAYER].grave, ["burst-1", "renewal-1"]);
   assert.ok(burnEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount === 500 && event.playerId === AI));
-  assert.ok(healEvents.some((event) => event.type === "LP_HEALED" && event.amount === 400 && event.playerId === PLAYER));
+  assert.ok(healEvents.some((event) => event.type === "LP_HEALED" && event.amount === 700 && event.playerId === PLAYER));
 });
 
-test("damage events consume shield before LP", () => {
+test("damage events reduce LP directly", () => {
   const state = makeState({
     cards: [
       card("burst-shield", { templateId: "burst-rune", effect: "burn500" })
@@ -855,23 +855,19 @@ test("damage events consume shield before LP", () => {
     player: {
       hand: ["burst-shield"]
     },
-    ai: {
-      shield: 300
-    }
+    ai: {}
   });
 
   const engine = new GameEngine(state);
   const events = engine.dispatch({ type: "ACTIVATE_CARD", playerId: PLAYER, rivalId: AI, cardId: "burst-shield" });
   const next = engine.getState();
 
-  assert.equal(next.players[AI].shield, 0);
-  assert.equal(next.players[AI].lp, 3800);
+  assert.equal(next.players[AI].lp, 3500);
   assert.ok(events.some((event) =>
     event.type === "DAMAGE_DEALT" &&
     event.playerId === AI &&
     event.requested === 500 &&
-    event.blocked === 300 &&
-    event.amount === 200
+    event.amount === 500
   ));
 });
 
@@ -1121,14 +1117,13 @@ test("extra-summon grants extra summon through ability events", () => {
   ));
 });
 
-test("shield spells grant shield through capped shield events", () => {
+test("life spells heal above starting LP through events", () => {
   const state = makeState({
     cards: [
-      card("shield-1", { templateId: "star-shield", effect: "shield800" })
+      card("shield-1", { templateId: "star-shield", effect: "heal800" })
     ],
     player: {
-      hand: ["shield-1"],
-      shield: 2000
+      hand: ["shield-1"]
     }
   });
 
@@ -1137,14 +1132,12 @@ test("shield spells grant shield through capped shield events", () => {
   const next = engine.getState();
 
   assert.deepEqual(next.players[PLAYER].grave, ["shield-1"]);
-  assert.equal(next.players[PLAYER].shield, 2400);
+  assert.equal(next.players[PLAYER].lp, 4800);
   assert.ok(events.some((event) =>
-    event.type === "SHIELD_GAINED" &&
+    event.type === "LP_HEALED" &&
     event.playerId === PLAYER &&
     event.requested === 800 &&
-    event.amount === 400 &&
-    event.before === 2000 &&
-    event.after === 2400 &&
+    event.amount === 800 &&
     event.sourceCardId === "shield-1"
   ));
 });
@@ -1590,7 +1583,7 @@ test("battle-trance immediately readies its target when that monster already att
   assertValidGameState(next);
 });
 
-test("light-shadow combo gains shield and draws through events", () => {
+test("light-shadow combo heals and draws through events", () => {
   const state = makeState({
     cards: [
       card("eclipse-1", { templateId: "eclipse-barrier", effect: "lightShadowCombo" }),
@@ -1598,8 +1591,7 @@ test("light-shadow combo gains shield and draws through events", () => {
     ],
     player: {
       hand: ["eclipse-1"],
-      deck: ["deck-1"],
-      shield: 2100
+      deck: ["deck-1"]
     }
   });
 
@@ -1612,16 +1604,14 @@ test("light-shadow combo gains shield and draws through events", () => {
   });
   const next = engine.getState();
 
-  assert.equal(next.players[PLAYER].shield, 2400);
+  assert.equal(next.players[PLAYER].lp, 4600);
   assert.deepEqual(next.players[PLAYER].hand, ["deck-1"]);
   assert.deepEqual(next.players[PLAYER].grave, ["eclipse-1"]);
   assert.ok(events.some((event) =>
-    event.type === "SHIELD_GAINED" &&
+    event.type === "LP_HEALED" &&
     event.playerId === PLAYER &&
     event.requested === 600 &&
-    event.amount === 300 &&
-    event.before === 2100 &&
-    event.after === 2400 &&
+    event.amount === 600 &&
     event.sourceCardId === "eclipse-1"
   ));
   assert.ok(events.some((event) =>
@@ -1723,7 +1713,7 @@ test("fire-wind combo damages the rival and buffs all own monsters through event
   });
   const next = engine.getState();
 
-  assert.equal(next.players[AI].lp, MAX_LP - 400);
+  assert.equal(next.players[AI].lp, STARTING_LP - 400);
   assert.equal(next.cards["fire-1"].tempAtk, 200);
   assert.equal(next.cards["wind-1"].tempAtk, 200);
   assert.deepEqual(next.players[PLAYER].grave, ["firewind-1"]);
@@ -2259,7 +2249,7 @@ test("multi-result fusion requires an explicit result and resolves the selected 
       card("ember-1", { templateId: "ember-drake", type: "monster", atk: 1500, def: 900 }),
       card("gale-1", { templateId: "gale-mage", type: "monster", atk: 1200, def: 1400 }),
       card("attack-archon", { templateId: "flare-gale-archon", type: "monster", atk: 2400, def: 1800 }),
-      card("guard-archon", { templateId: "tempest-aegis-archon", type: "monster", atk: 2000, def: 2600, onSummon: "shield400" })
+      card("guard-archon", { templateId: "tempest-aegis-archon", type: "monster", atk: 2000, def: 2600, onSummon: "heal400" })
     ],
     player: {
       hand: ["fusion-1", "gale-1"],
@@ -2290,9 +2280,9 @@ test("multi-result fusion requires an explicit result and resolves the selected 
   const next = engine.getState();
   assert.deepEqual(next.players[PLAYER].monsterZone, ["guard-archon"]);
   assert.deepEqual(next.players[PLAYER].deck, ["attack-archon"]);
-  assert.equal(next.players[PLAYER].shield, 400);
+  assert.equal(next.players[PLAYER].lp, 4400);
   assert.ok(events.some((event) => event.type === "FUSION_SUMMONED" && event.resultTemplateId === "tempest-aegis-archon"));
-  assert.ok(events.some((event) => event.type === "SHIELD_GAINED" && event.amount === 400));
+  assert.ok(events.some((event) => event.type === "LP_HEALED" && event.amount === 400));
   assertValidGameState(next);
 });
 
@@ -2567,7 +2557,7 @@ test("basic draw and heal on-summon effects resolve through events", () => {
   assertValidGameState(next);
 });
 
-test("conditional stat shield and burn on-summon effects resolve through events", () => {
+test("conditional stats, healing and burn on-summon effects resolve through events", () => {
   const buffState = makeState({
     cards: [
       card("ember-ally", { templateId: "ember-drake", type: "monster", element: "fire", atk: 1500, def: 900 }),
@@ -2580,7 +2570,7 @@ test("conditional stat shield and burn on-summon effects resolve through events"
   });
   const shieldState = makeState({
     cards: [
-      card("saint-1", { templateId: "prism-saint", type: "monster", element: "light", atk: 1000, def: 1800, onSummon: "shield400" })
+      card("saint-1", { templateId: "prism-saint", type: "monster", element: "light", atk: 1000, def: 1800, onSummon: "heal400" })
     ],
     player: {
       hand: ["saint-1"]
@@ -2605,7 +2595,7 @@ test("conditional stat shield and burn on-summon effects resolve through events"
   const burnEvents = burnEngine.dispatch({ type: "SUMMON_MONSTER", playerId: PLAYER, rivalId: AI, cardId: "alchemist-1", index: 1 });
 
   assert.equal(buffEngine.getState().cards["ember-ally"].tempAtk, 300);
-  assert.equal(shieldEngine.getState().players[PLAYER].shield, 400);
+  assert.equal(shieldEngine.getState().players[PLAYER].lp, 4400);
   assert.equal(burnEngine.getState().players[AI].lp, 3700);
   assert.ok(buffEvents.some((event) =>
     event.type === "STAT_MODIFIED" &&
@@ -2615,7 +2605,7 @@ test("conditional stat shield and burn on-summon effects resolve through events"
     event.sourceCardId === "captain-1"
   ));
   assert.ok(shieldEvents.some((event) =>
-    event.type === "SHIELD_GAINED" &&
+    event.type === "LP_HEALED" &&
     event.amount === 400 &&
     event.sourceCardId === "saint-1"
   ));
@@ -2718,9 +2708,9 @@ test("basic expansion summon effects resolve or skip from declarative requiremen
     index: 1
   });
 
-  assert.equal(shelterEngine.getState().players[PLAYER].shield, 300);
+  assert.equal(shelterEngine.getState().players[PLAYER].lp, 4300);
   assert.ok(shelterEvents.some((event) =>
-    event.type === "SHIELD_GAINED" &&
+    event.type === "LP_HEALED" &&
     event.amount === 300 &&
     event.sourceCardId === "bulwark-1"
   ));
@@ -2792,7 +2782,7 @@ test("void-lock can only trigger in battle phase and logs negation", () => {
   assert.ok(events.some((event) => event.type === "EFFECT_NEGATED" && event.targetEffectId === "attack-42"));
 });
 
-test("attack traps resolve destruction boost shield weaken and empty redirect through events", () => {
+test("attack traps resolve destruction boost healing weaken and empty redirect through events", () => {
   const destroyState = makeState({
     cards: [
       card("mirror-1", { templateId: "mirror-snare", type: "trap", trigger: "attackDestroy" }),
@@ -2846,7 +2836,7 @@ test("attack traps resolve destruction boost shield weaken and empty redirect th
 
   const shiftState = makeState({
     cards: [card("shift-1", { templateId: "storm-shift", type: "trap", trigger: "attackShift" })],
-    player: { spellTrapZone: ["shift-1"], shield: 2200 },
+    player: { spellTrapZone: ["shift-1"] },
     turn: { phase: Phase.battle }
   });
   shiftState.machine.phase = Phase.battle;
@@ -2854,8 +2844,8 @@ test("attack traps resolve destruction boost shield weaken and empty redirect th
   const shiftEngine = new GameEngine(shiftState);
   const shiftEvents = shiftEngine.dispatch({ type: "ACTIVATE_TRAP", playerId: PLAYER, rivalId: AI, cardId: "shift-1" });
 
-  assert.equal(shiftEngine.getState().players[PLAYER].shield, 2400);
-  assert.ok(shiftEvents.some((event) => event.type === "SHIELD_GAINED" && event.amount === 200 && event.requested === 400));
+  assert.equal(shiftEngine.getState().players[PLAYER].lp, 4400);
+  assert.ok(shiftEvents.some((event) => event.type === "LP_HEALED" && event.amount === 400 && event.requested === 400));
 
   const weakenState = makeState({
     cards: [
@@ -2986,7 +2976,7 @@ test("direct and summon traps resolve draw and damage through events", () => {
   assert.ok(summonBurnEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.amount === 400 && event.sourceCardId === "flare-1"));
 });
 
-test("soul-parry weakens attackers, gains shield, and requires attacker context", () => {
+test("soul-parry weakens attackers, heals LP, and requires attacker context", () => {
   const state = makeState({
     cards: [
       card("parry-1", { templateId: "soul-parry", type: "trap", trigger: "soulParry" }),
@@ -3012,7 +3002,7 @@ test("soul-parry weakens attackers, gains shield, and requires attacker context"
   });
 
   assert.equal(engine.getState().cards["attacker-1"].tempAtk, -300);
-  assert.equal(engine.getState().players[PLAYER].shield, 300);
+  assert.equal(engine.getState().players[PLAYER].lp, 4300);
   assert.deepEqual(engine.getState().players[PLAYER].grave, ["parry-1"]);
   assert.ok(events.some((event) =>
     event.type === "STAT_MODIFIED" &&
@@ -3021,7 +3011,7 @@ test("soul-parry weakens attackers, gains shield, and requires attacker context"
     event.sourceCardId === "parry-1"
   ));
   assert.ok(events.some((event) =>
-    event.type === "SHIELD_GAINED" &&
+    event.type === "LP_HEALED" &&
     event.amount === 300 &&
     event.sourceCardId === "parry-1"
   ));
@@ -3058,9 +3048,7 @@ test("battle resolution deals direct damage and marks the attacker through event
     player: {
       monsterZone: ["attacker-1"]
     },
-    ai: {
-      shield: 500
-    },
+    ai: {},
     turn: {
       phase: Phase.battle
     }
@@ -3077,11 +3065,10 @@ test("battle resolution deals direct damage and marks the attacker through event
   const next = engine.getState();
 
   assert.equal(next.cards["attacker-1"].used, true);
-  assert.equal(next.players[AI].shield, 0);
-  assert.equal(next.players[AI].lp, 3000);
+  assert.equal(next.players[AI].lp, 2500);
   assert.ok(events.some((event) => event.type === "ATTACK_DECLARED" && event.direct === true));
   assert.ok(events.some((event) => event.type === "MONSTER_USED" && event.cardId === "attacker-1"));
-  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 1500 && event.blocked === 500 && event.amount === 1000));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 1500 && event.amount === 1500));
   assert.ok(events.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "direct"));
   assertValidGameState(next);
 });
@@ -3197,7 +3184,7 @@ test("battle resolution applies piercing damage only for configured defense brea
       card("guard-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense" })
     ],
     player: { monsterZone: ["divine-1"] },
-    ai: { monsterZone: ["guard-1"], shield: 400 },
+    ai: { monsterZone: ["guard-1"] },
     turn: { phase: Phase.battle }
   });
   pierceState.machine.phase = Phase.battle;
@@ -3212,21 +3199,20 @@ test("battle resolution applies piercing damage only for configured defense brea
   });
   const next = pierceEngine.getState();
 
-  assert.equal(next.players[AI].shield, 0);
-  assert.equal(next.players[AI].lp, 2500);
+  assert.equal(next.players[AI].lp, 2100);
   assert.deepEqual(next.players[AI].grave, ["guard-1"]);
-  assert.ok(pierceEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 1900 && event.blocked === 400 && event.amount === 1500));
+  assert.ok(pierceEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 1900 && event.amount === 1900));
   assert.ok(pierceEvents.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "pierceDefense" && event.outcome?.piercing === true));
   assertValidGameState(next);
 });
 
-test("battle resolution applies divine pressure only from configured damage sources", () => {
+test("battle resolution applies direct damage without legacy shield modifiers", () => {
   const normalState = makeState({
     cards: [
       card("attacker-1", { templateId: "star-lancer", type: "monster", atk: 1800, def: 1000 })
     ],
     player: { monsterZone: ["attacker-1"] },
-    ai: { monsterZone: [], shield: 800 },
+    ai: { monsterZone: [] },
     turn: { phase: Phase.battle }
   });
   normalState.machine.phase = Phase.battle;
@@ -3239,9 +3225,8 @@ test("battle resolution applies divine pressure only from configured damage sour
     attackerCardId: "attacker-1"
   });
 
-  assert.equal(normalEngine.getState().players[AI].shield, 0);
-  assert.equal(normalEngine.getState().players[AI].lp, 3000);
-  assert.ok(normalEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.shieldPierced === 0 && event.blocked === 800 && event.amount === 1000));
+  assert.equal(normalEngine.getState().players[AI].lp, 2200);
+  assert.ok(normalEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 1800 && event.amount === 1800));
 
   const divineState = makeState({
     cards: [
@@ -3249,12 +3234,11 @@ test("battle resolution applies divine pressure only from configured damage sour
         templateId: "celestial-origin-dragon",
         type: "monster",
         atk: 4000,
-        def: 4000,
-        shieldPierce: { type: "divinePressure", amount: 500 }
+        def: 4000
       })
     ],
     player: { monsterZone: ["divine-1"] },
-    ai: { monsterZone: [], shield: 800 },
+    ai: { monsterZone: [] },
     turn: { phase: Phase.battle }
   });
   divineState.machine.phase = Phase.battle;
@@ -3268,10 +3252,9 @@ test("battle resolution applies divine pressure only from configured damage sour
   });
   const next = divineEngine.getState();
 
-  assert.equal(next.players[AI].shield, 0);
-  assert.equal(next.players[AI].lp, 300);
-  assert.ok(divineEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 4000 && event.shieldPierced === 500 && event.blocked === 300 && event.amount === 3700));
-  assert.ok(divineEvents.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "direct" && event.outcome?.shieldPierced === 500));
+  assert.equal(next.players[AI].lp, 0);
+  assert.ok(divineEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === AI && event.requested === 4000 && event.amount === 4000));
+  assert.ok(divineEvents.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "direct" && event.outcome?.finalDamage === 4000));
   assertValidGameState(next);
 });
 
@@ -3282,8 +3265,7 @@ test("battle resolution against stronger defense keeps monsters and applies guar
       card("guard-1", { templateId: "iron-guardian", ownerId: AI, type: "monster", atk: 900, def: 2100, mode: "defense", battleWear: 0 })
     ],
     player: {
-      monsterZone: ["attacker-1"],
-      shield: 100
+      monsterZone: ["attacker-1"]
     },
     ai: {
       monsterZone: ["guard-1"]
@@ -3308,13 +3290,12 @@ test("battle resolution against stronger defense keeps monsters and applies guar
   assert.deepEqual(next.players[PLAYER].monsterZone, ["attacker-1"]);
   assert.deepEqual(next.players[AI].monsterZone, ["guard-1"]);
   assert.deepEqual(next.players[AI].grave, []);
-  assert.equal(next.players[PLAYER].shield, 0);
-  assert.equal(next.players[PLAYER].lp, 3800);
+  assert.equal(next.players[PLAYER].lp, 3700);
   assert.equal(next.cards["guard-1"].battleWear, 150);
   assert.equal(next.cards["guard-1"].tempAtk, -150);
   assert.equal(next.cards["guard-1"].tempDef, -150);
   assert.ok(events.some((event) => event.type === "BATTLE_WEAR_APPLIED" && event.cardId === "guard-1" && event.amount === 150));
-  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === PLAYER && event.requested === 300 && event.blocked === 100 && event.amount === 200));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === PLAYER && event.requested === 300 && event.amount === 300));
   assert.ok(events.some((event) => event.type === "BATTLE_RESOLVED" && event.outcome?.kind === "guardCounter"));
   assertValidGameState(next);
 });
@@ -3409,7 +3390,7 @@ test("attack declaration opens an engine-owned response window without resolving
 
   assert.equal(next.cards["attacker-1"].used, undefined);
   assert.deepEqual(next.players[AI].monsterZone, ["target-1"]);
-  assert.equal(next.players[PLAYER].lp, MAX_LP);
+  assert.equal(next.players[PLAYER].lp, STARTING_LP);
   assert.equal(next.machine.timing, Timing.attackDeclaration);
   assert.equal(next.machine.pendingAttack.playerId, PLAYER);
   assert.equal(next.machine.pendingAttack.rivalId, AI);
@@ -3440,8 +3421,7 @@ test("redirect trap updates pending attack and battle resolves against the new d
     ],
     player: {
       monsterZone: ["dusk-1", "guard-1"],
-      spellTrapZone: ["switch-1"],
-      shield: 550
+      spellTrapZone: ["switch-1"]
     },
     ai: {
       monsterZone: ["sky-1"]
@@ -3502,8 +3482,7 @@ test("redirect trap updates pending attack and battle resolves against the new d
   assert.ok(!battleEvents.some((event) => event.type === "DAMAGE_DEALT" && event.playerId === PLAYER && event.requested === 550));
   assert.deepEqual(engine.getState().players[PLAYER].monsterZone, ["dusk-1", "guard-1"]);
   assert.deepEqual(engine.getState().players[PLAYER].grave, ["switch-1"]);
-  assert.equal(engine.getState().players[PLAYER].shield, 550);
-  assert.equal(engine.getState().players[AI].lp, MAX_LP - 150);
+  assert.equal(engine.getState().players[AI].lp, STARTING_LP - 150);
 });
 
 test("pending attack blocks auto-end and turn handoff until battle resolves or is canceled", () => {
@@ -4966,7 +4945,7 @@ test("element combos resolve through events and character passive triggers once 
 
   assert.equal(afterFirst.players[PLAYER].comboFlags.fireWind, true);
   assert.equal(afterFirst.players[PLAYER].comboThisTurn, true);
-  assert.equal(afterFirst.players[AI].lp, MAX_LP - 300);
+  assert.equal(afterFirst.players[AI].lp, STARTING_LP - 300);
   assert.equal(afterFirst.cards["fire-1"].tempAtk, 100);
   assert.equal(afterFirst.cards["wind-1"].tempAtk, 100);
   assert.deepEqual(afterFirst.players[PLAYER].hand, ["draw-1"]);
@@ -5012,7 +4991,7 @@ test("light-shadow, triad and trap-only combos use declarative event effects", (
     summonEvents.filter((event) => event.type === "COMBO_TRIGGERED").map((event) => event.comboId),
     ["lightShadow", "triad"]
   );
-  assert.equal(afterSummon.players[PLAYER].shield, 600);
+  assert.equal(afterSummon.players[PLAYER].lp, 4600);
   assert.deepEqual(afterSummon.players[PLAYER].hand, ["draw-1"]);
   assert.equal(afterSummon.cards["light-1"].tempAtk, 200);
   assert.equal(afterSummon.cards["shadow-1"].tempAtk, 200);
@@ -5025,7 +5004,7 @@ test("light-shadow, triad and trap-only combos use declarative event effects", (
     source: "trap"
   });
   assert.ok(trapEvents.some((event) => event.type === "COMBO_TRIGGERED" && event.comboId === "shadowAmbush"));
-  assert.equal(engine.getState().players[PLAYER].shield, 900);
+  assert.equal(engine.getState().players[PLAYER].lp, 4900);
 });
 
 test("turn draw moves cards and applies deck-out damage through events", () => {
@@ -5036,7 +5015,6 @@ test("turn draw moves cards and applies deck-out damage through events", () => {
     ],
     player: {
       lp: 4000,
-      shield: 100,
       deck: ["draw-a", "draw-b"]
     },
     turn: { playerId: PLAYER, phase: Phase.draw }
@@ -5050,11 +5028,10 @@ test("turn draw moves cards and applies deck-out damage through events", () => {
 
   assert.deepEqual(next.players[PLAYER].deck, []);
   assert.deepEqual(next.players[PLAYER].hand, ["draw-a", "draw-b"]);
-  assert.equal(next.players[PLAYER].shield, 0);
-  assert.equal(next.players[PLAYER].lp, 3600);
+  assert.equal(next.players[PLAYER].lp, 3500);
   assert.ok(events.some((event) => event.type === "CARDS_DRAWN" && event.count === 2 && event.requested === 3));
   assert.ok(events.some((event) => event.type === "DRAW_FAILED" && event.missing === 1 && event.reason === "turn"));
-  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.requested === 500 && event.blocked === 100 && event.amount === 400));
+  assert.ok(events.some((event) => event.type === "DAMAGE_DEALT" && event.requested === 500 && event.amount === 500));
 });
 
 test("resolve turn draw advances to main only when the player survives", () => {
@@ -5086,7 +5063,7 @@ test("resolve turn draw advances to main only when the player survives", () => {
   ));
 
   const survivedDeckOut = makeState({
-    player: { lp: 700, shield: 300, deck: [] },
+    player: { lp: 700, deck: [] },
     turn: { playerId: PLAYER, phase: Phase.draw }
   });
   survivedDeckOut.machine.phase = Phase.draw;
@@ -5095,13 +5072,12 @@ test("resolve turn draw advances to main only when the player survives", () => {
   const survivedEvents = survivedEngine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: PLAYER });
   const survivedNext = survivedEngine.getState();
 
-  assert.equal(survivedNext.players[PLAYER].lp, 500);
-  assert.equal(survivedNext.players[PLAYER].shield, 0);
+  assert.equal(survivedNext.players[PLAYER].lp, 200);
   assert.equal(survivedNext.turn.phase, Phase.main);
   assert.ok(survivedEvents.some((event) => event.type === "TURN_DRAW_RESOLVED" && event.phaseAdvanced === true));
 
   const fatalDeckOut = makeState({
-    player: { lp: 300, shield: 0, deck: [] },
+    player: { lp: 300, deck: [] },
     turn: { playerId: PLAYER, phase: Phase.draw }
   });
   fatalDeckOut.machine.phase = Phase.draw;
@@ -6346,7 +6322,7 @@ test("getState returns a defensive copy so UI code cannot mutate live engine sta
   snapshot.players[PLAYER].lp = 1;
   snapshot.turn.playerId = "missing";
 
-  assert.equal(engine.getState().players[PLAYER].lp, MAX_LP);
+  assert.equal(engine.getState().players[PLAYER].lp, STARTING_LP);
   assert.equal(engine.getState().turn.playerId, PLAYER);
 });
 

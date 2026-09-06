@@ -1,20 +1,21 @@
-export function buildLifeDisplay(value, maximum = 4000) {
-  const numericMaximum = Number(maximum);
+export function buildLifeDisplay(value, startingLife = 4000) {
+  const numericStartingLife = Number(startingLife);
   const numericValue = Number(value);
-  const safeMaximum = Number.isFinite(numericMaximum) && numericMaximum > 0 ? numericMaximum : 4000;
+  const safeStartingLife = Number.isFinite(numericStartingLife) && numericStartingLife > 0 ? numericStartingLife : 4000;
   const safeValue = Number.isFinite(numericValue)
-    ? Math.max(0, Math.min(safeMaximum, numericValue))
+    ? Math.max(0, numericValue)
     : 0;
   const current = Math.round(safeValue);
-  const max = Math.round(safeMaximum);
-  const percent = (safeValue / safeMaximum) * 100;
-  const tone = percent <= 25 ? "critical" : percent <= 50 ? "warning" : "stable";
+  const starting = Math.round(safeStartingLife);
+  const relativePercent = (safeValue / safeStartingLife) * 100;
+  const percent = Math.min(100, relativePercent);
+  const tone = relativePercent <= 25 ? "critical" : relativePercent <= 50 ? "warning" : "stable";
 
   return {
     current,
-    max,
-    text: `${current} / ${max}`,
-    ariaLabel: `生命值 ${current} / ${max}`,
+    starting,
+    text: String(current),
+    ariaLabel: `生命值 ${current}`,
     percent,
     tone
   };

@@ -69,7 +69,7 @@ test("duelist HUD reads like a fighting-game faceoff without covering the board"
   assert.match(css, /#app \.duel-table #aiFigure \.duelist-sprite\s*\{[\s\S]*left: 35%;/);
   assert.match(css, /#app \.duel-table \.skill-line\s*\{[\s\S]*height: 17px;[\s\S]*padding: 0 4px;[\s\S]*line-height: 17px;/);
   assert.match(css, /#app \.duel-table \.piles\s*\{[\s\S]*top: 82px;[\s\S]*width: 140px;/);
-  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*\.timeline-drawer\.is-docked\s*\{[\s\S]*inset: 122px 10px 10px auto;/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*\.workspace-deck\s*\{[\s\S]*inset: 122px 10px 10px auto;/);
   assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*#app \.duel-table \.field\s*\{[\s\S]*top: 122px;/);
   assert.match(css, /@media \(max-width: 1040px\)[\s\S]*\.versus-stage\s*\{[\s\S]*width: 54px;/);
 });
@@ -156,7 +156,7 @@ test("settings stay compact on small screens and become direct controls when spa
   assert.match(controller, /const expanded = spaciousSettings\.matches \|\| Boolean\(open\)/);
 });
 
-test("spacious screens keep context in side rails while scaled 4K uses edge gutters", () => {
+test("spacious screens unify card context and history in one right-side workbench", () => {
   const html = read("index.html");
   const css = read("duel-table.css");
   const controller = read("src/duel-table.js");
@@ -164,8 +164,9 @@ test("spacious screens keep context in side rails while scaled 4K uses edge gutt
 
   assert.match(html, /id="workspaceDeck"[\s\S]*id="detailDrawer"[\s\S]*id="timelineDrawer"/);
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*--workspace-height/);
-  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*--workspace-track: 34px;[\s\S]*--detail-rail-width: clamp\(220px, 12vw, 250px\);[\s\S]*--timeline-rail-width: clamp\(260px, 15vw, 300px\);/);
-  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*\.workspace-deck\s*\{[\s\S]*display: contents;[\s\S]*\.detail-drawer\.is-docked\s*\{[\s\S]*left: 10px;[\s\S]*\.timeline-drawer\.is-docked\s*\{[\s\S]*inset: 122px 10px 10px auto;/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*--workspace-track: 34px;[\s\S]*--workspace-rail-width: clamp\(300px, 18vw, 360px\);/);
+  assert.match(css, /@media \(min-width: 1600px\) and \(max-width: 2399px\) and \(min-height: 900px\)[\s\S]*\.workspace-deck\s*\{[\s\S]*inset: 122px 10px 10px auto;[\s\S]*grid-template-rows: minmax\(260px, 0\.72fr\) minmax\(0, 1\.28fr\);/);
+  assert.match(css, /\.workspace-deck \.detail-drawer\.is-docked\s*\{[\s\S]*border-bottom: 1px solid rgba\(132, 230, 224, 0\.16\);[\s\S]*\.workspace-deck \.timeline-drawer\.is-docked\s*\{[\s\S]*background: linear-gradient/);
   assert.match(css, /\.workspace-deck \.workspace-drawer\.is-docked[\s\S]*visibility: visible;[\s\S]*pointer-events: auto;/);
   assert.match(css, /@media \(min-width: 1600px\) and \(min-height: 900px\)[\s\S]*\.detail-drawer \.detail-actions\s*\{[\s\S]*display: none;[\s\S]*\.detail-drawer #battlePreview\s*\{[\s\S]*grid-row: 3;/);
   assert.match(renderer, /elements\.detailAttackBtn\.hidden = view\.fieldAction\.hidden/);
@@ -176,9 +177,9 @@ test("spacious screens keep context in side rails while scaled 4K uses edge gutt
   assert.match(controller, /const GUTTER_WORKSPACE_QUERY = "\(min-width: 2400px\) and \(min-height: 1200px\)"/);
   assert.match(controller, /function syncResponsiveWorkspace\(\)[\s\S]*const gutter = spacious && gutterWorkspace\.matches;[\s\S]*body\.dataset\.workspaceLayout = gutter \? "gutter" : spacious \? "expanded" : "drawer"/);
   assert.match(controller, /drawer\.root\?\.classList\.toggle\("is-docked", spacious\)/);
-  assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*--workspace-track: 38px;[\s\S]*width: min\(calc\(100% - 640px\), 3200px\);[\s\S]*\.workspace-deck\s*\{[\s\S]*display: contents;/);
+  assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*--workspace-track: 38px;[\s\S]*width: min\(calc\(100% - 640px\), 3200px\);[\s\S]*\.workspace-deck\s*\{[\s\S]*position: fixed;[\s\S]*right: max\(8px, calc\(\(100vw - 3200px\) \/ 2 - 312px\)\);[\s\S]*grid-template-rows: minmax\(250px, 0\.62fr\) minmax\(0, 1\.38fr\);/);
   assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*#app \.duel-table \.field\s*\{[\s\S]*minmax\(0, 1fr\)[\s\S]*var\(--workspace-track\)[\s\S]*minmax\(0, 1fr\);/);
-  assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*top: calc\(\(100dvh - clamp\(280px, 16dvh, 340px\) \+ 78px\) \/ 2\);[\s\S]*\.workspace-deck \.detail-drawer\.is-docked\s*\{[\s\S]*right: min\(calc\(100% - 320px\), calc\(\(100% \+ 3200px\) \/ 2\)\);[\s\S]*\.workspace-deck \.timeline-drawer\.is-docked\s*\{[\s\S]*left: min\(calc\(100% - 320px\), calc\(\(100% \+ 3200px\) \/ 2\)\);/);
+  assert.match(css, /@media \(min-width: 2400px\) and \(min-height: 1200px\)[\s\S]*\.workspace-deck \.workspace-drawer\.is-docked\s*\{[\s\S]*position: relative;[\s\S]*width: 100%;[\s\S]*height: 100%;/);
 });
 
 test("spacious card density keeps field hand and support scales related", () => {
@@ -420,8 +421,8 @@ test("spacious field commands form one row directly above the hand", () => {
   assert.match(css, /body\[data-duel-selection="playerField"\] \.hand-toolbar,[\s\S]*body\[data-duel-selection="hand"\] \.hand-toolbar,[\s\S]*body\[data-duel-selection="target"\] \.hand-toolbar\s*\{[\s\S]*display: none;/);
   assert.match(css, /body\[data-duel-selection="hand"\] \.hand-command > \.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\),[\s\S]*body\[data-duel-selection="target"\] \.hand-command > \.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\)\s*\{[\s\S]*grid-template-columns: minmax\(220px, 1fr\) repeat\(2, minmax\(100px, 132px\)\) minmax\(220px, 1fr\);/);
   assert.match(css, /body\[data-duel-selection="hand"\] \.hand-command > \.choice-actions:not\(\.fusion-choice\):not\(\.material-choice\):not\(\.split-choice\),[\s\S]*inset: auto;[\s\S]*width: 100%;[\s\S]*transform: none;/);
-  assert.match(css, /\.hand-stack:has\(> \.hand-toolbar:not\(\[hidden\]\) \.hand-reorder-toggle\[aria-pressed="false"\]\)\s*\{[\s\S]*grid-template-rows: minmax\(0, 1fr\) 0 0;/);
-  assert.match(css, /\.hand-toolbar:not\(\[hidden\]\):has\(\.hand-reorder-toggle\[aria-pressed="false"\]\)\s*\{[\s\S]*position: absolute;[\s\S]*bottom: 10px;[\s\S]*left: 10px;/);
+  assert.match(css, /Desktop hand organization is deliberately modeless/);
+  assert.match(css, /\.hand-toolbar:not\(\[hidden\]\)\s*\{[\s\S]*min-height: 30px;[\s\S]*padding: 0 2px;/);
   assert.match(css, /body\[data-duel-selection="hand"\][\s\S]*#choiceConfirmBtn\s*\{[\s\S]*grid-column: 2;/);
   assert.match(css, /body\[data-duel-selection="target"\][\s\S]*#choiceCancelBtn\s*\{[\s\S]*grid-column: 3;/);
   assert.match(css, /body\[data-duel-selection="playerField"\][\s\S]*\.field-attack-btn:not\(:disabled\)[\s\S]*background: linear-gradient\(180deg, #ffe19b, #f6bd60\);/);
@@ -463,22 +464,28 @@ test("battle chronicle uses full-height summaries filters and structured event n
   assert.doesNotMatch(read("src/app.js"), /cue\(`\$\{latest\.label\} · \$\{latest\.next\}`\)/);
 });
 
-test("hand organization exposes type sorting before entering drag mode", () => {
+test("hand organization uses one-click type sorting and modeless direct drag", () => {
   const html = read("index.html");
   const app = read("src/app.js");
   const css = read("duel-table.css");
   const renderer = read("src/hand-renderer.js");
 
   assert.match(html, /id="handSortType"[^>]*>按类型<\/button>/);
-  assert.match(html, /id="handReorderToggle"[^>]*>拖动排序<\/button>/);
+  assert.doesNotMatch(html, /id="handReorderToggle"|hand-reorder-step/);
   assert.match(app, /els\.handSortType\.hidden = !showToolbar/);
   assert.match(app, /handOrderMode === "type"[\s\S]*sortHandCardsByType\(state\.player\.hand, handDisplayOrder\)/);
   assert.match(app, /els\.handSortType\.setAttribute\("aria-pressed", String\(typeSorting\)\)/);
-  assert.match(app, /els\.handReorderToggle\.textContent = handReorderMode \? "完成排序" : "拖动排序"/);
-  assert.match(css, /both one-click type sorting and manual drag sorting stay visible/);
+  assert.match(app, /directReorder: showToolbar/);
+  assert.match(app, /els\.handResetOrder\.hidden = !showToolbar \|\| handOrderMode === "draw"/);
+  assert.match(css, /type sorting is a[\s\S]*single command and every card remains directly draggable/);
+  assert.match(renderer, /cardEl\.classList\.toggle\("hand-direct-reorder", directReorder\)/);
   assert.match(renderer, /cardEl\.addEventListener\("pointerdown"/);
   assert.match(renderer, /document\.elementFromPoint\(event\.clientX, event\.clientY\)/);
-  assert.match(renderer, /onPlaceCard\(card\.uid, targetUid\)/);
+  assert.match(renderer, /onSwapCard\(card\.uid, targetUid\)/);
+  assert.match(renderer, /classList\.add\("hand-drag-ghost"\)/);
+  assert.match(renderer, /swap-preview-left/);
+  assert.match(renderer, /swap-preview-right/);
+  assert.match(renderer, /event\.altKey[\s\S]*"ArrowLeft", "ArrowRight"/);
 });
 
 test("spell-trap destruction reveals the selected set card on the field", () => {

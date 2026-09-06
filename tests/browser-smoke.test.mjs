@@ -30,7 +30,6 @@ test("builds read-only browser smoke snapshots from live state", () => {
     },
     player: {
       lp: 4000,
-      shield: 0,
       attacksSkipped: false,
       directAttacks: 1,
       hand: [{ id: "star-breach" }],
@@ -39,7 +38,6 @@ test("builds read-only browser smoke snapshots from live state", () => {
     },
     ai: {
       lp: 2200,
-      shield: 0,
       hand: [{ id: "solar-knight" }],
       field: [{ id: "iron-guardian" }],
       traps: [null]

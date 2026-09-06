@@ -36,7 +36,6 @@ function enginePlayer(id, overrides = {}) {
   return {
     id,
     lp: 4000,
-    shield: 0,
     deck: [],
     hand: [],
     monsterZone: [],
@@ -95,7 +94,6 @@ function uiDuelist(owner) {
   return {
     owner,
     lp: 4000,
-    shield: 0,
     deck: [],
     hand: [],
     field: Array(MONSTER_ZONE_SIZE).fill(null),

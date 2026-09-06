@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FIELD_SIZE, MAX_LP } from "../src/rules.js";
+import { FIELD_SIZE, STARTING_LP } from "../src/rules.js";
 import { scoreSpellForAi, validateSpellCondition } from "../src/spells.js";
 
 function monster(overrides = {}) {
@@ -30,13 +30,12 @@ function spell(overrides = {}) {
 function duelist(overrides = {}) {
   return {
     owner: "player",
-    lp: MAX_LP,
+    lp: STARTING_LP,
     deck: [],
     hand: [],
     field: Array(FIELD_SIZE).fill(null),
     traps: Array(FIELD_SIZE).fill(null),
     grave: [],
-    shield: 0,
     directAttacks: 0,
     ...overrides
   };
@@ -80,10 +79,7 @@ test("validates fusion spell material and result requirements", () => {
 });
 
 test("validates basic spell resource requirements", () => {
-  assert.deepEqual(validateSpellCondition("heal700", { owner: duelist() }), {
-    ok: false,
-    reason: "生命值已满，不能发动回血魔法。"
-  });
+  assert.deepEqual(validateSpellCondition("heal700", { owner: duelist() }), { ok: true });
   assert.deepEqual(validateSpellCondition("heal700", { owner: duelist({ lp: 3200 }) }), { ok: true });
 
   assert.deepEqual(validateSpellCondition("draw2", { owner: duelist({ deck: [monster()] }) }), {
@@ -274,7 +270,7 @@ test("validates equipment spell requirements", () => {
     validateSpellCondition("equipBlade", {
       owner: duelist({
         field: [monster(), null, null],
-        traps: [spell({ effect: "shield800" }), spell({ effect: "draw2" }), spell({ effect: "burn500" })]
+        traps: [spell({ effect: "heal800" }), spell({ effect: "draw2" }), spell({ effect: "burn500" })]
       })
     }),
     { ok: false, reason: "魔陷区已满，不能发动装备魔法。" }
@@ -351,10 +347,10 @@ test("scores AI direct strike and combo spells", () => {
   assert.equal(
     scoreSpellForAi("directStrike", {
       owner: duelist({ field: [monster({ atk: 3000 }), null, null] }),
-      rival: duelist({ owner: "player", lp: 2000, shield: 2000, field: [monster({ atk: 1000 }), null, null] }),
+      rival: duelist({ owner: "player", lp: 2000, field: [monster({ atk: 1000 }), null, null] }),
       aiStyle: "scriptedPressure"
     }),
-    0
+    94
   );
   assert.equal(
     scoreSpellForAi("directStrike", {
@@ -507,7 +503,6 @@ test("AI does not treat an attack reset as lethal through an unbreakable guard",
       owner: "player",
       field: [monster({ mode: "defense", def: 4000 }), null, null, null, null],
       lp: 2000,
-      shield: 0
     }),
     aiStyle: "balanced"
   });
@@ -527,7 +522,7 @@ test("AI models rally attack as readying the first spent monster", () => {
         null
       ]
     }),
-    rival: duelist({ owner: "player", lp: 4200, shield: 0 }),
+    rival: duelist({ owner: "player", lp: 4200 }),
     aiStyle: "balanced"
   });
 

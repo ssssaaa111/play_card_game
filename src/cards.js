@@ -50,7 +50,7 @@ export function inferArchetype(card) {
   if (["equipBlade", "equipAegis", "equipPrism", "equipOverclock"].includes(card.effect)) return "装备";
   if (["draw2", "extraSummon", "graveReturn", "splitToken"].includes(card.effect)) return "资源";
   if (["pierceLine", "directStrike", "destroySpellTrap", "aceCrackdown"].includes(card.effect) || ["weakenAttack", "directRebound"].includes(card.trigger)) return "破阵";
-  if (["shield800", "heal700"].includes(card.effect) || ["directShield", "aceGuard"].includes(card.trigger)) return "守护";
+  if (["heal800", "heal700"].includes(card.effect) || ["directShield", "aceGuard"].includes(card.trigger)) return "守护";
   if (card.type === "trap") return "反制";
   return "通用";
 }

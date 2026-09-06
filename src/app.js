@@ -48,10 +48,9 @@ import {
 import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
 import { renderHandCards } from './hand-renderer.js';
 import {
-  handPlacementTap,
-  placeHandCard,
   reconcileHandOrder,
   shiftHandCard,
+  swapHandCards,
   sortHandCardsByType
 } from './hand-order.js';
 import {
@@ -236,7 +235,7 @@ import {
   turnLabel
 } from './view-model.js';
 import {
-  MAX_LP,
+  STARTING_LP,
   MONSTER_ZONE_SIZE,
   battlePreviewText,
   battleValue,
@@ -335,8 +334,6 @@ let deckBrowserIndex = 0;
 let deckBrowserPointerStartX = null;
 let handDisplayOrder = [];
 let handOrderMode = "draw";
-let handReorderMode = false;
-let handPlacementUid = "";
 let chainHistoryExpanded = false;
 const directActivationTracker = createDirectActivationTracker();
 const combatHudDamageStage = createCombatHudDamageStage();
@@ -393,7 +390,6 @@ const els = {
   handOrderStatus: document.querySelector("#handOrderStatus"),
   handSortType: document.querySelector("#handSortType"),
   handResetOrder: document.querySelector("#handResetOrder"),
-  handReorderToggle: document.querySelector("#handReorderToggle"),
   graveTargets: document.querySelector("#graveTargets"),
   timeline: document.querySelector("#timeline"),
   timelineCount: document.querySelector("#timelineCount"),
@@ -827,7 +823,9 @@ function renderNextAiReveal() {
   pendingAiRevealResolver = next.resolve;
   renderAiReveal();
   if (shouldAutoContinueAiReveal()) {
-    window.setTimeout(confirmAiRevealContinue, 70);
+    // Browser smoke polls every 80 ms. Keep automatic reveals visible across
+    // several polls so assertions cannot miss the entire public reveal window.
+    window.setTimeout(confirmAiRevealContinue, 320);
   }
 }
 
@@ -865,7 +863,11 @@ function confirmAiRevealContinue() {
 }
 
 function shouldAutoContinueAiReveal() {
-  const revealNeedsManualClick = ["ai-card-reveal-confirm", "ai-card-reveal-queue"].includes(BROWSER_SMOKE) ||
+  const revealNeedsManualClick = [
+    "ai-card-reveal-confirm",
+    "ai-card-reveal-queue",
+    "finale-sunflare-target-lock-basic"
+  ].includes(BROWSER_SMOKE) ||
     ["trio-after-attack-lethal-planning-basic", "trio-combined-lethal-planning-basic"].includes(BROWSER_SMOKE);
   return Boolean(BROWSER_SMOKE) && !revealNeedsManualClick;
 }
@@ -954,9 +956,10 @@ function applyScenarioSetup() {
   Object.assign(state.player, setup.player);
   Object.assign(state.ai, setup.ai);
   const supply = state.gauntlet?.active ? (state.gauntlet.supplies || {})[state.scenarioId] : null;
-  if (supply?.shield) {
-    state.player.shield = Math.max(0, Number(state.player.shield) + Number(supply.shield));
-    addLog(`连战补给：上一战延续的战意化作 ${supply.shield} 点护盾。`);
+  const supplyLife = Math.max(0, Number(supply?.lp ?? supply?.shield) || 0);
+  if (supplyLife > 0) {
+    state.player.lp += supplyLife;
+    addLog(`连战补给：上一战延续的战意回复了 ${supplyLife} LP。`);
   }
   state.gameEvents = Array.isArray(setup.gameEvents) ? setup.gameEvents.map((event) => ({ ...event })) : [];
   const scenarioKind = !BROWSER_TEST_MODE && scenario.setupVisibility === "player" ? "玩法场景" : "规则测试场景";
@@ -1027,8 +1030,6 @@ function startGame() {
   chainHistoryExpanded = false;
   handDisplayOrder = [];
   handOrderMode = "draw";
-  handReorderMode = false;
-  handPlacementUid = "";
   closeDeckBrowser();
   resetDuelModal(els);
   if (state.scenarioId === "normal") {
@@ -1068,8 +1069,6 @@ function prepareGame() {
   deckBrowserIndex = 0;
   handDisplayOrder = [];
   handOrderMode = "draw";
-  handReorderMode = false;
-  handPlacementUid = "";
   closeDeckBrowser();
   chainHistoryExpanded = false;
   if (BROWSER_MANUAL_SCENARIO && state.scenarioId === BROWSER_MANUAL_SCENARIO) {
@@ -1124,18 +1123,13 @@ function applyDrawEventFeedback(duelist, events, announce = true) {
   const failed = events.find((event) => event.type === "DRAW_FAILED");
   const damageEvent = events.find((event) => event.type === "DAMAGE_DEALT");
   if (failed) {
-    const blocked = Math.max(0, Number(damageEvent?.blocked) || 0);
     const dealt = Math.max(0, Number(damageEvent?.amount) || 0);
-    if (blocked > 0) {
-      playSound("guard");
-      playGuardShield(panelElement(duelist.owner));
-    }
     if (dealt > 0) {
       playSound("damage");
       playLifeDelta(duelist.owner, -dealt);
       animateAvatar(duelist.owner, "hit");
     }
-    addLog(`${duelist.owner === "player" ? "你" : "AI"} 少抽 ${failed.missing} 张卡，受到 ${dealt} 点伤害${blocked > 0 ? `，护盾吸收 ${blocked}` : ""}。`);
+    addLog(`${duelist.owner === "player" ? "你" : "AI"} 少抽 ${failed.missing} 张卡，受到 ${dealt} 点伤害。`);
     speak(`${duelist.owner === "player" ? "你" : "对手"}无卡可抽，受到伤害。`);
     checkGameOver();
   }
@@ -3017,43 +3011,22 @@ function resolveEngineSpellFeedback(owner, rival, card, events, targetInfo = nul
       playVoice(owner.owner, "draw", owner.owner === "player" ? `抽 ${event.count} 张卡。` : `对手抽 ${event.count} 张卡。`);
     }
     if (event.type === "LP_HEALED" && event.amount > 0) {
-      playSound("spell-heal700");
-      playLifeDelta(owner.owner, event.amount);
-      addLog(`${card.name} 为 ${duelistLabel(owner)}回复 ${event.amount} 点生命值。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
-    }
-    if (event.type === "SHIELD_GAINED" && event.amount > 0) {
       const target = event.playerId === owner.owner ? owner : rival;
       result.targetOwner = target.owner;
-      playSound("guard");
-      playEpicAction("护盾", "guard");
-      playGuardShield(panelElement(target.owner));
-      playVoice(target.owner, "shield", "护盾展开。");
-      addLog(`${target.owner === "player" ? "你" : "AI"} 获得 ${event.amount} 点护盾（${card.name}）。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
+      playSound("spell-heal700");
+      playLifeDelta(target.owner, event.amount);
+      addLog(`${card.name} 为 ${duelistLabel(target)}回复 ${event.amount} LP。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
     }
     if (event.type === "DAMAGE_DEALT") {
       const target = event.playerId === owner.owner ? owner : rival;
-      const pierced = Math.max(0, Number(event.shieldPierced) || 0);
-      const blocked = Math.max(0, Number(event.blocked) || 0);
       const dealt = Math.max(0, Number(event.amount) || 0);
       result.targetOwner = target.owner;
-      if (pierced > 0) {
-        playSound("guard");
-        playGuardShield(panelElement(target.owner));
-        addLog(`${target.owner === "player" ? "你的" : "AI 的"}护盾被神格威压消解了 ${pierced} 点。`);
-      }
-      if (blocked > 0) {
-        playSound("guard");
-        playGuardShield(panelElement(target.owner));
-        addLog(`${target.owner === "player" ? "你的" : "AI 的"}护盾吸收了 ${blocked} 点伤害。`);
-      }
       if (dealt > 0) {
         totalDamageDealt += dealt;
         playSound("damage");
         playLifeDelta(target.owner, -dealt);
         animateAvatar(target.owner, "hit");
         addLog(`${card.name} 对 ${duelistLabel(target)}造成 ${dealt} 点伤害。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
-      } else if (blocked > 0) {
-        addLog(`${card.name} 的伤害被护盾完全抵消。`, cardLogMeta(card, { actor: owner.owner, type: "effect" }));
       }
     }
     if (event.type === "STAT_MODIFIED") {
@@ -3291,7 +3264,7 @@ function attackContextCard(rival, context = {}, event = null) {
 async function resolveEngineTrapChain(owner, rival, eventName, context, trapIndex) {
   const links = [];
   const firstLink = queueTrapChainLink(owner, rival, eventName, context, trapIndex, 1);
-  if (!firstLink) return { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
+  if (!firstLink) return { cancelled: false, blocked: false, consumesAttack: false, activated: 0 };
   links.push(firstLink);
 
   let priorityHolder = owner;
@@ -3341,10 +3314,10 @@ async function resolveEngineTrapChain(owner, rival, eventName, context, trapInde
   } catch (error) {
     cue(error.message || "陷阱连锁结算失败。");
     console.error(error);
-    return { cancelled: false, shielded: false, consumesAttack: false, activated: links.length };
+    return { cancelled: false, blocked: false, consumesAttack: false, activated: links.length };
   }
 
-  let originalOutcome = { cancelled: false, shielded: false, consumesAttack: false };
+  let originalOutcome = { cancelled: false, blocked: false, consumesAttack: false };
   for (const link of links.slice().reverse()) {
     await sleep(320);
     if (link.owner.owner === "ai") {
@@ -3372,7 +3345,7 @@ async function resolveEngineTrapChain(owner, rival, eventName, context, trapInde
 }
 
 async function triggerTrap(owner, rival, eventName, context) {
-  const result = { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
+  const result = { cancelled: false, blocked: false, consumesAttack: false, activated: 0 };
   if (state.gameOver) return result;
   const engineResponse = Boolean(context?.engineResponse);
   const choice = await chooseTrapIndex(owner, rival, eventName, context);
@@ -3391,7 +3364,7 @@ async function triggerTrap(owner, rival, eventName, context) {
     return result;
   }
 
-  let outcome = { cancelled: false, shielded: false, consumesAttack: false };
+  let outcome = { cancelled: false, blocked: false, consumesAttack: false };
   try {
     outcome = engineResponse
       ? await resolveEngineTrapChain(owner, rival, eventName, context, choice.trapIndex)
@@ -3405,7 +3378,7 @@ async function triggerTrap(owner, rival, eventName, context) {
   }
   result.activated = outcome.activated || 1;
   result.cancelled = Boolean(outcome.cancelled);
-  result.shielded = Boolean(outcome.shielded);
+  result.blocked = Boolean(outcome.blocked);
   result.consumesAttack = Boolean(outcome.consumesAttack);
   checkGameOver();
   return result;
@@ -3460,7 +3433,7 @@ function closeTrapChoicePrompt() {
 
 function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex = 1, options = {}) {
   const trap = options.trap || owner.traps[trapIndex];
-  if (!trap) return { cancelled: false, shielded: false };
+  if (!trap) return { cancelled: false, blocked: false };
   const trapSource = options.trapSource || trapElement(owner.owner, trapIndex) || panelElement(owner.owner);
   const trapContext = redirectTrapContext(owner, trap, context);
   let trapEvents = Array.isArray(options.events) ? options.events : [];
@@ -3476,12 +3449,12 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     } catch (error) {
       cue(error.message || "陷阱卡发动失败。");
       console.error(error);
-      return { cancelled: false, shielded: false };
+      return { cancelled: false, blocked: false };
     }
   } else {
     if (!Array.isArray(options.events)) {
       reportMissingEngineEffect(trap, "trap");
-      return { cancelled: false, shielded: false };
+      return { cancelled: false, blocked: false };
     }
   }
   if (!options.announced) announceTrapActivation(owner, trap, chainIndex);
@@ -3502,7 +3475,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
       cardLogMeta(trap, { actor: owner.owner, type: "trap" })
     );
     speak(`${trap.name}，效果无效。`);
-    return { cancelled: false, shielded: false, negated: true };
+    return { cancelled: false, blocked: false, negated: true };
   }
   resolveEngineSpellFeedback(owner, rival, trap, trapEvents);
 
@@ -3512,7 +3485,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playEpicAction("断链", "guard");
     addLog(`${trap.name} 无效了${sourceTrap?.name ? ` ${sourceTrap.name}` : "上一张陷阱"}的效果。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(sourceTrap) }));
     speak(`${trap.name}，连锁无效。`);
-    return { cancelled: false, shielded: false };
+    return { cancelled: false, blocked: false };
   }
 
   if (trap.trigger === "attackDestroy") {
@@ -3547,15 +3520,15 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
 
   if (trap.trigger === "attackShift") {
     const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
-    const shieldTarget = context.targetIndex >= 0
+    const guardTarget = context.targetIndex >= 0
       ? fieldElement(owner.owner, context.targetIndex) || panelElement(owner.owner)
       : panelElement(owner.owner);
     playArrow(trapSource, attackerEl, "trap", trap.name);
-    playGuardShield(shieldTarget);
+    playGuardShield(guardTarget);
     playEpicAction("转移", "guard");
-    addLog(`${trap.name} 转移了攻击，获得 400 护盾。攻击机会已消耗。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
-    speak(`${trap.name} 转移攻击，护盾展开。`);
-    return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
+    addLog(`${trap.name} 转移了攻击，并回复 400 LP。攻击机会已消耗。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
+    speak(`${trap.name} 转移攻击，生命回复。`);
+    return { cancelled: true, blocked: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
   if (trap.trigger === "attackNegate") {
@@ -3568,7 +3541,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playEpicAction("无效", "guard");
     addLog(`${trap.name} 无效了本次攻击。攻击机会已消耗。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
     speak(`${trap.name} 无效攻击。`);
-    return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
+    return { cancelled: true, blocked: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
   if (trap.trigger === "aceGuard") {
@@ -3585,7 +3558,7 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playEpicAction("王牌守护", "guard");
     addLog(`${trap.name} 无效了本次攻击，并让 ${ace?.name || "王牌"} 攻击力提升 900。攻击机会已消耗。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(ace) }));
     speak(`${trap.name}，守住王牌。`);
-    return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
+    return { cancelled: true, blocked: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
   if (trap.trigger === "redirectAttack") {
@@ -3634,34 +3607,34 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
     playGuardShield(panelElement(owner.owner));
     if (attacker) {
       playEpicAction("格挡", "guard");
-      addLog(`${trap.name} 削弱了 ${attacker.name}，并展开护盾。攻击继续结算。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(attacker) }));
-      speak(`${trap.name} 格挡攻击，护盾展开。`);
+      addLog(`${trap.name} 削弱了 ${attacker.name}，并回复 300 LP。攻击继续结算。`, cardLogMeta(trap, { actor: owner.owner, type: "trap", relatedCardIds: relatedCardIds(attacker) }));
+      speak(`${trap.name} 格挡攻击，生命回复。`);
     }
     return { cancelled: false };
   }
 
   if (trap.trigger === "directShield") {
-    const shieldTarget = panelElement(owner.owner);
-    playArrow(trapSource, shieldTarget, "trap", trap.name);
+    const guardTarget = panelElement(owner.owner);
+    playArrow(trapSource, guardTarget, "trap", trap.name);
     playSound("guard");
-    playGuardShield(shieldTarget);
+    playGuardShield(guardTarget);
     playEpicAction("防御", "guard");
     addLog(`${trap.name} 让直接攻击伤害变为 0。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
-    return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
+    return { cancelled: true, blocked: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
   if (trap.trigger === "directRebound") {
     const attackerEl = fieldElement(rival.owner, context.attackerIndex) || panelElement(rival.owner);
-    const shieldTarget = panelElement(owner.owner);
+    const guardTarget = panelElement(owner.owner);
     playArrow(trapSource, attackerEl, "trap", trap.name);
     playSound("guard");
-    playGuardShield(shieldTarget);
+    playGuardShield(guardTarget);
     animateAvatar(rival.owner, "hit");
     shakeScreen();
     playEpicAction("反弹", "guard");
     addLog(`${trap.name} 让直接攻击伤害变为 0，并反弹 500 点伤害。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
     speak(`${trap.name} 反弹了直接攻击。`);
-    return { cancelled: true, shielded: true, consumesAttack: trapConsumesAttack(trap.trigger) };
+    return { cancelled: true, blocked: true, consumesAttack: trapConsumesAttack(trap.trigger) };
   }
 
   if (trap.trigger === "summonBurn") {
@@ -3680,19 +3653,7 @@ function playBattleDamageFeedback(events, duelist) {
   events
     .filter((event) => event.type === "DAMAGE_DEALT" && event.playerId === duelist.owner)
     .forEach((event) => {
-      const pierced = Math.max(0, Number(event.shieldPierced) || 0);
-      const blocked = Math.max(0, Number(event.blocked) || 0);
       const dealt = Math.max(0, Number(event.amount) || 0);
-      if (pierced > 0) {
-        playSound("guard");
-        playGuardShield(panelElement(duelist.owner));
-        addLog(`${duelist.owner === "player" ? "你的" : "AI 的"}护盾被神格威压消解了 ${pierced} 点。`);
-      }
-      if (blocked > 0) {
-        playSound("guard");
-        playGuardShield(panelElement(duelist.owner));
-        addLog(`${duelist.owner === "player" ? "你的" : "AI 的"}护盾吸收了 ${blocked} 点伤害。`);
-      }
       if (dealt > 0) {
         playSound("damage");
         playLifeDelta(duelist.owner, -dealt);
@@ -3991,7 +3952,7 @@ async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
     );
   }
   const hasAttackTrapResponse = trapCandidates(rival, "attack", attackContext).length > 0;
-  let trapResult = { cancelled: false, shielded: false, consumesAttack: false, activated: 0 };
+  let trapResult = { cancelled: false, blocked: false, consumesAttack: false, activated: 0 };
   if (hasAttackTrapResponse) {
     trapResult = await triggerTrap(rival, owner, "attack", attackContext);
   } else if (!closeTrapResponseWindow(rival.owner, "no-legal-trap")) {
@@ -4051,16 +4012,16 @@ async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
         direct: true
       }
     })) return false;
-    const shield = await triggerTrap(rival, owner, "direct", {
+    const defenseResult = await triggerTrap(rival, owner, "direct", {
       attackerIndex,
       targetIndex: resolvedTargetIndex,
       targetEffectId: attackContext.targetEffectId,
       engineResponse: true
     });
-    if (shield.cancelled) {
+    if (defenseResult.cancelled) {
       if (!consumeCancelledAttackWithEngine(owner, attacker, {
         declarationEventId: attackContext.targetEffectId,
-        consumeAttack: shield.consumesAttack,
+        consumeAttack: defenseResult.consumesAttack,
         reason: "direct-trap"
       })) return false;
       checkGameOver();
@@ -4185,7 +4146,6 @@ function cardImpactSignature(card) {
 function duelistImpactSignature(duelist) {
   return {
     lp: duelist.lp,
-    shield: duelist.shield || 0,
     directAttacks: duelist.directAttacks || 0,
     attackResets: duelist.attackResets || 0,
     attackResetEntries: (duelist.attackResetEntries || []).map((entry) => ({ ...entry })),
@@ -4968,7 +4928,6 @@ async function aiAttack({ getTurnGoal = null } = {}) {
       rivalField: state.player.field,
       rivalTraps: state.player.traps,
       rivalLp: state.player.lp,
-      rivalShield: state.player.shield,
       aiStyle: state.aiStyle,
       turnGoal: typeof getTurnGoal === "function" ? getTurnGoal() : "pressure",
       skippedAttackers,
@@ -5073,17 +5032,17 @@ function handleGauntletChapterWin() {
     addLog(`连战完成：${chapter.label} 胜利！战意分 +${earned}，累计 ${gauntlet.score}。`);
     return false;
   }
-  const supplyShield = remaining >= 1300 ? 600 : remaining >= 1000 ? 300 : 0;
-  if (supplyShield > 0) {
+  const supplyLife = remaining >= 1300 ? 600 : remaining >= 1000 ? 300 : 0;
+  if (supplyLife > 0) {
     gauntlet.supplies = {
       ...(gauntlet.supplies || {}),
-      [gauntlet.chapters[nextIndex]]: { shield: supplyShield }
+      [gauntlet.chapters[nextIndex]]: { lp: supplyLife }
     };
   }
   gauntlet.chapterIndex = nextIndex;
   const nextChapter = scenarioSetups[gauntlet.chapters[nextIndex]];
   playEpicAction(`连战 · 第 ${nextIndex + 1} 战`, "win", 1500);
-  addLog(`连战推进：${chapter.label} 胜利！战意分 +${earned}${supplyShield > 0 ? `，下一战获得 ${supplyShield} 点护盾补给。` : "。"} 下一战：${nextChapter.label}。`);
+  addLog(`连战推进：${chapter.label} 胜利！战意分 +${earned}${supplyLife > 0 ? `，下一战回复 ${supplyLife} LP。` : "。"} 下一战：${nextChapter.label}。`);
   window.setTimeout(() => advanceGauntletChapter(), 1500);
   return true;
 }
@@ -5151,7 +5110,7 @@ function recordCampaignResult(win) {
   const recorded = recordCampaignChapterResult(state.campaignProgress, campaign.id, chapter.id, {
     win,
     remainingLp,
-    maxLp: campaignChapterRatingMaxLp(chapter, scenarioSetups, MAX_LP),
+    maxLp: campaignChapterRatingMaxLp(chapter, scenarioSetups, STARTING_LP),
     recordedAt: new Date().toISOString(),
     objectiveResults
   });
@@ -5530,7 +5489,7 @@ function handleActionWindowTimeout(windowId) {
 function playSpellEffect(owner, rival, card, targetCard = null, targetOwner = owner.owner, targetInfo = null) {
   const source = panelElement(owner.owner);
   let target = panelElement(rival.owner);
-  if (["heal700", "draw2", "shield800", "extraSummon", "elementEcho", "graveReturn", "battleTrance", "directStrike", "lightShadowCombo"].includes(card.effect)) {
+  if (["heal700", "heal800", "draw2", "extraSummon", "elementEcho", "graveReturn", "battleTrance", "directStrike", "lightShadowCombo"].includes(card.effect)) {
     target = panelElement(owner.owner);
   }
   if (card.effect === "destroySpellTrap" && Number.isInteger(targetInfo?.index)) {
@@ -5597,7 +5556,7 @@ function renderCurrentCombatHud() {
     aiProfile: characterProfiles.ai,
     activeTurn,
     paused: state.paused,
-    maxLife: MAX_LP,
+    startingLife: STARTING_LP,
     directTargetReady: canPlayerTargetAiPanel()
   });
 }
@@ -6136,39 +6095,21 @@ function orderedPlayerHand() {
     ? sortHandCardsByType(state.player.hand, handDisplayOrder)
     : reconcileHandOrder(state.player.hand, handDisplayOrder);
   handDisplayOrder = cards.map((card) => card.uid);
-  if (handPlacementUid && !handDisplayOrder.includes(handPlacementUid)) handPlacementUid = "";
   return cards;
 }
 
 function moveDisplayedHandCard(card, direction) {
   handOrderMode = "custom";
   handDisplayOrder = shiftHandCard(handDisplayOrder, card.uid, direction);
-  handPlacementUid = "";
-  if (els.handOrderStatus) els.handOrderStatus.textContent = `已移动「${card.name}」。拖动卡牌或继续使用左右按钮。`;
+  if (els.handOrderStatus) els.handOrderStatus.textContent = `已移动「${card.name}」。`;
   renderHand();
 }
 
-function placeDisplayedHandCard(sourceUid, targetUid) {
+function swapDisplayedHandCards(sourceUid, targetUid) {
   const source = state.player.hand.find((card) => card?.uid === sourceUid);
   handOrderMode = "custom";
-  handDisplayOrder = placeHandCard(handDisplayOrder, sourceUid, targetUid);
-  handPlacementUid = "";
-  if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已移动「${source.name}」。`;
-  renderHand();
-}
-
-function tapDisplayedHandCard(card) {
-  const result = handPlacementTap(handPlacementUid, card.uid);
-  handPlacementUid = result.selectedUid;
-  if (result.placement) {
-    placeDisplayedHandCard(result.placement.sourceUid, result.placement.targetUid);
-    return;
-  }
-  if (els.handOrderStatus) {
-    els.handOrderStatus.textContent = handPlacementUid
-      ? `已选择「${card.name}」，再点另一张卡即可移动到它前面。`
-      : "已取消移动选择。点一张卡，再点目标位置即可移动。";
-  }
+  handDisplayOrder = swapHandCards(handDisplayOrder, sourceUid, targetUid);
+  if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已交换「${source.name}」的位置。`;
   renderHand();
 }
 
@@ -6176,7 +6117,6 @@ function sortDisplayedHandByType() {
   const cards = sortHandCardsByType(state.player.hand, handDisplayOrder);
   handOrderMode = "type";
   handDisplayOrder = cards.map((card) => card.uid);
-  handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = "已按怪兽、魔法、陷阱整理；怪兽按星级从高到低排列。";
   renderHand();
 }
@@ -6184,46 +6124,27 @@ function sortDisplayedHandByType() {
 function resetDisplayedHandOrder() {
   handOrderMode = "draw";
   handDisplayOrder = state.player.hand.map((card) => card.uid);
-  handPlacementUid = "";
   if (els.handOrderStatus) els.handOrderStatus.textContent = "已恢复当前手牌的摸牌顺序。";
-  renderHand();
-}
-
-function toggleHandReorder() {
-  handReorderMode = !handReorderMode;
-  if (handReorderMode) handOrderMode = "custom";
-  handPlacementUid = "";
-  if (els.handOrderStatus) {
-    els.handOrderStatus.textContent = handReorderMode
-      ? "拖动卡牌、点选起点与落点，或使用左右按钮调整顺序。"
-      : "手牌顺序已保存到本局显示。";
-  }
   renderHand();
 }
 
 function renderHand(animationKey) {
   const cards = orderedPlayerHand();
-  if (cards.length < 2) handReorderMode = false;
   const showToolbar = state.started && cards.length > 1;
   if (els.handToolbar) els.handToolbar.hidden = !showToolbar;
-  if (els.handOrderStatus) els.handOrderStatus.hidden = !handReorderMode;
+  if (els.handOrderStatus) els.handOrderStatus.hidden = !showToolbar;
   if (els.handSortType) {
     const typeSorting = handOrderMode === "type";
     els.handSortType.hidden = !showToolbar;
-    els.handSortType.textContent = typeSorting ? "类型排序中" : "按类型";
+    els.handSortType.textContent = "按类型";
     els.handSortType.setAttribute("aria-pressed", String(typeSorting));
     els.handSortType.title = typeSorting
-      ? "后续抽牌会继续按怪兽、魔法、陷阱归位；进入拖动排序可改为自定义顺序"
-      : "按怪兽、魔法、陷阱快速整理；后续抽牌会继续按类型归位";
+      ? "当前按怪兽、魔法、陷阱排列；直接拖动任意卡牌可改为自定义顺序"
+      : "立即按怪兽、魔法、陷阱整理；后续抽牌会继续按类型归位";
   }
-  if (els.handResetOrder) els.handResetOrder.hidden = !handReorderMode;
-  if (els.handReorderToggle) {
-    els.handReorderToggle.textContent = handReorderMode ? "完成排序" : "拖动排序";
-    els.handReorderToggle.setAttribute("aria-pressed", String(handReorderMode));
-    els.handReorderToggle.disabled = !showToolbar;
-  }
+  if (els.handResetOrder) els.handResetOrder.hidden = !showToolbar || handOrderMode === "draw";
   els.handToolbar?.setAttribute("data-order-mode", handOrderMode);
-  els.hand?.setAttribute("data-reorder-mode", String(handReorderMode));
+  els.hand?.setAttribute("data-direct-reorder", String(showToolbar));
   els.hand?.setAttribute("data-order-mode", handOrderMode);
   renderHandCards({
     document,
@@ -6243,11 +6164,9 @@ function renderHand(animationKey) {
         : null;
     },
     fusionSelectedUids: state.pendingFusion ? selectedFusionHandUids() : [],
-    reorderMode: handReorderMode,
-    reorderSelectedUid: handPlacementUid,
+    directReorder: showToolbar,
     onMoveCard: moveDisplayedHandCard,
-    onPlaceCard: placeDisplayedHandCard,
-    onTapCard: tapDisplayedHandCard,
+    onSwapCard: swapDisplayedHandCards,
     onCardDetail: openCardDetail,
     onCardClick: (card) => selectHandCard(card.uid, {
       directActivate: directActivationTracker.register(`hand:${card.uid}`)
@@ -6535,7 +6454,6 @@ if (els.deckBrowserStage) {
     deckBrowserPointerStartX = null;
   });
 }
-if (els.handReorderToggle) els.handReorderToggle.addEventListener("click", toggleHandReorder);
 if (els.handSortType) els.handSortType.addEventListener("click", sortDisplayedHandByType);
 if (els.handResetOrder) els.handResetOrder.addEventListener("click", resetDisplayedHandOrder);
 els.modalRestart.addEventListener("click", () => {
