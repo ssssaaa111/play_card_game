@@ -9992,15 +9992,27 @@ async function runHandReorderBasicSmoke(ctx) {
 
   const PointerCtor = window.PointerEvent || window.MouseEvent;
   const dragInsert = async ({ source, target, pointerId, expectedIds, liveRender = false, cancel = false, label }) => {
-    const sourceRect = source.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
     const handCards = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
-    const originalRects = handCards.map((element) => element.getBoundingClientRect());
     const firstRect = handCards[0].getBoundingClientRect();
     const secondRect = handCards[1].getBoundingClientRect();
     const vertical = Math.abs(firstRect.top - secondRect.top) > firstRect.height / 2;
-    const clientX = vertical ? targetRect.left + targetRect.width / 2 : targetRect.left - 3;
-    const clientY = vertical ? targetRect.top - 3 : targetRect.top + targetRect.height / 2;
+    const revealInHand = (element) => {
+      const bounds = ctx.els.hand.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      if (vertical) {
+        if (rect.top < bounds.top) ctx.els.hand.scrollTop -= bounds.top - rect.top + 6;
+        else if (rect.bottom > bounds.bottom) ctx.els.hand.scrollTop += rect.bottom - bounds.bottom + 6;
+      } else {
+        if (rect.left < bounds.left) ctx.els.hand.scrollLeft -= bounds.left - rect.left + 6;
+        else if (rect.right > bounds.right) ctx.els.hand.scrollLeft += rect.right - bounds.right + 6;
+      }
+    };
+    revealInHand(source);
+    const sourceRect = source.getBoundingClientRect();
+    const targetBeforeScroll = target.getBoundingClientRect();
+    const sourceX = sourceRect.left + sourceRect.width / 2;
+    const sourceY = sourceRect.top + sourceRect.height / 2;
+    const direction = Math.sign(vertical ? targetBeforeScroll.top - sourceRect.top : targetBeforeScroll.left - sourceRect.left) || 1;
     source.dispatchEvent(new PointerCtor("pointerdown", {
       bubbles: true,
       cancelable: true,
@@ -10008,9 +10020,23 @@ async function runHandReorderBasicSmoke(ctx) {
       pointerType: "mouse",
       button: 0,
       buttons: 1,
-      clientX: sourceRect.left + sourceRect.width / 2,
-      clientY: sourceRect.top + sourceRect.height / 2
+      clientX: sourceX,
+      clientY: sourceY
     }));
+    source.dispatchEvent(new PointerCtor("pointermove", {
+      bubbles: true,
+      cancelable: true,
+      pointerId,
+      pointerType: "mouse",
+      button: 0,
+      buttons: 1,
+      clientX: sourceX + (vertical ? 0 : direction * 8),
+      clientY: sourceY + (vertical ? direction * 8 : 0)
+    }));
+    revealInHand(target);
+    const targetRect = target.getBoundingClientRect();
+    const clientX = vertical ? targetRect.left + targetRect.width / 2 : targetRect.left - 3;
+    const clientY = vertical ? targetRect.top - 3 : targetRect.top + targetRect.height / 2;
     source.dispatchEvent(new PointerCtor("pointermove", {
       bubbles: true,
       cancelable: true,
@@ -10026,18 +10052,40 @@ async function runHandReorderBasicSmoke(ctx) {
     const placeholder = document.querySelector(".hand-insertion-placeholder");
     if (!source.classList.contains("is-dragging") || !placeholder || placeholder.hidden || !ghostRect ||
         ghostRect.width < sourceRect.width * 0.9 || ghostRect.height < sourceRect.height * 0.9) {
-      throw new Error(`${smokeName}: ${label} should lift a full-size card ghost and reserve an insertion slot`);
+      const handRect = ctx.els.hand.getBoundingClientRect();
+      throw new Error(`${smokeName}: ${label} should lift a full-size card ghost and reserve an insertion slot. ${JSON.stringify({
+        vertical,
+        pointer: { clientX, clientY },
+        hand: { top: handRect.top, bottom: handRect.bottom, scrollTop: ctx.els.hand.scrollTop },
+        source: { top: sourceRect.top, bottom: sourceRect.bottom, dragging: source.classList.contains("is-dragging") },
+        target: { top: targetRect.top, bottom: targetRect.bottom },
+        ghost: ghostRect ? { width: ghostRect.width, height: ghostRect.height } : null,
+        placeholder: placeholder ? { hidden: placeholder.hidden } : null
+      })}`);
     }
     const slotRect = placeholder.getBoundingClientRect();
     if (slotRect.width < sourceRect.width * 0.9 || slotRect.height < sourceRect.height * 0.9) {
       throw new Error(`${smokeName}: preview must reserve a full card, not a thin marker`);
     }
     await waitForSmoke(() => {
-      return handCards.some((element, index) => {
-        const rect = element.getBoundingClientRect();
-        return element !== source && Math.hypot(rect.left - originalRects[index].left, rect.top - originalRects[index].top) > 20;
+      return handCards.some((element) => {
+        if (element === source) return false;
+        const [x = "0", y = "0"] = element.style.translate.split(" ");
+        return Math.hypot(Number.parseFloat(x) || 0, Number.parseFloat(y) || 0) > 20;
       });
-    }, `${smokeName}: neighboring cards visibly make room`);
+    }, () => {
+      const handRect = ctx.els.hand.getBoundingClientRect();
+      const slotRect = placeholder?.getBoundingClientRect();
+      return `${smokeName}: ${label} neighboring cards visibly make room. ${JSON.stringify({
+        vertical,
+        pointer: { clientX, clientY },
+        hand: { top: handRect.top, bottom: handRect.bottom, scrollTop: ctx.els.hand.scrollTop },
+        source: { top: sourceRect.top, bottom: sourceRect.bottom },
+        target: { top: targetRect.top, bottom: targetRect.bottom },
+        placeholder: slotRect ? { top: slotRect.top, bottom: slotRect.bottom, hidden: placeholder.hidden } : null,
+        translates: handCards.map((element) => element.style.translate)
+      })}`;
+    });
     const stableShifts = handCards.map((element) => element.style.translate).join("|");
     source.dispatchEvent(new PointerCtor("pointermove", { bubbles: true, cancelable: true, pointerId, clientX, clientY }));
     if (stableShifts !== handCards.map((element) => element.style.translate).join("|")) {
