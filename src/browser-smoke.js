@@ -415,6 +415,11 @@ function assertScenarioBrief(els, { difficulty, objectives = [], hints = [] }) {
 }
 
 async function finishPlayerTurn(ctx) {
+  await waitForSmoke(
+    () => !ctx.state.presentationBusy && !ctx.els.endTurnBtn.disabled,
+    () => `结束回合按钮在演出完成后恢复可用。${smokeDebug(ctx)}`,
+    12000
+  );
   clickSmokeElement(ctx.els.endTurnBtn, "结束回合按钮");
 }
 
