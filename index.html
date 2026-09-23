@@ -6,6 +6,8 @@
   <title>星魂决斗 - 卡牌对战原型</title>
   <link rel="stylesheet" href="styles.css?v=20260901-field-clearance-1" />
   <link rel="stylesheet" href="duel-table.css?v=20260901-field-clearance-1" />
+  <link rel="stylesheet" href="target-selection.css" />
+  <link rel="stylesheet" href="ai-action.css" />
 </head>
 <body>
   <div id="app">
@@ -54,6 +56,25 @@
           <button class="btn utility-danger" id="restartBtn" title="重新开始本局">重新开始</button>
         </div>
       </div>
+      <section class="ai-action-dock" id="aiActionDock" aria-label="对手行动与回看" hidden>
+        <div class="ai-action-current" id="aiRevealModal">
+          <div class="ai-action-heading"><span id="aiRevealType"></span><span id="aiActionStatus">自动播放</span><span id="aiRevealProgress" hidden></span></div>
+          <div class="ai-action-message" role="status" aria-live="polite" aria-atomic="true">
+            <h2 id="aiRevealTitle">对手行动</h2>
+            <p id="aiRevealSummary"></p>
+          </div>
+          <div class="ai-action-controls">
+            <button id="aiRevealDetail" type="button">详情</button>
+            <button id="aiActionPause" type="button" aria-pressed="false">暂停</button>
+            <button id="aiRevealContinue" type="button">快进 ›</button>
+          </div>
+          <div class="ai-action-meter" aria-hidden="true"><i id="aiActionMeter"></i></div>
+        </div>
+        <aside class="ai-action-recent" aria-label="最近三步公开行动">
+          <div class="ai-action-recent-head"><span>最近三步 · 点击查看详情</span><button id="aiHistoryClose" type="button" hidden>返回对局</button></div>
+          <div id="aiActionHistory"></div>
+        </aside>
+      </section>
     </header>
 
     <main class="arena duel-table">
@@ -252,12 +273,12 @@
       </div>
       <div class="hand-stack">
         <div class="hand-toolbar" id="handToolbar" hidden>
-          <span id="handOrderStatus">直接拖动卡牌换位</span>
+          <span id="handOrderStatus">拖到卡牌之间插入 · 双方回合均可整理</span>
           <button class="btn ghost hand-order-shortcut" id="handSortType" type="button" hidden aria-pressed="false" title="立即按怪兽、魔法、陷阱整理；后续抽牌会继续按类型归位">按类型</button>
           <button class="btn ghost hand-order-shortcut" id="handResetOrder" type="button" hidden>恢复顺序</button>
+          <button class="ai-history-toggle" id="aiHistoryToggle" type="button" hidden>回看对手</button>
         </div>
         <div class="hand" id="hand"></div>
-        <div class="grave-targets" id="graveTargets" hidden></div>
       </div>
       <aside class="hand-command" id="handCommand" aria-label="战术指令">
         <div class="hand-command-head">
@@ -314,7 +335,9 @@
             <div class="fusion-preview-materials" id="fusionPreviewMaterials"></div>
             <button class="btn small-action" id="fusionPreviewDetail" type="button">查看结果详情</button>
           </div>
-          <span id="choiceText">选择一张卡</span>
+          <span id="choiceText" aria-live="polite">选择一张卡</span>
+          <div class="target-options" id="fieldTargets" aria-label="可选目标" hidden></div>
+          <div class="grave-targets" id="graveTargets" hidden></div>
           <button class="btn primary" id="choiceConfirmBtn" type="button">确认</button>
           <button class="btn" id="choiceCancelBtn" type="button">取消</button>
         </div>
@@ -517,22 +540,6 @@
         <div class="guide-item"><strong>12. 扩展系统</strong><span>开局前可选择角色、卡组和 AI 风格。攻击重置、墓地回收、破阵削弱和组合魔法都走统一结算，后面可以继续加新卡。</span></div>
       </div>
       <button class="btn primary" id="guideClose">开始决斗</button>
-    </div>
-  </div>
-  <div class="modal ai-reveal-modal" id="aiRevealModal">
-    <div class="modal-box ai-reveal">
-      <span class="ai-reveal-kicker">AI 亮牌确认</span>
-      <h2 id="aiRevealTitle">AI 公开了卡牌</h2>
-      <p class="ai-reveal-progress" id="aiRevealProgress" hidden></p>
-      <div class="ai-reveal-meta">
-        <span>类型</span>
-        <strong id="aiRevealType"></strong>
-      </div>
-      <p class="ai-reveal-summary" id="aiRevealSummary"></p>
-      <div class="ai-reveal-actions">
-        <button class="btn ghost" id="aiRevealDetail" type="button">查看详情</button>
-        <button class="btn primary" id="aiRevealContinue" type="button">继续</button>
-      </div>
     </div>
   </div>
   <div class="modal card-detail-modal" id="cardModal">

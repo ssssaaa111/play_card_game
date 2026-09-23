@@ -452,6 +452,10 @@ export function renderSupportZones({
     if (view.effectTargetLabel) slot.dataset.effectTargetLabel = view.effectTargetLabel;
     if (view.title) slot.title = view.title;
     if (view.supportDisplay) slot.dataset.supportState = view.supportDisplay.key;
+    if (view.targetable) {
+      slot.dataset.targetName = view.revealed ? card.name : "盖放卡牌";
+      slot.dataset.targetLabel = `${index + 1} · ${view.targetSelected ? "✓ 已选" : "点击选择"}`;
+    }
     slot.setAttribute("aria-label", view.ariaLabel);
     slot.addEventListener("click", () => onSlotClick(index));
     slot.addEventListener("dblclick", (event) => {

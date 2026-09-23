@@ -6127,3 +6127,11 @@ body:has(.phase-stage.is-active) .toast.show {
     box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.34), 0 0 20px rgba(239, 71, 111, 0.34);
   }
 }
+
+/* Sole-tribute confirmation must remain below the mobile two-row topbar. */
+@media (max-width: 720px) and (orientation: portrait) {
+  .hand-command > .choice-actions.material-choice {
+    top: calc(max(6px, var(--safe-area-top)) + 110px);
+    max-height: calc(48dvh - 110px);
+  }
+}

@@ -305,15 +305,15 @@ test("selected hand cards use explicit confirm and cancel actions", () => {
   assert.match(controls, /targetSelectionStatus\?\.confirmLabel \|\| "确认发动"/);
   assert.match(controls, /confirmDisabled: hasTarget \? !targetSelectionStatus\?\.complete : !selectedHandReady/);
   assert.match(app, /function resolvePendingSpellDefault\(\{ directActivate = false \} = \{\}\)/);
-  assert.match(app, /prepareDefaultTargetSelection\(initialTarget/);
+  assert.match(app, /const pendingTarget = projection\.target\?\.pending \|\| null/);
   assert.match(app, /resolveSelectedTargetSelection\(state\.pendingTarget/);
   assert.match(app, /function selectPendingSpellTarget\(ownerName, index, zone = "field"\)/);
-  assert.match(app, /beginSpellTargetSelection\(handIndex, card\)/);
+  assert.match(app, /beginSpellTargetSelection\(handIndex, card, projection = handActionInfo\(card\)\)/);
   assert.match(app, /已取消 \$\{previousCardName\} 的目标选择，改选 \$\{card\.name\}/);
   assert.match(app, /playSpell\(state\.player, state\.ai, selected\.index\)/);
   assert.match(app, /const selectedHandReady = Boolean\(/);
   assert.match(app, /selectedHandAction\?\.ok/);
-  assert.match(app, /canUseHandCards\(selectedHand\.card\)/);
+  assert.match(app, /return projectHandAction\(\{/);
   assert.match(app, /!state\.pendingTribute \|\| selectedTributeIndexes\(\)\.length === state\.pendingTribute\.cost/);
   assert.match(controls, /const showChoiceActions = canAct && \(hasPendingSelection \|\| selectedHandReady\)/);
   assert.equal((fieldRenderer.match(/"attack-target": attackTargetable/g) || []).length, 2);
@@ -500,12 +500,12 @@ test("app uses extracted card renderer", () => {
   const handRenderer = readProjectFile("src/hand-renderer.js");
   const renderer = readProjectFile("src/card-renderer.js");
 
-  assert.match(app, /from '\.\/card-renderer\.js'/);
+  assert.match(app, /from '\.\/target-picker-renderer\.js'/);
   assert.match(app, /from '\.\/field-renderer\.js'/);
   assert.match(app, /from '\.\/hand-renderer\.js'/);
   assert.match(fieldRenderer, /from "\.\/card-renderer\.js"/);
   assert.match(handRenderer, /from "\.\/card-renderer\.js"/);
-  assert.match(app, /renderCardElement\(document, card/);
+  assert.match(app, /renderTargetOptions\(\{/);
   assert.match(fieldRenderer, /slot\.dataset\.testid = `\$\{owner\}-field-\$\{index\}`/);
   assert.match(app, /renderMonsterZones\(\{/);
   assert.match(app, /renderSupportZones\(\{/);
@@ -645,7 +645,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-readability-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-readability-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "token-readability-basic"\)/);
-  assert.match(smoke, /const smokeName = "grave-target-readability-basic";[\s\S]*非怪兽[\s\S]*invalid grave target changed rules state[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "grave-target-readability-basic";[\s\S]*已隐藏 1 张不符合条件的卡[\s\S]*only the chosen grave monster moves to the field[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-challenge"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);
@@ -725,11 +725,11 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(controls, /classList\.toggle\("material-choice", view\.choice\.material\)/);
   assert.match(controls, /classList\.toggle\("target-choice", view\.choice\.target\)/);
   assert.match(app, /els\.fusionPreviewDetail\.addEventListener\("click"/);
-  assert.match(app, /pendingAiRevealQueue = \[\]/);
+  assert.match(app, /createAiActionPlayback\(/);
   assert.match(app, /withAiRevealQueuePosition\(/);
   assert.match(app, /function waitForAiReveal/);
-  assert.match(app, /setTimeout\(confirmAiRevealContinue, 320\)/);
-  assert.match(app, /"ai-card-reveal-confirm",[\s\S]*"ai-card-reveal-queue",[\s\S]*"finale-sunflare-target-lock-basic"[\s\S]*\.includes\(BROWSER_SMOKE\)/);
+  assert.match(app, /isPaused: isAiPlaybackPaused/);
+  assert.doesNotMatch(html, /class="modal ai-reveal-modal"/);
   assert.match(app, /buildAiCardReveal\(/);
   assert.match(setupRenderer, /buildPreDuelPreview\(\{/);
   assert.match(deckBrowser, /cardInspectorViewModel\(entry\.id\)/);
@@ -982,22 +982,6 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /"ai-extra-summon-basic": runAiExtraSummonBasicSmoke/);
   assert.match(smoke, /const smokeName = "response-action-lock-basic";[\s\S]*querySelector\("#detailName"\)\?\.textContent === blockedCard\?\.name[\s\S]*event\.type === "CHAIN_RESOLVED"/);
   assert.match(smoke, /"response-action-lock-basic": runResponseActionLockBasicSmoke/);
-});
-
-test("grave summon selection keeps illegal public cards visible with exact feedback", () => {
-  const app = readProjectFile("src/app.js");
-  const css = readProjectFile("styles.css");
-
-  assert.match(app, /const active = \["ownGraveMonster", "ownGraveCard"\]\.includes\(targetMode\)/);
-  assert.match(app, /const legalAction = targetMode === "ownGraveMonster" \? "可召唤" : "可选择"/);
-  assert.match(app, /dataset\.summary = `\$\{legalAction\} \$\{legalCount\} \/ 墓地 \$\{candidates\.length\}`/);
-  assert.match(app, /classList\.toggle\("grave-target-unavailable", !targetInfo\.ok\)/);
-  assert.match(app, /cardEl\.title = targetInfo\.ok \? `选择墓地目标：\$\{card\.name\}` : targetInfo\.reason/);
-  assert.doesNotMatch(app, /const targetInfo = validateCurrentTarget\("player", index, "grave"\);\s*if \(!targetInfo\.ok\) return/);
-  assert.match(app, /function selectPendingSpellTarget[\s\S]*const targetInfo = validateCurrentTarget[\s\S]*if \(!targetInfo\.ok\) \{\s*cue\(targetInfo\.reason\);\s*return true;\s*\}\s*notePlayerIntent\(\)/);
-  assert.match(app, /async function resolvePendingSpellTarget[\s\S]*const targetInfo = validateCurrentTarget[\s\S]*if \(!targetInfo\.ok\) \{\s*cue\(targetInfo\.reason\);\s*return true;\s*\}\s*notePlayerIntent\(\)/);
-  assert.match(css, /\.grave-targets \.card\.grave-target-unavailable/);
-  assert.match(css, /\.grave-target-reason/);
 });
 
 test("field spell targets expose unavailable reasons without changing rule state", () => {

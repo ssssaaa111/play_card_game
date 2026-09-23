@@ -46,7 +46,7 @@ test("rapid repeat activation survives a renderer replacing the clicked card nod
 test("monster, support, and grave targets expose direct double-click resolution", () => {
   assert.match(fieldRenderer, /slot\.addEventListener\("dblclick"/);
   assert.match(fieldRenderer, /onCardDoubleClick\(card, index\)/);
-  assert.match(app, /interactWithPendingSpellTarget\("player", index, "grave"/);
+  assert.match(app, /interactWithPendingSpellTarget\(target.owner, target.index, target.zone/);
 });
 
 test("trap response choices preserve rapid double activation across rerenders", () => {

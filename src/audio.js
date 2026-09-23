@@ -52,7 +52,6 @@ export function createAudioController({ getSettings, setSettings, announce, onVo
     }
   };
 
-  let cachedVoices = [];
   let activeVoiceAudio = [];
   let voiceQueue = [];
   let voicePlaying = false;
@@ -77,13 +76,6 @@ export function createAudioController({ getSettings, setSettings, announce, onVo
   function clearVoiceActivity() {
     voiceActivityToken += 1;
     onVoiceActivity?.(false);
-  }
-
-  if ("speechSynthesis" in window) {
-    cachedVoices = window.speechSynthesis.getVoices();
-    window.speechSynthesis.onvoiceschanged = () => {
-      cachedVoices = window.speechSynthesis.getVoices();
-    };
   }
 
   function readSettings() {
@@ -419,17 +411,6 @@ export function createAudioController({ getSettings, setSettings, announce, onVo
     }
   }
 
-  function preferredVoice(owner = "player") {
-    const voices = cachedVoices.length ? cachedVoices : window.speechSynthesis.getVoices();
-    const zhVoices = voices.filter((voice) => /zh|Chinese|Mandarin|普通话|中文/i.test(`${voice.lang} ${voice.name}`));
-    const preferred = owner === "ai"
-      ? [/Yunxi|Kangkang|male|男|Microsoft.*Chinese/i, /zh-CN/i]
-      : [/Xiaoxiao|Huihui|female|女|Microsoft.*Chinese/i, /zh-CN/i];
-    return preferred
-      .map((pattern) => zhVoices.find((voice) => pattern.test(`${voice.name} ${voice.lang}`)))
-      .find(Boolean) || zhVoices[0] || voices[0] || null;
-  }
-
   function stopVoiceAudio() {
     voiceToken += 1;
     clearVoiceActivity();
@@ -701,10 +682,8 @@ export function createAudioController({ getSettings, setSettings, announce, onVo
     const utterance = new SpeechSynthesisUtterance(text);
     const activityToken = beginVoiceActivity();
     utterance.lang = "zh-CN";
-    utterance.voice = preferredVoice(owner);
-    utterance.rate = owner === "ai" ? 0.96 : 1.02;
-    utterance.pitch = owner === "ai" ? 0.88 : 1.05;
-    utterance.volume = 0.96;
+    // Leave voice, rate, pitch and volume unset so every line uses the same
+    // browser/OS default speech profile.
     utterance.onend = () => endVoiceActivity(activityToken);
     utterance.onerror = () => endVoiceActivity(activityToken);
     window.speechSynthesis.speak(utterance);

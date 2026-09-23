@@ -178,6 +178,7 @@ test("pending target selection takes exclusive command focus from the selected m
   });
 
   assert.equal(choosingTarget.choice.hidden, false);
+  assert.equal(choosingTarget.choice.targetStep, "select");
   assert.equal(choosingTarget.fieldAction.hidden, true);
   assert.equal(restoredMonster.choice.hidden, true);
   assert.equal(restoredMonster.fieldAction.hidden, false);
@@ -204,6 +205,7 @@ test("target and fusion selections block turn controls and expose the correct pr
   assert.equal(target.hand.confirmDisabled, false);
   assert.equal(target.choice.text, "选择对方攻击力最高怪兽。\n已默认选择：苍穹骑手（敌方怪兽区 2）。");
   assert.equal(target.choice.target, true);
+  assert.equal(target.choice.targetStep, "confirm");
 
   const staleTarget = buildDuelControlsView({
     started: true,
@@ -217,6 +219,7 @@ test("target and fusion selections block turn controls and expose the correct pr
   });
   assert.equal(staleTarget.choice.confirmDisabled, true);
   assert.equal(staleTarget.choice.confirmText, "请选择目标");
+  assert.equal(staleTarget.choice.targetStep, "select");
 
   const fusion = buildDuelControlsView({
     started: true,

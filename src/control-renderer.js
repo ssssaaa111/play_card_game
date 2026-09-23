@@ -126,6 +126,7 @@ export function buildDuelControlsView({
       cancelText: cancelLabel,
       cancelDisabled: !canAct,
       target: hasTarget,
+      targetStep: hasTarget ? (targetSelectionStatus?.complete ? "confirm" : "select") : "none",
       fusion: hasFusion,
       material: hasFusion || hasTribute,
       split: pendingTarget?.effect === "splitToken"
@@ -205,6 +206,7 @@ export function renderDuelControls(elements, view) {
     elements.choiceActions.classList.toggle("fusion-choice", view.choice.fusion);
     elements.choiceActions.classList.toggle("material-choice", view.choice.material);
     elements.choiceActions.classList.toggle("target-choice", view.choice.target);
+    elements.choiceActions.dataset.targetStep = view.choice.targetStep;
     elements.choiceActions.classList.toggle("split-choice", view.choice.split);
   }
 

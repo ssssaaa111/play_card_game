@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>战斗演出室 · 星魂决斗</title>
+  <link rel="stylesheet" href="./battle-fx.css">
+</head>
+<body>
+  <main>
+    <header class="page-header">
+      <a class="brand" href="/" aria-label="返回星魂决斗"><span class="brand-mark" aria-hidden="true">✧</span><span>星魂决斗<small>STAR SOUL DUEL</small></span></a>
+      <div class="header-note"><span class="status-dot"></span>战斗演出室 <span class="divider">/</span> VOL. 01</div>
+      <span class="muted-badge">无声预览</span>
+    </header>
+    <section class="intro">
+      <div><p class="eyebrow">BATTLE CHOREOGRAPHY</p><h1>让每一次出手，<span>都有分量。</span></h1></div>
+      <p class="intro-note">四组实时战斗演出。<br>选择招式，感受从蓄势到命中的瞬间。</p>
+    </section>
+    <section class="theater" aria-label="战斗动画预览">
+      <div class="stage">
+        <canvas id="battle-canvas" width="1600" height="900" role="img" aria-label="日冕斩击战斗动画"></canvas>
+        <div class="stage-title"><span id="clip-subtitle">SOLAR CRESCENT</span><h2 id="clip-title">日冕斩击</h2><p id="clip-type">高速斩击</p></div>
+        <span class="stage-index" id="clip-index">01 / 04</span>
+        <div class="stage-caption"><span class="tiny-line"></span>实时特效 · 演示数值，不影响对局</div>
+        <div class="loading" id="loading" role="status">正在唤醒战斗立绘…</div>
+      </div>
+      <div class="transport">
+        <div class="transport-row">
+          <div class="playback"><button id="play" class="primary" disabled aria-label="暂停动画">暂停</button><button id="replay" disabled>↺ 重播</button><output id="time">0.00 / 4.00s</output></div>
+          <div class="options"><label class="motion"><input id="gentle" type="checkbox">减弱震屏</label><label>速度 <select id="speed" aria-label="播放速度"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select></label><button id="export" disabled>导出 WebM</button></div>
+        </div>
+        <label class="sr-only" for="seek">动画进度</label><input id="seek" type="range" min="0" max="4" step="0.01" value="0" disabled>
+        <div class="beats" id="beats" aria-label="演出阶段"></div>
+      </div>
+    </section>
+    <section class="library" aria-label="选择战斗动画">
+      <div class="section-label"><span>演出收藏</span><span>04 SEQUENCES</span></div>
+      <div class="clip-grid" id="clips"></div>
+    </section>
+    <footer><p id="description">压低重心、瞬身突进，金色弧光掠过后留下剑痕。</p><p id="notice" role="status">点击招式播放 · 空格暂停 · 拖动进度逐帧查看</p><a id="download" hidden>下载动画</a></footer>
+  </main>
+  <script type="module" src="./battle-fx.js"></script>
+</body>
+</html>
