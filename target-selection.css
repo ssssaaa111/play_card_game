@@ -1,0 +1,239 @@
+/* Target choices occupy the hand area, leaving the board available to click. */
+#cardModal.show { z-index: 220; }
+body[data-duel-selection="target"] #app .hand-command > #choiceActions.target-choice {
+  position: fixed;
+  inset: auto auto max(12px, var(--safe-area-bottom)) 50%;
+  z-index: 95;
+  width: min(720px, calc(100vw - 24px));
+  height: auto;
+  max-height: min(360px, calc(100dvh - 150px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) 42px;
+  gap: 10px;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid #65828c;
+  border-radius: 14px;
+  background: #0b141ef5;
+  box-shadow: 0 14px 42px #0009;
+  transform: translateX(-50%);
+}
+body[data-duel-selection="target"] #app #choiceActions.target-choice[hidden] { display: none; }
+body[data-duel-selection="target"] #app #choiceActions.target-choice::after { content: none; }
+body[data-duel-selection="target"] #app #choiceActions.target-choice::before {
+  content: "步骤 1 / 2 · 选择目标";
+  position: absolute;
+  inset: 13px 16px auto auto;
+  z-index: 2;
+  padding: 4px 8px;
+  border: 1px solid #d8b96366;
+  border-radius: 999px;
+  background: #211d12;
+  color: #f4d889;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
+body[data-duel-selection="target"] #app #choiceActions.target-choice[data-target-step="confirm"]::before {
+  content: "步骤 2 / 2 · 确认发动";
+  border-color: #80e2dc88;
+  background: #123134;
+  color: #a8fff6;
+}
+body[data-duel-selection="target"] #app #choiceActions.target-choice #choiceText {
+  grid-area: 1 / 1 / 2 / -1;
+  max-height: none;
+  padding: 0;
+  white-space: pre-line;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #e5edf3;
+  padding-right: 132px;
+}
+body[data-duel-selection="target"] #app #choiceActions.target-choice #choiceConfirmBtn,
+body[data-duel-selection="target"] #app #choiceActions.target-choice #choiceCancelBtn {
+  grid-row: 3;
+  min-height: 42px;
+  height: 42px;
+  width: 100%;
+  border-radius: 7px;
+}
+body[data-duel-selection="target"] #app #choiceActions.target-choice #choiceConfirmBtn { grid-column: 1; }
+body[data-duel-selection="target"] #app #choiceActions.target-choice #choiceCancelBtn { grid-column: 2; }
+body[data-duel-selection="target"] #app #choiceActions.target-choice .timer-progress {
+  position: absolute;
+  inset: 0 0 auto;
+  width: 100%;
+  margin: 0;
+}
+#app #choiceActions :is(.target-options, .grave-targets) {
+  grid-area: 2 / 1 / 3 / -1;
+  min-height: 0;
+  height: auto;
+  max-height: 204px;
+  align-self: stretch;
+  align-content: start;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 2px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  background: none;
+}
+#app #choiceActions :is(.target-options, .grave-targets)[hidden] { display: none; }
+#app #choiceActions .grave-targets::before {
+  content: attr(data-summary);
+  display: block;
+  grid-column: 1 / -1;
+  min-width: 0;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 400;
+  color: #9aaebd;
+}
+.target-option-row { display: flex; min-width: 0; gap: 4px; }
+.target-option-row:only-child { grid-column: 1 / -1; }
+#app #choiceActions .target-option.card {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 76px;
+  height: auto;
+  aspect-ratio: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid #7c704e;
+  border-radius: 8px;
+  background: #1c222a;
+  color: #f0f4f6;
+  text-align: left;
+  transform: none;
+  filter: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+#app #choiceActions .target-option.card::before,
+#app #choiceActions .target-option.card::after { content: none; }
+#app #choiceActions .target-option.card:hover { background: #293643; }
+#app #choiceActions .target-option.card.target-selected {
+  border-color: #80e2dc;
+  background: #163b3e;
+  box-shadow: inset 0 0 0 1px #80e2dc;
+}
+#app #choiceActions .target-option:focus-visible,
+#app #choiceActions .target-option-detail:focus-visible { outline: 2px solid #e7ffff; outline-offset: 2px; }
+.target-option img { width: 38px; height: 50px; object-fit: contain; flex: none; }
+.target-option-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.target-option-copy strong { font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; }
+.target-option-copy small { color: #afc2cf; font-size: 10px; line-height: 1.3; }
+.target-option-outcome { color: #d9bd7a; font-size: 10px; line-height: 1.3; }
+.target-selected .target-option-outcome { color: #a0fff5; }
+.target-option-check {
+  flex: none;
+  padding: 4px 6px;
+  border: 1px solid #d7ba7855;
+  border-radius: 999px;
+  color: #f0d38e;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.target-selected .target-option-check {
+  border-color: #80e2dc88;
+  background: #80e2dc18;
+  color: #a0fff5;
+}
+.target-option-detail {
+  flex: none;
+  padding: 6px;
+  border: 1px solid #354954;
+  border-radius: 7px;
+  background: #14212b;
+  color: #b9cbd8;
+  font-size: 11px;
+  cursor: pointer;
+}
+/* Unrelated slots are background, not a second set of candidate indicators. */
+body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot):not(.targetable) {
+  opacity: .35;
+  border-color: #64708030;
+  box-shadow: none;
+}
+body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).empty::after,
+body[data-duel-targeting="effect"] #app .duel-table .support-target-unavailable::after,
+body[data-duel-targeting="effect"] #app .duel-table .effect-target-unavailable:not(:hover):not(:focus-visible)::after { content: none; }
+body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).targetable {
+  opacity: 1;
+  border: 2px solid #deb760;
+  box-shadow: 0 0 0 2px #deb76020;
+}
+body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).target-selected {
+  border-color: #8cf0e6;
+  box-shadow: 0 0 0 3px #8cf0e632;
+}
+body[data-duel-targeting="effect"] #app .duel-table .trap-slot.targetable > .card { opacity: 0; pointer-events: none; }
+body[data-duel-targeting="effect"] #app .duel-table .trap-slot.targetable::before {
+  content: attr(data-target-name);
+  position: absolute;
+  inset: 2px 2px auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: #fff4d8;
+  font-size: clamp(9px, 1.1vw, 13px);
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  transform: none;
+  pointer-events: none;
+}
+body[data-duel-targeting="effect"] #app .duel-table .trap-slot.targetable::after {
+  content: attr(data-target-label);
+  inset: auto 2px 2px;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #ebce8c;
+  font-size: 9px;
+  line-height: 1.2;
+  transform: none;
+}
+body[data-duel-targeting="effect"] #app .duel-table .trap-slot.target-selected::after { color: #a0fff5; }
+body[data-duel-targeting="effect"] .toast[data-target-guidance="true"] { display: none; }
+body[data-duel-targeting="effect"] #hand .card:not(.selected) { opacity: .4; }
+body[data-duel-targeting="attack"] #app .duel-table :is(.slot.empty, .trap-slot) { opacity: .3; }
+body[data-duel-targeting="attack"] #app .duel-table .slot.attack-target {
+  border: 2px solid #ffad80;
+  box-shadow: 0 0 0 3px #ffad8030;
+}
+body[data-duel-targeting="attack"] #app .duel-table .slot.attack-target::after {
+  content: "点击攻击";
+  color: #fff1e4;
+  background: #74372b;
+}
+@media (max-width: 480px) {
+  body[data-duel-selection="target"] #app .hand-command > #choiceActions.target-choice { padding: 11px; gap: 7px; }
+  #app #choiceActions :is(.target-options, .grave-targets) { grid-template-columns: minmax(0, 1fr); max-height: 148px; }
+  body[data-duel-selection="target"] #app #choiceActions.target-choice #choiceText { font-size: 11px; }
+  body[data-duel-selection="target"] #app #choiceActions.target-choice::before { position: static; grid-area: 1 / 1 / 2 / -1; justify-self: end; }
+  body[data-duel-selection="target"] #app #choiceActions.target-choice #choiceText { padding-right: 0; padding-top: 28px; }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  body[data-duel-selection="target"] #app .hand-command > #choiceActions.target-choice {
+    inset: max(68px, var(--safe-area-top)) 8px 8px auto;
+    width: min(292px, 34vw);
+    max-height: none;
+    padding: 10px;
+    transform: none;
+  }
+  #app #choiceActions :is(.target-options, .grave-targets) { grid-template-columns: minmax(0, 1fr); }
+}

@@ -1,5 +1,7 @@
 import { createAudioController, createAudioSettings } from './audio.js';
 import { createAnimationController } from './animation.js';
+import { battlePresentation, createLiveBattleVfx } from './live-battle-vfx.js';
+import { createFieldStrikeController } from './field-strike.js';
 import { createMusicController, createMusicSettings, musicModeForDuel } from './music.js';
 import { monsterAssets, roleProfiles, aiProfiles, deckPresets, characterProfiles, scenarioSetups } from './data.js';
 import {
@@ -33,7 +35,6 @@ import { createTestSnapshot, scheduleBrowserSmoke } from './browser-smoke.js';
 import { getCardEffectDefinition } from './game-engine.js';
 import { cardDefinitionById, cardInspectorViewModel } from './card-detail.js';
 import { bindCardInspector, renderCardInspector } from './card-inspector-renderer.js';
-import { createCardElement as renderCardElement } from './card-renderer.js';
 import { buildDuelControlsView, renderDuelControls } from './control-renderer.js';
 import { createDirectActivationTracker } from './direct-activation.js';
 import {
@@ -46,11 +47,13 @@ import {
   showDuelModal
 } from './duel-modal-renderer.js';
 import { renderMonsterZones, renderSupportZones } from './field-renderer.js';
+import { projectHandAction } from './hand-action-projection.js';
 import { renderHandCards } from './hand-renderer.js';
+import { renderTargetOptions } from './target-picker-renderer.js';
 import {
   reconcileHandOrder,
   shiftHandCard,
-  swapHandCards,
+  insertHandCard,
   sortHandCardsByType
 } from './hand-order.js';
 import {
@@ -101,6 +104,7 @@ import {
 } from './effect-feedback.js';
 import { effectMarkersForCard } from './effect-markers.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
+import { createAiActionPlayback, aiActionConsequences, aiActionSummary } from './ai-action-playback.js';
 import { fusionOptionsForCard } from './fusion.js';
 import { buildFusionSelectionView, renderFusionSelectionPanel } from './fusion-selection-renderer.js';
 import {
@@ -178,9 +182,9 @@ import {
   selectTargetSelection,
   spellNeedsManualTarget,
   targetSelectionConfirmationText,
-  targetSelectionForCard,
   targetSelectionTargetLabel,
   targetSelectionPrompt,
+  targetSelectionScope,
   targetSelectionTimeoutFeedback,
   targetSelectionTimeoutLogMetadata,
   validateTargetSelection
@@ -325,10 +329,10 @@ const state = {
 let pendingTrapChoiceResolver = null;
 let scenarioHintsVisible = false;
 let pendingAiReveal = null;
-let pendingAiRevealResolver = null;
-let pendingAiRevealQueue = [];
-let pendingAiRevealIndex = 0;
-let pendingAiRevealTotal = 0;
+let aiActionHistory = [];
+let aiPlaybackPaused = false;
+let aiHistoryOpen = false;
+let aiHistoryRevision = "";
 let preDuelPreviewModel = null;
 let deckBrowserIndex = 0;
 let deckBrowserPointerStartX = null;
@@ -391,6 +395,7 @@ const els = {
   handSortType: document.querySelector("#handSortType"),
   handResetOrder: document.querySelector("#handResetOrder"),
   graveTargets: document.querySelector("#graveTargets"),
+  fieldTargets: document.querySelector("#fieldTargets"),
   timeline: document.querySelector("#timeline"),
   timelineCount: document.querySelector("#timelineCount"),
   timelineAudit: document.querySelector("#timelineAudit"),
@@ -509,6 +514,13 @@ const els = {
   aiRevealSummary: document.querySelector("#aiRevealSummary"),
   aiRevealDetail: document.querySelector("#aiRevealDetail"),
   aiRevealContinue: document.querySelector("#aiRevealContinue"),
+  aiActionDock: document.querySelector("#aiActionDock"),
+  aiActionStatus: document.querySelector("#aiActionStatus"),
+  aiActionMeter: document.querySelector("#aiActionMeter"),
+  aiActionPause: document.querySelector("#aiActionPause"),
+  aiActionHistory: document.querySelector("#aiActionHistory"),
+  aiHistoryToggle: document.querySelector("#aiHistoryToggle"),
+  aiHistoryClose: document.querySelector("#aiHistoryClose"),
   cardModal: document.querySelector("#cardModal"),
   zoomName: document.querySelector("#zoomName"),
   zoomCard: document.querySelector("#zoomCard"),
@@ -620,6 +632,14 @@ const {
   playVoice,
   playSound
 });
+
+const battleVfx = createLiveBattleVfx({ document, window, root: els.effectLayer, assetForCard: monsterAsset });
+const fieldStrike = createFieldStrikeController({
+  document, window, root: els.effectLayer,
+  onBusyChange: (busy) => { state.presentationBusy = busy; }
+});
+let duelRunId = 0;
+
 
 function showBattlePreview(attacker, target, owner = null, rival = null) {
   state.battlePreview = makeBattlePreview(attacker, target, owner, rival);
@@ -808,83 +828,115 @@ const deckEditorHandlers = {
   onClose: closeDeckEditor
 };
 
+function isAiPlaybackPaused() {
+  return state.paused || aiPlaybackPaused || aiHistoryOpen || (!BROWSER_SMOKE && document.hidden)
+    || Boolean(document.querySelector(".modal.show:not(#modal)"));
+}
+
+const aiActionPlayback = createAiActionPlayback({
+  ...(BROWSER_SMOKE ? {
+    requestFrame: (callback) => window.setTimeout(callback, 16),
+    cancelFrame: (frame) => window.clearTimeout(frame)
+  } : {}),
+  isPaused: isAiPlaybackPaused,
+  onChange: ({ action, history, index, total }) => {
+    pendingAiReveal = withAiRevealQueuePosition(action, { index, total });
+    aiActionHistory = history;
+    if (action) clearPlayerIdleTimers();
+    renderAiReveal();
+  },
+  onProgress: (progress, paused) => {
+    els.aiActionMeter.style.transform = `scaleX(${progress})`;
+    els.aiActionDock.dataset.paused = String(paused);
+    els.aiActionStatus.textContent = paused ? "已暂停" : "自动播放";
+    els.aiRevealContinue.disabled = paused;
+  }
+});
+
+function renderAiActionCues() {
+  document.querySelectorAll("[data-ai-action-cue]").forEach((element) => {
+    delete element.dataset.aiActionCue;
+    element.querySelectorAll(".ai-action-badge").forEach((badge) => badge.remove());
+  });
+  if (!pendingAiReveal || aiHistoryOpen) return;
+  const cues = new Map();
+  const source = state.ai.field.findIndex((card) => card?.id === pendingAiReveal.cardId);
+  const sourceElement = source >= 0 ? fieldElement("ai", source) : panelElement("ai");
+  if (sourceElement) cues.set(sourceElement, [pendingAiReveal.revealKind === "summon" ? "登场" : "发动"]);
+  for (const entry of pendingAiReveal.consequences || []) {
+    const found = entry.cardId ? findRuntimeCard(entry.cardId) : null;
+    const fieldIndex = found ? state[found.owner].field.indexOf(found.card) : -1;
+    const trapIndex = found ? state[found.owner].traps.indexOf(found.card) : -1;
+    const previous = entry.from;
+    const previousElement = previous?.zone === "spellTrapZone" ? trapElement(previous.playerId, previous.index)
+      : previous?.zone === "monsterZone" ? fieldElement(previous.playerId, previous.index) : null;
+    const element = fieldIndex >= 0 ? fieldElement(found.owner, fieldIndex)
+      : trapIndex >= 0 ? trapElement(found.owner, trapIndex)
+        : previousElement || (entry.playerId ? panelElement(entry.playerId) : null);
+    if (element) cues.set(element, [...(cues.get(element) || []), entry.badge]);
+  }
+  for (const [element, labels] of cues) {
+    element.dataset.aiActionCue = "true";
+    const badge = document.createElement("span");
+    badge.className = "ai-action-badge";
+    badge.textContent = [...new Set(labels)].slice(0, 2).join(" · ");
+    element.appendChild(badge);
+  }
+}
+
 function renderAiReveal() {
   renderAiRevealModal(els, pendingAiReveal);
-}
-
-function renderNextAiReveal() {
-  if (pendingAiReveal || !pendingAiRevealQueue.length) return;
-  const next = pendingAiRevealQueue.shift();
-  pendingAiRevealIndex += 1;
-  pendingAiReveal = withAiRevealQueuePosition(next.reveal, {
-    index: pendingAiRevealIndex,
-    total: pendingAiRevealTotal
-  });
-  pendingAiRevealResolver = next.resolve;
-  renderAiReveal();
-  if (shouldAutoContinueAiReveal()) {
-    // Browser smoke polls every 80 ms. Keep automatic reveals visible across
-    // several polls so assertions cannot miss the entire public reveal window.
-    window.setTimeout(confirmAiRevealContinue, 320);
+  els.aiActionDock.hidden = !pendingAiReveal && !aiHistoryOpen;
+  els.aiActionDock.dataset.history = String(aiHistoryOpen);
+  els.aiHistoryToggle.hidden = !aiActionHistory.length;
+  if (aiActionHistory.length) els.handToolbar.hidden = false;
+  els.aiHistoryClose.hidden = !aiHistoryOpen;
+  els.aiActionPause.textContent = aiPlaybackPaused ? "继续" : "暂停";
+  els.aiActionPause.setAttribute("aria-pressed", String(aiPlaybackPaused));
+  const revision = aiActionHistory.map((entry) => entry.sequence).join(",");
+  if (revision !== aiHistoryRevision) {
+    aiHistoryRevision = revision;
+    els.aiActionHistory.replaceChildren();
+    for (const entry of aiActionHistory) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.cardId = entry.cardId;
+      const title = document.createElement("strong");
+      title.textContent = entry.title;
+      const summary = document.createElement("span");
+      summary.textContent = entry.summary;
+      button.appendChild(title);
+      button.appendChild(summary);
+      button.title = `${entry.title}：${entry.summary}`;
+      button.addEventListener("click", () => openCardDetail(entry.cardId));
+      els.aiActionHistory.appendChild(button);
+    }
   }
+  renderAiActionCues();
 }
 
-function refreshAiRevealQueueProgress() {
-  if (!pendingAiReveal) return;
-  pendingAiReveal = withAiRevealQueuePosition(pendingAiReveal, {
-    index: pendingAiRevealIndex,
-    total: pendingAiRevealTotal
-  });
-  renderAiReveal();
+function clearAiReveal() {
+  aiPlaybackPaused = false;
+  aiHistoryOpen = false;
+  aiActionPlayback.reset();
 }
 
-function clearAiReveal(resolveValue = false) {
-  pendingAiReveal = null;
-  renderAiReveal();
-  const resolver = pendingAiRevealResolver;
-  pendingAiRevealResolver = null;
-  if (resolver) resolver(resolveValue);
-  if (!resolveValue) {
-    pendingAiRevealQueue.splice(0).forEach((entry) => entry.resolve(false));
-    pendingAiRevealIndex = 0;
-    pendingAiRevealTotal = 0;
-    return;
-  }
-  if (pendingAiRevealQueue.length) {
-    renderNextAiReveal();
-    return;
-  }
-  pendingAiRevealIndex = 0;
-  pendingAiRevealTotal = 0;
-}
+function confirmAiRevealContinue() { aiActionPlayback.skip(); }
 
-function confirmAiRevealContinue() {
-  clearAiReveal(true);
-}
-
-function shouldAutoContinueAiReveal() {
-  const revealNeedsManualClick = [
-    "ai-card-reveal-confirm",
-    "ai-card-reveal-queue",
-    "finale-sunflare-target-lock-basic"
-  ].includes(BROWSER_SMOKE) ||
-    ["trio-after-attack-lethal-planning-basic", "trio-combined-lethal-planning-basic"].includes(BROWSER_SMOKE);
-  return Boolean(BROWSER_SMOKE) && !revealNeedsManualClick;
+function syncAiPlaybackPause() {
+  const paused = state.paused || aiPlaybackPaused || aiHistoryOpen;
+  fieldStrike.setPaused(paused);
+  battleVfx.setPaused(paused);
 }
 
 function waitForAiReveal(input) {
   const reveal = buildAiCardReveal(input);
   if (!reveal || (state.gameOver && !input?.allowAfterGameOver)) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    if (!pendingAiReveal && pendingAiRevealQueue.length === 0) {
-      pendingAiRevealIndex = 0;
-      pendingAiRevealTotal = 1;
-    } else {
-      pendingAiRevealTotal += 1;
-      refreshAiRevealQueueProgress();
-    }
-    pendingAiRevealQueue.push({ reveal, resolve });
-    renderNextAiReveal();
+  const consequences = aiActionConsequences(input.events, { findCard: findRuntimeCard });
+  return aiActionPlayback.enqueue({
+    ...reveal,
+    consequences,
+    summary: input.summary || aiActionSummary(consequences) || reveal.summary
   });
 }
 
@@ -991,6 +1043,10 @@ function resetDuelResultState() {
 }
 
 function startGame() {
+  duelRunId++;
+  fieldStrike.reset();
+  combatHudDamageStage.end();
+  battleVfx.reset();
   stopAll();
   stopMusic({ fadeMs: 80 });
   phaseStageController.reset();
@@ -1059,6 +1115,10 @@ function startGame() {
 }
 
 function prepareGame() {
+  duelRunId++;
+  fieldStrike.reset();
+  combatHudDamageStage.end();
+  battleVfx.reset();
   stopAll();
   stopMusic({ fadeMs: 220 });
   phaseStageController.reset();
@@ -1192,7 +1252,7 @@ function opponentDuelist() {
 }
 
 function canPlayerAct() {
-  return canPlayerActState(state);
+  return !pendingAiReveal && !aiHistoryOpen && canPlayerActState(state);
 }
 
 function canUseHandSpells() {
@@ -1213,6 +1273,17 @@ function handTimingBlockReason(card) {
   if (card?.type === "spell") return "当前时点不能发动这张魔法卡。";
   if (card?.type === "trap") return "当前时点不能盖放这张陷阱卡。";
   return "这张卡只能在主要阶段使用。";
+}
+
+function handActionTiming(card) {
+  if (!state.started) return { ok: false, label: "待开局", reason: "点击开始决斗后才能操作。" };
+  if (state.paused) return { ok: false, label: "暂停中", reason: "继续决斗后才能操作手牌。" };
+  if (state.gameOver) return { ok: false, label: "已结束", reason: "本局决斗已经结束。" };
+  if (state.turn !== "player") return { ok: false, label: "对手回合", reason: "当前是对手回合；仍可拖动整理手牌。" };
+  if (!canPlayerAct()) return { ok: false, label: "结算中", reason: "当前效果正在结算，请稍候。" };
+  if (state.pendingTarget) return { ok: true };
+  if (canUseHandCards(card)) return { ok: true };
+  return { ok: false, label: "时点受限", reason: handTimingBlockReason(card) };
 }
 
 function canUseHandCards(card = null) {
@@ -1237,6 +1308,7 @@ function currentEngineMachine() {
 function isAttackFlowPending() {
   const machine = currentEngineMachine();
   return Boolean(
+    state.presentationBusy ||
     state.pendingTrapChoice ||
     pendingTrapChoiceResolver ||
     machine?.pendingAttack ||
@@ -1302,16 +1374,12 @@ function resumePlayerIdleCountdownAfterPassiveIntent() {
   }
 }
 
-function hasValidSpellInHand(duelist, rival) {
-  return duelist.hand.some((card, index) => card.type === "spell" && validateSpell(duelist, rival, card, index).ok);
-}
-
 function currentPlayerActions() {
   const summary = summarizePlayerActions({
     player: state.player,
     pendingTarget: state.pendingTarget,
     summonedThisTurn: state.player.normalSummonsUsed > 0,
-    canSpell: (card, index) => card.type === "spell" && validateSpell(state.player, state.ai, card, index).ok
+    canSpell: (card) => card.type === "spell" && handActionInfo(card).ruleOk
   });
   try {
     const projection = projectBattleFromUiState(state, "player");
@@ -1391,17 +1459,10 @@ function clearPendingTarget() {
   }
 }
 
-function beginSpellTargetSelection(handIndex, card) {
-  const initialTarget = pendingTargetForCard(card, handIndex, spellEffects);
-  const pendingTarget = prepareDefaultTargetSelection(initialTarget, {
-    player: state.player,
-    ai: state.ai
-  });
+function beginSpellTargetSelection(handIndex, card, projection = handActionInfo(card)) {
+  const pendingTarget = projection.target?.pending || null;
   if (!pendingTarget) return false;
-  const targets = collectLegalTargetSelections(pendingTarget, {
-    player: state.player,
-    ai: state.ai
-  });
+  const targets = projection.target?.legalTargets || [];
   if (!targets.length) {
     state.selected = null;
     cue(`${card.name} 没有合法目标，不能发动。`);
@@ -1716,10 +1777,9 @@ async function selectHandCard(uid, { directActivate = false } = {}) {
   }
   const handIndex = state.player.hand.findIndex((item) => item.uid === uid);
   const wasSelected = state.selected?.zone === "hand" && state.selected.uid === uid;
-  const canUseNow = canUseHandCards(card);
   const action = handActionInfo(card, handIndex);
-  if (!canUseNow || !action.ok) {
-    cue(canUseNow ? action.reason : handTimingBlockReason(card));
+  if (!action.ok) {
+    cue(action.reason);
     playSound("click");
     state.selected = { zone: "hand", uid };
     clearBattlePreview();
@@ -1737,8 +1797,8 @@ async function selectHandCard(uid, { directActivate = false } = {}) {
   state.selected = { zone: "hand", uid };
   clearBattlePreview();
   showDetail(card);
-  if (card.type === "spell" && spellNeedsManualTarget(state.player, card, spellEffects)) {
-    beginSpellTargetSelection(handIndex, card);
+  if (action.target?.required) {
+    beginSpellTargetSelection(handIndex, card, action);
     return;
   }
   render();
@@ -2361,11 +2421,6 @@ async function confirmSelectedHandAction() {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
-  if (!canUseHandCards(selected.card)) {
-    cue(handTimingBlockReason(selected.card));
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return;
-  }
   const action = handActionInfo(selected.card, selected.index);
   if (!action.ok) {
     cue(action.reason);
@@ -2490,8 +2545,9 @@ async function handlePlayerSlot(index, interaction = {}) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
-  if (!canUseHandCards(card)) {
-    cue(handTimingBlockReason(card));
+  const action = handActionInfo(card);
+  if (!action.ok) {
+    cue(action.reason);
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
@@ -2606,8 +2662,9 @@ async function handlePlayerTrapSlot(index, interaction = {}) {
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
-  if (!canUseHandCards(card)) {
-    cue("只能在主要阶段或战斗阶段盖放陷阱卡。");
+  const action = handActionInfo(card);
+  if (!action.ok) {
+    cue(action.reason);
     resumePlayerIdleCountdownAfterPassiveIntent();
     return;
   }
@@ -2713,6 +2770,7 @@ async function handleAiPanelAttack() {
 }
 
 async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) {
+  const runId = duelRunId;
   const card = owner.hand[handIndex];
   if (!card) return false;
   const tributeCards = Array.isArray(options.tributeIndexes)
@@ -2728,10 +2786,9 @@ async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) 
     console.error(error);
     return false;
   }
-  playSound("summon");
+  if (card.stars < 5) playSound("summon");
   animateAvatar(owner.owner, "cast");
   const summonLog = addLog(`${owner.owner === "player" ? "你" : "AI"} 召唤了 ${card.name}。`, cardLogMeta(card, { actor: owner.owner, type: "summon" }));
-  speak(`${owner.owner === "player" ? "你召唤" : "对手召唤"}，${card.name}。`);
   if (tributeCards.length) {
     addLog(`${owner.owner === "player" ? "你" : "AI"} 将 ${tributeCards.map((tribute) => `「${tribute.name}」`).join("、")} 作为祭品召唤了「${card.name}」。`, cardLogMeta(card, {
       actor: owner.owner,
@@ -2752,7 +2809,13 @@ async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) 
     playEpicAction("三曜共降", "summon");
   }
   if (card.stars >= 5) {
-    showAce(card, owner.owner);
+    const arrivalBeat = scenarioSetups[state.scenarioId]?.storyBeats?.find((beat) =>
+      beat.spokenOnSummon && !state.storyBeatsFired?.[beat.id] && scenarioTriggerProgress(beat, {
+        events: summonEvents,
+        resolveCardId: resolveScenarioEventCardId
+      }).completed
+    );
+    showAce(card, owner.owner, arrivalBeat?.line);
   } else {
     playDuelistLine(owner.owner, lineFor(owner.owner, "summon", card), false, "summon");
   }
@@ -2774,10 +2837,10 @@ async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) 
     engineResponse: true,
     ...summonContext
   }).length > 0;
-  if (owner.owner === "ai" && !hasRivalSummonResponse) {
-    await waitForAiReveal({ ...summonLog, revealKind: "summon" });
-  }
   render("summon-board-" + owner.owner);
+  if (owner.owner === "ai" && !hasRivalSummonResponse) {
+    if (!await waitForAiReveal({ ...summonLog, revealKind: "summon", events: summonEvents })) return false;
+  }
   if (!openTrapResponseWindow(rival.owner, {
     timing: "summon",
     resumeTiming: "mainOpen",
@@ -2790,9 +2853,10 @@ async function summonMonster(owner, rival, handIndex, fieldIndex, options = {}) 
     targetEffectId: summonedEvent.id,
     engineResponse: true
   });
+  if (runId !== duelRunId) return false;
   if (state.gameOver) return true;
   if (owner.owner === "ai" && hasRivalSummonResponse) {
-    await waitForAiReveal({ ...summonLog, revealKind: "summon" });
+    if (!await waitForAiReveal({ ...summonLog, revealKind: "summon", events: summonEvents })) return false;
   }
   if (card.onSummon) {
     if (canDispatchSummonEffectFromUiState(card)) {
@@ -2843,15 +2907,13 @@ async function playSpell(owner, rival, handIndex, targetInfo = null) {
     if (owner.owner === "player") resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
   }
-  if (owner.owner === "player" && ![PHASES.main, PHASES.battle].includes(state.phase)) {
-    cue("当前阶段不能发动魔法卡。");
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return false;
-  }
-  if (owner.owner === "player" && !targetInfo && !canUseHandCards(selectedCard)) {
-    cue("当前时点不能发动手牌。");
-    resumePlayerIdleCountdownAfterPassiveIntent();
-    return false;
+  if (owner.owner === "player") {
+    const action = handActionInfo(selectedCard);
+    if (!action.ok) {
+      cue(action.reason);
+      resumePlayerIdleCountdownAfterPassiveIntent();
+      return false;
+    }
   }
   const card = selectedCard;
   if (!canDispatchSpellFromUiState(card)) {
@@ -2869,7 +2931,7 @@ async function playSpell(owner, rival, handIndex, targetInfo = null) {
     return false;
   }
   if (spellNeedsManualTarget(owner, selectedCard, spellEffects) && !targetInfo) {
-    beginSpellTargetSelection(handIndex, selectedCard);
+    beginSpellTargetSelection(handIndex, selectedCard, handActionInfo(selectedCard));
     return false;
   }
   let engineEvents = [];
@@ -2886,15 +2948,16 @@ async function playSpell(owner, rival, handIndex, targetInfo = null) {
   }
   playSound(`spell-${card.effect}`);
   animateAvatar(owner.owner, "cast");
-  playCenterCardEffect(card, spellCaption(card));
-  playEpicAction("\u9b54\u6cd5", "draw");
-  const spellLog = addLog(`${owner.owner === "player" ? "\u4f60" : "AI"} \u53d1\u52a8\u9b54\u6cd5\u5361 ${card.name}\u3002`, cardLogMeta(card, { actor: owner.owner, type: "spell" }));
-  speak(`${owner.owner === "player" ? "\u4f60\u53d1\u52a8" : "\u5bf9\u624b\u53d1\u52a8"}\u9b54\u6cd5\u5361\uff0c${card.name}\u3002`);
-  playDuelistLine(owner.owner, lineFor(owner.owner, "spell", card), false, "spell");
-  if (owner.owner === "ai") {
-    await waitForAiReveal({ ...spellLog, revealKind: "spell" });
+  if (owner.owner === "player") {
+    playCenterCardEffect(card, spellCaption(card));
+    playEpicAction("\u9b54\u6cd5", "draw");
   }
+  const spellLog = addLog(`${owner.owner === "player" ? "\u4f60" : "AI"} \u53d1\u52a8\u9b54\u6cd5\u5361 ${card.name}\u3002`, cardLogMeta(card, { actor: owner.owner, type: "spell" }));
+  playDuelistLine(owner.owner, lineFor(owner.owner, "spell", card), false, "spell");
   result = resolveEngineSpellFeedback(owner, rival, card, engineEvents, targetInfo);
+  if (engineEvents.some((event) => event.type === "DAMAGE_DEALT" && event.amount > 0)) {
+    void battleVfx.playSpell({ card, owner: owner.owner, events: engineEvents });
+  }
   playSpellEffect(
     owner,
     rival,
@@ -2906,6 +2969,10 @@ async function playSpell(owner, rival, handIndex, targetInfo = null) {
   resolveElementCombos(owner, rival, "spell");
   clearPendingTarget();
   state.selected = null;
+  if (owner.owner === "ai") {
+    render();
+    if (!await waitForAiReveal({ ...spellLog, revealKind: "spell", events: engineEvents, allowAfterGameOver: true })) return false;
+  }
   checkGameOver();
   render();
   if (owner.owner === "player" && !state.gameOver) {
@@ -3204,7 +3271,6 @@ function announceTrapActivation(owner, trap, chainIndex) {
   playCenterCardEffect(trap, chainIndex > 1 ? `陷阱连锁 ${chainIndex}` : "陷阱连锁发动");
   playEpicAction(chainLabel, "guard");
   const trapLog = addLog(`${chainLabel}：${owner.owner === "player" ? "你的" : "AI 的"}陷阱卡 ${trap.name} 触发。`, cardLogMeta(trap, { actor: owner.owner, type: "trap" }));
-  speak(`陷阱发动，${trap.name}。`);
   playDuelistLine(owner.owner, lineFor(owner.owner, "trap", trap), false, "trap");
   return trapLog;
 }
@@ -3262,6 +3328,8 @@ function attackContextCard(rival, context = {}, event = null) {
 }
 
 async function resolveEngineTrapChain(owner, rival, eventName, context, trapIndex) {
+  const runId = duelRunId;
+  const cancelled = () => ({ cancelled: true, blocked: false, consumesAttack: false, activated: 0 });
   const links = [];
   const firstLink = queueTrapChainLink(owner, rival, eventName, context, trapIndex, 1);
   if (!firstLink) return { cancelled: false, blocked: false, consumesAttack: false, activated: 0 };
@@ -3288,6 +3356,7 @@ async function resolveEngineTrapChain(owner, rival, eventName, context, trapInde
       targetEffectId: runtimeCardId(sourceTrap)
     };
     const choice = await chooseTrapIndex(responder, priorityHolder, "chain", chainContext);
+    if (runId !== duelRunId) return cancelled();
     if (choice.trapIndex < 0) {
       if (choice.declined) {
         addLog(choice.skippedName ? `你没有发动 ${choice.skippedName}。` : "你没有追加陷阱连锁。");
@@ -3297,6 +3366,7 @@ async function resolveEngineTrapChain(owner, rival, eventName, context, trapInde
     if (responder.owner === "ai") {
       addLog(`AI 检测到 ${sourceTrap.name}，准备追加陷阱连锁。`, cardLogMeta(sourceTrap, { actor: "ai", type: "chain-check" }));
       await sleep(620);
+      if (runId !== duelRunId) return cancelled();
     }
     const nextLink = queueTrapChainLink(responder, priorityHolder, "chain", chainContext, choice.trapIndex, chainIndex);
     if (!nextLink) break;
@@ -3320,8 +3390,11 @@ async function resolveEngineTrapChain(owner, rival, eventName, context, trapInde
   let originalOutcome = { cancelled: false, blocked: false, consumesAttack: false };
   for (const link of links.slice().reverse()) {
     await sleep(320);
+    if (runId !== duelRunId) return cancelled();
     if (link.owner.owner === "ai") {
-      await waitForAiReveal({ ...link.revealEntry, revealKind: "trap" });
+      if (!await waitForAiReveal({ ...link.revealEntry, revealKind: "trap", events: eventsForTrap(resolutionEvents, link.trap), allowAfterGameOver: true })) {
+        return { cancelled: true, blocked: false, consumesAttack: false, activated: links.length };
+      }
     }
     const outcome = resolveTrapCard(
       link.owner,
@@ -3650,19 +3723,15 @@ function resolveTrapCard(owner, rival, eventName, context, trapIndex, chainIndex
 
 function playBattleDamageFeedback(events, duelist) {
   const battleDamage = battleDamageAmount(events, { playerId: duelist.owner });
-  events
-    .filter((event) => event.type === "DAMAGE_DEALT" && event.playerId === duelist.owner)
-    .forEach((event) => {
-      const dealt = Math.max(0, Number(event.amount) || 0);
-      if (dealt > 0) {
-        playSound("damage");
-        playLifeDelta(duelist.owner, -dealt);
-      }
-    });
+  if (battleDamage > 0) {
+    playSound("damage");
+    playLifeDelta(duelist.owner, -battleDamage);
+  }
   return battleDamage;
 }
 
 async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
+  const runId = duelRunId;
   const attackerId = runtimeCardId(attacker);
   if (!attackerId) return;
   const destroyedBackrow = events
@@ -3714,7 +3783,7 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
     combatHudDamageStage.begin(afterAttackDamageEvent);
     renderCurrentCombatHud();
     try {
-      await waitForAiReveal({
+      if (!await waitForAiReveal({
         actor: "ai",
         public: true,
         cardId: attacker.id,
@@ -3722,13 +3791,17 @@ async function resolveAfterAttackBattleFeedback(owner, attacker, events) {
         revealKind: "monster-effect",
         message: `${attacker.name} 的效果触发。`,
         summary: publicEffectSummary || undefined,
+        events: [afterAttackDamageEvent, growEvent].filter(Boolean),
         allowAfterGameOver: true
-      });
+      })) return;
     } finally {
-      combatHudDamageStage.end(afterAttackDamageEvent);
-      renderCurrentCombatHud();
+      if (runId === duelRunId) {
+        combatHudDamageStage.end(afterAttackDamageEvent);
+        renderCurrentCombatHud();
+      }
     }
   } else {
+    combatHudDamageStage.end(afterAttackDamageEvent);
     renderCurrentCombatHud();
   }
   if (events.some((event) =>
@@ -3889,6 +3962,7 @@ function playAttackResetFeedback(owner, attacker, events = []) {
 }
 
 async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
+  const runId = duelRunId;
   state.ruleCheckIssue = null;
   const attacker = owner.field[attackerIndex];
   if (!attacker || attacker.used) return;
@@ -3958,6 +4032,7 @@ async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
   } else if (!closeTrapResponseWindow(rival.owner, "no-legal-trap")) {
     trapResult.cancelled = true;
   }
+  if (runId !== duelRunId) return false;
   if (trapResult.cancelled) {
     if (!consumeCancelledAttackWithEngine(owner, attacker, {
       declarationEventId: attackContext.targetEffectId,
@@ -3970,35 +4045,8 @@ async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
   const resolvedTargetIndex = pendingAttackTargetIndex(rival, attackContext.targetIndex);
   attackContext.targetIndex = resolvedTargetIndex;
   const target = rival.field[resolvedTargetIndex];
-  const fromEl = fieldElement(owner.owner, attackerIndex);
-  const toEl = fieldElement(rival.owner, resolvedTargetIndex) || panelElement(rival.owner);
-  if (attacker.stars >= 5) {
-    playSound("ace");
-    playAceStrike(attacker, owner.owner, target);
-    playEpicAction("王牌攻势", "attack", 1300);
-    await sleep(ATTACK_TIMING_MS.ace);
-  }
-  playSound("attack-charge");
-  playAttackCloseup(attacker, target, owner.owner, rival.owner);
-  playEpicAction("攻击宣言", "attack", 1260);
-  playDuelistLine(owner.owner, lineFor(owner.owner, "attack", attacker), false, "attack");
-  await sleep(ATTACK_TIMING_MS.declaration);
-  playSound("attack");
-  animateAvatar(owner.owner, "attack");
-  playMonsterMotion(owner.owner, attackerIndex, "attack");
-  playMonsterPhantom(attacker, fromEl, toEl);
-  if (target) {
-    playMonsterMotion(rival.owner, resolvedTargetIndex, target.mode === "defense" ? "guard" : "stand");
-    playMonsterCounterPhantom(target, toEl, fromEl);
-  }
-  playSlashBurst(fromEl, toEl);
-  playEpicAction("冲击", "attack", 900);
-  playAttackCutIn(attacker, target, owner.owner, rival.owner);
-  await sleep(ATTACK_TIMING_MS.impact);
-
-  const outcome = target ? describeBattleOutcome(attacker, target, owner, rival) : null;
-  let battleEvents = [];
-
+  const fieldMode = fieldStrike.supported;
+  // Finish every response window before starting an attack that can visibly land.
   if (!target) {
     if (!openTrapResponseWindow(rival.owner, {
       timing: "damageStep",
@@ -4018,6 +4066,7 @@ async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
       targetEffectId: attackContext.targetEffectId,
       engineResponse: true
     });
+    if (runId !== duelRunId) return false;
     if (defenseResult.cancelled) {
       if (!consumeCancelledAttackWithEngine(owner, attacker, {
         declarationEventId: attackContext.targetEffectId,
@@ -4027,96 +4076,147 @@ async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
       checkGameOver();
       return assertAttackImpact(owner, rival, impactBefore, `${attacker.name} 的直接攻击`);
     }
+  }
+
+  // Response UI can rebuild the board. Measure the live cards after it closes.
+  const fromEl = fieldElement(owner.owner, attackerIndex);
+  const toEl = fieldElement(rival.owner, resolvedTargetIndex) || panelElement(rival.owner);
+  const outcome = target ? describeBattleOutcome(attacker, target, owner, rival) : null;
+  let battleEvents = [];
+  const commitImpact = () => {
+    if (runId !== duelRunId) return null;
     battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex, {
       declarationEventId: attackContext.targetEffectId
     });
-    if (!battleEvents) return false;
-    playSound("attack-impact");
-    playImpactExplosion(toEl);
-    const dealt = playBattleDamageFeedback(battleEvents, rival);
-    playSound("attack-direct");
-    animateAvatar(rival.owner, "hit");
-    playDuelistImpact(rival.owner, toEl);
-    shakeScreen();
-    playEpicAction("直击", "attack");
-    playArrow(fromEl, toEl, "attack", "直接攻击");
-    addLog(`${attacker.name} 直接攻击，造成 ${dealt} 点伤害。`, cardLogMeta(attacker, { actor: owner.owner, type: "battle" }));
-    playDuelistLine(owner.owner, lineFor(owner.owner, "direct", attacker), false, "direct");
-    playDuelistLine(rival.owner, lineFor(rival.owner, "hit"), false, "hit");
-  } else {
-    battleEvents = resolveBattleWithEngine(owner, rival, attackerIndex, resolvedTargetIndex, {
-      declarationEventId: attackContext.targetEffectId
-    });
-    if (!battleEvents) return false;
-    playSound("attack-impact");
-    playImpactExplosion(toEl);
-    if (outcome.diff > 0) {
-      let dealt = 0;
-      if (target.mode !== "defense" || outcome.rawDamage > 0) {
-        dealt = playBattleDamageFeedback(battleEvents, rival);
-        animateAvatar(rival.owner, "hit");
-        playMonsterMotion(rival.owner, resolvedTargetIndex, "hit");
-      }
-      if (target.mode === "defense") {
-        playSound("guard");
-        playMonsterMotion(rival.owner, resolvedTargetIndex, "guard");
-        playMonsterCounterPhantom(target, toEl, fromEl);
-        playGuardShield(toEl);
-        playEpicAction("防御", "guard");
-      }
-      playMonsterBurst(toEl);
-      playSound("attack-break");
-      shakeScreen();
-      playEpicAction(outcome.kind === "pierceDefense" ? "神格贯穿" : target.mode === "defense" ? "破防" : "击破", "attack");
-      playArrow(fromEl, toEl, "attack", "攻击");
-      addLog(battleLogText(attacker, target, outcome, dealt), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
-      speak(`${attacker.name} 击破目标。`);
-      playDuelistLine(owner.owner, lineFor(owner.owner, "break"), false, "break");
-    } else if (outcome.diff < 0) {
-      const dealt = playBattleDamageFeedback(battleEvents, owner);
-      playSound("damage");
-      animateAvatar(owner.owner, "hit");
-      playMonsterMotion(owner.owner, attackerIndex, "hit");
-      shakeScreen();
-      if (outcome.destroysAttacker) {
-        playMonsterBurst(fromEl);
-        playEpicAction("反击", "attack");
-      } else {
-        playSound("guard");
-        playMonsterMotion(rival.owner, resolvedTargetIndex, "guard");
-        playGuardShield(toEl);
-        playEpicAction("守备反击", "guard");
-      }
-      playArrow(toEl, fromEl, "attack", "反击");
-      addLog(battleLogText(attacker, target, outcome, dealt), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
-      speak(outcome.destroysAttacker
-        ? `${attacker.name} 攻击失败，被反击破坏。`
-        : `${attacker.name} 攻击受阻，承受反击伤害。`);
-      playDuelistLine(owner.owner, lineFor(owner.owner, "hit"), false, "hit");
-    } else if (outcome.kind === "guardHold") {
-      playSound("guard");
-      playMonsterMotion(rival.owner, resolvedTargetIndex, "guard");
-      playMonsterCounterPhantom(target, toEl, fromEl);
-      playGuardShield(toEl);
-      playEpicAction("防御", "guard");
-      playArrow(fromEl, toEl, "attack", "防御");
-      addLog(battleLogText(attacker, target, outcome), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
-      speak(`${target.name} 挡下了攻击。`);
-    } else {
-      playMonsterBurst(fromEl);
-      playMonsterBurst(toEl);
-      playSound("attack-clash");
-      shakeScreen();
-      playEpicAction("相杀", "attack");
-      animateAvatar(owner.owner, "hit");
+    if (!battleEvents) return null;
+    if (!target) {
+      playSound("attack-impact");
+      if (!fieldMode) playImpactExplosion(toEl);
+      const dealt = playBattleDamageFeedback(battleEvents, rival);
+      playSound("attack-direct");
       animateAvatar(rival.owner, "hit");
-      playMonsterMotion(owner.owner, attackerIndex, "hit");
-      playMonsterMotion(rival.owner, resolvedTargetIndex, "hit");
-      playArrow(fromEl, toEl, "attack", "相杀");
-      addLog(battleLogText(attacker, target, outcome), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
-      speak(`${attacker.name} 与 ${target.name} 同归于尽。`);
-      playDuelistLine(owner.owner, lineFor(owner.owner, "clash"), false, "clash");
+      if (!fieldMode) playDuelistImpact(rival.owner, toEl);
+      if (!fieldMode) shakeScreen();
+      if (!fieldMode) playEpicAction("直击", "attack");
+      if (!fieldMode) playArrow(fromEl, toEl, "attack", "直接攻击");
+      addLog(`${attacker.name} 直接攻击，造成 ${dealt} 点伤害。`, cardLogMeta(attacker, { actor: owner.owner, type: "battle" }));
+      playDuelistLine(owner.owner, lineFor(owner.owner, "direct", attacker), false, "direct");
+      playDuelistLine(rival.owner, lineFor(rival.owner, "hit"), false, "hit");
+    } else {
+      playSound("attack-impact");
+      if (!fieldMode) playImpactExplosion(toEl);
+      if (outcome.diff > 0) {
+        let dealt = 0;
+        if (target.mode !== "defense" || outcome.rawDamage > 0) {
+          dealt = playBattleDamageFeedback(battleEvents, rival);
+          animateAvatar(rival.owner, "hit");
+          if (!fieldMode) playMonsterMotion(rival.owner, resolvedTargetIndex, "hit");
+        }
+        if (target.mode === "defense") {
+          playSound("guard");
+          if (!fieldMode) playMonsterMotion(rival.owner, resolvedTargetIndex, "guard");
+          if (!fieldMode) playMonsterCounterPhantom(target, toEl, fromEl);
+          if (!fieldMode) playGuardShield(toEl);
+          if (!fieldMode) playEpicAction("防御", "guard");
+        }
+        if (!fieldMode) playMonsterBurst(toEl);
+        playSound("attack-break");
+        if (!fieldMode) shakeScreen();
+        if (!fieldMode) playEpicAction(outcome.kind === "pierceDefense" ? "神格贯穿" : target.mode === "defense" ? "破防" : "击破", "attack");
+        if (!fieldMode) playArrow(fromEl, toEl, "attack", "攻击");
+        addLog(battleLogText(attacker, target, outcome, dealt), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
+        speak(`${attacker.name} 击破目标。`);
+        playDuelistLine(owner.owner, lineFor(owner.owner, "break"), false, "break");
+      } else if (outcome.diff < 0) {
+        const dealt = playBattleDamageFeedback(battleEvents, owner);
+        playSound("damage");
+        animateAvatar(owner.owner, "hit");
+        if (!fieldMode) playMonsterMotion(owner.owner, attackerIndex, "hit");
+        if (!fieldMode) shakeScreen();
+        if (outcome.destroysAttacker) {
+          if (!fieldMode) playMonsterBurst(fromEl);
+          if (!fieldMode) playEpicAction("反击", "attack");
+        } else {
+          playSound("guard");
+          if (!fieldMode) playMonsterMotion(rival.owner, resolvedTargetIndex, "guard");
+          if (!fieldMode) playGuardShield(toEl);
+          if (!fieldMode) playEpicAction("守备反击", "guard");
+        }
+        if (!fieldMode) playArrow(toEl, fromEl, "attack", "反击");
+        addLog(battleLogText(attacker, target, outcome, dealt), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
+        speak(outcome.destroysAttacker
+          ? `${attacker.name} 攻击失败，被反击破坏。`
+          : `${attacker.name} 攻击受阻，承受反击伤害。`);
+        playDuelistLine(owner.owner, lineFor(owner.owner, "hit"), false, "hit");
+      } else if (outcome.kind === "guardHold") {
+        playSound("guard");
+        if (!fieldMode) playMonsterMotion(rival.owner, resolvedTargetIndex, "guard");
+        if (!fieldMode) playMonsterCounterPhantom(target, toEl, fromEl);
+        if (!fieldMode) playGuardShield(toEl);
+        if (!fieldMode) playEpicAction("防御", "guard");
+        if (!fieldMode) playArrow(fromEl, toEl, "attack", "防御");
+        addLog(battleLogText(attacker, target, outcome), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
+        speak(`${target.name} 挡下了攻击。`);
+      } else {
+        if (!fieldMode) playMonsterBurst(fromEl);
+        if (!fieldMode) playMonsterBurst(toEl);
+        playSound("attack-clash");
+        if (!fieldMode) shakeScreen();
+        if (!fieldMode) playEpicAction("相杀", "attack");
+        animateAvatar(owner.owner, "hit");
+        animateAvatar(rival.owner, "hit");
+        if (!fieldMode) playMonsterMotion(owner.owner, attackerIndex, "hit");
+        if (!fieldMode) playMonsterMotion(rival.owner, resolvedTargetIndex, "hit");
+        if (!fieldMode) playArrow(fromEl, toEl, "attack", "相杀");
+        addLog(battleLogText(attacker, target, outcome), cardLogMeta(attacker, { actor: owner.owner, type: "battle", relatedCardIds: relatedCardIds(target) }));
+        speak(`${attacker.name} 与 ${target.name} 同归于尽。`);
+        playDuelistLine(owner.owner, lineFor(owner.owner, "clash"), false, "clash");
+      }
     }
+    if (fieldMode) {
+      const { damageEvent } = findAfterAttackDamageAndGrowthEvents(battleEvents, {
+        attackerId: runtimeCardId(attacker), effectId: attacker.afterAttack
+      });
+      combatHudDamageStage.begin(damageEvent);
+      render();
+    }
+    return {
+      ...battlePresentation({ attacker, target, owner: owner.owner, rival: rival.owner, events: battleEvents }),
+      destroyed: { source: Boolean(outcome?.destroysAttacker), target: Boolean(outcome?.destroysTarget) }
+    };
+  };
+
+  if (fieldMode) {
+    clearBattlePreview({ preserveAttackIntent: true });
+    renderBattlePreview();
+    battleVfx.reset();
+    playSound("attack-charge");
+    playDuelistLine(owner.owner, lineFor(owner.owner, "attack", attacker), false, "attack");
+    const strike = await fieldStrike.play({
+      source: fromEl, target: toEl, attacker, defender: target, onImpact: commitImpact,
+      resolveSource: () => fieldElement(owner.owner, attackerIndex),
+      resolveTarget: () => fieldElement(rival.owner, resolvedTargetIndex) || panelElement(rival.owner)
+    });
+    if (strike.cancelled || runId !== duelRunId || !battleEvents?.length) return false;
+  } else {
+    if (attacker.stars >= 5) {
+      playSound("ace");
+      playAceStrike(attacker, owner.owner, target);
+      await sleep(ATTACK_TIMING_MS.ace);
+    }
+    playSound("attack-charge");
+    playAttackCloseup(attacker, target, owner.owner, rival.owner);
+    playDuelistLine(owner.owner, lineFor(owner.owner, "attack", attacker), false, "attack");
+    await sleep(ATTACK_TIMING_MS.declaration);
+    playSound("attack");
+    animateAvatar(owner.owner, "attack");
+    playMonsterMotion(owner.owner, attackerIndex, "attack");
+    playMonsterPhantom(attacker, fromEl, toEl);
+    playSlashBurst(fromEl, toEl);
+    playAttackCutIn(attacker, target, owner.owner, rival.owner);
+    await sleep(ATTACK_TIMING_MS.impact);
+
+    if (!commitImpact()) return false;
   }
 
   playAttackResetFeedback(owner, attacker, battleEvents);
@@ -4337,6 +4437,7 @@ function skipPlayerAttack() {
 }
 
 function manualEndPlayerTurn() {
+  if (pendingAiReveal || aiHistoryOpen) return;
   if (!canUsePlayerTurnControls(state)) {
     cue("抽卡完成后才能主动结束回合。");
     return;
@@ -4365,6 +4466,7 @@ function togglePause() {
     return;
   }
   state.paused = !state.paused;
+  syncAiPlaybackPause();
   if (state.paused) {
     clearPlayerIdleTimers();
     stopAll();
@@ -4625,11 +4727,13 @@ function chooseLiveAiTurnGoal() {
 }
 
 async function runAiTurn() {
+  const runId = duelRunId;
   if (state.gameOver || state.paused || !state.started || state.aiRunning) return;
   state.aiRunning = true;
   cue("对手开始行动。");
   try {
     await sleep(950);
+    if (runId !== duelRunId) return;
     const drawEvents = dispatchResolveTurnDrawFromUiState(state, "ai");
     queuePhaseStageEvents(drawEvents);
     applyDrawEventFeedback(state.ai, drawEvents, true);
@@ -4638,56 +4742,70 @@ async function runAiTurn() {
     dispatchPendingScriptedSummons();
     render();
     await sleep(1500);
+    if (runId !== duelRunId) return;
     let turnGoal = chooseLiveAiTurnGoal();
     if (aiFortifyGods({ turnGoal, counterPlan: currentBossCounterPlan() })) {
       render();
       await sleep(1100);
+      if (runId !== duelRunId) return;
       turnGoal = chooseLiveAiTurnGoal();
     }
     await aiPlaySpells({ turnGoal, timing: "beforeSummon", getTurnGoal: chooseLiveAiTurnGoal });
+    if (runId !== duelRunId) return;
     if (state.gameOver) return;
     await sleep(850);
+    if (runId !== duelRunId) return;
     turnGoal = chooseLiveAiTurnGoal();
     if (aiSetTraps({ turnGoal, getTurnGoal: chooseLiveAiTurnGoal }) > 0) {
       render();
       await sleep(1300);
+      if (runId !== duelRunId) return;
     }
     if (state.gameOver) return;
     turnGoal = chooseLiveAiTurnGoal();
     const summonAction = await aiSummon();
+    if (runId !== duelRunId) return;
     let summonedThisTurn = Boolean(summonAction);
     let deployedGodThisTurn = summonAction?.card?.archetype === "三曜神格";
     if (summonedThisTurn) {
       render();
-      await sleep(1700);
+      await sleep(250);
+      if (runId !== duelRunId) return;
     }
     while (!state.gameOver && state.ai.extraSummon > 0) {
       cue("对手还有额外召唤机会。");
       playEpicAction("额外召唤", "draw", 900);
       playVoice("ai", "summon", "对手准备额外召唤。");
       await sleep(950);
+      if (runId !== duelRunId) return;
       turnGoal = chooseLiveAiTurnGoal();
       const extraSummonAction = await aiSummon();
+      if (runId !== duelRunId) return;
       if (!extraSummonAction) break;
       deployedGodThisTurn = deployedGodThisTurn || extraSummonAction.card?.archetype === "三曜神格";
       summonedThisTurn = true;
       render();
-      await sleep(1850);
+      await sleep(250);
+      if (runId !== duelRunId) return;
     }
     if (state.gameOver) return;
     if (deployedGodThisTurn && summonedThisTurn) {
       turnGoal = chooseLiveAiTurnGoal();
       await aiPlaySpells({ turnGoal, timing: "afterSummon", getTurnGoal: chooseLiveAiTurnGoal });
+      if (runId !== duelRunId) return;
     }
     if (state.gameOver) return;
     turnGoal = chooseLiveAiTurnGoal();
     await aiPlayFusion({ turnGoal });
+    if (runId !== duelRunId) return;
     if (state.gameOver) return;
     const phaseEvents = dispatchChangePhaseFromUiState(state, "ai", PHASES.battle);
     queuePhaseStageEvents(phaseEvents);
     await aiAttack({ getTurnGoal: chooseLiveAiTurnGoal });
+    if (runId !== duelRunId) return;
     if (!state.gameOver) {
       await sleep(1150);
+      if (runId !== duelRunId) return;
       try {
         const endEvents = dispatchEndTurnFromUiState(state, "ai", {
           reason: "ai-complete",
@@ -4703,7 +4821,7 @@ async function runAiTurn() {
       render();
     }
   } finally {
-    state.aiRunning = false;
+    if (runId === duelRunId) state.aiRunning = false;
   }
 }
 
@@ -4712,6 +4830,7 @@ async function aiPlaySpells({
   timing = "beforeSummon",
   getTurnGoal = null
 } = {}) {
+  const runId = duelRunId;
   const liveTurnGoal = () => typeof getTurnGoal === "function" ? getTurnGoal() : turnGoal;
   let action = chooseAiSpellAction({
     hand: state.ai.hand,
@@ -4725,6 +4844,7 @@ async function aiPlaySpells({
   while (action && !state.gameOver) {
     const playedCard = action.card;
     const acted = await playSpell(state.ai, state.player, action.handIndex);
+    if (runId !== duelRunId) return;
     if (!acted) return;
     if (action.reason === "trioDeploymentFirst") {
       addLog(
@@ -4742,7 +4862,8 @@ async function aiPlaySpells({
         cardLogMeta(playedCard, { actor: "ai", type: "decision" })
       );
     }
-    await sleep(1650);
+    await sleep(250);
+    if (runId !== duelRunId) return;
     action = chooseAiSpellAction({
       hand: state.ai.hand,
       owner: state.ai,
@@ -4788,15 +4909,11 @@ async function aiPlayFusion({ turnGoal = "pressure" } = {}) {
   const resultCard = findRuntimeCard(resultEvent?.cardId)?.card || action.resultCard;
   playSound(`spell-${fusionCard.effect}`);
   animateAvatar("ai", "cast");
-  playCenterCardEffect(fusionCard, spellCaption(fusionCard));
-  playEpicAction("融合", "draw");
   const spellLog = addLog(`AI 发动魔法卡 ${fusionCard.name}。`, cardLogMeta(fusionCard, {
     actor: "ai",
     type: "spell"
   }));
-  speak(`对手发动魔法卡，${fusionCard.name}。`);
   playDuelistLine("ai", lineFor("ai", "spell", fusionCard), false, "spell");
-  await waitForAiReveal({ ...spellLog, revealKind: "spell" });
 
   const reasonText = action.reason === "fusionDefense"
     ? `对手选择「${resultCard?.name || action.fusionResultTemplateId}」建立防线。`
@@ -4810,12 +4927,14 @@ async function aiPlayFusion({ turnGoal = "pressure" } = {}) {
   }));
   resolveEngineSpellFeedback(state.ai, state.player, fusionCard, fusionEvents);
   resolveElementCombos(state.ai, state.player, "spell");
-  checkGameOver();
   render("summon-ai-" + action.fieldIndex);
+  if (!await waitForAiReveal({ ...spellLog, revealKind: "spell", events: fusionEvents, allowAfterGameOver: true })) return false;
+  checkGameOver();
   return true;
 }
 
 async function aiSummon() {
+  const runId = duelRunId;
   const action = chooseAiSummonAction({
     hand: state.ai.hand,
     field: state.ai.field,
@@ -4832,7 +4951,7 @@ async function aiSummon() {
   const didSummon = await summonMonster(state.ai, state.player, action.handIndex, action.fieldIndex, {
     tributeIndexes: action.tributeIndexes
   });
-  if (!didSummon) return false;
+  if (runId !== duelRunId || !didSummon) return false;
   const summoned = state.ai.field[action.fieldIndex];
   if (shouldSwitchSummonedMonsterToDefense({
     monster: summoned,
@@ -4919,6 +5038,7 @@ function aiFortifyGods({ turnGoal = "pressure", counterPlan = null } = {}) {
 }
 
 async function aiAttack({ getTurnGoal = null } = {}) {
+  const runId = duelRunId;
   const skippedAttackers = new Set();
   const maxAttackSteps = MONSTER_ZONE_SIZE * 3;
   for (let step = 0; step < maxAttackSteps; step += 1) {
@@ -4977,26 +5097,31 @@ async function aiAttack({ getTurnGoal = null } = {}) {
     }
     cue(`对手用 ${card.name} 发起攻击。`);
     await sleep(900);
+    if (runId !== duelRunId) return;
     if (targetIndex < 0) {
       cue(`对手准备让 ${card.name} 直接攻击。`);
       playEpicAction("Direct", "attack", 980);
       playVoice("ai", "direct", "对手准备直接攻击。");
       await sleep(900);
+      if (runId !== duelRunId) return;
     }
     showBattlePreview(card, target, state.ai, state.player);
     addLog(`对手攻击预判：${battlePreviewText(card, target, state.ai, state.player)}`);
     render();
     await sleep(1080);
+    if (runId !== duelRunId) return;
     const resolved = await attack(state.ai, state.player, attackerIndex, targetIndex);
+    if (runId !== duelRunId) return;
     render();
     if (resolved === false && state.ruleCheckIssue) break;
     await sleep(2200);
+    if (runId !== duelRunId) return;
   }
   addLog("AI attack loop reached the safety cap.");
 }
 
 function checkGameOver() {
-  if (state.gameOverAnnounced) return;
+  if (state.presentationBusy || state.gameOverAnnounced) return;
   if (state.gameOver || state.player.lp <= 0 || state.ai.lp <= 0) {
     state.gameOver = true;
     state.gameOverAnnounced = true;
@@ -5015,7 +5140,10 @@ function checkGameOver() {
       ...gauntletGameOverText(),
       ...campaignGameOverModalView(campaignResult)
     });
-    window.setTimeout(() => showDuelModal(els), 260);
+    const resultRunId = duelRunId;
+    window.setTimeout(() => {
+      if (resultRunId === duelRunId && state.gameOver && state.gameOverAnnounced) showDuelModal(els);
+    }, 260);
   }
 }
 
@@ -5257,8 +5385,8 @@ function openCardDetail(cardOrId) {
     return;
   }
   state.focusedCard = card;
-  resetPlayerIdleCountdown();
   renderCardDetailModal(document, els, view, { asset: monsterAsset(card) });
+  clearPlayerIdleTimers();
 }
 
 function openFocusedCardDetail() {
@@ -5344,6 +5472,7 @@ function addTimeline(entry) {
 }
 
 function announce(text) {
+  els.toast.dataset.targetGuidance = String(Boolean(state.pendingTarget && text.includes("\n")));
   els.toast.textContent = text;
   els.toast.classList.remove("show");
   void els.toast.offsetWidth;
@@ -5360,9 +5489,14 @@ function sleep(ms) {
 }
 
 function waitWhilePaused() {
-  if (!state.paused || state.gameOver) return Promise.resolve();
+  const runId = duelRunId;
+  if (!isAiPlaybackPaused()) return Promise.resolve();
   return new Promise((resolve) => {
-    state.resumeResolvers.push(resolve);
+    const check = () => {
+      if (runId !== duelRunId || !isAiPlaybackPaused()) resolve();
+      else window.setTimeout(check, 60);
+    };
+    check();
   });
 }
 
@@ -5399,6 +5533,7 @@ function timerTextForActionWindow(left) {
 
 function resetPlayerIdleCountdown() {
   clearPlayerIdleTimers();
+  if (pendingAiReveal || aiHistoryOpen || els.cardModal.classList.contains("show")) return;
   if (BROWSER_MANUAL_MODE) return;
   if (!shouldRunPlayerIdleCountdownForState(state)) return;
   const seconds = actionWindowTimeoutSeconds(state.actionWindow);
@@ -5600,7 +5735,9 @@ function render(animationKey = "") {
   const duelHint = duelHintView({
     started: state.started,
     paused: state.paused,
-    pendingPrompt: targetPrompt,
+    pendingPrompt: state.pendingTarget
+      ? `${state.pendingTarget.cardName} · ${targetSelectionScope(state.pendingTarget)} · ${targetSelectionDisplay.legalCount} 个可选`
+      : targetPrompt,
     selectionHint,
     scenarioId: state.scenarioId,
     scenarioGoal,
@@ -5640,6 +5777,7 @@ function render(animationKey = "") {
       : hasSelectedAttackIntent()
         ? "attack"
         : "none";
+  document.body.dataset.duelTargetZone = state.pendingTarget?.mode || "none";
   document.body.dataset.duelCanAct = String(canAct);
   const selectedHand = selectedHandInfo();
   const selectedHandAction = selectedHand ? handActionInfo(selectedHand.card, selectedHand.index) : null;
@@ -5647,7 +5785,6 @@ function render(animationKey = "") {
   const selectedHandReady = Boolean(
     selectedHand &&
     selectedHandAction?.ok &&
-    canUseHandCards(selectedHand.card) &&
     (!state.pendingTribute || selectedTributeIndexes().length === state.pendingTribute.cost) &&
     (!state.pendingFusion || fusionStatus?.complete)
   );
@@ -5802,7 +5939,7 @@ function performScriptedSummon(entry) {
       playSound("summon");
       animateAvatar(summon.owner, "cast");
       playEpicAction("神威再临", "draw", 1300);
-      playVoice("ai", "summon", `神殿的力量，${card.name}再临！`);
+      playVoice(summon.owner, "summon", `${card.name}，再临！`);
       addLog(`神殿的意志重新凝聚——${card.name} 降临！`, cardLogMeta(card, { actor: summon.owner, type: "summon" }));
     }
   } catch (error) {
@@ -5846,8 +5983,10 @@ function playScenarioStoryBeats() {
       actor: beat.speaker === "player" ? "player" : "ai",
       kind: "story"
     });
-    cue(beat.line);
-    playDuelistLine(beat.speaker === "player" ? "player" : "ai", beat.line, true, "story");
+    announce(beat.line);
+    if (!beat.spokenOnSummon) {
+      playDuelistLine(beat.speaker === "player" ? "player" : "ai", beat.line, true, "story");
+    }
   }
   state.storyBeatCursor = events.reduce((max, event) => Math.max(max, Number(event.id) || 0), cursor);
 }
@@ -6030,15 +6169,21 @@ function renderTraps(root, duelist, owner) {
   });
 }
 
-function handActionInfo(card, handIndex) {
+function handActionInfo(card) {
+  // Display order can change independently of the engine's hand. Resolve the
+  // actual card for every readiness check, just as selection/activation does.
+  const handIndex = state.player.hand.findIndex((entry) => entry.uid === card.uid);
   const selected = state.selected?.zone === "hand" && state.selected.uid === card.uid;
-  const targetSelection = card.type === "spell" ? targetSelectionForCard(card, spellEffects) : null;
+  const targetSelection = card.type === "spell"
+    ? pendingTargetForCard(card, handIndex, spellEffects)
+    : null;
   const needsTarget = spellNeedsManualTarget(state.player, card, spellEffects);
   const activeTargetSelection = state.pendingTarget?.handUid === card.uid;
-  const action = describeHandAction(card, {
-    started: state.started,
-    canAct: canUseHandCards(card) || Boolean(state.pendingTarget),
-    paused: state.paused,
+  const timing = handActionTiming(card);
+  let action = describeHandAction(card, {
+    started: true,
+    canAct: true,
+    paused: false,
     pendingTarget: state.pendingTarget,
     selected,
     hasMonsterZone: state.player.field.some((slot) => !slot),
@@ -6062,32 +6207,41 @@ function handActionInfo(card, handIndex) {
   if (card.type === "spell" && fusionDefinition(card)) {
     const fusion = fusionDefinition(card);
     if (!fusionSummonReady(card)) {
-      return {
+      action = {
         ok: false,
         label: "素材不足",
         reason: `需要手牌或场上的 ${fusionMaterialNames(fusion.materials)}，并且手牌或卡组里要有融合怪兽。`
       };
+    } else {
+      const status = state.pendingFusion?.handUid === card.uid ? fusionSelectionStatus() : null;
+      const display = status ? currentFusionSelectionDisplay() : null;
+      action = {
+        ...action,
+        label: status?.needsResult ? "选择融合结果" : status ? `融合 ${status.selectedCount}/${status.requiredCount}` : "融合召唤",
+        reason: display
+          ? display.text
+          : `确认后选择 ${fusionMaterialNames(fusion.materials)} 作为融合素材。`
+      };
     }
-    const status = state.pendingFusion?.handUid === card.uid ? fusionSelectionStatus() : null;
-    const display = status ? currentFusionSelectionDisplay() : null;
-    return {
-      ...action,
-      label: status?.needsResult ? "选择融合结果" : status ? `融合 ${status.selectedCount}/${status.requiredCount}` : "融合召唤",
-      reason: display
-        ? display.text
-        : `确认后选择 ${fusionMaterialNames(fusion.materials)} 作为融合素材。`
-    };
   }
   const tributeAction = tributeSelectionAction(card, state.pendingTribute, state.player.field, action);
   if (tributeAction) {
-    return {
+    action = {
       ...tributeAction,
       reason: state.pendingTribute?.handUid === card.uid
         ? currentTributeSelectionDisplay().text
         : tributeAction.reason
     };
   }
-  return action;
+  return projectHandAction({
+    card,
+    handIndex,
+    ruleAction: action,
+    timing,
+    targetSelection,
+    pendingTarget: state.pendingTarget,
+    duelists: { player: state.player, ai: state.ai }
+  });
 }
 
 function orderedPlayerHand() {
@@ -6105,11 +6259,12 @@ function moveDisplayedHandCard(card, direction) {
   renderHand();
 }
 
-function swapDisplayedHandCards(sourceUid, targetUid) {
+function insertDisplayedHandCard(sourceUid, beforeUid) {
   const source = state.player.hand.find((card) => card?.uid === sourceUid);
   handOrderMode = "custom";
-  handDisplayOrder = swapHandCards(handDisplayOrder, sourceUid, targetUid);
-  if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已交换「${source.name}」的位置。`;
+  const currentOrder = reconcileHandOrder(state.player.hand, handDisplayOrder).map((card) => card.uid);
+  handDisplayOrder = insertHandCard(currentOrder, sourceUid, beforeUid);
+  if (els.handOrderStatus && source) els.handOrderStatus.textContent = `已将「${source.name}」插入新位置。`;
   renderHand();
 }
 
@@ -6166,7 +6321,7 @@ function renderHand(animationKey) {
     fusionSelectedUids: state.pendingFusion ? selectedFusionHandUids() : [],
     directReorder: showToolbar,
     onMoveCard: moveDisplayedHandCard,
-    onSwapCard: swapDisplayedHandCards,
+    onInsertCard: insertDisplayedHandCard,
     onCardDetail: openCardDetail,
     onCardClick: (card) => selectHandCard(card.uid, {
       directActivate: directActivationTracker.register(`hand:${card.uid}`)
@@ -6176,67 +6331,35 @@ function renderHand(animationKey) {
 }
 
 function renderGraveTargets() {
-  const root = els.graveTargets;
-  if (!root) return;
-  root.innerHTML = "";
-  delete root.dataset.summary;
-  root.removeAttribute("aria-label");
-  const targetMode = state.pendingTarget?.mode || "";
-  const active = ["ownGraveMonster", "ownGraveCard"].includes(targetMode);
-  root.hidden = !active;
-  if (!active) return;
-  const candidates = state.player.grave
-    .map((card, index) => card ? {
-      card,
-      index,
-      targetInfo: validateCurrentTarget("player", index, "grave")
-    } : null)
-    .filter(Boolean);
-  const legalCount = candidates.filter((candidate) => candidate.targetInfo.ok).length;
-  const legalAction = targetMode === "ownGraveMonster" ? "可召唤" : "可选择";
-  root.dataset.summary = `${legalAction} ${legalCount} / 墓地 ${candidates.length}`;
-  root.setAttribute("aria-label", `墓地目标：${legalCount} 张${legalAction}，墓地共 ${candidates.length} 张卡。`);
-  candidates.forEach(({ card, index, targetInfo }) => {
-    const cardEl = renderCardElement(document, card, { asset: monsterAsset(card) });
-    cardEl.dataset.zone = "player-grave";
-    cardEl.dataset.targetState = targetInfo.ok ? "legal" : "unavailable";
-    cardEl.classList.add("grave-target-card");
-    cardEl.classList.toggle("targetable", targetInfo.ok);
-    cardEl.classList.toggle("grave-target-unavailable", !targetInfo.ok);
-    const selected = isSelectedTargetSelection(state.pendingTarget, "player", index, "grave");
-    cardEl.classList.toggle("target-selected", targetInfo.ok && selected);
-    cardEl.setAttribute("aria-pressed", String(targetInfo.ok && selected));
-    cardEl.setAttribute("aria-disabled", String(!targetInfo.ok));
-    cardEl.title = targetInfo.ok ? `选择墓地目标：${card.name}` : targetInfo.reason;
-    if (!targetInfo.ok) {
-      const reason = document.createElement("span");
-      reason.className = "grave-target-reason";
-      reason.textContent = /不是怪兽/.test(targetInfo.reason) ? "非怪兽" : "不满足条件";
-      reason.title = targetInfo.reason;
-      cardEl.appendChild(reason);
+  const pending = state.pendingTarget;
+  const grave = ["ownGraveMonster", "ownGraveCard"].includes(pending?.mode);
+  const targets = collectLegalTargetSelections(pending, { player: state.player, ai: state.ai });
+  for (const root of [els.graveTargets, els.fieldTargets]) {
+    if (!root) continue;
+    const active = Boolean(pending) && (root === els.graveTargets ? grave : !grave);
+    root.hidden = !active;
+    if (!active) {
+      root.replaceChildren();
+      delete root.dataset.summary;
+      continue;
     }
-    const detailButton = document.createElement("button");
-    detailButton.type = "button";
-    detailButton.className = "card-detail-entry grave-detail-entry";
-    detailButton.textContent = "详情";
-    detailButton.setAttribute("aria-label", `查看${card.name}详情`);
-    detailButton.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openCardDetail(card);
+    if (grave) {
+      const total = state.player.grave.filter(Boolean).length;
+      const omitted = total - targets.length;
+      root.dataset.summary = `${pending.mode === "ownGraveMonster" ? "可召唤" : "可选择"} ${targets.length} / 墓地 ${total}${omitted ? ` · 已隐藏 ${omitted} 张不符合条件的卡` : ""}`;
+      root.setAttribute("aria-label", root.dataset.summary);
+    }
+    renderTargetOptions({
+      document, root, targets, selection: pending,
+      selectedAt: (target) => isSelectedTargetSelection(pending, target.owner, target.index, target.zone),
+      definitionForCard: (card) => cardDefinitionById(card.id),
+      assetForCard: monsterAsset,
+      onSelect: (target, doubleClick) => interactWithPendingSpellTarget(target.owner, target.index, target.zone, {
+        directActivate: doubleClick || directActivationTracker.register(`${target.owner}:${target.zone}:${target.index}`)
+      }),
+      onDetail: (card) => openCardDetail(cardDefinitionById(card.id) || card)
     });
-    cardEl.appendChild(detailButton);
-    cardEl.addEventListener("click", () => {
-      interactWithPendingSpellTarget("player", index, "grave", {
-        directActivate: directActivationTracker.register(`player:grave:${index}`)
-      });
-    });
-    cardEl.addEventListener("dblclick", (event) => {
-      event.preventDefault();
-      interactWithPendingSpellTarget("player", index, "grave", { directActivate: true });
-    });
-    root.appendChild(cardEl);
-  });
+  }
 }
 
 function renderChainHistory() {
@@ -6286,20 +6409,21 @@ function toggleVoice() {
   render();
 }
 
-function showAce(card, owner = "player") {
-  els.aceName.textContent = `${card.name} 登场`;
-  els.aceIcon.textContent = card.icon;
-  els.aceLine.textContent = aceLine(card);
-  els.aceOverlay.classList.remove("show");
-  els.aceOverlay.classList.remove("fire", "wind", "shadow", "light");
-  if (card.element) {
-    els.aceOverlay.classList.add(card.element);
-  }
-  void els.aceOverlay.offsetWidth;
-  els.aceOverlay.classList.add("show");
+function showAce(card, owner = "player", arrivalLine = "") {
   playSound("ace");
-  window.setTimeout(() => els.aceOverlay.classList.remove("show"), 2300);
-  playDuelistLine(owner, lineFor(owner, "ace", card), true, "ace");
+  playDuelistLine(owner, arrivalLine || lineFor(owner, "ace", card), true, "ace");
+  els.aceOverlay.classList.remove("show");
+  void battleVfx.playSummon(card, owner).then(({ played, cancelled }) => {
+    if (played || cancelled) return;
+    els.aceName.textContent = card.name + " 登场";
+    els.aceIcon.textContent = card.icon;
+    els.aceLine.textContent = aceLine(card);
+    els.aceOverlay.classList.remove("fire", "wind", "shadow", "light");
+    if (card.element) els.aceOverlay.classList.add(card.element);
+    void els.aceOverlay.offsetWidth;
+    els.aceOverlay.classList.add("show");
+    window.setTimeout(() => els.aceOverlay.classList.remove("show"), 2300);
+  });
 }
 
 function showGuide() {
@@ -6399,6 +6523,23 @@ els.aiRevealDetail.addEventListener("click", () => {
   if (pendingAiReveal?.cardId) openCardDetail(pendingAiReveal.cardId);
 });
 els.aiRevealContinue.addEventListener("click", confirmAiRevealContinue);
+els.aiActionPause.addEventListener("click", () => {
+  aiPlaybackPaused = !aiPlaybackPaused;
+  syncAiPlaybackPause();
+  renderAiReveal();
+});
+els.aiHistoryToggle.addEventListener("click", () => {
+  aiHistoryOpen = true;
+  syncAiPlaybackPause();
+  clearPlayerIdleTimers();
+  renderAiReveal();
+});
+els.aiHistoryClose.addEventListener("click", () => {
+  aiHistoryOpen = false;
+  syncAiPlaybackPause();
+  renderAiReveal();
+  resetPlayerIdleCountdown();
+});
 els.chainYes.addEventListener("click", confirmTrapChoice);
 els.chainNo.addEventListener("click", () => answerChain(false));
 els.restartBtn.addEventListener("click", prepareGame);

@@ -279,7 +279,7 @@ test("the authored campaign chapters expose two attainable event objectives", ()
 test("the reworked campaign chapters provide story beats backed by the shared trigger schema", () => {
   for (const chapter of trial.chapters) {
     const beats = scenarioSetups[chapter.scenarioId].storyBeats;
-    assert.equal(beats.length, 3);
+    assert.equal(beats.length, chapter.scenarioId === "protagonistTrioOmegaAscension" ? 4 : 3);
     assert.equal(new Set(beats.map((beat) => beat.id)).size, beats.length);
     for (const beat of beats) {
       assert.ok(beat.when?.eventType);

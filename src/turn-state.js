@@ -68,6 +68,7 @@ export function actionWindowTimeoutSeconds(windowName) {
 export function canPlayerActState({
   started = false,
   paused = false,
+  presentationBusy = false,
   turn = "",
   gameOver = false,
   actionWindow = ""
@@ -75,6 +76,7 @@ export function canPlayerActState({
   return Boolean(
     started &&
     !paused &&
+    !presentationBusy &&
     turn === TURNS.player &&
     !gameOver &&
     actionWindow !== ACTION_WINDOWS.resolution
@@ -144,7 +146,7 @@ export function playerActionWindowDecision(state = {}, {
 }
 
 export function pauseResumeStep(state = {}) {
-  if (!state.started || state.gameOver || state.paused) return "none";
+  if (!state.started || state.gameOver || state.paused || state.presentationBusy) return "none";
   if (state.turn === TURNS.player && state.phase === PHASES.draw) return "playerDraw";
   if (state.turn === TURNS.player && state.phase === PHASES.main) return "playerMain";
   if (state.turn === TURNS.player && state.phase === PHASES.battle) return "playerBattle";

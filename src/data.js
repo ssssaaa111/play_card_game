@@ -1930,7 +1930,8 @@ export const scenarioSetups = {
         id: "full-trio-convergence",
         when: { eventType: "TRIO_CONVERGENCE_RESOLVED", playerId: "ai" },
         speaker: "ai",
-        line: "三只祭品已经足够——日、月、星，三曜共降！"
+        spokenOnSummon: true,
+        line: "日月星辰，听我号令。三曜，共降！"
       },
       {
         id: "full-snare-committed",
@@ -1989,13 +1990,22 @@ export const scenarioSetups = {
         id: "ascension-sun-descends",
         when: { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "trio-sun-judicator", summonType: "tribute" },
         speaker: "ai",
-        line: "第一轮祭品已经足够。先由日曜裁决你的防线！"
+        spokenOnSummon: true,
+        line: "烈日临空，裁决降临！"
       },
       {
         id: "ascension-moon-descends",
         when: { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "trio-moon-warden", summonType: "tribute" },
         speaker: "ai",
-        line: "星火重聚，第二轮祭品完成——月曜，独立降临！"
+        spokenOnSummon: true,
+        line: "月蚀蔽天，万籁归寂！"
+      },
+      {
+        id: "ascension-star-descends",
+        when: { eventType: "MONSTER_SUMMONED", playerId: "ai", cardId: "trio-star-herald", summonType: "tribute" },
+        speaker: "ai",
+        spokenOnSummon: true,
+        line: "群星陨落，终焉降临！"
       }
     ]
   },

@@ -1,6 +1,7 @@
 import { createCardElement } from "./card-renderer.js";
+import { handInsertionPoint, handInsertionPreview } from "./hand-order.js";
 
-const HAND_DRAG_SETTLE_MS = 110;
+const handDragSessions = new WeakMap();
 
 function enabledClassEntries(entries = {}) {
   return Object.entries(entries)
@@ -88,11 +89,22 @@ export function renderHandCards({
   fusionSelectedUids = [],
   directReorder = false,
   onMoveCard = () => {},
-  onSwapCard = () => {},
+  onInsertCard = () => {},
   onCardDetail = () => {},
   onCardClick = () => {},
   onCardDoubleClick = () => {}
 } = {}) {
+  const session = handDragSessions.get(root);
+  if (session) {
+    if (started && directReorder && cards.some((card) => card.uid === session.uid)) {
+      // AI actions redraw the board while the pointer is held. Keep its source
+      // node alive and retain only the latest hand update until the gesture ends.
+      const options = arguments[0];
+      session.pendingRender = () => renderHandCards(options);
+      return;
+    }
+    session.cancel(false);
+  }
   const fragment = document.createDocumentFragment();
   cards.forEach((card, index) => {
     const action = actionForCard(card, index);
@@ -114,6 +126,11 @@ export function renderHandCards({
     cardEl.dataset.zone = "hand";
     cardEl.dataset.cardUid = card.uid || "";
     cardEl.dataset.displayIndex = String(index);
+    cardEl.dataset.actionState = action.ok ? "ready" : action.ruleOk ? "timing-blocked" : "blocked";
+    cardEl.dataset.actionLabel = view.actionLabel;
+    cardEl.dataset.actionReason = view.actionReason;
+    cardEl.dataset.targetCount = String(action.target?.count || 0);
+    cardEl.dataset.targetScope = action.target?.scope || "";
     cardEl.draggable = false;
     cardEl.classList.toggle("hand-direct-reorder", directReorder);
     cardEl.setAttribute("aria-grabbed", "false");
@@ -147,123 +164,130 @@ export function renderHandCards({
 
     if (directReorder) {
       cardEl.tabIndex = 0;
-      cardEl.setAttribute("aria-description", "可直接拖动换位；按住 Alt 再按左右方向键可微调顺序");
+      cardEl.setAttribute("aria-description", "双方回合均可拖动插入；按住 Alt 再按左右方向键可微调顺序");
       let pointerDrag = null;
       let dragGhost = null;
-      const clearPointerTargets = () => {
-        root.querySelectorAll(".is-drop-target").forEach((element) => {
-          element.classList.remove("is-drop-target", "swap-preview-left", "swap-preview-right");
-        });
-      };
-      const removeDragGhost = () => {
-        dragGhost?.remove();
-        dragGhost = null;
-        root.classList.remove("is-reordering");
-      };
+      let placeholder = null;
+
       const positionDragGhost = (event) => {
-        if (!dragGhost || !pointerDrag) return;
+        if (!dragGhost) return;
         dragGhost.style.left = `${event.clientX - pointerDrag.offsetX}px`;
         dragGhost.style.top = `${event.clientY - pointerDrag.offsetY}px`;
-        const tilt = Math.max(-4, Math.min(4, (event.clientX - pointerDrag.lastX) * 0.12));
-        dragGhost.style.setProperty("--hand-drag-tilt", `${tilt}deg`);
-        pointerDrag.lastX = event.clientX;
-      };
-      const createDragGhost = (event) => {
-        if (dragGhost || !pointerDrag) return;
-        const ghost = cardEl.cloneNode(true);
-        ghost.classList.remove("is-dragging", "is-drop-target", "swap-preview-left", "swap-preview-right");
-        ghost.classList.add("hand-drag-ghost");
-        ghost.removeAttribute("tabindex");
-        ghost.setAttribute("aria-hidden", "true");
-        ghost.querySelectorAll("button").forEach((button) => button.setAttribute("tabindex", "-1"));
-        ghost.style.width = `${pointerDrag.sourceRect.width}px`;
-        ghost.style.height = `${pointerDrag.sourceRect.height}px`;
-        document.body.appendChild(ghost);
-        dragGhost = ghost;
-        root.classList.add("is-reordering");
-        positionDragGhost(event);
-      };
-      const beginPointerDrag = (event) => {
-        const sourceRect = cardEl.getBoundingClientRect();
-        pointerDrag = {
-          pointerId: event.pointerId ?? null,
-          x: event.clientX,
-          y: event.clientY,
-          lastX: event.clientX,
-          offsetX: event.clientX - sourceRect.left,
-          offsetY: event.clientY - sourceRect.top,
-          sourceRect,
-          targetUid: "",
-          active: false
-        };
       };
       const updatePointerDrag = (event) => {
-        if (!pointerDrag) return;
+        if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
         if (!pointerDrag.active && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) < 6) return;
         if (!pointerDrag.active) {
           pointerDrag.active = true;
-          createDragGhost(event);
+          pointerDrag.bounds = root.getBoundingClientRect();
+          pointerDrag.scrollLeft = root.scrollLeft;
+          pointerDrag.scrollTop = root.scrollTop;
+          // Measure once, before the preview moves any cards. Moving hit targets
+          // would otherwise make a stationary pointer flip between two slots.
+          pointerDrag.layout = Array.from(root.querySelectorAll('[data-zone="hand"]')).map((element) => ({
+            uid: element.dataset.cardUid, element, rect: element.getBoundingClientRect()
+          }));
+          root.classList.add("is-reordering");
+          cardEl.classList.add("is-dragging");
+          cardEl.setAttribute("aria-grabbed", "true");
+          dragGhost = cardEl.cloneNode(true);
+          dragGhost.classList.remove("is-dragging");
+          dragGhost.classList.add("hand-drag-ghost");
+          dragGhost.removeAttribute("tabindex");
+          dragGhost.setAttribute("aria-hidden", "true");
+          dragGhost.querySelectorAll("button").forEach((button) => button.setAttribute("tabindex", "-1"));
+          dragGhost.style.width = `${pointerDrag.rect.width}px`;
+          dragGhost.style.height = `${pointerDrag.rect.height}px`;
+          document.body.appendChild(dragGhost);
+          placeholder = document.createElement("span");
+          placeholder.className = "hand-insertion-placeholder";
+          placeholder.setAttribute("aria-hidden", "true");
+          document.body.appendChild(placeholder);
         }
         suppressClick = true;
-        cardEl.classList.add("is-dragging");
-        cardEl.setAttribute("aria-grabbed", "true");
         positionDragGhost(event);
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-zone="hand"]');
-        const targetUid = target && target !== cardEl ? target.dataset.cardUid || "" : "";
-        if (targetUid !== pointerDrag.targetUid) {
-          clearPointerTargets();
-          pointerDrag.targetUid = targetUid;
-          if (targetUid) {
-            const sourceIndex = Number(cardEl.dataset.displayIndex);
-            const targetIndex = Number(target.dataset.displayIndex);
-            target.classList.add("is-drop-target", sourceIndex < targetIndex ? "swap-preview-left" : "swap-preview-right");
+        const bounds = root.getBoundingClientRect();
+        const dx = bounds.left - pointerDrag.bounds.left - (root.scrollLeft - pointerDrag.scrollLeft);
+        const dy = bounds.top - pointerDrag.bounds.top - (root.scrollTop - pointerDrag.scrollTop);
+        const layout = pointerDrag.layout.map(({ uid, rect }) => ({
+          uid, rect: { left: rect.left + dx, right: rect.right + dx, top: rect.top + dy,
+            bottom: rect.bottom + dy, width: rect.width, height: rect.height }
+        }));
+        const inside = event.clientX >= bounds.left - 12 && event.clientX <= bounds.right + 12
+          && event.clientY >= bounds.top - 12 && event.clientY <= bounds.bottom + 12;
+        pointerDrag.insertion = inside ? handInsertionPoint(layout, card.uid, event.clientX, event.clientY) : null;
+        placeholder.hidden = !pointerDrag.insertion;
+        if (pointerDrag.insertion) {
+          const preview = handInsertionPreview(layout, card.uid, pointerDrag.insertion.beforeUid);
+          for (const shift of preview.shifts) {
+            const element = pointerDrag.layout.find((entry) => entry.uid === shift.uid).element;
+            element.style.translate = `${shift.x}px ${shift.y}px`;
           }
+          const slot = preview.slot;
+          placeholder.style.left = `${slot.left}px`;
+          placeholder.style.top = `${slot.top}px`;
+          placeholder.style.width = `${slot.width}px`;
+          placeholder.style.height = `${slot.height}px`;
+          placeholder.style.clipPath = `inset(${Math.max(0, bounds.top - slot.top)}px ${Math.max(0, slot.right - bounds.right)}px ${Math.max(0, slot.bottom - bounds.bottom)}px ${Math.max(0, bounds.left - slot.left)}px)`;
+        } else {
+          pointerDrag.layout.forEach(({ element }) => { element.style.translate = ""; });
         }
         event.preventDefault();
       };
-      cardEl.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0 || event.target.closest("button")) return;
-        beginPointerDrag(event);
-        try {
-          cardEl.setPointerCapture?.(event.pointerId);
-        } catch {
-          // Synthetic browser smoke events do not own a native pointer capture.
-        }
-      });
-      cardEl.addEventListener("pointermove", (event) => {
-        if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
-        updatePointerDrag(event);
-      });
-      const finishPointerDrag = (event) => {
-        if (!pointerDrag || (event.pointerId != null && pointerDrag.pointerId !== event.pointerId)) return;
-        const activeDrag = pointerDrag.active;
-        const targetUid = activeDrag && event.type !== "pointercancel" ? pointerDrag.targetUid : "";
-        const target = targetUid
-          ? root.querySelector(`[data-zone="hand"][data-card-uid="${targetUid}"]`)
-          : null;
-        const settleRect = target?.getBoundingClientRect() || pointerDrag.sourceRect;
-        pointerDrag = null;
-        cardEl.setAttribute("aria-grabbed", "false");
-        const completeDrag = () => {
-          cardEl.classList.remove("is-dragging");
-          clearPointerTargets();
-          removeDragGhost();
-          if (targetUid) onSwapCard(card.uid, targetUid);
-          suppressClick = false;
-        };
-        if (activeDrag && dragGhost) {
-          dragGhost.getBoundingClientRect();
-          dragGhost.classList.add("is-settling");
-          dragGhost.style.left = `${settleRect.left}px`;
-          dragGhost.style.top = `${settleRect.top}px`;
-          dragGhost.style.setProperty("--hand-drag-tilt", "0deg");
-          document.defaultView?.setTimeout(completeDrag, HAND_DRAG_SETTLE_MS);
-        } else {
-          completeDrag();
-        }
+      const cancelPointerDrag = () => finishPointerDrag({ type: "pointercancel" });
+      const escapePointerDrag = (event) => {
+        if (event.key === "Escape") cancelPointerDrag();
       };
-      cardEl.addEventListener("pointerup", finishPointerDrag);
-      cardEl.addEventListener("pointercancel", finishPointerDrag);
+      const finishPointerDrag = (event, flush = true) => {
+        if (!pointerDrag || (event.pointerId != null && pointerDrag.pointerId !== event.pointerId)) return;
+        if (event.type === "pointerup" && pointerDrag.active) updatePointerDrag(event);
+        const finished = pointerDrag;
+        const pendingRender = handDragSessions.get(root)?.pendingRender;
+        pointerDrag = null;
+        handDragSessions.delete(root);
+        document.removeEventListener("pointermove", updatePointerDrag);
+        document.removeEventListener("pointerup", finishPointerDrag);
+        document.removeEventListener("pointercancel", cancelPointerDrag);
+        document.removeEventListener("keydown", escapePointerDrag);
+        document.defaultView?.removeEventListener("blur", cancelPointerDrag);
+        cardEl.removeEventListener("lostpointercapture", cancelPointerDrag);
+        try { cardEl.releasePointerCapture?.(finished.pointerId); } catch {}
+        cardEl.classList.remove("is-dragging");
+        cardEl.setAttribute("aria-grabbed", "false");
+        finished.layout?.forEach(({ element }) => { element.style.translate = ""; });
+        root.classList.remove("is-reordering");
+        dragGhost?.remove();
+        placeholder?.remove();
+        dragGhost = placeholder = null;
+        if (finished.active && finished.insertion && event.type === "pointerup") {
+          onInsertCard(card.uid, finished.insertion.beforeUid);
+        } else if (flush) {
+          pendingRender?.();
+        }
+        // Keep the native click following pointerup from also playing this card.
+        document.defaultView?.setTimeout(() => { suppressClick = false; }, 0);
+      };
+      cardEl.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || event.target.closest("button") || handDragSessions.has(root)) return;
+        const rect = cardEl.getBoundingClientRect();
+        pointerDrag = {
+          pointerId: event.pointerId,
+          x: event.clientX, y: event.clientY,
+          offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top,
+          rect, active: false, insertion: null
+        };
+        handDragSessions.set(root, {
+          uid: card.uid,
+          cancel: (flush) => finishPointerDrag({ type: "pointercancel" }, flush)
+        });
+        document.addEventListener("pointermove", updatePointerDrag, { passive: false });
+        document.addEventListener("pointerup", finishPointerDrag);
+        document.addEventListener("pointercancel", cancelPointerDrag);
+        document.addEventListener("keydown", escapePointerDrag);
+        document.defaultView?.addEventListener("blur", cancelPointerDrag);
+        cardEl.addEventListener("lostpointercapture", cancelPointerDrag);
+        try { cardEl.setPointerCapture?.(event.pointerId); } catch {}
+      });
       cardEl.addEventListener("keydown", (event) => {
         if (!event.altKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
         event.preventDefault();
@@ -280,6 +304,7 @@ export function renderHandCards({
     });
     cardEl.addEventListener("dblclick", (event) => {
       event.preventDefault();
+      if (suppressClick) return;
       onCardDoubleClick(card, index);
     });
     fragment.appendChild(cardEl);

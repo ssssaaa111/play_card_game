@@ -42,6 +42,18 @@ export function targetSelectionPrompt(selection) {
   );
 }
 
+export function targetSelectionScope(selection) {
+  const scopes = {
+    ownMonster: "我方场上怪兽",
+    enemyMonster: "敌方场上怪兽",
+    enemySpellTrap: "敌方魔陷区有卡的位置",
+    ownGraveMonster: "我方墓地怪兽",
+    ownGraveCard: "我方墓地卡牌"
+  };
+  const scope = scopes[selection?.mode] || "合法目标";
+  return selection?.targetRule === "strongest" ? `${scope} · 攻击力最高` : scope;
+}
+
 function targetSuccess(target, owner, index, zone) {
   return {
     ok: true,
@@ -267,8 +279,12 @@ export function buildTargetSelectionDisplay(pending, duelists = {}) {
     ? `${selectedByDefault ? "已默认选择" : "已选择"}：${selectedName}。`
     : "尚未选择目标。";
   const guidance = selectedTarget
-    ? "点击其他高亮目标可以更换，确认后发动。"
-    : "请点击一个高亮目标。";
+    ? legalTargets.length === 1
+      ? "仅此 1 个目标，确认后发动。"
+      : "点击其他候选可以更换，确认后发动。"
+    : ["ownGraveMonster", "ownGraveCard"].includes(pending.mode)
+      ? "点击下方墓地卡牌，再确认发动。"
+      : "点击下方候选或场上高亮卡牌，再确认发动。";
   return {
     complete: Boolean(selectedTarget),
     legalCount: legalTargets.length,
@@ -276,7 +292,7 @@ export function buildTargetSelectionDisplay(pending, duelists = {}) {
     selectedName,
     selectedByDefault,
     prompt,
-    text: [prompt, selectionText, guidance].filter(Boolean).join("\n"),
+    text: [`${pending.cardName} · ${targetSelectionScope(pending)} · ${legalTargets.length} 个可选`, selectionText, guidance].join("\n"),
     confirmLabel: selectedTarget ? "确认发动" : "请选择目标"
   };
 }

@@ -33,14 +33,43 @@ export function shiftHandCard(order = [], uid, direction = 0) {
   return next;
 }
 
-export function swapHandCards(order = [], sourceUid, targetUid) {
+export function insertHandCard(order = [], sourceUid, beforeUid = null) {
   const next = [...order];
-  if (!sourceUid || !targetUid || sourceUid === targetUid) return next;
+  if (!sourceUid || sourceUid === beforeUid) return next;
   const sourceIndex = next.indexOf(sourceUid);
-  const targetIndex = next.indexOf(targetUid);
-  if (sourceIndex < 0 || targetIndex < 0) return next;
-  [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
+  if (sourceIndex < 0 || (beforeUid !== null && !next.includes(beforeUid))) return next;
+  next.splice(sourceIndex, 1);
+  next.splice(beforeUid === null ? next.length : next.indexOf(beforeUid), 0, sourceUid);
   return next;
+}
+
+export function handInsertionPoint(cards, sourceUid, x, y) {
+  const remaining = cards.filter((entry) => entry.uid !== sourceUid);
+  if (!remaining.length) return null;
+  const vertical = cards.length > 1 && Math.abs(cards[0].rect.top - cards[1].rect.top) > cards[0].rect.height / 2;
+  const coordinate = vertical ? y : x;
+  const next = remaining.find(({ rect }) => coordinate < (vertical ? rect.top + rect.height / 2 : rect.left + rect.width / 2));
+  const anchor = (next || remaining.at(-1)).rect;
+  return {
+    beforeUid: next?.uid || null,
+    vertical,
+    left: vertical ? anchor.left : next ? anchor.left - 5 : anchor.right + 5,
+    top: vertical ? next ? anchor.top - 5 : anchor.bottom + 5 : anchor.top,
+    width: vertical ? anchor.width : 3,
+    height: vertical ? 3 : anchor.height
+  };
+}
+
+export function handInsertionPreview(cards, sourceUid, beforeUid) {
+  const order = insertHandCard(cards.map((card) => card.uid), sourceUid, beforeUid);
+  const slot = cards[order.indexOf(sourceUid)]?.rect;
+  return {
+    slot,
+    shifts: cards.filter((card) => card.uid !== sourceUid).map((card) => {
+      const target = cards[order.indexOf(card.uid)].rect;
+      return { uid: card.uid, x: target.left - card.rect.left, y: target.top - card.rect.top };
+    })
+  };
 }
 
 const HAND_TYPE_ORDER = new Map([

@@ -263,6 +263,7 @@ function smokeDebug(ctx) {
     phase: ctx.state.phase,
     paused: Boolean(ctx.state.paused),
     aiRunning: Boolean(ctx.state.aiRunning),
+    presentationBusy: Boolean(ctx.state.presentationBusy),
     actionWindow: ctx.state.actionWindow,
     ruleCheckIssue: ctx.state.ruleCheckIssue || null,
     pendingTrapChoice: ctx.state.pendingTrapChoice ? {
@@ -304,6 +305,7 @@ function setSmokeStatus(status, detail = "") {
 
 function waitForSmoke(predicate, label, timeout = 8000) {
   const startedAt = Date.now();
+  const describe = () => typeof label === "function" ? label() : label;
   return new Promise((resolve, reject) => {
     const tick = () => {
       if (predicate()) {
@@ -311,7 +313,7 @@ function waitForSmoke(predicate, label, timeout = 8000) {
         return;
       }
       if (Date.now() - startedAt > timeout) {
-        reject(new Error(`等待超时：${label}`));
+        reject(new Error(`等待超时：${describe()}`));
         return;
       }
       window.setTimeout(tick, 80);
@@ -413,6 +415,11 @@ function assertScenarioBrief(els, { difficulty, objectives = [], hints = [] }) {
 }
 
 async function finishPlayerTurn(ctx) {
+  await waitForSmoke(
+    () => !ctx.state.presentationBusy && !ctx.els.endTurnBtn.disabled,
+    () => `结束回合按钮在演出完成后恢复可用。${smokeDebug(ctx)}`,
+    12000
+  );
   clickSmokeElement(ctx.els.endTurnBtn, "结束回合按钮");
 }
 
@@ -428,6 +435,18 @@ function fieldSlot(els, owner, index) {
 
 function handCard(els, cardId) {
   return els.hand.querySelector(`[data-zone="hand"][data-card-id="${cardId}"]`);
+}
+
+function handCardActionSnapshot(els, cardId) {
+  const card = handCard(els, cardId);
+  if (!card) return null;
+  return {
+    actionState: card.dataset.actionState || "",
+    actionLabel: card.dataset.actionLabel || "",
+    actionReason: card.dataset.actionReason || "",
+    actionReady: card.classList.contains("action-ready"),
+    actionBlocked: card.classList.contains("action-blocked")
+  };
 }
 
 function assertHandCardReady(els, cardId, label) {
@@ -2507,38 +2526,18 @@ async function runGraveTargetReadabilityBasicSmoke(ctx) {
   await waitForSmoke(
     () => ctx.state.pendingTarget?.effect === "graveRevive" &&
       graveTargetCard(ctx.els, "astral-comet-ace") &&
-      graveTargetCard(ctx.els, "last-spark"),
-    `${smokeName}: legal and illegal grave cards remain visible`,
+      !graveTargetCard(ctx.els, "last-spark"),
+    `${smokeName}: grave picker contains only legal monsters`,
     9000
   );
   const legalTarget = graveTargetCard(ctx.els, "astral-comet-ace");
   const illegalTarget = graveTargetCard(ctx.els, "last-spark");
   if (!legalTarget?.classList.contains("targetable") ||
       legalTarget.dataset.targetState !== "legal" ||
-      !illegalTarget?.classList.contains("grave-target-unavailable") ||
-      illegalTarget.dataset.targetState !== "unavailable" ||
-      illegalTarget.getAttribute("aria-disabled") !== "true" ||
-      !illegalTarget.textContent.includes("非怪兽") ||
+      illegalTarget ||
+      !ctx.els.graveTargets?.dataset.summary?.includes("已隐藏 1 张不符合条件的卡") ||
       !ctx.els.graveTargets?.dataset.summary?.includes("可召唤 1 / 墓地 2")) {
     throw new Error(`${smokeName}: grave target availability is not understandable. ${smokeDebug(ctx)}`);
-  }
-
-  const rulesSnapshot = () => JSON.stringify({
-    hand: ctx.state.player.hand.map((card) => card?.uid || card?.id || null),
-    field: ctx.state.player.field.map((card) => card?.uid || card?.id || null),
-    traps: ctx.state.player.traps.map((card) => card?.uid || card?.id || null),
-    grave: ctx.state.player.grave.map((card) => card?.uid || card?.id || null),
-    pendingTarget: ctx.state.pendingTarget,
-    gameEvents: ctx.state.gameEvents
-  });
-  const beforeInvalidClick = rulesSnapshot();
-  clickSmokeElement(illegalTarget, `${smokeName}: click visible non-monster grave card`);
-  await waitForSmoke(
-    () => ctx.els.toast?.textContent === "不能选择该卡：不是怪兽。",
-    `${smokeName}: invalid grave card explains the exact reason`
-  );
-  if (rulesSnapshot() !== beforeInvalidClick) {
-    throw new Error(`${smokeName}: invalid grave target changed rules state. ${smokeDebug(ctx)}`);
   }
 
   await selectAndConfirmSpellTarget(ctx, legalTarget, `${smokeName}: revive legal monster`);
@@ -2547,7 +2546,7 @@ async function runGraveTargetReadabilityBasicSmoke(ctx) {
       !ctx.state.player.grave.some((card) => card?.id === "astral-comet-ace") &&
       ctx.state.player.grave.some((card) => card?.id === "last-spark") &&
       !ctx.state.pendingTarget,
-    `${smokeName}: legal grave summon still completes after invalid click`,
+    `${smokeName}: only the chosen grave monster moves to the field`,
     9000
   );
   assertUniqueRuntimeCards(ctx.state, smokeName);
@@ -4903,7 +4902,7 @@ async function runAiFusionPlanningBasicSmoke(ctx) {
   await finishPlayerTurn(ctx);
   await waitForSmoke(
     () => aiRevealVisible(ctx.els, "starforge-fusion"),
-    `${smokeName}: AI fusion spell reaches its public reveal. ${smokeDebug(ctx)}`,
+    () => `${smokeName}: AI fusion spell reaches its public reveal. ${smokeDebug(ctx)}`,
     32000
   );
 
@@ -6377,7 +6376,7 @@ async function runTrioOmegaFullDuelSmoke(ctx) {
   await waitForSmoke(
     () => ctx.state.phase === "battle" &&
       !ctx.state.ai.field.some((card) => card?.id === "iron-guardian") &&
-      ctx.state.ai.field.filter(Boolean).length === 3,
+      ctx.state.ai.field.filter(Boolean).length === 3 && !ctx.state.presentationBusy,
     `full duel: one opening body should be destroyed while three tributes remain. ${smokeDebug(ctx)}`,
     12000
   );
@@ -7447,8 +7446,29 @@ async function runBattleTrapSmoke(ctx) {
     "攻击完整结算后重新开放战斗窗口",
     9000
   );
+  await waitForSmoke(
+    () => {
+      const trap = handCard(ctx.els, "mirror-snare");
+      return !ctx.state.presentationBusy &&
+        trap?.dataset.actionState === "ready" &&
+        trap.classList.contains("action-ready");
+    },
+    () => `攻击结算后镜光反制恢复可盖放：${JSON.stringify(handCardActionSnapshot(ctx.els, "mirror-snare"))} ${smokeDebug(ctx)}`,
+    9000
+  );
   clickSmokeElement(handCard(ctx.els, "mirror-snare"), "战斗阶段选择镜光反制");
-  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "战斗阶段陷阱确认可用");
+  await waitForSmoke(
+    () => {
+      const selectedCard = ctx.state.selected?.zone === "hand"
+        ? ctx.state.player.hand.find((card) => card?.uid === ctx.state.selected.uid)
+        : null;
+      return selectedCard?.id === "mirror-snare" &&
+        !ctx.els.choiceActions.hidden &&
+        !ctx.els.choiceConfirmBtn.disabled;
+    },
+    () => `战斗阶段陷阱确认可用：${JSON.stringify(handCardActionSnapshot(ctx.els, "mirror-snare"))} ${smokeDebug(ctx)}`,
+    9000
+  );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "确认盖放镜光反制");
   await waitForSmoke(
     () => ctx.state.phase === "battle" && ctx.state.player.traps.some((card) => card?.id === "mirror-snare"),
@@ -7490,13 +7510,16 @@ async function runAceAttackSmoke(ctx) {
   await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "熔核巨像中央确认可用");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "进入熔核巨像祭品选择");
   await waitForSmoke(() => ctx.state.pendingTribute?.cost === 1, "熔核巨像等待一只祭品");
-  clickSmokeElement(fieldCard(ctx.els, "player", "nova-squire"), "选择新星侍从作为祭品");
+  const tributeIndex = ctx.state.player.field.findIndex((card) => card?.id === "nova-squire");
+  if (!ctx.state.pendingTribute.selectedIndexes.includes(tributeIndex)) {
+    clickSmokeElement(fieldCard(ctx.els, "player", "nova-squire"), "选择新星侍从作为祭品");
+  }
   await waitForSmoke(() => !ctx.els.choiceConfirmBtn.disabled, "熔核巨像祭品选择完成");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "确认祭品召唤熔核巨像");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "flare-titan") &&
       ctx.state.player.grave.some((card) => card?.id === "nova-squire") &&
-      ctx.els.aceOverlay.classList.contains("show") &&
+      ctx.els.effectLayer.querySelector('.live-battle-vfx[data-kind="summon"][data-card-id="flare-titan"]') &&
       fieldCard(ctx.els, "player", "flare-titan"),
     "王牌召唤动画与场上怪兽"
   );
@@ -7506,7 +7529,7 @@ async function runAceAttackSmoke(ctx) {
   clickSmokeElement(fieldCard(ctx.els, "player", "flare-titan"), "选择熔核巨像");
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "iron-guardian")?.classList.contains("attack-target"), "王牌攻击目标高亮");
   clickSmokeElement(fieldCard(ctx.els, "ai", "iron-guardian"), "熔核巨像攻击铁壁守卫");
-  await waitForSmoke(() => ctx.els.effectLayer.querySelector(".ace-strike"), "王牌攻势特写", 9000);
+  await waitForSmoke(() => ctx.els.effectLayer.querySelector('.field-strike[data-card-id="flare-titan"]'), "王牌重击实战动画", 9000);
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "flare-titan" && card.used) &&
       !ctx.state.ai.field.some((card) => card?.id === "iron-guardian"),
@@ -8964,8 +8987,8 @@ async function runAiCardRevealConfirmSmoke(ctx) {
   if (!ctx.els.aiRevealType.textContent.includes("陷阱")) {
     throw new Error("ai-card-reveal-confirm: reveal type should be trap");
   }
-  if (!ctx.els.aiRevealSummary.textContent.includes(card.text)) {
-    throw new Error("ai-card-reveal-confirm: reveal summary should include card effect text");
+  if (!ctx.els.aiRevealSummary.textContent.trim()) {
+    throw new Error("ai-card-reveal-confirm: reveal should explain its public result");
   }
   clickSmokeElement(ctx.els.aiRevealDetail, "ai-card-reveal-confirm: open detail");
   await assertCardDetailModal(ctx, card, "ai-card-reveal-confirm");
@@ -8986,6 +9009,37 @@ async function runAiCardRevealConfirmSmoke(ctx) {
 async function runAiCardRevealQueueSmoke(ctx) {
   setSmokeStatus("running", "ai-card-reveal-queue");
   await startSmokeDuel(ctx, "direct");
+  const handBeforeReveal = ctx.els.hand.getBoundingClientRect();
+  const assertHandAccessDuringReveal = () => {
+    const hand = ctx.els.hand.getBoundingClientRect();
+    const dock = ctx.els.aiActionDock.getBoundingClientRect();
+    if (getComputedStyle(ctx.els.hand).visibility !== "visible" || hand.width < 40 || hand.height < 40) {
+      throw new Error("ai-card-reveal-queue: hand must stay visible during opponent announcements");
+    }
+    const overlaps = dock.left < hand.right && dock.right > hand.left && dock.top < hand.bottom && dock.bottom > hand.top;
+    if (overlaps) throw new Error("ai-card-reveal-queue: action dock must not cover the hand");
+    if (Math.abs(hand.left - handBeforeReveal.left) > 2 || Math.abs(hand.top - handBeforeReveal.top) > 2) {
+      throw new Error("ai-card-reveal-queue: showing an announcement must not move the hand under the pointer");
+    }
+    const accessible = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).some((card) => {
+      const rect = card.getBoundingClientRect();
+      const x = Math.max(rect.left, hand.left, 0) + 20;
+      const y = Math.max(rect.top, hand.top, 0) + 20;
+      if (x >= Math.min(rect.right, hand.right, window.innerWidth) || y >= Math.min(rect.bottom, hand.bottom, window.innerHeight)) return false;
+      return document.elementFromPoint(x, y)?.closest('[data-zone="hand"]') === card;
+    });
+    if (!accessible) throw new Error("ai-card-reveal-queue: a visible hand card must still receive pointer input");
+    const arena = ctx.els.hand.ownerDocument.querySelector(".arena").getBoundingClientRect();
+    if (ctx.els.playerField.getBoundingClientRect().bottom > arena.bottom + 2) {
+      throw new Error("ai-card-reveal-queue: announcement layout must not clip the player field");
+    }
+    for (const button of [ctx.els.aiRevealDetail, ctx.els.aiActionPause, ctx.els.aiRevealContinue, document.querySelector("#utilityMenuToggle")]) {
+      const rect = button.getBoundingClientRect();
+      if (document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.closest("button") !== button) {
+        throw new Error(`ai-card-reveal-queue: ${button.id} must remain reachable during playback`);
+      }
+    }
+  };
   if (typeof ctx.showAiRevealForSmoke !== "function") {
     throw new Error("ai-card-reveal-queue: reveal test hook should exist");
   }
@@ -9013,17 +9067,20 @@ async function runAiCardRevealQueueSmoke(ctx) {
     "ai-card-reveal-queue: first queued reveal shows progress",
     6000
   );
-  clickSmokeElement(ctx.els.aiRevealContinue, "ai-card-reveal-queue: continue first reveal");
+  assertHandAccessDuringReveal();
+  // The normal playback path must advance without a confirmation click.
   await waitForSmoke(
     () => aiRevealVisible(ctx.els, second.id) && (ctx.els.aiRevealProgress?.textContent || "").includes("2 / 2"),
     "ai-card-reveal-queue: second queued reveal shows progress",
     6000
   );
+  assertHandAccessDuringReveal();
   clickSmokeElement(ctx.els.aiRevealDetail, "ai-card-reveal-queue: inspect second reveal");
   await assertCardDetailModal(ctx, second, "ai-card-reveal-queue");
+  await new Promise((resolve) => window.setTimeout(resolve, 2600));
+  if (!aiRevealVisible(ctx.els, second.id)) throw new Error("ai-card-reveal-queue: detail must pause playback");
   clickSmokeElement(ctx.els.zoomClose, "ai-card-reveal-queue: close second detail");
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "ai-card-reveal-queue: detail closes");
-  clickSmokeElement(ctx.els.aiRevealContinue, "ai-card-reveal-queue: continue second reveal");
   await Promise.all([firstReveal, secondReveal]);
   await waitForSmoke(() => !ctx.els.aiRevealModal.classList.contains("show"), "ai-card-reveal-queue: reveal queue closes");
   if (!ctx.state.started || ctx.state.gameOver) {
@@ -9907,7 +9964,7 @@ async function runHandReorderBasicSmoke(ctx) {
   const ruleOrderBefore = ctx.state.player.hand.map((card) => card.uid);
   const displayBefore = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'))
     .map((card) => card.dataset.cardId);
-  if (displayBefore.length < 2) throw new Error(`${smokeName}: scenario must expose at least two hand cards`);
+  if (displayBefore.length < 4) throw new Error(`${smokeName}: scenario must expose at least four hand cards`);
   if (ctx.els.handSortType.hidden || ctx.els.hand.querySelectorAll(".hand-direct-reorder").length !== displayBefore.length) {
     throw new Error(`${smokeName}: one-click type sort and modeless drag sorting should both be available`);
   }
@@ -9934,9 +9991,28 @@ async function runHandReorderBasicSmoke(ctx) {
   }, `${smokeName}: reset restores opening order after direct sort`);
 
   const PointerCtor = window.PointerEvent || window.MouseEvent;
-  const dragSwap = async ({ source, target, pointerId, expectedIds, previewClass, label }) => {
+  const dragInsert = async ({ source, target, pointerId, expectedIds, liveRender = false, cancel = false, label }) => {
+    const handCards = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
+    const firstRect = handCards[0].getBoundingClientRect();
+    const secondRect = handCards[1].getBoundingClientRect();
+    const vertical = Math.abs(firstRect.top - secondRect.top) > firstRect.height / 2;
+    const revealInHand = (element) => {
+      const bounds = ctx.els.hand.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      if (vertical) {
+        if (rect.top < bounds.top) ctx.els.hand.scrollTop -= bounds.top - rect.top + 6;
+        else if (rect.bottom > bounds.bottom) ctx.els.hand.scrollTop += rect.bottom - bounds.bottom + 6;
+      } else {
+        if (rect.left < bounds.left) ctx.els.hand.scrollLeft -= bounds.left - rect.left + 6;
+        else if (rect.right > bounds.right) ctx.els.hand.scrollLeft += rect.right - bounds.right + 6;
+      }
+    };
+    revealInHand(source);
     const sourceRect = source.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
+    const targetBeforeScroll = target.getBoundingClientRect();
+    const sourceX = sourceRect.left + sourceRect.width / 2;
+    const sourceY = sourceRect.top + sourceRect.height / 2;
+    const direction = Math.sign(vertical ? targetBeforeScroll.top - sourceRect.top : targetBeforeScroll.left - sourceRect.left) || 1;
     source.dispatchEvent(new PointerCtor("pointerdown", {
       bubbles: true,
       cancelable: true,
@@ -9944,8 +10020,8 @@ async function runHandReorderBasicSmoke(ctx) {
       pointerType: "mouse",
       button: 0,
       buttons: 1,
-      clientX: sourceRect.left + sourceRect.width / 2,
-      clientY: sourceRect.top + sourceRect.height / 2
+      clientX: sourceX,
+      clientY: sourceY
     }));
     source.dispatchEvent(new PointerCtor("pointermove", {
       bubbles: true,
@@ -9954,58 +10030,139 @@ async function runHandReorderBasicSmoke(ctx) {
       pointerType: "mouse",
       button: 0,
       buttons: 1,
-      clientX: targetRect.left + targetRect.width / 2,
-      clientY: targetRect.top + targetRect.height / 2
+      clientX: sourceX + (vertical ? 0 : direction * 8),
+      clientY: sourceY + (vertical ? direction * 8 : 0)
+    }));
+    revealInHand(target);
+    const targetRect = target.getBoundingClientRect();
+    const clientX = vertical ? targetRect.left + targetRect.width / 2 : targetRect.left - 3;
+    const clientY = vertical ? targetRect.top - 3 : targetRect.top + targetRect.height / 2;
+    source.dispatchEvent(new PointerCtor("pointermove", {
+      bubbles: true,
+      cancelable: true,
+      pointerId,
+      pointerType: "mouse",
+      button: 0,
+      buttons: 1,
+      clientX,
+      clientY
     }));
     const ghost = document.querySelector(".hand-drag-ghost");
     const ghostRect = ghost?.getBoundingClientRect();
-    if (!source.classList.contains("is-dragging") || !target.classList.contains("is-drop-target") ||
-        !target.classList.contains(previewClass) || !ghostRect ||
+    const placeholder = document.querySelector(".hand-insertion-placeholder");
+    if (!source.classList.contains("is-dragging") || !placeholder || placeholder.hidden || !ghostRect ||
         ghostRect.width < sourceRect.width * 0.9 || ghostRect.height < sourceRect.height * 0.9) {
-      throw new Error(`${smokeName}: ${label} should lift a full-size card ghost and preview the swap target`);
+      const handRect = ctx.els.hand.getBoundingClientRect();
+      throw new Error(`${smokeName}: ${label} should lift a full-size card ghost and reserve an insertion slot. ${JSON.stringify({
+        vertical,
+        pointer: { clientX, clientY },
+        hand: { top: handRect.top, bottom: handRect.bottom, scrollTop: ctx.els.hand.scrollTop },
+        source: { top: sourceRect.top, bottom: sourceRect.bottom, dragging: source.classList.contains("is-dragging") },
+        target: { top: targetRect.top, bottom: targetRect.bottom },
+        ghost: ghostRect ? { width: ghostRect.width, height: ghostRect.height } : null,
+        placeholder: placeholder ? { hidden: placeholder.hidden } : null
+      })}`);
     }
-    source.dispatchEvent(new PointerCtor("pointerup", {
+    const slotRect = placeholder.getBoundingClientRect();
+    if (slotRect.width < sourceRect.width * 0.9 || slotRect.height < sourceRect.height * 0.9) {
+      throw new Error(`${smokeName}: preview must reserve a full card, not a thin marker`);
+    }
+    await waitForSmoke(() => {
+      return handCards.some((element) => {
+        if (element === source) return false;
+        const [x = "0", y = "0"] = element.style.translate.split(" ");
+        return Math.hypot(Number.parseFloat(x) || 0, Number.parseFloat(y) || 0) > 20;
+      });
+    }, () => {
+      const handRect = ctx.els.hand.getBoundingClientRect();
+      const slotRect = placeholder?.getBoundingClientRect();
+      return `${smokeName}: ${label} neighboring cards visibly make room. ${JSON.stringify({
+        vertical,
+        pointer: { clientX, clientY },
+        hand: { top: handRect.top, bottom: handRect.bottom, scrollTop: ctx.els.hand.scrollTop },
+        source: { top: sourceRect.top, bottom: sourceRect.bottom },
+        target: { top: targetRect.top, bottom: targetRect.bottom },
+        placeholder: slotRect ? { top: slotRect.top, bottom: slotRect.bottom, hidden: placeholder.hidden } : null,
+        translates: handCards.map((element) => element.style.translate)
+      })}`;
+    });
+    const stableShifts = handCards.map((element) => element.style.translate).join("|");
+    source.dispatchEvent(new PointerCtor("pointermove", { bubbles: true, cancelable: true, pointerId, clientX, clientY }));
+    if (stableShifts !== handCards.map((element) => element.style.translate).join("|")) {
+      throw new Error(`${smokeName}: preview must not oscillate under a stationary pointer`);
+    }
+    if (cancel) {
+      const bounds = ctx.els.hand.getBoundingClientRect();
+      source.dispatchEvent(new PointerCtor("pointermove", {
+        bubbles: true, cancelable: true, pointerId, clientX, clientY: bounds.top - 40
+      }));
+      if (!placeholder.hidden || handCards.some((element) => element.style.translate)) {
+        throw new Error(`${smokeName}: leaving the hand must restore the original arrangement`);
+      }
+    }
+    if (liveRender) {
+      ctx.render();
+      ctx.render();
+      if (!source.isConnected || !ctx.els.hand.classList.contains("is-reordering")) {
+        throw new Error(`${smokeName}: opponent refresh must preserve the active hand gesture`);
+      }
+    }
+    document.dispatchEvent(new PointerCtor(cancel ? "pointercancel" : "pointerup", {
       bubbles: true,
       cancelable: true,
       pointerId,
       pointerType: "mouse",
       button: 0,
       buttons: 0,
-      clientX: targetRect.left + targetRect.width / 2,
-      clientY: targetRect.top + targetRect.height / 2
+      clientX,
+      clientY
     }));
     await waitForSmoke(() => {
       const ids = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]')).map((card) => card.dataset.cardId);
-      return ids.every((id, index) => id === expectedIds[index]) && !document.querySelector(".hand-drag-ghost");
-    }, `${smokeName}: ${label} swaps both card slots`);
+      return ids.length === expectedIds.length && ids.every((id, index) => id === expectedIds[index])
+        && !document.querySelector(".hand-drag-ghost, .hand-insertion-placeholder")
+        && Array.from(ctx.els.hand.children).every((element) => !element.style.translate)
+        && !ctx.els.hand.classList.contains("is-reordering");
+    }, `${smokeName}: ${label} inserts and cleans up the gesture`);
+    if (liveRender && source.isConnected) throw new Error(`${smokeName}: deferred hand render must flush after release`);
   };
 
   let cardsForDrag = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
-  const rightToLeftOrder = [...displayBefore];
-  [rightToLeftOrder[0], rightToLeftOrder[rightToLeftOrder.length - 1]] = [
-    rightToLeftOrder.at(-1),
-    rightToLeftOrder[0]
-  ];
-  await dragSwap({
+  const rightToLeftOrder = [displayBefore.at(-1), ...displayBefore.slice(0, -1)];
+  await dragInsert({
     source: cardsForDrag.at(-1),
     target: cardsForDrag[0],
     pointerId: 73,
     expectedIds: rightToLeftOrder,
-    previewClass: "swap-preview-right",
     label: "right-to-left drag"
   });
 
   cardsForDrag = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
   const leftToRightOrder = [...rightToLeftOrder];
-  [leftToRightOrder[0], leftToRightOrder[1]] = [leftToRightOrder[1], leftToRightOrder[0]];
-  await dragSwap({
+  leftToRightOrder.splice(2, 0, leftToRightOrder.shift());
+  await dragInsert({
     source: cardsForDrag[0],
-    target: cardsForDrag[1],
+    target: cardsForDrag[3],
     pointerId: 74,
     expectedIds: leftToRightOrder,
-    previewClass: "swap-preview-left",
     label: "left-to-right drag"
   });
+  clickSmokeElement(ctx.els.endTurnBtn, `${smokeName}: start a real opponent turn`);
+  await waitForSmoke(() => ctx.state.turn === "ai" && ctx.state.aiRunning, `${smokeName}: opponent turn begins`);
+  {
+    cardsForDrag = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
+    const aiTurnOrder = [...leftToRightOrder];
+    aiTurnOrder.splice(1, 0, aiTurnOrder.pop());
+    await dragInsert({
+      source: cardsForDrag.at(-1), target: cardsForDrag[1], pointerId: 75,
+      expectedIds: aiTurnOrder, liveRender: true, label: "opponent turn with repeated refresh"
+    });
+    cardsForDrag = Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'));
+    await dragInsert({
+      source: cardsForDrag.at(-1), target: cardsForDrag[0], pointerId: 76,
+      expectedIds: aiTurnOrder, liveRender: true, cancel: true, label: "cancel during opponent refresh"
+    });
+  }
   if (ctx.state.player.hand.some((card, index) => card.uid !== ruleOrderBefore[index])) {
     throw new Error(`${smokeName}: UI reorder must not mutate the rule hand array`);
   }
@@ -10223,6 +10380,68 @@ async function runSupportTargetReadabilityBasicSmoke(ctx) {
   setSmokeStatus("passed", smokeName);
 }
 
+async function runHandActionOrderSmoke(ctx) {
+  const name = "hand-action-order";
+  setSmokeStatus("running", name);
+  await startSmokeDuel(ctx, "protagonistTrioOmegaFull");
+  const snapshot = () => Object.fromEntries(Array.from(ctx.els.hand.querySelectorAll('[data-zone="hand"]'))
+    .map((card) => [card.dataset.cardUid, {
+      ready: card.classList.contains("action-ready"),
+      blocked: card.classList.contains("action-blocked"),
+      reason: card.title,
+      label: card.querySelector(".action-tag")?.textContent
+    }]));
+  const assertUnchanged = (expected, label) => {
+    const actual = snapshot();
+    for (const [uid, entry] of Object.entries(expected)) {
+      if (JSON.stringify(actual[uid]) !== JSON.stringify(entry)) {
+        throw new Error(`${name}: ${label} changed ${uid}: ${JSON.stringify({ expected: entry, actual: actual[uid] })}`);
+      }
+    }
+  };
+  const originalOrder = ctx.state.player.hand.map((card) => card.uid).join(",");
+  if (handCard(ctx.els, "trio-ember-recall").classList.contains("action-ready")) {
+    throw new Error(name + ": empty grave must block recall");
+  }
+  const initial = snapshot();
+  clickSmokeElement(ctx.els.handSortType, name + ": type sort with blocked recall");
+  assertUnchanged(initial, "type sort");
+  clickSmokeElement(ctx.els.handResetOrder, name + ": restore draw order");
+  assertUnchanged(initial, "restore order");
+
+  // Reproduce a later full-duel window: one legal grave monster, with another
+  // spell still lacking a target. Both readiness states must follow their UIDs.
+  const pawn = cloneCardById("trio-ember-pawn");
+  ctx.state.player.grave.push(pawn);
+  ctx.render();
+  assertHandCardReady(ctx.els, "trio-ember-recall", name + ": grave monster enables recall");
+  const legal = snapshot();
+  clickSmokeElement(ctx.els.handSortType, name + ": type sort with legal recall");
+  assertUnchanged(legal, "type sort with grave target");
+  handCard(ctx.els, "trio-ember-recall").dispatchEvent(new KeyboardEvent("keydown", {
+    key: "ArrowLeft", altKey: true, bubbles: true, cancelable: true
+  }));
+  assertUnchanged(legal, "manual reorder");
+  if (ctx.state.player.hand.map((card) => card.uid).join(",") !== originalOrder) {
+    throw new Error(name + ": sorting must not mutate engine hand order");
+  }
+  // A fresh draw/removal changes engine indices without changing card identity.
+  const extraRecall = cloneCardById("trio-ember-recall");
+  ctx.state.player.hand.unshift(extraRecall);
+  ctx.render();
+  assertUnchanged(legal, "new draw shifts engine indices");
+  ctx.state.player.hand.splice(0, 1);
+  ctx.render();
+  assertUnchanged(legal, "card removal shifts engine indices");
+
+  clickSmokeElement(assertHandCardReady(ctx.els, "trio-ember-recall", name + ": recall still ready"), name + ": select recall");
+  await waitForSmoke(() => ctx.state.pendingTarget?.effect === "graveRevive" && !ctx.els.choiceConfirmBtn.disabled, name + ": legal target selected");
+  clickSmokeElement(ctx.els.choiceConfirmBtn, name + ": resolve the highlighted card");
+  await waitForSmoke(() => ctx.state.player.field.some((card) => card?.uid === pawn.uid)
+    && !ctx.state.player.hand.some((card) => card.id === "trio-ember-recall"), name + ": recall resolves after reordering", 9000);
+  setSmokeStatus("passed", name);
+}
+
 async function runHandActionHighlightRecoveryBasicSmoke(ctx) {
   const smokeName = "hand-action-highlight-recovery-basic";
   setSmokeStatus("running", smokeName);
@@ -10328,6 +10547,69 @@ async function runSpellLegalityHighlightBasicSmoke(ctx) {
     9000
   );
   setSmokeStatus("passed", smokeName);
+}
+
+async function runFieldStrikeFlowSmoke(ctx, mode) {
+  const name = "field-strike-" + mode;
+  setSmokeStatus("running", name);
+  await startSmokeDuel(ctx, "direct");
+  if (mode === "last-hit") { ctx.state.ai.lp = 400; ctx.render?.(); }
+  const before = ctx.state.ai.lp;
+  const observations = [];
+  let interrupted = false;
+  const observe = (mutations = []) => {
+    // Virtual-time/headless browsers may reach the deadline before another RAF.
+    const removed = mutations.flatMap((entry) => [...entry.removedNodes])
+      .find((node) => node.nodeType === 1 && node.matches(".field-strike"));
+    const layer = document.querySelector(".field-strike") || removed;
+    if (!layer) return;
+    const phase = layer.dataset.phase;
+    if (observations.at(-1)?.phase !== phase) {
+      observations.push({ phase, lp: ctx.state.ai.lp, damage: layer.dataset.damage,
+        modal: ctx.els.modal.classList.contains("show"), busy: ctx.state.presentationBusy,
+        endDisabled: ctx.els.endTurnBtn.disabled, completed: !layer.isConnected });
+    }
+    if (!interrupted && phase === "windup" && mode !== "last-hit") {
+      interrupted = true;
+      clickSmokeElement(mode === "restart" ? ctx.els.restartBtn : ctx.els.guideBtn, name + ": interrupt windup");
+    }
+  };
+  const observer = new MutationObserver(observe);
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-phase"] });
+  try {
+    clickSmokeElementCenter(fieldCard(ctx.els, "player", "star-lancer"), name + ": attacker");
+    clickSmokeElementCenter(fieldCard(ctx.els, "ai", "iron-guardian"), name + ": target");
+    if (mode === "restart") {
+      await waitForSmoke(() => interrupted && !ctx.state.started && !document.querySelector(".field-strike"), name + ": restart cancels pending strike");
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      if (ctx.state.presentationBusy || countGameEvents(ctx.state, "BATTLE_RESOLVED")) throw new Error(name + ": stale battle survived restart");
+      clickSmokeElement(ctx.els.modalRestart, name + ": start fresh duel");
+      await waitForSmoke(() => ctx.state.phase === "main" && ctx.state.started, name + ": fresh main phase");
+      if (ctx.state.ai.lp !== before) throw new Error(name + ": stale damage affected fresh duel");
+    } else {
+      if (mode === "modal") {
+        await waitForSmoke(() => document.querySelector(".field-strike")?.hidden, name + ": guide suspends and hides strike");
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        if (ctx.state.ai.lp !== before || document.querySelector(".field-strike")?.dataset.impact !== "false") {
+          throw new Error(name + ": damage continued behind guide");
+        }
+        clickSmokeElementCenter(ctx.els.guideClose, name + ": close guide");
+      }
+      await waitForSmoke(() => observations.some((entry) => entry.phase === "impact" || entry.phase === "recover"), name + ": contact observed");
+      await waitForSmoke(() => !document.querySelector(".field-strike"), name + ": recovery completes");
+      const contact = observations.find((entry) => entry.phase === "impact" || entry.phase === "recover");
+      if (observations[0]?.lp !== before || contact.lp >= before || contact.modal || (!contact.completed && (!contact.busy || !contact.endDisabled))) {
+        throw new Error(name + ": hit order or action lock failed " + JSON.stringify(observations));
+      }
+      if (countGameEvents(ctx.state, "BATTLE_RESOLVED") !== 1) throw new Error(name + ": battle committed more than once");
+      if (mode === "last-hit") {
+        await waitForSmoke(() => ctx.state.gameOver && ctx.els.modal.classList.contains("show"), name + ": result appears after recovery");
+        if (ctx.state.gameOverWinner !== "player" || ctx.state.presentationBusy) throw new Error(name + ": invalid result state");
+      }
+    }
+    document.body.dataset.strikeEvidence = JSON.stringify(observations);
+    setSmokeStatus("passed", name);
+  } finally { observer.disconnect(); }
 }
 
 async function runGameOverEventSmoke(ctx) {
@@ -10592,7 +10874,11 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "equipment-spell": runEquipmentSpellSmoke,
     "support-target-readability-basic": runSupportTargetReadabilityBasicSmoke,
     "hand-action-highlight-recovery-basic": runHandActionHighlightRecoveryBasicSmoke,
+    "hand-action-order": runHandActionOrderSmoke,
     "spell-legality-highlight-basic": runSpellLegalityHighlightBasicSmoke,
+    "field-strike-modal": (ctx) => runFieldStrikeFlowSmoke(ctx, "modal"),
+    "field-strike-restart": (ctx) => runFieldStrikeFlowSmoke(ctx, "restart"),
+    "field-strike-last-hit": (ctx) => runFieldStrikeFlowSmoke(ctx, "last-hit"),
     "game-over-event": runGameOverEventSmoke,
     "post-duel-log-review": runPostDuelLogReviewSmoke
   };
