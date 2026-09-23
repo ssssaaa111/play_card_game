@@ -304,6 +304,7 @@ function setSmokeStatus(status, detail = "") {
 
 function waitForSmoke(predicate, label, timeout = 8000) {
   const startedAt = Date.now();
+  const describe = () => typeof label === "function" ? label() : label;
   return new Promise((resolve, reject) => {
     const tick = () => {
       if (predicate()) {
@@ -311,7 +312,7 @@ function waitForSmoke(predicate, label, timeout = 8000) {
         return;
       }
       if (Date.now() - startedAt > timeout) {
-        reject(new Error(`等待超时：${label}`));
+        reject(new Error(`等待超时：${describe()}`));
         return;
       }
       window.setTimeout(tick, 80);
@@ -4883,7 +4884,7 @@ async function runAiFusionPlanningBasicSmoke(ctx) {
   await finishPlayerTurn(ctx);
   await waitForSmoke(
     () => aiRevealVisible(ctx.els, "starforge-fusion"),
-    `${smokeName}: AI fusion spell reaches its public reveal. ${smokeDebug(ctx)}`,
+    () => `${smokeName}: AI fusion spell reaches its public reveal. ${smokeDebug(ctx)}`,
     32000
   );
 

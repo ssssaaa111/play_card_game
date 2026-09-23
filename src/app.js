@@ -829,11 +829,15 @@ const deckEditorHandlers = {
 };
 
 function isAiPlaybackPaused() {
-  return state.paused || aiPlaybackPaused || aiHistoryOpen || document.hidden
+  return state.paused || aiPlaybackPaused || aiHistoryOpen || (!BROWSER_SMOKE && document.hidden)
     || Boolean(document.querySelector(".modal.show:not(#modal)"));
 }
 
 const aiActionPlayback = createAiActionPlayback({
+  ...(BROWSER_SMOKE ? {
+    requestFrame: (callback) => window.setTimeout(callback, 16),
+    cancelFrame: (frame) => window.clearTimeout(frame)
+  } : {}),
   isPaused: isAiPlaybackPaused,
   onChange: ({ action, history, index, total }) => {
     pendingAiReveal = withAiRevealQueuePosition(action, { index, total });
