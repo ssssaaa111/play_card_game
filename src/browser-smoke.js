@@ -263,6 +263,7 @@ function smokeDebug(ctx) {
     phase: ctx.state.phase,
     paused: Boolean(ctx.state.paused),
     aiRunning: Boolean(ctx.state.aiRunning),
+    presentationBusy: Boolean(ctx.state.presentationBusy),
     actionWindow: ctx.state.actionWindow,
     ruleCheckIssue: ctx.state.ruleCheckIssue || null,
     pendingTrapChoice: ctx.state.pendingTrapChoice ? {
@@ -429,6 +430,18 @@ function fieldSlot(els, owner, index) {
 
 function handCard(els, cardId) {
   return els.hand.querySelector(`[data-zone="hand"][data-card-id="${cardId}"]`);
+}
+
+function handCardActionSnapshot(els, cardId) {
+  const card = handCard(els, cardId);
+  if (!card) return null;
+  return {
+    actionState: card.dataset.actionState || "",
+    actionLabel: card.dataset.actionLabel || "",
+    actionReason: card.dataset.actionReason || "",
+    actionReady: card.classList.contains("action-ready"),
+    actionBlocked: card.classList.contains("action-blocked")
+  };
 }
 
 function assertHandCardReady(els, cardId, label) {
@@ -7428,8 +7441,29 @@ async function runBattleTrapSmoke(ctx) {
     "攻击完整结算后重新开放战斗窗口",
     9000
   );
+  await waitForSmoke(
+    () => {
+      const trap = handCard(ctx.els, "mirror-snare");
+      return !ctx.state.presentationBusy &&
+        trap?.dataset.actionState === "ready" &&
+        trap.classList.contains("action-ready");
+    },
+    () => `攻击结算后镜光反制恢复可盖放：${JSON.stringify(handCardActionSnapshot(ctx.els, "mirror-snare"))} ${smokeDebug(ctx)}`,
+    9000
+  );
   clickSmokeElement(handCard(ctx.els, "mirror-snare"), "战斗阶段选择镜光反制");
-  await waitForSmoke(() => !ctx.els.choiceActions.hidden && !ctx.els.choiceConfirmBtn.disabled, "战斗阶段陷阱确认可用");
+  await waitForSmoke(
+    () => {
+      const selectedCard = ctx.state.selected?.zone === "hand"
+        ? ctx.state.player.hand.find((card) => card?.uid === ctx.state.selected.uid)
+        : null;
+      return selectedCard?.id === "mirror-snare" &&
+        !ctx.els.choiceActions.hidden &&
+        !ctx.els.choiceConfirmBtn.disabled;
+    },
+    () => `战斗阶段陷阱确认可用：${JSON.stringify(handCardActionSnapshot(ctx.els, "mirror-snare"))} ${smokeDebug(ctx)}`,
+    9000
+  );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "确认盖放镜光反制");
   await waitForSmoke(
     () => ctx.state.phase === "battle" && ctx.state.player.traps.some((card) => card?.id === "mirror-snare"),
