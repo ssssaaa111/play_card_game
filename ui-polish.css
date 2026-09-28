@@ -161,6 +161,17 @@ body {
   filter: drop-shadow(0 0 30px rgba(var(--ui-cyan), 0.12));
 }
 
+#app .duel-table .field {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--ui-red), 0.032),
+      transparent 34%,
+      transparent 66%,
+      rgba(var(--ui-cyan), 0.038)
+    );
+}
+
 #app .duel-table .zone-row,
 #app .duel-table .trap-row {
   gap: 6px;
@@ -489,6 +500,128 @@ body {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42), inset 3px 0 0 rgba(var(--ui-gold), 0.46);
 }
 
+/* Card inspection should feel like opening a tactical dossier. */
+.modal.card-detail-modal {
+  background:
+    radial-gradient(circle at 24% 42%, rgba(var(--ui-cyan), 0.09), transparent 30%),
+    radial-gradient(circle at 78% 32%, rgba(var(--ui-gold), 0.07), transparent 26%),
+    rgba(2, 5, 10, 0.78);
+  backdrop-filter: blur(9px);
+}
+
+.modal-box.card-zoom {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(var(--ui-gold), 0.34);
+  border-radius: 5px 16px 5px 16px;
+  background:
+    linear-gradient(135deg, rgba(var(--ui-gold), 0.04), transparent 36%),
+    linear-gradient(315deg, rgba(var(--ui-cyan), 0.045), transparent 38%),
+    #0a0f19;
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.66),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.022);
+}
+
+.modal-box.card-zoom::before {
+  position: absolute;
+  top: 0;
+  right: 18px;
+  left: 18px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-gold), 0.7), rgba(var(--ui-cyan), 0.5), transparent);
+  box-shadow: 0 0 14px rgba(var(--ui-gold), 0.18);
+}
+
+.card-zoom-head {
+  position: relative;
+  align-items: center;
+  padding-bottom: 11px;
+  border-bottom: 1px solid rgba(var(--ui-gold), 0.14);
+}
+
+.card-zoom-head::after {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 72px;
+  height: 1px;
+  content: "";
+  background: rgba(var(--ui-gold), 0.8);
+  box-shadow: 0 0 10px rgba(var(--ui-gold), 0.32);
+}
+
+.card-zoom-head h2 {
+  margin: 0;
+  color: #ffe09b;
+  font-size: clamp(22px, 2.4vw, 30px);
+  font-weight: 950;
+  letter-spacing: 0.025em;
+}
+
+.card-zoom-head .drawer-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 3px 9px 3px 9px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.zoom-layout {
+  gap: 18px;
+  margin: 16px 0 0;
+}
+
+#zoomCard {
+  padding: 9px;
+  border: 1px solid rgba(var(--ui-cyan), 0.18);
+  border-radius: 3px 11px 3px 11px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(var(--ui-cyan), 0.09), transparent 50%),
+    rgba(4, 8, 14, 0.66);
+  box-shadow: inset 0 -20px 40px rgba(0, 0, 0, 0.18);
+}
+
+#zoomCard .card {
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.52),
+    0 0 0 1px rgba(var(--ui-gold), 0.08),
+    inset 0 -3px 0 rgba(var(--ui-gold), 0.12);
+}
+
+.zoom-detail-copy {
+  align-content: start;
+  gap: 9px;
+}
+
+.zoom-summary {
+  padding: 9px 11px;
+  border: 1px solid rgba(var(--ui-gold), 0.14);
+  border-left: 3px solid rgba(var(--ui-gold), 0.78);
+  border-radius: 2px 8px 2px 8px;
+  background: rgba(var(--ui-gold), 0.06);
+}
+
+.zoom-effect-block {
+  padding: 10px 11px;
+  border-color: rgba(var(--ui-cyan), 0.2);
+  border-radius: 2px 9px 2px 9px;
+  background:
+    linear-gradient(120deg, rgba(var(--ui-cyan), 0.045), transparent 48%),
+    rgba(5, 12, 20, 0.7);
+}
+
+.zoom-effect-block > span {
+  color: #8ee7e2;
+  letter-spacing: 0.14em;
+}
+
+.zoom-meta-row {
+  border-color: rgba(210, 228, 236, 0.09);
+  border-radius: 2px 7px 2px 7px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
 /* Phase changes read as a quick broadcast ribbon rather than a modal. */
 .phase-stage {
   filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.4));
@@ -618,7 +751,12 @@ body {
   }
 
   .phase-stage {
-    top: calc(max(6px, var(--safe-area-top, 0px)) + 104px);
+    top: calc(
+      max(5px, var(--safe-area-top, 0px)) +
+      100px +
+      (100dvh - 100px - clamp(226px, 34dvh, 278px)) / 2 -
+      27px
+    );
     width: min(360px, calc(100vw - 20px));
   }
 
@@ -661,6 +799,35 @@ body {
 
   .hand-panel {
     padding: 7px;
+  }
+}
+
+@media (min-width: 560px) and (max-width: 720px) {
+  .modal-box.card-zoom {
+    width: min(660px, 100%);
+    max-height: calc(100dvh - 20px - var(--safe-area-top) - var(--safe-area-bottom));
+    padding: 15px;
+    overflow-y: auto;
+  }
+
+  .zoom-layout {
+    grid-template-columns: minmax(176px, 208px) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  #zoomCard {
+    width: 100%;
+    margin: 0;
+    padding: 7px;
+  }
+
+  #zoomEffect {
+    max-height: 178px;
+  }
+
+  .zoom-meta-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+    padding: 6px 8px;
   }
 }
 
@@ -764,6 +931,26 @@ body {
 
   .hand .card {
     border-radius: 2px 7px 2px 7px;
+  }
+}
+
+@media (max-width: 559px) {
+  .modal-box.card-zoom {
+    padding: 12px;
+  }
+
+  .card-zoom-head {
+    padding-bottom: 8px;
+  }
+
+  #zoomCard {
+    width: min(204px, 66vw);
+    padding: 6px;
+  }
+
+  .zoom-layout {
+    gap: 10px;
+    margin-top: 10px;
   }
 }
 
