@@ -1,0 +1,781 @@
+/*
+ * Command-table visual consolidation.
+ *
+ * This file intentionally loads last.  It turns the existing functional
+ * regions into one duel surface without changing state classes or hit areas.
+ */
+
+:root {
+  --ui-void: #05070d;
+  --ui-deep: #080d16;
+  --ui-panel: rgba(7, 12, 20, 0.94);
+  --ui-panel-soft: rgba(10, 17, 27, 0.84);
+  --ui-cyan: 84, 210, 210;
+  --ui-red: 239, 71, 111;
+  --ui-gold: 246, 189, 96;
+  --ui-violet: 183, 148, 244;
+  --ui-hairline: rgba(174, 214, 224, 0.16);
+  --ui-corner: 7px;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(var(--ui-cyan), 0.1), transparent 34%),
+    radial-gradient(circle at 8% -8%, rgba(var(--ui-violet), 0.14), transparent 32%),
+    radial-gradient(circle at 94% 6%, rgba(var(--ui-gold), 0.1), transparent 26%),
+    linear-gradient(152deg, #05070c 0%, #0a111c 48%, #04060a 100%);
+}
+
+#app {
+  gap: 6px;
+}
+
+/* Top command strip */
+.topbar {
+  isolation: isolate;
+  border-color: rgba(var(--ui-cyan), 0.22);
+  border-radius: var(--ui-corner);
+  background:
+    linear-gradient(90deg, rgba(var(--ui-cyan), 0.065), transparent 30%),
+    linear-gradient(270deg, rgba(var(--ui-gold), 0.045), transparent 24%),
+    linear-gradient(180deg, rgba(14, 23, 35, 0.98), rgba(5, 9, 16, 0.98));
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.36),
+    inset 0 -1px 0 rgba(var(--ui-cyan), 0.18);
+}
+
+.topbar::before,
+.topbar::after {
+  position: absolute;
+  z-index: -1;
+  content: "";
+  pointer-events: none;
+}
+
+.topbar::before {
+  inset: 0;
+  background: repeating-linear-gradient(115deg, transparent 0 58px, rgba(255, 255, 255, 0.018) 58px 59px);
+}
+
+.topbar::after {
+  right: 18px;
+  bottom: -1px;
+  left: 18px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-cyan), 0.72) 18%, rgba(var(--ui-gold), 0.52) 82%, transparent);
+  box-shadow: 0 0 14px rgba(var(--ui-cyan), 0.22);
+}
+
+.brand-mark {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 94% 23%, 94% 77%, 50% 100%, 6% 77%, 6% 23%);
+  background:
+    linear-gradient(140deg, #fff1b0 0 27%, #58d7d3 28% 62%, #a17bea 63%);
+  box-shadow: 0 0 18px rgba(var(--ui-cyan), 0.24);
+}
+
+.brand h1 {
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 14px rgba(var(--ui-cyan), 0.12);
+}
+
+.phase {
+  border-color: rgba(var(--ui-cyan), 0.24);
+  border-radius: 4px 11px 4px 11px;
+  background:
+    linear-gradient(100deg, rgba(var(--ui-gold), 0.075), transparent 38%),
+    rgba(2, 7, 13, 0.64);
+  box-shadow: inset 3px 0 0 rgba(var(--ui-gold), 0.34);
+}
+
+.phase > strong {
+  color: #ffdd98;
+  letter-spacing: 0.04em;
+}
+
+.actions .btn,
+.utility-toggle,
+.utility-menu .btn,
+.utility-menu .music-volume-control {
+  border-radius: 4px 9px 4px 9px;
+}
+
+.actions .btn {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.065), transparent),
+    rgba(7, 12, 20, 0.86);
+}
+
+.actions #endTurnBtn:not(:disabled) {
+  border-color: rgba(var(--ui-gold), 0.56);
+  color: #ffe6aa;
+  box-shadow: inset 0 -2px 0 rgba(var(--ui-gold), 0.28);
+}
+
+/* One battlefield instead of a stack of dashboard cards. */
+#app .arena.duel-table {
+  isolation: isolate;
+  border-color: rgba(var(--ui-cyan), 0.23);
+  border-radius: var(--ui-corner);
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(var(--ui-cyan), 0.09), transparent 46%),
+    linear-gradient(90deg, transparent 49.92%, rgba(var(--ui-gold), 0.06) 50%, transparent 50.08%),
+    repeating-linear-gradient(90deg, rgba(var(--ui-cyan), 0.019) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(0deg, rgba(var(--ui-cyan), 0.016) 0 1px, transparent 1px 36px),
+    linear-gradient(155deg, #0a111a, #05080e 64%, #070b12);
+  box-shadow:
+    0 20px 54px rgba(0, 0, 0, 0.42),
+    inset 0 0 90px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 0 rgba(var(--ui-cyan), 0.2);
+}
+
+#app .arena.duel-table::before {
+  inset: 5px;
+  border-color: rgba(219, 239, 239, 0.045);
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, rgba(var(--ui-red), 0.16), transparent 16%) top left / 34% 1px no-repeat,
+    linear-gradient(270deg, rgba(var(--ui-cyan), 0.18), transparent 16%) bottom right / 34% 1px no-repeat;
+}
+
+#app .arena.duel-table::after {
+  top: 50%;
+  right: 9%;
+  bottom: auto;
+  left: 9%;
+  width: auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-gold), 0.18), rgba(var(--ui-cyan), 0.18), transparent);
+  box-shadow: 0 0 26px rgba(var(--ui-cyan), 0.1);
+}
+
+#app .duel-table .field::before {
+  inset: 12% 12% 10%;
+  border-color: rgba(var(--ui-cyan), 0.1);
+  background:
+    linear-gradient(90deg, rgba(var(--ui-cyan), 0.09) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(var(--ui-gold), 0.055) 1px, transparent 1px);
+  background-size: 44px 44px;
+  opacity: 0.64;
+  filter: drop-shadow(0 0 30px rgba(var(--ui-cyan), 0.12));
+}
+
+#app .duel-table .zone-row,
+#app .duel-table .trap-row {
+  gap: 6px;
+}
+
+#app .duel-table .slot,
+#app .duel-table .trap-slot {
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.18);
+  border-radius: 2px 8px 2px 8px;
+  background:
+    linear-gradient(155deg, rgba(var(--zone-accent, 84, 210, 210), 0.065), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(0, 0, 0, 0.16)),
+    rgba(5, 9, 15, 0.5);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.018),
+    inset 0 -16px 30px rgba(0, 0, 0, 0.18);
+}
+
+#app .duel-table .slot::before {
+  inset: 5px;
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.1);
+  border-radius: 1px 5px 1px 5px;
+  background:
+    linear-gradient(135deg, rgba(var(--zone-accent, 84, 210, 210), 0.045), transparent 44%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 18px);
+}
+
+#app .duel-table .slot.empty::after,
+#app .duel-table .trap-slot.empty::after {
+  color: rgba(218, 233, 240, 0.2);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-shadow: 0 0 12px rgba(var(--zone-accent, 84, 210, 210), 0.22);
+}
+
+#app .duel-table .slot:has(.field-monster-card),
+#app .duel-table .trap-slot:has(.field-support-card) {
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.3);
+  background:
+    radial-gradient(ellipse at 50% 92%, rgba(var(--zone-accent, 84, 210, 210), 0.13), transparent 50%),
+    rgba(5, 9, 15, 0.72);
+}
+
+#app .duel-table .center-line {
+  gap: 8px;
+}
+
+#app .duel-table .center-line::before,
+#app .duel-table .center-line::after {
+  height: 1px;
+  opacity: 0.84;
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-gold), 0.38), rgba(var(--ui-cyan), 0.2));
+}
+
+#app .duel-table .center-line::after {
+  background: linear-gradient(90deg, rgba(var(--ui-cyan), 0.2), rgba(var(--ui-gold), 0.38), transparent);
+}
+
+#app .duel-table .center-line span {
+  min-height: 22px;
+  padding: 3px 14px;
+  border-radius: 2px 7px 2px 7px;
+  background: rgba(3, 7, 12, 0.9);
+  color: rgba(230, 239, 247, 0.72);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 0 24px rgba(0, 0, 0, 0.46);
+}
+
+/* Duelist rails */
+#app .duel-table .player-card {
+  position: relative;
+  border-radius: 3px 13px 3px 13px;
+  background:
+    linear-gradient(102deg, rgba(var(--ui-red), 0.075), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 52%),
+    rgba(4, 8, 14, 0.94);
+  box-shadow: 0 11px 30px rgba(0, 0, 0, 0.4), inset 0 -2px 0 rgba(var(--ui-red), 0.16);
+}
+
+#app .duel-table .side:not(.enemy) .player-card {
+  border-radius: 13px 3px 13px 3px;
+  background:
+    linear-gradient(258deg, rgba(var(--ui-cyan), 0.085), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 52%),
+    rgba(4, 8, 14, 0.94);
+  box-shadow: 0 11px 30px rgba(0, 0, 0, 0.4), inset 0 -2px 0 rgba(var(--ui-cyan), 0.18);
+}
+
+#app .duel-table .player-card::before {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 2px;
+  content: "";
+  background: linear-gradient(transparent, rgba(var(--ui-red), 0.9), transparent);
+  box-shadow: 0 0 12px rgba(var(--ui-red), 0.42);
+  pointer-events: none;
+}
+
+#app .duel-table .side:not(.enemy) .player-card::before {
+  right: 0;
+  left: auto;
+  background: linear-gradient(transparent, rgba(var(--ui-cyan), 0.94), transparent);
+  box-shadow: 0 0 12px rgba(var(--ui-cyan), 0.44);
+}
+
+#app .duel-table .player-title > span:first-child {
+  font-weight: 950;
+  letter-spacing: 0.04em;
+}
+
+#app .duel-table .life-bar,
+#app .duel-table .side:not(.enemy) .life-bar {
+  border-radius: 2px 7px 2px 2px;
+  background: rgba(3, 9, 8, 0.88);
+}
+
+#app .duel-table .side:not(.enemy) .life-bar {
+  border-radius: 7px 2px 2px 2px;
+}
+
+#app .duel-table .pile {
+  border-radius: 2px 7px 2px 7px;
+  border-color: rgba(198, 220, 228, 0.12);
+  background: rgba(4, 8, 14, 0.86);
+}
+
+.versus-stage {
+  width: 86px;
+  height: 62px;
+  border-radius: 5px 14px 5px 14px;
+  background:
+    linear-gradient(145deg, rgba(var(--ui-red), 0.08), transparent 44%),
+    linear-gradient(325deg, rgba(var(--ui-cyan), 0.09), transparent 44%),
+    rgba(3, 7, 12, 0.94);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.44), inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.versus-stage::before,
+.versus-stage::after {
+  top: 30px;
+  width: 40px;
+}
+
+.versus-mark {
+  font-size: 25px;
+  letter-spacing: -0.13em;
+}
+
+/* Cards keep their gameplay colors; the frame and text hierarchy become sharper. */
+.card {
+  border-width: 1px;
+  border-radius: 3px 9px 3px 9px;
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    inset 0 -3px 0 rgba(var(--ui-gold), 0.08);
+}
+
+.card:hover {
+  box-shadow:
+    0 18px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(var(--ui-gold), 0.34),
+    inset 0 -3px 0 rgba(var(--ui-gold), 0.24);
+}
+
+.card .art {
+  border-radius: 2px 6px 2px 6px;
+  border-color: rgba(235, 243, 248, 0.16);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.2);
+}
+
+.card .card-name {
+  letter-spacing: 0.015em;
+}
+
+.card .badge,
+.card .element-badge,
+.card .action-tag,
+.card .action-reason,
+.card .card-state-chip {
+  border-radius: 2px 5px 2px 5px;
+}
+
+/* Bottom command deck */
+.hand-panel {
+  border-color: rgba(var(--ui-cyan), 0.2);
+  border-radius: var(--ui-corner);
+  background:
+    linear-gradient(90deg, rgba(var(--ui-gold), 0.065), transparent 16%),
+    linear-gradient(270deg, rgba(var(--ui-cyan), 0.045), transparent 24%),
+    linear-gradient(180deg, rgba(10, 16, 25, 0.98), rgba(4, 7, 13, 0.98));
+  box-shadow:
+    0 -12px 38px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(var(--ui-cyan), 0.13);
+}
+
+.hand-panel::before {
+  position: absolute;
+  top: -1px;
+  right: 18px;
+  left: 18px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-gold), 0.52), rgba(var(--ui-cyan), 0.56), transparent);
+  box-shadow: 0 0 12px rgba(var(--ui-cyan), 0.16);
+  pointer-events: none;
+}
+
+.hand-title {
+  border-right-color: rgba(var(--ui-gold), 0.2);
+}
+
+.hand-title-copy > strong {
+  color: #ffe0a0;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+}
+
+.hand-readiness {
+  border-radius: 2px 6px 2px 6px;
+}
+
+.hand-stack {
+  position: relative;
+  padding: 0 3px;
+}
+
+.hand-stack::before,
+.hand-stack::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 8;
+  width: 18px;
+  content: "";
+  pointer-events: none;
+}
+
+.hand-stack::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(5, 8, 14, 0.9), transparent);
+}
+
+.hand-stack::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(5, 8, 14, 0.9), transparent);
+}
+
+.hand-command {
+  border-color: rgba(var(--ui-cyan), 0.2);
+  border-radius: 3px 10px 3px 10px;
+  background:
+    linear-gradient(145deg, rgba(var(--ui-cyan), 0.06), transparent 48%),
+    rgba(5, 10, 17, 0.86);
+  box-shadow: inset 2px 0 0 rgba(var(--ui-cyan), 0.28);
+}
+
+.hand-command[data-active="true"] {
+  border-color: rgba(var(--ui-gold), 0.5);
+  background:
+    linear-gradient(145deg, rgba(var(--ui-gold), 0.08), transparent 50%),
+    rgba(8, 10, 16, 0.94);
+  box-shadow: inset 3px 0 0 rgba(var(--ui-gold), 0.62), 0 0 28px rgba(var(--ui-gold), 0.07);
+}
+
+.hand-command-flow > span,
+.field-action-btn,
+.hand-command > .choice-actions .btn {
+  border-radius: 2px 7px 2px 7px;
+}
+
+.field-action-btn:not(:disabled) {
+  border-color: rgba(223, 234, 240, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent),
+    rgba(5, 9, 15, 0.82);
+}
+
+.field-action-btn.field-attack-btn:not(:disabled) {
+  border-color: rgba(var(--ui-red), 0.64);
+  color: #ffd8df;
+  background:
+    linear-gradient(180deg, rgba(var(--ui-red), 0.2), rgba(var(--ui-red), 0.06)),
+    rgba(12, 7, 13, 0.92);
+  box-shadow: inset 0 -2px 0 rgba(var(--ui-red), 0.34), 0 0 18px rgba(var(--ui-red), 0.08);
+}
+
+@media (min-width: 721px) and (max-width: 1599px),
+  (min-width: 721px) and (max-height: 899px) {
+  .field-battle-preview[data-preview-mode="target"] .battle-preview-side {
+    min-height: 20px;
+  }
+
+  .field-battle-preview[data-preview-mode="target"] .battle-preview-side strong {
+    font-size: 12px;
+  }
+
+  .field-battle-preview[data-preview-mode="target"] .battle-preview-result {
+    margin-top: 1px;
+    font-size: 7px;
+    line-height: 1;
+  }
+}
+
+.workspace-tab {
+  border-radius: 3px 9px 3px 9px;
+  background: rgba(4, 8, 14, 0.9);
+}
+
+.toast {
+  width: max-content;
+  max-width: min(680px, calc(100vw - 28px));
+  padding: 9px 14px;
+  border-color: rgba(var(--ui-gold), 0.58);
+  border-radius: 3px 10px 3px 10px;
+  background:
+    linear-gradient(100deg, rgba(var(--ui-gold), 0.07), transparent 48%),
+    rgba(4, 8, 14, 0.94);
+  color: #ffe0a0;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42), inset 3px 0 0 rgba(var(--ui-gold), 0.46);
+}
+
+/* Phase changes read as a quick broadcast ribbon rather than a modal. */
+.phase-stage {
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.4));
+}
+
+.phase-stage-frame {
+  min-height: 72px;
+  padding: 9px 19px 10px 24px;
+  border-radius: 4px 13px 4px 13px;
+  background:
+    linear-gradient(96deg, color-mix(in srgb, var(--phase-stage-accent) 10%, transparent), transparent 45%),
+    rgba(4, 9, 16, 0.93);
+  box-shadow:
+    inset 3px 0 0 var(--phase-stage-accent),
+    inset 0 0 24px color-mix(in srgb, var(--phase-stage-glow) 62%, transparent),
+    0 0 24px color-mix(in srgb, var(--phase-stage-glow) 62%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.phase-stage-title {
+  font-size: clamp(22px, 2vw, 29px);
+}
+
+.phase-stage-frame::before {
+  opacity: 0.5;
+}
+
+@media (min-width: 1041px) {
+  #app .duel-table .field {
+    inset: 108px 0 0;
+  }
+
+  .phase-stage {
+    top: calc(
+      172px +
+      (100dvh - 172px - clamp(184px, 24dvh, 224px)) / 2 -
+      36px
+    );
+  }
+
+  .toast {
+    top: calc(
+      172px +
+      (100dvh - 172px - clamp(184px, 24dvh, 224px)) / 2 -
+      22px
+    );
+  }
+
+  #app .duel-table .side.duel-hud,
+  #app .duel-table .side.enemy.duel-hud {
+    width: min(1400px, calc(50% - 70px));
+  }
+
+  #app .duel-table .player-card {
+    height: 78px;
+  }
+
+  #app .duel-table .duelist-face {
+    height: 67px;
+  }
+
+  #app .duel-table .duelist-figure {
+    height: 74px;
+    border-radius: 3px 13px 3px 11px;
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-figure {
+    border-radius: 13px 3px 11px 3px;
+  }
+
+  .hand .card {
+    transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+  }
+
+  .hand .card:hover {
+    z-index: 12;
+    transform: translateY(-7px);
+  }
+}
+
+@media (max-width: 1040px) {
+  #app {
+    gap: 5px;
+  }
+
+  .topbar {
+    border-radius: 5px;
+  }
+
+  #app .arena.duel-table,
+  .hand-panel {
+    border-radius: 5px;
+  }
+
+  #app .duel-table .field {
+    inset: 58px 0 0;
+    padding-inline: 6px;
+  }
+
+  #app .duel-table .side.duel-hud {
+    top: 5px;
+  }
+
+  #app .duel-table .player-card {
+    border-radius: 2px 8px 2px 8px;
+  }
+
+  #app .duel-table .side:not(.enemy) .player-card {
+    border-radius: 8px 2px 8px 2px;
+  }
+
+  .versus-stage {
+    top: 4px;
+    width: 48px;
+    height: 46px;
+    border-radius: 3px 9px 3px 9px;
+  }
+
+  .versus-stage::before,
+  .versus-stage::after {
+    top: 22px;
+    width: 14px;
+  }
+
+  .versus-mark {
+    font-size: 19px;
+  }
+
+  .phase-stage {
+    top: calc(max(6px, var(--safe-area-top, 0px)) + 104px);
+    width: min(360px, calc(100vw - 20px));
+  }
+
+  .toast {
+    top: calc(
+      max(5px, var(--safe-area-top, 0px)) +
+      100px +
+      (100dvh - 100px - clamp(242px, 36dvh, 296px)) / 2 -
+      20px
+    );
+    max-width: calc(100vw - 22px);
+    padding: 7px 10px;
+    font-size: 10px;
+  }
+
+  .phase-stage-frame {
+    min-height: 54px;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "code title actor"
+      "code detail detail";
+    align-items: center;
+    gap: 1px 8px;
+    padding: 7px 12px 8px 16px;
+  }
+
+  .phase-stage-title {
+    overflow: hidden;
+    font-size: clamp(17px, 4.7vw, 22px);
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .phase-stage-code,
+  .phase-stage-actor,
+  .phase-stage-detail {
+    font-size: 8px;
+  }
+
+  .hand-panel {
+    padding: 7px;
+  }
+}
+
+@media (max-width: 600px) {
+  #app {
+    padding:
+      max(5px, var(--safe-area-top))
+      max(5px, var(--safe-area-right))
+      max(5px, var(--safe-area-bottom))
+      max(5px, var(--safe-area-left));
+  }
+
+  .topbar {
+    gap: 5px;
+    padding: 5px;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    font-size: 17px;
+  }
+
+  .brand h1 {
+    font-size: 17px;
+  }
+
+  .phase {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .actions .btn {
+    min-height: 38px;
+  }
+
+  #app .duel-table .zone-row,
+  #app .duel-table .trap-row {
+    gap: 4px;
+  }
+
+  #app .duel-table .slot,
+  #app .duel-table .trap-slot {
+    border-radius: 1px 5px 1px 5px;
+  }
+
+  #app .duel-table .slot.empty::after,
+  #app .duel-table .trap-slot.empty::after {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  #app .duel-table .center-line span {
+    min-height: 19px;
+    padding: 2px 8px;
+    font-size: 8px;
+  }
+
+  .phase-stage {
+    top: calc(
+      max(5px, var(--safe-area-top, 0px)) +
+      100px +
+      (100dvh - 100px - clamp(242px, 36dvh, 296px)) / 2 -
+      23px
+    );
+    width: min(300px, calc(100vw - 18px));
+  }
+
+  .phase-stage-frame {
+    min-height: 48px;
+    padding: 6px 9px 6px 13px;
+  }
+
+  .phase-stage-code {
+    display: none;
+  }
+
+  .phase-stage-frame {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "title actor"
+      "detail detail";
+  }
+
+  .phase-stage-title {
+    font-size: 17px;
+  }
+
+  .hand-title-copy > span {
+    display: none;
+  }
+
+  .hand-panel {
+    grid-template-columns: 1fr;
+    grid-template-rows: 44px minmax(0, 1fr);
+  }
+
+  .hand-title-copy > strong {
+    font-size: 16px;
+  }
+
+  .hand .card {
+    border-radius: 2px 7px 2px 7px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
+  .phase-stage {
+    top: calc(max(5px, var(--safe-area-top, 0px)) + 55px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hand .card,
+  .field-action-btn {
+    transition: none;
+  }
+}
