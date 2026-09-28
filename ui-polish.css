@@ -622,6 +622,458 @@ body {
   background: rgba(255, 255, 255, 0.022);
 }
 
+/* Pre-duel deployment: compact briefing at intermediate widths. */
+.modal.setup-modal .modal-box {
+  border-radius: 6px 18px 6px 18px;
+  background:
+    linear-gradient(145deg, rgba(var(--ui-cyan), 0.045), transparent 34%),
+    linear-gradient(315deg, rgba(var(--ui-gold), 0.035), transparent 32%),
+    #090f18;
+}
+
+.setup-modal .modal-header {
+  border-bottom-color: rgba(var(--ui-cyan), 0.16);
+  background:
+    linear-gradient(100deg, rgba(var(--ui-cyan), 0.07), rgba(var(--ui-gold), 0.025)),
+    rgba(6, 11, 18, 0.97);
+}
+
+.setup-modal .setup-live-summary,
+.setup-loadout,
+.setup-intel,
+.setup-campaign {
+  border-radius: 3px 11px 3px 11px;
+}
+
+.setup-section-head > span {
+  border-radius: 2px 8px 2px 8px;
+}
+
+.setup-modal .setup-field,
+.setup-modal .scenario-brief,
+.setup-modal .pre-duel-stat,
+.setup-modal .pre-duel-route,
+.setup-modal .pre-duel-deck,
+.setup-modal .setup-stats {
+  border-radius: 2px 8px 2px 8px;
+}
+
+.setup-modal .setup-field select,
+.setup-modal .pre-duel-deck-toggle,
+.setup-modal .deck-editor-open {
+  border-radius: 2px 7px 2px 7px;
+}
+
+.setup-modal .modal-actions {
+  border-top-color: rgba(var(--ui-gold), 0.14);
+  background: linear-gradient(180deg, rgba(6, 11, 18, 0.9), rgba(5, 9, 15, 0.99));
+}
+
+.setup-modal .modal-actions #modalRestart {
+  border-radius: 3px 10px 3px 10px;
+  background: linear-gradient(180deg, #ffe39d, #efb24c);
+  box-shadow: 0 12px 30px rgba(var(--ui-gold), 0.14), inset 0 1px rgba(255, 255, 255, 0.4);
+}
+
+@media (min-width: 620px) and (max-width: 900px) {
+  .modal.setup-modal {
+    padding: 8px;
+  }
+
+  .modal.setup-modal .modal-box {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .setup-modal .modal-header {
+    position: sticky;
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 0.7fr);
+    gap: 14px;
+    padding: 14px 16px 12px;
+  }
+
+  .setup-modal .modal-heading h2 {
+    font-size: 27px;
+  }
+
+  .setup-modal .modal-heading p {
+    max-width: 430px;
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  .setup-modal .setup-panel {
+    padding: 11px 12px 12px;
+  }
+
+  .setup-cockpit {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .setup-loadout,
+  .setup-intel {
+    height: 100%;
+    padding: 10px;
+  }
+
+  .setup-section-head {
+    margin-bottom: 9px;
+  }
+
+  .setup-section-head small {
+    display: none;
+  }
+
+  .setup-modal .setup-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .setup-modal .setup-field {
+    gap: 5px;
+    padding: 7px;
+  }
+
+  .setup-modal .setup-field select {
+    min-width: 0;
+    min-height: 37px;
+    padding: 6px 7px;
+    font-size: 10px;
+  }
+
+  .setup-modal .deck-editor-open {
+    min-height: 33px;
+    padding: 5px 7px;
+    font-size: 9px;
+  }
+
+  .setup-modal .setup-stats {
+    max-height: 4.5em;
+    margin-top: 7px;
+    overflow: hidden;
+    padding: 6px 8px;
+    line-height: 1.35;
+  }
+
+  .setup-modal .setup-intel .scenario-brief {
+    margin-bottom: 7px;
+    padding: 9px;
+  }
+
+  .setup-modal .scenario-objectives {
+    margin-block: 5px;
+  }
+
+  .setup-modal .scenario-objectives li {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.4;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .setup-modal .pre-duel-preview {
+    gap: 7px;
+  }
+
+  .setup-modal .pre-duel-summary {
+    grid-template-columns: minmax(96px, 0.72fr) minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .setup-modal .pre-duel-stat {
+    min-height: 58px;
+    padding: 8px;
+  }
+
+  .setup-modal .pre-duel-skill small {
+    display: -webkit-box;
+    overflow: hidden;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .setup-modal .pre-duel-deck {
+    padding: 8px;
+  }
+
+  .setup-modal .pre-duel-deck-head {
+    gap: 6px;
+  }
+
+  .setup-modal .pre-duel-deck-toggle {
+    min-height: 32px;
+    padding: 5px 7px;
+    font-size: 9px;
+  }
+
+  .setup-modal .modal-actions {
+    padding: 9px 12px 11px;
+  }
+}
+
+/* Deck gallery: a quick inspection console instead of a full-height card stack. */
+.deck-browser-modal {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(var(--ui-cyan), 0.1), transparent 34%),
+    rgba(1, 4, 9, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.modal-box.deck-browser {
+  width: min(860px, 100%);
+  padding: 14px;
+  border: 1px solid rgba(var(--ui-cyan), 0.48);
+  border-top: 3px solid rgba(var(--ui-gold), 0.82);
+  border-radius: 5px 18px 5px 18px;
+  background:
+    linear-gradient(135deg, rgba(var(--ui-cyan), 0.06), transparent 32%),
+    linear-gradient(315deg, rgba(var(--ui-gold), 0.035), transparent 26%),
+    rgba(7, 12, 20, 0.985);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.64), 0 0 40px rgba(var(--ui-cyan), 0.08);
+}
+
+.deck-browser-head {
+  min-height: 46px;
+  margin: -2px 0 10px;
+  padding: 0 2px 9px;
+  border-bottom: 1px solid rgba(var(--ui-cyan), 0.16);
+}
+
+.deck-browser-head h2 {
+  margin-top: 1px;
+  color: #f3f7fb;
+  font-size: clamp(21px, 3vw, 29px);
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+
+.deck-browser-head-actions {
+  gap: 8px;
+}
+
+#deckBrowserPosition {
+  min-width: 62px;
+  padding: 5px 8px;
+  border: 1px solid rgba(var(--ui-gold), 0.32);
+  border-radius: 2px 7px 2px 7px;
+  background: rgba(var(--ui-gold), 0.07);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.deck-browser-stage {
+  grid-template-columns: 36px minmax(170px, 210px) minmax(0, 1fr) 36px;
+  gap: 10px;
+  min-height: 0;
+  padding: 11px;
+  border-color: rgba(var(--ui-cyan), 0.16);
+  border-radius: 3px 12px 3px 12px;
+  background:
+    linear-gradient(90deg, rgba(var(--ui-cyan), 0.035), transparent 42%),
+    rgba(2, 7, 13, 0.72);
+}
+
+.deck-browser-prev {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.deck-browser-card {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.deck-browser-detail {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.deck-browser-next {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.deck-browser-card {
+  width: 100%;
+  max-width: 205px;
+  justify-self: center;
+}
+
+.deck-browser-card .card {
+  min-height: 0;
+  border-radius: 3px 10px 3px 10px;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.5), 0 0 24px rgba(var(--ui-cyan), 0.07);
+}
+
+.deck-browser-card .card:hover {
+  transform: none;
+}
+
+.deck-browser-detail {
+  align-self: center;
+  align-content: start;
+  gap: 10px;
+  max-height: 294px;
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-left: 3px solid rgba(var(--ui-cyan), 0.42);
+  border-radius: 2px 10px 2px 10px;
+  background: rgba(255, 255, 255, 0.028);
+  scrollbar-color: rgba(var(--ui-cyan), 0.5) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+}
+
+.deck-browser-badges {
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.deck-browser-badges span {
+  padding: 3px 7px;
+  border-radius: 2px 7px 2px 7px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+#deckBrowserText {
+  color: #edf3fa;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+#deckBrowserMeta {
+  padding-top: 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  color: #9fb1c4;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.deck-browser-detail small {
+  color: #6f879f;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.deck-browser-nav {
+  width: 34px;
+  height: 70px;
+  border-radius: 2px 9px 2px 9px;
+  background: linear-gradient(180deg, rgba(var(--ui-cyan), 0.1), rgba(4, 11, 18, 0.96));
+  font-size: 28px;
+  transition: border-color 140ms ease, color 140ms ease, transform 140ms ease, background 140ms ease;
+}
+
+.deck-browser-nav:hover:not(:disabled),
+.deck-browser-nav:focus-visible {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(var(--ui-gold), 0.14), rgba(11, 14, 20, 0.98));
+}
+
+.deck-browser-rail {
+  gap: 5px;
+  margin-top: 8px;
+  padding: 1px 1px 5px;
+  scrollbar-color: rgba(var(--ui-cyan), 0.42) rgba(255, 255, 255, 0.035);
+  scrollbar-width: thin;
+}
+
+.deck-browser-rail-card {
+  max-width: 154px;
+  padding: 6px 8px;
+  border-radius: 2px 7px 2px 7px;
+  color: #aebed0;
+  background: rgba(255, 255, 255, 0.032);
+  font-size: 9px;
+  letter-spacing: 0.025em;
+}
+
+.deck-browser-rail-card[aria-current="true"] {
+  box-shadow: inset 0 -2px rgba(var(--ui-gold), 0.72);
+}
+
+@media (max-width: 619px) {
+  .deck-browser-modal {
+    padding: 7px;
+  }
+
+  .modal-box.deck-browser {
+    max-height: calc(100dvh - 14px);
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .deck-browser-head {
+    min-height: 40px;
+    margin-bottom: 7px;
+    padding-bottom: 7px;
+  }
+
+  .deck-browser-head h2 {
+    font-size: 19px;
+  }
+
+  .deck-browser-stage {
+    grid-template-columns: 30px minmax(0, 190px) 30px;
+    justify-content: center;
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .deck-browser-card {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 190px;
+  }
+
+  .deck-browser-prev {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .deck-browser-next {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .deck-browser-card .card {
+    min-height: 0;
+  }
+
+  .deck-browser-nav {
+    width: 30px;
+    height: 56px;
+    font-size: 24px;
+  }
+
+  .deck-browser-detail {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-self: auto;
+    gap: 7px;
+    max-height: none;
+    padding: 10px;
+  }
+
+  #deckBrowserText {
+    font-size: 11px;
+    line-height: 1.58;
+  }
+
+  .deck-browser-detail small {
+    display: none;
+  }
+
+  .deck-browser-rail {
+    margin-top: 6px;
+  }
+}
+
 /* Phase changes read as a quick broadcast ribbon rather than a modal. */
 .phase-stage {
   filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.4));
