@@ -423,6 +423,128 @@ body {
   background: linear-gradient(270deg, rgba(5, 8, 14, 0.9), transparent);
 }
 
+/* Hand interaction rail: keep reordering discoverable and remove native bright scrollbars. */
+.hand-toolbar:not([hidden]) {
+  min-height: 30px;
+  gap: 6px;
+  padding: 2px 4px 4px;
+  border-bottom: 1px solid rgba(var(--ui-cyan), 0.1);
+  background: linear-gradient(90deg, rgba(var(--ui-cyan), 0.025), transparent 56%);
+}
+
+#handOrderStatus {
+  color: #8eabb7;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+}
+
+#handOrderStatus::before {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(var(--ui-cyan), 0.26);
+  border-radius: 2px 6px 2px 6px;
+  background: rgba(var(--ui-cyan), 0.055);
+  color: #91e5df;
+  font-size: 11px;
+}
+
+.hand-order-shortcut,
+.ai-history-toggle {
+  min-height: 27px;
+  padding: 4px 9px;
+  border-color: rgba(161, 188, 214, 0.2);
+  border-radius: 2px 7px 2px 7px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+  color: #aebfce;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+}
+
+.hand-order-shortcut:hover,
+.hand-order-shortcut:focus-visible,
+.ai-history-toggle:hover,
+.ai-history-toggle:focus-visible {
+  border-color: rgba(var(--ui-cyan), 0.56);
+  color: #e7ffff;
+  background: rgba(var(--ui-cyan), 0.09);
+}
+
+#handSortType[aria-pressed="true"] {
+  border-color: rgba(var(--ui-gold), 0.62);
+  color: #ffe1a2;
+  background: rgba(var(--ui-gold), 0.1);
+  box-shadow: inset 0 -2px 0 rgba(var(--ui-gold), 0.48);
+}
+
+#handResetOrder {
+  border-color: rgba(var(--ui-gold), 0.24);
+  color: #e7cf9e;
+}
+
+.ai-history-toggle::before {
+  margin-right: 4px;
+  content: "◴";
+  color: #82d8d5;
+}
+
+.hand,
+.grave-targets {
+  scrollbar-color: rgba(var(--ui-cyan), 0.5) rgba(255, 255, 255, 0.035);
+  scrollbar-width: thin;
+}
+
+.hand::-webkit-scrollbar,
+.grave-targets::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.hand::-webkit-scrollbar-track,
+.grave-targets::-webkit-scrollbar-track {
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.032);
+}
+
+.hand::-webkit-scrollbar-thumb,
+.grave-targets::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: linear-gradient(90deg, rgba(var(--ui-cyan), 0.45), rgba(var(--ui-gold), 0.42));
+}
+
+.hand::-webkit-scrollbar-thumb:hover,
+.grave-targets::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, rgba(var(--ui-cyan), 0.72), rgba(var(--ui-gold), 0.64));
+}
+
+body[data-duel-turn="player"] .hand-readiness {
+  border-color: rgba(var(--ui-cyan), 0.28);
+  background: rgba(var(--ui-cyan), 0.075);
+  box-shadow: inset 0 -1px 0 rgba(var(--ui-cyan), 0.22);
+}
+
+body[data-duel-turn="ai"] .hand-readiness {
+  border-color: rgba(159, 176, 196, 0.16);
+  background: rgba(159, 176, 196, 0.035);
+  filter: saturate(0.55);
+}
+
+/* Empty lanes recede until a card or target choice makes them relevant. */
+body[data-duel-selection="none"] #app .duel-table .slot.empty,
+body[data-duel-selection="none"] #app .duel-table .trap-slot.empty {
+  opacity: 0.58;
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.12);
+  box-shadow: inset 0 -10px 24px rgba(0, 0, 0, 0.12);
+}
+
+body[data-duel-selection="none"] #app .duel-table .slot.empty:hover,
+body[data-duel-selection="none"] #app .duel-table .trap-slot.empty:hover {
+  opacity: 0.82;
+}
+
 .hand-command {
   border-color: rgba(var(--ui-cyan), 0.2);
   border-radius: 3px 10px 3px 10px;
@@ -1255,6 +1377,10 @@ body {
 }
 
 @media (min-width: 560px) and (max-width: 720px) {
+  #handOrderStatus {
+    display: inline-flex;
+  }
+
   .modal-box.card-zoom {
     width: min(660px, 100%);
     max-height: calc(100dvh - 20px - var(--safe-area-top) - var(--safe-area-bottom));
