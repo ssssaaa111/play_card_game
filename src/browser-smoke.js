@@ -3441,35 +3441,60 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
 
 async function runMobileHandChoiceFitBasicSmoke(ctx) {
   setSmokeStatus("running", "mobile-hand-choice-fit-basic");
-  await startSmokeDuel(ctx, "trioChainLifecycle");
+  await startSmokeDuel(ctx, "direct");
 
   if (window.innerWidth > 720) {
     throw new Error(`mobile-hand-choice-fit-basic: expected phone viewport, received ${window.innerWidth}x${window.innerHeight}`);
   }
 
   const hand = ctx.els.hand;
+  const handStack = document.querySelector(".hand-stack");
   const handPanel = document.querySelector(".hand-panel");
-  const selectedCard = handCard(ctx.els, "guard-sigil");
-  if (!hand || !handPanel || !selectedCard) {
+  const selectedCard = handCard(ctx.els, "star-breach");
+  if (!hand || !handStack || !handPanel || !selectedCard) {
     throw new Error("mobile-hand-choice-fit-basic: required hand regions are missing");
   }
 
-  clickSmokeElement(selectedCard, "mobile-hand-choice-fit-basic: select guard sigil");
   await waitForSmoke(
-    () => document.body.dataset.duelSelection === "hand" && !ctx.els.choiceActions.hidden,
-    "mobile-hand-choice-fit-basic: hand choice opens"
+    () => hand.scrollWidth > hand.clientWidth + 4 && handStack.dataset.scrollable === "true",
+    "mobile-hand-choice-fit-basic: overflowing hand exposes scroll affordance"
+  );
+  hand.scrollLeft = hand.scrollWidth;
+  hand.dispatchEvent(new Event("scroll"));
+  await waitForSmoke(
+    () => handStack.dataset.scrollStart === "false" && handStack.dataset.scrollEnd === "true",
+    "mobile-hand-choice-fit-basic: scroll affordance follows the right edge"
   );
 
-  const selectedCardRect = selectedCard.getBoundingClientRect();
+  clickSmokeElement(selectedCard, "mobile-hand-choice-fit-basic: select offscreen direct spell");
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "hand"
+      && !ctx.els.choiceActions.hidden
+      && handStack.dataset.scrollStart === "true",
+    "mobile-hand-choice-fit-basic: selected card returns into view"
+  );
+
+  const focusedCard = handCard(ctx.els, "star-breach");
+  if (!focusedCard?.classList.contains("selected")) {
+    throw new Error("mobile-hand-choice-fit-basic: focused card did not survive the hand rerender");
+  }
+  const selectedCardRect = focusedCard.getBoundingClientRect();
   const handRect = hand.getBoundingClientRect();
-  if (selectedCard.scrollHeight > Math.ceil(selectedCard.clientHeight) + 1) {
-    throw new Error(`mobile-hand-choice-fit-basic: selected card content is clipped (${selectedCard.clientHeight}/${selectedCard.scrollHeight})`);
+  if (focusedCard.scrollHeight > Math.ceil(focusedCard.clientHeight) + 1) {
+    throw new Error(`mobile-hand-choice-fit-basic: selected card content is clipped (${focusedCard.clientHeight}/${focusedCard.scrollHeight})`);
   }
   if (hand.scrollHeight > Math.ceil(hand.clientHeight) + 1) {
     throw new Error(`mobile-hand-choice-fit-basic: selected hand needs hidden vertical scrolling (${hand.clientHeight}/${hand.scrollHeight})`);
   }
   if (selectedCardRect.bottom > handRect.bottom + 1 || selectedCardRect.bottom > handPanel.getBoundingClientRect().bottom + 1) {
     throw new Error(`mobile-hand-choice-fit-basic: selected card leaves its hand region (${selectedCardRect.bottom}/${handRect.bottom})`);
+  }
+  if (selectedCardRect.left < handRect.left - 1 || selectedCardRect.right > handRect.right + 1) {
+    throw new Error(`mobile-hand-choice-fit-basic: auto-focused card is horizontally clipped (${selectedCardRect.left}/${selectedCardRect.right} vs ${handRect.left}/${handRect.right})`);
+  }
+  const siblingCard = hand.querySelector(".card:not(.selected)");
+  if (!siblingCard || Number.parseFloat(getComputedStyle(siblingCard).opacity) >= Number.parseFloat(getComputedStyle(focusedCard).opacity)) {
+    throw new Error("mobile-hand-choice-fit-basic: selected action does not suppress unrelated hand cards");
   }
 
   clickSmokeElement(ctx.els.choiceCancelBtn, "mobile-hand-choice-fit-basic: cancel hand choice");
