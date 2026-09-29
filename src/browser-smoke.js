@@ -3477,6 +3477,33 @@ async function runMobileHandChoiceFitBasicSmoke(ctx) {
     () => document.body.dataset.duelSelection === "none" && ctx.els.choiceActions.hidden,
     "mobile-hand-choice-fit-basic: hand choice closes"
   );
+
+  const timelineToggle = document.querySelector("#timelineDrawerToggle");
+  const timelineDrawer = document.querySelector("#timelineDrawer");
+  const arena = document.querySelector(".arena.duel-table");
+  if (!timelineToggle || !timelineDrawer || !arena) {
+    throw new Error("mobile-hand-choice-fit-basic: tactical drawer regions are missing");
+  }
+  clickSmokeElement(timelineToggle, "mobile-hand-choice-fit-basic: open timeline drawer");
+  await waitForSmoke(
+    () => timelineDrawer.classList.contains("is-open")
+      && Number.parseFloat(getComputedStyle(timelineDrawer).opacity) > 0.99
+      && timelineDrawer.getBoundingClientRect().top < arena.getBoundingClientRect().bottom,
+    "mobile-hand-choice-fit-basic: timeline drawer opens"
+  );
+  const timelineRect = timelineDrawer.getBoundingClientRect();
+  const arenaRect = arena.getBoundingClientRect();
+  if (timelineRect.top < arenaRect.top - 1 || timelineRect.bottom > arenaRect.bottom + 1) {
+    throw new Error(
+      `mobile-hand-choice-fit-basic: timeline drawer leaves the battlefield ` +
+      `(${timelineRect.top}/${timelineRect.bottom} vs ${arenaRect.top}/${arenaRect.bottom})`
+    );
+  }
+  clickSmokeElement(document.querySelector("#timelineDrawer .drawer-close"), "mobile-hand-choice-fit-basic: close timeline drawer");
+  await waitForSmoke(
+    () => !timelineDrawer.classList.contains("is-open"),
+    "mobile-hand-choice-fit-basic: timeline drawer closes"
+  );
   setSmokeStatus("passed", "mobile-hand-choice-fit-basic");
 }
 
