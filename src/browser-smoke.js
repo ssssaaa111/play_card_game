@@ -7101,10 +7101,33 @@ async function runSpellTargetDefaultBasicSmoke(ctx) {
       ctx.state.pendingTarget?.selectedTarget?.cardUid === target.uid &&
       ctx.state.pendingTarget?.selectedTargetSource === "default" &&
       fieldCard(ctx.els, "player", "celestial-origin-dragon")?.classList.contains("target-selected") &&
-      ctx.els.choiceText?.textContent.includes("已默认选择：创星神龙") &&
-      ctx.els.choiceConfirmBtn?.textContent.includes("确认发动"),
+      ctx.els.choiceActions?.classList.contains("single-target") &&
+      ctx.els.fieldTargets?.hidden &&
+      ctx.els.graveTargets?.hidden &&
+      ctx.els.choiceText?.textContent === "战意高扬 → 创星神龙（我方怪兽区 1）" &&
+      ctx.els.choiceConfirmBtn?.textContent === "发动" &&
+      ctx.els.choiceCancelBtn?.textContent === "取消",
     "spell-target-default-basic: only legal target is visibly selected"
   );
+  const compactChoiceRect = ctx.els.choiceActions.getBoundingClientRect();
+  if (compactChoiceRect.height > 80 || compactChoiceRect.width > 560) {
+    const compactChoiceStyle = getComputedStyle(ctx.els.choiceActions);
+    throw new Error(`spell-target-default-basic: unique target confirmation should stay compact: ${JSON.stringify({
+      width: Math.round(compactChoiceRect.width),
+      height: Math.round(compactChoiceRect.height),
+      cssHeight: compactChoiceStyle.height,
+      minHeight: compactChoiceStyle.minHeight,
+      gridRows: compactChoiceStyle.gridTemplateRows,
+      alignContent: compactChoiceStyle.alignContent,
+      top: compactChoiceStyle.top,
+      bottom: compactChoiceStyle.bottom,
+      padding: compactChoiceStyle.padding,
+      boxSizing: compactChoiceStyle.boxSizing,
+      visibleChildren: [...ctx.els.choiceActions.children]
+        .filter((element) => getComputedStyle(element).display !== "none")
+        .map((element) => ({ id: element.id, height: Math.round(element.getBoundingClientRect().height) }))
+    })}`);
+  }
   if (!ctx.state.player.hand.some((card) => card?.uid === spell.uid) ||
       countGameEvents(ctx.state, "CARD_ACTIVATED") !== activationsBefore) {
     throw new Error("spell-target-default-basic: opening target selection must not activate the spell");
@@ -7166,6 +7189,8 @@ async function runSpellMultiTargetChoiceBasicSmoke(ctx) {
     `${smokeName}: repeated hand activation must wait for an explicit target`
   );
   if (!ctx.els.choiceText?.textContent.includes("尚未选择目标") ||
+      ctx.els.choiceActions?.classList.contains("single-target") ||
+      ctx.els.fieldTargets?.hidden ||
       fieldCard(ctx.els, "player", "star-lancer")?.classList.contains("target-selected") ||
       fieldCard(ctx.els, "player", "nova-squire")?.classList.contains("target-selected")) {
     throw new Error(`${smokeName}: multiple legal targets must not expose a default selection. ${smokeDebug(ctx)}`);
@@ -7327,7 +7352,7 @@ async function runTargetWindowSmoke(ctx) {
   if (ctx.state.pendingTarget?.selectedTarget?.cardUid !== starLancer?.uid ||
       ctx.state.pendingTarget?.selectedTargetSource !== "default" ||
       !fieldCard(ctx.els, "player", "star-lancer")?.classList.contains("target-selected") ||
-      !ctx.els.choiceText?.textContent.includes("已默认选择：星轨枪兵")) {
+      ctx.els.choiceText?.textContent !== "战意高扬 → 星轨枪兵（我方怪兽区 1）") {
     throw new Error("战意高扬没有把唯一合法目标明确显示为默认选中");
   }
   assertPendingSelection(ctx, "target", "战意高扬目标选择窗口");
@@ -7348,7 +7373,7 @@ async function runTargetWindowSmoke(ctx) {
   const skyRaider = ctx.state.ai.field.find((card) => card?.id === "sky-raider");
   if (ctx.state.pendingTarget?.selectedTarget?.cardUid !== skyRaider?.uid ||
       !fieldCard(ctx.els, "ai", "sky-raider")?.classList.contains("target-selected") ||
-      !ctx.els.choiceText?.textContent.includes("已默认选择：天岚突袭者")) {
+      ctx.els.choiceText?.textContent !== "破阵星芒 → 天岚突袭者（敌方怪兽区 2）") {
     throw new Error("切换魔法后没有重新计算并显示敌方默认目标");
   }
   assertPendingSelection(ctx, "target", "切换到破阵星芒目标选择");

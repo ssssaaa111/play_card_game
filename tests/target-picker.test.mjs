@@ -13,9 +13,10 @@ test("revival candidates exclude spells and retain their original grave indexes"
   assert.equal(targets[0].index, 1);
   assert.equal(targets[0].card, monster);
   const display = buildTargetSelectionDisplay(prepareDefaultTargetSelection(pending, state), state);
-  assert.match(display.text, /我方墓地怪兽 · 1 个可选/);
-  assert.match(display.text, /仅此 1 个目标/);
-  assert.doesNotMatch(display.text, /其他候选|其他高亮/);
+  assert.equal(display.singleTarget, true);
+  assert.equal(display.text, "余烁归轨 → 余烁小卫（我方墓地）");
+  assert.equal(display.confirmLabel, "发动");
+  assert.doesNotMatch(display.text, /个可选|仅此|默认选择|其他候选|其他高亮/);
   assert.equal(collectLegalTargetSelections({ mode: "ownGraveCard" }, state).length, 2);
 });
 

@@ -68,6 +68,37 @@ body[data-duel-selection="target"] #app #choiceActions.target-choice .timer-prog
   width: 100%;
   margin: 0;
 }
+/* A sole legal target is already locked by the rules. Keep only a compact
+   confirmation strip instead of repeating a one-item picker. */
+body[data-duel-selection="target"] #app .hand-command > #choiceActions.target-choice.single-target {
+  width: min(540px, calc(100vw - 24px));
+  max-height: none;
+  grid-template-columns: minmax(0, 1fr) 96px 76px;
+  grid-template-rows: 42px;
+  gap: 8px;
+  padding: 11px 12px;
+  align-items: stretch;
+}
+body[data-duel-selection="target"] #app #choiceActions.target-choice.single-target::before { content: none; }
+body[data-duel-selection="target"] #app #choiceActions.target-choice.single-target #choiceText {
+  grid-area: 1 / 1 / 2 / 2;
+  align-self: center;
+  padding: 0;
+  color: #e9fbf8;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: normal;
+}
+body[data-duel-selection="target"] #app #choiceActions.target-choice.single-target #choiceConfirmBtn {
+  grid-area: 1 / 2 / 2 / 3;
+}
+body[data-duel-selection="target"] #app #choiceActions.target-choice.single-target #choiceCancelBtn {
+  grid-area: 1 / 3 / 2 / 4;
+}
+body[data-duel-selection="target"] #app #choiceActions.target-choice.single-target :is(.target-options, .grave-targets) {
+  display: none;
+}
 #app #choiceActions :is(.target-options, .grave-targets) {
   grid-area: 2 / 1 / 3 / -1;
   min-height: 0;
@@ -226,6 +257,26 @@ body[data-duel-targeting="attack"] #app .duel-table .slot.attack-target::after {
   body[data-duel-selection="target"] #app #choiceActions.target-choice #choiceText { font-size: 11px; }
   body[data-duel-selection="target"] #app #choiceActions.target-choice::before { position: static; grid-area: 1 / 1 / 2 / -1; justify-self: end; }
   body[data-duel-selection="target"] #app #choiceActions.target-choice #choiceText { padding-right: 0; padding-top: 28px; }
+  body[data-duel-selection="target"] #app .hand-command > #choiceActions.target-choice.single-target {
+    grid-template-columns: minmax(0, 1fr) minmax(78px, .42fr);
+    grid-template-rows: auto 38px;
+    padding: 10px;
+  }
+  body[data-duel-selection="target"] #app #choiceActions.target-choice.single-target #choiceText {
+    grid-area: 1 / 1 / 2 / -1;
+    padding: 0 2px 2px;
+    font-size: 11px;
+  }
+  body[data-duel-selection="target"] #app #choiceActions.target-choice.single-target #choiceConfirmBtn {
+    grid-area: 2 / 1 / 3 / 2;
+    min-height: 38px;
+    height: 38px;
+  }
+  body[data-duel-selection="target"] #app #choiceActions.target-choice.single-target #choiceCancelBtn {
+    grid-area: 2 / 2 / 3 / 3;
+    min-height: 38px;
+    height: 38px;
+  }
 }
 @media (max-height: 520px) and (orientation: landscape) {
   body[data-duel-selection="target"] #app .hand-command > #choiceActions.target-choice {
@@ -236,4 +287,9 @@ body[data-duel-targeting="attack"] #app .duel-table .slot.attack-target::after {
     transform: none;
   }
   #app #choiceActions :is(.target-options, .grave-targets) { grid-template-columns: minmax(0, 1fr); }
+  body[data-duel-selection="target"] #app .hand-command > #choiceActions.target-choice.single-target {
+    inset: max(68px, var(--safe-area-top)) 8px auto auto;
+    width: min(420px, calc(100vw - 16px));
+    transform: none;
+  }
 }
