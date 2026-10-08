@@ -2523,24 +2523,26 @@ async function runGraveTargetReadabilityBasicSmoke(ctx) {
   );
 
   clickSmokeElement(handCard(ctx.els, "starwake-recall"), `${smokeName}: open grave revive selection`);
+  const ace = ctx.state.player.grave.find((card) => card?.id === "astral-comet-ace");
   await waitForSmoke(
     () => ctx.state.pendingTarget?.effect === "graveRevive" &&
-      graveTargetCard(ctx.els, "astral-comet-ace") &&
-      !graveTargetCard(ctx.els, "last-spark"),
-    `${smokeName}: grave picker contains only legal monsters`,
+      ctx.state.pendingTarget?.selectedTarget?.cardUid === ace?.uid &&
+      ctx.state.pendingTarget?.selectedTargetSource === "default" &&
+      ctx.els.choiceActions?.classList.contains("single-target") &&
+      ctx.els.graveTargets?.hidden &&
+      ctx.els.choiceText?.textContent.includes("天穹逆星者（我方墓地）") &&
+      ctx.els.choiceConfirmBtn?.textContent === "发动" &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: sole legal grave monster is compactly locked`,
     9000
   );
-  const legalTarget = graveTargetCard(ctx.els, "astral-comet-ace");
-  const illegalTarget = graveTargetCard(ctx.els, "last-spark");
-  if (!legalTarget?.classList.contains("targetable") ||
-      legalTarget.dataset.targetState !== "legal" ||
-      illegalTarget ||
-      !ctx.els.graveTargets?.dataset.summary?.includes("已隐藏 1 张不符合条件的卡") ||
-      !ctx.els.graveTargets?.dataset.summary?.includes("可召唤 1 / 墓地 2")) {
-    throw new Error(`${smokeName}: grave target availability is not understandable. ${smokeDebug(ctx)}`);
+  if (graveTargetCard(ctx.els, "astral-comet-ace") ||
+      graveTargetCard(ctx.els, "last-spark") ||
+      ctx.els.choiceText.textContent.includes("1 个可选")) {
+    throw new Error(`${smokeName}: a sole grave target should not render a redundant picker. ${smokeDebug(ctx)}`);
   }
 
-  await selectAndConfirmSpellTarget(ctx, legalTarget, `${smokeName}: revive legal monster`);
+  confirmSpellTarget(ctx, `${smokeName}: revive locked monster`);
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace") &&
       !ctx.state.player.grave.some((card) => card?.id === "astral-comet-ace") &&
@@ -9479,17 +9481,20 @@ async function runCampaignObjectiveTrackerBasicSmoke(ctx) {
   );
 
   clickSmokeElement(handCard(ctx.els, "starwake-recall"), `${smokeName}: open grave revival`);
+  const ace = ctx.state.player.grave.find((card) => card?.id === "astral-comet-ace");
   await waitForSmoke(
-    () => ctx.state.pendingTarget?.effect === "graveRevive" && graveTargetCard(ctx.els, "astral-comet-ace"),
-    `${smokeName}: ace is selectable in grave`,
+    () => ctx.state.pendingTarget?.effect === "graveRevive" &&
+      ctx.state.pendingTarget?.selectedTarget?.cardUid === ace?.uid &&
+      ctx.state.pendingTarget?.selectedTargetSource === "default" &&
+      ctx.els.choiceActions?.classList.contains("single-target") &&
+      ctx.els.graveTargets?.hidden &&
+      ctx.els.choiceText?.textContent.includes("天穹逆星者（我方墓地）") &&
+      ctx.els.choiceConfirmBtn?.textContent === "发动" &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: sole ace target is automatically locked`,
     9000
   );
-  await selectAndConfirmSpellTarget(
-    ctx,
-    graveTargetCard(ctx.els, "astral-comet-ace"),
-    `${smokeName}: revive campaign ace`,
-    { confirmCenter: true }
-  );
+  confirmSpellTarget(ctx, `${smokeName}: revive campaign ace`, { center: true });
   await waitForSmoke(
     () => ctx.state.campaignObjectivesAnnounced?.["revive-ace"] &&
       ctx.els.campaignMissionProgress?.textContent === "1 / 3" &&
