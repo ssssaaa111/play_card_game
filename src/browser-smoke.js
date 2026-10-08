@@ -8906,6 +8906,35 @@ async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("passed", "mode-auto-end");
 }
 
+async function runAttackDoubleClickMultiTargetSmoke(ctx) {
+  const smokeName = "attack-double-click-multi-target-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "target");
+  await clickSmokeElementTwiceAcrossRender(
+    () => fieldCard(ctx.els, "player", "star-lancer"),
+    `${smokeName}: double click attacker`,
+    () => ctx.state.selected?.zone === "playerField" && ctx.state.selected.index === 0
+  );
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === 0,
+    `${smokeName}: double click enters attack target selection. ${smokeDebug(ctx)}`
+  );
+  await waitForSmoke(
+    () => ctx.els.aiField.querySelectorAll(".slot.attack-target").length === 2,
+    `${smokeName}: both legal targets are highlighted. ${smokeDebug(ctx)}`
+  );
+  await waitForSmoke(
+    () => ctx.els.attackRouteLayer.querySelectorAll(".attack-route").length === 2,
+    `${smokeName}: both attack routes are visible. ${smokeDebug(ctx)}`
+  );
+  clickSmokeElement(ctx.els.fieldCancelBtn, `${smokeName}: cancel attack target selection`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === null && ctx.state.selected?.zone === "playerField",
+    `${smokeName}: cancel preserves the selected attacker`
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiModeEventSmoke(ctx) {
   setSmokeStatus("running", "ai-mode-event");
   await startSmokeDuel(ctx, "combo");
@@ -10904,6 +10933,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "phase-progression-basic": runPhaseProgressionBasicSmoke,
     "phase-window-ownership-basic": runPhaseWindowOwnershipBasicSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
+    "attack-double-click-multi-target-basic": runAttackDoubleClickMultiTargetSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
     "pause-detail": runPauseDetailSmoke,

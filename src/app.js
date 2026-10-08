@@ -2370,9 +2370,13 @@ async function quickAttackOnlyTarget(attackerIndex) {
   clearBattlePreview();
   showDetail(attacker);
   const targets = projectBattleFromUiState(state, "player", { attackerIndex }).attackActions;
-  if (targets.length !== 1) {
+  if (targets.length > 1) {
+    prepareSelectedMonsterAttack();
+    return false;
+  }
+  if (targets.length === 0) {
     render();
-    cue(targets.length > 1 ? "有多个可攻击目标，请点选具体目标。" : "这只怪兽当前没有合法攻击目标。");
+    cue("这只怪兽当前没有合法攻击目标。");
     resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
   }
