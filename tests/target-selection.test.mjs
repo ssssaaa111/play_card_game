@@ -289,8 +289,9 @@ test("target windows default to the only legal target and expose that selection"
   assert.equal(isSelectedTargetSelection(prepared, "player", 1), true);
   assert.equal(display.complete, true);
   assert.equal(display.selectedByDefault, true);
-  assert.match(display.text, /已默认选择：最高怪（我方怪兽区 2）/);
-  assert.equal(display.confirmLabel, "确认发动");
+  assert.equal(display.singleTarget, true);
+  assert.equal(display.text, "战意高扬 → 最高怪（我方怪兽区 2）");
+  assert.equal(display.confirmLabel, "发动");
 });
 
 test("target windows stay unselected when more than one legal target exists", () => {
@@ -308,6 +309,7 @@ test("target windows stay unselected when more than one legal target exists", ()
   assert.equal(prepared.selectedTargetSource, undefined);
   assert.equal(display.complete, false);
   assert.equal(display.legalCount, 2);
+  assert.equal(display.singleTarget, false);
   assert.equal(display.confirmLabel, "请选择目标");
   assert.match(display.text, /尚未选择目标/);
 });

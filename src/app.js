@@ -1429,6 +1429,7 @@ function currentTargetSelectionDisplay(pending = state.pendingTarget) {
   if (pending?.purpose === "afterAttackTarget") {
     return {
       ...display,
+      singleTarget: false,
       text: [
         `${pending.cardName}：选择本次攻击后要破坏的对手魔陷。`,
         display.selectedTarget ? `已选择：${display.selectedName}。` : "尚未选择目标。",
@@ -1444,6 +1445,7 @@ function currentTargetSelectionDisplay(pending = state.pendingTarget) {
     : "尚未选择分裂来源。";
   return {
     ...display,
+    singleTarget: false,
     text: [
       split.text,
       selectionText,
@@ -2370,9 +2372,13 @@ async function quickAttackOnlyTarget(attackerIndex) {
   clearBattlePreview();
   showDetail(attacker);
   const targets = projectBattleFromUiState(state, "player", { attackerIndex }).attackActions;
-  if (targets.length !== 1) {
+  if (targets.length > 1) {
+    prepareSelectedMonsterAttack();
+    return false;
+  }
+  if (targets.length === 0) {
     render();
-    cue(targets.length > 1 ? "有多个可攻击目标，请点选具体目标。" : "这只怪兽当前没有合法攻击目标。");
+    cue("这只怪兽当前没有合法攻击目标。");
     resumePlayerIdleCountdownAfterPassiveIntent();
     return false;
   }
@@ -5736,7 +5742,9 @@ function render(animationKey = "") {
     started: state.started,
     paused: state.paused,
     pendingPrompt: state.pendingTarget
-      ? `${state.pendingTarget.cardName} · ${targetSelectionScope(state.pendingTarget)} · ${targetSelectionDisplay.legalCount} 个可选`
+      ? targetSelectionDisplay.singleTarget
+        ? `${state.pendingTarget.cardName} · 目标已锁定：${targetSelectionDisplay.selectedName}`
+        : `${state.pendingTarget.cardName} · ${targetSelectionScope(state.pendingTarget)} · ${targetSelectionDisplay.legalCount} 个可选`
       : targetPrompt,
     selectionHint,
     scenarioId: state.scenarioId,
@@ -6334,9 +6342,10 @@ function renderGraveTargets() {
   const pending = state.pendingTarget;
   const grave = ["ownGraveMonster", "ownGraveCard"].includes(pending?.mode);
   const targets = collectLegalTargetSelections(pending, { player: state.player, ai: state.ai });
+  const compactTarget = currentTargetSelectionDisplay(pending).singleTarget;
   for (const root of [els.graveTargets, els.fieldTargets]) {
     if (!root) continue;
-    const active = Boolean(pending) && (root === els.graveTargets ? grave : !grave);
+    const active = Boolean(pending) && !compactTarget && (root === els.graveTargets ? grave : !grave);
     root.hidden = !active;
     if (!active) {
       root.replaceChildren();

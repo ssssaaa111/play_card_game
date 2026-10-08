@@ -265,6 +265,7 @@ export function buildTargetSelectionDisplay(pending, duelists = {}) {
       selectedTarget: null,
       selectedName: "",
       selectedByDefault: false,
+      singleTarget: false,
       prompt: "",
       text: "",
       confirmLabel: "请选择目标"
@@ -274,7 +275,21 @@ export function buildTargetSelectionDisplay(pending, duelists = {}) {
   const selectedTarget = resolveSelectedTargetSelection(pending, duelists);
   const selectedName = selectedTarget ? targetSelectionTargetLabel(selectedTarget) : "";
   const selectedByDefault = Boolean(selectedTarget && pending.selectedTargetSource === "default");
+  const singleTarget = legalTargets.length === 1 && Boolean(selectedTarget);
   const prompt = targetSelectionPrompt(pending);
+  if (singleTarget) {
+    return {
+      complete: true,
+      legalCount: 1,
+      selectedTarget,
+      selectedName,
+      selectedByDefault,
+      singleTarget: true,
+      prompt,
+      text: `${pending.cardName} → ${selectedName}`,
+      confirmLabel: "发动"
+    };
+  }
   const selectionText = selectedTarget
     ? `${selectedByDefault ? "已默认选择" : "已选择"}：${selectedName}。`
     : "尚未选择目标。";
@@ -291,6 +306,7 @@ export function buildTargetSelectionDisplay(pending, duelists = {}) {
     selectedTarget,
     selectedName,
     selectedByDefault,
+    singleTarget: false,
     prompt,
     text: [`${pending.cardName} · ${targetSelectionScope(pending)} · ${legalTargets.length} 个可选`, selectionText, guidance].join("\n"),
     confirmLabel: selectedTarget ? "确认发动" : "请选择目标"

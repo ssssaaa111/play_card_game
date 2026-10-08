@@ -194,18 +194,21 @@ test("target and fusion selections block turn controls and expose the correct pr
     targetPrompt: "选择对方攻击力最高怪兽。",
     targetSelectionStatus: {
       complete: true,
-      confirmLabel: "确认发动",
-      text: "选择对方攻击力最高怪兽。\n已默认选择：苍穹骑手（敌方怪兽区 2）。"
+      singleTarget: true,
+      confirmLabel: "发动",
+      text: "破阵星芒 → 苍穹骑手（敌方怪兽区 2）"
     }
   });
 
   assert.equal(target.skipAttack.disabled, true);
   assert.equal(target.endTurn.disabled, true);
-  assert.equal(target.hand.confirmText, "确认发动");
+  assert.equal(target.hand.confirmText, "发动");
   assert.equal(target.hand.confirmDisabled, false);
-  assert.equal(target.choice.text, "选择对方攻击力最高怪兽。\n已默认选择：苍穹骑手（敌方怪兽区 2）。");
+  assert.equal(target.choice.text, "破阵星芒 → 苍穹骑手（敌方怪兽区 2）");
   assert.equal(target.choice.target, true);
-  assert.equal(target.choice.targetStep, "confirm");
+  assert.equal(target.choice.targetSingle, true);
+  assert.equal(target.choice.cancelText, "取消");
+  assert.equal(target.choice.targetStep, "single");
 
   const staleTarget = buildDuelControlsView({
     started: true,

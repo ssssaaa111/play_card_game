@@ -645,7 +645,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "tribute-readability-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "fusion-readability-basic"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "token-readability-basic"\)/);
-  assert.match(smoke, /const smokeName = "grave-target-readability-basic";[\s\S]*已隐藏 1 张不符合条件的卡[\s\S]*only the chosen grave monster moves to the field[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /const smokeName = "grave-target-readability-basic";[\s\S]*sole legal grave monster is compactly locked[\s\S]*should not render a redundant picker[\s\S]*only the chosen grave monster moves to the field[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-demo"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-challenge"\)/);
   assert.match(smoke, /setSmokeStatus\("passed", "trio-omega-autopilot-fails"\)/);

@@ -46,7 +46,8 @@ export function buildDuelControlsView({
   const currentConfirmLabel = hasTarget
     ? targetSelectionStatus?.confirmLabel || "确认发动"
     : confirmLabel;
-  const cancelLabel = hasTarget ? "取消目标" : "取消选择";
+  const singleTarget = hasTarget && Boolean(targetSelectionStatus?.singleTarget);
+  const cancelLabel = singleTarget ? "取消" : hasTarget ? "取消目标" : "取消选择";
   const showChoiceActions = canAct && (hasPendingSelection || selectedHandReady);
   const selectedMonsterInDefense = selectedPlayerMonsterMode === "defense";
   const attackDisabled = hasPendingSelection || !canAct || !selectedPlayerMonsterCanAttack;
@@ -126,7 +127,8 @@ export function buildDuelControlsView({
       cancelText: cancelLabel,
       cancelDisabled: !canAct,
       target: hasTarget,
-      targetStep: hasTarget ? (targetSelectionStatus?.complete ? "confirm" : "select") : "none",
+      targetSingle: singleTarget,
+      targetStep: hasTarget ? (singleTarget ? "single" : targetSelectionStatus?.complete ? "confirm" : "select") : "none",
       fusion: hasFusion,
       material: hasFusion || hasTribute,
       split: pendingTarget?.effect === "splitToken"
@@ -206,6 +208,7 @@ export function renderDuelControls(elements, view) {
     elements.choiceActions.classList.toggle("fusion-choice", view.choice.fusion);
     elements.choiceActions.classList.toggle("material-choice", view.choice.material);
     elements.choiceActions.classList.toggle("target-choice", view.choice.target);
+    elements.choiceActions.classList.toggle("single-target", view.choice.targetSingle);
     elements.choiceActions.dataset.targetStep = view.choice.targetStep;
     elements.choiceActions.classList.toggle("split-choice", view.choice.split);
   }

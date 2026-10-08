@@ -1,0 +1,1879 @@
+/*
+ * Command-table visual consolidation.
+ *
+ * This file intentionally loads last.  It turns the existing functional
+ * regions into one duel surface without changing state classes or hit areas.
+ */
+
+:root {
+  --ui-void: #05070d;
+  --ui-deep: #080d16;
+  --ui-panel: rgba(7, 12, 20, 0.94);
+  --ui-panel-soft: rgba(10, 17, 27, 0.84);
+  --ui-cyan: 84, 210, 210;
+  --ui-red: 239, 71, 111;
+  --ui-gold: 246, 189, 96;
+  --ui-violet: 183, 148, 244;
+  --ui-hairline: rgba(174, 214, 224, 0.16);
+  --ui-corner: 7px;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(var(--ui-cyan), 0.1), transparent 34%),
+    radial-gradient(circle at 8% -8%, rgba(var(--ui-violet), 0.14), transparent 32%),
+    radial-gradient(circle at 94% 6%, rgba(var(--ui-gold), 0.1), transparent 26%),
+    linear-gradient(152deg, #05070c 0%, #0a111c 48%, #04060a 100%);
+}
+
+#app {
+  gap: 6px;
+}
+
+/* Top command strip */
+.topbar {
+  isolation: isolate;
+  border-color: rgba(var(--ui-cyan), 0.22);
+  border-radius: var(--ui-corner);
+  background:
+    linear-gradient(90deg, rgba(var(--ui-cyan), 0.065), transparent 30%),
+    linear-gradient(270deg, rgba(var(--ui-gold), 0.045), transparent 24%),
+    linear-gradient(180deg, rgba(14, 23, 35, 0.98), rgba(5, 9, 16, 0.98));
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.36),
+    inset 0 -1px 0 rgba(var(--ui-cyan), 0.18);
+}
+
+.topbar::before,
+.topbar::after {
+  position: absolute;
+  z-index: -1;
+  content: "";
+  pointer-events: none;
+}
+
+.topbar::before {
+  inset: 0;
+  background: repeating-linear-gradient(115deg, transparent 0 58px, rgba(255, 255, 255, 0.018) 58px 59px);
+}
+
+.topbar::after {
+  right: 18px;
+  bottom: -1px;
+  left: 18px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-cyan), 0.72) 18%, rgba(var(--ui-gold), 0.52) 82%, transparent);
+  box-shadow: 0 0 14px rgba(var(--ui-cyan), 0.22);
+}
+
+.brand-mark {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 94% 23%, 94% 77%, 50% 100%, 6% 77%, 6% 23%);
+  background:
+    linear-gradient(140deg, #fff1b0 0 27%, #58d7d3 28% 62%, #a17bea 63%);
+  box-shadow: 0 0 18px rgba(var(--ui-cyan), 0.24);
+}
+
+.brand h1 {
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 14px rgba(var(--ui-cyan), 0.12);
+}
+
+.phase {
+  border-color: rgba(var(--ui-cyan), 0.24);
+  border-radius: 4px 11px 4px 11px;
+  background:
+    linear-gradient(100deg, rgba(var(--ui-gold), 0.075), transparent 38%),
+    rgba(2, 7, 13, 0.64);
+  box-shadow: inset 3px 0 0 rgba(var(--ui-gold), 0.34);
+}
+
+.phase > strong {
+  color: #ffdd98;
+  letter-spacing: 0.04em;
+}
+
+.actions .btn,
+.utility-toggle,
+.utility-menu .btn,
+.utility-menu .music-volume-control {
+  border-radius: 4px 9px 4px 9px;
+}
+
+.actions .btn {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.065), transparent),
+    rgba(7, 12, 20, 0.86);
+}
+
+.actions #endTurnBtn:not(:disabled) {
+  border-color: rgba(var(--ui-gold), 0.56);
+  color: #ffe6aa;
+  box-shadow: inset 0 -2px 0 rgba(var(--ui-gold), 0.28);
+}
+
+/* One battlefield instead of a stack of dashboard cards. */
+#app .arena.duel-table {
+  isolation: isolate;
+  border-color: rgba(var(--ui-cyan), 0.23);
+  border-radius: var(--ui-corner);
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(var(--ui-cyan), 0.09), transparent 46%),
+    linear-gradient(90deg, transparent 49.92%, rgba(var(--ui-gold), 0.06) 50%, transparent 50.08%),
+    repeating-linear-gradient(90deg, rgba(var(--ui-cyan), 0.019) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(0deg, rgba(var(--ui-cyan), 0.016) 0 1px, transparent 1px 36px),
+    linear-gradient(155deg, #0a111a, #05080e 64%, #070b12);
+  box-shadow:
+    0 20px 54px rgba(0, 0, 0, 0.42),
+    inset 0 0 90px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 0 rgba(var(--ui-cyan), 0.2);
+}
+
+#app .arena.duel-table::before {
+  inset: 5px;
+  border-color: rgba(219, 239, 239, 0.045);
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, rgba(var(--ui-red), 0.16), transparent 16%) top left / 34% 1px no-repeat,
+    linear-gradient(270deg, rgba(var(--ui-cyan), 0.18), transparent 16%) bottom right / 34% 1px no-repeat;
+}
+
+#app .arena.duel-table::after {
+  top: 50%;
+  right: 9%;
+  bottom: auto;
+  left: 9%;
+  width: auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-gold), 0.18), rgba(var(--ui-cyan), 0.18), transparent);
+  box-shadow: 0 0 26px rgba(var(--ui-cyan), 0.1);
+}
+
+#app .duel-table .field::before {
+  inset: 12% 12% 10%;
+  border-color: rgba(var(--ui-cyan), 0.1);
+  background:
+    linear-gradient(90deg, rgba(var(--ui-cyan), 0.09) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(var(--ui-gold), 0.055) 1px, transparent 1px);
+  background-size: 44px 44px;
+  opacity: 0.64;
+  filter: drop-shadow(0 0 30px rgba(var(--ui-cyan), 0.12));
+}
+
+#app .duel-table .field {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(var(--ui-red), 0.032),
+      transparent 34%,
+      transparent 66%,
+      rgba(var(--ui-cyan), 0.038)
+    );
+}
+
+#app .duel-table .zone-row,
+#app .duel-table .trap-row {
+  gap: 6px;
+}
+
+#app .duel-table .slot,
+#app .duel-table .trap-slot {
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.18);
+  border-radius: 2px 8px 2px 8px;
+  background:
+    linear-gradient(155deg, rgba(var(--zone-accent, 84, 210, 210), 0.065), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(0, 0, 0, 0.16)),
+    rgba(5, 9, 15, 0.5);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.018),
+    inset 0 -16px 30px rgba(0, 0, 0, 0.18);
+}
+
+#app .duel-table .slot::before {
+  inset: 5px;
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.1);
+  border-radius: 1px 5px 1px 5px;
+  background:
+    linear-gradient(135deg, rgba(var(--zone-accent, 84, 210, 210), 0.045), transparent 44%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 18px);
+}
+
+#app .duel-table .slot.empty::after,
+#app .duel-table .trap-slot.empty::after {
+  color: rgba(218, 233, 240, 0.2);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-shadow: 0 0 12px rgba(var(--zone-accent, 84, 210, 210), 0.22);
+}
+
+#app .duel-table .slot:has(.field-monster-card),
+#app .duel-table .trap-slot:has(.field-support-card) {
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.3);
+  background:
+    radial-gradient(ellipse at 50% 92%, rgba(var(--zone-accent, 84, 210, 210), 0.13), transparent 50%),
+    rgba(5, 9, 15, 0.72);
+}
+
+#app .duel-table .center-line {
+  gap: 8px;
+}
+
+#app .duel-table .center-line::before,
+#app .duel-table .center-line::after {
+  height: 1px;
+  opacity: 0.84;
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-gold), 0.38), rgba(var(--ui-cyan), 0.2));
+}
+
+#app .duel-table .center-line::after {
+  background: linear-gradient(90deg, rgba(var(--ui-cyan), 0.2), rgba(var(--ui-gold), 0.38), transparent);
+}
+
+#app .duel-table .center-line span {
+  min-height: 22px;
+  padding: 3px 14px;
+  border-radius: 2px 7px 2px 7px;
+  background: rgba(3, 7, 12, 0.9);
+  color: rgba(230, 239, 247, 0.72);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 0 24px rgba(0, 0, 0, 0.46);
+}
+
+/* Duelist rails */
+#app .duel-table .player-card {
+  position: relative;
+  border-radius: 3px 13px 3px 13px;
+  background:
+    linear-gradient(102deg, rgba(var(--ui-red), 0.075), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 52%),
+    rgba(4, 8, 14, 0.94);
+  box-shadow: 0 11px 30px rgba(0, 0, 0, 0.4), inset 0 -2px 0 rgba(var(--ui-red), 0.16);
+}
+
+#app .duel-table .side:not(.enemy) .player-card {
+  border-radius: 13px 3px 13px 3px;
+  background:
+    linear-gradient(258deg, rgba(var(--ui-cyan), 0.085), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 52%),
+    rgba(4, 8, 14, 0.94);
+  box-shadow: 0 11px 30px rgba(0, 0, 0, 0.4), inset 0 -2px 0 rgba(var(--ui-cyan), 0.18);
+}
+
+#app .duel-table .player-card::before {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 2px;
+  content: "";
+  background: linear-gradient(transparent, rgba(var(--ui-red), 0.9), transparent);
+  box-shadow: 0 0 12px rgba(var(--ui-red), 0.42);
+  pointer-events: none;
+}
+
+#app .duel-table .side:not(.enemy) .player-card::before {
+  right: 0;
+  left: auto;
+  background: linear-gradient(transparent, rgba(var(--ui-cyan), 0.94), transparent);
+  box-shadow: 0 0 12px rgba(var(--ui-cyan), 0.44);
+}
+
+#app .duel-table .player-title > span:first-child {
+  font-weight: 950;
+  letter-spacing: 0.04em;
+}
+
+#app .duel-table .life-bar,
+#app .duel-table .side:not(.enemy) .life-bar {
+  border-radius: 2px 7px 2px 2px;
+  background: rgba(3, 9, 8, 0.88);
+}
+
+#app .duel-table .side:not(.enemy) .life-bar {
+  border-radius: 7px 2px 2px 2px;
+}
+
+#app .duel-table .pile {
+  border-radius: 2px 7px 2px 7px;
+  border-color: rgba(198, 220, 228, 0.12);
+  background: rgba(4, 8, 14, 0.86);
+}
+
+.versus-stage {
+  width: 86px;
+  height: 62px;
+  border-radius: 5px 14px 5px 14px;
+  background:
+    linear-gradient(145deg, rgba(var(--ui-red), 0.08), transparent 44%),
+    linear-gradient(325deg, rgba(var(--ui-cyan), 0.09), transparent 44%),
+    rgba(3, 7, 12, 0.94);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.44), inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.versus-stage::before,
+.versus-stage::after {
+  top: 30px;
+  width: 40px;
+}
+
+.versus-mark {
+  font-size: 25px;
+  letter-spacing: -0.13em;
+}
+
+/* Cards keep their gameplay colors; the frame and text hierarchy become sharper. */
+.card {
+  border-width: 1px;
+  border-radius: 3px 9px 3px 9px;
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    inset 0 -3px 0 rgba(var(--ui-gold), 0.08);
+}
+
+.card:hover {
+  box-shadow:
+    0 18px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(var(--ui-gold), 0.34),
+    inset 0 -3px 0 rgba(var(--ui-gold), 0.24);
+}
+
+.card .art {
+  border-radius: 2px 6px 2px 6px;
+  border-color: rgba(235, 243, 248, 0.16);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.2);
+}
+
+.card .card-name {
+  letter-spacing: 0.015em;
+}
+
+.card .badge,
+.card .element-badge,
+.card .action-tag,
+.card .action-reason,
+.card .card-state-chip {
+  border-radius: 2px 5px 2px 5px;
+}
+
+/* Bottom command deck */
+.hand-panel {
+  border-color: rgba(var(--ui-cyan), 0.2);
+  border-radius: var(--ui-corner);
+  background:
+    linear-gradient(90deg, rgba(var(--ui-gold), 0.065), transparent 16%),
+    linear-gradient(270deg, rgba(var(--ui-cyan), 0.045), transparent 24%),
+    linear-gradient(180deg, rgba(10, 16, 25, 0.98), rgba(4, 7, 13, 0.98));
+  box-shadow:
+    0 -12px 38px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(var(--ui-cyan), 0.13);
+}
+
+.hand-panel::before {
+  position: absolute;
+  top: -1px;
+  right: 18px;
+  left: 18px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-gold), 0.52), rgba(var(--ui-cyan), 0.56), transparent);
+  box-shadow: 0 0 12px rgba(var(--ui-cyan), 0.16);
+  pointer-events: none;
+}
+
+.hand-title {
+  border-right-color: rgba(var(--ui-gold), 0.2);
+}
+
+.hand-title-copy > strong {
+  color: #ffe0a0;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+}
+
+.hand-readiness {
+  border-radius: 2px 6px 2px 6px;
+}
+
+.hand-stack {
+  position: relative;
+  padding: 0 3px;
+}
+
+.hand-stack::before,
+.hand-stack::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 8;
+  width: 18px;
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.hand-stack::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(5, 8, 14, 0.9), transparent);
+}
+
+.hand-stack::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(5, 8, 14, 0.9), transparent);
+}
+
+.hand-stack[data-scrollable="true"][data-scroll-start="false"]::before,
+.hand-stack[data-scrollable="true"][data-scroll-end="false"]::after {
+  width: 30px;
+  display: grid;
+  align-items: center;
+  color: rgba(193, 253, 249, 0.88);
+  font-size: 20px;
+  font-weight: 900;
+  text-shadow: 0 0 12px rgba(var(--ui-cyan), 0.74);
+  opacity: 1;
+}
+
+.hand-stack[data-scrollable="true"][data-scroll-start="false"]::before {
+  content: "‹";
+  justify-items: start;
+  padding-left: 3px;
+}
+
+.hand-stack[data-scrollable="true"][data-scroll-end="false"]::after {
+  content: "›";
+  justify-items: end;
+  padding-right: 3px;
+}
+
+/* Hand interaction rail: keep reordering discoverable and remove native bright scrollbars. */
+.hand-toolbar:not([hidden]) {
+  min-height: 30px;
+  gap: 6px;
+  padding: 2px 4px 4px;
+  border-bottom: 1px solid rgba(var(--ui-cyan), 0.1);
+  background: linear-gradient(90deg, rgba(var(--ui-cyan), 0.025), transparent 56%);
+}
+
+#handOrderStatus {
+  color: #8eabb7;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+}
+
+#handOrderStatus::before {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(var(--ui-cyan), 0.26);
+  border-radius: 2px 6px 2px 6px;
+  background: rgba(var(--ui-cyan), 0.055);
+  color: #91e5df;
+  font-size: 11px;
+}
+
+.hand-order-shortcut,
+.ai-history-toggle {
+  min-height: 27px;
+  padding: 4px 9px;
+  border-color: rgba(161, 188, 214, 0.2);
+  border-radius: 2px 7px 2px 7px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+  color: #aebfce;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+}
+
+.hand-order-shortcut:hover,
+.hand-order-shortcut:focus-visible,
+.ai-history-toggle:hover,
+.ai-history-toggle:focus-visible {
+  border-color: rgba(var(--ui-cyan), 0.56);
+  color: #e7ffff;
+  background: rgba(var(--ui-cyan), 0.09);
+}
+
+#handSortType[aria-pressed="true"] {
+  border-color: rgba(var(--ui-gold), 0.62);
+  color: #ffe1a2;
+  background: rgba(var(--ui-gold), 0.1);
+  box-shadow: inset 0 -2px 0 rgba(var(--ui-gold), 0.48);
+}
+
+#handResetOrder {
+  border-color: rgba(var(--ui-gold), 0.24);
+  color: #e7cf9e;
+}
+
+.ai-history-toggle::before {
+  margin-right: 4px;
+  content: "◴";
+  color: #82d8d5;
+}
+
+.hand,
+.grave-targets {
+  scrollbar-color: rgba(var(--ui-cyan), 0.5) rgba(255, 255, 255, 0.035);
+  scrollbar-width: thin;
+}
+
+.hand::-webkit-scrollbar,
+.grave-targets::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.hand::-webkit-scrollbar-track,
+.grave-targets::-webkit-scrollbar-track {
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.032);
+}
+
+.hand::-webkit-scrollbar-thumb,
+.grave-targets::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: linear-gradient(90deg, rgba(var(--ui-cyan), 0.45), rgba(var(--ui-gold), 0.42));
+}
+
+.hand::-webkit-scrollbar-thumb:hover,
+.grave-targets::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, rgba(var(--ui-cyan), 0.72), rgba(var(--ui-gold), 0.64));
+}
+
+body[data-duel-turn="player"] .hand-readiness {
+  border-color: rgba(var(--ui-cyan), 0.28);
+  background: rgba(var(--ui-cyan), 0.075);
+  box-shadow: inset 0 -1px 0 rgba(var(--ui-cyan), 0.22);
+}
+
+body[data-duel-turn="ai"] .hand-readiness {
+  border-color: rgba(159, 176, 196, 0.16);
+  background: rgba(159, 176, 196, 0.035);
+  filter: saturate(0.55);
+}
+
+/* Readiness stays scannable without giving every playable card equal visual weight. */
+#app .hand .card.action-ready:not(.selected) {
+  outline: 0;
+  border-color: rgba(var(--hand-action-accent), 0.58);
+  box-shadow:
+    inset 0 -2px 0 rgba(var(--hand-action-accent), 0.28),
+    0 10px 20px rgba(0, 0, 0, 0.3);
+}
+
+#app .hand .card.action-ready:not(.selected):hover,
+#app .hand .card.action-ready:not(.selected):focus-visible {
+  border-color: rgba(var(--hand-action-accent), 0.92);
+  box-shadow:
+    0 0 0 2px rgba(var(--hand-action-accent), 0.15),
+    0 15px 26px rgba(0, 0, 0, 0.4);
+}
+
+.hand-panel[data-has-selection="true"] .hand .card:not(.selected):not(.fusion-candidate):not(.fusion-selected):not(.tribute-candidate):not(.tribute-selected) {
+  opacity: 0.48;
+  filter: saturate(0.62) brightness(0.76);
+}
+
+.hand-panel[data-has-selection="true"] .hand .card.selected {
+  z-index: 7;
+  transform: translateY(-6px) scale(1.018);
+  box-shadow:
+    0 0 0 3px rgba(var(--ui-gold), 0.3),
+    0 0 28px rgba(var(--ui-gold), 0.18),
+    0 20px 34px rgba(0, 0, 0, 0.5);
+}
+
+.hand .card {
+  transition:
+    opacity 140ms ease,
+    transform 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    filter 150ms ease;
+}
+
+/* Empty lanes recede until a card or target choice makes them relevant. */
+body[data-duel-selection="none"] #app .duel-table .slot.empty,
+body[data-duel-selection="none"] #app .duel-table .trap-slot.empty {
+  opacity: 0.58;
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.12);
+  box-shadow: inset 0 -10px 24px rgba(0, 0, 0, 0.12);
+}
+
+body[data-duel-selection="none"] #app .duel-table .slot.empty:hover,
+body[data-duel-selection="none"] #app .duel-table .trap-slot.empty:hover {
+  opacity: 0.82;
+}
+
+/* Material and attack choices retain one bright interaction layer. */
+body[data-duel-targeting="material"] #app .duel-table :is(.slot, .trap-slot) {
+  opacity: 0.24;
+  filter: saturate(0.44) brightness(0.7);
+}
+
+body[data-duel-targeting="material"] #app .duel-table :is(
+  .slot.tribute-candidate,
+  .slot.tribute-selected,
+  .slot.fusion-candidate,
+  .slot.fusion-selected,
+  .slot.split-candidate,
+  .slot.split-selected
+) {
+  z-index: 3;
+  opacity: 1;
+  filter: none;
+  translate: 0 -2px;
+}
+
+body[data-duel-targeting="material"] #hand .card:not(.selected):not(.fusion-candidate):not(.fusion-selected):not(.tribute-candidate):not(.tribute-selected) {
+  opacity: 0.28;
+  filter: saturate(0.45) brightness(0.68);
+}
+
+body[data-duel-targeting="material"] #app .duel-table :is(
+  .slot.tribute-unavailable,
+  .slot.fusion-unavailable,
+  .slot.split-unavailable
+)::after {
+  opacity: 0;
+}
+
+body[data-duel-targeting="material"] #app .duel-table :is(
+  .slot.tribute-unavailable,
+  .slot.fusion-unavailable,
+  .slot.split-unavailable
+):is(:hover, :focus-visible)::after {
+  opacity: 1;
+}
+
+body[data-duel-targeting="attack"] #app .duel-table :is(.slot, .trap-slot):not(.attack-target):not(:has(.card.selected)) {
+  opacity: 0.28;
+  filter: saturate(0.5) brightness(0.72);
+}
+
+body[data-duel-targeting="attack"] #app .duel-table .slot.attack-target,
+body[data-duel-targeting="attack"] #app .duel-table .slot:has(.card.selected) {
+  z-index: 3;
+  opacity: 1;
+  filter: none;
+}
+
+.hand-command {
+  border-color: rgba(var(--ui-cyan), 0.2);
+  border-radius: 3px 10px 3px 10px;
+  background:
+    linear-gradient(145deg, rgba(var(--ui-cyan), 0.06), transparent 48%),
+    rgba(5, 10, 17, 0.86);
+  box-shadow: inset 2px 0 0 rgba(var(--ui-cyan), 0.28);
+}
+
+.hand-command[data-active="true"] {
+  border-color: rgba(var(--ui-gold), 0.5);
+  background:
+    linear-gradient(145deg, rgba(var(--ui-gold), 0.08), transparent 50%),
+    rgba(8, 10, 16, 0.94);
+  box-shadow: inset 3px 0 0 rgba(var(--ui-gold), 0.62), 0 0 28px rgba(var(--ui-gold), 0.07);
+}
+
+.hand-command[data-step="locate"] .hand-command-flow > span:first-child,
+.hand-command[data-step="execute"] .hand-command-flow > span:nth-child(-n + 2) {
+  border-color: rgba(102, 209, 158, 0.24);
+  color: rgba(174, 242, 207, 0.76);
+  background: rgba(26, 68, 48, 0.34);
+}
+
+.hand-command-flow > span,
+.field-action-btn,
+.hand-command > .choice-actions .btn {
+  border-radius: 2px 7px 2px 7px;
+}
+
+.field-action-btn:not(:disabled) {
+  border-color: rgba(223, 234, 240, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent),
+    rgba(5, 9, 15, 0.82);
+}
+
+.field-action-btn.field-attack-btn:not(:disabled) {
+  border-color: rgba(var(--ui-red), 0.64);
+  color: #ffd8df;
+  background:
+    linear-gradient(180deg, rgba(var(--ui-red), 0.2), rgba(var(--ui-red), 0.06)),
+    rgba(12, 7, 13, 0.92);
+  box-shadow: inset 0 -2px 0 rgba(var(--ui-red), 0.34), 0 0 18px rgba(var(--ui-red), 0.08);
+}
+
+@media (min-width: 721px) and (max-width: 1599px),
+  (min-width: 721px) and (max-height: 899px) {
+  .field-battle-preview[data-preview-mode="target"] .battle-preview-side {
+    min-height: 20px;
+  }
+
+  .field-battle-preview[data-preview-mode="target"] .battle-preview-side strong {
+    font-size: 12px;
+  }
+
+  .field-battle-preview[data-preview-mode="target"] .battle-preview-result {
+    margin-top: 1px;
+    font-size: 7px;
+    line-height: 1;
+  }
+}
+
+/* Tactical drawers share the same sharp command-table language. */
+.workspace-drawer {
+  isolation: isolate;
+  border-radius: 4px 14px 4px 14px;
+  background:
+    linear-gradient(145deg, rgba(var(--ui-cyan), 0.045), transparent 36%),
+    linear-gradient(315deg, rgba(var(--ui-gold), 0.025), transparent 32%),
+    rgba(5, 10, 17, 0.975);
+  box-shadow: 0 24px 58px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.workspace-drawer::before {
+  position: absolute;
+  top: -1px;
+  right: 18px;
+  left: 18px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-cyan), 0.56), rgba(var(--ui-gold), 0.42), transparent);
+  pointer-events: none;
+}
+
+.workspace-drawer-head {
+  border-bottom-color: rgba(var(--ui-cyan), 0.14);
+}
+
+.workspace-drawer-kicker {
+  color: rgba(155, 190, 204, 0.72);
+}
+
+.drawer-close {
+  border-radius: 2px 8px 2px 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.workspace-drawer .tip {
+  border: 1px solid rgba(var(--ui-gold), 0.1);
+  border-radius: 2px 8px 2px 8px;
+  background: rgba(var(--ui-gold), 0.04);
+  color: #8797a8;
+}
+
+.detail-drawer .detail-card:not([data-card-type]) {
+  align-content: center;
+  justify-items: center;
+  padding: 22px;
+  border: 1px solid rgba(var(--ui-gold), 0.1);
+  border-radius: 3px 11px 3px 11px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(var(--ui-gold), 0.065), transparent 34%),
+    rgba(255, 255, 255, 0.016);
+  text-align: center;
+}
+
+.detail-drawer .detail-card:not([data-card-type])::before {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(var(--ui-gold), 0.32);
+  border-radius: 4px 14px 4px 14px;
+  content: "◇";
+  color: #f0c979;
+  background: rgba(var(--ui-gold), 0.055);
+  font-size: 22px;
+  box-shadow: 0 0 24px rgba(var(--ui-gold), 0.08);
+}
+
+.detail-drawer .detail-card:not([data-card-type]) #detailName {
+  margin-bottom: 8px;
+  color: #f0d59b;
+  font-size: 17px;
+}
+
+.detail-drawer .detail-card:not([data-card-type]) #detailText {
+  max-width: 245px;
+  color: #91a2b3;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.detail-drawer .detail-card:not([data-card-type]) .detail-actions {
+  display: none;
+}
+
+.detail-drawer .detail-card[data-card-type] {
+  padding-left: 10px;
+  border-left: 2px solid rgb(var(--detail-accent));
+}
+
+.detail-drawer .detail-card #modeBtn:disabled {
+  display: none;
+}
+
+.timeline-overview > div,
+.timeline-filters,
+.timeline-drawer .timeline-item.phase {
+  border-radius: 2px 8px 2px 8px;
+}
+
+.timeline-drawer .timeline-list {
+  scrollbar-color: rgba(var(--ui-cyan), 0.5) rgba(255, 255, 255, 0.03);
+  scrollbar-width: thin;
+}
+
+.workspace-tab {
+  border-radius: 3px 9px 3px 9px;
+  background: rgba(4, 8, 14, 0.94);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.workspace-tab[aria-expanded="true"] {
+  border-color: rgba(var(--ui-gold), 0.56);
+  color: #ffe1a3;
+  background: rgba(var(--ui-gold), 0.09);
+  box-shadow: inset 0 -2px 0 rgba(var(--ui-gold), 0.44), 0 8px 24px rgba(0, 0, 0, 0.34);
+}
+
+.toast {
+  width: max-content;
+  max-width: min(680px, calc(100vw - 28px));
+  padding: 9px 14px;
+  border-color: rgba(var(--ui-gold), 0.58);
+  border-radius: 3px 10px 3px 10px;
+  background:
+    linear-gradient(100deg, rgba(var(--ui-gold), 0.07), transparent 48%),
+    rgba(4, 8, 14, 0.94);
+  color: #ffe0a0;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42), inset 3px 0 0 rgba(var(--ui-gold), 0.46);
+}
+
+/* Card inspection should feel like opening a tactical dossier. */
+.modal.card-detail-modal {
+  background:
+    radial-gradient(circle at 24% 42%, rgba(var(--ui-cyan), 0.09), transparent 30%),
+    radial-gradient(circle at 78% 32%, rgba(var(--ui-gold), 0.07), transparent 26%),
+    rgba(2, 5, 10, 0.78);
+  backdrop-filter: blur(9px);
+}
+
+.modal-box.card-zoom {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(var(--ui-gold), 0.34);
+  border-radius: 5px 16px 5px 16px;
+  background:
+    linear-gradient(135deg, rgba(var(--ui-gold), 0.04), transparent 36%),
+    linear-gradient(315deg, rgba(var(--ui-cyan), 0.045), transparent 38%),
+    #0a0f19;
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.66),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.022);
+}
+
+.modal-box.card-zoom::before {
+  position: absolute;
+  top: 0;
+  right: 18px;
+  left: 18px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(var(--ui-gold), 0.7), rgba(var(--ui-cyan), 0.5), transparent);
+  box-shadow: 0 0 14px rgba(var(--ui-gold), 0.18);
+}
+
+.card-zoom-head {
+  position: relative;
+  align-items: center;
+  padding-bottom: 11px;
+  border-bottom: 1px solid rgba(var(--ui-gold), 0.14);
+}
+
+.card-zoom-head::after {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 72px;
+  height: 1px;
+  content: "";
+  background: rgba(var(--ui-gold), 0.8);
+  box-shadow: 0 0 10px rgba(var(--ui-gold), 0.32);
+}
+
+.card-zoom-head h2 {
+  margin: 0;
+  color: #ffe09b;
+  font-size: clamp(22px, 2.4vw, 30px);
+  font-weight: 950;
+  letter-spacing: 0.025em;
+}
+
+.card-zoom-head .drawer-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 3px 9px 3px 9px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.zoom-layout {
+  gap: 18px;
+  margin: 16px 0 0;
+}
+
+#zoomCard {
+  padding: 9px;
+  border: 1px solid rgba(var(--ui-cyan), 0.18);
+  border-radius: 3px 11px 3px 11px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(var(--ui-cyan), 0.09), transparent 50%),
+    rgba(4, 8, 14, 0.66);
+  box-shadow: inset 0 -20px 40px rgba(0, 0, 0, 0.18);
+}
+
+#zoomCard .card {
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.52),
+    0 0 0 1px rgba(var(--ui-gold), 0.08),
+    inset 0 -3px 0 rgba(var(--ui-gold), 0.12);
+}
+
+.zoom-detail-copy {
+  align-content: start;
+  gap: 9px;
+}
+
+.zoom-summary {
+  padding: 9px 11px;
+  border: 1px solid rgba(var(--ui-gold), 0.14);
+  border-left: 3px solid rgba(var(--ui-gold), 0.78);
+  border-radius: 2px 8px 2px 8px;
+  background: rgba(var(--ui-gold), 0.06);
+}
+
+.zoom-effect-block {
+  padding: 10px 11px;
+  border-color: rgba(var(--ui-cyan), 0.2);
+  border-radius: 2px 9px 2px 9px;
+  background:
+    linear-gradient(120deg, rgba(var(--ui-cyan), 0.045), transparent 48%),
+    rgba(5, 12, 20, 0.7);
+}
+
+.zoom-effect-block > span {
+  color: #8ee7e2;
+  letter-spacing: 0.14em;
+}
+
+.zoom-meta-row {
+  border-color: rgba(210, 228, 236, 0.09);
+  border-radius: 2px 7px 2px 7px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+/* Pre-duel deployment: compact briefing at intermediate widths. */
+.modal.setup-modal .modal-box {
+  border-radius: 6px 18px 6px 18px;
+  background:
+    linear-gradient(145deg, rgba(var(--ui-cyan), 0.045), transparent 34%),
+    linear-gradient(315deg, rgba(var(--ui-gold), 0.035), transparent 32%),
+    #090f18;
+}
+
+.setup-modal .modal-header {
+  border-bottom-color: rgba(var(--ui-cyan), 0.16);
+  background:
+    linear-gradient(100deg, rgba(var(--ui-cyan), 0.07), rgba(var(--ui-gold), 0.025)),
+    rgba(6, 11, 18, 0.97);
+}
+
+.setup-modal .setup-live-summary,
+.setup-loadout,
+.setup-intel,
+.setup-campaign {
+  border-radius: 3px 11px 3px 11px;
+}
+
+.setup-section-head > span {
+  border-radius: 2px 8px 2px 8px;
+}
+
+.setup-modal .setup-field,
+.setup-modal .scenario-brief,
+.setup-modal .pre-duel-stat,
+.setup-modal .pre-duel-route,
+.setup-modal .pre-duel-deck,
+.setup-modal .setup-stats {
+  border-radius: 2px 8px 2px 8px;
+}
+
+.setup-modal .setup-field select,
+.setup-modal .pre-duel-deck-toggle,
+.setup-modal .deck-editor-open {
+  border-radius: 2px 7px 2px 7px;
+}
+
+.setup-modal .modal-actions {
+  border-top-color: rgba(var(--ui-gold), 0.14);
+  background: linear-gradient(180deg, rgba(6, 11, 18, 0.9), rgba(5, 9, 15, 0.99));
+}
+
+.setup-modal .modal-actions #modalRestart {
+  border-radius: 3px 10px 3px 10px;
+  background: linear-gradient(180deg, #ffe39d, #efb24c);
+  box-shadow: 0 12px 30px rgba(var(--ui-gold), 0.14), inset 0 1px rgba(255, 255, 255, 0.4);
+}
+
+@media (min-width: 620px) and (max-width: 900px) {
+  .modal.setup-modal {
+    padding: 8px;
+  }
+
+  .modal.setup-modal .modal-box {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .setup-modal .modal-header {
+    position: sticky;
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 0.7fr);
+    gap: 14px;
+    padding: 14px 16px 12px;
+  }
+
+  .setup-modal .modal-heading h2 {
+    font-size: 27px;
+  }
+
+  .setup-modal .modal-heading p {
+    max-width: 430px;
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  .setup-modal .setup-panel {
+    padding: 11px 12px 12px;
+  }
+
+  .setup-cockpit {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .setup-loadout,
+  .setup-intel {
+    height: 100%;
+    padding: 10px;
+  }
+
+  .setup-section-head {
+    margin-bottom: 9px;
+  }
+
+  .setup-section-head small {
+    display: none;
+  }
+
+  .setup-modal .setup-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .setup-modal .setup-field {
+    gap: 5px;
+    padding: 7px;
+  }
+
+  .setup-modal .setup-field select {
+    min-width: 0;
+    min-height: 37px;
+    padding: 6px 7px;
+    font-size: 10px;
+  }
+
+  .setup-modal .deck-editor-open {
+    min-height: 33px;
+    padding: 5px 7px;
+    font-size: 9px;
+  }
+
+  .setup-modal .setup-stats {
+    max-height: 4.5em;
+    margin-top: 7px;
+    overflow: hidden;
+    padding: 6px 8px;
+    line-height: 1.35;
+  }
+
+  .setup-modal .setup-intel .scenario-brief {
+    margin-bottom: 7px;
+    padding: 9px;
+  }
+
+  .setup-modal .scenario-objectives {
+    margin-block: 5px;
+  }
+
+  .setup-modal .scenario-objectives li {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.4;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .setup-modal .pre-duel-preview {
+    gap: 7px;
+  }
+
+  .setup-modal .pre-duel-summary {
+    grid-template-columns: minmax(96px, 0.72fr) minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .setup-modal .pre-duel-stat {
+    min-height: 58px;
+    padding: 8px;
+  }
+
+  .setup-modal .pre-duel-skill small {
+    display: -webkit-box;
+    overflow: hidden;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .setup-modal .pre-duel-deck {
+    padding: 8px;
+  }
+
+  .setup-modal .pre-duel-deck-head {
+    gap: 6px;
+  }
+
+  .setup-modal .pre-duel-deck-toggle {
+    min-height: 32px;
+    padding: 5px 7px;
+    font-size: 9px;
+  }
+
+  .setup-modal .modal-actions {
+    padding: 9px 12px 11px;
+  }
+}
+
+/* Deck gallery: a quick inspection console instead of a full-height card stack. */
+.deck-browser-modal {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(var(--ui-cyan), 0.1), transparent 34%),
+    rgba(1, 4, 9, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.modal-box.deck-browser {
+  width: min(860px, 100%);
+  padding: 14px;
+  border: 1px solid rgba(var(--ui-cyan), 0.48);
+  border-top: 3px solid rgba(var(--ui-gold), 0.82);
+  border-radius: 5px 18px 5px 18px;
+  background:
+    linear-gradient(135deg, rgba(var(--ui-cyan), 0.06), transparent 32%),
+    linear-gradient(315deg, rgba(var(--ui-gold), 0.035), transparent 26%),
+    rgba(7, 12, 20, 0.985);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.64), 0 0 40px rgba(var(--ui-cyan), 0.08);
+}
+
+.deck-browser-head {
+  min-height: 46px;
+  margin: -2px 0 10px;
+  padding: 0 2px 9px;
+  border-bottom: 1px solid rgba(var(--ui-cyan), 0.16);
+}
+
+.deck-browser-head h2 {
+  margin-top: 1px;
+  color: #f3f7fb;
+  font-size: clamp(21px, 3vw, 29px);
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+
+.deck-browser-head-actions {
+  gap: 8px;
+}
+
+#deckBrowserPosition {
+  min-width: 62px;
+  padding: 5px 8px;
+  border: 1px solid rgba(var(--ui-gold), 0.32);
+  border-radius: 2px 7px 2px 7px;
+  background: rgba(var(--ui-gold), 0.07);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.deck-browser-stage {
+  grid-template-columns: 36px minmax(170px, 210px) minmax(0, 1fr) 36px;
+  gap: 10px;
+  min-height: 0;
+  padding: 11px;
+  border-color: rgba(var(--ui-cyan), 0.16);
+  border-radius: 3px 12px 3px 12px;
+  background:
+    linear-gradient(90deg, rgba(var(--ui-cyan), 0.035), transparent 42%),
+    rgba(2, 7, 13, 0.72);
+}
+
+.deck-browser-prev {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.deck-browser-card {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.deck-browser-detail {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.deck-browser-next {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.deck-browser-card {
+  width: 100%;
+  max-width: 205px;
+  justify-self: center;
+}
+
+.deck-browser-card .card {
+  min-height: 0;
+  border-radius: 3px 10px 3px 10px;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.5), 0 0 24px rgba(var(--ui-cyan), 0.07);
+}
+
+.deck-browser-card .card:hover {
+  transform: none;
+}
+
+.deck-browser-detail {
+  align-self: center;
+  align-content: start;
+  gap: 10px;
+  max-height: 294px;
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-left: 3px solid rgba(var(--ui-cyan), 0.42);
+  border-radius: 2px 10px 2px 10px;
+  background: rgba(255, 255, 255, 0.028);
+  scrollbar-color: rgba(var(--ui-cyan), 0.5) rgba(255, 255, 255, 0.04);
+  scrollbar-width: thin;
+}
+
+.deck-browser-badges {
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.deck-browser-badges span {
+  padding: 3px 7px;
+  border-radius: 2px 7px 2px 7px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+#deckBrowserText {
+  color: #edf3fa;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+#deckBrowserMeta {
+  padding-top: 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  color: #9fb1c4;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.deck-browser-detail small {
+  color: #6f879f;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.deck-browser-nav {
+  width: 34px;
+  height: 70px;
+  border-radius: 2px 9px 2px 9px;
+  background: linear-gradient(180deg, rgba(var(--ui-cyan), 0.1), rgba(4, 11, 18, 0.96));
+  font-size: 28px;
+  transition: border-color 140ms ease, color 140ms ease, transform 140ms ease, background 140ms ease;
+}
+
+.deck-browser-nav:hover:not(:disabled),
+.deck-browser-nav:focus-visible {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(var(--ui-gold), 0.14), rgba(11, 14, 20, 0.98));
+}
+
+.deck-browser-rail {
+  gap: 5px;
+  margin-top: 8px;
+  padding: 1px 1px 5px;
+  scrollbar-color: rgba(var(--ui-cyan), 0.42) rgba(255, 255, 255, 0.035);
+  scrollbar-width: thin;
+}
+
+.deck-browser-rail-card {
+  max-width: 154px;
+  padding: 6px 8px;
+  border-radius: 2px 7px 2px 7px;
+  color: #aebed0;
+  background: rgba(255, 255, 255, 0.032);
+  font-size: 9px;
+  letter-spacing: 0.025em;
+}
+
+.deck-browser-rail-card[aria-current="true"] {
+  box-shadow: inset 0 -2px rgba(var(--ui-gold), 0.72);
+}
+
+@media (max-width: 619px) {
+  .deck-browser-modal {
+    padding: 7px;
+  }
+
+  .modal-box.deck-browser {
+    max-height: calc(100dvh - 14px);
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .deck-browser-head {
+    min-height: 40px;
+    margin-bottom: 7px;
+    padding-bottom: 7px;
+  }
+
+  .deck-browser-head h2 {
+    font-size: 19px;
+  }
+
+  .deck-browser-stage {
+    grid-template-columns: 30px minmax(0, 190px) 30px;
+    justify-content: center;
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .deck-browser-card {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 190px;
+  }
+
+  .deck-browser-prev {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .deck-browser-next {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .deck-browser-card .card {
+    min-height: 0;
+  }
+
+  .deck-browser-nav {
+    width: 30px;
+    height: 56px;
+    font-size: 24px;
+  }
+
+  .deck-browser-detail {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-self: auto;
+    gap: 7px;
+    max-height: none;
+    padding: 10px;
+  }
+
+  #deckBrowserText {
+    font-size: 11px;
+    line-height: 1.58;
+  }
+
+  .deck-browser-detail small {
+    display: none;
+  }
+
+  .deck-browser-rail {
+    margin-top: 6px;
+  }
+}
+
+/* Phase changes read as a quick broadcast ribbon rather than a modal. */
+.phase-stage {
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.4));
+}
+
+.phase-stage-frame {
+  min-height: 72px;
+  padding: 9px 19px 10px 24px;
+  border-radius: 4px 13px 4px 13px;
+  background:
+    linear-gradient(96deg, color-mix(in srgb, var(--phase-stage-accent) 10%, transparent), transparent 45%),
+    rgba(4, 9, 16, 0.93);
+  box-shadow:
+    inset 3px 0 0 var(--phase-stage-accent),
+    inset 0 0 24px color-mix(in srgb, var(--phase-stage-glow) 62%, transparent),
+    0 0 24px color-mix(in srgb, var(--phase-stage-glow) 62%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.phase-stage-title {
+  font-size: clamp(22px, 2vw, 29px);
+}
+
+.phase-stage-frame::before {
+  opacity: 0.5;
+}
+
+@media (min-width: 1041px) {
+  #app .duel-table .field {
+    inset: 108px 0 0;
+  }
+
+  .phase-stage {
+    top: calc(
+      172px +
+      (100dvh - 172px - clamp(184px, 24dvh, 224px)) / 2 -
+      36px
+    );
+  }
+
+  .toast {
+    top: calc(
+      172px +
+      (100dvh - 172px - clamp(184px, 24dvh, 224px)) / 2 -
+      22px
+    );
+  }
+
+  #app .duel-table .side.duel-hud,
+  #app .duel-table .side.enemy.duel-hud {
+    width: min(1400px, calc(50% - 70px));
+  }
+
+  #app .duel-table .player-card {
+    height: 78px;
+  }
+
+  #app .duel-table .duelist-face {
+    height: 67px;
+  }
+
+  #app .duel-table .duelist-figure {
+    height: 74px;
+    border-radius: 3px 13px 3px 11px;
+  }
+
+  #app .duel-table .side:not(.enemy) .duelist-figure {
+    border-radius: 13px 3px 11px 3px;
+  }
+
+  .hand .card {
+    transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+  }
+
+  .hand .card:hover {
+    z-index: 12;
+    transform: translateY(-7px);
+  }
+}
+
+@media (max-width: 1040px) {
+  #app {
+    gap: 5px;
+  }
+
+  .topbar {
+    border-radius: 5px;
+  }
+
+  #app .arena.duel-table,
+  .hand-panel {
+    border-radius: 5px;
+  }
+
+  #app .duel-table .field {
+    inset: 58px 0 0;
+    padding-inline: 6px;
+  }
+
+  #app .duel-table .side.duel-hud {
+    top: 5px;
+  }
+
+  #app .duel-table .player-card {
+    border-radius: 2px 8px 2px 8px;
+  }
+
+  #app .duel-table .side:not(.enemy) .player-card {
+    border-radius: 8px 2px 8px 2px;
+  }
+
+  .versus-stage {
+    top: 4px;
+    width: 48px;
+    height: 46px;
+    border-radius: 3px 9px 3px 9px;
+  }
+
+  .versus-stage::before,
+  .versus-stage::after {
+    top: 22px;
+    width: 14px;
+  }
+
+  .versus-mark {
+    font-size: 19px;
+  }
+
+  .phase-stage {
+    top: calc(
+      max(5px, var(--safe-area-top, 0px)) +
+      100px +
+      (100dvh - 100px - clamp(226px, 34dvh, 278px)) / 2 -
+      27px
+    );
+    width: min(360px, calc(100vw - 20px));
+  }
+
+  .toast {
+    top: calc(
+      max(5px, var(--safe-area-top, 0px)) +
+      100px +
+      (100dvh - 100px - clamp(242px, 36dvh, 296px)) / 2 -
+      20px
+    );
+    max-width: calc(100vw - 22px);
+    padding: 7px 10px;
+    font-size: 10px;
+  }
+
+  .phase-stage-frame {
+    min-height: 54px;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "code title actor"
+      "code detail detail";
+    align-items: center;
+    gap: 1px 8px;
+    padding: 7px 12px 8px 16px;
+  }
+
+  .phase-stage-title {
+    overflow: hidden;
+    font-size: clamp(17px, 4.7vw, 22px);
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .phase-stage-code,
+  .phase-stage-actor,
+  .phase-stage-detail {
+    font-size: 8px;
+  }
+
+  .hand-panel {
+    padding: 7px;
+  }
+}
+
+@media (min-width: 560px) and (max-width: 720px) {
+  #handOrderStatus {
+    display: inline-flex;
+  }
+
+  .modal-box.card-zoom {
+    width: min(660px, 100%);
+    max-height: calc(100dvh - 20px - var(--safe-area-top) - var(--safe-area-bottom));
+    padding: 15px;
+    overflow-y: auto;
+  }
+
+  .zoom-layout {
+    grid-template-columns: minmax(176px, 208px) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  #zoomCard {
+    width: 100%;
+    margin: 0;
+    padding: 7px;
+  }
+
+  #zoomEffect {
+    max-height: 178px;
+  }
+
+  .zoom-meta-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+    padding: 6px 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  #app {
+    padding:
+      max(5px, var(--safe-area-top))
+      max(5px, var(--safe-area-right))
+      max(5px, var(--safe-area-bottom))
+      max(5px, var(--safe-area-left));
+  }
+
+  .topbar {
+    gap: 5px;
+    padding: 5px;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    font-size: 17px;
+  }
+
+  .brand h1 {
+    font-size: 17px;
+  }
+
+  .phase {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .actions .btn {
+    min-height: 38px;
+  }
+
+  #app .duel-table .zone-row,
+  #app .duel-table .trap-row {
+    gap: 4px;
+  }
+
+  #app .duel-table .slot,
+  #app .duel-table .trap-slot {
+    border-radius: 1px 5px 1px 5px;
+  }
+
+  #app .duel-table .slot.empty::after,
+  #app .duel-table .trap-slot.empty::after {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  #app .duel-table .center-line span {
+    min-height: 19px;
+    padding: 2px 8px;
+    font-size: 8px;
+  }
+
+  .phase-stage {
+    top: calc(
+      max(5px, var(--safe-area-top, 0px)) +
+      100px +
+      (100dvh - 100px - clamp(242px, 36dvh, 296px)) / 2 -
+      23px
+    );
+    width: min(300px, calc(100vw - 18px));
+  }
+
+  .phase-stage-frame {
+    min-height: 48px;
+    padding: 6px 9px 6px 13px;
+  }
+
+  .phase-stage-code {
+    display: none;
+  }
+
+  .phase-stage-frame {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "title actor"
+      "detail detail";
+  }
+
+  .phase-stage-title {
+    font-size: 17px;
+  }
+
+  .hand-title-copy > span {
+    display: none;
+  }
+
+  .hand-panel {
+    grid-template-columns: 1fr;
+    grid-template-rows: 44px minmax(0, 1fr);
+  }
+
+  .hand-title-copy > strong {
+    font-size: 16px;
+  }
+
+  .hand .card {
+    border-radius: 2px 7px 2px 7px;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1040px) and (orientation: portrait) {
+  .workspace-tabs {
+    position: absolute;
+    top: auto;
+    right: 8px;
+    bottom: 8px;
+    left: auto;
+    width: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  #app .arena.duel-table .workspace-deck {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    display: contents;
+    pointer-events: auto;
+  }
+
+  #app .arena.duel-table .workspace-drawer {
+    position: fixed;
+    top: calc(max(6px, var(--safe-area-top)) + 101px);
+    bottom: calc(clamp(242px, 36dvh, 296px) + max(12px, var(--safe-area-bottom)));
+    width: calc(100% - 12px);
+    max-width: none;
+    transition: none;
+  }
+
+  #app .arena.duel-table .detail-drawer {
+    right: auto;
+    left: 6px;
+  }
+
+  #app .arena.duel-table .timeline-drawer {
+    right: 6px;
+    left: auto;
+  }
+
+  #app .arena.duel-table .workspace-tabs {
+    position: absolute;
+    top: auto;
+    right: 7px;
+    bottom: 7px;
+    left: auto;
+  }
+
+  body[data-duel-selection="hand"] .hand .card,
+  body[data-duel-selection="target"] .hand .card {
+    grid-template-rows: auto minmax(22px, 1fr) 28px 18px;
+    overflow: hidden;
+  }
+
+  body[data-duel-selection="hand"] .hand .card.compact-action-state,
+  body[data-duel-selection="target"] .hand .card.compact-action-state {
+    grid-template-rows: auto minmax(32px, 1fr) 28px;
+  }
+
+  body[data-duel-selection="hand"] .hand .card .stats,
+  body[data-duel-selection="target"] .hand .card .stats {
+    display: none;
+  }
+
+  .hand-panel[data-has-selection="true"] .hand .card.selected {
+    transform: none;
+  }
+}
+
+@media (max-width: 559px) {
+  .modal-box.card-zoom {
+    padding: 12px;
+  }
+
+  .card-zoom-head {
+    padding-bottom: 8px;
+  }
+
+  #zoomCard {
+    width: min(204px, 66vw);
+    padding: 6px;
+  }
+
+  .zoom-layout {
+    gap: 10px;
+    margin-top: 10px;
+  }
+}
+
+@media (max-width: 720px) and (max-height: 780px) {
+  body[data-duel-selection="hand"] .hand .card,
+  body[data-duel-selection="target"] .hand .card {
+    grid-template-rows: auto minmax(24px, 1fr) 18px;
+    gap: 2px;
+    padding: 4px;
+  }
+
+  body[data-duel-selection="hand"] .hand .card.compact-action-state,
+  body[data-duel-selection="target"] .hand .card.compact-action-state {
+    grid-template-rows: auto minmax(28px, 1fr);
+  }
+
+  body[data-duel-selection="hand"] .hand .card .art,
+  body[data-duel-selection="target"] .hand .card .art {
+    display: none;
+  }
+
+  body[data-duel-selection="hand"] .hand .card .card-text.hand-summary,
+  body[data-duel-selection="target"] .hand .card .card-text.hand-summary {
+    min-height: 24px;
+    -webkit-line-clamp: 1;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
+  .phase-stage {
+    top: calc(max(5px, var(--safe-area-top, 0px)) + 55px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hand .card,
+  .field-action-btn {
+    transition: none;
+  }
+}

@@ -2523,24 +2523,26 @@ async function runGraveTargetReadabilityBasicSmoke(ctx) {
   );
 
   clickSmokeElement(handCard(ctx.els, "starwake-recall"), `${smokeName}: open grave revive selection`);
+  const ace = ctx.state.player.grave.find((card) => card?.id === "astral-comet-ace");
   await waitForSmoke(
     () => ctx.state.pendingTarget?.effect === "graveRevive" &&
-      graveTargetCard(ctx.els, "astral-comet-ace") &&
-      !graveTargetCard(ctx.els, "last-spark"),
-    `${smokeName}: grave picker contains only legal monsters`,
+      ctx.state.pendingTarget?.selectedTarget?.cardUid === ace?.uid &&
+      ctx.state.pendingTarget?.selectedTargetSource === "default" &&
+      ctx.els.choiceActions?.classList.contains("single-target") &&
+      ctx.els.graveTargets?.hidden &&
+      ctx.els.choiceText?.textContent.includes("天穹逆星者（我方墓地）") &&
+      ctx.els.choiceConfirmBtn?.textContent === "发动" &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: sole legal grave monster is compactly locked`,
     9000
   );
-  const legalTarget = graveTargetCard(ctx.els, "astral-comet-ace");
-  const illegalTarget = graveTargetCard(ctx.els, "last-spark");
-  if (!legalTarget?.classList.contains("targetable") ||
-      legalTarget.dataset.targetState !== "legal" ||
-      illegalTarget ||
-      !ctx.els.graveTargets?.dataset.summary?.includes("已隐藏 1 张不符合条件的卡") ||
-      !ctx.els.graveTargets?.dataset.summary?.includes("可召唤 1 / 墓地 2")) {
-    throw new Error(`${smokeName}: grave target availability is not understandable. ${smokeDebug(ctx)}`);
+  if (graveTargetCard(ctx.els, "astral-comet-ace") ||
+      graveTargetCard(ctx.els, "last-spark") ||
+      ctx.els.choiceText.textContent.includes("1 个可选")) {
+    throw new Error(`${smokeName}: a sole grave target should not render a redundant picker. ${smokeDebug(ctx)}`);
   }
 
-  await selectAndConfirmSpellTarget(ctx, legalTarget, `${smokeName}: revive legal monster`);
+  confirmSpellTarget(ctx, `${smokeName}: revive locked monster`);
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "astral-comet-ace") &&
       !ctx.state.player.grave.some((card) => card?.id === "astral-comet-ace") &&
@@ -3441,29 +3443,47 @@ async function runDuelLayoutDensityBasicSmoke(ctx) {
 
 async function runMobileHandChoiceFitBasicSmoke(ctx) {
   setSmokeStatus("running", "mobile-hand-choice-fit-basic");
-  await startSmokeDuel(ctx, "trioChainLifecycle");
+  await startSmokeDuel(ctx, "direct");
 
   if (window.innerWidth > 720) {
     throw new Error(`mobile-hand-choice-fit-basic: expected phone viewport, received ${window.innerWidth}x${window.innerHeight}`);
   }
 
   const hand = ctx.els.hand;
+  const handStack = document.querySelector(".hand-stack");
   const handPanel = document.querySelector(".hand-panel");
-  const selectedCard = handCard(ctx.els, "guard-sigil");
-  if (!hand || !handPanel || !selectedCard) {
+  const selectedCard = handCard(ctx.els, "star-breach");
+  if (!hand || !handStack || !handPanel || !selectedCard) {
     throw new Error("mobile-hand-choice-fit-basic: required hand regions are missing");
   }
 
-  clickSmokeElement(selectedCard, "mobile-hand-choice-fit-basic: select guard sigil");
   await waitForSmoke(
-    () => document.body.dataset.duelSelection === "hand" && !ctx.els.choiceActions.hidden,
-    "mobile-hand-choice-fit-basic: hand choice opens"
+    () => hand.scrollWidth > hand.clientWidth + 4 && handStack.dataset.scrollable === "true",
+    "mobile-hand-choice-fit-basic: overflowing hand exposes scroll affordance"
+  );
+  hand.scrollLeft = hand.scrollWidth;
+  hand.dispatchEvent(new Event("scroll"));
+  await waitForSmoke(
+    () => handStack.dataset.scrollStart === "false" && handStack.dataset.scrollEnd === "true",
+    "mobile-hand-choice-fit-basic: scroll affordance follows the right edge"
   );
 
-  const selectedCardRect = selectedCard.getBoundingClientRect();
+  clickSmokeElement(selectedCard, "mobile-hand-choice-fit-basic: select offscreen direct spell");
+  await waitForSmoke(
+    () => document.body.dataset.duelSelection === "hand"
+      && !ctx.els.choiceActions.hidden
+      && handStack.dataset.scrollStart === "true",
+    "mobile-hand-choice-fit-basic: selected card returns into view"
+  );
+
+  const focusedCard = handCard(ctx.els, "star-breach");
+  if (!focusedCard?.classList.contains("selected")) {
+    throw new Error("mobile-hand-choice-fit-basic: focused card did not survive the hand rerender");
+  }
+  const selectedCardRect = focusedCard.getBoundingClientRect();
   const handRect = hand.getBoundingClientRect();
-  if (selectedCard.scrollHeight > Math.ceil(selectedCard.clientHeight) + 1) {
-    throw new Error(`mobile-hand-choice-fit-basic: selected card content is clipped (${selectedCard.clientHeight}/${selectedCard.scrollHeight})`);
+  if (focusedCard.scrollHeight > Math.ceil(focusedCard.clientHeight) + 1) {
+    throw new Error(`mobile-hand-choice-fit-basic: selected card content is clipped (${focusedCard.clientHeight}/${focusedCard.scrollHeight})`);
   }
   if (hand.scrollHeight > Math.ceil(hand.clientHeight) + 1) {
     throw new Error(`mobile-hand-choice-fit-basic: selected hand needs hidden vertical scrolling (${hand.clientHeight}/${hand.scrollHeight})`);
@@ -3471,11 +3491,45 @@ async function runMobileHandChoiceFitBasicSmoke(ctx) {
   if (selectedCardRect.bottom > handRect.bottom + 1 || selectedCardRect.bottom > handPanel.getBoundingClientRect().bottom + 1) {
     throw new Error(`mobile-hand-choice-fit-basic: selected card leaves its hand region (${selectedCardRect.bottom}/${handRect.bottom})`);
   }
+  if (selectedCardRect.left < handRect.left - 1 || selectedCardRect.right > handRect.right + 1) {
+    throw new Error(`mobile-hand-choice-fit-basic: auto-focused card is horizontally clipped (${selectedCardRect.left}/${selectedCardRect.right} vs ${handRect.left}/${handRect.right})`);
+  }
+  const siblingCard = hand.querySelector(".card:not(.selected)");
+  if (!siblingCard || Number.parseFloat(getComputedStyle(siblingCard).opacity) >= Number.parseFloat(getComputedStyle(focusedCard).opacity)) {
+    throw new Error("mobile-hand-choice-fit-basic: selected action does not suppress unrelated hand cards");
+  }
 
   clickSmokeElement(ctx.els.choiceCancelBtn, "mobile-hand-choice-fit-basic: cancel hand choice");
   await waitForSmoke(
     () => document.body.dataset.duelSelection === "none" && ctx.els.choiceActions.hidden,
     "mobile-hand-choice-fit-basic: hand choice closes"
+  );
+
+  const timelineToggle = document.querySelector("#timelineDrawerToggle");
+  const timelineDrawer = document.querySelector("#timelineDrawer");
+  const arena = document.querySelector(".arena.duel-table");
+  if (!timelineToggle || !timelineDrawer || !arena) {
+    throw new Error("mobile-hand-choice-fit-basic: tactical drawer regions are missing");
+  }
+  clickSmokeElement(timelineToggle, "mobile-hand-choice-fit-basic: open timeline drawer");
+  await waitForSmoke(
+    () => timelineDrawer.classList.contains("is-open")
+      && Number.parseFloat(getComputedStyle(timelineDrawer).opacity) > 0.99
+      && timelineDrawer.getBoundingClientRect().top < arena.getBoundingClientRect().bottom,
+    "mobile-hand-choice-fit-basic: timeline drawer opens"
+  );
+  const timelineRect = timelineDrawer.getBoundingClientRect();
+  const arenaRect = arena.getBoundingClientRect();
+  if (timelineRect.top < arenaRect.top - 1 || timelineRect.bottom > arenaRect.bottom + 1) {
+    throw new Error(
+      `mobile-hand-choice-fit-basic: timeline drawer leaves the battlefield ` +
+      `(${timelineRect.top}/${timelineRect.bottom} vs ${arenaRect.top}/${arenaRect.bottom})`
+    );
+  }
+  clickSmokeElement(document.querySelector("#timelineDrawer .drawer-close"), "mobile-hand-choice-fit-basic: close timeline drawer");
+  await waitForSmoke(
+    () => !timelineDrawer.classList.contains("is-open"),
+    "mobile-hand-choice-fit-basic: timeline drawer closes"
   );
   setSmokeStatus("passed", "mobile-hand-choice-fit-basic");
 }
@@ -4657,14 +4711,21 @@ async function runTrioOmegaStoryDemoSmoke(ctx) {
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), `${smokeName}: moon target highlighted`);
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}: pawn breaks moon`);
   await waitForSmoke(
-    () => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") && ctx.state.ai.lp === 300,
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") &&
+      ctx.state.ai.lp === 300 &&
+      ctx.state.phase === "battle" &&
+      ctx.state.actionWindow === "battle" &&
+      ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && !card.used),
     `${smokeName}: first attack resolves. ${trioOmegaFailureSnapshot(ctx)}`,
     12000
   );
   await waitForSmoke(() => storyLog().includes("第二尊神"), `${smokeName}: moon falls story beat`, 8000);
 
   clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn second attack`);
-  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), `${smokeName}: star target highlighted`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"),
+    `${smokeName}: star target highlighted. ${trioOmegaFailureSnapshot(ctx)}`
+  );
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}: pawn breaks star`);
   await waitForSmoke(
     () => ctx.state.gameOver && ctx.state.gameOverWinner === "player",
@@ -7049,10 +7110,33 @@ async function runSpellTargetDefaultBasicSmoke(ctx) {
       ctx.state.pendingTarget?.selectedTarget?.cardUid === target.uid &&
       ctx.state.pendingTarget?.selectedTargetSource === "default" &&
       fieldCard(ctx.els, "player", "celestial-origin-dragon")?.classList.contains("target-selected") &&
-      ctx.els.choiceText?.textContent.includes("已默认选择：创星神龙") &&
-      ctx.els.choiceConfirmBtn?.textContent.includes("确认发动"),
+      ctx.els.choiceActions?.classList.contains("single-target") &&
+      ctx.els.fieldTargets?.hidden &&
+      ctx.els.graveTargets?.hidden &&
+      ctx.els.choiceText?.textContent === "战意高扬 → 创星神龙（我方怪兽区 1）" &&
+      ctx.els.choiceConfirmBtn?.textContent === "发动" &&
+      ctx.els.choiceCancelBtn?.textContent === "取消",
     "spell-target-default-basic: only legal target is visibly selected"
   );
+  const compactChoiceRect = ctx.els.choiceActions.getBoundingClientRect();
+  if (compactChoiceRect.height > 80 || compactChoiceRect.width > 560) {
+    const compactChoiceStyle = getComputedStyle(ctx.els.choiceActions);
+    throw new Error(`spell-target-default-basic: unique target confirmation should stay compact: ${JSON.stringify({
+      width: Math.round(compactChoiceRect.width),
+      height: Math.round(compactChoiceRect.height),
+      cssHeight: compactChoiceStyle.height,
+      minHeight: compactChoiceStyle.minHeight,
+      gridRows: compactChoiceStyle.gridTemplateRows,
+      alignContent: compactChoiceStyle.alignContent,
+      top: compactChoiceStyle.top,
+      bottom: compactChoiceStyle.bottom,
+      padding: compactChoiceStyle.padding,
+      boxSizing: compactChoiceStyle.boxSizing,
+      visibleChildren: [...ctx.els.choiceActions.children]
+        .filter((element) => getComputedStyle(element).display !== "none")
+        .map((element) => ({ id: element.id, height: Math.round(element.getBoundingClientRect().height) }))
+    })}`);
+  }
   if (!ctx.state.player.hand.some((card) => card?.uid === spell.uid) ||
       countGameEvents(ctx.state, "CARD_ACTIVATED") !== activationsBefore) {
     throw new Error("spell-target-default-basic: opening target selection must not activate the spell");
@@ -7114,6 +7198,8 @@ async function runSpellMultiTargetChoiceBasicSmoke(ctx) {
     `${smokeName}: repeated hand activation must wait for an explicit target`
   );
   if (!ctx.els.choiceText?.textContent.includes("尚未选择目标") ||
+      ctx.els.choiceActions?.classList.contains("single-target") ||
+      ctx.els.fieldTargets?.hidden ||
       fieldCard(ctx.els, "player", "star-lancer")?.classList.contains("target-selected") ||
       fieldCard(ctx.els, "player", "nova-squire")?.classList.contains("target-selected")) {
     throw new Error(`${smokeName}: multiple legal targets must not expose a default selection. ${smokeDebug(ctx)}`);
@@ -7275,7 +7361,7 @@ async function runTargetWindowSmoke(ctx) {
   if (ctx.state.pendingTarget?.selectedTarget?.cardUid !== starLancer?.uid ||
       ctx.state.pendingTarget?.selectedTargetSource !== "default" ||
       !fieldCard(ctx.els, "player", "star-lancer")?.classList.contains("target-selected") ||
-      !ctx.els.choiceText?.textContent.includes("已默认选择：星轨枪兵")) {
+      ctx.els.choiceText?.textContent !== "战意高扬 → 星轨枪兵（我方怪兽区 1）") {
     throw new Error("战意高扬没有把唯一合法目标明确显示为默认选中");
   }
   assertPendingSelection(ctx, "target", "战意高扬目标选择窗口");
@@ -7296,7 +7382,7 @@ async function runTargetWindowSmoke(ctx) {
   const skyRaider = ctx.state.ai.field.find((card) => card?.id === "sky-raider");
   if (ctx.state.pendingTarget?.selectedTarget?.cardUid !== skyRaider?.uid ||
       !fieldCard(ctx.els, "ai", "sky-raider")?.classList.contains("target-selected") ||
-      !ctx.els.choiceText?.textContent.includes("已默认选择：天岚突袭者")) {
+      ctx.els.choiceText?.textContent !== "破阵星芒 → 天岚突袭者（敌方怪兽区 2）") {
     throw new Error("切换魔法后没有重新计算并显示敌方默认目标");
   }
   assertPendingSelection(ctx, "target", "切换到破阵星芒目标选择");
@@ -8854,6 +8940,35 @@ async function runModeAutoEndSmoke(ctx) {
   setSmokeStatus("passed", "mode-auto-end");
 }
 
+async function runAttackDoubleClickMultiTargetSmoke(ctx) {
+  const smokeName = "attack-double-click-multi-target-basic";
+  setSmokeStatus("running", smokeName);
+  await startSmokeDuel(ctx, "target");
+  await clickSmokeElementTwiceAcrossRender(
+    () => fieldCard(ctx.els, "player", "star-lancer"),
+    `${smokeName}: double click attacker`,
+    () => ctx.state.selected?.zone === "playerField" && ctx.state.selected.index === 0
+  );
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === 0,
+    `${smokeName}: double click enters attack target selection. ${smokeDebug(ctx)}`
+  );
+  await waitForSmoke(
+    () => ctx.els.aiField.querySelectorAll(".slot.attack-target").length === 2,
+    `${smokeName}: both legal targets are highlighted. ${smokeDebug(ctx)}`
+  );
+  await waitForSmoke(
+    () => ctx.els.attackRouteLayer.querySelectorAll(".attack-route").length === 2,
+    `${smokeName}: both attack routes are visible. ${smokeDebug(ctx)}`
+  );
+  clickSmokeElement(ctx.els.fieldCancelBtn, `${smokeName}: cancel attack target selection`);
+  await waitForSmoke(
+    () => ctx.state.attackIntentIndex === null && ctx.state.selected?.zone === "playerField",
+    `${smokeName}: cancel preserves the selected attacker`
+  );
+  setSmokeStatus("passed", smokeName);
+}
+
 async function runAiModeEventSmoke(ctx) {
   setSmokeStatus("running", "ai-mode-event");
   await startSmokeDuel(ctx, "combo");
@@ -9366,17 +9481,20 @@ async function runCampaignObjectiveTrackerBasicSmoke(ctx) {
   );
 
   clickSmokeElement(handCard(ctx.els, "starwake-recall"), `${smokeName}: open grave revival`);
+  const ace = ctx.state.player.grave.find((card) => card?.id === "astral-comet-ace");
   await waitForSmoke(
-    () => ctx.state.pendingTarget?.effect === "graveRevive" && graveTargetCard(ctx.els, "astral-comet-ace"),
-    `${smokeName}: ace is selectable in grave`,
+    () => ctx.state.pendingTarget?.effect === "graveRevive" &&
+      ctx.state.pendingTarget?.selectedTarget?.cardUid === ace?.uid &&
+      ctx.state.pendingTarget?.selectedTargetSource === "default" &&
+      ctx.els.choiceActions?.classList.contains("single-target") &&
+      ctx.els.graveTargets?.hidden &&
+      ctx.els.choiceText?.textContent.includes("天穹逆星者（我方墓地）") &&
+      ctx.els.choiceConfirmBtn?.textContent === "发动" &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    `${smokeName}: sole ace target is automatically locked`,
     9000
   );
-  await selectAndConfirmSpellTarget(
-    ctx,
-    graveTargetCard(ctx.els, "astral-comet-ace"),
-    `${smokeName}: revive campaign ace`,
-    { confirmCenter: true }
-  );
+  confirmSpellTarget(ctx, `${smokeName}: revive campaign ace`, { center: true });
   await waitForSmoke(
     () => ctx.state.campaignObjectivesAnnounced?.["revive-ace"] &&
       ctx.els.campaignMissionProgress?.textContent === "1 / 3" &&
@@ -10852,6 +10970,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "phase-progression-basic": runPhaseProgressionBasicSmoke,
     "phase-window-ownership-basic": runPhaseWindowOwnershipBasicSmoke,
     "mode-auto-end": runModeAutoEndSmoke,
+    "attack-double-click-multi-target-basic": runAttackDoubleClickMultiTargetSmoke,
     "ai-mode-event": runAiModeEventSmoke,
     "invalid-spell-auto-end": runInvalidSpellAutoEndSmoke,
     "pause-detail": runPauseDetailSmoke,

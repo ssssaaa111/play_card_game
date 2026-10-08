@@ -33,6 +33,7 @@ export function createDuelTableController(documentRef = document) {
   const chainHistoryToggle = documentRef.querySelector("#chainHistoryToggle");
   const field = documentRef.querySelector(".duel-table .field");
   const hand = documentRef.querySelector("#hand");
+  const handStack = documentRef.querySelector(".hand-stack");
   const handPanel = documentRef.querySelector(".hand-panel");
   const handGuide = documentRef.querySelector("#handGuide");
   const handReadyCount = documentRef.querySelector("#handReadyCount");
@@ -67,6 +68,8 @@ export function createDuelTableController(documentRef = document) {
   let timelineDrag = null;
   let latestTimelineStep = Number(timeline?.dataset.timelineLatestStep) || 0;
   let pendingTimelineCount = 0;
+  let lastAutoFocusedHandUid = "";
+  let handViewportFrame = 0;
 
   function setUtilityMenu(open) {
     const expanded = spaciousSettings.matches || Boolean(open);
@@ -250,6 +253,46 @@ export function createDuelTableController(documentRef = document) {
     chainHistoryVisible = visible;
   }
 
+  function syncHandViewport() {
+    if (!hand || !handStack) return;
+    const maxScroll = Math.max(0, hand.scrollWidth - hand.clientWidth);
+    const scrollable = maxScroll > 4;
+    handStack.dataset.scrollable = String(scrollable);
+    handStack.dataset.scrollStart = String(!scrollable || hand.scrollLeft <= 4);
+    handStack.dataset.scrollEnd = String(!scrollable || hand.scrollLeft >= maxScroll - 4);
+  }
+
+  function focusSelectedHandCard(selectedCard) {
+    if (!hand) return;
+    const selectedUid = selectedCard?.dataset.cardUid || "";
+    if (!selectedUid) {
+      lastAutoFocusedHandUid = "";
+      syncHandViewport();
+      return;
+    }
+    if (selectedUid === lastAutoFocusedHandUid) {
+      syncHandViewport();
+      return;
+    }
+    lastAutoFocusedHandUid = selectedUid;
+    if (handViewportFrame) cancelAnimationFrame(handViewportFrame);
+    handViewportFrame = requestAnimationFrame(() => {
+      handViewportFrame = 0;
+      if (!selectedCard.isConnected) return;
+      const handRect = hand.getBoundingClientRect();
+      const cardRect = selectedCard.getBoundingClientRect();
+      const edgePadding = Math.min(28, Math.max(10, handRect.width * 0.04));
+      const clipped = cardRect.left < handRect.left + edgePadding
+        || cardRect.right > handRect.right - edgePadding;
+      if (clipped) {
+        const centeredOffset = cardRect.left + cardRect.width / 2 - (handRect.left + handRect.width / 2);
+        const maxScroll = Math.max(0, hand.scrollWidth - hand.clientWidth);
+        hand.scrollLeft = Math.max(0, Math.min(maxScroll, hand.scrollLeft + centeredOffset));
+      }
+      syncHandViewport();
+    });
+  }
+
   function syncCombatAttention() {
     const phase = body?.dataset.duelPhase || "setup";
     const canAct = body?.dataset.duelCanAct === "true";
@@ -275,6 +318,7 @@ export function createDuelTableController(documentRef = document) {
       handPanel.dataset.attention = selection;
       handPanel.dataset.commandActive = String(commandActive);
     }
+    focusSelectedHandCard(selectedCard);
     if (handReadyCount) handReadyCount.textContent = String(readyCount);
     if (handReadyLabel) {
       handReadyLabel.textContent = phase === "setup"
@@ -408,6 +452,8 @@ export function createDuelTableController(documentRef = document) {
   timeline?.addEventListener("scroll", syncTimelineScrollPosition, { passive: true });
   field?.addEventListener("click", closeCompactDrawer);
   hand?.addEventListener("click", closeCompactDrawer);
+  hand?.addEventListener("scroll", syncHandViewport, { passive: true });
+  window.addEventListener("resize", syncHandViewport);
 
   documentRef.addEventListener("pointerdown", (event) => {
     if (spaciousSettings.matches || !utilityMenu || utilityMenu.hidden) return;
@@ -517,6 +563,7 @@ export function createDuelTableController(documentRef = document) {
   syncTimelineScale();
   syncDetailDrawer();
   syncCombatAttention();
+  syncHandViewport();
   syncSetupSummary();
 
   return {
@@ -544,6 +591,9 @@ export function createDuelTableController(documentRef = document) {
       timeline?.removeEventListener("pointerup", stopTimelineDrag);
       timeline?.removeEventListener("pointercancel", stopTimelineDrag);
       timeline?.removeEventListener("scroll", syncTimelineScrollPosition);
+      hand?.removeEventListener("scroll", syncHandViewport);
+      window.removeEventListener("resize", syncHandViewport);
+      if (handViewportFrame) cancelAnimationFrame(handViewportFrame);
     },
     openDrawer(name) {
       return setDrawer(name, true);
