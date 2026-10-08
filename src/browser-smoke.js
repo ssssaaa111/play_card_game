@@ -4709,14 +4709,21 @@ async function runTrioOmegaStoryDemoSmoke(ctx) {
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), `${smokeName}: moon target highlighted`);
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}: pawn breaks moon`);
   await waitForSmoke(
-    () => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") && ctx.state.ai.lp === 300,
+    () => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden") &&
+      ctx.state.ai.lp === 300 &&
+      ctx.state.phase === "battle" &&
+      ctx.state.actionWindow === "battle" &&
+      ctx.state.player.field.some((card) => card?.id === "trio-ember-pawn" && !card.used),
     `${smokeName}: first attack resolves. ${trioOmegaFailureSnapshot(ctx)}`,
     12000
   );
   await waitForSmoke(() => storyLog().includes("第二尊神"), `${smokeName}: moon falls story beat`, 8000);
 
   clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn second attack`);
-  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), `${smokeName}: star target highlighted`);
+  await waitForSmoke(
+    () => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"),
+    `${smokeName}: star target highlighted. ${trioOmegaFailureSnapshot(ctx)}`
+  );
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}: pawn breaks star`);
   await waitForSmoke(
     () => ctx.state.gameOver && ctx.state.gameOverWinner === "player",
