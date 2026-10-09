@@ -28,3 +28,49 @@ export function fusionOptionForResult(card, resultTemplateId = "") {
   if (!resultTemplateId) return options.length === 1 ? options[0] : null;
   return options.find((option) => option.resultTemplateId === resultTemplateId) || null;
 }
+
+function fusionCandidateTemplateId(candidate) {
+  return candidate?.templateId
+    || candidate?.card?.templateId
+    || candidate?.card?.id
+    || candidate?.id
+    || "";
+}
+
+export function forcedFusionMaterialSelection(materials = [], candidates = []) {
+  const requirements = normalizeFusionRequirements(materials);
+  const available = (Array.isArray(candidates) ? candidates : [])
+    .map((candidate) => ({
+      ...candidate,
+      templateId: fusionCandidateTemplateId(candidate)
+    }))
+    .filter((candidate) => candidate.templateId);
+  const selected = [];
+  const ambiguous = [];
+  const missing = [];
+
+  requirements.forEach((requirement) => {
+    const matches = available.filter((candidate) => candidate.templateId === requirement.templateId);
+    if (matches.length < requirement.count) {
+      missing.push({ ...requirement, availableCount: matches.length });
+      return;
+    }
+    if (matches.length === requirement.count) {
+      selected.push(...matches);
+      return;
+    }
+    ambiguous.push({ ...requirement, candidateCount: matches.length });
+  });
+
+  const requiredCount = requirements.reduce((total, requirement) => total + requirement.count, 0);
+  return {
+    selected,
+    ambiguous,
+    missing,
+    requiredCount,
+    unique: requirements.length > 0
+      && missing.length === 0
+      && ambiguous.length === 0
+      && selected.length === requiredCount
+  };
+}
