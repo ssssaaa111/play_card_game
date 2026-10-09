@@ -358,3 +358,45 @@ test("monster field view follows projected attack legality instead of guessing f
   assert.ok(!resolving.cardClasses.includes("attack-ready"));
   assert.equal(resolving.attackReason, "当前正在结算，暂时不能攻击。");
 });
+test("placement targets mark empty summon zones without hiding the reason", () => {
+  const candidate = monsterFieldSlotView({
+    owner: "player",
+    index: 3,
+    state: { player: { attacksSkipped: false } },
+    placementTarget: {
+      ok: true,
+      kind: "summon",
+      reason: "可将「赤焰幼龙」召唤到怪兽区 4。"
+    }
+  });
+  const occupied = monsterFieldSlotView({
+    card: monster(),
+    owner: "player",
+    index: 0,
+    state: { player: { attacksSkipped: false } },
+    placementTarget: {
+      ok: false,
+      kind: "summon",
+      reason: "怪兽区 1 已被占用。"
+    }
+  });
+  const trap = supportFieldSlotView({
+    owner: "player",
+    index: 2,
+    placementTarget: {
+      ok: true,
+      kind: "set",
+      reason: "可将「镜光反制」盖放到魔陷区 3。"
+    }
+  });
+
+  assert.ok(candidate.slotClasses.includes("placement-candidate"));
+  assert.equal(candidate.placementState, "candidate");
+  assert.equal(candidate.placementKind, "summon");
+  assert.match(candidate.ariaLabel, /怪兽区 4/);
+  assert.ok(occupied.slotClasses.includes("placement-unavailable"));
+  assert.equal(occupied.title, "怪兽区 1 已被占用。");
+  assert.ok(trap.slotClasses.includes("placement-candidate"));
+  assert.equal(trap.placementKind, "set");
+  assert.match(trap.ariaLabel, /可将「镜光反制」盖放/);
+});

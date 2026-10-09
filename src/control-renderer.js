@@ -21,6 +21,8 @@ export function buildDuelControlsView({
   fusionStatus = null,
   selectionPrompt = "",
   confirmLabel = "确认",
+  selectionMode = "",
+  placementKind = "",
   phase = "ready",
   selectedPlayerMonster = false,
   selectedPlayerMonsterName = "",
@@ -47,7 +49,9 @@ export function buildDuelControlsView({
     ? targetSelectionStatus?.confirmLabel || "确认发动"
     : confirmLabel;
   const singleTarget = hasTarget && Boolean(targetSelectionStatus?.singleTarget);
-  const cancelLabel = singleTarget ? "取消" : hasTarget ? "取消目标" : "取消选择";
+  const singleChoice = !hasTarget && selectionMode === "single";
+  const multipleChoice = !hasTarget && selectionMode === "multiple";
+  const cancelLabel = singleTarget || singleChoice ? "取消" : hasTarget ? "取消目标" : "取消选择";
   const showChoiceActions = canAct && (hasPendingSelection || selectedHandReady);
   const selectedMonsterInDefense = selectedPlayerMonsterMode === "defense";
   const attackDisabled = hasPendingSelection || !canAct || !selectedPlayerMonsterCanAttack;
@@ -128,8 +132,13 @@ export function buildDuelControlsView({
       cancelDisabled: !canAct,
       target: hasTarget,
       targetSingle: singleTarget,
+      single: singleChoice,
+      multiple: multipleChoice,
+      selectionMode: singleTarget ? "single" : selectionMode || "none",
       targetStep: hasTarget ? (singleTarget ? "single" : targetSelectionStatus?.complete ? "confirm" : "select") : "none",
       fusion: hasFusion,
+      placement: Boolean(placementKind),
+      placementKind,
       material: hasFusion || hasTribute,
       split: pendingTarget?.effect === "splitToken"
     },
@@ -209,6 +218,11 @@ export function renderDuelControls(elements, view) {
     elements.choiceActions.classList.toggle("material-choice", view.choice.material);
     elements.choiceActions.classList.toggle("target-choice", view.choice.target);
     elements.choiceActions.classList.toggle("single-target", view.choice.targetSingle);
+    elements.choiceActions.classList.toggle("single-choice", view.choice.single);
+    elements.choiceActions.classList.toggle("multiple-choice", view.choice.multiple);
+    elements.choiceActions.classList.toggle("placement-choice", view.choice.placement);
+    elements.choiceActions.dataset.selectionMode = view.choice.selectionMode;
+    elements.choiceActions.dataset.placementKind = view.choice.placementKind;
     elements.choiceActions.dataset.targetStep = view.choice.targetStep;
     elements.choiceActions.classList.toggle("split-choice", view.choice.split);
   }
