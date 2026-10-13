@@ -261,3 +261,32 @@ test("mechanics readability prompts survive the extracted control renderer", () 
   assert.equal(split.choice.split, true);
   assert.match(split.choice.text, /将生成 2 只/);
 });
+test("choice controls distinguish locked and multiple placement candidates", () => {
+  const locked = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    selectedHandReady: true,
+    selectedHandName: "赤焰幼龙",
+    selectedHandReason: "赤焰幼龙 → 召唤区 4（唯一空位）",
+    confirmLabel: "召唤",
+    selectionMode: "single",
+    placementKind: "summon"
+  });
+  assert.equal(locked.choice.single, true);
+  assert.equal(locked.choice.multiple, false);
+  assert.equal(locked.choice.selectionMode, "single");
+  assert.equal(locked.choice.placement, true);
+  assert.equal(locked.choice.cancelText, "取消");
+
+  const multiple = buildDuelControlsView({
+    started: true,
+    canAct: true,
+    selectedHandReady: true,
+    selectedHandName: "赤焰幼龙",
+    selectionMode: "multiple",
+    placementKind: "summon"
+  });
+  assert.equal(multiple.choice.single, false);
+  assert.equal(multiple.choice.multiple, true);
+  assert.equal(multiple.choice.selectionMode, "multiple");
+});

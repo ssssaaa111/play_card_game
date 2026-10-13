@@ -105,7 +105,7 @@ import {
 import { effectMarkersForCard } from './effect-markers.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
 import { createAiActionPlayback, aiActionConsequences, aiActionSummary } from './ai-action-playback.js';
-import { fusionOptionsForCard } from './fusion.js';
+import { forcedFusionMaterialSelection, fusionOptionsForCard } from './fusion.js';
 import { buildFusionSelectionView, renderFusionSelectionPanel } from './fusion-selection-renderer.js';
 import {
   buildEngineStateFromUiState,
@@ -1814,6 +1814,34 @@ function selectedHandInfo() {
   return { card: state.player.hand[index], index };
 }
 
+function currentHandPlacementSelection() {
+  if (!canPlayerAct() || state.pendingTarget || state.pendingFusion || state.pendingTribute) return null;
+  const info = selectedHandInfo();
+  if (!info || !handActionInfo(info.card).ok) return null;
+  const card = info.card;
+  const monsterPlacement = card.type === "monster" && tributeCost(card) === 0;
+  const trapPlacement = card.type === "trap";
+  if (!monsterPlacement && !trapPlacement) return null;
+  const zones = monsterPlacement ? state.player.field : state.player.traps;
+  const indexes = zones
+    .map((slot, index) => (!slot ? index : -1))
+    .filter((index) => index >= 0);
+  if (indexes.length === 0) return null;
+  const kind = monsterPlacement ? "summon" : "set";
+  const zoneName = monsterPlacement ? "召唤区" : "魔陷区";
+  const verb = monsterPlacement ? "召唤" : "盖放";
+  const mode = indexes.length === 1 ? "single" : "multiple";
+  return {
+    card,
+    kind,
+    indexes,
+    mode,
+    text: mode === "single"
+      ? `${card.name} → ${zoneName} ${indexes[0] + 1}（唯一空位）`
+      : `${card.name}：选择高亮${zoneName}直接${verb}（${indexes.length} 个可选）；确认可自动放置。`
+  };
+}
+
 function beginTributeSelection(handIndex, card) {
   const prepared = prepareTributeSelection(card, handIndex, state.player.field);
   if (!prepared.handled) return false;
@@ -2004,10 +2032,36 @@ function beginFusionSelection(handIndex, card) {
     },
     { zone: "hand", uid: card.uid }
   );
+  if (state.pendingFusion?.resultId) preselectForcedFusionMaterials();
   cue(currentFusionSelectionDisplay().text);
   render();
   resetPlayerIdleCountdown();
   return true;
+}
+
+function availableFusionMaterialCandidates() {
+  const sourceUid = state.pendingFusion?.handUid;
+  return [
+    ...state.player.field.map((card, index) => ({ zone: "field", index, card })),
+    ...state.player.hand.map((card) => ({ zone: "hand", uid: card?.uid, card }))
+  ].filter((entry) => entry.card?.type === "monster" && entry.card.uid !== sourceUid);
+}
+
+function preselectForcedFusionMaterials() {
+  const pending = state.pendingFusion;
+  if (!pending?.resultId) return null;
+  const selection = forcedFusionMaterialSelection(
+    pending.materials,
+    availableFusionMaterialCandidates()
+  );
+  pending.selectedIndexes = selection.selected
+    .filter((entry) => entry.zone === "field")
+    .map((entry) => entry.index);
+  pending.selectedHandUids = selection.selected
+    .filter((entry) => entry.zone === "hand")
+    .map((entry) => entry.uid);
+  pending.materialChoiceMode = selection.unique ? "single" : "multiple";
+  return selection;
 }
 
 function pendingFusionHandInfo() {
@@ -2111,6 +2165,7 @@ function selectFusionResult(resultId) {
   info.pending.materials = option.materials.map((entry) => ({ ...entry }));
   info.pending.selectedIndexes = [];
   info.pending.selectedHandUids = [];
+  preselectForcedFusionMaterials();
   state.selected = { zone: "hand", uid: info.card.uid };
   cue(currentFusionSelectionDisplay().text);
   render();
@@ -5778,18 +5833,39 @@ function render(animationKey = "") {
       : state.pendingTribute
         ? "tribute"
         : state.selected?.zone || "none";
+  const handPlacement = currentHandPlacementSelection();
   document.body.dataset.duelTargeting = state.pendingTarget
     ? "effect"
     : state.pendingFusion || state.pendingTribute
       ? "material"
-      : hasSelectedAttackIntent()
-        ? "attack"
-        : "none";
+      : handPlacement
+        ? "placement"
+        : hasSelectedAttackIntent()
+          ? "attack"
+          : "none";
   document.body.dataset.duelTargetZone = state.pendingTarget?.mode || "none";
   document.body.dataset.duelCanAct = String(canAct);
   const selectedHand = selectedHandInfo();
   const selectedHandAction = selectedHand ? handActionInfo(selectedHand.card, selectedHand.index) : null;
   const fusionStatus = state.pendingFusion ? fusionSelectionStatus() : null;
+  const tributeDisplay = state.pendingTribute ? currentTributeSelectionDisplay() : null;
+  const fusionDisplay = state.pendingFusion ? currentFusionSelectionDisplay() : null;
+  const tributeSingleChoice = Boolean(
+    state.pendingTribute
+    && tributeDisplay?.complete
+    && state.player.field.filter(Boolean).length === state.pendingTribute.cost
+  );
+  const fusionSingleChoice = Boolean(
+    state.pendingFusion
+    && fusionStatus?.complete
+    && state.pendingFusion.materialChoiceMode === "single"
+    && state.pendingFusion.resultOptions?.length === 1
+  );
+  const selectionMode = tributeSingleChoice || fusionSingleChoice
+    ? "single"
+    : state.pendingTribute || state.pendingFusion
+      ? "multiple"
+      : handPlacement?.mode || "";
   const selectedHandReady = Boolean(
     selectedHand &&
     selectedHandAction?.ok &&
@@ -5819,16 +5895,26 @@ function render(animationKey = "") {
     pendingTribute: state.pendingTribute,
     selectedHandReady,
     selectedHandName: selectedHand?.card.name || "",
-    selectedHandReason: selectedHandAction?.reason || "",
+    selectedHandReason: handPlacement?.text || selectedHandAction?.reason || "",
     targetPrompt,
     targetSelectionStatus: targetSelectionDisplay,
     fusionStatus,
     selectionPrompt: state.pendingTribute
-      ? currentTributeSelectionDisplay()?.text || ""
+      ? tributeSingleChoice
+        ? `${state.pendingTribute.cardName} · 祭品已锁定：${tributeDisplay.selectedNames.join("、")}`
+        : tributeDisplay?.text || ""
       : state.pendingFusion
-        ? currentFusionSelectionDisplay()?.text || ""
+        ? fusionSingleChoice
+          ? `${fusionDisplay.resultName} · 素材已锁定：${fusionDisplay.selectedNames.join("、")}`
+          : fusionDisplay?.text || ""
         : "",
-    confirmLabel: handConfirmLabel(selectedHand?.card),
+    confirmLabel: handPlacement
+      ? handPlacement.mode === "single"
+        ? handPlacement.kind === "summon" ? "召唤" : "盖放"
+        : handPlacement.kind === "summon" ? "自动召唤" : "自动盖放"
+      : handConfirmLabel(selectedHand?.card),
+    selectionMode,
+    placementKind: handPlacement?.kind || "",
     phase: state.phase,
     selectedPlayerMonster,
     selectedPlayerMonsterName: selectedPlayerMonsterCard?.name || "",
@@ -6099,6 +6185,19 @@ function renderField(root, duelist, owner, animationKey) {
     spellTargetAt: (index) => fieldSpellTargetActive
       ? validateCurrentTarget(owner, index, "field")
       : null,
+    placementTargetAt: (index) => {
+      const placement = currentHandPlacementSelection();
+      if (owner !== "player" || placement?.kind !== "summon") return null;
+      const open = placement.indexes.includes(index);
+      return {
+        ok: open,
+        kind: placement.kind,
+        label: open ? "可召唤" : "不可召唤",
+        reason: open
+          ? `可将「${placement.card.name}」召唤到怪兽区 ${index + 1}。`
+          : `怪兽区 ${index + 1} 已被占用。`
+      };
+    },
     effectMarkersAt: (index) => fieldEffectMarkers(duelist.field[index], duelist),
     onSlotClick: (index) => {
       const interaction = { directActivate: directActivationTracker.register(`${owner}:field:${index}`) };
@@ -6130,6 +6229,19 @@ function renderTraps(root, duelist, owner) {
     spellTargetAt: (index) => isSupportTargetSelection(state.pendingTarget)
       ? validateCurrentTarget(owner, index, "traps")
       : null,
+    placementTargetAt: (index) => {
+      const placement = currentHandPlacementSelection();
+      if (owner !== "player" || placement?.kind !== "set") return null;
+      const open = placement.indexes.includes(index);
+      return {
+        ok: open,
+        kind: placement.kind,
+        label: open ? "可盖放" : "不可盖放",
+        reason: open
+          ? `可将「${placement.card.name}」盖放到魔陷区 ${index + 1}。`
+          : `魔陷区 ${index + 1} 已被占用。`
+      };
+    },
     afterAttackLockAt: (index) => {
       if (!pendingAttack?.afterAttackTargetCardId || pendingAttack.afterAttackTargetPlayerId !== owner) return null;
       const cardAtIndex = duelist.traps[index];

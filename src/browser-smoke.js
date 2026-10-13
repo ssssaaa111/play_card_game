@@ -2136,6 +2136,15 @@ async function runSummonPositionBasicSmoke(ctx) {
   const card = handCard(ctx.els, "ember-drake");
   if (!card) throw new Error("summon-position-basic: summon card should be in hand");
   clickSmokeElement(card, "summon-position-basic: select monster");
+  await waitForSmoke(
+    () => document.body.dataset.duelTargeting === "placement" &&
+      ctx.els.choiceActions?.classList.contains("multiple-choice") &&
+      ctx.els.choiceActions?.classList.contains("placement-choice") &&
+      ctx.els.choiceConfirmBtn?.textContent === "自动召唤" &&
+      [...ctx.els.playerField.querySelectorAll(".slot.placement-candidate")].length === 5 &&
+      ctx.els.choiceText?.textContent.includes("5 个可选"),
+    "summon-position-basic: all open summon zones are explicit candidates"
+  );
   clickSmokeElement(fieldSlot(ctx.els, "player", 3), "summon-position-basic: choose fourth monster slot");
   await waitForSmoke(
     () => ctx.state.player.field[3]?.id === "ember-drake" &&
@@ -2174,11 +2183,11 @@ async function runTributeReadabilityBasicSmoke(ctx) {
   clickSmokeElement(handCard(ctx.els, "starfall-colossus"), "tribute-readability-basic: select monster");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-readability-basic: enter tribute selection");
   await waitForSmoke(
-    () => ctx.els.choiceText?.textContent.includes("需要解放 2 只怪兽") &&
-      ctx.els.choiceText.textContent.includes("已选择 2 / 2") &&
-      ctx.els.choiceText.textContent.includes("星火信使") &&
-      ctx.els.choiceText.textContent.includes("微光机巧卫"),
-    "tribute-readability-basic: requirement and auto-selected materials are visible"
+    () => ctx.els.choiceActions?.classList.contains("single-choice") &&
+      ctx.els.choiceActions.dataset.selectionMode === "single" &&
+      ctx.els.choiceText?.textContent.includes("祭品已锁定：星火信使、微光机巧卫") &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "tribute-readability-basic: sole tribute combination uses compact confirmation"
   );
 
   clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-readability-basic: unselect first material");
@@ -2210,9 +2219,10 @@ async function runTributeReadabilityBasicSmoke(ctx) {
 
   clickSmokeElement(fieldCard(ctx.els, "player", "spark-runner"), "tribute-readability-basic: restore first material");
   await waitForSmoke(
-    () => ctx.els.choiceText?.textContent.includes("已选择 2 / 2：星火信使、微光机巧卫") &&
-      ctx.els.choiceText.textContent.includes("解放素材已齐"),
-    "tribute-readability-basic: completed selection is explicit"
+    () => ctx.els.choiceActions?.classList.contains("single-choice") &&
+      ctx.els.choiceText?.textContent.includes("祭品已锁定：星火信使、微光机巧卫") &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "tribute-readability-basic: restored sole combination returns to compact confirmation"
   );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "tribute-readability-basic: confirm summon");
   await waitForSmoke(
@@ -2237,12 +2247,12 @@ async function runFusionSummonBasicSmoke(ctx) {
   await startSmokeDuel(ctx, "fusionSummon");
   clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-summon-basic: select fusion spell");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-summon-basic: enter material selection");
-  await waitForSmoke(() => Boolean(ctx.state.pendingFusion), "fusion-summon-basic: fusion selection opens");
-  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-summon-basic: select ember material");
-  clickSmokeElementCenter(fieldCard(ctx.els, "player", "gale-mage"), "fusion-summon-basic: select gale material");
   await waitForSmoke(
-    () => ctx.state.pendingFusion?.selectedIndexes?.length === 2 && !ctx.els.choiceConfirmBtn.disabled,
-    "fusion-summon-basic: exact materials selected"
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 2 &&
+      ctx.els.choiceActions?.classList.contains("single-choice") &&
+      ctx.els.choiceText?.textContent.includes("素材已锁定") &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "fusion-summon-basic: exact materials are auto-locked"
   );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-summon-basic: confirm fusion");
   await waitForSmoke(
@@ -2263,11 +2273,12 @@ async function runFusionReadabilityBasicSmoke(ctx) {
   clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-readability-basic: select fusion spell");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-readability-basic: enter material selection");
   await waitForSmoke(
-    () => ctx.els.choiceText?.textContent.includes("融合召唤「焰岚合星者」") &&
-      ctx.els.choiceText.textContent.includes("需要素材：赤焰幼龙、疾风术士") &&
-      ctx.els.choiceText.textContent.includes("已选择 0 / 2：无") &&
-      ctx.els.choiceText.textContent.includes("还缺素材：赤焰幼龙、疾风术士"),
-    "fusion-readability-basic: result and full recipe are visible"
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
+      ctx.state.pendingFusion?.selectedHandUids?.length === 1 &&
+      ctx.els.choiceActions?.classList.contains("single-choice") &&
+      ctx.els.choiceText?.textContent.includes("素材已锁定：赤焰幼龙（场上）、疾风术士（手牌）") &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "fusion-readability-basic: sole mixed-zone material combination is auto-locked"
   );
   if (window.innerWidth <= 720) {
     const choiceRect = ctx.els.choiceActions.getBoundingClientRect();
@@ -2281,16 +2292,18 @@ async function runFusionReadabilityBasicSmoke(ctx) {
     }
   }
   const emberSlot = fieldSlot(ctx.els, "player", 0);
-  if (!emberSlot?.classList.contains("fusion-candidate") || emberSlot.dataset.materialReason !== "可选择「赤焰幼龙」作为融合素材。") {
-    throw new Error("fusion-readability-basic: field material should expose a fusion-specific candidate reason");
+  if (!emberSlot?.classList.contains("fusion-selected") ||
+      emberSlot.dataset.materialReason !== "「赤焰幼龙」已被选择，再次点击可取消。") {
+    throw new Error("fusion-readability-basic: auto-locked field material should expose its selected state");
   }
 
-  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-readability-basic: select field material");
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-readability-basic: unlock field material");
   await waitForSmoke(
-    () => ctx.els.choiceText?.textContent.includes("已选择 1 / 2：赤焰幼龙（场上）") &&
-      ctx.els.choiceText.textContent.includes("还缺素材：疾风术士") &&
+    () => !ctx.els.choiceActions?.classList.contains("single-choice") &&
+      ctx.els.choiceText?.textContent.includes("已选择 1 / 2：疾风术士（手牌）") &&
+      ctx.els.choiceText.textContent.includes("还缺素材：赤焰幼龙") &&
       ctx.els.choiceConfirmBtn.disabled,
-    "fusion-readability-basic: selected field material and missing hand material are visible"
+    "fusion-readability-basic: cancelling a locked material restores expanded editing"
   );
 
   const selectionBeforeInvalidClicks = {
@@ -2317,12 +2330,12 @@ async function runFusionReadabilityBasicSmoke(ctx) {
     throw new Error("fusion-readability-basic: invalid clicks changed the selected materials");
   }
 
-  clickSmokeElement(handCard(ctx.els, "gale-mage"), "fusion-readability-basic: select legal hand material");
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-readability-basic: restore locked field material");
   await waitForSmoke(
-    () => ctx.els.choiceText?.textContent.includes("已选择 2 / 2：赤焰幼龙（场上）、疾风术士（手牌）") &&
-      ctx.els.choiceText.textContent.includes("素材齐备，确认后完成融合召唤") &&
+    () => ctx.els.choiceActions?.classList.contains("single-choice") &&
+      ctx.els.choiceText?.textContent.includes("素材已锁定：赤焰幼龙（场上）、疾风术士（手牌）") &&
       !ctx.els.choiceConfirmBtn.disabled,
-    "fusion-readability-basic: completed mixed selection is explicit"
+    "fusion-readability-basic: restored unique combination returns to compact confirmation"
   );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-readability-basic: confirm fusion summon");
   await waitForSmoke(
@@ -2349,9 +2362,18 @@ async function runFusionOcclusionSmoke(ctx) {
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-occlusion: enter material selection");
   await waitForSmoke(
     () => ctx.state.pendingFusion?.resultId === "flare-gale-archon" &&
-      ctx.els.choiceActions?.classList.contains("fusion-choice") &&
+      ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
+      ctx.state.pendingFusion?.selectedHandUids?.length === 1 &&
+      ctx.els.choiceActions?.classList.contains("single-choice"),
+    "fusion-occlusion: unique combination starts compact"
+  );
+  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-occlusion: expand material selection");
+  await waitForSmoke(
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 0 &&
+      ctx.state.pendingFusion?.selectedHandUids?.length === 1 &&
+      !ctx.els.choiceActions?.classList.contains("single-choice") &&
       !ctx.els.fusionPreview?.hidden,
-    "fusion-occlusion: fusion selection opens"
+    "fusion-occlusion: manual edit restores the expanded preview"
   );
   const rectOf = (element) => {
     const rect = element.getBoundingClientRect();
@@ -2370,17 +2392,12 @@ async function runFusionOcclusionSmoke(ctx) {
       );
     }
   };
-  assertClear("initial");
-  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "fusion-occlusion: select field material");
+  assertClear("expanded");
+  clickSmokeElement(fieldCard(ctx.els, "player", "ember-drake"), "fusion-occlusion: restore field material");
   await waitForSmoke(
-    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1,
-    "fusion-occlusion: field material selected"
-  );
-  assertClear("after-field-material");
-  clickSmokeElement(handCard(ctx.els, "gale-mage"), "fusion-occlusion: select hand material");
-  await waitForSmoke(
-    () => ctx.state.pendingFusion?.selectedHandUids?.length === 1,
-    "fusion-occlusion: hand material selected"
+    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
+      ctx.state.pendingFusion?.selectedHandUids?.length === 1,
+    "fusion-occlusion: field material restored"
   );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-occlusion: confirm fusion summon");
   await waitForSmoke(
@@ -2947,45 +2964,15 @@ async function runFusionSummonSmoke(ctx) {
   clickSmokeElement(handCard(ctx.els, "starforge-fusion"), "fusion-summon: select fusion spell");
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-summon: enter material selection");
   await waitForSmoke(
-    () => ctx.state.pendingFusion?.resultId === "flare-gale-archon" && ctx.els.choiceConfirmBtn.disabled,
-    "fusion-summon: pending fusion material selection"
+    () => ctx.state.pendingFusion?.resultId === "flare-gale-archon" &&
+      ctx.state.pendingFusion?.selectedIndexes?.length === 2 &&
+      ctx.els.choiceActions?.classList.contains("fusion-choice") &&
+      ctx.els.choiceActions?.classList.contains("single-choice") &&
+      ctx.els.choiceText?.textContent.includes("素材已锁定") &&
+      !ctx.els.choiceConfirmBtn.disabled,
+    "fusion-summon: unique field materials are auto-locked"
   );
-  if (!ctx.els.choiceActions?.classList.contains("fusion-choice")) {
-    throw new Error("fusion-summon: fusion material chooser should avoid covering the field");
-  }
   const detailCard = cloneCardById("flare-gale-archon");
-  if (ctx.els.fusionPreview?.hidden) {
-    throw new Error("fusion-summon: fusion preview should be visible during material selection");
-  }
-  if (ctx.els.fusionPreview?.dataset.cardId !== "flare-gale-archon") {
-    throw new Error("fusion-summon: fusion preview should reference the fusion result");
-  }
-  if (!ctx.els.fusionPreviewName?.textContent.includes(detailCard.name)) {
-    throw new Error("fusion-summon: fusion preview should show result name");
-  }
-  if (!ctx.els.fusionPreviewStats?.textContent.includes("ATK 2400") || !ctx.els.fusionPreviewStats?.textContent.includes("DEF 1800")) {
-    throw new Error("fusion-summon: fusion preview should show result ATK and DEF");
-  }
-  const previewMaterials = ctx.els.fusionPreviewMaterials?.textContent || "";
-  if (!previewMaterials.includes(cloneCardById("ember-drake").name) || !previewMaterials.includes(cloneCardById("gale-mage").name)) {
-    throw new Error("fusion-summon: fusion preview should show required materials");
-  }
-  clickSmokeElement(ctx.els.fusionPreviewDetail, "fusion-summon: open fusion result detail from preview");
-  await assertCardDetailModal(ctx, detailCard, "fusion-summon-preview");
-  clickSmokeElement(ctx.els.zoomClose, "fusion-summon: close fusion preview detail");
-  await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "fusion-summon: preview detail closes");
-  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-summon: select first material");
-  await waitForSmoke(
-    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
-      ctx.els.choiceConfirmBtn.disabled &&
-      fieldCard(ctx.els, "player", "ember-drake")?.classList.contains("tribute-selected"),
-    "fusion-summon: first material selected"
-  );
-  clickSmokeElementCenter(fieldCard(ctx.els, "player", "gale-mage"), "fusion-summon: select second material");
-  await waitForSmoke(
-    () => ctx.state.pendingFusion?.selectedIndexes?.length === 2 && !ctx.els.choiceConfirmBtn.disabled,
-    "fusion-summon: two materials selected"
-  );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-summon: confirm fusion summon");
   await waitForSmoke(
     () => ctx.state.player.field.some((card) => card?.id === "flare-gale-archon") &&
@@ -3034,23 +3021,13 @@ async function runFusionMixedMaterialsSmoke(ctx) {
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-mixed-materials: enter material selection");
   await waitForSmoke(
     () => ctx.state.pendingFusion?.resultId === "flare-gale-archon" &&
-      handCard(ctx.els, "gale-mage")?.classList.contains("tribute-candidate"),
-    "fusion-mixed-materials: hand material should be selectable",
-    6000
-  );
-  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-mixed-materials: select field material");
-  await waitForSmoke(
-    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
-      ctx.state.pendingFusion?.selectedHandUids?.length === 0,
-    "fusion-mixed-materials: field material selected"
-  );
-  clickSmokeElement(handCard(ctx.els, "gale-mage"), "fusion-mixed-materials: select hand material");
-  await waitForSmoke(
-    () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
+      ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
       ctx.state.pendingFusion?.selectedHandUids?.length === 1 &&
       handCard(ctx.els, "gale-mage")?.classList.contains("tribute-selected") &&
+      ctx.els.choiceActions?.classList.contains("single-choice") &&
       !ctx.els.choiceConfirmBtn.disabled,
-    "fusion-mixed-materials: mixed materials selected"
+    "fusion-mixed-materials: unique mixed-zone materials are auto-locked",
+    6000
   );
   const previewText = ctx.els.fusionPreviewMaterials?.textContent || "";
   if (!previewText.includes("赤焰幼龙（场上）") || !previewText.includes("疾风术士（手牌）")) {
@@ -3118,8 +3095,10 @@ async function runFusionResultChoiceSmoke(ctx) {
   await waitForSmoke(
     () => ctx.state.pendingFusion?.resultId === "tempest-aegis-archon" &&
       ctx.els.fusionResultChoices?.querySelector('[data-card-id="tempest-aegis-archon"]')?.classList.contains("selected") &&
-      handCard(ctx.els, "gale-mage")?.classList.contains("tribute-candidate"),
-    "fusion-result-choice: defensive result selected",
+      ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
+      ctx.state.pendingFusion?.selectedHandUids?.length === 1 &&
+      handCard(ctx.els, "gale-mage")?.classList.contains("tribute-selected"),
+    "fusion-result-choice: result choice auto-locks its unique materials",
     6000
   );
   assertPendingSelection(ctx, "fusion", "fusion-result-choice: material selection");
@@ -3128,24 +3107,22 @@ async function runFusionResultChoiceSmoke(ctx) {
       !ctx.els.fusionPreviewStats?.textContent.includes("DEF 2600")) {
     throw new Error("fusion-result-choice: preview should show selected result name and stats");
   }
-  if (!ctx.els.fusionPreviewKicker?.textContent.includes("素材 0/2") ||
-      ctx.els.fusionPreview?.dataset.materialState !== "selecting") {
-    throw new Error("fusion-result-choice: selected result should expose material progress");
+  if (!ctx.els.fusionPreviewKicker?.textContent.includes("素材齐备") ||
+      ctx.els.fusionPreview?.dataset.materialState !== "complete" ||
+      ctx.els.choiceConfirmBtn.disabled) {
+    throw new Error("fusion-result-choice: selected result should expose its locked material combination");
   }
   clickSmokeElement(ctx.els.fusionPreviewDetail, "fusion-result-choice: open selected result detail");
   await assertCardDetailModal(ctx, resultDefinition, "fusion-result-choice-preview");
   clickSmokeElement(ctx.els.zoomClose, "fusion-result-choice: close selected result detail");
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "fusion-result-choice: preview detail closes");
 
-  clickSmokeElementCenter(fieldCard(ctx.els, "player", "ember-drake"), "fusion-result-choice: select field material");
-  clickSmokeElement(handCard(ctx.els, "gale-mage"), "fusion-result-choice: select hand material");
   await waitForSmoke(
     () => ctx.state.pendingFusion?.selectedIndexes?.length === 1 &&
       ctx.state.pendingFusion?.selectedHandUids?.length === 1 &&
       ctx.els.fusionPreview?.dataset.materialState === "complete" &&
-      ctx.els.fusionPreviewKicker?.textContent.includes("素材齐备") &&
       !ctx.els.choiceConfirmBtn.disabled,
-    "fusion-result-choice: mixed materials selected",
+    "fusion-result-choice: auto-locked materials remain ready",
     6000
   );
   clickSmokeElement(ctx.els.choiceConfirmBtn, "fusion-result-choice: confirm defensive fusion");

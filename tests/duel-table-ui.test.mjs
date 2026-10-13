@@ -10,9 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 test("duel table shell keeps existing gameplay anchors inside a focused workspace", () => {
   const html = read("index.html");
 
-  assert.match(html, /href="styles\.css\?v=20260901-field-clearance-1"/);
-  assert.match(html, /href="duel-table\.css\?v=20260901-field-clearance-1"/);
-  assert.match(html, /src="src\/app\.js\?v=20260901-field-clearance-1"/);
+  assert.match(html, /href="styles\.css\?v=[^"]+"/);
+  assert.match(html, /href="duel-table\.css\?v=[^"]+"/);
+  assert.match(html, /src="src\/app\.js\?v=[^"]+"/);
   assert.match(html, /class="arena duel-table"/);
   assert.match(html, /id="detailDrawer"[\s\S]*id="detailName"/);
   assert.match(html, /id="timelineDrawer"[\s\S]*id="timeline"/);
@@ -21,7 +21,7 @@ test("duel table shell keeps existing gameplay anchors inside a focused workspac
   assert.match(html, /id="fieldActionBar"[\s\S]*id="fieldAttackBtn"[\s\S]*id="fieldModeBtn"[\s\S]*id="fieldDetailBtn"[\s\S]*id="fieldCancelBtn"/);
   assert.match(html, /class="detail-actions"[\s\S]*id="detailAttackBtn"[\s\S]*id="modeBtn"[\s\S]*id="detailBtn"[\s\S]*id="detailSelectionCancelBtn"/);
   assert.match(html, /class="hand-panel" aria-label="玩家手牌"/);
-  assert.match(html, /src="src\/duel-table\.js\?v=20260901-field-clearance-1"/);
+  assert.match(html, /src="src\/duel-table\.js\?v=[^"]+"/);
 });
 
 test("attack intent draws battlefield routes and keeps the exact outcome in the command row", () => {

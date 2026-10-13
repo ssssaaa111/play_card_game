@@ -37,7 +37,8 @@ export function monsterFieldSlotView({
   materialTarget = null,
   materialKind = "",
   splitTarget = null,
-  spellTarget = null
+  spellTarget = null,
+  placementTarget = null
 } = {}) {
   const selected = owner === "player"
     && state.selected?.zone === "playerField"
@@ -53,7 +54,9 @@ export function monsterFieldSlotView({
   const effectTargetReason = spellTarget && !spellTarget.ok ? spellTarget.reason || "不能选择该目标。" : "";
   const effectTargetUnavailable = effectTargetState === "unavailable";
   const effectTargetLabel = effectTargetUnavailable ? unavailableEffectTargetLabel(effectTargetReason) : "";
-  const interactionTarget = materialTarget || splitTarget || spellTarget;
+  const placementCandidate = Boolean(placementTarget?.ok);
+  const placementUnavailable = Boolean(placementTarget && !placementTarget.ok);
+  const interactionTarget = materialTarget || splitTarget || spellTarget || placementTarget;
   const disabled = owner === "ai"
     && !card
     && !targetable
@@ -86,6 +89,8 @@ export function monsterFieldSlotView({
     || materialUnavailable
     || splitCandidate
     || splitUnavailable
+    || placementCandidate
+    || placementUnavailable
     || effectTargetState
   ) && !selected;
   const fieldState = owner !== "player" || !card || fieldStateSuppressed
@@ -148,6 +153,9 @@ export function monsterFieldSlotView({
       ? (materialCandidate ? (materialSelected ? "selected" : "candidate") : "unavailable")
       : "",
     materialReason: materialTarget?.reason || "",
+    placementState: placementTarget ? (placementCandidate ? "candidate" : "unavailable") : "",
+    placementReason: placementTarget?.reason || "",
+    placementKind: placementTarget?.kind || "",
     ariaLabel: `${ownerLabel(owner)}召唤区 ${index + 1}${selected ? "，当前选中" : fieldStateLabel ? `，${fieldStateLabel}` : ""}${targetSelected ? "，已选择为效果目标" : ""}${attackTargetable ? "，可作为攻击目标" : ""}${interactionTarget?.reason ? `，${interactionTarget.reason}` : ""}`,
     slotClasses: enabledClassEntries({
       [`field-state-${fieldState}`]: Boolean(fieldState),
@@ -162,6 +170,8 @@ export function monsterFieldSlotView({
       "fusion-unavailable": materialKind === "fusion" && materialUnavailable,
       "split-candidate": splitCandidate,
       "split-unavailable": splitUnavailable,
+      "placement-candidate": placementCandidate,
+      "placement-unavailable": placementUnavailable,
       "effect-target-unavailable": effectTargetUnavailable
     }),
     cardClasses: enabledClassEntries({
@@ -184,6 +194,8 @@ export function monsterFieldSlotView({
       "fusion-unavailable": materialKind === "fusion" && materialUnavailable,
       "split-candidate": splitCandidate,
       "split-unavailable": splitUnavailable,
+      "placement-candidate": placementCandidate,
+      "placement-unavailable": placementUnavailable,
       "effect-target-unavailable": effectTargetUnavailable
     })
   };
@@ -198,7 +210,8 @@ export function supportFieldSlotView({
   spellTarget = null,
   trapChoiceReady = false,
   trapChoiceSelected = false,
-  afterAttackLock = null
+  afterAttackLock = null,
+  placementTarget = null
 } = {}) {
   const targetInteraction = Boolean(spellTarget);
   const effectTargetUnavailable = Boolean(spellTarget && !spellTarget.ok);
@@ -220,6 +233,8 @@ export function supportFieldSlotView({
     : null;
   const zoneLabel = `${ownerLabel(owner)}魔陷区 ${index + 1}`;
   const afterAttackLocked = Boolean(afterAttackLock);
+  const placementCandidate = Boolean(placementTarget?.ok);
+  const placementUnavailable = Boolean(placementTarget && !placementTarget.ok);
   const afterAttackLockLabel = afterAttackLocked
     ? `，${afterAttackLock.sourceName || "攻击怪兽"}已锁定此魔陷区，攻击结算后将破坏该卡`
     : "";
@@ -233,7 +248,10 @@ export function supportFieldSlotView({
     effectTargetState: spellTarget ? (spellTarget.ok ? "legal" : "unavailable") : "",
     effectTargetReason,
     effectTargetLabel,
-    title: effectTargetReason,
+    title: effectTargetReason || placementTarget?.reason || "",
+    placementState: placementTarget ? (placementCandidate ? "candidate" : "unavailable") : "",
+    placementReason: placementTarget?.reason || "",
+    placementKind: placementTarget?.kind || "",
     trapChoiceReady,
     trapChoiceSelected,
     afterAttackLocked,
@@ -241,13 +259,15 @@ export function supportFieldSlotView({
     supportDisplay,
     ariaLabel: `${supportDisplay
       ? `${zoneLabel}，${card.name}，${supportDisplay.description}`
-      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为效果目标" : ""}${effectTargetReason ? `，${effectTargetReason}` : ""}${afterAttackLockLabel}`,
+      : `${zoneLabel}${card ? "，盖放卡牌" : "，空位"}`}${targetSelected ? "，已选择为效果目标" : ""}${effectTargetReason ? `，${effectTargetReason}` : ""}${placementTarget?.reason ? `，${placementTarget.reason}` : ""}${afterAttackLockLabel}`,
     slotClasses: enabledClassEntries({
       "trap-response": trapChoiceReady,
       "trap-response-selected": trapChoiceSelected,
       targetable,
       "target-selected": targetSelected,
       "after-attack-locked": afterAttackLocked,
+      "placement-candidate": placementCandidate,
+      "placement-unavailable": placementUnavailable,
       "support-target-unavailable": effectTargetUnavailable,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     }),
@@ -257,6 +277,8 @@ export function supportFieldSlotView({
       targetable,
       "target-selected": targetSelected,
       "after-attack-locked": afterAttackLocked,
+      "placement-candidate": placementCandidate,
+      "placement-unavailable": placementUnavailable,
       "support-target-unavailable": effectTargetUnavailable,
       [`support-${supportDisplay?.key}`]: Boolean(supportDisplay)
     })
@@ -285,6 +307,7 @@ export function renderMonsterZones({
   materialTargetAt = () => null,
   splitTargetAt = () => null,
   spellTargetAt = () => null,
+  placementTargetAt = () => null,
   effectMarkersAt = () => [],
   onSlotClick = () => {},
   onSlotDoubleClick = () => {},
@@ -301,6 +324,7 @@ export function renderMonsterZones({
     const materialTarget = materialTargetAt(index);
     const splitTarget = splitTargetAt(index);
     const spellTarget = spellTargetAt(index);
+    const placementTarget = placementTargetAt(index);
     const tributeCandidate = owner === "player" && Boolean(state.pendingTribute) && Boolean(card);
     const fusionCandidate = owner === "player"
       && Boolean(state.pendingFusion)
@@ -323,7 +347,8 @@ export function renderMonsterZones({
       materialTarget,
       materialKind: state.pendingTribute ? "tribute" : state.pendingFusion ? "fusion" : "",
       splitTarget,
-      spellTarget
+      spellTarget,
+      placementTarget
     });
     const slot = document.createElement("button");
     slot.type = "button";
@@ -339,6 +364,9 @@ export function renderMonsterZones({
     if (view.effectTargetState) slot.dataset.effectTargetState = view.effectTargetState;
     if (view.effectTargetReason) slot.dataset.effectTargetReason = view.effectTargetReason;
     if (view.effectTargetLabel) slot.dataset.effectTargetLabel = view.effectTargetLabel;
+    if (view.placementState) slot.dataset.placementState = view.placementState;
+    if (view.placementReason) slot.dataset.placementReason = view.placementReason;
+    if (view.placementKind) slot.dataset.placementKind = view.placementKind;
     if (view.fieldState) slot.dataset.fieldState = view.fieldState;
     if (view.title) slot.title = view.title;
     if (attackReadiness) {
@@ -416,6 +444,7 @@ export function renderSupportZones({
   targetableAt = () => false,
   targetSelectedAt = () => false,
   spellTargetAt = () => null,
+  placementTargetAt = () => null,
   afterAttackLockAt = () => null,
   onSlotClick = () => {},
   onSlotDoubleClick = () => {},
@@ -435,6 +464,7 @@ export function renderSupportZones({
       targetable: targetableAt(index),
       targetSelected: targetSelectedAt(index),
       spellTarget: spellTargetAt(index),
+      placementTarget: placementTargetAt(index),
       trapChoiceReady,
       trapChoiceSelected,
       afterAttackLock: afterAttackLockAt(index)
@@ -450,6 +480,9 @@ export function renderSupportZones({
     if (view.effectTargetState) slot.dataset.effectTargetState = view.effectTargetState;
     if (view.effectTargetReason) slot.dataset.effectTargetReason = view.effectTargetReason;
     if (view.effectTargetLabel) slot.dataset.effectTargetLabel = view.effectTargetLabel;
+    if (view.placementState) slot.dataset.placementState = view.placementState;
+    if (view.placementReason) slot.dataset.placementReason = view.placementReason;
+    if (view.placementKind) slot.dataset.placementKind = view.placementKind;
     if (view.title) slot.title = view.title;
     if (view.supportDisplay) slot.dataset.supportState = view.supportDisplay.key;
     if (view.targetable) {
