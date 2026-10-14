@@ -47,7 +47,7 @@ export function showDuelModal(elements) {
   elements.modal.classList.add("show");
 }
 
-export function renderAiRevealModal(elements, reveal) {
+export function renderAiRevealModal(elements, reveal, { stage = null, stageSummary = "" } = {}) {
   if (!elements.aiRevealModal) return false;
   elements.aiRevealModal.classList.toggle("show", Boolean(reveal));
   if (!reveal) {
@@ -58,13 +58,22 @@ export function renderAiRevealModal(elements, reveal) {
     return true;
   }
   elements.aiRevealModal.dataset.cardId = reveal.cardId;
+  elements.aiRevealModal.dataset.actionKind = reveal.revealKind || "effect";
+  elements.aiRevealModal.dataset.actionStage = stage?.id || "result";
   if (elements.aiRevealTitle) elements.aiRevealTitle.textContent = reveal.title;
   if (elements.aiRevealProgress) {
     elements.aiRevealProgress.textContent = reveal.progressText || "";
     elements.aiRevealProgress.hidden = !reveal.progressText;
   }
-  if (elements.aiRevealType) elements.aiRevealType.textContent = reveal.type;
-  if (elements.aiRevealSummary) elements.aiRevealSummary.textContent = reveal.summary;
+  if (elements.aiRevealType) elements.aiRevealType.textContent = reveal.actionType || reveal.type;
+  if (elements.aiActionStage) elements.aiActionStage.textContent = stage?.label || "结果";
+  if (elements.aiRevealSummary) elements.aiRevealSummary.textContent = stageSummary || reveal.summary;
+  if (elements.aiActionBeats) {
+    elements.aiActionBeats.querySelectorAll("[data-ai-action-beat]").forEach((beat, index) => {
+      const activeIndex = Number(stage?.index ?? 3);
+      beat.dataset.state = index < activeIndex ? "complete" : index === activeIndex ? "active" : "pending";
+    });
+  }
   return true;
 }
 

@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createAiActionPlayback, aiActionConsequences, aiActionDuration, aiActionSummary } from "../src/ai-action-playback.js";
+import {
+  createAiActionPlayback,
+  aiAttackResolutionEvents,
+  aiActionConsequences,
+  aiActionDuration,
+  aiActionStageAt,
+  aiActionStageSummary,
+  aiActionSummary
+} from "../src/ai-action-playback.js";
 
 function harness() {
   let time = 0;
@@ -121,6 +129,44 @@ test("destroyed targets keep their original zone for field cues", () => {
 test("important effects have a longer reading beat than routine cards", () => {
   assert.ok(aiActionDuration({ revealKind: "trap" }) > aiActionDuration({ revealKind: "spell" }));
   assert.ok(aiActionDuration({ revealKind: "summon", card: { stars: 7 } }) > aiActionDuration({ revealKind: "summon", card: { stars: 2 } }));
+});
+
+test("public actions expose source target resolution and result beats", () => {
+  assert.equal(aiActionStageAt(0).id, "source");
+  assert.equal(aiActionStageAt(0.3).id, "target");
+  assert.equal(aiActionStageAt(0.6).id, "resolve");
+  assert.equal(aiActionStageAt(0.9).id, "result");
+  const action = {
+    name: "破晓锋印",
+    summary: "你 LP −700",
+    consequences: [{ targetLabel: "你" }]
+  };
+  assert.equal(aiActionStageSummary(action, aiActionStageAt(0)), "破晓锋印成为本次行动来源");
+  assert.equal(aiActionStageSummary(action, aiActionStageAt(0.3)), "作用目标：你");
+  assert.equal(aiActionStageSummary(action, aiActionStageAt(0.6)), "规则效果正在结算…");
+  assert.equal(aiActionStageSummary(action, aiActionStageAt(0.9)), "你 LP −700");
+});
+
+test("attack resolution names its target and exact public outcome", () => {
+  const entries = aiActionConsequences([
+    { type: "DAMAGE_DEALT", playerId: "player", amount: 600 },
+    { type: "CARD_DESTROYED", cardId: "guard", playerId: "player" },
+    { type: "BATTLE_RESOLVED", rivalId: "player", targetCardId: "guard", outcome: { kind: "attackWin" } }
+  ], { findCard: () => ({ card: { name: "星盾卫" } }) });
+  assert.deepEqual(entries.map((entry) => entry.text), ["你 LP −600", "星盾卫 被破坏", "星盾卫：击破"]);
+  assert.deepEqual([...new Set(entries.map((entry) => entry.targetLabel))], ["你", "星盾卫"]);
+  assert.ok(aiActionDuration({ revealKind: "attack", card: { stars: 7 } }) > aiActionDuration({ revealKind: "attack", card: { stars: 2 } }));
+});
+
+test("attack recap leaves authored after-attack effects to their own reveal", () => {
+  const events = [
+    { id: 10, type: "DAMAGE_DEALT", playerId: "player", amount: 600 },
+    { id: 11, type: "DAMAGE_DEALT", playerId: "player", amount: 300 },
+    { id: 12, type: "STAT_MODIFIED", cardId: "star", amount: 300 },
+    { id: 13, type: "AFTER_ATTACK_EFFECT_RESOLVED", resultEventIds: [11, 12] },
+    { id: 14, type: "BATTLE_RESOLVED", outcome: { kind: "attackWin" } }
+  ];
+  assert.deepEqual(aiAttackResolutionEvents(events).map((event) => event.id), [10, 14]);
 });
 
 test("identical tokens keep both field cues and a counted summary", () => {

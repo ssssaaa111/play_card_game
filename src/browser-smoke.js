@@ -9144,7 +9144,8 @@ async function runAiCardRevealQueueSmoke(ctx) {
     public: true,
     cardId: first.id,
     revealKind: "trap",
-    type: "trap"
+    type: "trap",
+    events: [{ type: "DAMAGE_DEALT", playerId: "player", amount: 400 }]
   });
   const secondReveal = ctx.showAiRevealForSmoke({
     actor: "ai",
@@ -9160,6 +9161,21 @@ async function runAiCardRevealQueueSmoke(ctx) {
     6000
   );
   assertHandAccessDuringReveal();
+  if (ctx.els.aiRevealModal?.dataset.actionStage !== "source" || ctx.els.aiActionStage?.textContent !== "来源") {
+    throw new Error("ai-card-reveal-queue: playback must begin from the public source beat");
+  }
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.dataset.actionStage === "target" &&
+      ctx.els.aiRevealSummary?.textContent.includes("作用目标：你"),
+    "ai-card-reveal-queue: target beat names the affected side",
+    3000
+  );
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.dataset.actionStage === "result" &&
+      ctx.els.aiRevealSummary?.textContent.includes("你 LP −400"),
+    "ai-card-reveal-queue: result beat exposes the exact public delta",
+    3000
+  );
   // The normal playback path must advance without a confirmation click.
   await waitForSmoke(
     () => aiRevealVisible(ctx.els, second.id) && (ctx.els.aiRevealProgress?.textContent || "").includes("2 / 2"),

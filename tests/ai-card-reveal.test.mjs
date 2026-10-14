@@ -58,6 +58,19 @@ test("AI reveal card details resolve from the unified card definition", () => {
   assert.equal(detail.effectText, definition.text);
 });
 
+test("AI attacks use the same public action model as cards and effects", () => {
+  const reveal = buildAiCardReveal({
+    actor: "ai",
+    public: true,
+    cardId: "ember-drake",
+    revealKind: "attack"
+  });
+
+  assert.equal(reveal.revealKind, "attack");
+  assert.equal(reveal.actionType, "攻击");
+  assert.match(reveal.title, /AI 发起攻击/);
+});
+
 test("AI monster effect reveals can explain the exact public resolution without mutating card definitions", () => {
   const definition = cardDefinitionById("trio-sun-judicator");
   const definitionSummary = definition.summary;
