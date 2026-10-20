@@ -103,8 +103,16 @@ import {
   statChangeText
 } from './effect-feedback.js';
 import { effectMarkersForCard } from './effect-markers.js';
+import { duelFocusView } from './duel-focus.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
-import { createAiActionPlayback, aiActionConsequences, aiActionSummary } from './ai-action-playback.js';
+import {
+  createAiActionPlayback,
+  aiAttackResolutionEvents,
+  aiActionConsequences,
+  aiActionStageAt,
+  aiActionStageSummary,
+  aiActionSummary
+} from './ai-action-playback.js';
 import { forcedFusionMaterialSelection, fusionOptionsForCard } from './fusion.js';
 import { buildFusionSelectionView, renderFusionSelectionPanel } from './fusion-selection-renderer.js';
 import {
@@ -330,6 +338,7 @@ let pendingTrapChoiceResolver = null;
 let scenarioHintsVisible = false;
 let pendingAiReveal = null;
 let aiActionHistory = [];
+let aiPlaybackStage = aiActionStageAt(0);
 let aiPlaybackPaused = false;
 let aiHistoryOpen = false;
 let aiHistoryRevision = "";
@@ -516,6 +525,8 @@ const els = {
   aiRevealContinue: document.querySelector("#aiRevealContinue"),
   aiActionDock: document.querySelector("#aiActionDock"),
   aiActionStatus: document.querySelector("#aiActionStatus"),
+  aiActionStage: document.querySelector("#aiActionStage"),
+  aiActionBeats: document.querySelector("#aiActionBeats"),
   aiActionMeter: document.querySelector("#aiActionMeter"),
   aiActionPause: document.querySelector("#aiActionPause"),
   aiActionHistory: document.querySelector("#aiActionHistory"),
@@ -840,18 +851,41 @@ const aiActionPlayback = createAiActionPlayback({
   } : {}),
   isPaused: isAiPlaybackPaused,
   onChange: ({ action, history, index, total }) => {
+    aiPlaybackStage = aiActionStageAt(0);
     pendingAiReveal = withAiRevealQueuePosition(action, { index, total });
     aiActionHistory = history;
     if (action) clearPlayerIdleTimers();
     renderAiReveal();
   },
-  onProgress: (progress, paused) => {
+  onProgress: (progress, paused, action) => {
     els.aiActionMeter.style.transform = `scaleX(${progress})`;
     els.aiActionDock.dataset.paused = String(paused);
     els.aiActionStatus.textContent = paused ? "已暂停" : "自动播放";
     els.aiRevealContinue.disabled = paused;
+    const nextStage = aiActionStageAt(progress);
+    if (action && nextStage.id !== aiPlaybackStage.id) {
+      aiPlaybackStage = nextStage;
+      renderAiReveal();
+    }
   }
 });
+
+function syncDuelFocusState(handPlacement = currentHandPlacementSelection()) {
+  const focus = duelFocusView({
+    aiActionActive: Boolean(pendingAiReveal && !aiHistoryOpen),
+    aiStage: aiPlaybackStage.id,
+    responseActive: Boolean(state.pendingTrapChoice),
+    targetActive: Boolean(state.pendingTarget),
+    materialActive: Boolean(state.pendingFusion || state.pendingTribute),
+    placementActive: Boolean(handPlacement),
+    attackActive: hasSelectedAttackIntent(),
+    selectionActive: Boolean(state.selected)
+  });
+  document.body.dataset.duelFocus = focus.mode;
+  document.body.dataset.duelFocusStage = focus.stage;
+  document.body.dataset.duelFocusActor = focus.actor;
+  return focus;
+}
 
 function renderAiActionCues() {
   document.querySelectorAll("[data-ai-action-cue]").forEach((element) => {
@@ -860,32 +894,51 @@ function renderAiActionCues() {
   });
   if (!pendingAiReveal || aiHistoryOpen) return;
   const cues = new Map();
+  const stageId = aiPlaybackStage.id;
+  const rolePriority = { source: 0, target: 1, result: 2 };
+  const addCue = (element, role, label) => {
+    if (!element) return;
+    const current = cues.get(element) || { role: "source", labels: [] };
+    if (rolePriority[role] > rolePriority[current.role]) current.role = role;
+    if (label) current.labels.push(label);
+    cues.set(element, current);
+  };
   const source = state.ai.field.findIndex((card) => card?.id === pendingAiReveal.cardId);
   const sourceElement = source >= 0 ? fieldElement("ai", source) : panelElement("ai");
-  if (sourceElement) cues.set(sourceElement, [pendingAiReveal.revealKind === "summon" ? "登场" : "发动"]);
-  for (const entry of pendingAiReveal.consequences || []) {
-    const found = entry.cardId ? findRuntimeCard(entry.cardId) : null;
-    const fieldIndex = found ? state[found.owner].field.indexOf(found.card) : -1;
-    const trapIndex = found ? state[found.owner].traps.indexOf(found.card) : -1;
-    const previous = entry.from;
-    const previousElement = previous?.zone === "spellTrapZone" ? trapElement(previous.playerId, previous.index)
-      : previous?.zone === "monsterZone" ? fieldElement(previous.playerId, previous.index) : null;
-    const element = fieldIndex >= 0 ? fieldElement(found.owner, fieldIndex)
-      : trapIndex >= 0 ? trapElement(found.owner, trapIndex)
-        : previousElement || (entry.playerId ? panelElement(entry.playerId) : null);
-    if (element) cues.set(element, [...(cues.get(element) || []), entry.badge]);
+  const sourceLabel = stageId === "source"
+    ? pendingAiReveal.revealKind === "attack" ? "攻击者" : pendingAiReveal.revealKind.includes("summon") ? "登场" : "发动"
+    : stageId === "target" ? "来源" : stageId === "resolve" ? "结算中" : "完成";
+  addCue(sourceElement, "source", sourceLabel);
+  if (stageId !== "source") {
+    for (const entry of pendingAiReveal.consequences || []) {
+      const found = entry.cardId ? findRuntimeCard(entry.cardId) : null;
+      const fieldIndex = found ? state[found.owner].field.indexOf(found.card) : -1;
+      const trapIndex = found ? state[found.owner].traps.indexOf(found.card) : -1;
+      const previous = entry.from;
+      const previousElement = previous?.zone === "spellTrapZone" ? trapElement(previous.playerId, previous.index)
+        : previous?.zone === "monsterZone" ? fieldElement(previous.playerId, previous.index) : null;
+      const element = fieldIndex >= 0 ? fieldElement(found.owner, fieldIndex)
+        : trapIndex >= 0 ? trapElement(found.owner, trapIndex)
+          : previousElement || (entry.playerId ? panelElement(entry.playerId) : null);
+      const label = stageId === "target" ? "目标" : stageId === "resolve" ? "结算中" : entry.badge;
+      addCue(element, stageId === "result" ? "result" : "target", label);
+    }
   }
-  for (const [element, labels] of cues) {
-    element.dataset.aiActionCue = "true";
+  for (const [element, cueView] of cues) {
+    element.dataset.aiActionCue = cueView.role;
     const badge = document.createElement("span");
     badge.className = "ai-action-badge";
-    badge.textContent = [...new Set(labels)].slice(0, 2).join(" · ");
+    badge.textContent = [...new Set(cueView.labels)].filter(Boolean).slice(0, 2).join(" · ");
     element.appendChild(badge);
   }
 }
 
 function renderAiReveal() {
-  renderAiRevealModal(els, pendingAiReveal);
+  syncDuelFocusState();
+  renderAiRevealModal(els, pendingAiReveal, {
+    stage: aiPlaybackStage,
+    stageSummary: pendingAiReveal ? aiActionStageSummary(pendingAiReveal, aiPlaybackStage) : ""
+  });
   els.aiActionDock.hidden = !pendingAiReveal && !aiHistoryOpen;
   els.aiActionDock.dataset.history = String(aiHistoryOpen);
   els.aiHistoryToggle.hidden = !aiActionHistory.length;
@@ -918,6 +971,7 @@ function renderAiReveal() {
 function clearAiReveal() {
   aiPlaybackPaused = false;
   aiHistoryOpen = false;
+  aiPlaybackStage = aiActionStageAt(0);
   aiActionPlayback.reset();
 }
 
@@ -4281,6 +4335,18 @@ async function attack(owner, rival, attackerIndex, targetIndex, options = {}) {
   }
 
   playAttackResetFeedback(owner, attacker, battleEvents);
+  if (owner.owner === "ai") {
+    const announced = await waitForAiReveal({
+      actor: "ai",
+      public: true,
+      cardId: attacker.id,
+      revealKind: "attack",
+      type: "attack",
+      events: aiAttackResolutionEvents(battleEvents),
+      allowAfterGameOver: true
+    });
+    if (!announced || runId !== duelRunId) return false;
+  }
   const afterAttackFeedback = resolveAfterAttackBattleFeedback(owner, attacker, battleEvents);
   if (owner.owner === "ai") {
     await afterAttackFeedback;
@@ -5157,25 +5223,21 @@ async function aiAttack({ getTurnGoal = null } = {}) {
       continue;
     }
     cue(`对手用 ${card.name} 发起攻击。`);
-    await sleep(900);
-    if (runId !== duelRunId) return;
     if (targetIndex < 0) {
       cue(`对手准备让 ${card.name} 直接攻击。`);
       playEpicAction("Direct", "attack", 980);
       playVoice("ai", "direct", "对手准备直接攻击。");
-      await sleep(900);
-      if (runId !== duelRunId) return;
     }
     showBattlePreview(card, target, state.ai, state.player);
     addLog(`对手攻击预判：${battlePreviewText(card, target, state.ai, state.player)}`);
     render();
-    await sleep(1080);
+    await sleep(620);
     if (runId !== duelRunId) return;
     const resolved = await attack(state.ai, state.player, attackerIndex, targetIndex);
     if (runId !== duelRunId) return;
     render();
     if (resolved === false && state.ruleCheckIssue) break;
-    await sleep(2200);
+    await sleep(450);
     if (runId !== duelRunId) return;
   }
   addLog("AI attack loop reached the safety cap.");
@@ -5844,6 +5906,7 @@ function render(animationKey = "") {
           ? "attack"
           : "none";
   document.body.dataset.duelTargetZone = state.pendingTarget?.mode || "none";
+  syncDuelFocusState(handPlacement);
   document.body.dataset.duelCanAct = String(canAct);
   const selectedHand = selectedHandInfo();
   const selectedHandAction = selectedHand ? handActionInfo(selectedHand.card, selectedHand.index) : null;

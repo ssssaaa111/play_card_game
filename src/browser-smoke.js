@@ -4891,9 +4891,12 @@ async function runFinaleSunflareTargetLockBasicSmoke(ctx) {
     `${smokeName}: sun after-attack effect reveal`,
     18000
   );
-  if (!ctx.els.aiRevealSummary?.textContent.includes("攻击后效果没有转移到其他魔陷")) {
-    throw new Error(`${smokeName}: sun reveal must explain the exact no-transfer resolution. ${smokeDebug(ctx)}`);
-  }
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.dataset.actionStage === "result"
+      && ctx.els.aiRevealSummary?.textContent.includes("攻击后效果没有转移到其他魔陷"),
+    () => `${smokeName}: sun reveal must explain the exact no-transfer resolution. ${smokeDebug(ctx)}`,
+    6000
+  );
   clickSmokeElement(ctx.els.aiRevealContinue, `${smokeName}: continue sun effect reveal`);
 
   await waitForSmoke(
@@ -6156,8 +6159,13 @@ async function runTrioGauntletSmoke(ctx) {
   clickSmokeElement(fieldCard(ctx.els, "ai", "temple-revenant"), `${smokeName}: c3 break guardian`);
   await waitForSmoke(() => !ctx.state.ai.field.some((card) => card?.id === "temple-revenant"), `${smokeName}: c3 guardian destroyed`);
   await waitForSmoke(
-    () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator"),
-    `${smokeName}: c3 final sun stands. ${trioOmegaFailureSnapshot(ctx)}`,
+    () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.state.turn === "player" &&
+      ctx.state.phase === "battle" &&
+      ctx.state.actionWindow === "battle" &&
+      !ctx.state.presentationBusy &&
+      !ctx.els.endTurnBtn.disabled,
+    `${smokeName}: c3 final sun stands and battle input resumes. ${trioOmegaFailureSnapshot(ctx)}`,
     12000
   );
   clickSmokeElement(fieldSlot(ctx.els, "player", c3DecoyIndex()).querySelector('[data-card-id="trio-decoy-ward"]'), `${smokeName}: c3 decoy attacks final sun`);
@@ -7393,6 +7401,10 @@ async function runFieldTargetReadabilityBasicSmoke(ctx) {
     () => ctx.state.pendingTarget?.effect === "buff500" && ctx.state.actionWindow === "targetSelect",
     `${smokeName}: target selection is open`
   );
+
+  if (document.body.dataset.duelFocus !== "target" || document.body.dataset.duelFocusActor !== "player") {
+    throw new Error(`${smokeName}: battlefield focus should identify the player's target selection.`);
+  }
 
   const legalSlot = fieldSlot(ctx.els, "player", 0);
   const lowerAtkSlot = fieldSlot(ctx.els, "player", 1);
@@ -9126,7 +9138,9 @@ async function runAiCardRevealQueueSmoke(ctx) {
       throw new Error("ai-card-reveal-queue: announcement layout must not clip the player field");
     }
     for (const button of [ctx.els.aiRevealDetail, ctx.els.aiActionPause, ctx.els.aiRevealContinue, document.querySelector("#utilityMenuToggle")]) {
+      if (!button || button.hidden || getComputedStyle(button).display === "none") continue;
       const rect = button.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) continue;
       if (document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.closest("button") !== button) {
         throw new Error(`ai-card-reveal-queue: ${button.id} must remain reachable during playback`);
       }
@@ -9144,7 +9158,8 @@ async function runAiCardRevealQueueSmoke(ctx) {
     public: true,
     cardId: first.id,
     revealKind: "trap",
-    type: "trap"
+    type: "trap",
+    events: [{ type: "DAMAGE_DEALT", playerId: "player", amount: 400 }]
   });
   const secondReveal = ctx.showAiRevealForSmoke({
     actor: "ai",
@@ -9160,6 +9175,29 @@ async function runAiCardRevealQueueSmoke(ctx) {
     6000
   );
   assertHandAccessDuringReveal();
+  if (ctx.els.aiRevealModal?.dataset.actionStage !== "source" ||
+      ctx.els.aiActionStage?.textContent !== "来源" ||
+      document.body.dataset.duelFocus !== "resolution" ||
+      document.body.dataset.duelFocusStage !== "source" ||
+      document.body.dataset.duelFocusActor !== "ai") {
+    throw new Error("ai-card-reveal-queue: playback must begin from the public source beat");
+  }
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.dataset.actionStage === "target" &&
+      ctx.els.aiRevealSummary?.textContent.includes("作用目标：你") &&
+      document.body.dataset.duelFocus === "resolution" &&
+      document.body.dataset.duelFocusStage === "target",
+    "ai-card-reveal-queue: target beat names the affected side",
+    3000
+  );
+  await waitForSmoke(
+    () => ctx.els.aiRevealModal?.dataset.actionStage === "result" &&
+      ctx.els.aiRevealSummary?.textContent.includes("你 LP −400") &&
+      document.body.dataset.duelFocus === "resolution" &&
+      document.body.dataset.duelFocusStage === "result",
+    "ai-card-reveal-queue: result beat exposes the exact public delta",
+    3000
+  );
   // The normal playback path must advance without a confirmation click.
   await waitForSmoke(
     () => aiRevealVisible(ctx.els, second.id) && (ctx.els.aiRevealProgress?.textContent || "").includes("2 / 2"),
@@ -9175,6 +9213,9 @@ async function runAiCardRevealQueueSmoke(ctx) {
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "ai-card-reveal-queue: detail closes");
   await Promise.all([firstReveal, secondReveal]);
   await waitForSmoke(() => !ctx.els.aiRevealModal.classList.contains("show"), "ai-card-reveal-queue: reveal queue closes");
+  if (document.body.dataset.duelFocus === "resolution") {
+    throw new Error("ai-card-reveal-queue: battlefield focus should clear after the reveal queue closes");
+  }
   if (!ctx.state.started || ctx.state.gameOver) {
     throw new Error(`ai-card-reveal-queue: duel should continue after queued reveals. ${smokeDebug(ctx)}`);
   }

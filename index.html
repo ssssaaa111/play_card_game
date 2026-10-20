@@ -7,8 +7,9 @@
   <link rel="stylesheet" href="styles.css?v=20260901-field-clearance-1" />
   <link rel="stylesheet" href="duel-table.css?v=20260901-field-clearance-1" />
   <link rel="stylesheet" href="target-selection.css" />
-  <link rel="stylesheet" href="ai-action.css" />
+  <link rel="stylesheet" href="ai-action.css?v=20261014-ai-action-flow-1" />
   <link rel="stylesheet" href="ui-polish.css?v=20261010-choice-flow-1" />
+  <link rel="stylesheet" href="duel-focus.css?v=20261021-focus-pass-1" />
 </head>
 <body>
   <div id="app">
@@ -59,7 +60,18 @@
       </div>
       <section class="ai-action-dock" id="aiActionDock" aria-label="对手行动与回看" hidden>
         <div class="ai-action-current" id="aiRevealModal">
-          <div class="ai-action-heading"><span id="aiRevealType"></span><span id="aiActionStatus">自动播放</span><span id="aiRevealProgress" hidden></span></div>
+          <div class="ai-action-heading">
+            <span id="aiRevealType"></span>
+            <span class="ai-action-stage" id="aiActionStage">来源</span>
+            <span id="aiActionStatus">自动播放</span>
+            <span id="aiRevealProgress" hidden></span>
+            <span class="ai-action-beats" id="aiActionBeats" aria-label="行动阶段：来源、目标、结算、结果">
+              <i data-ai-action-beat="source" data-state="active">来源</i>
+              <i data-ai-action-beat="target" data-state="pending">目标</i>
+              <i data-ai-action-beat="resolve" data-state="pending">结算</i>
+              <i data-ai-action-beat="result" data-state="pending">结果</i>
+            </span>
+          </div>
           <div class="ai-action-message" role="status" aria-live="polite" aria-atomic="true">
             <h2 id="aiRevealTitle">对手行动</h2>
             <p id="aiRevealSummary"></p>
@@ -612,6 +624,6 @@
   </div>
 
   <script type="module" src="src/duel-table.js?v=20260901-field-clearance-1"></script>
-  <script type="module" src="src/app.js?v=20261010-choice-flow-1"></script>
+  <script type="module" src="src/app.js?v=20261014-ai-action-flow-1"></script>
 </body>
 </html>

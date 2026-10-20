@@ -14,8 +14,15 @@
   grid-template-rows: 12px minmax(0, 1fr);
   gap: 2px 14px; align-content: center;
 }
-.ai-action-heading { display: flex; gap: 10px; align-items: center; color: #9ac2cb; font-size: 10px; line-height: 12px; }
+.ai-action-heading { min-width: 0; display: flex; gap: 8px; align-items: center; color: #9ac2cb; font-size: 10px; line-height: 12px; }
 #aiRevealType { color: #8de9d8; font-weight: 800; }
+.ai-action-stage { color: #f1cf89; font-weight: 900; }
+.ai-action-beats { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; min-width: 0; }
+.ai-action-beats i { position: relative; display: inline-flex; align-items: center; gap: 3px; color: #67818a; font-style: normal; font-weight: 700; transition: color 120ms ease, opacity 120ms ease; }
+.ai-action-beats i:not(:first-child)::before { content: ""; width: 10px; height: 1px; background: #416069; }
+.ai-action-beats i[data-state="complete"] { color: #7eb8af; }
+.ai-action-beats i[data-state="active"] { color: #fff0bc; text-shadow: 0 0 8px #f1c76c77; }
+.ai-action-beats i[data-state="active"]::after { content: ""; position: absolute; left: 50%; bottom: -4px; width: 4px; height: 4px; border-radius: 50%; background: #f1c76c; box-shadow: 0 0 7px #f1c76c; }
 .ai-action-message { min-width: 0; display: flex; gap: 12px; align-items: center; }
 #aiRevealTitle { margin: 0; font-size: 15px; line-height: 1.25; flex-shrink: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #aiRevealSummary { margin: 0; min-width: 0; font-size: 12px; line-height: 1.4; color: #c5d8df; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -31,6 +38,9 @@
 .ai-action-meter { position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: #8ac8cb22; overflow: hidden; }
 .ai-action-meter i { display: block; width: 100%; height: 100%; background: #8de9d8; transform-origin: left; transform: scaleX(0); }
 .ai-action-dock[data-paused="true"] .ai-action-meter i { background: #f1c77c; }
+.ai-action-current[data-action-kind="attack"] #aiRevealType { color: #ffc978; }
+.ai-action-current[data-action-kind="attack"] .ai-action-meter i { background: #f1b75d; }
+.ai-action-current[data-action-stage="result"] #aiRevealSummary { color: #f2e8cf; font-weight: 700; }
 .ai-action-recent { display: none; height: 100%; min-width: 0; }
 .ai-action-recent-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #8dabb8; font-size: 10px; }
 .ai-action-dock[data-history="true"] .ai-action-current { display: none; }
@@ -43,7 +53,12 @@
 #aiActionHistory span { color: #8dabb8; font-size: 10px; }
 .ai-history-toggle { margin-left: auto; padding: 5px 7px; flex-shrink: 0; font-size: 10px; }
 [data-ai-action-cue] { outline: 2px solid #89efdf !important; outline-offset: -3px; box-shadow: inset 0 0 22px #61e5d333, 0 0 14px #61e5d344 !important; }
+[data-ai-action-cue="source"] { outline-color: #78ead8 !important; }
+[data-ai-action-cue="target"] { outline-color: #f1c66f !important; box-shadow: inset 0 0 24px #f1b95b26, 0 0 16px #f1b95b55 !important; }
+[data-ai-action-cue="result"] { outline-color: #fff0bd !important; box-shadow: inset 0 0 24px #fff0bd24, 0 0 18px #fff0bd66 !important; }
 .ai-action-badge { position: absolute; left: 50%; top: 0; transform: translateX(-50%); z-index: 8; pointer-events: none; white-space: nowrap; max-width: 96%; overflow: hidden; text-overflow: ellipsis; padding: 3px 7px; border-radius: 0 0 5px 5px; background: #b9f9e8; color: #082b31; font-size: 10px; font-weight: 900; }
+[data-ai-action-cue="target"] .ai-action-badge { background: #ffe0a0; color: #3a2605; }
+[data-ai-action-cue="result"] .ai-action-badge { background: #fff1c8; color: #3a2405; }
 @media (max-width: 1040px) {
   .ai-action-message { display: block; align-self: center; }
   #aiRevealTitle { max-width: 100%; font-size: 13px; }
@@ -52,6 +67,8 @@
 @media (max-width: 720px) and (min-height: 541px) {
   .ai-action-dock { inset: 4px 60px 4px 6px; padding: 3px 7px; }
   .ai-action-current { grid-template-columns: 1fr; grid-template-rows: 12px minmax(0, 1fr) 28px; gap: 2px; }
+  .ai-action-heading { gap: 5px; }
+  .ai-action-beats { display: none; }
   .ai-action-controls { grid-column: 1; grid-row: 3; }
   .ai-action-controls button { min-height: 28px; padding: 3px 10px; }
   #aiRevealContinue { margin-left: auto; }

@@ -1,0 +1,227 @@
+/* One battlefield hierarchy for commands, candidates, locked targets and results. */
+body {
+  --duel-focus-source: 102, 232, 218;
+  --duel-focus-candidate: 246, 189, 96;
+  --duel-focus-selected: 255, 222, 145;
+  --duel-focus-result: 255, 239, 194;
+}
+
+#app .duel-table :is(.slot, .trap-slot),
+#app .duel-table :is(#playerPanel, #aiPanel),
+#app .workspace-deck {
+  transition:
+    opacity 150ms ease,
+    filter 150ms ease,
+    transform 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+/* Empty zones remain locatable without competing with real cards. */
+body[data-duel-focus="idle"] #app .duel-table :is(.slot.empty, .trap-slot.empty) {
+  opacity: 0.36;
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.08);
+  background: rgba(5, 8, 13, 0.3);
+  box-shadow: inset 0 -10px 24px rgba(0, 0, 0, 0.1);
+}
+
+body[data-duel-focus="idle"] #app .duel-table :is(.slot.empty, .trap-slot.empty)::before {
+  opacity: 0.32;
+}
+
+body[data-duel-focus="idle"] #app .duel-table :is(.slot.empty, .trap-slot.empty)::after {
+  opacity: 0.52;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+body[data-duel-focus="idle"] #app .duel-table :is(.slot.empty, .trap-slot.empty):is(:hover, :focus-visible) {
+  opacity: 0.74;
+  border-color: rgba(var(--zone-accent, 84, 210, 210), 0.32);
+}
+
+/* Historical information remains available while the battlefield owns attention. */
+body:not([data-duel-focus="idle"]):not([data-duel-focus="command"]) #app .workspace-deck {
+  opacity: 0.54;
+  filter: saturate(0.66) brightness(0.74);
+}
+
+body:not([data-duel-focus="idle"]) #app .center-line::before,
+body:not([data-duel-focus="idle"]) #app .center-line::after {
+  opacity: 0.45;
+}
+
+/* Selecting a card first establishes one cyan source before any candidates appear. */
+body[data-duel-focus="command"] #app .duel-table :is(.slot, .trap-slot):not(:has(.card.selected)) {
+  opacity: 0.48;
+  filter: saturate(0.58) brightness(0.74);
+}
+
+body[data-duel-focus="command"] #app .duel-table .slot:has(.card.selected),
+body[data-duel-focus="attack"] #app .duel-table .slot:has(.card.selected),
+body[data-duel-focus="target"] #app .duel-table .slot:has(.card.selected) {
+  z-index: 7;
+  opacity: 1;
+  filter: none;
+  border-color: rgba(var(--duel-focus-source), 0.98);
+  box-shadow:
+    inset 0 -3px 0 rgba(var(--duel-focus-source), 0.74),
+    0 0 0 3px rgba(var(--duel-focus-source), 0.15),
+    0 0 30px rgba(var(--duel-focus-source), 0.25);
+}
+
+body[data-duel-focus="command"] #app .duel-table .field-state-chip.selected,
+body[data-duel-focus="attack"] #app .duel-table .field-state-chip.selected,
+body[data-duel-focus="target"] #app .duel-table .field-state-chip.selected {
+  border-color: rgba(var(--duel-focus-source), 0.76);
+  background: rgba(8, 40, 43, 0.96);
+  color: #c8fff9;
+  box-shadow: 0 0 18px rgba(var(--duel-focus-source), 0.32);
+}
+
+/* All player choice flows use the same source / candidate / selected hierarchy. */
+body[data-duel-focus="target"] #app .duel-table :is(.slot, .trap-slot):not(.targetable):not(.target-selected):not(:has(.card.selected)),
+body[data-duel-focus="attack"] #app .duel-table :is(.slot, .trap-slot):not(.attack-target):not(:has(.card.selected)),
+body[data-duel-focus="placement"] #app .duel-table :is(.slot, .trap-slot):not(.placement-candidate),
+body[data-duel-focus="material"] #app .duel-table :is(.slot, .trap-slot):not(.tribute-candidate):not(.tribute-selected):not(.fusion-candidate):not(.fusion-selected):not(.split-candidate):not(.split-selected) {
+  opacity: 0.2 !important;
+  filter: saturate(0.34) brightness(0.58) !important;
+  box-shadow: none;
+}
+
+body[data-duel-focus="target"] #app .duel-table :is(.effect-target-unavailable, .support-target-unavailable):is(:hover, :focus-visible),
+body[data-duel-focus="material"] #app .duel-table :is(.tribute-unavailable, .fusion-unavailable, .split-unavailable):is(:hover, :focus-visible) {
+  opacity: 0.72 !important;
+  filter: saturate(0.62) brightness(0.78) !important;
+}
+
+body[data-duel-focus="target"] #app .duel-table :is(.slot, .trap-slot).targetable,
+body[data-duel-focus="attack"] #app .duel-table .slot.attack-target,
+body[data-duel-focus="placement"] #app .duel-table :is(.slot, .trap-slot).placement-candidate,
+body[data-duel-focus="material"] #app .duel-table :is(.slot.tribute-candidate, .slot.fusion-candidate, .slot.split-candidate) {
+  z-index: 6;
+  opacity: 1 !important;
+  filter: none !important;
+  border-color: rgba(var(--duel-focus-candidate), 0.98) !important;
+  box-shadow:
+    inset 0 -3px 0 rgba(var(--duel-focus-candidate), 0.76),
+    0 0 0 3px rgba(var(--duel-focus-candidate), 0.14),
+    0 0 26px rgba(var(--duel-focus-candidate), 0.26) !important;
+  transform: translateY(-3px) scale(1.01);
+}
+
+body[data-duel-focus="material"] #hand :is(.card.tribute-candidate, .card.fusion-candidate) {
+  opacity: 1;
+  filter: none;
+  border-color: rgba(var(--duel-focus-candidate), 0.92);
+  box-shadow: 0 0 0 3px rgba(var(--duel-focus-candidate), 0.13), 0 16px 28px rgba(0, 0, 0, 0.42);
+}
+
+body[data-duel-focus="target"] #app .duel-table :is(.slot, .trap-slot).target-selected,
+body[data-duel-focus="material"] #app .duel-table :is(.slot.tribute-selected, .slot.fusion-selected, .slot.split-selected),
+body[data-duel-focus="material"] #hand :is(.card.tribute-selected, .card.fusion-selected) {
+  z-index: 8;
+  opacity: 1 !important;
+  filter: none !important;
+  border-color: rgb(var(--duel-focus-selected)) !important;
+  background-color: rgba(83, 58, 19, 0.58);
+  box-shadow:
+    inset 0 0 0 2px rgba(var(--duel-focus-selected), 0.36),
+    0 0 0 4px rgba(var(--duel-focus-selected), 0.2),
+    0 0 34px rgba(var(--duel-focus-selected), 0.36) !important;
+  transform: translateY(-4px) scale(1.015);
+}
+
+body[data-duel-focus="target"] #app .duel-table :is(.slot, .trap-slot).target-selected::after {
+  content: "已锁定";
+  border-color: rgba(var(--duel-focus-selected), 0.82);
+  background: rgba(75, 48, 13, 0.96);
+  color: #fff1c9;
+}
+
+body[data-duel-focus="attack"] #app .duel-table .slot.attack-target::after {
+  content: "选择攻击目标";
+  border-color: rgba(var(--duel-focus-candidate), 0.72);
+  background: rgba(79, 42, 13, 0.94);
+  color: #fff1d1;
+}
+
+/* Trap responses are a focused choice rather than another full-board highlight. */
+body[data-duel-focus="response"] #app .duel-table :is(.slot, .trap-slot):not(.trap-response):not(.trap-response-selected) {
+  opacity: 0.24;
+  filter: saturate(0.4) brightness(0.62);
+}
+
+body[data-duel-focus="response"] #app .duel-table :is(.trap-slot.trap-response, .trap-slot.trap-response-selected) {
+  z-index: 7;
+  opacity: 1;
+  filter: none;
+  transform: translateY(-3px);
+}
+
+body[data-duel-focus="response"] #app .duel-table .trap-slot.trap-response-selected {
+  border-color: rgb(var(--duel-focus-selected));
+  box-shadow: 0 0 0 4px rgba(var(--duel-focus-selected), 0.2), 0 0 36px rgba(var(--duel-focus-selected), 0.34);
+}
+
+/* Opponent playback uses the same cyan source, gold target and bright result. */
+body[data-duel-focus="resolution"] #app .duel-table :is(.slot, .trap-slot, #playerPanel, #aiPanel):not([data-ai-action-cue]) {
+  opacity: 0.18;
+  filter: saturate(0.3) brightness(0.55);
+}
+
+body[data-duel-focus="resolution"] #app [data-ai-action-cue] {
+  z-index: 9;
+  opacity: 1 !important;
+  filter: none !important;
+  transform: translateY(-3px);
+}
+
+body[data-duel-focus="resolution"] #app [data-ai-action-cue="source"] {
+  outline-color: rgba(var(--duel-focus-source), 0.98) !important;
+  box-shadow:
+    inset 0 0 26px rgba(var(--duel-focus-source), 0.18),
+    0 0 20px rgba(var(--duel-focus-source), 0.3) !important;
+}
+
+body[data-duel-focus="resolution"] #app [data-ai-action-cue="target"] {
+  outline-color: rgba(var(--duel-focus-candidate), 0.98) !important;
+  box-shadow:
+    inset 0 0 28px rgba(var(--duel-focus-candidate), 0.18),
+    0 0 24px rgba(var(--duel-focus-candidate), 0.34) !important;
+}
+
+body[data-duel-focus="resolution"] #app [data-ai-action-cue="result"] {
+  outline-color: rgba(var(--duel-focus-result), 1) !important;
+  box-shadow:
+    inset 0 0 32px rgba(var(--duel-focus-result), 0.22),
+    0 0 30px rgba(var(--duel-focus-result), 0.42) !important;
+}
+
+body[data-duel-focus="resolution"][data-duel-focus-stage="result"] #app [data-ai-action-cue="result"] .ai-action-badge {
+  padding: 5px 9px;
+  border: 1px solid rgba(var(--duel-focus-result), 0.72);
+  background: rgba(67, 43, 10, 0.96);
+  color: #fff1c4;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  body:not([data-duel-focus="idle"]):not([data-duel-focus="command"]) #app .workspace-deck {
+    opacity: 1;
+    filter: none;
+  }
+
+  body[data-duel-focus="command"] #app .duel-table :is(.slot, .trap-slot):not(:has(.card.selected)) {
+    opacity: 0.36;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app .duel-table :is(.slot, .trap-slot),
+  #app .duel-table :is(#playerPanel, #aiPanel),
+  #app .workspace-deck {
+    transition: none;
+  }
+}

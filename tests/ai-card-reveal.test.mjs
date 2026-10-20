@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { createBattleLogEntry } from "../src/battle-log.js";
 import { aiRevealProgressText, buildAiCardReveal, withAiRevealQueuePosition } from "../src/ai-card-reveal.js";
+import { aiActionStageAt, aiActionStageSummary } from "../src/ai-action-playback.js";
 import { cardDefinitionById, cardDetailViewModel } from "../src/card-detail.js";
 import { scenarioSetups } from "../src/data.js";
 import { getCardEffectDefinition } from "../src/game-engine.js";
@@ -58,6 +59,19 @@ test("AI reveal card details resolve from the unified card definition", () => {
   assert.equal(detail.effectText, definition.text);
 });
 
+test("AI attacks use the same public action model as cards and effects", () => {
+  const reveal = buildAiCardReveal({
+    actor: "ai",
+    public: true,
+    cardId: "ember-drake",
+    revealKind: "attack"
+  });
+
+  assert.equal(reveal.revealKind, "attack");
+  assert.equal(reveal.actionType, "攻击");
+  assert.match(reveal.title, /AI 发起攻击/);
+});
+
 test("AI monster effect reveals can explain the exact public resolution without mutating card definitions", () => {
   const definition = cardDefinitionById("trio-sun-judicator");
   const definitionSummary = definition.summary;
@@ -71,6 +85,7 @@ test("AI monster effect reveals can explain the exact public resolution without 
   });
 
   assert.equal(reveal.summary, resolutionSummary);
+  assert.equal(aiActionStageSummary(reveal, aiActionStageAt(0.9)), resolutionSummary);
   assert.equal(definition.summary, definitionSummary);
 });
 

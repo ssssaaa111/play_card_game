@@ -7,6 +7,16 @@ const revealLabels = {
   summon: "AI 召唤了",
   "special-summon": "AI 特殊召唤了",
   "monster-effect": "AI 触发了",
+  attack: "AI 发起攻击",
+};
+
+const revealTypeLabels = {
+  spell: "魔法",
+  trap: "陷阱",
+  summon: "召唤",
+  "special-summon": "特殊召唤",
+  "monster-effect": "怪兽效果",
+  attack: "攻击"
 };
 
 const revealKinds = new Set(Object.keys(revealLabels));
@@ -27,6 +37,7 @@ export function buildAiCardReveal(input = {}) {
     title: `${label}「${detail.name}」`,
     name: detail.name,
     type: detail.type,
+    actionType: revealTypeLabels[revealKind] || detail.type,
     summary: input.summary || card.summary || card.text || detail.rule || "",
     card,
   };
