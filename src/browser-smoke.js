@@ -7397,6 +7397,10 @@ async function runFieldTargetReadabilityBasicSmoke(ctx) {
     `${smokeName}: target selection is open`
   );
 
+  if (document.body.dataset.duelFocus !== "target" || document.body.dataset.duelFocusActor !== "player") {
+    throw new Error(`${smokeName}: battlefield focus should identify the player's target selection.`);
+  }
+
   const legalSlot = fieldSlot(ctx.els, "player", 0);
   const lowerAtkSlot = fieldSlot(ctx.els, "player", 1);
   const emptySlot = fieldSlot(ctx.els, "player", 2);
@@ -9129,7 +9133,9 @@ async function runAiCardRevealQueueSmoke(ctx) {
       throw new Error("ai-card-reveal-queue: announcement layout must not clip the player field");
     }
     for (const button of [ctx.els.aiRevealDetail, ctx.els.aiActionPause, ctx.els.aiRevealContinue, document.querySelector("#utilityMenuToggle")]) {
+      if (!button || button.hidden || getComputedStyle(button).display === "none") continue;
       const rect = button.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) continue;
       if (document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.closest("button") !== button) {
         throw new Error(`ai-card-reveal-queue: ${button.id} must remain reachable during playback`);
       }
@@ -9164,18 +9170,26 @@ async function runAiCardRevealQueueSmoke(ctx) {
     6000
   );
   assertHandAccessDuringReveal();
-  if (ctx.els.aiRevealModal?.dataset.actionStage !== "source" || ctx.els.aiActionStage?.textContent !== "来源") {
+  if (ctx.els.aiRevealModal?.dataset.actionStage !== "source" ||
+      ctx.els.aiActionStage?.textContent !== "来源" ||
+      document.body.dataset.duelFocus !== "resolution" ||
+      document.body.dataset.duelFocusStage !== "source" ||
+      document.body.dataset.duelFocusActor !== "ai") {
     throw new Error("ai-card-reveal-queue: playback must begin from the public source beat");
   }
   await waitForSmoke(
     () => ctx.els.aiRevealModal?.dataset.actionStage === "target" &&
-      ctx.els.aiRevealSummary?.textContent.includes("作用目标：你"),
+      ctx.els.aiRevealSummary?.textContent.includes("作用目标：你") &&
+      document.body.dataset.duelFocus === "resolution" &&
+      document.body.dataset.duelFocusStage === "target",
     "ai-card-reveal-queue: target beat names the affected side",
     3000
   );
   await waitForSmoke(
     () => ctx.els.aiRevealModal?.dataset.actionStage === "result" &&
-      ctx.els.aiRevealSummary?.textContent.includes("你 LP −400"),
+      ctx.els.aiRevealSummary?.textContent.includes("你 LP −400") &&
+      document.body.dataset.duelFocus === "resolution" &&
+      document.body.dataset.duelFocusStage === "result",
     "ai-card-reveal-queue: result beat exposes the exact public delta",
     3000
   );
@@ -9194,6 +9208,9 @@ async function runAiCardRevealQueueSmoke(ctx) {
   await waitForSmoke(() => !ctx.els.cardModal.classList.contains("show"), "ai-card-reveal-queue: detail closes");
   await Promise.all([firstReveal, secondReveal]);
   await waitForSmoke(() => !ctx.els.aiRevealModal.classList.contains("show"), "ai-card-reveal-queue: reveal queue closes");
+  if (document.body.dataset.duelFocus === "resolution") {
+    throw new Error("ai-card-reveal-queue: battlefield focus should clear after the reveal queue closes");
+  }
   if (!ctx.state.started || ctx.state.gameOver) {
     throw new Error(`ai-card-reveal-queue: duel should continue after queued reveals. ${smokeDebug(ctx)}`);
   }

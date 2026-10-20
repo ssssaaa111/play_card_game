@@ -103,6 +103,7 @@ import {
   statChangeText
 } from './effect-feedback.js';
 import { effectMarkersForCard } from './effect-markers.js';
+import { duelFocusView } from './duel-focus.js';
 import { buildAiCardReveal, withAiRevealQueuePosition } from './ai-card-reveal.js';
 import {
   createAiActionPlayback,
@@ -869,6 +870,23 @@ const aiActionPlayback = createAiActionPlayback({
   }
 });
 
+function syncDuelFocusState(handPlacement = currentHandPlacementSelection()) {
+  const focus = duelFocusView({
+    aiActionActive: Boolean(pendingAiReveal && !aiHistoryOpen),
+    aiStage: aiPlaybackStage.id,
+    responseActive: Boolean(state.pendingTrapChoice),
+    targetActive: Boolean(state.pendingTarget),
+    materialActive: Boolean(state.pendingFusion || state.pendingTribute),
+    placementActive: Boolean(handPlacement),
+    attackActive: hasSelectedAttackIntent(),
+    selectionActive: Boolean(state.selected)
+  });
+  document.body.dataset.duelFocus = focus.mode;
+  document.body.dataset.duelFocusStage = focus.stage;
+  document.body.dataset.duelFocusActor = focus.actor;
+  return focus;
+}
+
 function renderAiActionCues() {
   document.querySelectorAll("[data-ai-action-cue]").forEach((element) => {
     delete element.dataset.aiActionCue;
@@ -916,6 +934,7 @@ function renderAiActionCues() {
 }
 
 function renderAiReveal() {
+  syncDuelFocusState();
   renderAiRevealModal(els, pendingAiReveal, {
     stage: aiPlaybackStage,
     stageSummary: pendingAiReveal ? aiActionStageSummary(pendingAiReveal, aiPlaybackStage) : ""
@@ -5887,6 +5906,7 @@ function render(animationKey = "") {
           ? "attack"
           : "none";
   document.body.dataset.duelTargetZone = state.pendingTarget?.mode || "none";
+  syncDuelFocusState(handPlacement);
   document.body.dataset.duelCanAct = String(canAct);
   const selectedHand = selectedHandInfo();
   const selectedHandAction = selectedHand ? handActionInfo(selectedHand.card, selectedHand.index) : null;
