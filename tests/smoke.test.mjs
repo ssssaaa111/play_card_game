@@ -964,6 +964,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-preview"\)/);
   assert.match(smoke, /const smokeName = "campaign-hub-basic";[\s\S]*fresh progress must only unlock the first chapter[\s\S]*first campaign chapter starts[\s\S]*setSmokeStatus\("passed", smokeName\)/);
   assert.match(smoke, /const smokeName = "campaign-reward-unlock-basic";[\s\S]*playable gauntlet reward must start visibly locked[\s\S]*reward click launches the first gauntlet battle[\s\S]*setSmokeStatus\("passed", smokeName\)/);
+  assert.match(smoke, /ctx\.state\.actionWindow === "battle"[\s\S]*!ctx\.state\.presentationBusy[\s\S]*!ctx\.els\.endTurnBtn\.disabled,[\s\S]*c3 final sun stands and battle input resumes/);
   assert.match(app, /state\.gauntlet\?\.active && state\.gauntlet\.sourceScenarioId[\s\S]*state\.gauntlet\.sourceScenarioId[\s\S]*els\.scenarioSelect\?\.value/);
   assert.match(smoke, /setSmokeStatus\("passed", "pre-duel-deck-scroll-preview"\)/);
   assert.match(smoke, /const smokeName = "hand-reorder-basic";[\s\S]*direct type sort must not mutate the rule hand array[\s\S]*right-to-left drag[\s\S]*left-to-right drag[\s\S]*UI reorder must not mutate the rule hand array[\s\S]*setSmokeStatus\("passed", smokeName\)/);

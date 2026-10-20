@@ -6159,8 +6159,13 @@ async function runTrioGauntletSmoke(ctx) {
   clickSmokeElement(fieldCard(ctx.els, "ai", "temple-revenant"), `${smokeName}: c3 break guardian`);
   await waitForSmoke(() => !ctx.state.ai.field.some((card) => card?.id === "temple-revenant"), `${smokeName}: c3 guardian destroyed`);
   await waitForSmoke(
-    () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator"),
-    `${smokeName}: c3 final sun stands. ${trioOmegaFailureSnapshot(ctx)}`,
+    () => ctx.state.ai.field.some((card) => card?.id === "trio-sun-judicator") &&
+      ctx.state.turn === "player" &&
+      ctx.state.phase === "battle" &&
+      ctx.state.actionWindow === "battle" &&
+      !ctx.state.presentationBusy &&
+      !ctx.els.endTurnBtn.disabled,
+    `${smokeName}: c3 final sun stands and battle input resumes. ${trioOmegaFailureSnapshot(ctx)}`,
     12000
   );
   clickSmokeElement(fieldSlot(ctx.els, "player", c3DecoyIndex()).querySelector('[data-card-id="trio-decoy-ward"]'), `${smokeName}: c3 decoy attacks final sun`);
