@@ -60,7 +60,7 @@ function card(id, overrides = {}) {
   };
 }
 
-function makeState({ cards = [], player = {}, ai = {}, turn = {}, machine = {}, continuousEffects = [] } = {}) {
+function makeState({ cards = [], player = {}, ai = {}, turn = {}, machine = {}, continuousEffects = [], controllers } = {}) {
   return {
     cards: Object.fromEntries(cards.map((entry) => [entry.id, entry])),
     players: {
@@ -88,6 +88,7 @@ function makeState({ cards = [], player = {}, ai = {}, turn = {}, machine = {}, 
     },
     events: [],
     continuousEffects,
+    ...(controllers ? { controllers } : {}),
     nextEventId: 1
   };
 }
@@ -4623,6 +4624,24 @@ test("AI turn and phase transitions keep the AI-owned action window", () => {
   ));
 });
 
+test("automated action windows follow controller kind instead of a reserved seat id", () => {
+  const humanAiSeat = new GameEngine(makeState({
+    controllers: { [PLAYER]: "human", [AI]: "human" },
+    turn: { playerId: PLAYER, phase: Phase.end },
+    machine: { phase: Phase.end, timing: Timing.end }
+  }));
+  humanAiSeat.dispatch({ type: "START_TURN", playerId: AI });
+  assert.equal(humanAiSeat.getState().machine.actionWindow?.window, ActionWindow.draw);
+
+  const automatedPlayerSeat = new GameEngine(makeState({
+    controllers: { [PLAYER]: "ai", [AI]: "human" },
+    turn: { playerId: AI, phase: Phase.end },
+    machine: { phase: Phase.end, timing: Timing.end }
+  }));
+  automatedPlayerSeat.dispatch({ type: "START_TURN", playerId: PLAYER });
+  assert.equal(automatedPlayerSeat.getState().machine.actionWindow?.window, ActionWindow.automated);
+});
+
 test("phase changes reject duplicate, rollback, and skipped-end transitions without changing state", () => {
   const cases = [
     { from: Phase.main, to: Phase.main },
@@ -5400,7 +5419,7 @@ test("action window commands reject phase, owner, and response-window mismatches
     },
     {
       action: { type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: ActionWindow.ai, openedAt: 1000 },
-      reason: /AI action window belongs to ai/
+      reason: /Automated action window belongs to an AI-controlled seat/
     },
     {
       action: { type: "OPEN_ACTION_WINDOW", playerId: PLAYER, window: ActionWindow.response, openedAt: 1000 },

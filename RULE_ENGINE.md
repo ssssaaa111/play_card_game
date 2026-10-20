@@ -21,6 +21,8 @@ For new cards, the rule test is part of the card definition. Do not add a card e
 - UI code should treat `GameEngine.getState()` as read-only. It returns a defensive copy, so mutating it cannot mutate live engine state.
 - Card effect functions receive `EffectContext`, not raw state.
 - The client should be treated as presentation only. The engine state and event log are the source of truth.
+- Duel identity and control source are separate concepts. `seatIds` identifies the two rules participants, while `controllers` declares whether a seat is driven by a human, AI planner, or remote peer. Rules must not infer control type from a reserved player id.
+- `player` and `ai` remain the default solo seat ids for compatibility. New shared or multiplayer code must use the configured seat ids and `localPlayerId` instead of branching on those names.
 - If a spell or trap has no UI metadata definition or no engine-backed effect definition, UI code must fail visibly and leave hand, grave, LP, field, and spell/trap zones unchanged. It must not move the card or apply a free JavaScript fallback.
 
 ## Command and event log
@@ -142,6 +144,7 @@ The validator catches:
 
 - AI decision functions in `src/ai.js` are pure planners. They return command-shaped actions such as `spell`, `setTrap`, `summon`, `attack`, `skipAttack`, or `none`; they must not mutate game state.
 - AI execution in `src/app.js` should consume those planned actions and then use the same adapter/`GameEngine.dispatch` path as player actions.
+- Automated action windows follow the seat controller type, not the literal `ai` seat id. A human-controlled seat named `ai` receives ordinary draw/main/battle windows, and any AI-controlled seat receives the automated window.
 - Browser smoke baselines run with `npm run smoke:browser` against `127.0.0.1:5177`. If Windows blocks the npm wrapper, run the same entrypoint directly with `node scripts/browser-smoke.mjs <smoke-name>`. The runner first creates Chrome profiles under project `.tmp`, then falls back to the OS temp directory when that path is denied. A scenario should first be implemented in `src/browser-smoke.js`, then added to `scripts/browser-smoke.mjs` when it becomes part of the default regression set.
 
 ## Turn handoff and auto-end

@@ -228,7 +228,7 @@ test("app uses extracted turn state machine", () => {
   const app = readProjectFile("src/app.js");
 
   assert.match(app, /from '\.\/turn-state\.js'/);
-  assert.match(app, /canPlayerActState\(state\)/);
+  assert.match(app, /canLocalSeatActState\(state\)/);
   assert.match(app, /dispatchOpenActionWindowFromUiState\(/);
   assert.match(app, /dispatchRequestAutoEndFromUiState\(/);
   assert.match(app, /dispatchCancelAutoEndFromUiState\(/);
@@ -237,10 +237,10 @@ test("app uses extracted turn state machine", () => {
   assert.match(app, /async function runAiTurn\(\)[\s\S]*dispatchEndTurnFromUiState\(state, "ai", \{[\s\S]*beginTurn\("player"\)/);
   assert.match(app, /dispatchResolveTurnDrawFromUiState\(/);
   assert.match(app, /function autoPlayerDraw\(\)[\s\S]*dispatchResolveTurnDrawFromUiState\(state, "player"\)/);
-  assert.match(app, /playerActionWindowDecision\(state, \{[\s\S]*hasMainAction: actions\.hasMain[\s\S]*hasBattleAction: actions\.hasBattle[\s\S]*\}\)/);
-  assert.match(app, /shouldRunPlayerIdleCountdownForState\(state\)/);
-  assert.match(app, /pauseResumeStep\(state\)/);
-  assert.match(app, /canUsePlayerTurnControls\(state\)/);
+  assert.match(app, /localActionWindowDecision\(state, \{[\s\S]*hasMainAction: actions\.hasMain[\s\S]*hasBattleAction: actions\.hasBattle[\s\S]*\}\)/);
+  assert.match(app, /shouldRunLocalIdleCountdownForState\(state\)/);
+  assert.match(app, /sessionResumeStep\(state\)/);
+  assert.match(app, /canUseLocalTurnControls\(state\)/);
   assert.match(app, /Object\.assign\(state, turnStartPatch\(owner\)\)/);
   assert.match(app, /Object\.assign\(state, drawToMainPatch\(\)\)/);
   assert.match(app, /Object\.assign\(state, mainToBattlePatch\(\)\)/);

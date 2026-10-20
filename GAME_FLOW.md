@@ -1,6 +1,6 @@
 # 游戏流程与状态机
 
-最后更新：2026-06-22
+最后更新：2026-10-21
 
 本文描述当前实现中的真实流程。规则变化时，应同时更新对应流程图、阶段表和事件说明。
 
@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart LR
-    Input[玩家或 AI 操作] --> Command[GameEngine.dispatch Command]
+    Input[本地玩家 远端玩家或 AI 操作] --> Command[GameEngine.dispatch Command]
     Command --> Validate[校验回合 阶段 时点 条件 目标]
     Validate --> Events[产生 GameEvent]
     Events --> Apply[applyGameEvent 修改规则状态]
@@ -21,6 +21,8 @@ flowchart LR
 - 卡牌和公共操作不能直接修改规则状态，只能产生事件。
 - `engine-adapter` 负责把规则事件投影到当前固定槽位 UI。
 - 动画、声音、选中状态和 DOM 不属于核心规则状态。
+- `seatIds` 定义规则中的两个参赛席位，`controllers` 独立定义席位由本地真人、远端真人或 AI 控制；引擎不再用玩家 ID 推断控制方式。
+- `localPlayerId` 只决定当前客户端能操作哪个席位，不改变规则身份。默认单人模式仍使用 `player / ai`，多人模式可以使用 `p1 / p2`。
 
 ## 一局游戏
 

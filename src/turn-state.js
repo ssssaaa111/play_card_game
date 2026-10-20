@@ -1,4 +1,5 @@
 import { ActionWindow } from './game-engine.js';
+import { isAutomatedSeat } from './duel-session.js';
 
 export const PHASES = {
   setup: "setup",
@@ -65,34 +66,52 @@ export function actionWindowTimeoutSeconds(windowName) {
   return actionWindowTimeouts[normalizeActionWindow(windowName)] || 0;
 }
 
-export function canPlayerActState({
-  started = false,
-  paused = false,
-  presentationBusy = false,
-  turn = "",
-  gameOver = false,
-  actionWindow = ""
-} = {}) {
+export function canLocalSeatActState(state = {}) {
+  const {
+    started = false,
+    paused = false,
+    presentationBusy = false,
+    turn = "",
+    gameOver = false,
+    actionWindow = "",
+    localPlayerId = TURNS.player
+  } = state;
   return Boolean(
     started &&
     !paused &&
     !presentationBusy &&
-    turn === TURNS.player &&
+    turn === localPlayerId &&
     !gameOver &&
     actionWindow !== ACTION_WINDOWS.resolution
   );
 }
 
+export function canPlayerActState(state = {}) {
+  return canLocalSeatActState(state);
+}
+
+export function isLocalMainState(state = {}) {
+  return canLocalSeatActState(state) && state.phase === PHASES.main;
+}
+
 export function isPlayerMainState(state = {}) {
-  return canPlayerActState(state) && state.phase === PHASES.main;
+  return isLocalMainState(state);
+}
+
+export function isLocalBattleState(state = {}) {
+  return canLocalSeatActState(state) && state.phase === PHASES.battle;
 }
 
 export function isPlayerBattleState(state = {}) {
-  return canPlayerActState(state) && state.phase === PHASES.battle;
+  return isLocalBattleState(state);
+}
+
+export function canUseLocalTurnControls(state = {}) {
+  return isLocalMainState(state) || isLocalBattleState(state);
 }
 
 export function canUsePlayerTurnControls(state = {}) {
-  return isPlayerMainState(state) || isPlayerBattleState(state);
+  return canUseLocalTurnControls(state);
 }
 
 export function shouldRunPlayerIdleCountdown({
@@ -110,8 +129,12 @@ export function shouldRunPlayerIdleCountdown({
 }
 
 export function shouldRunPlayerIdleCountdownForState(state = {}) {
+  return shouldRunLocalIdleCountdownForState(state);
+}
+
+export function shouldRunLocalIdleCountdownForState(state = {}) {
   return shouldRunPlayerIdleCountdown({
-    canAct: canPlayerActState(state) || (
+    canAct: canLocalSeatActState(state) || (
       state.started &&
       !state.paused &&
       !state.gameOver &&
@@ -123,12 +146,12 @@ export function shouldRunPlayerIdleCountdownForState(state = {}) {
   });
 }
 
-export function playerActionWindowDecision(state = {}, {
+export function localActionWindowDecision(state = {}, {
   hasAnyAction = false,
   hasMainAction = hasAnyAction,
   hasBattleAction = false
 } = {}) {
-  if (!canPlayerActState(state) || ![PHASES.main, PHASES.battle].includes(state.phase)) return { kind: "ignore" };
+  if (!canLocalSeatActState(state) || ![PHASES.main, PHASES.battle].includes(state.phase)) return { kind: "ignore" };
   if (state.pendingTarget) {
     return { kind: "targetSelect", actionWindow: ACTION_WINDOWS.targetSelect, resetIdle: true };
   }
@@ -145,12 +168,26 @@ export function playerActionWindowDecision(state = {}, {
   return { kind: "autoEnd", actionWindow: ACTION_WINDOWS.autoEnd, scheduleAutoEnd: true };
 }
 
-export function pauseResumeStep(state = {}) {
+export function playerActionWindowDecision(state = {}, options = {}) {
+  return localActionWindowDecision(state, options);
+}
+
+export function sessionResumeStep(state = {}) {
   if (!state.started || state.gameOver || state.paused || state.presentationBusy) return "none";
-  if (state.turn === TURNS.player && state.phase === PHASES.draw) return "playerDraw";
-  if (state.turn === TURNS.player && state.phase === PHASES.main) return "playerMain";
-  if (state.turn === TURNS.player && state.phase === PHASES.battle) return "playerBattle";
-  if (state.turn === TURNS.ai && !state.aiRunning) return "aiTurn";
+  const localPlayerId = state.localPlayerId || TURNS.player;
+  if (state.turn === localPlayerId && state.phase === PHASES.draw) return "localDraw";
+  if (state.turn === localPlayerId && state.phase === PHASES.main) return "localMain";
+  if (state.turn === localPlayerId && state.phase === PHASES.battle) return "localBattle";
+  if (isAutomatedSeat(state, state.turn) && !state.aiRunning && !state.automationRunning) return "automatedTurn";
+  return "remoteTurn";
+}
+
+export function pauseResumeStep(state = {}) {
+  const step = sessionResumeStep(state);
+  if (step === "localDraw") return "playerDraw";
+  if (step === "localMain") return "playerMain";
+  if (step === "localBattle") return "playerBattle";
+  if (step === "automatedTurn") return "aiTurn";
   return "none";
 }
 

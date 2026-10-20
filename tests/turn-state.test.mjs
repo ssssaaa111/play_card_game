@@ -8,11 +8,14 @@ import {
   TURNS,
   actionWindowTimeoutSeconds,
   actionWindowTiming,
+  canLocalSeatActState,
   canPlayerActState,
+  canUseLocalTurnControls,
   canUsePlayerTurnControls,
   drawToMainPatch,
   mainToBattlePatch,
   normalizeActionWindow,
+  sessionResumeStep,
   pauseResumeStep,
   playerActionWindowDecision,
   shouldRunPlayerIdleCountdownForState,
@@ -50,6 +53,21 @@ test("normalizes action windows and detects player control", () => {
   assert.equal(canUsePlayerTurnControls(state()), true);
   assert.equal(canUsePlayerTurnControls(state({ phase: PHASES.draw })), false);
   assert.equal(canUsePlayerTurnControls(state({ actionWindow: ACTION_WINDOWS.resolution })), false);
+});
+
+test("local control follows the configured seat instead of a fixed player id", () => {
+  const secondSeatState = state({
+    seatIds: ["p1", "p2"],
+    localPlayerId: "p2",
+    controllers: { p1: "remote", p2: "human" },
+    turn: "p2"
+  });
+
+  assert.equal(canLocalSeatActState(secondSeatState), true);
+  assert.equal(canUseLocalTurnControls(secondSeatState), true);
+  assert.equal(sessionResumeStep(secondSeatState), "localMain");
+  assert.equal(canLocalSeatActState({ ...secondSeatState, turn: "p1" }), false);
+  assert.equal(sessionResumeStep({ ...secondSeatState, turn: "p1" }), "remoteTurn");
 });
 
 test("maps action windows to explicit timings and timeout budgets", () => {
