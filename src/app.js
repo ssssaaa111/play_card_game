@@ -63,6 +63,7 @@ import {
   renderDeckBrowser
 } from './deck-browser.js';
 import { buildDeck, createDuelist } from './deck.js';
+import { createDuelSessionConfig } from './duel-session.js';
 import {
   campaignChapterDefinition,
   campaignChapterRatingMaxLp,
@@ -221,13 +222,13 @@ import {
   PHASES,
   TIMINGS,
   actionWindowTimeoutSeconds,
-  canPlayerActState,
-  canUsePlayerTurnControls,
+  canLocalSeatActState,
+  canUseLocalTurnControls,
   drawToMainPatch,
+  localActionWindowDecision,
   mainToBattlePatch,
-  pauseResumeStep,
-  playerActionWindowDecision,
-  shouldRunPlayerIdleCountdownForState,
+  sessionResumeStep,
+  shouldRunLocalIdleCountdownForState,
   turnStartAttackLockReleases,
   turnStartPatch
 } from './turn-state.js';
@@ -283,6 +284,7 @@ function scenarioIdFromParam(value) {
 
 const state = {
   cardDefinitionsComplete: true,
+  ...createDuelSessionConfig(),
   player: createDuelist("player"),
   ai: createDuelist("ai"),
   turn: "player",
@@ -1306,7 +1308,7 @@ function opponentDuelist() {
 }
 
 function canPlayerAct() {
-  return !pendingAiReveal && !aiHistoryOpen && canPlayerActState(state);
+  return !pendingAiReveal && !aiHistoryOpen && canLocalSeatActState(state);
 }
 
 function canUseHandSpells() {
@@ -1333,7 +1335,7 @@ function handActionTiming(card) {
   if (!state.started) return { ok: false, label: "待开局", reason: "点击开始决斗后才能操作。" };
   if (state.paused) return { ok: false, label: "暂停中", reason: "继续决斗后才能操作手牌。" };
   if (state.gameOver) return { ok: false, label: "已结束", reason: "本局决斗已经结束。" };
-  if (state.turn !== "player") return { ok: false, label: "对手回合", reason: "当前是对手回合；仍可拖动整理手牌。" };
+  if (state.turn !== state.localPlayerId) return { ok: false, label: "对手回合", reason: "当前是对手回合；仍可拖动整理手牌。" };
   if (!canPlayerAct()) return { ok: false, label: "结算中", reason: "当前效果正在结算，请稍候。" };
   if (state.pendingTarget) return { ok: true };
   if (canUseHandCards(card)) return { ok: true };
@@ -1423,7 +1425,7 @@ function notePlayerIntent() {
 }
 
 function resumePlayerIdleCountdownAfterPassiveIntent() {
-  if (shouldRunPlayerIdleCountdownForState(state)) {
+  if (shouldRunLocalIdleCountdownForState(state)) {
     resetPlayerIdleCountdown();
   }
 }
@@ -1739,7 +1741,7 @@ function hasPlayerMainAction() {
 function resolvePlayerActionWindow(reason = "操作完成", animationKey = "") {
   if (isAttackFlowPending()) return;
   const actions = currentPlayerActions();
-  const decision = playerActionWindowDecision(state, {
+  const decision = localActionWindowDecision(state, {
     hasMainAction: actions.hasMain,
     hasBattleAction: actions.hasBattle
   });
@@ -4532,7 +4534,7 @@ function enterPlayerBattlePhase(reason = "战斗时点", { preserveSelection = f
 }
 
 function skipPlayerAttack() {
-  if (!canUsePlayerTurnControls(state)) {
+  if (!canUseLocalTurnControls(state)) {
     cue("现在还不能跳过攻击。");
     return;
   }
@@ -4565,7 +4567,7 @@ function skipPlayerAttack() {
 
 function manualEndPlayerTurn() {
   if (pendingAiReveal || aiHistoryOpen) return;
-  if (!canUsePlayerTurnControls(state)) {
+  if (!canUseLocalTurnControls(state)) {
     cue("抽卡完成后才能主动结束回合。");
     return;
   }
@@ -4603,12 +4605,12 @@ function togglePause() {
     addLog("决斗继续。");
     playMusic(currentMusicMode());
     resumeWaiters();
-    const resumeStep = pauseResumeStep(state);
-    if (resumeStep === "playerDraw") {
+    const resumeStep = sessionResumeStep(state);
+    if (resumeStep === "localDraw") {
       window.setTimeout(autoPlayerDraw, 350);
-    } else if (resumeStep === "playerMain" || resumeStep === "playerBattle") {
+    } else if (resumeStep === "localMain" || resumeStep === "localBattle") {
       resetPlayerIdleCountdown();
-    } else if (resumeStep === "aiTurn") {
+    } else if (resumeStep === "automatedTurn") {
       window.setTimeout(runAiTurn, 350);
     }
   }
@@ -5658,7 +5660,7 @@ function resetPlayerIdleCountdown() {
   clearPlayerIdleTimers();
   if (pendingAiReveal || aiHistoryOpen || els.cardModal.classList.contains("show")) return;
   if (BROWSER_MANUAL_MODE) return;
-  if (!shouldRunPlayerIdleCountdownForState(state)) return;
+  if (!shouldRunLocalIdleCountdownForState(state)) return;
   const seconds = actionWindowTimeoutSeconds(state.actionWindow);
   if (seconds <= 0) return;
   setActionWindow(state.actionWindow, {
@@ -5670,7 +5672,7 @@ function resetPlayerIdleCountdown() {
   const windowId = state.actionWindowId;
   els.timerProgress?.classList.add("active");
   const tick = () => {
-    if (!shouldRunPlayerIdleCountdownForState(state)) {
+    if (!shouldRunLocalIdleCountdownForState(state)) {
       clearPlayerIdleTimers();
       return;
     }
@@ -5878,7 +5880,7 @@ function render(animationKey = "") {
   els.duelHint.dataset.kind = duelHint.kind;
   els.duelHint.title = duelHint.title;
   const setupModalOpen = els.modal?.classList.contains("show") && !state.started && !state.gameOver;
-  const canUseTurnControls = canUsePlayerTurnControls(state);
+  const canUseTurnControls = canUseLocalTurnControls(state);
   const canAct = canPlayerAct();
   document.body.dataset.duelPhase = !state.started
     ? "setup"

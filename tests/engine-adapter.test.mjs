@@ -2593,3 +2593,30 @@ test("projects legal actions from UI state through the engine", () => {
   assert.deepEqual(legal.actions.declareAttack.map((action) => action.targetCardId), [guard.uid]);
   assert.deepEqual(state.gameEvents, []);
 });
+
+test("projects and dispatches custom human seat ids without an ai identity", () => {
+  const p1 = createDuelist("p1");
+  const p2 = createDuelist("p2");
+  const monster = uiMonster("p2-summon", "star-lancer");
+  monster.ownerId = "p2";
+  p2.hand = [monster];
+  const state = {
+    seatIds: ["p1", "p2"],
+    localPlayerId: "p1",
+    controllers: { p1: "human", p2: "human" },
+    p1,
+    p2,
+    turn: "p2",
+    phase: PHASES.main,
+    gameEvents: []
+  };
+
+  const projected = buildEngineStateFromUiState(state);
+  assert.deepEqual(Object.keys(projected.players), ["p1", "p2"]);
+  assert.deepEqual(projected.controllers, { p1: "human", p2: "human" });
+
+  const events = dispatchSummonMonsterFromUiState(state, "p2", 0, 0);
+  assert.equal(state.p2.hand.length, 0);
+  assert.equal(state.p2.field[0], monster);
+  assert.ok(events.some((event) => event.type === "MONSTER_SUMMONED" && event.playerId === "p2"));
+});

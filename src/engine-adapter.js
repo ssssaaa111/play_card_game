@@ -5,8 +5,8 @@ import { spellDefinition } from './spells.js';
 import { trapDefinition } from './traps.js';
 import { ACTION_WINDOWS, PHASES, TIMINGS } from './turn-state.js';
 import { fusionOptionForResult, fusionOptionsForCard } from './fusion.js';
+import { normalizeControllers, otherSeatId, seatIdsForState } from './duel-session.js';
 
-const ownerIds = ["player", "ai"];
 const ONE_SHOT_EFFECT = "oneShot";
 const CONTINUOUS_EFFECT = "continuous";
 
@@ -295,7 +295,8 @@ export function buildEngineStateFromUiState(uiState) {
   const cards = {};
   const events = Array.isArray(uiState.gameEvents) ? uiState.gameEvents.map((event) => ({ ...event })) : [];
   const nextEventId = events.reduce((largest, event) => Math.max(largest, Number(event.id) || 0), 0) + 1;
-  ownerIds.forEach((ownerId) => {
+  const seatIds = seatIdsForState(uiState);
+  seatIds.forEach((ownerId) => {
     const duelist = uiState[ownerId];
     if (!duelist) return;
     collectCards(duelist.deck, ownerId, cards);
@@ -310,19 +311,15 @@ export function buildEngineStateFromUiState(uiState) {
     cards,
     cardDefinitions,
     cardDefinitionsComplete: Boolean(uiState.cardDefinitionsComplete),
-    players: {
-      player: uiDuelistToEngine(uiState.player),
-      ai: uiDuelistToEngine(uiState.ai)
-    },
+    seatIds,
+    controllers: normalizeControllers(seatIds, uiState.controllers),
+    players: Object.fromEntries(seatIds.map((ownerId) => [ownerId, uiDuelistToEngine(uiState[ownerId])])),
     turn: {
       playerId: uiState.turn || "player",
       phase
     },
     machine: projectMachineStateFromEvents(events, phase),
-    abilities: {
-      player: uiAbilityEntries(uiState.player),
-      ai: uiAbilityEntries(uiState.ai)
-    },
+    abilities: Object.fromEntries(seatIds.map((ownerId) => [ownerId, uiAbilityEntries(uiState[ownerId])])),
     events,
     continuousEffects: projectContinuousEffectsFromEvents(events),
     gameOver: projectGameOverFromUiState(uiState, events),
@@ -337,7 +334,7 @@ function uiDuelist(uiState, playerId) {
 }
 
 function removeCardFromUiState(uiState, cardId) {
-  for (const ownerId of ownerIds) {
+  for (const ownerId of seatIdsForState(uiState)) {
     const duelist = uiState[ownerId];
     if (!duelist) continue;
 
@@ -906,8 +903,8 @@ export function getBattleLegalActionsFromUiState(uiState, playerId = uiState.tur
   return getLegalActions(engineState, playerId);
 }
 
-function otherUiPlayerId(playerId) {
-  return ownerIds.find((ownerId) => ownerId !== playerId) || "ai";
+function otherUiPlayerId(uiState, playerId) {
+  return otherSeatId(uiState, playerId);
 }
 
 function actionTargetIndex(uiState, rivalId, action) {
@@ -916,7 +913,7 @@ function actionTargetIndex(uiState, rivalId, action) {
 }
 
 export function projectBattleFromUiState(uiState, playerId = uiState.turn || "player", options = {}) {
-  const rivalId = options.rivalId || otherUiPlayerId(playerId);
+  const rivalId = options.rivalId || otherUiPlayerId(uiState, playerId);
   const legal = getLegalActionsFromUiState(uiState, playerId);
   const battleLegal = getBattleLegalActionsFromUiState(uiState, playerId);
   const attackerIndex = Number.isInteger(options.attackerIndex) ? options.attackerIndex : -1;
@@ -1100,7 +1097,7 @@ function targetCardIdForSpell(uiState, playerId, rivalId, card, targetInfo) {
 }
 
 function findUiCard(uiState, cardId) {
-  for (const ownerId of ownerIds) {
+  for (const ownerId of seatIdsForState(uiState)) {
     const duelist = uiState[ownerId];
     if (!duelist) continue;
     for (const zoneName of ["deck", "hand", "grave", "field", "traps"]) {

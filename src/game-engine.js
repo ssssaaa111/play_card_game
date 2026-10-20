@@ -1,6 +1,7 @@
 import { MONSTER_ZONE_SIZE, SPELL_TRAP_ZONE_SIZE, TRIO_COMEBACK_LP_THRESHOLD, canEffectTargetCard } from "./rules.js";
 import { matchingElementCombos } from "./combos.js";
 import { fusionOptionForResult, fusionOptionsForCard } from "./fusion.js";
+import { ControllerKind, isAutomatedSeat, normalizeControllers, seatIdsForState } from "./duel-session.js";
 
 export const Phase = Object.freeze({
   setup: "setup",
@@ -36,6 +37,7 @@ export const ActionWindow = Object.freeze({
   response: "response",
   resolution: "resolution",
   autoEnd: "autoEnd",
+  automated: "ai",
   ai: "ai",
   gameOver: "gameOver"
 });
@@ -2423,9 +2425,9 @@ function actionWindowCompatibilityIssue(state, playerId, window) {
     }
     return "";
   }
-  if (window === ActionWindow.ai) {
-    if (playerId !== "ai") return "AI action window belongs to ai";
-    if (!belongsToCurrentPlayer()) return "AI action window belongs to the current turn player";
+  if (window === ActionWindow.automated) {
+    if (!isAutomatedSeat(state, playerId)) return "Automated action window belongs to an AI-controlled seat";
+    if (!belongsToCurrentPlayer()) return "Automated action window belongs to the current turn player";
     if (![Phase.draw, Phase.main, Phase.battle].includes(phase)) {
       return "AI action window requires draw, main, or battle phase";
     }
@@ -2484,6 +2486,20 @@ export function assertValidGameState(state) {
   }
   if (!state.players || typeof state.players !== "object") {
     throw new GameStateValidationError("GameState.players must exist");
+  }
+  const playerIds = Object.keys(state.players);
+  if (state.seatIds !== undefined && (
+    !Array.isArray(state.seatIds) ||
+    state.seatIds.length !== 2 ||
+    state.seatIds.some((id) => !playerIds.includes(id))
+  )) {
+    throw new GameStateValidationError("GameState.seatIds must identify both duel players");
+  }
+  if (state.controllers !== undefined && (
+    !state.controllers ||
+    playerIds.some((id) => !Object.values(ControllerKind).includes(state.controllers[id]))
+  )) {
+    throw new GameStateValidationError("Every duel player must have a valid controller");
   }
   if (!state.turn || !state.players[state.turn.playerId]) {
     throw new GameStateValidationError("Current turn player must exist");
@@ -4031,13 +4047,13 @@ function pendingAttackContextLossReason(state) {
   return "";
 }
 
-function battleActionWindowForPlayer(playerId) {
-  return playerId === "ai" ? ActionWindow.ai : ActionWindow.battle;
+function battleActionWindowForPlayer(state, playerId) {
+  return isAutomatedSeat(state, playerId) ? ActionWindow.automated : ActionWindow.battle;
 }
 
-function phaseActionWindowForPlayer(playerId, phase) {
-  if (playerId === "ai" && [Phase.draw, Phase.main, Phase.battle].includes(phase)) {
-    return ActionWindow.ai;
+function phaseActionWindowForPlayer(state, playerId, phase) {
+  if (isAutomatedSeat(state, playerId) && [Phase.draw, Phase.main, Phase.battle].includes(phase)) {
+    return ActionWindow.automated;
   }
   return {
     [Phase.draw]: ActionWindow.draw,
@@ -4048,7 +4064,7 @@ function phaseActionWindowForPlayer(playerId, phase) {
 
 function openPhaseActionWindow(state, emit, playerId, reason) {
   if (state.gameOver || state.turn.playerId !== playerId) return null;
-  const window = phaseActionWindowForPlayer(playerId, state.turn.phase);
+  const window = phaseActionWindowForPlayer(state, playerId, state.turn.phase);
   if (!window) return null;
   const openedAt = Number(state.nextEventId) || state.events.length + 1;
   return emit("ACTION_WINDOW_OPENED", {
@@ -4075,9 +4091,9 @@ function restoreActionWindowAfterResponse(state, emit, reason) {
   if (state.machine.pendingAttack) {
     window = ActionWindow.resolution;
   } else if (state.turn.phase === Phase.main) {
-    window = playerId === "ai" ? ActionWindow.ai : ActionWindow.main;
+    window = isAutomatedSeat(state, playerId) ? ActionWindow.automated : ActionWindow.main;
   } else if (state.turn.phase === Phase.battle) {
-    window = battleActionWindowForPlayer(playerId);
+    window = battleActionWindowForPlayer(state, playerId);
   }
   if (!window) return null;
 
@@ -4111,7 +4127,7 @@ function completeBattleFlow(state, emit, playerId, reason) {
       to: Timing.battleOpen
     });
   }
-  const window = battleActionWindowForPlayer(playerId);
+  const window = battleActionWindowForPlayer(state, playerId);
   const openedAt = Number(state.nextEventId) || state.events.length + 1;
   return emit("ACTION_WINDOW_OPENED", {
     playerId,
@@ -4680,6 +4696,8 @@ function normalizeState(state) {
     phase: state.turn.phase
   };
   state.abilities = state.abilities && typeof state.abilities === "object" ? state.abilities : {};
+  state.seatIds = seatIdsForState(state);
+  state.controllers = normalizeControllers(state.seatIds, state.controllers);
   for (const card of Object.values(state.cards || {})) {
     if (isTokenCard(card)) {
       card.token = true;
