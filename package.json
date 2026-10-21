@@ -8,6 +8,7 @@
   },
   "scripts": {
     "serve": "node scripts/dev-server.mjs",
+    "serve:online": "node scripts/duel-server.mjs",
     "dev": "npm run serve",
     "test": "node --test",
     "test:engine": "node --test tests/game-engine.test.mjs",
@@ -19,6 +20,11 @@
     "sim:finale": "node scripts/finale-sim.mjs",
     "audit:finale": "node scripts/finale-balance-audit.mjs",
     "test:smoke": "node --test tests/smoke.test.mjs",
+    "test:online": "node --test tests/duel-command.test.mjs tests/duel-view.test.mjs tests/duel-room.test.mjs",
+    "smoke:online": "node scripts/online-smoke.mjs",
     "smoke:browser": "node scripts/browser-smoke.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
   }
 }

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星魂决斗 · 真人对战</title>
+  <link rel="stylesheet" href="online-duel.css">
+</head>
+<body>
+  <header class="online-header">
+    <div>
+      <span class="eyebrow">ONLINE DUEL / AUTHORITY SERVER</span>
+      <h1>星魂决斗 · 真人对战</h1>
+    </div>
+    <div class="connection-pill" id="connectionStatus" data-state="connecting">连接中</div>
+    <a class="ghost-link" href="/">返回单人模式</a>
+  </header>
+
+  <main>
+    <section class="lobby-card" id="lobbyPanel">
+      <div class="section-copy">
+        <span class="step">01</span>
+        <div>
+          <h2>创建或加入房间</h2>
+          <p>两名玩家使用同一房间码。完整牌局与牌序只保存在服务端。</p>
+        </div>
+      </div>
+      <label>
+        <span>玩家名称</span>
+        <input id="playerName" maxlength="24" autocomplete="nickname" value="决斗者">
+      </label>
+      <div class="lobby-actions">
+        <button class="primary" id="createRoom" type="button">创建房间</button>
+        <div class="join-row">
+          <input id="roomCodeInput" maxlength="6" placeholder="房间码" autocomplete="off">
+          <button id="joinRoom" type="button">加入</button>
+        </div>
+      </div>
+      <p class="error-copy" id="lobbyError" role="alert"></p>
+    </section>
+
+    <section class="room-card" id="roomPanel" hidden>
+      <div class="room-heading">
+        <div>
+          <span class="eyebrow">PRIVATE ROOM</span>
+          <h2>房间 <button class="room-code" id="copyRoomCode" type="button" title="复制邀请链接">------</button></h2>
+        </div>
+        <button id="readyButton" class="primary" type="button">准备</button>
+      </div>
+      <div class="seat-grid" id="seatGrid"></div>
+      <p id="roomHint">等待第二名玩家加入。</p>
+    </section>
+
+    <section class="duel-shell" id="duelPanel" hidden>
+      <article class="duelist-panel rival" id="rivalPanel"></article>
+      <section class="zone-row" aria-label="对手魔陷区"><span>对手后场</span><div id="rivalTraps"></div></section>
+      <section class="zone-row monster-row" aria-label="对手怪兽区"><span>对手场地</span><div id="rivalField"></div></section>
+
+      <section class="duel-console">
+        <div>
+          <span class="eyebrow" id="turnLabel">DUEL START</span>
+          <h2 id="phaseLabel">主要阶段</h2>
+        </div>
+        <div class="revision">REV <span id="revisionLabel">0</span></div>
+        <div class="event-log" id="eventLog" aria-live="polite"></div>
+      </section>
+
+      <section class="zone-row monster-row" aria-label="我方怪兽区"><span>我方场地</span><div id="playerField"></div></section>
+      <section class="zone-row" aria-label="我方魔陷区"><span>我方后场</span><div id="playerTraps"></div></section>
+      <article class="duelist-panel player" id="playerPanel"></article>
+
+      <section class="hand-panel">
+        <div class="hand-heading"><strong>手牌</strong><span id="handCount"></span></div>
+        <div class="hand-row" id="playerHand"></div>
+      </section>
+      <section class="action-panel">
+        <div class="action-heading">
+          <strong>可执行操作</strong>
+          <span id="actionHint">等待你的回合</span>
+        </div>
+        <div class="action-list" id="actionList"></div>
+      </section>
+      <p class="error-copy" id="duelError" role="alert"></p>
+    </section>
+  </main>
+
+  <template id="slotTemplate"><div class="zone-slot"><span>EMPTY</span></div></template>
+  <script type="module" src="/src/online-duel-app.js"></script>
+</body>
+</html>

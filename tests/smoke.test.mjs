@@ -55,9 +55,13 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/combos.js");
   checkModuleSyntax("src/data.js");
   checkModuleSyntax("src/deck.js");
+  checkModuleSyntax("src/duel-command.js");
+  checkModuleSyntax("src/duel-view.js");
   checkModuleSyntax("src/engine-adapter.js");
   checkModuleSyntax("src/log-audit.js");
   checkModuleSyntax("src/music.js");
+  checkModuleSyntax("src/online-duel-app.js");
+  checkModuleSyntax("src/online-duel-client.js");
   checkModuleSyntax("src/pre-duel-preview.js");
   checkModuleSyntax("src/response-state.js");
   checkModuleSyntax("src/selection-state.js");
@@ -71,6 +75,19 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/traps.js");
   checkModuleSyntax("src/turn-state.js");
   checkModuleSyntax("src/view-model.js");
+});
+
+test("online duel page keeps its room, board, and action mounts wired", () => {
+  const html = readProjectFile("online.html");
+
+  assert.match(html, /<link rel="stylesheet" href="online-duel\.css"/);
+  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js"><\/script>/);
+  assert.match(html, /id="lobbyPanel"/);
+  assert.match(html, /id="roomPanel"[^>]*hidden/);
+  assert.match(html, /id="duelPanel"[^>]*hidden/);
+  assert.match(html, /id="playerHand"/);
+  assert.match(html, /id="actionList"/);
+  assert.match(html, /id="eventLog"/);
 });
 
 test("index keeps critical app mount points wired", () => {

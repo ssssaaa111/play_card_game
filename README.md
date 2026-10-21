@@ -22,6 +22,25 @@ http://localhost:5177/
 
 本项目固定使用 `5177` 作为本地预览端口；如果端口被占用，先关闭旧服务或直接复用已有页面。
 
+### 真人对战
+
+首次运行先安装依赖：
+
+```powershell
+npm install
+```
+
+分别启动静态页面和权威对局服务：
+
+```powershell
+npm run serve
+npm run serve:online
+```
+
+两名玩家打开 `http://localhost:5177/online.html`，一人创建房间并把六位房间码发给另一人。双方准备后自动开局。对局服务默认监听 `ws://127.0.0.1:5178/duel`，部署时可通过页面查询参数 `duelServer=wss://example.com/duel` 指定公网地址。
+
+当前联机 MVP 覆盖房间、准备、召唤、魔法、表示切换、战斗、回合交接、隐藏手牌与牌序、版本冲突保护和断线重连。陷阱响应窗口暂时自动放弃，后续阶段会把双方陷阱选择和完整连锁接到服务端。
+
 ## 测试
 
 ```powershell
@@ -29,7 +48,7 @@ cd card-duel
 npm test
 ```
 
-当前基准测试使用 Node 内置 `node:test`，不需要安装额外依赖。
+当前基准测试使用 Node 内置 `node:test`；真人对战服务使用轻量 `ws` 运行时依赖。
 
 - `tests/actions.test.mjs`：覆盖玩家行动窗口判断，例如可攻击、可召唤、可盖陷阱、可切换表示和目标选择。
 - `tests/battle.test.mjs`：覆盖攻击结算结果、直接生命值伤害、守备破防、反击和战斗损耗计算。
@@ -55,6 +74,9 @@ npm test
 - `tests/timeline.test.mjs`：覆盖结算时间线的事件分类和长度裁剪。
 - `tests/traps.test.mjs`：覆盖陷阱触发事件匹配和玩家可见的触发时机文案。
 - `tests/turn-state.test.mjs`：覆盖回合状态机判断、玩家行动窗口决策、暂停恢复和阶段切换 patch。
+- `tests/duel-command.test.mjs`：覆盖联机消息格式、命令白名单与服务端座位绑定。
+- `tests/duel-room.test.mjs`：覆盖双人房间、准备、命令幂等、版本冲突、回合交接和断线重连。
+- `tests/duel-view.test.mjs`：覆盖按玩家裁剪的隐藏手牌、盖牌和牌序视图。
 - `tests/view-model.test.mjs`：覆盖回合状态、中心提示和手牌行动标签文案。
 - `tests/smoke.test.mjs`：检查模块语法、页面关键挂点和已知兼容性问题。
 
@@ -92,6 +114,12 @@ npm test
 - `src/data.js`：纯数据配置，包含卡牌库、怪兽素材映射、角色、卡组预设和规则测试场景。
 - `src/deck.js`：卡组和决斗者构造模块，包含卡牌克隆、预设卡组构建和规则测试场景卡组扣除。
 - `src/duel-session.js`：决斗席位与控制器模型，区分单人、本地双人、在线双人，以及本地、远端和 AI 控制来源。
+- `src/duel-command.js`：联机消息与玩家命令协议，负责格式校验、白名单和座位身份绑定。
+- `src/duel-view.js`：服务端玩家视图投影，确保对手手牌、盖牌与双方牌序不会下发。
+- `src/online-duel-client.js`：浏览器 WebSocket 客户端，负责请求应答、状态同步和重连会话。
+- `server/duel-room.js`：权威双人房间，负责座位、准备、命令版本、规则引擎调度和重连。
+- `scripts/duel-server.mjs`：WebSocket 对局服务入口。
+- `online.html`：真人对战房间与基础战场入口。
 - `src/custom-decks.js`：自定义卡组数据层，负责本地持久化、40-60 张与同名上限校验，以及预设/自定义解析。
 - `src/deck-editor.js`：卡组编辑器视图模型，负责按类型分组卡牌库、卡组构成和校验摘要。
 - `src/deck-editor-renderer.js`：卡组编辑器 DOM 渲染，负责卡组列表、草稿构成和卡牌库交互。
