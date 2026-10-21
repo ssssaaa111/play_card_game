@@ -24,6 +24,8 @@ function publicCard(card) {
     ownerId: card.ownerId,
     name: card.name || card.templateId || "未知卡牌",
     type: card.type || "unknown",
+    icon: card.icon || "",
+    stars: Math.max(0, Number(card.stars) || 0),
     rarity: card.rarity || "",
     archetype: card.archetype || "",
     element: card.element || "",

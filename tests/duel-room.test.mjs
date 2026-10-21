@@ -37,7 +37,10 @@ test("room dispatches legal commands once and rejects stale revisions", () => {
   });
 
   assert.equal(receipt.duplicate, false);
-  assert.equal(room.viewFor("p1").players.p1.monsterZone.filter(Boolean).length, 1);
+  const summonedMonster = room.viewFor("p1").players.p1.monsterZone.find(Boolean);
+  assert.ok(summonedMonster);
+  assert.equal(typeof summonedMonster.icon, "string");
+  assert.equal(typeof summonedMonster.stars, "number");
   const duplicate = room.submit("connection-1", {
     revision: view.revision,
     commandId: "command-summon-1",

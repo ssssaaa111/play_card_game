@@ -80,6 +80,7 @@ test("main modules parse as browser ES modules", () => {
 test("online duel page keeps its room, board, and action mounts wired", () => {
   const html = readProjectFile("online.html");
   const css = readProjectFile("online-duel.css");
+  const app = readProjectFile("src/online-duel-app.js");
 
   assert.match(html, /<link rel="stylesheet" href="online-duel\.css"/);
   assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js"><\/script>/);
@@ -90,6 +91,11 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="actionList"/);
   assert.match(html, /id="eventLog"/);
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
+  assert.match(css, /\.online-card\.actionable/);
+  assert.match(css, /\.duelist-avatar/);
+  assert.match(app, /import \{ cardArtById \} from "\.\/card-art\.js"/);
+  assert.match(app, /import \{ monsterAssets \} from "\.\/data\.js"/);
+  assert.match(app, /cardElement\.addEventListener\("click", choose\)/);
 });
 
 test("index keeps critical app mount points wired", () => {
