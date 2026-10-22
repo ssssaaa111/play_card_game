@@ -1,5 +1,25 @@
 import { makeBattlePreview, makeAttackIntentPreview } from "./rules.js";
+import { createTrapResponse, selectTrapResponse } from "./response-state.js";
 import { describeBattleOutcome } from "./battle.js";
+
+export function onlineTrapResponseChoice(view, previous = null) {
+  const response = view?.attackResponse;
+  if (!response || !response.candidates.length || view.gameOver) return null;
+  const state = onlineBoardState(view);
+  const pending = view.machine.pendingAttack;
+  const choice = {
+    ...createTrapResponse({ eventName: response.eventName, candidates: response.candidates, details: {
+      owner: state.player, rival: state.ai, context: {
+        attackerIndex: state.ai.field.findIndex((card) => card?.uid === pending.attackerCardId),
+        targetIndex: state.player.field.findIndex((card) => card?.uid === pending.targetCardId)
+      }
+    } }),
+    declarationEventId: response.declarationEventId,
+    roomCode: view.roomCode
+  };
+  return previous?.roomCode === choice.roomCode && previous?.declarationEventId === choice.declarationEventId
+    ? selectTrapResponse(choice, previous.selectedIndex) || choice : choice;
+}
 
 // Translate the server's public snapshot into the cards used by the solo UI.
 // Display IDs are templates; commands always retain server instance IDs.

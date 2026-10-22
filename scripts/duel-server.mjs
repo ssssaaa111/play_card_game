@@ -11,15 +11,24 @@ import {
   normalizeRoomCode,
   parseClientMessage
 } from "../src/duel-command.js";
-import { DuelRoomError } from "../server/duel-room.js";
+import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
 import { DuelRoomStore } from "../server/duel-room-store.js";
+import { createOnlineDuelState } from "../server/online-duel-state.js";
 
 const hostArgument = process.argv.find((argument) => argument.startsWith("--host="));
 const portArgument = process.argv.find((argument) => argument.startsWith("--port="));
 const host = hostArgument?.slice("--host=".length) || process.env.DUEL_HOST || "127.0.0.1";
 const requestedPort = Number.parseInt(portArgument?.slice("--port=".length) || process.env.DUEL_PORT || "5178", 10);
 const port = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort <= 65535 ? requestedPort : 5178;
-const roomStore = new DuelRoomStore();
+const responseDemo = process.argv.includes("--scenario=trap-response");
+if (responseDemo && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const roomStore = new DuelRoomStore(responseDemo ? { createRoom: (options) => new DuelRoom({
+  ...options,
+  createState: (config) => createOnlineDuelState({ ...config, openingHands: {
+    p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"],
+    p2: ["mirror-snare", "weakening-web", "storm-shift", "guard-sigil", "iron-guardian"]
+  } })
+}) } : {});
 const connections = new Map();
 
 function send(socket, message) {

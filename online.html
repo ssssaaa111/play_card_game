@@ -79,6 +79,16 @@
     </section>
   </div>
   <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><h2 id="inspectorTitle">卡牌详情</h2><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
+  <dialog id="onlineResponse" class="online-response" aria-labelledby="responseTitle" aria-describedby="responseText">
+    <section class="online-response-panel">
+      <header><span>ATTACK RESPONSE</span><h2 id="responseTitle">对手发起攻击 · 你的响应</h2><p>本次攻击可发动一张陷阱，也可以放弃响应。</p></header>
+      <p id="responseText"></p>
+      <div id="responseChoices" class="chain-choices"></div>
+      <p id="responseStatus" role="status" aria-live="polite"></p>
+      <p id="responseError" class="error-copy" role="alert"></p>
+      <footer><button id="responseActivate" class="btn primary" type="button">发动陷阱</button><button id="responsePass" class="btn" type="button">放弃响应，继续结算</button></footer>
+    </section>
+  </dialog>
   <script type="module" src="/src/online-duel-app.js"></script>
 </body>
 </html>

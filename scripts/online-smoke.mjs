@@ -6,6 +6,7 @@ import { WebSocket } from "ws";
 import { DuelClientMessage, DuelServerMessage } from "../src/duel-command.js";
 
 const serverUrl = process.env.DUEL_SERVER_URL || "ws://127.0.0.1:5178/duel";
+const responseScenario = process.argv.includes("--scenario=trap-response");
 
 class SmokeClient {
   constructor(name) {
@@ -97,18 +98,15 @@ try {
   assert.ok(secondStart.players.p1.hand.every((card) => card.hidden));
 
   const summon = firstStart.legalActions.actions.summon[0];
-  assert.ok(summon, "first player should have a summon action");
-  await first.request(DuelClientMessage.command, {
-    revision: firstStart.revision,
-    commandId: "smoke-summon-1",
-    action: summon
-  });
-  const secondAfterSummon = await second.waitForView((view) =>
-    view.revision > secondStart.revision && view.players.p1.monsterZone.some(Boolean)
-  );
-  assert.ok(secondAfterSummon.players.p1.monsterZone.find(Boolean)?.name);
-
-  const firstAfterSummon = await first.waitForView((view) => view.revision === secondAfterSummon.revision);
+  if (responseScenario) assert.ok(summon, "the fixed scenario must provide a summon action");
+  let firstAfterSummon = firstStart;
+  // Random legal openings need not contain a summonable monster.
+  if (summon) {
+    await first.request(DuelClientMessage.command, { revision: firstStart.revision, commandId: "smoke-summon-1", action: summon });
+    const secondAfterSummon = await second.waitForView((view) => view.revision > secondStart.revision && view.players.p1.monsterZone.some(Boolean));
+    assert.ok(secondAfterSummon.players.p1.monsterZone.find(Boolean)?.name);
+    firstAfterSummon = await first.waitForView((view) => view.revision === secondAfterSummon.revision);
+  }
   await first.request(DuelClientMessage.command, {
     revision: firstAfterSummon.revision,
     commandId: "smoke-end-1",
@@ -116,6 +114,27 @@ try {
   });
   const secondTurn = await second.waitForView((view) => view.turn.playerId === "p2" && view.turn.phase === "main");
   assert.equal(secondTurn.players.p2.handCount, 6);
+
+  let commandSequence = 0;
+  const command = async (client, action) => {
+    const receipt = await client.request(DuelClientMessage.command, { revision: client.view.revision, commandId: `smoke-response:${commandSequence++}`, action });
+    await Promise.all([first.waitForView((view) => view.revision >= receipt.revision), client.waitForView((view) => view.revision >= receipt.revision)]);
+    return receipt;
+  };
+  let pendingAttack = null;
+  if (responseScenario) {
+    const mirror = secondTurn.players.p2.hand.find((card) => card.templateId === "mirror-snare");
+    assert.ok(mirror, "fixed scenario must include mirror-snare");
+    await command(second, { type: "SET_TRAP", cardId: mirror.id, index: 2 });
+    assert.equal(first.view.players.p2.spellTrapZone[2].hidden, true);
+    await command(second, { type: "END_TURN" });
+    await command(first, { type: "CHANGE_PHASE", phase: "battle" });
+    await command(first, first.view.legalActions.actions.declareAttack[0]);
+    await second.waitForView((view) => Boolean(view.attackResponse));
+    pendingAttack = second.view.machine.pendingAttack;
+    assert.equal(first.view.players.p2.lp, 4000, "declaration alone must not deal damage");
+    assert.equal(first.view.attackResponse, null, "attacker must not receive hidden candidates");
+  }
 
   second.close();
   await first.waitForView((view) => view.seats.find((seat) => seat.seatId === "p2")?.connected === false);
@@ -128,7 +147,18 @@ try {
   assert.equal(resumeResult.resumed, true);
   await resumed.waitForView((view) => view.viewerSeatId === "p2" && view.status === "playing");
 
-  console.log(`online-duel-smoke passed (${created.roomCode})`);
+  if (responseScenario) {
+    assert.equal(resumed.view.attackResponse.declarationEventId, pendingAttack.declarationEventId);
+    const cardId = resumed.view.attackResponse.candidates[0].cardId;
+    await command(resumed, { type: "RESPOND_TRAP", cardId, declarationEventId: pendingAttack.declarationEventId });
+    assert.equal(first.view.machine.pendingAttack, null);
+    assert.equal(first.view.players.p2.lp, 4000);
+    assert.ok(!first.view.players.p1.monsterZone.some(Boolean));
+    assert.equal(first.view.players.p2.grave.at(-1).templateId, "mirror-snare");
+    assert.equal(resumed.view.machine.responseWindow, null);
+  }
+
+  console.log(`online-duel-smoke passed (${created.roomCode}${responseScenario ? ", trap-response + resume" : ""})`);
 } finally {
   first.close();
   second.close();

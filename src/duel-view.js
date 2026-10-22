@@ -1,5 +1,6 @@
 import { getLegalActions } from "./game-engine.js";
 import { otherSeatId, seatIdsForState } from "./duel-session.js";
+import { onlineAttackResponse } from "./online-response.js";
 
 const PUBLIC_EVENT_FIELDS = new Set([
   "id", "type", "playerId", "rivalId", "winnerId", "loserId", "loserIds",
@@ -39,7 +40,7 @@ function publicCard(card) {
     battleWear: Math.max(0, Number(card.battleWear) || 0),
     effect: card.effect || "",
     trigger: card.trigger || "",
-    text: card.text || ""
+    text: card.type === "trap" ? (card.text || "").replace("盖放后自动触发：", "盖放后可发动：") : card.text || ""
   };
 }
 
@@ -207,6 +208,7 @@ export function buildDuelView(state, viewerSeatId, {
       timing: state.machine?.timing || state.turn.phase
     },
     machine: publicMachineState(state.machine),
+    attackResponse: canRequestLegalActions ? onlineAttackResponse(state, viewerSeatId) : null,
     players: Object.fromEntries(seatIds.map((seatId) => [
       seatId,
       projectedPlayer(state, seatId, viewerSeatId)

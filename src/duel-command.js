@@ -24,6 +24,8 @@ export const OnlineCommandType = Object.freeze({
   changeMonsterMode: "CHANGE_MONSTER_MODE",
   changePhase: "CHANGE_PHASE",
   declareAttack: "DECLARE_ATTACK",
+  respondTrap: "RESPOND_TRAP",
+  passAttackResponse: "PASS_ATTACK_RESPONSE",
   skipRemainingAttacks: "SKIP_REMAINING_ATTACKS",
   endTurn: "END_TURN"
 });
@@ -199,6 +201,15 @@ export function sanitizeOnlineAction(action, { seatId, rivalId } = {}) {
     case OnlineCommandType.skipRemainingAttacks:
       sanitized = { type: action.type, playerId };
       break;
+    case OnlineCommandType.respondTrap:
+    case OnlineCommandType.passAttackResponse: {
+      if (!Number.isSafeInteger(action.declarationEventId) || action.declarationEventId <= 0) {
+        throw new DuelProtocolError("declarationEventId must be a positive integer");
+      }
+      sanitized = { type: action.type, playerId, declarationEventId: action.declarationEventId };
+      if (action.type === OnlineCommandType.respondTrap) sanitized.cardId = cardId();
+      break;
+    }
     case OnlineCommandType.endTurn:
       sanitized = { type: action.type, playerId, reason: "online-player", endedBy: "online-player" };
       break;

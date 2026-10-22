@@ -2,9 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
+import { createOnlineDuelState } from "../server/online-duel-state.js";
 
 function startedRoom() {
-  const room = new DuelRoom({ code: "ABC234" });
+  const room = new DuelRoom({ code: "ABC234", createState: (options) => createOnlineDuelState({ ...options, openingHands: {
+    p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"]
+  } }) });
   const p1 = room.join({ name: "星野", connectionId: "connection-1" });
   const p2 = room.join({ name: "月见", connectionId: "connection-2" });
   room.setReady("connection-1", true);
@@ -74,7 +77,7 @@ test("ending a turn automatically starts and draws for the opponent", () => {
   assert.equal(after.players.p2.handCount, handBefore + 1);
 });
 
-test("declaring an attack resolves the MVP response window on the server", () => {
+test("declaring an attack auto-resolves when no legal trap is set", () => {
   const { room } = startedRoom();
   const opening = room.viewFor("p1");
   const summon = opening.legalActions.actions.summon[0];

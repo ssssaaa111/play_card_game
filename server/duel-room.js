@@ -4,6 +4,7 @@ import { GameEngine, GameRuleError } from "../src/game-engine.js";
 import { DuelProtocolError, normalizeCommandEnvelope, normalizeDisplayName, sanitizeOnlineAction } from "../src/duel-command.js";
 import { buildDuelView } from "../src/duel-view.js";
 import { createOnlineDuelState } from "./online-duel-state.js";
+import { onlineAttackResponse, onlineTrapAction, activateOnlineTrap, settleOnlineAttack } from "../src/online-response.js";
 
 const ROOM_SEAT_IDS = Object.freeze(["p1", "p2"]);
 const MAX_REMEMBERED_COMMANDS = 100;
@@ -187,28 +188,39 @@ export class DuelRoom {
   }
 
   #dispatchAction(action) {
-    const events = [...this.engine.dispatch(action)];
-    if (action.type === "DECLARE_ATTACK" && !this.engine.getState().gameOver) {
-      const pending = this.engine.getState().machine.pendingAttack;
-      events.push(...this.engine.dispatch({
-        type: "CLOSE_RESPONSE_WINDOW",
-        playerId: pending.rivalId,
-        reason: "online-mvp-auto-pass"
-      }));
-      events.push(...this.engine.dispatch({
-        type: "RESOLVE_BATTLE",
-        playerId: pending.playerId,
-        rivalId: pending.rivalId,
-        attackerCardId: pending.attackerCardId,
-        ...(pending.targetCardId ? { targetCardId: pending.targetCardId } : {}),
-        declarationEventId: pending.declarationEventId
-      }));
+    // A network command may dispatch several engine actions. Commit all or none.
+    const engine = new GameEngine(this.engine.getState());
+    const events = [];
+    if (["RESPOND_TRAP", "PASS_ATTACK_RESPONSE"].includes(action.type)) {
+      const state = engine.getState();
+      const response = onlineAttackResponse(state, action.playerId);
+      if (!response || response.declarationEventId !== action.declarationEventId) throw new GameRuleError("Attack response is no longer available");
+      let canceledBy = null;
+      if (action.type === "RESPOND_TRAP") {
+        if (!response.candidates.some((candidate) => candidate.cardId === action.cardId)) throw new GameRuleError("Trap is not a legal response");
+        const trapAction = onlineTrapAction(state, action.playerId, action.cardId);
+        canceledBy = state.cards[action.cardId].trigger;
+        events.push(...activateOnlineTrap(engine, trapAction));
+      } else {
+        events.push(...engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: action.playerId, reason: "online-player-pass" }));
+      }
+      events.push(...settleOnlineAttack(engine, { canceledBy }));
+    } else {
+      events.push(...engine.dispatch(action));
     }
-    if (action.type === "END_TURN" && !this.engine.getState().gameOver) {
+    if (action.type === "DECLARE_ATTACK" && !engine.getState().gameOver) {
+      const pending = engine.getState().machine.pendingAttack;
+      if (!onlineAttackResponse(engine.getState(), pending.rivalId)?.candidates.length) {
+        events.push(...engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: pending.rivalId, reason: "online-no-response" }));
+        events.push(...settleOnlineAttack(engine));
+      }
+    }
+    if (action.type === "END_TURN" && !engine.getState().gameOver) {
       const nextPlayerId = action.rivalId || ROOM_SEAT_IDS.find((seatId) => seatId !== action.playerId);
-      events.push(...this.engine.dispatch({ type: "START_TURN", playerId: nextPlayerId }));
-      events.push(...this.engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: nextPlayerId }));
+      events.push(...engine.dispatch({ type: "START_TURN", playerId: nextPlayerId }));
+      events.push(...engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: nextPlayerId }));
     }
+    this.engine = engine;
     return events;
   }
 

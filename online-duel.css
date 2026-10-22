@@ -126,6 +126,19 @@ body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-targe
   .online-inspector-copy { width: 100%; }
   .online-inspector-effect { min-height: 80px; }
 }
+.online-response { padding: 0; width: min(720px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; color: var(--ink); border: 1px solid rgba(195,149,255,.7); border-radius: 16px; background: #171322; box-shadow: 0 22px 90px #000b; }
+.online-response::backdrop { background: #080513b8; backdrop-filter: blur(3px); }
+.online-response { margin: auto; }
+.online-response .btn:disabled { opacity: .45; cursor: not-allowed; }
+.online-response-panel { padding: clamp(14px, 3vw, 26px); }
+.online-response header > span { color: #d0b5ff; font-size: 10px; letter-spacing: .16em; }
+.online-response h2 { margin: 7px 0; font-size: clamp(18px, 3vw, 24px); }
+.online-response p { line-height: 1.6; font-size: 13px; }
+.online-response .chain-choices { display: grid; gap: 8px; }
+.online-response .trap-choice-card { width: 100%; min-width: 0; }
+.online-response footer { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.online-response footer .btn { flex: 1 1 210px; white-space: normal; min-height: 44px; }
+.online-response #responseStatus { color: #d0b5ff; }
 @media (prefers-reduced-motion: reduce) {
   .online-inspector-panel, .online-inspector-backdrop, .card.online-ready-located, #app .duel-table #duelHint[data-kind="receipt"] { animation: none; }
 }

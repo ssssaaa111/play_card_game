@@ -4,6 +4,10 @@ import { renderMonsterZones, renderSupportZones } from "./field-renderer.js";
 import { buildDuelControlsView } from "./control-renderer.js";
 import { renderBattlePreviewElement } from "./battle-preview-renderer.js";
 import { createOnlineActionRunner } from "./online-action-runner.js";
+import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js";
+import { selectTrapResponse } from "./response-state.js";
+import { trapActivationText } from "./traps.js";
+import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
@@ -17,13 +21,15 @@ const elements = Object.fromEntries([
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
-  "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview"
+  "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
+  "onlineResponse", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
 const client = new OnlineDuelClient();
 let actionPending = false;
 let selection = null;
+let trapChoice = null;
 let handOrder = [];
 let locatedReadyCardId = null;
 let inspectorReturnFocus = null;
@@ -41,7 +47,7 @@ const EVENT_LABELS = {
   LP_HEALED: "生命值恢复", ATTACK_DECLARED: "攻击宣言", BATTLE_RESOLVED: "战斗结算", CARD_DESTROYED: "卡牌破坏",
   TURN_STARTED: "新回合开始", TURN_ENDED: "回合结束", CARDS_DRAWN: "抽取卡牌", TURN_DRAW_RESOLVED: "回合抽卡",
   MONSTER_MODE_CHANGED: "表示形式切换", PHASE_CHANGED: "阶段推进", GAME_OVER_DECLARED: "决斗结束", EFFECT_SKIPPED: "效果条件不足",
-  CONTINUOUS_EFFECT_REGISTERED: "持续效果生效", TRAP_SET: "陷阱盖放"
+  CONTINUOUS_EFFECT_REGISTERED: "持续效果生效", TRAP_SET: "陷阱盖放", ATTACK_CANCELED: "攻击被取消", ATTACK_TARGET_REDIRECTED: "攻击目标改变"
 };
 
 function escapeHtml(value) {
@@ -53,6 +59,7 @@ function setConnection(state, text) {
 }
 function setError(message = "") {
   (client.view?.status === "playing" ? elements.duelError : elements.lobbyError).textContent = message;
+  elements.responseError.textContent = message;
 }
 function saveSession() {
   if (client.session) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(client.session));
@@ -150,6 +157,7 @@ function showCards(cards, title = "卡牌详情") {
 function chooseCard(id) {
   if (actionPending) return;
   const view = client.view;
+  if (view.machine?.responseWindow) return;
   const next = chooseOnlineCard(view, selection, id);
   if (next === selection) return;
   clearActionReceipt();
@@ -236,6 +244,7 @@ function renderDuelist(root, view, seatId, rival) {
 
 function renderBoard(view, model) {
   const state = onlineBoardState(view, selection);
+  state.pendingTrapChoice = trapChoice;
   for (const owner of ["ai", "player"]) {
     const duelist = state[owner];
     const targeting = model?.stage === "target";
@@ -274,7 +283,7 @@ function renderBoard(view, model) {
     slot?.classList.add("online-placement-selected");
     slot?.setAttribute("aria-pressed", "true");
   }
-  const canAct = !actionPending && !view.gameOver && state.turn === "player";
+  const canAct = !actionPending && !view.gameOver && !view.machine.responseWindow && state.turn === "player";
   const hand = reconcileHandOrder(state.player.hand, handOrder);
   handOrder = hand.map((card) => card.uid);
   renderHandCards({
@@ -315,7 +324,7 @@ function locateNextReadyHandCard() {
 
 function renderCommands(view, model) {
   const ownTurn = view.turn.playerId === view.viewerSeatId;
-  const canAct = ownTurn && !actionPending && !view.gameOver;
+  const canAct = ownTurn && !actionPending && !view.gameOver && !view.machine.responseWindow;
   const inHand = view.players[view.viewerSeatId].hand.some((card) => card.id === selection?.cardId);
   const attacks = model?.actions.filter((action) => action.type === "DECLARE_ATTACK") || [];
   const attackIntent = onlineAttackIntent(view, model);
@@ -402,6 +411,64 @@ function renderCommands(view, model) {
   }
 }
 
+function responseRendererOptions(view) {
+  return { choice: trapChoice, traps: view.players[view.viewerSeatId].spellTrapZone.map(onlineDisplayCard), activationText: trapActivationText };
+}
+
+function selectResponse(index) {
+  if (actionPending) return;
+  trapChoice = selectTrapResponse(trapChoice, index) || trapChoice;
+  // Keep the clicked button mounted so a second click can become a double-click.
+  const panel = buildTrapResponseView(responseRendererOptions(client.view));
+  elements.responseText.textContent = panel.detailsText;
+  elements.responseStatus.textContent = panel.statusText;
+  elements.responseActivate.textContent = panel.actionText;
+  elements.responseActivate.disabled = panel.actionDisabled;
+  for (const button of elements.responseChoices.children) {
+    const selected = Number(button.dataset.trapChoiceIndex) === trapChoice.selectedIndex;
+    button.classList.toggle("selected", selected);
+    button.dataset.choiceState = selected ? "selected" : "ready";
+    button.setAttribute("aria-pressed", String(selected));
+    const state = button.querySelector(".trap-choice-state");
+    state.textContent = selected ? "已选择" : "可发动";
+    state.className = `trap-choice-state ${selected ? "selected" : "ready"}`;
+    button.setAttribute("aria-label", `${button.querySelector(".trap-choice-title strong").textContent}，${state.textContent}。${button.querySelector(".trap-choice-effect").textContent}`);
+  }
+}
+
+function respondToAttack(activate, index = trapChoice?.selectedIndex) {
+  const response = client.view?.attackResponse;
+  if (!response || actionPending) return;
+  const candidate = response.candidates.find((entry) => entry.index === index);
+  if (activate && !candidate) return;
+  return sendAction({ type: activate ? "RESPOND_TRAP" : "PASS_ATTACK_RESPONSE", declarationEventId: response.declarationEventId, ...(activate ? { cardId: candidate.cardId } : {}) });
+}
+
+function renderResponse(view) {
+  if (trapChoice) {
+    renderTrapResponsePanel({ document, ...responseRendererOptions(view), elements: {
+      chainText: elements.responseText, chainStatus: elements.responseStatus, chainYes: elements.responseActivate, chainChoices: elements.responseChoices
+    }, onSelect: selectResponse, onActivate: (index) => respondToAttack(true, index) });
+    elements.responseActivate.disabled ||= actionPending;
+    elements.responsePass.disabled = actionPending;
+    elements.responseChoices.querySelectorAll("button").forEach((button) => { button.disabled = actionPending; });
+    if (!elements.onlineResponse.open) {
+      closeInspector();
+      elements.onlineResponse.showModal();
+      elements.responsePass.focus({ preventScroll: true });
+    }
+  } else if (elements.onlineResponse.open) elements.onlineResponse.close();
+  if (!view.machine.responseWindow) return;
+  const ownResponse = view.machine.responseWindow.playerId === view.viewerSeatId;
+  const text = ownResponse ? "对手发起攻击，请选择陷阱或放弃响应。" : "等待对手选择是否发动陷阱，攻击尚未结算。";
+  document.body.dataset.duelFocus = ownResponse ? "response" : "idle";
+  elements.commandTitle.textContent = ownResponse ? "轮到你响应攻击" : "等待对手响应";
+  elements.commandHint.textContent = text;
+  elements.commandSignal.textContent = "响应中";
+  elements.duelHint.textContent = text;
+  elements.duelHint.dataset.kind = "status";
+}
+
 function renderRoom(view) {
   const playing = view.status !== "waiting";
   document.body.dataset.onlineStatus = playing ? "playing" : "waiting";
@@ -439,6 +506,7 @@ function render(view) {
   elements.duelPanel.hidden = view.status === "waiting";
   elements.handPanel.hidden = view.status === "waiting";
   if (view.status === "waiting") return;
+  if (view.machine.responseWindow) selection = null;
   const model = onlineSelectionModel(view, selection);
   if (!model) selection = null;
   const ownTurn = view.turn.playerId === view.viewerSeatId;
@@ -461,8 +529,10 @@ function render(view) {
   document.querySelectorAll("[data-phase-step]").forEach((step) => step.classList.toggle("is-current", step.dataset.phaseStep === view.turn.phase));
   renderDuelist(elements.aiPanel, view, view.opponentSeatId, true);
   renderDuelist(elements.playerPanel, view, view.viewerSeatId, false);
+  trapChoice = onlineTrapResponseChoice(view, trapChoice);
   renderBoard(view, model);
   renderCommands(view, model);
+  renderResponse(view);
   renderEvents(view);
 }
 
@@ -483,6 +553,9 @@ elements.copyRoomCode.addEventListener("click", async () => {
   catch { elements.copyRoomCode.title = `房间码 ${client.view.roomCode}，可手动复制`; }
 });
 elements.choiceConfirmBtn.addEventListener("click", () => sendAction(onlineSelectionModel(client.view, selection)?.action));
+elements.responseActivate.addEventListener("click", () => respondToAttack(true));
+elements.responsePass.addEventListener("click", () => respondToAttack(false));
+elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());
 for (const id of ["fieldCancelBtn", "choiceCancelBtn"]) elements[id].addEventListener("click", cancelSelection);
 elements.fieldAttackBtn.addEventListener("click", prepareSelectedAttack);
 elements.fieldModeBtn.addEventListener("click", () => sendAction(onlineCardActions(client.view, selection?.cardId).find((action) => action.type === "CHANGE_MONSTER_MODE")));
