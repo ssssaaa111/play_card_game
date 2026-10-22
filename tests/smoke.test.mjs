@@ -88,6 +88,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="roomPanel"[^>]*hidden/);
   assert.match(html, /id="duelPanel"[^>]*hidden/);
   assert.match(html, /id="hand"/);
+  assert.match(html, /id="handReadyJump"[^>]*disabled/);
   assert.match(html, /id="choiceActions"/);
   assert.match(html, /id="eventLog"/);
   assert.match(html, /id="viewerIdentity"[^>]*hidden/);
@@ -112,6 +113,10 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /async function prepareSelectedAttack\(\)/);
   assert.match(app, /fieldAttackBtn\.addEventListener\("click", prepareSelectedAttack\)/);
   assert.match(app, /进入战斗阶段并发起攻击/);
+  assert.match(app, /function locateNextReadyHandCard\(\)/);
+  assert.match(app, /handReadyJump\.addEventListener\("click", locateNextReadyHandCard\)/);
+  assert.match(app, /battleButton\.dataset\.currentPhase/);
+  assert.match(app, /handPanel\.dataset\.commandActive/);
 });
 
 test("index keeps critical app mount points wired", () => {

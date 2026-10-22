@@ -11,7 +11,7 @@ const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
   "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "duelPanel", "aiPanel", "playerPanel",
   "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "eventLog", "logToggle",
-  "handPanel", "hand", "handCount", "handReadyCount", "handGuide", "handSortType", "duelHint", "duelError", "versusStage", "versusPhase",
+  "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "duelHint", "duelError", "versusStage", "versusPhase",
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
@@ -23,6 +23,7 @@ const client = new OnlineDuelClient();
 let actionPending = false;
 let selection = null;
 let handOrder = [];
+let locatedReadyCardId = null;
 let inspectorReturnFocus = null;
 const assetForCard = (card) => monsterAssets[card.id] || "";
 const EVENT_LABELS = {
@@ -268,8 +269,28 @@ function renderBoard(view, model) {
     },
     onCardClick: (card) => chooseCard(card.uid), onCardDetail: (card) => showCards([onlineCard(view, card.uid)], card.name)
   });
+  const readyCards = canAct ? state.player.hand.filter((card) => onlineCardActions(view, card.uid).length) : [];
+  if (!readyCards.some((card) => card.uid === locatedReadyCardId)) locatedReadyCardId = null;
+  elements.handPanel.dataset.readyCount = String(readyCards.length);
+  elements.handPanel.dataset.hasSelection = String(Boolean(selection));
+  elements.handPanel.dataset.attention = model?.stage || "none";
   elements.handCount.textContent = `${state.player.handCount} 张`;
-  elements.handReadyCount.textContent = `${state.player.hand.filter((card) => onlineCardActions(view, card.uid).length).length} 可操作`;
+  elements.handReadyCount.textContent = `${readyCards.length} 可操作`;
+  elements.handReadyJump.disabled = readyCards.length === 0;
+  elements.handReadyJump.title = readyCards.length ? "定位下一张可操作手牌" : "当前没有可操作手牌";
+  elements.handReadyJump.setAttribute("aria-label", elements.handReadyJump.title);
+}
+
+function locateNextReadyHandCard() {
+  const cards = [...elements.hand.querySelectorAll(".card.action-ready:not(.action-blocked)")];
+  if (!cards.length) return;
+  const current = cards.findIndex((card) => card.dataset.cardUid === locatedReadyCardId);
+  const card = cards[(current + 1) % cards.length];
+  locatedReadyCardId = card.dataset.cardUid;
+  card.focus({ preventScroll: true });
+  card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  card.classList.remove("online-ready-located");
+  requestAnimationFrame(() => card.classList.add("online-ready-located"));
 }
 
 function renderCommands(view, model) {
@@ -323,13 +344,18 @@ function renderCommands(view, model) {
   elements.choiceActions.dataset.selectionMode = interaction.choice.selectionMode;
   elements.choiceActions.dataset.targetStep = interaction.choice.targetStep;
   elements.commandIdle.hidden = Boolean(model);
+  elements.handPanel.dataset.commandActive = String(Boolean(model));
   elements.handCommand.dataset.active = String(Boolean(model));
+  elements.handCommand.dataset.signal = actionPending || model ? "active" : canAct ? "ready" : "idle";
   elements.handCommand.dataset.step = model ? model.action ? "execute" : "locate" : "select";
   elements.commandSignal.textContent = actionPending ? "结算中" : model ? "操作中" : canAct ? "待命" : "等待";
   elements.commandTitle.textContent = view.gameOver ? "决斗结束" : canAct ? "选择一张手牌或场上怪兽" : "对手正在行动";
   elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "选择卡牌，再选择落点或目标。" : "可以查看公开卡牌和墓地。";
   elements.duelHint.textContent = model ? prompt : elements.commandTitle.textContent;
   elements.handGuide.textContent = model ? "确认或取消后继续行动" : "选择卡牌 · 再选择落点或目标";
+  const inBattle = view.turn.phase === "battle";
+  elements.battleButton.textContent = inBattle ? "战斗阶段" : "进入战斗";
+  elements.battleButton.dataset.currentPhase = String(inBattle);
   elements.battleButton.disabled = !canAct || Boolean(selection) || view.turn.phase !== "main" || !view.legalActions.can.endTurn;
   elements.endTurnButton.disabled = !canAct || Boolean(selection) || !view.legalActions.can.endTurn;
   const directAttackReady = Boolean(isAttack && model?.action && model.targetIds.length === 0);
@@ -445,6 +471,7 @@ elements.cardInspector.addEventListener("close", () => {
   if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
 });
 elements.handSortType.addEventListener("click", () => { handOrder = sortHandCardsByType(onlineBoardState(client.view, selection).player.hand, handOrder).map((card) => card.uid); render(client.view); });
+elements.handReadyJump.addEventListener("click", locateNextReadyHandCard);
 elements.hand.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key) || event.target.closest("button")) return;
   const card = event.target.closest(".card[data-card-uid]");

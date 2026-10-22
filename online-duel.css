@@ -61,6 +61,13 @@ body[data-duel-focus="material"] #app .duel-table .slot.tribute-selected { opaci
 .online-seat-number { color: rgba(246,189,96,.92); font-size: 9px; letter-spacing: .08em; }
 body[data-online-viewer-seat="p2"] .player-card[data-online-role="self"] .online-role-badge { border-color: rgba(246,189,96,.55); color: #ffda91; background: rgba(246,189,96,.14); }
 .field-attack-btn[data-phase-jump="true"]:not(:disabled) { border-color: rgba(246,189,96,.82); color: #fff0c8; background: linear-gradient(180deg, rgba(246,189,96,.22), rgba(239,71,111,.09)), rgba(12,7,13,.94); box-shadow: inset 0 -2px 0 rgba(246,189,96,.38), 0 0 20px rgba(246,189,96,.12); }
+.topbar .btn.primary.turn-control[data-current-phase="true"]:disabled { border-color: rgba(84,210,210,.42); color: rgba(173,245,241,.82); background: rgba(16,47,52,.62); box-shadow: inset 0 -2px 0 rgba(84,210,210,.22); cursor: default; }
+.hand-ready-jump { appearance: none; font: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+.hand-ready-jump:not(:disabled):hover, .hand-ready-jump:not(:disabled):focus-visible { border-color: rgba(246,189,96,.68); background: rgba(71,48,12,.76); color: #fff0c8; transform: translateY(-1px); outline: none; }
+.hand-ready-jump:not(:disabled) small::after { content: "  ›"; color: var(--gold); }
+.hand-ready-jump:disabled { cursor: default; }
+.card.online-ready-located { animation: online-ready-locate .72s ease-out; }
+@keyframes online-ready-locate { 0% { box-shadow: 0 0 0 0 rgba(246,189,96,.82), 0 12px 28px rgba(0,0,0,.38); } 45% { box-shadow: 0 0 0 5px rgba(246,189,96,.34), 0 12px 28px rgba(0,0,0,.38); } 100% { box-shadow: 0 0 0 1px rgba(246,189,96,.08), 0 12px 28px rgba(0,0,0,.38); } }
 body[data-duel-selection="playerField"] #app .duel-table #playerField .slot.field-state-selected { transform: translateY(-4px) scale(1.015); }
 body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-target { position: relative; z-index: 8; opacity: 1; filter: none; border-color: rgba(246,189,96,.92); box-shadow: inset 0 -3px 0 rgba(246,189,96,.56), 0 0 0 3px rgba(246,189,96,.14), 0 0 30px rgba(239,71,111,.26); }
 body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-target::after { content: "直接攻击目标"; position: absolute; right: 8px; bottom: 7px; padding: 3px 7px; border: 1px solid rgba(246,189,96,.64); border-radius: 999px; color: #fff0c8; background: rgba(91,43,23,.94); font-size: 8px; font-weight: 900; letter-spacing: .05em; }
@@ -90,5 +97,5 @@ body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-targe
   .online-inspector-effect { min-height: 80px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .online-inspector-panel, .online-inspector-backdrop { animation: none; }
+  .online-inspector-panel, .online-inspector-backdrop, .card.online-ready-located { animation: none; }
 }
