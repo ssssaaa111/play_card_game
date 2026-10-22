@@ -105,7 +105,8 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /身份已恢复/);
   assert.match(app, /event\.target === elements\.cardInspector/);
   assert.match(app, /elements\.inspectorBackdrop\.addEventListener\("click", closeInspector\)/);
-  assert.match(app, /if \(selection\?\.cardId === id\)[\s\S]*cancelSelection\(\)/);
+  // Toggle/cancel behavior is covered by online-duel-ui.test.mjs, independent
+  // of whether its implementation lives in the app or an extracted helper.
   const chooseCardSource = app.slice(app.indexOf("function chooseCard"), app.indexOf("function chooseSlot"));
   assert.doesNotMatch(chooseCardSource, /showCards\(/, "primary hand-card clicks must not open the detail dialog");
   assert.match(app, /elements\.duelPanel\.addEventListener\("click"/);

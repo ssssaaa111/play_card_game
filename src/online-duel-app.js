@@ -2,10 +2,12 @@ import { createCardElement } from "./card-renderer.js";
 import { renderHandCards } from "./hand-renderer.js";
 import { renderMonsterZones, renderSupportZones } from "./field-renderer.js";
 import { buildDuelControlsView } from "./control-renderer.js";
+import { renderBattlePreviewElement } from "./battle-preview-renderer.js";
+import { createOnlineActionRunner } from "./online-action-runner.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, latestOnlineActionReceipt } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -15,7 +17,7 @@ const elements = Object.fromEntries([
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
-  "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel"
+  "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
@@ -29,6 +31,10 @@ let observedReceiptRoomCode = null;
 let lastObservedEventId = 0;
 let actionReceipt = null;
 let actionReceiptTimer = null;
+const runCommand = createOnlineActionRunner((pending) => {
+  actionPending = pending;
+  render(client.view);
+});
 const assetForCard = (card) => monsterAssets[card.id] || "";
 const EVENT_LABELS = {
   MONSTER_SUMMONED: "怪兽登场", CARD_ACTIVATED: "卡牌发动", CARD_MOVED: "卡牌移动", DAMAGE_DEALT: "生命值受创",
@@ -144,29 +150,10 @@ function showCards(cards, title = "卡牌详情") {
 function chooseCard(id) {
   if (actionPending) return;
   const view = client.view;
-  const model = onlineSelectionModel(view, selection);
-  if (model?.targetIds.includes(id)) {
-    clearActionReceipt();
-    selection.targetCardId = id;
-  } else if (model?.tributeCount && view.players[view.viewerSeatId].monsterZone.some((card) => card?.id === id)) {
-    clearActionReceipt();
-    selection.tributeCardIds = selection.tributeCardIds.includes(id)
-      ? selection.tributeCardIds.filter((entry) => entry !== id)
-      : [...selection.tributeCardIds, id].slice(-model.tributeCount);
-    selection.index = null;
-  } else if (onlineCardActions(view, id).length || (
-    view.turn.playerId === view.viewerSeatId
-    && view.players[view.viewerSeatId].monsterZone.some((card) => card?.id === id)
-  )) {
-    clearActionReceipt();
-    if (selection?.cardId === id) {
-      cancelSelection();
-      return;
-    }
-    selection = selectOnlineCard(view, id);
-  } else {
-    return;
-  }
+  const next = chooseOnlineCard(view, selection, id);
+  if (next === selection) return;
+  clearActionReceipt();
+  selection = next;
   render(view);
 }
 
@@ -187,15 +174,15 @@ function chooseSlot(owner, zone, index) {
 async function sendAction(action) {
   if (actionPending || !action) return;
   clearActionReceipt();
-  actionPending = true;
   selection = null;
   setError();
-  render(client.view);
-  try { await client.sendAction(action); }
-  catch (error) {
-    if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
-    setError(error.message);
-  } finally { actionPending = false; render(client.view); }
+  return runCommand(async () => {
+    try { await client.sendAction(action); }
+    catch (error) {
+      if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
+      setError(error.message);
+    }
+  });
 }
 
 async function prepareSelectedAttack() {
@@ -213,28 +200,25 @@ async function prepareSelectedAttack() {
     return;
   }
 
-  actionPending = true;
   setError();
-  render(client.view);
-  try {
-    await client.sendAction({ type: "CHANGE_PHASE", phase: "battle" });
-    if (client.view.turn.phase !== "battle") await client.sync();
-    const attackSelection = selectOnlineCard(client.view, cardId, "DECLARE_ATTACK");
-    const attackModel = onlineSelectionModel(client.view, attackSelection);
-    if (!attackModel?.actions.some((action) => action.type === "DECLARE_ATTACK")) {
+  return runCommand(async () => {
+    try {
+      await client.sendAction({ type: "CHANGE_PHASE", phase: "battle" });
+      if (client.view.turn.phase !== "battle") await client.sync();
+      const attackSelection = selectOnlineCard(client.view, cardId, "DECLARE_ATTACK");
+      const attackModel = onlineSelectionModel(client.view, attackSelection);
+      if (!attackModel?.actions.some((action) => action.type === "DECLARE_ATTACK")) {
+        selection = selectOnlineCard(client.view, cardId);
+        setError("已进入战斗阶段，但这只怪兽当前不能攻击。");
+      } else {
+        selection = attackSelection;
+      }
+    } catch (error) {
+      if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
+      setError(error.message);
       selection = selectOnlineCard(client.view, cardId);
-      setError("已进入战斗阶段，但这只怪兽当前不能攻击。");
-    } else {
-      selection = attackSelection;
     }
-  } catch (error) {
-    if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
-    setError(error.message);
-    selection = selectOnlineCard(client.view, cardId);
-  } finally {
-    actionPending = false;
-    render(client.view);
-  }
+  });
 }
 
 function renderDuelist(root, view, seatId, rival) {
@@ -370,8 +354,12 @@ function renderCommands(view, model) {
   elements.choiceText.textContent = prompt;
   elements.choiceConfirmBtn.textContent = confirmLabel;
   elements.choiceConfirmBtn.disabled = !canAct || !model?.action;
+  const preview = isAttack ? onlineBattlePreview(view, model) : null;
+  elements.onlineBattlePreview.hidden = !preview;
+  renderBattlePreviewElement(document, elements.onlineBattlePreview, preview);
   elements.choiceCancelBtn.disabled = actionPending;
   elements.choiceActions.classList.toggle("target-choice", interaction.choice.target);
+  elements.choiceActions.classList.toggle("online-attack-choice", isAttack);
   elements.choiceActions.classList.toggle("single-target", interaction.choice.targetSingle);
   elements.choiceActions.classList.toggle("single-choice", interaction.choice.single);
   elements.choiceActions.classList.toggle("multiple-choice", interaction.choice.multiple);
@@ -518,6 +506,11 @@ elements.hand.addEventListener("keydown", (event) => {
   if (card) { event.preventDefault(); chooseCard(card.dataset.cardUid); }
 });
 elements.logToggle.addEventListener("click", () => setEventLogOpen(elements.eventLog.hidden));
+document.addEventListener("click", (event) => {
+  if (!runCommand.blocksRepeatedClick(event.detail)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
 elements.duelPanel.addEventListener("click", (event) => {
   if (!elements.eventLog.hidden && !event.target.closest?.("#eventLog, #logToggle")) setEventLogOpen(false);
   if (event.target.closest?.(".slot, .trap-slot, .card, button, a")) return;

@@ -1,3 +1,6 @@
+import { makeBattlePreview, makeAttackIntentPreview } from "./rules.js";
+import { describeBattleOutcome } from "./battle.js";
+
 // Translate the server's public snapshot into the cards used by the solo UI.
 // Display IDs are templates; commands always retain server instance IDs.
 export function onlineDisplayCard(card) {
@@ -145,6 +148,48 @@ export function onlineSelectionModel(view, selection) {
     ...(tributeCount ? { tributeCardIds } : {})
   };
   return { card, actions, choices, action, stage, targetIds, targetCardId, slots, index, tributeCount, tributeCardIds };
+}
+
+export function chooseOnlineCard(view, selection, cardId) {
+  const model = onlineSelectionModel(view, selection);
+  if (model?.targetIds.includes(cardId)) return { ...selection, targetCardId: cardId };
+  const self = view.players[view.viewerSeatId];
+  if (model?.tributeCount && self.monsterZone.some((card) => card?.id === cardId)) {
+    const tributeCardIds = selection.tributeCardIds.includes(cardId)
+      ? selection.tributeCardIds.filter((id) => id !== cardId)
+      : [...selection.tributeCardIds, cardId].slice(-model.tributeCount);
+    return { ...selection, tributeCardIds, index: null };
+  }
+  const ownMonster = view.turn.playerId === view.viewerSeatId && !view.gameOver
+    && self.monsterZone.some((card) => card?.id === cardId);
+  if (!ownMonster && !onlineCardActions(view, cardId).length) return selection;
+  return selection?.cardId === cardId ? null : selectOnlineCard(view, cardId);
+}
+
+export function onlineBattlePreview(view, model) {
+  if (!model || !model.choices.some((action) => action.type === "DECLARE_ATTACK")) return null;
+  const self = view.players[view.viewerSeatId];
+  const rival = view.players[view.opponentSeatId];
+  const attacker = self.monsterZone.find((card) => card?.id === model.card.id);
+  if (!attacker || attacker.hidden) return null;
+  const action = model.action;
+  if (!action) return makeAttackIntentPreview(attacker, {
+    targetCount: model.targetIds.length,
+    canDirectAttack: model.choices.some((entry) => !entry.targetCardId)
+  });
+  const target = action.targetCardId ? rival.monsterZone.find((card) => card?.id === action.targetCardId) : null;
+  if (action.targetCardId && (!target || target.hidden)) return null;
+  const preview = makeBattlePreview(attacker, target);
+  const outcome = describeBattleOutcome(attacker, target);
+  const suffersDamage = outcome.diff < 0 ? self : rival;
+  const lpAfter = Math.max(0, suffersDamage.lp - outcome.finalDamage);
+  return {
+    ...preview,
+    rows: [...preview.rows, {
+      label: outcome.diff < 0 ? "我方 LP" : "对手 LP",
+      value: `${suffersDamage.lp} → ${lpAfter}`
+    }, { label: "提示", value: "按当前攻防预估，卡牌效果可能改变结果" }]
+  };
 }
 
 export function onlineBoardState(view, selection) {

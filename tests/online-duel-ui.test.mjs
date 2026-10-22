@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineActionReceipt, latestOnlineActionReceipt } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
+import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
 
 const monster = (id) => ({ id, templateId: "iron-guardian", name: id, type: "monster", atk: 900, def: 2100 });
 function snapshot() {
@@ -116,6 +117,55 @@ test("shared cards use template art while retaining instance identity without ch
   assert.equal(onlineCard(view, hidden.id), null);
   assert.deepEqual(onlineBoardState(view, null).ai.hand, [hidden]);
   assert.equal(onlineBoardState(view, null).selected, null, "empty slots must not become phantom selections");
+});
+
+test("card selection toggles cancel, switches targets and ignores unavailable cards without mutating snapshots", () => {
+  const view = snapshot();
+  view.players.p1.hand = [{ id: "buff", type: "spell" }];
+  view.players.p1.monsterZone[0] = monster("one");
+  view.players.p1.monsterZone[1] = monster("two");
+  view.legalActions.actions.activateCard = ["one", "two"].map((targetCardId) => ({ type: "ACTIVATE_CARD", cardId: "buff", targetCardId }));
+  const before = structuredClone(view);
+  const selected = chooseOnlineCard(view, null, "buff");
+  const target1 = chooseOnlineCard(view, selected, "one");
+  const target2 = chooseOnlineCard(view, target1, "two");
+  assert.equal(selected.targetCardId, null);
+  assert.equal(target1.targetCardId, "one");
+  assert.equal(target2.targetCardId, "two");
+  assert.equal(chooseOnlineCard(view, target2, "not-playable"), target2);
+  assert.equal(chooseOnlineCard(view, target2, "buff"), null);
+  assert.deepEqual(view, before);
+});
+
+test("attack previews cover direct damage, counterattack, defense, ties and live modifiers using public cards", () => {
+  const view = snapshot();
+  view.turn.phase = "battle";
+  const attacker = { ...monster("attacker"), atk: 1800, tempAtk: -150, battleWear: 150 };
+  const target = { ...monster("target"), atk: 1200, def: 1900, mode: "attack" };
+  view.players.p1.monsterZone[0] = attacker;
+  view.players.p2.monsterZone[0] = target;
+  view.players.p1.lp = 4000;
+  view.players.p2.lp = 3000;
+  view.legalActions.actions.declareAttack = [{ type: "DECLARE_ATTACK", attackerCardId: "attacker", targetCardId: "target" }];
+  const preview = () => onlineBattlePreview(view, onlineSelectionModel(view, selectOnlineCard(view, "attacker", "DECLARE_ATTACK")));
+  assert.equal(preview().compare.attackerValue, 1650, "battle wear is already included in tempAtk");
+  assert.equal(preview().compare.diff, 450);
+  target.mode = "defense";
+  assert.equal(preview().badge, "守备反击");
+  assert.deepEqual(preview().rows.find((row) => row.label === "我方 LP"), { label: "我方 LP", value: "4000 → 3750" });
+  target.def = 1000;
+  assert.equal(preview().badge, "破防");
+  assert.deepEqual(preview().rows.find((row) => row.label === "对手 LP"), { label: "对手 LP", value: "3000 → 3000" });
+  target.mode = "attack";
+  target.atk = 1650;
+  assert.equal(preview().badge, "相杀");
+  target.atk = 2000;
+  assert.equal(preview().badge, "受反击");
+  view.legalActions.actions.declareAttack[0] = { type: "DECLARE_ATTACK", attackerCardId: "attacker" };
+  view.players.p2.lp = 500;
+  assert.equal(preview().mode, "direct");
+  assert.deepEqual(preview().rows.find((row) => row.label === "对手 LP"), { label: "对手 LP", value: "500 → 0" });
+  assert.equal(onlineBattlePreview(view, null), null);
 });
 
 test("selecting a card does not issue a command; confirmation retains its server instance ID and chosen slot", () => {
