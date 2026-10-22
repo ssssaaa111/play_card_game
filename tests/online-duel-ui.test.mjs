@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 
 const monster = (id) => ({ id, templateId: "iron-guardian", name: id, type: "monster", atk: 900, def: 2100 });
@@ -20,6 +20,17 @@ test("viewer identity keeps two tabs visually tied to their own reserved seats",
   assert.deepEqual(onlineIdentityView(view), {
     name: "月见", seatId: "p2", seatNumber: "2P", seatRole: "挑战者", opponentName: "星野"
   });
+});
+
+test("online card details expose effect copy and current public values", () => {
+  assert.deepEqual(onlineCardDetailView({
+    name: "星轨枪兵", type: "monster", text: "风属性前线怪兽。", atk: 1800, tempAtk: 200, def: 1000, element: "wind", stars: 4
+  }), {
+    name: "星轨枪兵", typeLabel: "怪兽", effectText: "风属性前线怪兽。",
+    rows: [["攻击力", "2000"], ["守备力", "1000"], ["属性", "风"], ["星级", "4 星"]]
+  });
+  assert.deepEqual(onlineCardDetailView({ name: "星魂共鸣", type: "spell", text: "最高怪兽强化。", rarity: "R", archetype: "连携" }).rows,
+    [["类型", "魔法"], ["稀有度", "R"], ["流派", "连携"]]);
 });
 
 test("shared cards use template art while retaining instance identity without changing the snapshot", () => {

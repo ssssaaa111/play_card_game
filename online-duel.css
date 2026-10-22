@@ -29,13 +29,27 @@ body[data-online-status="waiting"] #app { grid-template-rows: auto minmax(0, 1fr
 .online-log-toggle { position: absolute; z-index: 12; right: 12px; bottom: 12px; }
 .online-event-log { position: absolute; z-index: 25; right: 12px; bottom: 54px; width: min(330px, calc(100% - 24px)); max-height: 65%; overflow-y: auto; padding: 12px; border: 1px solid var(--table-line); border-radius: 10px; background: rgba(7,10,17,.98); box-shadow: var(--table-shadow); }
 .online-event-log span { display: block; padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.6; }
-.online-inspector { width: min(640px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 20px; border: 1px solid var(--table-line); border-radius: 14px; background: #0d131f; color: var(--ink); overflow-y: auto; box-shadow: var(--table-shadow); }
-.online-inspector::backdrop { background: rgba(0,0,0,.75); backdrop-filter: blur(5px); }
+.online-inspector { width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 12px; border: 0; background: transparent; color: var(--ink); overflow-y: auto; }
+.online-inspector[open] { display: grid; place-items: center; }
+.online-inspector::backdrop { background: transparent; }
+.online-inspector-backdrop { position: fixed; z-index: 0; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; cursor: zoom-out; background: rgba(0,0,0,.75); backdrop-filter: blur(5px); animation: online-backdrop-in 130ms ease-out; }
+.online-inspector-panel { position: relative; z-index: 1; width: min(780px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 20px; overflow-y: auto; border: 1px solid var(--table-line); border-radius: 14px; background: #0d131f; box-shadow: 0 26px 80px rgba(0,0,0,.72), 0 0 34px rgba(84,210,210,.12); animation: online-inspector-in 150ms cubic-bezier(.2,.8,.2,1); }
 .online-inspector header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-#inspectorContent { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; }
+.online-inspector header .btn { min-width: 36px; font-size: 18px; line-height: 1; }
+.online-inspector-hint { margin: 14px 0 0; color: rgba(207,220,234,.52); font-size: 10px; text-align: center; letter-spacing: .04em; }
+body[data-online-overlay="detail"] #app { filter: saturate(.72); }
+#inspectorContent { display: grid; gap: 14px; }
+.online-inspector-entry { display: grid; grid-template-columns: 240px minmax(0,1fr); align-items: stretch; gap: 18px; padding: 14px; border: 1px solid rgba(84,210,210,.14); border-radius: 10px; background: linear-gradient(120deg, rgba(84,210,210,.045), transparent 45%), rgba(0,0,0,.18); }
 #inspectorContent .card { width: 240px; min-height: 320px; flex: 0 0 240px; }
 #inspectorContent .card-text { white-space: normal; overflow: visible; -webkit-line-clamp: unset; font-size: 13px; }
 #inspectorContent .art { min-height: 130px; }
+.online-inspector-copy { min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 5px 2px; }
+.online-inspector-kicker { color: var(--cyan); font-size: 10px; font-weight: 900; letter-spacing: .12em; }
+.online-inspector-effect { flex: 1; margin: 0; padding: 14px; border-left: 3px solid rgba(246,189,96,.72); color: rgba(235,240,247,.9); background: rgba(246,189,96,.055); font-size: 13px; line-height: 1.8; }
+.online-inspector-meta { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; margin: 0; }
+.online-inspector-meta > div { display: flex; justify-content: space-between; gap: 8px; padding: 8px 9px; border: 1px solid rgba(255,255,255,.07); border-radius: 5px; background: rgba(255,255,255,.025); }
+.online-inspector-meta dt { color: rgba(195,208,222,.58); font-size: 10px; }
+.online-inspector-meta dd { margin: 0; color: #f0d69d; font-size: 11px; font-weight: 800; text-align: right; }
 #fieldTargets { max-height: 115px; overflow-y: auto; }
 .online-target { width: 100%; display: grid; gap: 4px; padding: 9px 12px; margin-bottom: 5px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: rgba(0,0,0,.35); text-align: left; cursor: pointer; }
 .online-target[aria-pressed="true"] { border-color: var(--gold); background: rgba(246,189,96,.15); }
@@ -49,6 +63,8 @@ body[data-online-viewer-seat="p2"] .player-card[data-online-role="self"] .online
 .topbar .btn.primary { background: linear-gradient(135deg, #f6bd60, #ffdc96); color: #17130b; }
 #app .duel-table .online-placement-selected { outline: 3px solid var(--gold); outline-offset: -5px; }
 #app .duel-table .online-placement-selected::after { content: "已选落点 ✓"; }
+@keyframes online-inspector-in { from { opacity: 0; transform: translateY(10px) scale(.975); } to { opacity: 1; transform: none; } }
+@keyframes online-backdrop-in { from { background: rgba(0,0,0,0); backdrop-filter: blur(0); } }
 @media (max-width: 1040px) {
   .topbar .connection-pill { font-size: 9px; padding: 4px 7px; }
   .online-identity { min-width: 104px; padding: 4px 7px; }
@@ -63,4 +79,12 @@ body[data-online-viewer-seat="p2"] .player-card[data-online-role="self"] .online
   .lobby-actions { grid-template-columns: minmax(0,1fr) auto; }
   .lobby-actions #createRoom { grid-column: 1 / -1; }
   .online-log-toggle { padding: 5px 8px; font-size: 10px; bottom: 5px; right: 5px; }
+  .online-inspector { padding: 6px; }
+  .online-inspector-panel { width: calc(100vw - 12px); max-height: calc(100dvh - 12px); padding: 14px; }
+  .online-inspector-entry { grid-template-columns: 1fr; justify-items: center; padding: 10px; }
+  .online-inspector-copy { width: 100%; }
+  .online-inspector-effect { min-height: 80px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .online-inspector-panel, .online-inspector-backdrop { animation: none; }
 }

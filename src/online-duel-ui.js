@@ -5,6 +5,29 @@ export function onlineDisplayCard(card) {
   return { ...card, id: card.templateId || card.id, uid: card.id };
 }
 
+export function onlineCardDetailView(card) {
+  if (!card || card.hidden) return null;
+  const typeLabel = card.type === "monster" ? "怪兽" : card.type === "trap" ? "陷阱" : "魔法";
+  const rows = card.type === "monster"
+    ? [
+        ["攻击力", String(Math.max(0, Number(card.atk || 0) + Number(card.tempAtk || 0)))],
+        ["守备力", String(Math.max(0, Number(card.def || 0) + Number(card.tempDef || 0)))],
+        ["属性", ({ fire: "火", light: "光", wind: "风", shadow: "暗" }[card.element] || card.element || "无")],
+        ["星级", `${Math.max(0, Number(card.stars) || 0)} 星`]
+      ]
+    : [
+        ["类型", typeLabel],
+        ["稀有度", card.rarity || "N"],
+        ["流派", card.archetype || "通用"]
+      ];
+  return {
+    name: card.name,
+    typeLabel,
+    effectText: card.text || "这张卡没有额外的公开效果说明。",
+    rows
+  };
+}
+
 export function onlineIdentityView(view) {
   const seat = view?.seats?.find((entry) => entry.seatId === view.viewerSeatId);
   if (!seat) return null;

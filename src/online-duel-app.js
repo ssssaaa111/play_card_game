@@ -5,7 +5,7 @@ import { buildDuelControlsView } from "./control-renderer.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -15,7 +15,7 @@ const elements = Object.fromEntries([
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
-  "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "viewerIdentity", "viewerName", "viewerSeatLabel"
+  "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
@@ -23,6 +23,7 @@ const client = new OnlineDuelClient();
 let actionPending = false;
 let selection = null;
 let handOrder = [];
+let inspectorReturnFocus = null;
 const assetForCard = (card) => monsterAssets[card.id] || "";
 const EVENT_LABELS = {
   MONSTER_SUMMONED: "怪兽登场", CARD_ACTIVATED: "卡牌发动", CARD_MOVED: "卡牌移动", DAMAGE_DEALT: "生命值受创",
@@ -51,15 +52,61 @@ function storedSession() {
 function seatName(view, id) { return view.seats?.find((seat) => seat.seatId === id)?.name || id; }
 function cardName(view, id) { return onlineCard(view, id)?.name || "盖放卡牌"; }
 
+function setEventLogOpen(open) {
+  elements.eventLog.hidden = !open;
+  elements.logToggle.setAttribute("aria-expanded", String(open));
+}
+
+function cancelSelection() {
+  if (actionPending || !selection) return false;
+  selection = null;
+  render(client.view);
+  return true;
+}
+
+function closeInspector() {
+  if (elements.cardInspector.open) elements.cardInspector.close();
+}
+
 function showCards(cards, title = "卡牌详情") {
   elements.inspectorTitle.textContent = title;
   elements.inspectorContent.replaceChildren();
   for (const card of cards.filter((entry) => entry && !entry.hidden)) {
     const display = onlineDisplayCard(card);
-    elements.inspectorContent.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: true }));
+    const detail = onlineCardDetailView(card);
+    const entry = document.createElement("article");
+    entry.className = "online-inspector-entry";
+    entry.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: true }));
+    const copy = document.createElement("section");
+    copy.className = "online-inspector-copy";
+    const kicker = document.createElement("span");
+    kicker.className = "online-inspector-kicker";
+    kicker.textContent = `${detail.typeLabel} · 效果说明`;
+    const effect = document.createElement("p");
+    effect.className = "online-inspector-effect";
+    effect.textContent = detail.effectText;
+    const meta = document.createElement("dl");
+    meta.className = "online-inspector-meta";
+    for (const [label, value] of detail.rows) {
+      const row = document.createElement("div");
+      const term = document.createElement("dt");
+      const description = document.createElement("dd");
+      term.textContent = label;
+      description.textContent = value;
+      row.append(term, description);
+      meta.appendChild(row);
+    }
+    copy.append(kicker, effect, meta);
+    entry.appendChild(copy);
+    elements.inspectorContent.appendChild(entry);
   }
   if (!elements.inspectorContent.childElementCount) elements.inspectorContent.textContent = "这里还没有卡牌。";
-  if (!elements.cardInspector.open) elements.cardInspector.showModal();
+  if (!elements.cardInspector.open) {
+    inspectorReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.dataset.onlineOverlay = "detail";
+    elements.cardInspector.showModal();
+    elements.inspectorClose.focus({ preventScroll: true });
+  }
 }
 
 function chooseCard(id) {
@@ -74,7 +121,10 @@ function chooseCard(id) {
       : [...selection.tributeCardIds, id].slice(-model.tributeCount);
     selection.index = null;
   } else if (onlineCardActions(view, id).length) {
-    if (selection?.cardId === id) return;
+    if (selection?.cardId === id) {
+      cancelSelection();
+      return;
+    }
     selection = selectOnlineCard(view, id);
   } else {
     const card = onlineCard(view, id);
@@ -94,6 +144,7 @@ function chooseSlot(owner, zone, index) {
     selection.index = index;
     render(view);
   } else if (card) chooseCard(card.id);
+  else if (selection && !["placement", "material", "target"].includes(model?.stage)) cancelSelection();
 }
 
 async function sendAction(action) {
@@ -330,22 +381,38 @@ elements.copyRoomCode.addEventListener("click", async () => {
   catch { elements.copyRoomCode.title = `房间码 ${client.view.roomCode}，可手动复制`; }
 });
 elements.choiceConfirmBtn.addEventListener("click", () => sendAction(onlineSelectionModel(client.view, selection)?.action));
-for (const id of ["fieldCancelBtn", "choiceCancelBtn"]) elements[id].addEventListener("click", () => { selection = null; render(client.view); });
+for (const id of ["fieldCancelBtn", "choiceCancelBtn"]) elements[id].addEventListener("click", cancelSelection);
 elements.fieldAttackBtn.addEventListener("click", () => { selection = selectOnlineCard(client.view, selection.cardId, "DECLARE_ATTACK"); render(client.view); });
 elements.fieldModeBtn.addEventListener("click", () => sendAction(onlineCardActions(client.view, selection?.cardId).find((action) => action.type === "CHANGE_MONSTER_MODE")));
 elements.fieldDetailBtn.addEventListener("click", () => { const card = onlineCard(client.view, selection?.cardId); if (card) showCards([card], card.name); });
 elements.battleButton.addEventListener("click", () => sendAction({ type: "CHANGE_PHASE", phase: "battle" }));
 elements.endTurnButton.addEventListener("click", () => sendAction({ type: "END_TURN" }));
-elements.inspectorClose.addEventListener("click", () => elements.cardInspector.close());
+elements.inspectorClose.addEventListener("click", closeInspector);
+elements.inspectorBackdrop.addEventListener("click", closeInspector);
+elements.cardInspector.addEventListener("click", (event) => { if (event.target === elements.cardInspector) closeInspector(); });
+elements.cardInspector.addEventListener("close", () => {
+  document.body.dataset.onlineOverlay = "none";
+  const returnFocus = inspectorReturnFocus;
+  inspectorReturnFocus = null;
+  if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+});
 elements.handSortType.addEventListener("click", () => { handOrder = sortHandCardsByType(onlineBoardState(client.view, selection).player.hand, handOrder).map((card) => card.uid); render(client.view); });
 elements.hand.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key) || event.target.closest("button")) return;
   const card = event.target.closest(".card[data-card-uid]");
   if (card) { event.preventDefault(); chooseCard(card.dataset.cardUid); }
 });
-elements.logToggle.addEventListener("click", () => { elements.eventLog.hidden = !elements.eventLog.hidden; elements.logToggle.setAttribute("aria-expanded", String(!elements.eventLog.hidden)); });
+elements.logToggle.addEventListener("click", () => setEventLogOpen(elements.eventLog.hidden));
+elements.duelPanel.addEventListener("click", (event) => {
+  if (!elements.eventLog.hidden && !event.target.closest?.("#eventLog, #logToggle")) setEventLogOpen(false);
+  if (event.target.closest?.(".slot, .trap-slot, .card, button, a")) return;
+  cancelSelection();
+});
+elements.hand.addEventListener("click", (event) => {
+  if (!event.target.closest?.(".card, button")) cancelSelection();
+});
 for (const [id, own] of [["playerGrave", true], ["rivalGrave", false]]) elements[id].addEventListener("click", () => showCards(client.view.players[own ? client.view.viewerSeatId : client.view.opponentSeatId].grave, own ? "我方墓地" : "对手墓地"));
-document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !elements.cardInspector.open && !actionPending) { selection = null; render(client.view); } });
+document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !elements.cardInspector.open) cancelSelection(); });
 elements.roomCodeInput.value = new URLSearchParams(window.location.search).get("room") || "";
 try {
   await client.connect(); setConnection("connected", "服务已连接");

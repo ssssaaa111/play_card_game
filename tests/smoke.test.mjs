@@ -101,6 +101,12 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /onlineSelectionModel\(client\.view, selection\)\?\.action/);
   assert.match(app, /sessionStorage\.setItem\(STORAGE_KEY/);
   assert.match(app, /身份已恢复/);
+  assert.match(app, /event\.target === elements\.cardInspector/);
+  assert.match(app, /elements\.inspectorBackdrop\.addEventListener\("click", closeInspector\)/);
+  assert.match(app, /if \(selection\?\.cardId === id\)[\s\S]*cancelSelection\(\)/);
+  assert.match(app, /elements\.duelPanel\.addEventListener\("click"/);
+  assert.match(app, /elements\.hand\.addEventListener\("click"/);
+  assert.match(html, /点击弹窗外空白处或按 Esc 关闭/);
 });
 
 test("index keeps critical app mount points wired", () => {
