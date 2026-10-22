@@ -57,6 +57,27 @@ export function onlineCardActions(view, cardId) {
     .filter((action) => (action.cardId || action.attackerCardId) === cardId);
 }
 
+export function onlineAttackIntent(view, model) {
+  const attacks = model?.actions?.filter((action) => action.type === "DECLARE_ATTACK") || [];
+  const ownTurn = view?.turn?.playerId === view?.viewerSeatId;
+  const self = view?.players?.[view?.viewerSeatId];
+  const canEnterBattle = Boolean(
+    model?.card?.type === "monster"
+    && ownTurn
+    && view?.turn?.phase === "main"
+    && view?.legalActions?.can?.endTurn
+    && model.card.mode !== "defense"
+    && !model.card.used
+    && !self?.attacksSkipped
+  );
+  return {
+    available: attacks.length > 0 || canEnterBattle,
+    requiresBattlePhase: attacks.length === 0 && canEnterBattle,
+    attackCount: attacks.length,
+    label: attacks.length > 0 ? "攻击" : canEnterBattle ? "进入战斗并攻击" : "当前不能攻击"
+  };
+}
+
 export function selectOnlineCard(view, cardId, actionType = null) {
   const card = onlineCard(view, cardId);
   if (!card) return null;

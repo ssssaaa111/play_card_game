@@ -60,6 +60,10 @@ body[data-duel-focus="material"] #app .duel-table .slot.tribute-selected { opaci
 .player-card[data-online-role="self"] .online-role-badge { border-color: rgba(84,210,210,.48); color: #8df5f0; background: rgba(84,210,210,.13); }
 .online-seat-number { color: rgba(246,189,96,.92); font-size: 9px; letter-spacing: .08em; }
 body[data-online-viewer-seat="p2"] .player-card[data-online-role="self"] .online-role-badge { border-color: rgba(246,189,96,.55); color: #ffda91; background: rgba(246,189,96,.14); }
+.field-attack-btn[data-phase-jump="true"]:not(:disabled) { border-color: rgba(246,189,96,.82); color: #fff0c8; background: linear-gradient(180deg, rgba(246,189,96,.22), rgba(239,71,111,.09)), rgba(12,7,13,.94); box-shadow: inset 0 -2px 0 rgba(246,189,96,.38), 0 0 20px rgba(246,189,96,.12); }
+body[data-duel-selection="playerField"] #app .duel-table #playerField .slot.field-state-selected { transform: translateY(-4px) scale(1.015); }
+body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-target { position: relative; z-index: 8; opacity: 1; filter: none; border-color: rgba(246,189,96,.92); box-shadow: inset 0 -3px 0 rgba(246,189,96,.56), 0 0 0 3px rgba(246,189,96,.14), 0 0 30px rgba(239,71,111,.26); }
+body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-target::after { content: "直接攻击目标"; position: absolute; right: 8px; bottom: 7px; padding: 3px 7px; border: 1px solid rgba(246,189,96,.64); border-radius: 999px; color: #fff0c8; background: rgba(91,43,23,.94); font-size: 8px; font-weight: 900; letter-spacing: .05em; }
 .topbar .btn.primary { background: linear-gradient(135deg, #f6bd60, #ffdc96); color: #17130b; }
 #app .duel-table .online-placement-selected { outline: 3px solid var(--gold); outline-offset: -5px; }
 #app .duel-table .online-placement-selected::after { content: "已选落点 ✓"; }

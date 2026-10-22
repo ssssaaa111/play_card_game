@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 
 const monster = (id) => ({ id, templateId: "iron-guardian", name: id, type: "monster", atk: 900, def: 2100 });
@@ -31,6 +31,22 @@ test("online card details expose effect copy and current public values", () => {
   });
   assert.deepEqual(onlineCardDetailView({ name: "星魂共鸣", type: "spell", text: "最高怪兽强化。", rarity: "R", archetype: "连携" }).rows,
     [["类型", "魔法"], ["稀有度", "R"], ["流派", "连携"]]);
+});
+
+test("a selected attack-position monster can carry its intent from main into battle", () => {
+  const view = snapshot();
+  view.players.p1.monsterZone[0] = monster("attacker:1");
+  view.legalActions.can = { endTurn: true };
+  const model = onlineSelectionModel(view, selectOnlineCard(view, "attacker:1"));
+  assert.deepEqual(onlineAttackIntent(view, model), {
+    available: true, requiresBattlePhase: true, attackCount: 0, label: "进入战斗并攻击"
+  });
+  view.turn.phase = "battle";
+  view.legalActions.actions.declareAttack = [{ type: "DECLARE_ATTACK", attackerCardId: "attacker:1" }];
+  const battleModel = onlineSelectionModel(view, selectOnlineCard(view, "attacker:1"));
+  assert.deepEqual(onlineAttackIntent(view, battleModel), {
+    available: true, requiresBattlePhase: false, attackCount: 1, label: "攻击"
+  });
 });
 
 test("shared cards use template art while retaining instance identity without changing the snapshot", () => {

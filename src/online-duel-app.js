@@ -5,7 +5,7 @@ import { buildDuelControlsView } from "./control-renderer.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -120,7 +120,10 @@ function chooseCard(id) {
       ? selection.tributeCardIds.filter((entry) => entry !== id)
       : [...selection.tributeCardIds, id].slice(-model.tributeCount);
     selection.index = null;
-  } else if (onlineCardActions(view, id).length) {
+  } else if (onlineCardActions(view, id).length || (
+    view.turn.playerId === view.viewerSeatId
+    && view.players[view.viewerSeatId].monsterZone.some((card) => card?.id === id)
+  )) {
     if (selection?.cardId === id) {
       cancelSelection();
       return;
@@ -158,6 +161,45 @@ async function sendAction(action) {
     if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
     setError(error.message);
   } finally { actionPending = false; render(client.view); }
+}
+
+async function prepareSelectedAttack() {
+  if (actionPending || !selection?.cardId) return;
+  const cardId = selection.cardId;
+  const model = onlineSelectionModel(client.view, selection);
+  const intent = onlineAttackIntent(client.view, model);
+  if (!intent.available) {
+    setError("这只怪兽当前不能攻击。");
+    return;
+  }
+  if (!intent.requiresBattlePhase) {
+    selection = selectOnlineCard(client.view, cardId, "DECLARE_ATTACK");
+    render(client.view);
+    return;
+  }
+
+  actionPending = true;
+  setError();
+  render(client.view);
+  try {
+    await client.sendAction({ type: "CHANGE_PHASE", phase: "battle" });
+    if (client.view.turn.phase !== "battle") await client.sync();
+    const attackSelection = selectOnlineCard(client.view, cardId, "DECLARE_ATTACK");
+    const attackModel = onlineSelectionModel(client.view, attackSelection);
+    if (!attackModel?.actions.some((action) => action.type === "DECLARE_ATTACK")) {
+      selection = selectOnlineCard(client.view, cardId);
+      setError("已进入战斗阶段，但这只怪兽当前不能攻击。");
+    } else {
+      selection = attackSelection;
+    }
+  } catch (error) {
+    if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
+    setError(error.message);
+    selection = selectOnlineCard(client.view, cardId);
+  } finally {
+    actionPending = false;
+    render(client.view);
+  }
 }
 
 function renderDuelist(root, view, seatId, rival) {
@@ -237,6 +279,7 @@ function renderCommands(view, model) {
   const canAct = ownTurn && !actionPending && !view.gameOver;
   const inHand = view.players[view.viewerSeatId].hand.some((card) => card.id === selection?.cardId);
   const attacks = model?.actions.filter((action) => action.type === "DECLARE_ATTACK") || [];
+  const attackIntent = onlineAttackIntent(view, model);
   const mode = model?.actions.find((action) => action.type === "CHANGE_MONSTER_MODE");
   const isAttack = selection?.actionType === "DECLARE_ATTACK";
   const targeting = model?.stage === "target";
@@ -248,7 +291,9 @@ function renderCommands(view, model) {
     : model?.stage === "placement" ? `${name}：已选第 ${model.index + 1} 格，可点击其他高亮空位。`
       : targeting ? `${name}：${model.targetCardId ? `已选 ${cardName(view, model.targetCardId)}，确认后${isAttack ? "攻击" : "发动"}。` : "点击场上高亮卡牌选择目标。"}`
         : isAttack ? `${name}：对手场上没有怪兽，可直接攻击。`
-          : selectedField ? `${name}：选择攻击、切换表示或查看详情。` : `${name}：确认后${confirmLabel.replace("确认", "")}。`;
+          : selectedField ? attackIntent.requiresBattlePhase
+            ? `${name}：可进入战斗阶段并发起攻击。`
+            : `${name}：选择攻击、切换表示或查看详情。` : `${name}：确认后${confirmLabel.replace("确认", "")}。`;
   const controls = buildDuelControlsView({
     started: true, gameOver: Boolean(view.gameOver), canAct, canUseTurnControls: canAct,
     phase: view.turn.phase, selectedHandReady: inHand && Boolean(model?.action), selectedHandName: name,
@@ -260,8 +305,10 @@ function renderCommands(view, model) {
   });
   elements.fieldActionBar.hidden = !selectedField;
   elements.fieldActionName.textContent = name;
-  elements.fieldActionStatus.textContent = controls.fieldAction.status;
-  elements.fieldAttackBtn.disabled = !canAct || !attacks.length;
+  elements.fieldActionStatus.textContent = attackIntent.requiresBattlePhase ? "点击攻击将自动进入战斗阶段" : controls.fieldAction.status;
+  elements.fieldAttackBtn.disabled = !canAct || !attackIntent.available;
+  elements.fieldAttackBtn.textContent = `⚔ ${attackIntent.label}`;
+  elements.fieldAttackBtn.dataset.phaseJump = String(attackIntent.requiresBattlePhase);
   elements.fieldModeBtn.disabled = !canAct || !mode;
   elements.fieldModeBtn.textContent = controls.modeText;
   elements.choiceActions.hidden = !model || selectedField;
@@ -287,6 +334,9 @@ function renderCommands(view, model) {
   elements.handGuide.textContent = model ? "确认或取消后继续行动" : "选择卡牌 · 再选择落点或目标";
   elements.battleButton.disabled = !canAct || Boolean(selection) || view.turn.phase !== "main" || !view.legalActions.can.endTurn;
   elements.endTurnButton.disabled = !canAct || Boolean(selection) || !view.legalActions.can.endTurn;
+  const directAttackReady = Boolean(isAttack && model?.action && model.targetIds.length === 0);
+  elements.aiPanel.classList.toggle("online-direct-target", directAttackReady);
+  elements.aiPanel.setAttribute("aria-current", directAttackReady ? "true" : "false");
   elements.fieldTargets.replaceChildren();
   elements.fieldTargets.hidden = !interaction.choice.targetList;
   for (const targetId of model?.targetIds || []) {
@@ -382,7 +432,7 @@ elements.copyRoomCode.addEventListener("click", async () => {
 });
 elements.choiceConfirmBtn.addEventListener("click", () => sendAction(onlineSelectionModel(client.view, selection)?.action));
 for (const id of ["fieldCancelBtn", "choiceCancelBtn"]) elements[id].addEventListener("click", cancelSelection);
-elements.fieldAttackBtn.addEventListener("click", () => { selection = selectOnlineCard(client.view, selection.cardId, "DECLARE_ATTACK"); render(client.view); });
+elements.fieldAttackBtn.addEventListener("click", prepareSelectedAttack);
 elements.fieldModeBtn.addEventListener("click", () => sendAction(onlineCardActions(client.view, selection?.cardId).find((action) => action.type === "CHANGE_MONSTER_MODE")));
 elements.fieldDetailBtn.addEventListener("click", () => { const card = onlineCard(client.view, selection?.cardId); if (card) showCards([card], card.name); });
 elements.battleButton.addEventListener("click", () => sendAction({ type: "CHANGE_PHASE", phase: "battle" }));

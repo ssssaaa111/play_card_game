@@ -107,6 +107,9 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /elements\.duelPanel\.addEventListener\("click"/);
   assert.match(app, /elements\.hand\.addEventListener\("click"/);
   assert.match(html, /点击弹窗外空白处或按 Esc 关闭/);
+  assert.match(app, /async function prepareSelectedAttack\(\)/);
+  assert.match(app, /fieldAttackBtn\.addEventListener\("click", prepareSelectedAttack\)/);
+  assert.match(app, /进入战斗阶段并发起攻击/);
 });
 
 test("index keeps critical app mount points wired", () => {
