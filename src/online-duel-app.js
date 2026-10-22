@@ -5,7 +5,7 @@ import { buildDuelControlsView } from "./control-renderer.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -15,7 +15,7 @@ const elements = Object.fromEntries([
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
-  "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose"
+  "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "viewerIdentity", "viewerName", "viewerSeatLabel"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
@@ -113,7 +113,11 @@ function renderDuelist(root, view, seatId, rival) {
   const player = view.players[seatId];
   const seat = view.seats.find((entry) => entry.seatId === seatId);
   const active = view.turn.playerId === seatId;
-  root.innerHTML = `<div class="duelist-face"><div class="duelist-figure ${rival ? "ai" : "player"}" aria-hidden="true"><img class="duelist-sprite" src="assets/duelist-${rival ? "ai" : "player"}.png" alt=""></div><div><div class="player-title"><span>${escapeHtml(seatName(view, seatId))}</span><span class="life-caption">LP</span></div><div class="life-bar"><div class="life-fill" style="width:${Math.max(0, Math.min(100, player.lp / 40))}%"></div><span class="life-value">${player.lp} / 4000</span></div><div class="skill-line">${seat?.connected ? "在线" : "断线重连中"} · 手牌 ${player.handCount}${active ? " · 当前回合" : ""}</div></div></div>`;
+  const identity = onlineIdentityView(view);
+  const seatNumber = seatId === "p1" ? "1P" : "2P";
+  root.dataset.onlineRole = rival ? "opponent" : "self";
+  root.innerHTML = `<div class="duelist-face"><div class="duelist-figure ${rival ? "ai" : "player"}" aria-hidden="true"><img class="duelist-sprite" src="assets/duelist-${rival ? "ai" : "player"}.png" alt=""></div><div><div class="player-title"><span><b class="online-role-badge">${rival ? "对手" : "你"}</b>${escapeHtml(seatName(view, seatId))}</span><span class="life-caption">LP</span></div><div class="life-bar"><div class="life-fill" style="width:${Math.max(0, Math.min(100, player.lp / 40))}%"></div><span class="life-value">${player.lp} / 4000</span></div><div class="skill-line"><b class="online-seat-number">${seatNumber}</b> · ${seat?.connected ? "在线" : "断线重连中"} · 手牌 ${player.handCount}${active ? " · 当前回合" : ""}</div></div></div>`;
+  root.setAttribute("aria-label", `${rival ? "对手" : "当前玩家"} ${seatName(view, seatId)}，${seatNumber}${!rival && identity ? `，${identity.seatRole}` : ""}`);
   elements[rival ? "rivalDeckCount" : "playerDeckCount"].textContent = player.deckCount;
   elements[rival ? "rivalGraveCount" : "playerGraveCount"].textContent = player.grave.length;
 }
@@ -253,6 +257,12 @@ function renderRoom(view) {
   elements.roomPanel.hidden = playing;
   elements.copyRoomCode.hidden = false;
   elements.copyRoomCode.textContent = view.roomCode;
+  const identity = onlineIdentityView(view);
+  elements.viewerIdentity.hidden = !identity;
+  elements.viewerName.textContent = identity?.name || "";
+  elements.viewerSeatLabel.textContent = identity ? `${identity.seatNumber} · ${identity.seatRole}` : "";
+  elements.viewerIdentity.dataset.seat = identity?.seatId || "";
+  document.body.dataset.onlineViewerSeat = identity?.seatId || "none";
   elements.seatGrid.innerHTML = view.seats.map((seat) => `<div class="seat-card" data-ready="${seat.ready}"><strong>${escapeHtml(seat.name)}${seat.seatId === view.viewerSeatId ? "（你）" : ""}</strong><span>${seat.connected ? "在线" : "已断线"} · ${seat.ready ? "已准备" : "未准备"}</span></div>`).join("");
   const self = view.seats.find((seat) => seat.seatId === view.viewerSeatId);
   elements.readyButton.disabled = Boolean(self?.ready);
@@ -310,7 +320,7 @@ for (const [id, join] of [["createRoom", false], ["joinRoom", true]]) elements[i
   try {
     setError();
     const result = join ? await client.joinRoom(elements.roomCodeInput.value, elements.playerName.value) : await client.createRoom(elements.playerName.value);
-    saveSession(); render(result.view);
+    saveSession(); setConnection("connected", `身份已保存 · ${seatName(result.view, result.seatId)}`); render(result.view);
   } catch (error) { setError(error.message); }
 });
 elements.readyButton.addEventListener("click", async () => { try { await client.setReady(true); } catch (error) { setError(error.message); } });
@@ -341,7 +351,7 @@ try {
   await client.connect(); setConnection("connected", "服务已连接");
   const session = storedSession();
   if (session) {
-    try { const result = await client.resumeRoom(session); saveSession(); render(result.view); }
+    try { const result = await client.resumeRoom(session); saveSession(); setConnection("connected", `身份已恢复 · ${seatName(result.view, result.seatId)}`); render(result.view); }
     catch { sessionStorage.removeItem(STORAGE_KEY); }
   }
 } catch (error) { setConnection("error", "服务未启动"); setError(`${error.message}。请先启动对战服务。`); }

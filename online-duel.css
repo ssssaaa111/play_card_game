@@ -3,12 +3,19 @@
 .connection-pill { padding: 7px 10px; border: 1px solid var(--line); border-radius: 20px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .connection-pill[data-state="connected"] { color: var(--green); }
 .connection-pill[data-state="error"], .error-copy { color: var(--red); }
+.online-session-hud { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+.online-identity { --identity-accent: 84, 210, 210; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 1px 7px; min-width: 128px; padding: 6px 10px 6px 12px; border: 1px solid rgba(var(--identity-accent), .42); border-left: 3px solid rgb(var(--identity-accent)); border-radius: 7px; background: linear-gradient(100deg, rgba(var(--identity-accent), .15), rgba(5, 10, 18, .9) 70%); box-shadow: inset 0 0 18px rgba(var(--identity-accent), .06), 0 0 14px rgba(var(--identity-accent), .08); }
+.online-identity[data-seat="p2"] { --identity-accent: 246, 189, 96; }
+.online-identity > span { grid-column: 1 / -1; color: rgba(219, 230, 241, .56); font-size: 8px; font-weight: 800; letter-spacing: .14em; }
+.online-identity > strong { min-width: 0; overflow: hidden; color: rgb(var(--identity-accent)); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.online-identity > small { color: rgba(225, 233, 242, .72); font-size: 9px; white-space: nowrap; }
 .online-room-code { border: 0; color: var(--gold); background: none; cursor: pointer; font-size: inherit; letter-spacing: .12em; }
 .topbar .brand .subtitle { display: block; color: var(--muted); font-size: 10px; }
 body[data-online-status="waiting"] #app { grid-template-rows: auto minmax(0, 1fr); overflow-y: auto; }
 .lobby-card, .room-card { align-self: start; width: min(650px, 100%); margin: 8vh auto 0; padding: clamp(20px, 5vw, 40px); display: grid; gap: 18px; border: 1px solid var(--table-line); border-radius: var(--table-radius); background: var(--table-panel); box-shadow: var(--table-shadow); }
 .lobby-card h2, .room-card h2 { color: var(--gold); }
 .lobby-card p, .room-card p { line-height: 1.8; font-size: 13px; color: var(--muted); }
+.lobby-card .online-session-note { margin-top: -10px; padding: 9px 11px; border-left: 2px solid rgba(84,210,210,.62); background: rgba(84,210,210,.06); color: rgba(215,230,239,.76); font-size: 11px; }
 .lobby-card input { min-width: 0; width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: rgba(0,0,0,.35); color: var(--ink); font: inherit; }
 .lobby-card input:focus { outline: 2px solid var(--cyan); }
 .lobby-actions { display: grid; grid-template-columns: auto minmax(80px, 1fr) auto; gap: 10px; }
@@ -35,15 +42,24 @@ body[data-online-status="waiting"] #app { grid-template-rows: auto minmax(0, 1fr
 .online-target small { color: var(--muted); }
 body[data-duel-focus="material"] #app .duel-table .slot.tribute-selected { opacity: 1 !important; filter: none !important; }
 .online-pile-target { outline: 2px solid var(--gold); }
+.online-role-badge { display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; padding: 2px 5px; border: 1px solid rgba(239,71,111,.46); border-radius: 4px; color: #ff9bb2; background: rgba(239,71,111,.13); font-size: 8px; letter-spacing: .08em; vertical-align: 1px; }
+.player-card[data-online-role="self"] .online-role-badge { border-color: rgba(84,210,210,.48); color: #8df5f0; background: rgba(84,210,210,.13); }
+.online-seat-number { color: rgba(246,189,96,.92); font-size: 9px; letter-spacing: .08em; }
+body[data-online-viewer-seat="p2"] .player-card[data-online-role="self"] .online-role-badge { border-color: rgba(246,189,96,.55); color: #ffda91; background: rgba(246,189,96,.14); }
 .topbar .btn.primary { background: linear-gradient(135deg, #f6bd60, #ffdc96); color: #17130b; }
 #app .duel-table .online-placement-selected { outline: 3px solid var(--gold); outline-offset: -5px; }
 #app .duel-table .online-placement-selected::after { content: "已选落点 ✓"; }
 @media (max-width: 1040px) {
   .topbar .connection-pill { font-size: 9px; padding: 4px 7px; }
+  .online-identity { min-width: 104px; padding: 4px 7px; }
+  .online-identity > span { display: none; }
+  .online-identity > strong { font-size: 10px; }
 }
 @media (max-width: 720px) {
   .topbar .brand h1 { font-size: 15px; }
   .topbar .connection-pill { display: none; }
+  .online-identity { min-width: 0; grid-template-columns: minmax(0,1fr); justify-items: end; border-left-width: 1px; }
+  .online-identity > small { display: none; }
   .lobby-actions { grid-template-columns: minmax(0,1fr) auto; }
   .lobby-actions #createRoom { grid-column: 1 / -1; }
   .online-log-toggle { padding: 5px 8px; font-size: 10px; bottom: 5px; right: 5px; }

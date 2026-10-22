@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 
 const monster = (id) => ({ id, templateId: "iron-guardian", name: id, type: "monster", atk: 900, def: 2100 });
@@ -8,6 +8,19 @@ function snapshot() {
   const player = () => ({ hand: [], monsterZone: Array(5).fill(null), spellTrapZone: Array(5).fill(null), grave: [], banished: [] });
   return { status: "playing", revision: 3, viewerSeatId: "p1", opponentSeatId: "p2", turn: { playerId: "p1", phase: "main" }, players: { p1: player(), p2: player() }, legalActions: { actions: {} } };
 }
+
+test("viewer identity keeps two tabs visually tied to their own reserved seats", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  assert.deepEqual(onlineIdentityView(view), {
+    name: "星野", seatId: "p1", seatNumber: "1P", seatRole: "房主", opponentName: "月见"
+  });
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  assert.deepEqual(onlineIdentityView(view), {
+    name: "月见", seatId: "p2", seatNumber: "2P", seatRole: "挑战者", opponentName: "星野"
+  });
+});
 
 test("shared cards use template art while retaining instance identity without changing the snapshot", () => {
   const card = monster("p1:card-4");

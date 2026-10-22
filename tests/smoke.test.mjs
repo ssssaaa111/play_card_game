@@ -90,6 +90,8 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="hand"/);
   assert.match(html, /id="choiceActions"/);
   assert.match(html, /id="eventLog"/);
+  assert.match(html, /id="viewerIdentity"[^>]*hidden/);
+  assert.match(html, /每个标签页保存一名玩家身份/);
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
   assert.match(html, /href="duel-table\.css"/);
   assert.match(html, /href="duel-focus\.css"/);
@@ -97,6 +99,8 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /import \{ renderMonsterZones, renderSupportZones \} from "\.\/field-renderer\.js"/);
   assert.match(app, /import \{ monsterAssets \} from "\.\/data\.js"/);
   assert.match(app, /onlineSelectionModel\(client\.view, selection\)\?\.action/);
+  assert.match(app, /sessionStorage\.setItem\(STORAGE_KEY/);
+  assert.match(app, /身份已恢复/);
 });
 
 test("index keeps critical app mount points wired", () => {

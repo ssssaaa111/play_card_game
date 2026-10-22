@@ -5,6 +5,19 @@ export function onlineDisplayCard(card) {
   return { ...card, id: card.templateId || card.id, uid: card.id };
 }
 
+export function onlineIdentityView(view) {
+  const seat = view?.seats?.find((entry) => entry.seatId === view.viewerSeatId);
+  if (!seat) return null;
+  const firstSeat = view.viewerSeatId === "p1";
+  return {
+    name: seat.name,
+    seatId: seat.seatId,
+    seatNumber: firstSeat ? "1P" : "2P",
+    seatRole: firstSeat ? "房主" : "挑战者",
+    opponentName: view.seats?.find((entry) => entry.seatId === view.opponentSeatId)?.name || "等待加入"
+  };
+}
+
 export function onlineCard(view, cardId) {
   for (const player of Object.values(view?.players || {})) {
     for (const zone of ["hand", "monsterZone", "spellTrapZone", "grave", "banished"]) {
