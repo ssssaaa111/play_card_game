@@ -130,8 +130,6 @@ function chooseCard(id) {
     }
     selection = selectOnlineCard(view, id);
   } else {
-    const card = onlineCard(view, id);
-    if (card) showCards([card], card.name);
     return;
   }
   render(view);

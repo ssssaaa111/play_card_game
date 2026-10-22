@@ -104,6 +104,8 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /event\.target === elements\.cardInspector/);
   assert.match(app, /elements\.inspectorBackdrop\.addEventListener\("click", closeInspector\)/);
   assert.match(app, /if \(selection\?\.cardId === id\)[\s\S]*cancelSelection\(\)/);
+  const chooseCardSource = app.slice(app.indexOf("function chooseCard"), app.indexOf("function chooseSlot"));
+  assert.doesNotMatch(chooseCardSource, /showCards\(/, "primary hand-card clicks must not open the detail dialog");
   assert.match(app, /elements\.duelPanel\.addEventListener\("click"/);
   assert.match(app, /elements\.hand\.addEventListener\("click"/);
   assert.match(html, /点击弹窗外空白处或按 Esc 关闭/);
