@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineActionReceipt, latestOnlineActionReceipt } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 
 const monster = (id) => ({ id, templateId: "iron-guardian", name: id, type: "monster", atk: 900, def: 2100 });
@@ -31,6 +31,62 @@ test("online card details expose effect copy and current public values", () => {
   });
   assert.deepEqual(onlineCardDetailView({ name: "星魂共鸣", type: "spell", text: "最高怪兽强化。", rarity: "R", archetype: "连携" }).rows,
     [["类型", "魔法"], ["稀有度", "R"], ["流派", "连携"]]);
+});
+
+test("public duel actions become concise viewer-relative receipts", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p2.grave = [{ id: "spell:1", name: "晨昏星界", type: "spell" }];
+  view.recentEvents = [
+    { id: 7, type: "PHASE_CHANGED", playerId: "p2" },
+    { id: 8, type: "CARD_ACTIVATED", playerId: "p2", cardId: "spell:1" }
+  ];
+  assert.deepEqual(latestOnlineActionReceipt(view, 7), {
+    id: 8, type: "CARD_ACTIVATED", actor: "opponent", text: "月见发动《晨昏星界》"
+  });
+  view.players.p1.monsterZone[0] = { ...monster("attacker:1"), name: "天岚突袭者" };
+  view.recentEvents.push({ id: 9, type: "ATTACK_DECLARED", playerId: "p1", attackerCardId: "attacker:1", direct: true });
+  assert.deepEqual(latestOnlineActionReceipt(view, 8), {
+    id: 9, type: "ATTACK_DECLARED", actor: "self", text: "星野以《天岚突袭者》发起直接攻击"
+  });
+  assert.equal(latestOnlineActionReceipt(view, 9), null);
+});
+
+test("a summon receipt wins over the activation event from the same action batch", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p2.monsterZone[0] = { ...monster("summoned:1"), name: "余烁小卫" };
+  view.recentEvents = [
+    { id: 10, type: "CARD_ACTIVATED", playerId: "p2", cardId: "summoned:1" },
+    { id: 11, type: "MONSTER_SUMMONED", playerId: "p2", cardId: "summoned:1", summonType: "normal" }
+  ];
+
+  assert.deepEqual(latestOnlineActionReceipt(view, 9), {
+    id: 11, type: "MONSTER_SUMMONED", actor: "opponent", text: "月见召唤《余烁小卫》"
+  });
+});
+
+test("monster mode changes use the engine event name and public card name", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.monsterZone[0] = { ...monster("guardian:1"), name: "守望铁卫" };
+
+  assert.deepEqual(onlineActionReceipt(view, {
+    id: 12, type: "MONSTER_MODE_CHANGED", playerId: "p1", cardId: "guardian:1", from: "attack", to: "defense"
+  }), {
+    id: 12, type: "MONSTER_MODE_CHANGED", actor: "self", text: "星野将《守望铁卫》切换为守备表示"
+  });
+});
+
+test("action receipts do not expose names for cards absent from the public view", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+
+  assert.deepEqual(onlineActionReceipt(view, {
+    id: 13, type: "CARD_ACTIVATED", playerId: "p2", cardId: "hidden:trap:1"
+  }), {
+    id: 13, type: "CARD_ACTIVATED", actor: "opponent", text: "月见发动一张卡"
+  });
 });
 
 test("a selected attack-position monster can carry its intent from main into battle", () => {

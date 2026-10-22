@@ -91,6 +91,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="handReadyJump"[^>]*disabled/);
   assert.match(html, /id="choiceActions"/);
   assert.match(html, /id="eventLog"/);
+  assert.match(html, /id="duelHint"[^>]*aria-live="polite"/);
   assert.match(html, /id="viewerIdentity"[^>]*hidden/);
   assert.match(html, /每个标签页保存一名玩家身份/);
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
@@ -117,6 +118,8 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /handReadyJump\.addEventListener\("click", locateNextReadyHandCard\)/);
   assert.match(app, /battleButton\.dataset\.currentPhase/);
   assert.match(app, /handPanel\.dataset\.commandActive/);
+  assert.match(app, /syncActionReceipt\(view\)/);
+  assert.match(app, /actionReceipt\?\.text/);
 });
 
 test("index keeps critical app mount points wired", () => {

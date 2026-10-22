@@ -51,7 +51,7 @@
       <aside class="side enemy duel-hud" aria-label="对手状态"><section class="player-card" id="aiPanel"></section><section class="piles"><div class="pile"><span><small>牌库</small><strong id="rivalDeckCount">0</strong></span></div><button class="pile" id="rivalGrave" type="button"><span><small>墓地</small><strong id="rivalGraveCount">0</strong></span></button></section></aside>
       <section class="field" id="duelField" aria-label="决斗场地">
         <div class="zone-row" id="aiField" aria-label="对手怪兽区"></div><div class="trap-row" id="aiTraps" aria-label="对手魔陷区"></div>
-        <div class="center-line"><span id="duelHint">选择手牌，规划你的行动</span></div>
+        <div class="center-line"><span id="duelHint" role="status" aria-live="polite" aria-atomic="true">选择手牌，规划你的行动</span></div>
         <div class="trap-row" id="playerTraps" aria-label="我方魔陷区"></div><div class="zone-row" id="playerField" aria-label="我方怪兽区"></div>
       </section>
       <aside class="side duel-hud" aria-label="玩家状态"><section class="player-card" id="playerPanel"></section><section class="piles"><div class="pile"><span><small>牌库</small><strong id="playerDeckCount">0</strong></span></div><button class="pile" id="playerGrave" type="button"><span><small>墓地</small><strong id="playerGraveCount">0</strong></span></button></section></aside>

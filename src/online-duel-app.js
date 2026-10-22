@@ -5,7 +5,7 @@ import { buildDuelControlsView } from "./control-renderer.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, latestOnlineActionReceipt } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -25,13 +25,17 @@ let selection = null;
 let handOrder = [];
 let locatedReadyCardId = null;
 let inspectorReturnFocus = null;
+let observedReceiptRoomCode = null;
+let lastObservedEventId = 0;
+let actionReceipt = null;
+let actionReceiptTimer = null;
 const assetForCard = (card) => monsterAssets[card.id] || "";
 const EVENT_LABELS = {
   MONSTER_SUMMONED: "怪兽登场", CARD_ACTIVATED: "卡牌发动", CARD_MOVED: "卡牌移动", DAMAGE_DEALT: "生命值受创",
-  LIFE_GAINED: "生命值恢复", ATTACK_DECLARED: "攻击宣言", BATTLE_RESOLVED: "战斗结算", MONSTER_DESTROYED: "怪兽破坏",
+  LP_HEALED: "生命值恢复", ATTACK_DECLARED: "攻击宣言", BATTLE_RESOLVED: "战斗结算", CARD_DESTROYED: "卡牌破坏",
   TURN_STARTED: "新回合开始", TURN_ENDED: "回合结束", CARDS_DRAWN: "抽取卡牌", TURN_DRAW_RESOLVED: "回合抽卡",
-  MODE_CHANGED: "表示形式切换", PHASE_CHANGED: "阶段推进", GAME_OVER_DECLARED: "决斗结束", EFFECT_SKIPPED: "效果条件不足",
-  CONTINUOUS_EFFECT_REGISTERED: "持续效果生效"
+  MONSTER_MODE_CHANGED: "表示形式切换", PHASE_CHANGED: "阶段推进", GAME_OVER_DECLARED: "决斗结束", EFFECT_SKIPPED: "效果条件不足",
+  CONTINUOUS_EFFECT_REGISTERED: "持续效果生效", TRAP_SET: "陷阱盖放"
 };
 
 function escapeHtml(value) {
@@ -52,6 +56,33 @@ function storedSession() {
 }
 function seatName(view, id) { return view.seats?.find((seat) => seat.seatId === id)?.name || id; }
 function cardName(view, id) { return onlineCard(view, id)?.name || "盖放卡牌"; }
+
+function clearActionReceipt() {
+  actionReceipt = null;
+  if (actionReceiptTimer) clearTimeout(actionReceiptTimer);
+  actionReceiptTimer = null;
+}
+
+function syncActionReceipt(view) {
+  const events = view?.recentEvents || [];
+  const newestId = events.reduce((max, event) => Math.max(max, Number(event.id) || 0), 0);
+  if (observedReceiptRoomCode !== view.roomCode || newestId < lastObservedEventId) {
+    observedReceiptRoomCode = view.roomCode;
+    lastObservedEventId = newestId;
+    clearActionReceipt();
+    return;
+  }
+  const receipt = latestOnlineActionReceipt(view, lastObservedEventId);
+  lastObservedEventId = Math.max(lastObservedEventId, newestId);
+  if (!receipt) return;
+  clearActionReceipt();
+  actionReceipt = receipt;
+  actionReceiptTimer = setTimeout(() => {
+    actionReceipt = null;
+    actionReceiptTimer = null;
+    render(client.view);
+  }, 2800);
+}
 
 function setEventLogOpen(open) {
   elements.eventLog.hidden = !open;
@@ -115,8 +146,10 @@ function chooseCard(id) {
   const view = client.view;
   const model = onlineSelectionModel(view, selection);
   if (model?.targetIds.includes(id)) {
+    clearActionReceipt();
     selection.targetCardId = id;
   } else if (model?.tributeCount && view.players[view.viewerSeatId].monsterZone.some((card) => card?.id === id)) {
+    clearActionReceipt();
     selection.tributeCardIds = selection.tributeCardIds.includes(id)
       ? selection.tributeCardIds.filter((entry) => entry !== id)
       : [...selection.tributeCardIds, id].slice(-model.tributeCount);
@@ -125,6 +158,7 @@ function chooseCard(id) {
     view.turn.playerId === view.viewerSeatId
     && view.players[view.viewerSeatId].monsterZone.some((card) => card?.id === id)
   )) {
+    clearActionReceipt();
     if (selection?.cardId === id) {
       cancelSelection();
       return;
@@ -143,6 +177,7 @@ function chooseSlot(owner, zone, index) {
   const card = cards[index];
   const placementZone = selection?.actionType === "SET_TRAP" ? "spellTrapZone" : "monsterZone";
   if (!actionPending && owner === "player" && model?.stage === "placement" && zone === placementZone && model.slots.includes(index)) {
+    clearActionReceipt();
     selection.index = index;
     render(view);
   } else if (card) chooseCard(card.id);
@@ -151,6 +186,7 @@ function chooseSlot(owner, zone, index) {
 
 async function sendAction(action) {
   if (actionPending || !action) return;
+  clearActionReceipt();
   actionPending = true;
   selection = null;
   setError();
@@ -351,7 +387,10 @@ function renderCommands(view, model) {
   elements.commandSignal.textContent = actionPending ? "结算中" : model ? "操作中" : canAct ? "待命" : "等待";
   elements.commandTitle.textContent = view.gameOver ? "决斗结束" : canAct ? "选择一张手牌或场上怪兽" : "对手正在行动";
   elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "选择卡牌，再选择落点或目标。" : "可以查看公开卡牌和墓地。";
-  elements.duelHint.textContent = model ? prompt : elements.commandTitle.textContent;
+  elements.duelHint.textContent = model ? prompt : actionReceipt?.text || elements.commandTitle.textContent;
+  elements.duelHint.dataset.kind = model ? "action" : actionReceipt ? "receipt" : "status";
+  elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor : "none";
+  elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type : "none";
   elements.handGuide.textContent = model ? "确认或取消后继续行动" : "选择卡牌 · 再选择落点或目标";
   const inBattle = view.turn.phase === "battle";
   elements.battleButton.textContent = inBattle ? "战斗阶段" : "进入战斗";
@@ -408,6 +447,7 @@ function renderEvents(view) {
 function render(view) {
   if (!view) return;
   renderRoom(view);
+  syncActionReceipt(view);
   elements.duelPanel.hidden = view.status === "waiting";
   elements.handPanel.hidden = view.status === "waiting";
   if (view.status === "waiting") return;

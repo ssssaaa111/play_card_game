@@ -51,6 +51,30 @@ export function onlineCard(view, cardId) {
   return null;
 }
 
+const ACTION_RECEIPT_TYPES = new Set(["MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED"]);
+
+export function onlineActionReceipt(view, event) {
+  if (!event || !ACTION_RECEIPT_TYPES.has(event.type)) return null;
+  const actorName = view?.seats?.find((seat) => seat.seatId === event.playerId)?.name || event.playerId || "系统";
+  const cardId = event.cardId || event.attackerCardId || event.sourceCardId;
+  const card = cardId ? onlineCard(view, cardId) : null;
+  const cardLabel = card?.name ? `《${card.name}》` : "一张卡";
+  const actor = event.playerId === view?.viewerSeatId ? "self" : event.playerId ? "opponent" : "system";
+  const text = event.type === "MONSTER_SUMMONED" ? `${actorName}召唤${cardLabel}`
+    : event.type === "CARD_ACTIVATED" ? `${actorName}发动${cardLabel}`
+      : event.type === "ATTACK_DECLARED" ? `${actorName}以${cardLabel}${event.direct ? "发起直接攻击" : "发起攻击"}`
+        : `${actorName}将${cardLabel}切换为${event.mode === "defense" || event.to === "defense" ? "守备" : "攻击"}表示`;
+  return { id: Number(event.id) || 0, type: event.type, actor, text };
+}
+
+export function latestOnlineActionReceipt(view, afterEventId = 0) {
+  return [...(view?.recentEvents || [])]
+    .reverse()
+    .filter((event) => Number(event.id) > Number(afterEventId || 0))
+    .map((event) => onlineActionReceipt(view, event))
+    .find(Boolean) || null;
+}
+
 export function onlineCardActions(view, cardId) {
   if (view?.gameOver || view?.turn?.playerId !== view?.viewerSeatId) return [];
   return Object.values(view?.legalActions?.actions || {}).flat()
