@@ -4,6 +4,8 @@ import { renderMonsterZones, renderSupportZones } from "./field-renderer.js";
 import { buildDuelControlsView } from "./control-renderer.js";
 import { renderBattlePreviewElement } from "./battle-preview-renderer.js";
 import { createOnlineActionRunner } from "./online-action-runner.js";
+import { createDirectActivationTracker } from "./direct-activation.js";
+import { createAudioController, createAudioSettings } from "./audio.js";
 import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js";
 import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
@@ -11,7 +13,7 @@ import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -22,10 +24,11 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseTitle", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError"
+  "onlineResponse", "responseTitle", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError", "soundBtn"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
+const AUDIO_STORAGE_KEY = "star-card-duel:online-audio:v1";
 const client = new OnlineDuelClient();
 let actionPending = false;
 let selection = null;
@@ -37,6 +40,19 @@ let observedReceiptRoomCode = null;
 let lastObservedEventId = 0;
 let actionReceipt = null;
 let actionReceiptTimer = null;
+let lastResponseSoundId = null;
+const directActivationTracker = createDirectActivationTracker();
+const audioSettings = loadAudioSettings();
+const audioController = createAudioController({
+  getSettings: () => audioSettings,
+  setSettings: (patch) => {
+    Object.assign(audioSettings, patch);
+    try { localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify({ soundOn: audioSettings.soundOn })); } catch {}
+    renderSoundButton();
+  },
+  announce: () => {}
+});
+const { playSound, toggleSound: toggleAudioSound, unlock: unlockAudio } = audioController;
 const runCommand = createOnlineActionRunner((pending) => {
   actionPending = pending;
   render(client.view);
@@ -52,6 +68,20 @@ const EVENT_LABELS = {
 
 function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+function loadAudioSettings() {
+  const settings = createAudioSettings();
+  try {
+    const saved = JSON.parse(localStorage.getItem(AUDIO_STORAGE_KEY) || "null");
+    if (typeof saved?.soundOn === "boolean") settings.soundOn = saved.soundOn;
+  } catch {}
+  settings.voiceOn = false;
+  return settings;
+}
+function renderSoundButton() {
+  if (!elements.soundBtn) return;
+  elements.soundBtn.textContent = `音效 ${audioSettings.soundOn ? "开" : "关"}`;
+  elements.soundBtn.setAttribute("aria-pressed", String(audioSettings.soundOn));
 }
 function setConnection(state, text) {
   elements.connectionStatus.dataset.state = state;
@@ -85,8 +115,11 @@ function syncActionReceipt(view) {
     clearActionReceipt();
     return;
   }
+  const freshEvents = events.filter((event) => Number(event.id) > Number(lastObservedEventId || 0));
   const receipt = latestOnlineActionReceipt(view, lastObservedEventId);
   lastObservedEventId = Math.max(lastObservedEventId, newestId);
+  const eventSound = [...freshEvents].reverse().map((event) => onlineEventSound(view, event)).find(Boolean);
+  if (eventSound) playSound(eventSound);
   if (!receipt) return;
   clearActionReceipt();
   actionReceipt = receipt;
@@ -113,6 +146,8 @@ function setEventLogOpen(open) {
 function cancelSelection() {
   if (actionPending || !selection) return false;
   selection = null;
+  directActivationTracker.reset();
+  playSound("click");
   render(client.view);
   return true;
 }
@@ -170,21 +205,49 @@ function chooseCard(id) {
   if (next === selection) return;
   clearActionReceipt();
   selection = next;
+  playSound("click");
   render(view);
 }
 
-function chooseSlot(owner, zone, index) {
+function chooseHandCard(id, { directActivate = false } = {}) {
+  if (actionPending || client.view?.machine?.responseWindow) return;
+  const alreadySelected = selection?.cardId === id;
+  if (!alreadySelected) chooseCard(id);
+  if (!directActivate) {
+    if (alreadySelected) chooseCard(id);
+    return;
+  }
+  const model = onlineSelectionModel(client.view, selection);
+  if (model?.action) sendAction(model.action);
+}
+
+function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
   const view = client.view;
   const model = onlineSelectionModel(view, selection);
   const cards = view.players[owner === "player" ? view.viewerSeatId : view.opponentSeatId][zone];
   const card = cards[index];
   const placementZone = selection?.actionType === "SET_TRAP" ? "spellTrapZone" : "monsterZone";
+  const cardIsCandidate = Boolean(card && (
+    model?.targetIds.includes(card.id)
+    || (owner === "player" && zone === "monsterZone" && model?.tributeCount)
+  ));
+  let directCandidate = false;
   if (!actionPending && owner === "player" && model?.stage === "placement" && zone === placementZone && model.slots.includes(index)) {
     clearActionReceipt();
     selection.index = index;
+    directCandidate = true;
+    playSound("click");
     render(view);
-  } else if (card) chooseCard(card.id);
+  } else if (card) {
+    directCandidate = cardIsCandidate;
+    const keepChosenTribute = directActivate && model?.tributeCardIds.includes(card.id);
+    if (!keepChosenTribute) chooseCard(card.id);
+  }
   else if (selection && !["placement", "material", "target"].includes(model?.stage)) cancelSelection();
+  if (directActivate && directCandidate) {
+    const action = onlineSelectionModel(view, selection)?.action;
+    if (action) sendAction(action);
+  }
 }
 
 async function sendAction(action) {
@@ -212,6 +275,7 @@ async function prepareSelectedAttack() {
   }
   if (!intent.requiresBattlePhase) {
     selection = selectOnlineCard(client.view, cardId, "DECLARE_ATTACK");
+    playSound("click");
     render(client.view);
     return;
   }
@@ -235,6 +299,26 @@ async function prepareSelectedAttack() {
       selection = selectOnlineCard(client.view, cardId);
     }
   });
+}
+
+async function quickAttack(cardId) {
+  if (actionPending || !cardId) return;
+  if (selection?.cardId !== cardId) {
+    selection = selectOnlineCard(client.view, cardId);
+    render(client.view);
+  }
+  await prepareSelectedAttack();
+  const model = onlineSelectionModel(client.view, selection);
+  const attacks = model?.choices?.filter((action) => action.type === "DECLARE_ATTACK") || [];
+  if (attacks.length === 1 && model?.action) await sendAction(model.action);
+}
+
+function chooseFieldCard(id, { directActivate = false } = {}) {
+  if (directActivate) {
+    quickAttack(id);
+    return;
+  }
+  chooseCard(id);
 }
 
 function renderDuelist(root, view, seatId, rival) {
@@ -267,17 +351,37 @@ function renderBoard(view, model) {
         ? model.index === index ? "已选择此落点，确认后出牌" : "点击选择此落点" : "此区域不能放置所选卡牌"
     } : null;
     const isTarget = (card) => Boolean(card && model?.targetIds.includes(card.uid || card.id));
-    const click = (zone, index) => chooseSlot(owner, zone, index);
+    const click = (zone, index, directActivate = false) => chooseSlot(owner, zone, index, { directActivate });
+    const clickSlot = (zone, index) => click(zone, index, directActivationTracker.register(`slot:${owner}:${zone}:${index}`));
+    const monsterClick = (index, directActivate = false) => {
+      const card = duelist.field[index];
+      const cardId = card?.uid || card?.id;
+      const candidate = Boolean(cardId && (model?.targetIds.includes(cardId) || (owner === "player" && model?.tributeCount)));
+      if (candidate || owner !== "player") click("monsterZone", index, directActivate);
+      else if (cardId) chooseFieldCard(cardId, { directActivate });
+    };
+    const attackReadiness = (card) => {
+      if (owner !== "player" || !card) return null;
+      const cardId = card.uid || card.id;
+      const cardModel = onlineSelectionModel(view, selectOnlineCard(view, cardId));
+      const intent = onlineAttackIntent(view, cardModel);
+      return {
+        ok: !actionPending && intent.available,
+        reason: intent.requiresBattlePhase ? "双击将自动进入战斗阶段并攻击" : intent.available ? "双击发起攻击" : "当前不能攻击"
+      };
+    };
     renderMonsterZones({
       document, root: elements[owner === "ai" ? "aiField" : "playerField"], duelist, owner, state, assetForCard,
       targetableAt: (index) => targeting && !attacking && isTarget(duelist.field[index]),
       attackTargetableAt: (index) => targeting && attacking && isTarget(duelist.field[index]),
       targetSelectedAt: (index) => targeting && duelist.field[index]?.uid === model.targetCardId,
-      attackReadinessAt: (index) => owner === "player" && duelist.field[index] ? { ok: !actionPending && onlineCardActions(view, duelist.field[index].uid).some((action) => action.type === "DECLARE_ATTACK"), reason: view.turn.phase === "main" ? "进入战斗阶段后可攻击" : "当前不能攻击" } : null,
+      attackReadinessAt: (index) => attackReadiness(duelist.field[index]),
       materialTargetAt: (index) => model?.tributeCount ? { ok: owner === "player" && Boolean(duelist.field[index]), reason: "选择召唤祭品" } : null,
       selectedTributeIndexes: duelist.field.flatMap((card, index) => model?.tributeCardIds.includes(card?.uid) ? [index] : []),
       placementTargetAt: (index) => placement("monsterZone", index),
-      onSlotClick: (index) => click("monsterZone", index), onCardClick: (index) => click("monsterZone", index)
+      onSlotClick: (index) => clickSlot("monsterZone", index),
+      onSlotDoubleClick: (index) => click("monsterZone", index, true),
+      onCardClick: (index) => monsterClick(index, directActivationTracker.register(`field:${owner}:${duelist.field[index].uid || duelist.field[index].id}`))
     });
     renderSupportZones({
       document, root: elements[owner === "ai" ? "aiTraps" : "playerTraps"], duelist, owner, state, assetForCard,
@@ -285,7 +389,10 @@ function renderBoard(view, model) {
       targetSelectedAt: (index) => targeting && duelist.traps[index]?.uid === model.targetCardId,
       spellTargetAt: (index) => targeting ? { ok: isTarget(duelist.traps[index]), reason: "请选择高亮目标" } : null,
       placementTargetAt: (index) => placement("spellTrapZone", index),
-      onSlotClick: (index) => click("spellTrapZone", index), onCardClick: (_card, index) => click("spellTrapZone", index)
+      onSlotClick: (index) => clickSlot("spellTrapZone", index),
+      onSlotDoubleClick: (index) => click("spellTrapZone", index, true),
+      onCardClick: (_card, index) => click("spellTrapZone", index, directActivationTracker.register(`field:${owner}:spellTrapZone:${index}`)),
+      onCardDoubleClick: (_card, index) => click("spellTrapZone", index, true)
     });
   }
   if (model?.stage === "placement") {
@@ -305,9 +412,11 @@ function renderBoard(view, model) {
     selectedZone: "hand", selectedUid: selection?.cardId,
     actionForCard: (card) => {
       const ready = canAct && onlineCardActions(view, card.uid).length > 0;
-      return { ok: ready, label: ready ? card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "发动" : "暂不可用", reason: !canAct ? "等待对手行动，可查看卡牌详情" : ready ? "点击选择，再确认出牌" : "当前阶段或场上条件不满足" };
+      return { ok: ready, label: ready ? card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "发动" : "暂不可用", reason: !canAct ? "等待对手行动，可查看卡牌详情" : ready ? `单击选择 · 双击${card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "发动"}` : "当前阶段或场上条件不满足" };
     },
-    onCardClick: (card) => chooseCard(card.uid), onCardDetail: (card) => showCards([onlineCard(view, card.uid)], card.name)
+    onCardClick: (card) => chooseHandCard(card.uid, { directActivate: directActivationTracker.register(`hand:${card.uid}`) }),
+    onCardDoubleClick: (card) => chooseHandCard(card.uid, { directActivate: true }),
+    onCardDetail: (card) => showCards([onlineCard(view, card.uid)], card.name)
   });
   const readyCards = canAct ? state.player.hand.filter((card) => onlineCardActions(view, card.uid).length) : [];
   if (!readyCards.some((card) => card.uid === locatedReadyCardId)) locatedReadyCardId = null;
@@ -394,14 +503,14 @@ function renderCommands(view, model) {
   elements.handCommand.dataset.step = model ? model.action ? "execute" : "locate" : "select";
   elements.commandSignal.textContent = actionPending ? "结算中" : model ? "操作中" : canAct ? "待命" : "等待";
   elements.commandTitle.textContent = view.gameOver ? "决斗结束" : canAct ? "选择一张手牌或场上怪兽" : "对手正在行动";
-  elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "选择卡牌，再选择落点或目标。" : "可以查看公开卡牌和墓地。";
+  elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "单击选择，双击快捷执行；需要目标时，合法候选会高亮。" : "可以查看公开卡牌和墓地。";
   elements.duelHint.textContent = model ? prompt : actionReceipt?.text || elements.commandTitle.textContent;
   elements.duelHint.dataset.kind = model ? "action" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
   elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor : "none";
   elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type : "none";
   elements.duelHint.dataset.tone = !model && actionReceipt ? actionReceipt.tone || "neutral" : "neutral";
   elements.duelPanel.dataset.battleResult = !model && actionReceipt?.kind === "battle-result" ? actionReceipt.result : "none";
-  elements.handGuide.textContent = model ? "确认或取消后继续行动" : "选择卡牌 · 再选择落点或目标";
+  elements.handGuide.textContent = model ? "确认或双击高亮候选执行" : "单击选择 · 双击快捷出牌";
   const inBattle = view.turn.phase === "battle";
   elements.battleButton.textContent = inBattle ? "战斗阶段" : "进入战斗";
   elements.battleButton.dataset.currentPhase = String(inBattle);
@@ -458,6 +567,11 @@ function respondToAttack(activate, index = trapChoice?.selectedIndex) {
 }
 
 function renderResponse(view) {
+  const responseSoundId = view.attackResponse?.declarationEventId || null;
+  if (responseSoundId && responseSoundId !== lastResponseSoundId) {
+    lastResponseSoundId = responseSoundId;
+    playSound("trap");
+  } else if (!responseSoundId) lastResponseSoundId = null;
   if (trapChoice) {
     const panel = renderTrapResponsePanel({ document, ...responseRendererOptions(view), elements: {
       chainText: elements.responseText, chainStatus: elements.responseStatus, chainYes: elements.responseActivate, chainChoices: elements.responseChoices
@@ -593,8 +707,13 @@ elements.handReadyJump.addEventListener("click", locateNextReadyHandCard);
 elements.hand.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key) || event.target.closest("button")) return;
   const card = event.target.closest(".card[data-card-uid]");
-  if (card) { event.preventDefault(); chooseCard(card.dataset.cardUid); }
+  if (card) { event.preventDefault(); chooseHandCard(card.dataset.cardUid); }
 });
+elements.soundBtn?.addEventListener("click", () => {
+  const enabled = toggleAudioSound({ previewSound: "click" });
+  elements.soundBtn.title = enabled ? "关闭联机决斗音效" : "开启联机决斗音效";
+});
+document.addEventListener("pointerdown", unlockAudio, { capture: true, once: true });
 elements.logToggle.addEventListener("click", () => setEventLogOpen(elements.eventLog.hidden));
 document.addEventListener("click", (event) => {
   if (!runCommand.blocksRepeatedClick(event.detail)) return;
@@ -612,6 +731,7 @@ elements.hand.addEventListener("click", (event) => {
 for (const [id, own] of [["playerGrave", true], ["rivalGrave", false]]) elements[id].addEventListener("click", () => showCards(client.view.players[own ? client.view.viewerSeatId : client.view.opponentSeatId].grave, own ? "我方墓地" : "对手墓地"));
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !elements.cardInspector.open) cancelSelection(); });
 elements.roomCodeInput.value = new URLSearchParams(window.location.search).get("room") || "";
+renderSoundButton();
 try {
   await client.connect(); setConnection("connected", "服务已连接");
   const session = storedSession();

@@ -182,6 +182,30 @@ export function latestOnlineActionReceipt(view, afterEventId = 0) {
     .find(Boolean) || null;
 }
 
+export function onlineEventSound(view, event) {
+  if (!event) return "";
+  if (event.type === "MONSTER_SUMMONED") {
+    const card = onlineCard(view, event.cardId);
+    return Number(card?.stars || 0) >= 7 ? "ace" : "summon";
+  }
+  if (event.type === "CARD_ACTIVATED") {
+    const card = onlineCard(view, event.cardId);
+    return card?.type === "trap" ? "trap" : "spell";
+  }
+  if (event.type === "ATTACK_DECLARED") return "attack-charge";
+  if (event.type === "ATTACK_CANCELED") return "guard";
+  if (event.type === "BATTLE_RESOLVED") {
+    const kind = event.outcome?.kind;
+    if (kind === "direct") return "attack-direct";
+    if (["attackWin", "breakDefense", "pierceDefense", "countered"].includes(kind)) return "attack-break";
+    if (kind === "clash") return "attack-clash";
+    if (["guardHold", "guardCounter"].includes(kind)) return "guard";
+    return "attack-impact";
+  }
+  if (event.type === "TURN_STARTED" && event.playerId === view?.viewerSeatId) return "turn";
+  return "";
+}
+
 export function onlineCardActions(view, cardId) {
   if (view?.gameOver || view?.turn?.playerId !== view?.viewerSeatId) return [];
   return Object.values(view?.legalActions?.actions || {}).flat()

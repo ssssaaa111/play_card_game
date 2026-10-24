@@ -157,6 +157,73 @@ body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-targe
 .online-response[data-response-mode="single"] #responseStatus { display: inline-flex; margin: 2px 0 0; padding: 5px 9px; border: 1px solid rgba(246,189,96,.36); border-radius: 999px; color: #ffe7ad; background: rgba(246,189,96,.08); }
 .online-response[data-response-mode="single"] footer { margin-top: 12px; }
 .online-response[data-response-mode="single"] footer .btn { min-height: 48px; }
+
+/* Online controls mirror the solo duel's fast, readable interaction language. */
+.online-sound-btn[aria-pressed="true"] {
+  border-color: rgba(84,210,210,.5);
+  color: #baf7f1;
+  background: rgba(16,52,57,.78);
+}
+body[data-online-status="playing"][data-duel-turn="player"] #app .hand .card.action-ready:not(.selected) {
+  border-color: rgba(246,189,96,.88);
+  box-shadow: 0 0 0 2px rgba(246,189,96,.18), 0 14px 30px rgba(0,0,0,.45), 0 0 25px rgba(246,189,96,.26);
+  animation: online-ready-breathe 1.7s ease-in-out infinite;
+}
+body[data-online-status="playing"][data-duel-turn="player"] #app .hand .card.action-ready:not(.selected) .action-tag {
+  color: #201306;
+  background: linear-gradient(135deg, #ffd98d, #f6bd60);
+  box-shadow: 0 3px 12px rgba(246,189,96,.32);
+}
+body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #playerField .slot[data-attack-state="ready"] {
+  border-color: rgba(239,71,111,.58);
+  box-shadow: inset 0 0 0 1px rgba(239,71,111,.13), 0 0 20px rgba(239,71,111,.19);
+}
+body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #playerField .slot[data-attack-state="ready"]::before {
+  content: "双击攻击";
+  position: absolute;
+  z-index: 7;
+  top: 5px;
+  right: 5px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255,184,155,.58);
+  border-radius: 999px;
+  color: #ffe7db;
+  background: rgba(92,24,37,.92);
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
+body[data-duel-targeting="placement"] #app .duel-table :is(.slot, .trap-slot).placement-candidate,
+body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).targetable,
+body[data-duel-targeting="attack"] #app .duel-table .slot.attack-target {
+  animation: online-candidate-pulse 1.05s ease-in-out infinite;
+}
+body[data-duel-targeting="placement"] #app .duel-table :is(.slot, .trap-slot).placement-candidate::after {
+  content: "可放置 · 双击执行";
+}
+body[data-duel-targeting="placement"] #app .duel-table :is(.slot, .trap-slot).placement-candidate[data-placement-kind="summon"]::after {
+  content: "召唤位置 · 双击执行";
+}
+body[data-duel-targeting="placement"] #app .duel-table :is(.slot, .trap-slot).placement-candidate[data-placement-kind="trap"]::after {
+  content: "盖放位置 · 双击执行";
+}
+body[data-duel-targeting="attack"] #app .duel-table .slot.attack-target::after {
+  content: "攻击候选 · 双击执行";
+  font-weight: 900;
+}
+body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).targetable::after {
+  font-weight: 900;
+}
+@keyframes online-ready-breathe {
+  0%,100% { filter: brightness(1); transform: translateY(0); }
+  50% { filter: brightness(1.1); transform: translateY(-2px); }
+}
+@keyframes online-candidate-pulse {
+  0%,100% { filter: brightness(1); }
+  50% { filter: brightness(1.24); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .online-inspector-panel, .online-inspector-backdrop, .card.online-ready-located, #app .duel-table #duelHint[data-kind="receipt"], #app .duel-table #duelHint[data-kind="battle-result"], .player-card[data-battle-impact], .zone-row[data-battle-impact] { animation: none; }
+  .online-inspector-panel, .online-inspector-backdrop, .card.online-ready-located, #app .duel-table #duelHint[data-kind="receipt"], #app .duel-table #duelHint[data-kind="battle-result"], .player-card[data-battle-impact], .zone-row[data-battle-impact], #app .hand .card.action-ready, #app .duel-table :is(.slot, .trap-slot) { animation: none; }
 }

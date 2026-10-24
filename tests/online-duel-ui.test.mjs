@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineActionReceipt, latestOnlineActionReceipt } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
+import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
 
 const monster = (id) => ({ id, templateId: "iron-guardian", name: id, type: "monster", atk: 900, def: 2100 });
@@ -139,6 +140,18 @@ test("canceled attacks become a clear blocked battle result", () => {
     destroyedSeatIds: [],
     text: "《日冕骑士》的攻击被陷阱阻断"
   });
+});
+
+test("online event sounds distinguish summon, spell, attack and battle outcomes", () => {
+  const view = snapshot();
+  view.players.p1.monsterZone[0] = { ...monster("summoned:1"), stars: 4 };
+  view.players.p1.grave.push({ id: "spell:1", templateId: "ember-bolt", type: "spell" });
+  assert.equal(onlineEventSound(view, { type: "MONSTER_SUMMONED", cardId: "summoned:1" }), "summon");
+  assert.equal(onlineEventSound(view, { type: "CARD_ACTIVATED", cardId: "spell:1" }), "spell");
+  assert.equal(onlineEventSound(view, { type: "ATTACK_DECLARED" }), "attack-charge");
+  assert.equal(onlineEventSound(view, { type: "BATTLE_RESOLVED", outcome: { kind: "direct" } }), "attack-direct");
+  assert.equal(onlineEventSound(view, { type: "BATTLE_RESOLVED", outcome: { kind: "clash" } }), "attack-clash");
+  assert.equal(onlineEventSound(view, { type: "ATTACK_CANCELED" }), "guard");
 });
 
 test("a selected attack-position monster can carry its intent from main into battle", () => {
@@ -320,7 +333,13 @@ test("field selection separates mode change, attack intent and target confirmati
 });
 
 test("a shared UI summon at a non-default slot is accepted and mirrored to the other player", () => {
-  const room = new DuelRoom({ code: "ABC234" });
+  const room = new DuelRoom({
+    code: "ABC234",
+    createState: (config) => createOnlineDuelState({ ...config, openingHands: {
+      p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"],
+      p2: ["mirror-snare", "weakening-web", "storm-shift", "guard-sigil", "iron-guardian"]
+    } })
+  });
   room.join({ name: "星野", connectionId: "one" });
   room.join({ name: "月见", connectionId: "two" });
   room.setReady("one", true); room.setReady("two", true);
@@ -333,4 +352,17 @@ test("a shared UI summon at a non-default slot is accepted and mirrored to the o
   room.submit("one", { revision: view.revision, commandId: "ui-summon", action });
   assert.equal(room.viewFor("p1").players.p1.monsterZone[3]?.id, legal.cardId);
   assert.equal(room.viewFor("p2").players.p1.monsterZone[3]?.id, legal.cardId);
+
+  const afterFirstSummon = room.viewFor("p1");
+  room.submit("one", { revision: afterFirstSummon.revision, commandId: "ui-end-p1", action: { type: "END_TURN" } });
+  const secondView = room.viewFor("p2");
+  assert.equal(secondView.turn.playerId, "p2");
+  const secondLegal = secondView.legalActions.actions.summon[0];
+  assert.ok(secondLegal, "2P receives a summon action on their own turn");
+  const secondSelection = selectOnlineCard(secondView, secondLegal.cardId);
+  secondSelection.index = 4;
+  const secondAction = onlineSelectionModel(secondView, secondSelection).action;
+  room.submit("two", { revision: secondView.revision, commandId: "ui-summon-p2", action: secondAction });
+  assert.equal(room.viewFor("p2").players.p2.monsterZone[4]?.id, secondLegal.cardId);
+  assert.equal(room.viewFor("p1").players.p2.monsterZone[4]?.id, secondLegal.cardId);
 });

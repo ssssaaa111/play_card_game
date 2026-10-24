@@ -122,6 +122,11 @@ try {
     return receipt;
   };
   let pendingAttack = null;
+  const secondSummon = secondTurn.legalActions.actions.summon[0];
+  assert.ok(secondSummon, "2P must receive a summon action on their own turn");
+  await command(second, { ...secondSummon, index: 4 });
+  assert.equal(second.view.players.p2.monsterZone[4]?.id, secondSummon.cardId);
+  assert.equal(first.view.players.p2.monsterZone[4]?.id, secondSummon.cardId);
   if (responseScenario) {
     const mirror = secondTurn.players.p2.hand.find((card) => card.templateId === "mirror-snare");
     assert.ok(mirror, "fixed scenario must include mirror-snare");
