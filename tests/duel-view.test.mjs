@@ -30,3 +30,39 @@ test("opponent draw events keep drawn card ids private", () => {
   assert.equal(p2Draw.count, 1);
   assert.equal("cardIds" in p2Draw, false);
 });
+
+test("battle result events expose only the public outcome summary", () => {
+  const state = createOnlineDuelState();
+  state.events.push({
+    id: 999,
+    type: "BATTLE_RESOLVED",
+    playerId: "p1",
+    rivalId: "p2",
+    direct: true,
+    outcome: {
+      kind: "direct",
+      attack: 1700,
+      targetValue: 0,
+      diff: 1700,
+      finalDamage: 1700,
+      damagePlayerId: "p2",
+      destroysAttacker: false,
+      destroysTarget: false,
+      wear: 0,
+      secretEngineNote: "must-not-leak"
+    }
+  });
+
+  const event = buildDuelView(state, "p1").recentEvents.find((entry) => entry.id === 999);
+  assert.deepEqual(event.outcome, {
+    kind: "direct",
+    attack: 1700,
+    targetValue: 0,
+    diff: 1700,
+    finalDamage: 1700,
+    damagePlayerId: "p2",
+    destroysAttacker: false,
+    destroysTarget: false,
+    wear: 0
+  });
+});

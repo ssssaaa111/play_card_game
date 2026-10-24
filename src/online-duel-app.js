@@ -22,7 +22,7 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError"
+  "onlineResponse", "responseTitle", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
@@ -47,7 +47,7 @@ const EVENT_LABELS = {
   LP_HEALED: "生命值恢复", ATTACK_DECLARED: "攻击宣言", BATTLE_RESOLVED: "战斗结算", CARD_DESTROYED: "卡牌破坏",
   TURN_STARTED: "新回合开始", TURN_ENDED: "回合结束", CARDS_DRAWN: "抽取卡牌", TURN_DRAW_RESOLVED: "回合抽卡",
   MONSTER_MODE_CHANGED: "表示形式切换", PHASE_CHANGED: "阶段推进", GAME_OVER_DECLARED: "决斗结束", EFFECT_SKIPPED: "效果条件不足",
-  CONTINUOUS_EFFECT_REGISTERED: "持续效果生效", TRAP_SET: "陷阱盖放", ATTACK_CANCELED: "攻击被取消", ATTACK_TARGET_REDIRECTED: "攻击目标改变"
+  CONTINUOUS_EFFECT_REGISTERED: "持续效果生效", TRAP_SET: "陷阱盖放", ATTACK_CANCELED: "攻击被取消", ATTACK_TARGET_CHANGED: "攻击目标改变"
 };
 
 function escapeHtml(value) {
@@ -94,7 +94,15 @@ function syncActionReceipt(view) {
     actionReceipt = null;
     actionReceiptTimer = null;
     render(client.view);
-  }, 2800);
+  }, receipt.kind === "battle-result" ? 3800 : 2800);
+}
+
+function battleImpactForSeat(seatId) {
+  if (actionReceipt?.kind !== "battle-result") return "none";
+  if (actionReceipt.destroyedSeatIds?.includes(seatId)) return "destroyed";
+  if (actionReceipt.damagePlayerId === seatId && actionReceipt.damage > 0) return "damage";
+  return actionReceipt.result === "canceled" && actionReceipt.actor === (seatId === client.view?.viewerSeatId ? "self" : "opponent")
+    ? "blocked" : "none";
 }
 
 function setEventLogOpen(open) {
@@ -235,6 +243,7 @@ function renderDuelist(root, view, seatId, rival) {
   const active = view.turn.playerId === seatId;
   const identity = onlineIdentityView(view);
   const seatNumber = seatId === "p1" ? "1P" : "2P";
+  root.dataset.battleImpact = battleImpactForSeat(seatId);
   root.dataset.onlineRole = rival ? "opponent" : "self";
   root.innerHTML = `<div class="duelist-face"><div class="duelist-figure ${rival ? "ai" : "player"}" aria-hidden="true"><img class="duelist-sprite" src="assets/duelist-${rival ? "ai" : "player"}.png" alt=""></div><div><div class="player-title"><span><b class="online-role-badge">${rival ? "对手" : "你"}</b>${escapeHtml(seatName(view, seatId))}</span><span class="life-caption">LP</span></div><div class="life-bar"><div class="life-fill" style="width:${Math.max(0, Math.min(100, player.lp / 40))}%"></div><span class="life-value">${player.lp} / 4000</span></div><div class="skill-line"><b class="online-seat-number">${seatNumber}</b> · ${seat?.connected ? "在线" : "断线重连中"} · 手牌 ${player.handCount}${active ? " · 当前回合" : ""}</div></div></div>`;
   root.setAttribute("aria-label", `${rival ? "对手" : "当前玩家"} ${seatName(view, seatId)}，${seatNumber}${!rival && identity ? `，${identity.seatRole}` : ""}`);
@@ -247,6 +256,8 @@ function renderBoard(view, model) {
   state.pendingTrapChoice = trapChoice;
   for (const owner of ["ai", "player"]) {
     const duelist = state[owner];
+    const seatId = owner === "player" ? view.viewerSeatId : view.opponentSeatId;
+    elements[owner === "ai" ? "aiField" : "playerField"].dataset.battleImpact = battleImpactForSeat(seatId);
     const targeting = model?.stage === "target";
     const attacking = selection?.actionType === "DECLARE_ATTACK";
     const placement = (zone, index) => model?.stage === "placement" ? {
@@ -385,9 +396,11 @@ function renderCommands(view, model) {
   elements.commandTitle.textContent = view.gameOver ? "决斗结束" : canAct ? "选择一张手牌或场上怪兽" : "对手正在行动";
   elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "选择卡牌，再选择落点或目标。" : "可以查看公开卡牌和墓地。";
   elements.duelHint.textContent = model ? prompt : actionReceipt?.text || elements.commandTitle.textContent;
-  elements.duelHint.dataset.kind = model ? "action" : actionReceipt ? "receipt" : "status";
+  elements.duelHint.dataset.kind = model ? "action" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
   elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor : "none";
   elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type : "none";
+  elements.duelHint.dataset.tone = !model && actionReceipt ? actionReceipt.tone || "neutral" : "neutral";
+  elements.duelPanel.dataset.battleResult = !model && actionReceipt?.kind === "battle-result" ? actionReceipt.result : "none";
   elements.handGuide.textContent = model ? "确认或取消后继续行动" : "选择卡牌 · 再选择落点或目标";
   const inBattle = view.turn.phase === "battle";
   elements.battleButton.textContent = inBattle ? "战斗阶段" : "进入战斗";
@@ -446,16 +459,20 @@ function respondToAttack(activate, index = trapChoice?.selectedIndex) {
 
 function renderResponse(view) {
   if (trapChoice) {
-    renderTrapResponsePanel({ document, ...responseRendererOptions(view), elements: {
+    const panel = renderTrapResponsePanel({ document, ...responseRendererOptions(view), elements: {
       chainText: elements.responseText, chainStatus: elements.responseStatus, chainYes: elements.responseActivate, chainChoices: elements.responseChoices
     }, onSelect: selectResponse, onActivate: (index) => respondToAttack(true, index) });
+    elements.onlineResponse.dataset.responseMode = panel.singleChoice ? "single" : "multiple";
+    elements.onlineResponse.classList.toggle("single-response", panel.singleChoice);
+    elements.responseChoices.hidden = panel.singleChoice || panel.choices.length === 0;
+    elements.responseTitle.textContent = panel.singleChoice ? "可发动一张陷阱" : "选择本次攻击的响应";
     elements.responseActivate.disabled ||= actionPending;
     elements.responsePass.disabled = actionPending;
     elements.responseChoices.querySelectorAll("button").forEach((button) => { button.disabled = actionPending; });
     if (!elements.onlineResponse.open) {
       closeInspector();
       elements.onlineResponse.showModal();
-      elements.responsePass.focus({ preventScroll: true });
+      elements[panel.singleChoice ? "responseActivate" : "responsePass"].focus({ preventScroll: true });
     }
   } else if (elements.onlineResponse.open) elements.onlineResponse.close();
   if (!view.machine.responseWindow) return;
@@ -493,7 +510,7 @@ function renderEvents(view) {
   elements.eventLog.innerHTML = view.recentEvents.filter((event) => EVENT_LABELS[event.type]).slice(-20).reverse().map((event) => {
     const player = event.playerId ? seatName(view, event.playerId) : "系统";
     const text = event.type === "DAMAGE_DEALT" ? `受到 ${event.amount || event.damage || 0} 点伤害`
-      : event.type === "LIFE_GAINED" ? `恢复 ${event.amount || 0} LP` : EVENT_LABELS[event.type];
+      : event.type === "LP_HEALED" ? `恢复 ${event.amount || 0} LP` : EVENT_LABELS[event.type];
     const id = event.cardId || event.attackerCardId || event.sourceCardId;
     return `<span>${escapeHtml(player)} · ${escapeHtml(text)}${id ? ` · ${escapeHtml(cardName(view, id))}` : ""}</span>`;
   }).join("") || "<span>等待第一步行动</span>";

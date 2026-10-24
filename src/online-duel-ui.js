@@ -74,10 +74,93 @@ export function onlineCard(view, cardId) {
   return null;
 }
 
-const ACTION_RECEIPT_TYPES = new Set(["MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED"]);
+const ACTION_RECEIPT_TYPES = new Set([
+  "MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED",
+  "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED"
+]);
 
-export function onlineActionReceipt(view, event) {
+function battleResultReceipt(view, event, events = []) {
+  const outcome = event.outcome || {};
+  const attacker = onlineCard(view, event.attackerCardId);
+  const target = onlineCard(view, event.targetCardId);
+  const attackerName = attacker?.name ? `《${attacker.name}》` : "攻击怪兽";
+  const targetName = target?.name ? `《${target.name}》` : "目标怪兽";
+  const actor = event.playerId === view?.viewerSeatId ? "self" : "opponent";
+  if (event.type === "ATTACK_CANCELED") {
+    return {
+      id: Number(event.id) || 0,
+      type: event.type,
+      actor,
+      kind: "battle-result",
+      tone: "blocked",
+      result: "canceled",
+      damagePlayerId: null,
+      destroyedSeatIds: [],
+      text: `${attackerName}的攻击被陷阱阻断`
+    };
+  }
+  if (event.type === "ATTACK_TARGET_CHANGED") {
+    return {
+      id: Number(event.id) || 0,
+      type: event.type,
+      actor,
+      kind: "battle-result",
+      tone: "redirect",
+      result: "redirected",
+      damagePlayerId: null,
+      destroyedSeatIds: [],
+      text: `${attackerName}的攻击目标转为${targetName}`
+    };
+  }
+
+  const damageEvent = events.find((entry) =>
+    entry.type === "DAMAGE_DEALT"
+    && Number(entry.id) < Number(event.id)
+    && Number(entry.id) > Number(event.declarationEventId || 0)
+    && entry.playerId === outcome.damagePlayerId
+    && (!entry.sourceCardId || entry.sourceCardId === event.attackerCardId || entry.sourceCardId === event.targetCardId)
+  );
+  const damage = Math.max(0, Number(damageEvent?.amount ?? outcome.finalDamage) || 0);
+  const damagedName = outcome.damagePlayerId
+    ? view?.seats?.find((seat) => seat.seatId === outcome.damagePlayerId)?.name || outcome.damagePlayerId
+    : "";
+  const destroyedSeatIds = [
+    ...(outcome.destroysAttacker ? [event.playerId] : []),
+    ...(outcome.destroysTarget ? [event.rivalId] : [])
+  ].filter(Boolean);
+  let text = `${attackerName}完成攻击`;
+  if (outcome.kind === "direct") text = `${attackerName}直接命中${damagedName}${damage ? ` · ${damage} 伤害` : ""}`;
+  else if (outcome.kind === "attackWin") text = `${attackerName}击破${targetName}${damage ? ` · ${damage} 伤害` : ""}`;
+  else if (outcome.kind === "pierceDefense") text = `${attackerName}贯穿${targetName}${damage ? ` · ${damage} 伤害` : ""}`;
+  else if (outcome.kind === "breakDefense") text = `${attackerName}击破${targetName} · 未造成 LP 伤害`;
+  else if (outcome.kind === "guardCounter") text = `${targetName}挡下攻击 · ${damagedName}受到 ${damage} 伤害`;
+  else if (outcome.kind === "guardHold") text = `${targetName}完全挡下攻击 · 双方保留`;
+  else if (outcome.kind === "countered") text = `${attackerName}被${targetName}反击破坏${damage ? ` · ${damage} 伤害` : ""}`;
+  else if (outcome.kind === "clash") text = `${attackerName}与${targetName}同归于尽`;
+  const viewerLostCard = destroyedSeatIds.includes(view?.viewerSeatId);
+  const viewerDamaged = outcome.damagePlayerId === view?.viewerSeatId && damage > 0;
+  const tone = viewerLostCard || viewerDamaged ? "danger"
+    : outcome.kind === "guardHold" ? "blocked"
+      : outcome.kind === "clash" ? "neutral" : "success";
+  return {
+    id: Number(event.id) || 0,
+    type: event.type,
+    actor,
+    kind: "battle-result",
+    tone,
+    result: outcome.kind || "resolved",
+    damage,
+    damagePlayerId: outcome.damagePlayerId || null,
+    destroyedSeatIds,
+    text
+  };
+}
+
+export function onlineActionReceipt(view, event, { events = [] } = {}) {
   if (!event || !ACTION_RECEIPT_TYPES.has(event.type)) return null;
+  if (["BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED"].includes(event.type)) {
+    return battleResultReceipt(view, event, events);
+  }
   const actorName = view?.seats?.find((seat) => seat.seatId === event.playerId)?.name || event.playerId || "系统";
   const cardId = event.cardId || event.attackerCardId || event.sourceCardId;
   const card = cardId ? onlineCard(view, cardId) : null;
@@ -91,10 +174,11 @@ export function onlineActionReceipt(view, event) {
 }
 
 export function latestOnlineActionReceipt(view, afterEventId = 0) {
-  return [...(view?.recentEvents || [])]
+  const events = (view?.recentEvents || [])
+    .filter((event) => Number(event.id) > Number(afterEventId || 0));
+  return [...events]
     .reverse()
-    .filter((event) => Number(event.id) > Number(afterEventId || 0))
-    .map((event) => onlineActionReceipt(view, event))
+    .map((event) => onlineActionReceipt(view, event, { events }))
     .find(Boolean) || null;
 }
 

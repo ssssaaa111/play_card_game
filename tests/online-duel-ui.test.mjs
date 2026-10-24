@@ -90,6 +90,57 @@ test("action receipts do not expose names for cards absent from the public view"
   });
 });
 
+test("battle receipts summarize damage and change tone for each viewer", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.monsterZone[0] = { ...monster("attacker:1"), name: "日冕骑士", atk: 1700 };
+  view.recentEvents = [
+    { id: 20, type: "ATTACK_DECLARED", playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", direct: true },
+    { id: 21, type: "DAMAGE_DEALT", playerId: "p2", amount: 1200, requested: 1700, sourceCardId: "attacker:1" },
+    { id: 22, type: "BATTLE_RESOLVED", playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", direct: true, declarationEventId: 20, outcome: {
+      kind: "direct", finalDamage: 1700, damagePlayerId: "p2", destroysAttacker: false, destroysTarget: false
+    } }
+  ];
+
+  assert.deepEqual(latestOnlineActionReceipt(view, 19), {
+    id: 22,
+    type: "BATTLE_RESOLVED",
+    actor: "self",
+    kind: "battle-result",
+    tone: "success",
+    result: "direct",
+    damage: 1200,
+    damagePlayerId: "p2",
+    destroyedSeatIds: [],
+    text: "《日冕骑士》直接命中月见 · 1200 伤害"
+  });
+
+  view.viewerSeatId = "p2";
+  assert.equal(latestOnlineActionReceipt(view, 19).tone, "danger");
+  assert.equal(latestOnlineActionReceipt(view, 19).actor, "opponent");
+});
+
+test("canceled attacks become a clear blocked battle result", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.monsterZone[0] = { ...monster("attacker:1"), name: "日冕骑士" };
+  view.recentEvents = [
+    { id: 30, type: "ATTACK_DECLARED", playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", direct: true },
+    { id: 31, type: "ATTACK_CANCELED", playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", declarationEventId: 30, reason: "online-trap" }
+  ];
+  assert.deepEqual(latestOnlineActionReceipt(view, 29), {
+    id: 31,
+    type: "ATTACK_CANCELED",
+    actor: "self",
+    kind: "battle-result",
+    tone: "blocked",
+    result: "canceled",
+    damagePlayerId: null,
+    destroyedSeatIds: [],
+    text: "《日冕骑士》的攻击被陷阱阻断"
+  });
+});
+
 test("a selected attack-position monster can carry its intent from main into battle", () => {
   const view = snapshot();
   view.players.p1.monsterZone[0] = monster("attacker:1");

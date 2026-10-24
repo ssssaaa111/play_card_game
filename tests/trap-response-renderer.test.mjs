@@ -38,6 +38,7 @@ test("unselected response lists every legal trap without enabling activation", (
   assert.equal(view.choices.length, 2);
   assert.equal(view.actionDisabled, true);
   assert.equal(view.actionText, "发动陷阱");
+  assert.equal(view.singleChoice, false);
   assert.equal(view.statusText, "可响应 2 张 · 本事件限发动 1 张");
   assert.match(view.detailsText, /反击阵列、断链裁决/);
 });
@@ -52,8 +53,9 @@ test("selected first response labels its exact chain position", () => {
   const view = buildTrapResponseView({ choice, traps, activationText });
 
   assert.equal(view.actionDisabled, false);
-  assert.equal(view.actionText, "发动 反击阵列 · CL1");
-  assert.equal(view.statusText, "已选择：反击阵列 · 将加入 CL1");
+  assert.equal(view.singleChoice, true);
+  assert.equal(view.actionText, "发动《反击阵列》");
+  assert.equal(view.statusText, "唯一可发动：反击阵列 · 已自动选中");
   assert.equal(view.stackEntries.length, 0);
 });
 
@@ -95,6 +97,7 @@ test("prompt view has a safe empty state", () => {
     statusText: "",
     actionText: "发动陷阱",
     actionDisabled: false,
+    singleChoice: false,
     choices: [],
     stackEntries: [],
     resolutionOrder: ""

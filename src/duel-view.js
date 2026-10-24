@@ -14,6 +14,11 @@ const CARD_EVENT_FIELDS = new Set([
   "cardId", "sourceCardId", "targetCardId", "attackerCardId", "declarationEventId"
 ]);
 
+const PUBLIC_BATTLE_OUTCOME_FIELDS = new Set([
+  "kind", "attack", "targetValue", "diff", "finalDamage", "damagePlayerId",
+  "destroysAttacker", "destroysTarget", "wear", "piercing"
+]);
+
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
@@ -79,6 +84,14 @@ function publicEvent(event, visibleIds) {
   if (!event || event.type === "COMMAND_DISPATCHED") return null;
   const result = {};
   for (const [key, value] of Object.entries(event)) {
+    if (key === "outcome" && value && typeof value === "object") {
+      result.outcome = Object.fromEntries(
+        Object.entries(value)
+          .filter(([field]) => PUBLIC_BATTLE_OUTCOME_FIELDS.has(field))
+          .map(([field, entry]) => [field, clone(entry)])
+      );
+      continue;
+    }
     if (PUBLIC_EVENT_FIELDS.has(key)) {
       result[key] = clone(value);
       continue;
