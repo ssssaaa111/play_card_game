@@ -74,6 +74,33 @@ export function onlineCard(view, cardId) {
   return null;
 }
 
+export function onlineResponseBattleView(view) {
+  const pending = view?.machine?.pendingAttack;
+  if (!pending?.attackerCardId) return null;
+  const attacker = onlineCard(view, pending.attackerCardId);
+  if (!attacker) return null;
+  const target = pending.targetCardId ? onlineCard(view, pending.targetCardId) : null;
+  const preview = makeBattlePreview(attacker, target);
+  const attackerValue = Math.max(0, Number(attacker.atk || 0) + Number(attacker.tempAtk || 0));
+  const targetMode = target?.mode === "defense" ? "defense" : "attack";
+  const targetValue = target
+    ? Math.max(0, Number(target[targetMode === "defense" ? "def" : "atk"] || 0) + Number(target[targetMode === "defense" ? "tempDef" : "tempAtk"] || 0))
+    : Math.max(0, Number(view?.players?.[pending.rivalId]?.lp || 0));
+  const targetSeat = view?.seats?.find((seat) => seat.seatId === pending.rivalId);
+  const directSummary = preview?.rows?.find((row) => row.label === "结算")?.value;
+  return {
+    declarationEventId: pending.declarationEventId,
+    direct: Boolean(pending.direct),
+    tone: preview?.tone || (pending.direct ? "danger" : "neutral"),
+    badge: preview?.badge || (pending.direct ? "直击" : "攻击"),
+    attackerName: attacker.name || "攻击怪兽",
+    attackerStat: `ATK ${attackerValue}`,
+    targetName: target?.name || `${targetSeat?.name || "防守方"}的生命值`,
+    targetStat: target ? `${targetMode === "defense" ? "DEF" : "ATK"} ${targetValue}` : `LP ${targetValue}`,
+    summary: directSummary || preview?.result || "攻击已锁定，等待响应。"
+  };
+}
+
 const ACTION_RECEIPT_TYPES = new Set([
   "MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED",
   "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN"

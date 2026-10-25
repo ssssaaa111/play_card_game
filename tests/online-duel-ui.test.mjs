@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -33,6 +33,40 @@ test("online card details expose effect copy and current public values", () => {
   });
   assert.deepEqual(onlineCardDetailView({ name: "星魂共鸣", type: "spell", text: "最高怪兽强化。", rarity: "R", archetype: "连携" }).rows,
     [["类型", "魔法"], ["稀有度", "R"], ["流派", "连携"]]);
+});
+
+test("pending attack responses expose a compact public battle comparison", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.monsterZone[0] = { ...monster("attacker:1"), name: "日冕骑士", atk: 1700, def: 1200, mode: "attack" };
+  view.players.p2.monsterZone[0] = { ...monster("target:1"), name: "铁壁守卫", mode: "defense" };
+  view.players.p2.lp = 4000;
+  view.machine = { pendingAttack: { playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", targetCardId: "target:1", direct: false, declarationEventId: 23 } };
+
+  assert.deepEqual(onlineResponseBattleView(view), {
+    declarationEventId: 23,
+    direct: false,
+    tone: "guard",
+    badge: "守备反击",
+    attackerName: "日冕骑士",
+    attackerStat: "ATK 1700",
+    targetName: "铁壁守卫",
+    targetStat: "DEF 2100",
+    summary: "攻击方承受 400 点守备力差值伤害；双方怪兽保留，目标会产生战斗损耗。"
+  });
+
+  view.machine.pendingAttack = { playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", targetCardId: null, direct: true, declarationEventId: 24 };
+  assert.deepEqual(onlineResponseBattleView(view), {
+    declarationEventId: 24,
+    direct: true,
+    tone: "danger",
+    badge: "直击",
+    attackerName: "日冕骑士",
+    attackerStat: "ATK 1700",
+    targetName: "月见的生命值",
+    targetStat: "LP 4000",
+    summary: "预计造成 1700 点生命值伤害。"
+  });
 });
 
 test("public duel actions become concise viewer-relative receipts", () => {

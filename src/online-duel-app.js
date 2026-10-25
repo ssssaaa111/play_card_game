@@ -15,7 +15,7 @@ import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -26,7 +26,7 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseTitle", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError", "soundBtn", "effectLayer", "phaseStage"
+  "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
@@ -589,6 +589,19 @@ function renderBoard(view, model) {
   elements.handReadyJump.disabled = readyCards.length === 0;
   elements.handReadyJump.title = readyCards.length ? "定位下一张可操作手牌" : "当前没有可操作手牌";
   elements.handReadyJump.setAttribute("aria-label", elements.handReadyJump.title);
+  elements.aiPanel.classList.remove("online-response-direct-target");
+  elements.playerPanel.classList.remove("online-response-direct-target");
+  const pendingAttack = view.machine?.pendingAttack;
+  if (pendingAttack) {
+    const attackerOwner = ownerForSeat(view, pendingAttack.playerId);
+    const targetOwner = ownerForSeat(view, pendingAttack.rivalId);
+    cardAnchor(view, pendingAttack.attackerCardId, attackerOwner)?.classList.add("online-response-attacker");
+    if (pendingAttack.targetCardId) {
+      cardAnchor(view, pendingAttack.targetCardId, targetOwner)?.classList.add("online-response-target");
+    } else {
+      elements[targetOwner === "player" ? "playerPanel" : "aiPanel"].classList.add("online-response-direct-target");
+    }
+  }
 }
 
 function locateNextReadyHandCard() {
@@ -698,6 +711,21 @@ function responseRendererOptions(view) {
   return { choice: trapChoice, traps: view.players[view.viewerSeatId].spellTrapZone.map(onlineDisplayCard), activationText: trapActivationText };
 }
 
+function renderResponseBattle(view) {
+  const battle = onlineResponseBattleView(view);
+  elements.responseBattle.hidden = !battle;
+  elements.responseBattleSummary.hidden = !battle;
+  if (!battle) return;
+  elements.responseBattle.dataset.tone = battle.tone;
+  elements.responseBattle.dataset.direct = String(battle.direct);
+  elements.responseAttackerName.textContent = battle.attackerName;
+  elements.responseAttackerStat.textContent = battle.attackerStat;
+  elements.responseBattleBadge.textContent = battle.badge;
+  elements.responseTargetName.textContent = battle.targetName;
+  elements.responseTargetStat.textContent = battle.targetStat;
+  elements.responseBattleSummary.textContent = `若不发动陷阱：${battle.summary}`;
+}
+
 function selectResponse(index) {
   if (actionPending) return;
   trapChoice = selectTrapResponse(trapChoice, index) || trapChoice;
@@ -728,6 +756,7 @@ function respondToAttack(activate, index = trapChoice?.selectedIndex) {
 }
 
 function renderResponse(view) {
+  renderResponseBattle(view);
   const responseSoundId = view.attackResponse?.declarationEventId || null;
   if (responseSoundId && responseSoundId !== lastResponseSoundId) {
     lastResponseSoundId = responseSoundId;
@@ -739,19 +768,29 @@ function renderResponse(view) {
     }, onSelect: selectResponse, onActivate: (index) => respondToAttack(true, index) });
     elements.onlineResponse.dataset.responseMode = panel.singleChoice ? "single" : "multiple";
     elements.onlineResponse.classList.toggle("single-response", panel.singleChoice);
-    elements.responseChoices.hidden = panel.singleChoice || panel.choices.length === 0;
+    elements.responseChoices.hidden = panel.choices.length === 0;
     elements.responseTitle.textContent = panel.singleChoice ? "可发动一张陷阱" : "选择本次攻击的响应";
+    elements.responseLead.textContent = panel.singleChoice ? "唯一可用陷阱已自动选中，直接决定发动或放弃。" : "选择一张陷阱响应本次攻击，双击候选可直接发动。";
+    elements.responseText.hidden = panel.singleChoice;
     elements.responseActivate.disabled ||= actionPending;
     elements.responsePass.disabled = actionPending;
-    elements.responseChoices.querySelectorAll("button").forEach((button) => { button.disabled = actionPending; });
+    elements.responseChoices.querySelectorAll("button").forEach((button) => {
+      button.disabled = actionPending || panel.singleChoice;
+      button.classList.toggle("single-ready", panel.singleChoice);
+      if (panel.singleChoice) button.title = "唯一可用陷阱，已自动选中";
+    });
     if (!elements.onlineResponse.open) {
       closeInspector();
       elements.onlineResponse.showModal();
       elements[panel.singleChoice ? "responseActivate" : "responsePass"].focus({ preventScroll: true });
     }
   } else if (elements.onlineResponse.open) elements.onlineResponse.close();
-  if (!view.machine.responseWindow) return;
+  if (!view.machine.responseWindow) {
+    document.body.dataset.onlineResponse = "none";
+    return;
+  }
   const ownResponse = view.machine.responseWindow.playerId === view.viewerSeatId;
+  document.body.dataset.onlineResponse = ownResponse ? "acting" : "waiting";
   const text = ownResponse ? "对手发起攻击，请选择陷阱或放弃响应。" : "等待对手选择是否发动陷阱，攻击尚未结算。";
   document.body.dataset.duelFocus = ownResponse ? "response" : "idle";
   elements.commandTitle.textContent = ownResponse ? "轮到你响应攻击" : "等待对手响应";

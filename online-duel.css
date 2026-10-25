@@ -147,6 +147,20 @@ body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-targe
 .online-response header > span { color: #d0b5ff; font-size: 10px; letter-spacing: .16em; }
 .online-response h2 { margin: 7px 0; font-size: clamp(18px, 3vw, 24px); }
 .online-response p { line-height: 1.6; font-size: 13px; }
+.online-response-battle { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: stretch; gap: 10px; margin: 16px 0 10px; }
+.online-response-battle[hidden], .online-response-summary[hidden] { display: none; }
+.online-response-combatant { display: grid; align-content: center; gap: 3px; min-width: 0; padding: 12px 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(6,10,18,.58); }
+.online-response-combatant > span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.online-response-combatant > strong { overflow: hidden; color: #f8fbff; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.online-response-combatant > b { color: #ffd77d; font-size: 12px; }
+.online-response-combatant.target { text-align: right; }
+.online-response-route { display: grid; place-content: center; justify-items: center; gap: 2px; min-width: 58px; color: #ffbd68; }
+.online-response-route > span { font-size: 27px; line-height: 1; text-shadow: 0 0 18px rgba(255,126,68,.65); }
+.online-response-route > b { font-size: 9px; letter-spacing: .08em; white-space: nowrap; }
+.online-response-battle[data-tone="guard"] .online-response-route { color: #80e4ff; }
+.online-response-battle[data-tone="danger"] .online-response-route { color: #ff6688; }
+.online-response-summary { margin: 0 0 12px; padding: 9px 12px; border-left: 3px solid rgba(246,189,96,.8); border-radius: 4px 9px 9px 4px; color: #ffe5aa; background: rgba(246,189,96,.08); }
+.online-response-rule:empty { display: none; }
 .online-response .chain-choices { display: grid; gap: 8px; }
 .online-response .trap-choice-card { width: 100%; min-width: 0; }
 .online-response footer { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
@@ -154,9 +168,24 @@ body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-targe
 .online-response #responseStatus { color: #d0b5ff; }
 .online-response[data-response-mode="single"] { width: min(560px, calc(100vw - 24px)); border-color: rgba(246,189,96,.72); }
 .online-response[data-response-mode="single"] .online-response-panel { padding: clamp(16px, 3vw, 24px); }
+.online-response[data-response-mode="single"] .trap-choice-card.single-ready { opacity: 1; cursor: default; pointer-events: none; border-color: rgba(246,189,96,.54); background: linear-gradient(135deg, rgba(246,189,96,.12), rgba(195,149,255,.09)); }
 .online-response[data-response-mode="single"] #responseStatus { display: inline-flex; margin: 2px 0 0; padding: 5px 9px; border: 1px solid rgba(246,189,96,.36); border-radius: 999px; color: #ffe7ad; background: rgba(246,189,96,.08); }
 .online-response[data-response-mode="single"] footer { margin-top: 12px; }
 .online-response[data-response-mode="single"] footer .btn { min-height: 48px; }
+
+body[data-online-response="waiting"] #app .duel-table #duelHint[data-kind="status"] { border-color: rgba(195,149,255,.72); color: #f0e4ff; background: rgba(39,21,66,.92); box-shadow: 0 0 0 3px rgba(195,149,255,.08), 0 0 30px rgba(195,149,255,.25); }
+body[data-online-response="waiting"] #app .duel-table #duelHint[data-kind="status"]::before { background: #c399ff; box-shadow: 0 0 16px rgba(195,149,255,.92); animation: online-response-dot 1s ease-in-out infinite; }
+#app .duel-table :is(.slot, .card).online-response-attacker { z-index: 7; outline: 2px solid rgba(255,142,70,.9); box-shadow: 0 0 0 5px rgba(255,142,70,.14), 0 0 28px rgba(255,89,61,.48); }
+#app .duel-table :is(.slot, .card).online-response-target { z-index: 7; outline: 2px solid rgba(195,149,255,.92); box-shadow: 0 0 0 5px rgba(195,149,255,.14), 0 0 28px rgba(195,149,255,.45); }
+#app .duel-table .online-response-direct-target { outline: 2px solid rgba(239,71,111,.78); box-shadow: 0 0 28px rgba(239,71,111,.34); }
+@keyframes online-response-dot { 50% { opacity: .35; transform: scale(.7); } }
+
+@media (max-width: 620px) {
+  .online-response-battle { grid-template-columns: minmax(0,1fr) 36px minmax(0,1fr); gap: 6px; }
+  .online-response-combatant { padding: 10px 9px; }
+  .online-response-combatant > strong { font-size: 12px; }
+  .online-response-route { min-width: 36px; }
+}
 
 /* Online controls mirror the solo duel's fast, readable interaction language. */
 .online-sound-btn[aria-pressed="true"] {
@@ -225,7 +254,7 @@ body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).targe
   50% { filter: brightness(1.24); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .online-inspector-panel, .online-inspector-backdrop, .card.online-ready-located, #app .duel-table #duelHint[data-kind="receipt"], #app .duel-table #duelHint[data-kind="battle-result"], .player-card[data-battle-impact], .zone-row[data-battle-impact], #app .hand .card.action-ready, #app .duel-table :is(.slot, .trap-slot) { animation: none; }
+  .online-inspector-panel, .online-inspector-backdrop, .card.online-ready-located, #app .duel-table #duelHint[data-kind="receipt"], #app .duel-table #duelHint[data-kind="battle-result"], body[data-online-response="waiting"] #app .duel-table #duelHint[data-kind="status"]::before, .player-card[data-battle-impact], .zone-row[data-battle-impact], #app .hand .card.action-ready, #app .duel-table :is(.slot, .trap-slot) { animation: none; }
 }
 
 body[data-online-status="playing"] > .online-effect-layer { z-index: 140; }

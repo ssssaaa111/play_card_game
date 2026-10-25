@@ -33,7 +33,13 @@ test("opponent draw events keep drawn card ids private", () => {
 
 test("opponent set events expose only the public slot and never the concealed card id", () => {
   const state = createOnlineDuelState();
-  const trapId = state.players.p1.hand.find((cardId) => state.cards[cardId].type === "trap");
+  let trapId = state.players.p1.hand.find((cardId) => state.cards[cardId].type === "trap");
+  if (!trapId) {
+    const deckIndex = state.players.p1.deck.findIndex((cardId) => state.cards[cardId].type === "trap");
+    assert.notEqual(deckIndex, -1);
+    trapId = state.players.p1.deck.splice(deckIndex, 1)[0];
+    state.players.p1.hand.push(trapId);
+  }
   const engine = new GameEngine(state);
   engine.dispatch({ type: "SET_TRAP", playerId: "p1", cardId: trapId, index: 3 });
   const event = buildDuelView(engine.getState(), "p2").recentEvents.find((entry) => entry.type === "TRAP_SET");
