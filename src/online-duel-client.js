@@ -85,6 +85,10 @@ export class OnlineDuelClient {
     return this.request(DuelClientMessage.setReady, { ready });
   }
 
+  leaveRoom() {
+    return this.request(DuelClientMessage.leaveRoom, {});
+  }
+
   sync() {
     return this.request(DuelClientMessage.syncRoom, {});
   }

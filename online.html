@@ -105,6 +105,19 @@
       <footer><button id="responseActivate" class="btn primary" type="button">发动陷阱</button><button id="responsePass" class="btn" type="button">放弃响应，继续结算</button></footer>
     </section>
   </dialog>
+  <dialog id="onlineResult" class="online-result" aria-labelledby="resultTitle" aria-describedby="resultSummary">
+    <section class="online-result-panel">
+      <span id="resultKicker" class="online-result-kicker">DUEL COMPLETE</span>
+      <h2 id="resultTitle">决斗结束</h2>
+      <p id="resultSummary">本局决斗已经结束。</p>
+      <div class="online-result-score" aria-label="最终生命值">
+        <article><span>你</span><strong id="resultSelfName">玩家</strong><b id="resultSelfLp">4000 LP</b></article>
+        <i>VS</i>
+        <article><span>对手</span><strong id="resultRivalName">对手</strong><b id="resultRivalLp">4000 LP</b></article>
+      </div>
+      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button id="resultLobby" class="btn primary" type="button">返回大厅</button></footer>
+    </section>
+  </dialog>
   <script type="module" src="/src/online-duel-app.js"></script>
 </body>
 </html>

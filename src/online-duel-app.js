@@ -15,7 +15,7 @@ import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -26,7 +26,8 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError", "soundBtn", "effectLayer", "phaseStage"
+  "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
+  "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
@@ -46,6 +47,8 @@ let lastResponseSoundId = null;
 let pendingActionCue = null;
 let lastFieldPositions = new Map();
 let cueCleanupTimer = null;
+let lastResultKey = null;
+let resultRevealTimer = null;
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
 const audioController = createAudioController({
@@ -573,7 +576,7 @@ function renderBoard(view, model) {
     selectedZone: "hand", selectedUid: selection?.cardId,
     actionForCard: (card) => {
       const ready = canAct && onlineCardActions(view, card.uid).length > 0;
-      return { ok: ready, label: ready ? card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "发动" : "暂不可用", reason: !canAct ? "等待对手行动，可查看卡牌详情" : ready ? `单击选择 · 双击${card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "发动"}` : "当前阶段或场上条件不满足" };
+      return { ok: ready, label: view.gameOver ? "已结束" : ready ? card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "发动" : "暂不可用", reason: view.gameOver ? "决斗已结束，可查看卡牌详情" : !canAct ? "等待对手行动，可查看卡牌详情" : ready ? `单击选择 · 双击${card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "发动"}` : "当前阶段或场上条件不满足" };
     },
     onCardClick: (card) => chooseHandCard(card.uid, { directActivate: directActivationTracker.register(`hand:${card.uid}`) }),
     onCardDoubleClick: (card) => chooseHandCard(card.uid, { directActivate: true }),
@@ -675,7 +678,7 @@ function renderCommands(view, model) {
   elements.handCommand.dataset.active = String(Boolean(model));
   elements.handCommand.dataset.signal = actionPending || model ? "active" : canAct ? "ready" : "idle";
   elements.handCommand.dataset.step = model ? model.action ? "execute" : "locate" : "select";
-  elements.commandSignal.textContent = actionPending ? "结算中" : model ? "操作中" : canAct ? "待命" : "等待";
+  elements.commandSignal.textContent = view.gameOver ? "结束" : actionPending ? "结算中" : model ? "操作中" : canAct ? "待命" : "等待";
   elements.commandTitle.textContent = view.gameOver ? "决斗结束" : canAct ? "选择一张手牌或场上怪兽" : "对手正在行动";
   elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "单击选择，双击快捷执行；需要目标时，合法候选会高亮。" : "可以查看公开卡牌和墓地。";
   elements.duelHint.textContent = model ? prompt : actionReceipt?.text || elements.commandTitle.textContent;
@@ -684,7 +687,7 @@ function renderCommands(view, model) {
   elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type : "none";
   elements.duelHint.dataset.tone = !model && actionReceipt ? actionReceipt.tone || "neutral" : "neutral";
   elements.duelPanel.dataset.battleResult = !model && actionReceipt?.kind === "battle-result" ? actionReceipt.result : "none";
-  elements.handGuide.textContent = model ? "确认或双击高亮候选执行" : "单击选择 · 双击快捷出牌";
+  elements.handGuide.textContent = view.gameOver ? "决斗已结束 · 可查看卡牌详情" : model ? "确认或双击高亮候选执行" : "单击选择 · 双击快捷出牌";
   const inBattle = view.turn.phase === "battle";
   elements.battleButton.textContent = inBattle ? "战斗阶段" : "进入战斗";
   elements.battleButton.dataset.currentPhase = String(inBattle);
@@ -800,6 +803,50 @@ function renderResponse(view) {
   elements.duelHint.dataset.kind = "status";
 }
 
+function renderGameResult(view) {
+  const result = onlineGameResultView(view);
+  if (!result) {
+    document.body.dataset.onlineResult = "none";
+    lastResultKey = null;
+    if (resultRevealTimer) clearTimeout(resultRevealTimer);
+    resultRevealTimer = null;
+    if (elements.onlineResult.open) elements.onlineResult.close();
+    return;
+  }
+  document.body.dataset.onlineResult = result.tone;
+  elements.onlineResult.dataset.resultTone = result.tone;
+  elements.resultKicker.textContent = result.kicker;
+  elements.resultTitle.textContent = result.title;
+  elements.resultSummary.textContent = result.summary;
+  elements.resultSelfName.textContent = result.selfName;
+  elements.resultSelfLp.textContent = `${result.selfLp} LP`;
+  elements.resultRivalName.textContent = result.rivalName;
+  elements.resultRivalLp.textContent = `${result.rivalLp} LP`;
+  elements.duelHint.textContent = `${result.title} · ${result.summary}`;
+  elements.duelHint.dataset.kind = "status";
+  elements.duelHint.dataset.tone = result.tone;
+  if (lastResultKey === result.key) return;
+  lastResultKey = result.key;
+  if (resultRevealTimer) clearTimeout(resultRevealTimer);
+  resultRevealTimer = window.setTimeout(() => {
+    resultRevealTimer = null;
+    if (!elements.onlineResult.open) elements.onlineResult.showModal();
+    elements.resultReview.focus({ preventScroll: true });
+  }, 1050);
+}
+
+async function returnToOnlineLobby() {
+  if (elements.resultLobby.disabled) return;
+  elements.resultLobby.disabled = true;
+  elements.resultLobby.textContent = "正在返回…";
+  try { await client.leaveRoom(); } catch {}
+  try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+  client.disconnect();
+  const url = new URL(window.location.href);
+  url.searchParams.delete("room");
+  window.location.assign(url.toString());
+}
+
 function renderRoom(view) {
   const playing = view.status !== "waiting";
   document.body.dataset.onlineStatus = playing ? "playing" : "waiting";
@@ -864,6 +911,7 @@ function render(view) {
   renderBoard(view, model);
   renderCommands(view, model);
   renderResponse(view);
+  renderGameResult(view);
   renderEvents(view);
   playPendingActionCue(view);
 }
@@ -888,6 +936,8 @@ elements.choiceConfirmBtn.addEventListener("click", () => sendAction(onlineSelec
 elements.responseActivate.addEventListener("click", () => respondToAttack(true));
 elements.responsePass.addEventListener("click", () => respondToAttack(false));
 elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());
+elements.resultReview.addEventListener("click", () => elements.onlineResult.close());
+elements.resultLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
 for (const id of ["fieldCancelBtn", "choiceCancelBtn"]) elements[id].addEventListener("click", cancelSelection);
 elements.fieldAttackBtn.addEventListener("click", prepareSelectedAttack);
 elements.fieldModeBtn.addEventListener("click", () => sendAction(onlineCardActions(client.view, selection?.cardId).find((action) => action.type === "CHANGE_MONSTER_MODE")));

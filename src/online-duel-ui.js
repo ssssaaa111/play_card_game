@@ -101,6 +101,36 @@ export function onlineResponseBattleView(view) {
   };
 }
 
+export function onlineGameResultView(view) {
+  const gameOver = view?.gameOver;
+  if (!gameOver) return null;
+  const winnerId = gameOver.winnerId || null;
+  const draw = !winnerId;
+  const won = winnerId === view.viewerSeatId;
+  const selfSeat = view.seats?.find((seat) => seat.seatId === view.viewerSeatId);
+  const rivalSeat = view.seats?.find((seat) => seat.seatId === view.opponentSeatId);
+  const self = view.players?.[view.viewerSeatId];
+  const rival = view.players?.[view.opponentSeatId];
+  const reason = gameOver.reason || "lp-zero";
+  const winnerName = view.seats?.find((seat) => seat.seatId === winnerId)?.name || "胜者";
+  const summary = draw
+    ? "双方同时失去全部生命值，本局以平局结束。"
+    : reason === "lp-zero"
+      ? won ? `${rivalSeat?.name || "对手"}的生命值归零，你赢得了本局决斗。` : `你的生命值归零，${winnerName}赢得了本局决斗。`
+      : won ? "你完成了本局的胜利条件。" : `${winnerName}完成了本局的胜利条件。`;
+  return {
+    key: `${view.roomCode || "room"}:${gameOver.triggerEventId || gameOver.reason || "finished"}`,
+    tone: draw ? "draw" : won ? "victory" : "defeat",
+    kicker: draw ? "DUEL DRAW" : won ? "DUEL VICTORY" : "DUEL DEFEAT",
+    title: draw ? "平局" : won ? "决斗胜利" : "决斗败北",
+    summary,
+    selfName: selfSeat?.name || "你",
+    selfLp: Math.max(0, Number(self?.lp || 0)),
+    rivalName: rivalSeat?.name || "对手",
+    rivalLp: Math.max(0, Number(rival?.lp || 0))
+  };
+}
+
 const ACTION_RECEIPT_TYPES = new Set([
   "MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED",
   "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN"
