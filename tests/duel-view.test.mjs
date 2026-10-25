@@ -31,6 +31,16 @@ test("opponent draw events keep drawn card ids private", () => {
   assert.equal("cardIds" in p2Draw, false);
 });
 
+test("opponent set events expose only the public slot and never the concealed card id", () => {
+  const state = createOnlineDuelState();
+  const trapId = state.players.p1.hand.find((cardId) => state.cards[cardId].type === "trap");
+  const engine = new GameEngine(state);
+  engine.dispatch({ type: "SET_TRAP", playerId: "p1", cardId: trapId, index: 3 });
+  const event = buildDuelView(engine.getState(), "p2").recentEvents.find((entry) => entry.type === "TRAP_SET");
+  assert.equal(event.index, 3);
+  assert.equal("cardId" in event, false);
+});
+
 test("battle result events expose only the public outcome summary", () => {
   const state = createOnlineDuelState();
   state.events.push({

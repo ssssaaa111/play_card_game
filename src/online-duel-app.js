@@ -7,6 +7,7 @@ import { createOnlineActionRunner } from "./online-action-runner.js";
 import { createDirectActivationTracker } from "./direct-activation.js";
 import { createAudioController, createAudioSettings } from "./audio.js";
 import { createAnimationController } from "./animation.js";
+import { createPhaseStageController, phaseStageCue } from "./phase-stage.js";
 import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js";
 import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
@@ -25,7 +26,7 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseTitle", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError", "soundBtn", "effectLayer"
+  "onlineResponse", "responseTitle", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
@@ -81,6 +82,7 @@ const animationController = createAnimationController({
     : Math.max(0, Number(card?.atk || 0) + Number(card?.tempAtk || 0)),
   playSound
 });
+const phaseStageController = createPhaseStageController({ root: elements.phaseStage, window });
 const runCommand = createOnlineActionRunner((pending) => {
   actionPending = pending;
   render(client.view);
@@ -143,10 +145,18 @@ function syncActionReceipt(view) {
     clearActionReceipt();
     pendingActionCue = null;
     lastFieldPositions = new Map();
+    phaseStageController.reset();
     return;
   }
   const freshEvents = events.filter((event) => Number(event.id) > Number(lastObservedEventId || 0));
   const cue = onlineActionCue(view, freshEvents);
+  const turnEvent = [...freshEvents].reverse().find((event) => event.type === "TURN_STARTED");
+  const phaseEvent = !cue ? [...freshEvents].reverse().find((event) => event.type === "PHASE_CHANGED") : null;
+  const stageEvent = turnEvent || phaseEvent;
+  if (stageEvent) {
+    const stagePhase = turnEvent ? view.turn?.phase || turnEvent.phase || "main" : phaseEvent.to || view.turn?.phase;
+    phaseStageController.enqueue(phaseStageCue(stagePhase, ownerForSeat(view, stageEvent.playerId)));
+  }
   if (cue) {
     const previousSource = lastFieldPositions.get(cue.cardId);
     const previousTarget = lastFieldPositions.get(cue.targetCardId);
@@ -193,10 +203,10 @@ function cardAnchor(view, cardId, owner) {
 
 function pulseActionAnchor(anchor, kind) {
   if (!anchor) return;
-  anchor.classList.remove("online-action-focus", "summon", "spell", "trap", "effect");
+  anchor.classList.remove("online-action-focus", "summon", "spell", "trap", "effect", "set", "mode");
   void anchor.offsetWidth;
   anchor.classList.add("online-action-focus", kind);
-  window.setTimeout(() => anchor.classList.remove("online-action-focus", "summon", "spell", "trap", "effect"), 1100);
+  window.setTimeout(() => anchor.classList.remove("online-action-focus", "summon", "spell", "trap", "effect", "set", "mode"), 1100);
 }
 
 function captureFieldPositions(view) {
@@ -259,6 +269,17 @@ function playPendingActionCue(view) {
     pulseActionAnchor(cardAnchor(view, cue.cardId, cue.actor), cue.kind);
     animationController.playEpicAction(cue.label, cue.kind === "trap" ? "guard" : "draw", 1000);
     if (card) animationController.playCenterCardEffect(card, cue.actor === "player" ? "我方效果发动" : "对手效果发动");
+  } else if (cue.kind === "set") {
+    const anchor = cue.slotIndex != null ? animationController.trapElement(cue.actor, cue.slotIndex) : animationController.panelElement(cue.actor);
+    pulseActionAnchor(anchor, "set");
+    animationController.playEpicAction(cue.label, "guard", 900);
+  } else if (cue.kind === "mode") {
+    const anchor = cardAnchor(view, cue.cardId, cue.actor);
+    pulseActionAnchor(anchor, "mode");
+    animationController.playEpicAction(cue.label, cue.mode === "defense" ? "guard" : "attack", 900);
+    if (sourceIndex >= 0) animationController.playMonsterMotion(cue.actor, sourceIndex, cue.mode === "defense" ? "guard" : "stand");
+  } else if (cue.kind === "draw") {
+    animationController.playEpicAction(`${cue.label}${cue.count > 1 ? ` ×${cue.count}` : ""}`, "draw", 850);
   } else if (cue.kind === "guard") {
     animationController.playEpicAction(cue.label, "guard", 1000);
     animationController.playGuardShield(target);

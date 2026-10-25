@@ -5,7 +5,7 @@ import { onlineAttackResponse } from "./online-response.js";
 const PUBLIC_EVENT_FIELDS = new Set([
   "id", "type", "playerId", "rivalId", "winnerId", "loserId", "loserIds",
   "phase", "fromPhase", "nextPhase", "timing", "amount", "requested", "count",
-  "mode", "from", "to", "reason", "endedBy", "summonType", "ability", "uses",
+  "mode", "from", "to", "index", "reason", "endedBy", "summonType", "ability", "uses",
   "comboId", "window", "windowType", "prompt", "damage", "destroyed",
   "attackerAtk", "targetValue", "targetMode", "direct", "result"
 ]);

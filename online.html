@@ -80,6 +80,14 @@
     </section>
   </div>
   <div class="effect-layer online-effect-layer" id="effectLayer" aria-hidden="true"></div>
+  <div class="phase-stage" id="phaseStage" data-active="false" hidden aria-live="polite" aria-atomic="true">
+    <div class="phase-stage-frame">
+      <span class="phase-stage-code" data-phase-stage-code>MAIN PHASE</span>
+      <strong class="phase-stage-title" data-phase-stage-title>主要阶段</strong>
+      <span class="phase-stage-actor" data-phase-stage-actor>你的回合</span>
+      <span class="phase-stage-detail" data-phase-stage-detail>部署怪兽 · 发动支援 · 构筑战线</span>
+    </div>
+  </div>
   <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><h2 id="inspectorTitle">卡牌详情</h2><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
   <dialog id="onlineResponse" class="online-response" aria-labelledby="responseTitle" aria-describedby="responseText">
     <section class="online-response-panel">

@@ -76,7 +76,7 @@ export function onlineCard(view, cardId) {
 
 const ACTION_RECEIPT_TYPES = new Set([
   "MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED",
-  "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED"
+  "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN"
 ]);
 
 function battleResultReceipt(view, event, events = []) {
@@ -169,7 +169,9 @@ export function onlineActionReceipt(view, event, { events = [] } = {}) {
   const text = event.type === "MONSTER_SUMMONED" ? `${actorName}召唤${cardLabel}`
     : event.type === "CARD_ACTIVATED" ? `${actorName}发动${cardLabel}`
       : event.type === "ATTACK_DECLARED" ? `${actorName}以${cardLabel}${event.direct ? "发起直接攻击" : "发起攻击"}`
-        : `${actorName}将${cardLabel}切换为${event.mode === "defense" || event.to === "defense" ? "守备" : "攻击"}表示`;
+        : event.type === "TRAP_SET" ? `${actorName}盖放了 1 张陷阱`
+          : event.type === "CARDS_DRAWN" ? `${actorName}抽取了 ${Math.max(0, Number(event.count) || 0)} 张卡`
+            : `${actorName}将${cardLabel}切换为${event.mode === "defense" || event.to === "defense" ? "守备" : "攻击"}表示`;
   return { id: Number(event.id) || 0, type: event.type, actor, text };
 }
 
@@ -192,6 +194,8 @@ export function onlineEventSound(view, event) {
     const card = onlineCard(view, event.cardId);
     return card?.type === "trap" ? "trap" : "spell";
   }
+  if (event.type === "TRAP_SET") return "click";
+  if (event.type === "CARDS_DRAWN" && event.sourceCardId) return "draw";
   if (event.type === "ATTACK_DECLARED") return "attack-charge";
   if (event.type === "ATTACK_CANCELED") return "guard";
   if (event.type === "BATTLE_RESOLVED") {
@@ -260,6 +264,42 @@ export function onlineActionCue(view, events = []) {
       actor: ownerFor(activated.playerId),
       cardId: activated.cardId,
       label: card?.type === "trap" ? "陷阱发动" : card?.type === "spell" ? "魔法发动" : "卡牌发动"
+    };
+  }
+
+  const setTrap = latest("TRAP_SET");
+  if (setTrap) {
+    return {
+      id: Number(setTrap.id) || 0,
+      kind: "set",
+      actor: ownerFor(setTrap.playerId),
+      cardId: setTrap.cardId || null,
+      slotIndex: Number.isInteger(setTrap.index) ? setTrap.index : null,
+      label: "后场盖放"
+    };
+  }
+
+  const modeChange = latest("MONSTER_MODE_CHANGED");
+  if (modeChange) {
+    const mode = modeChange.to || modeChange.mode || "attack";
+    return {
+      id: Number(modeChange.id) || 0,
+      kind: "mode",
+      actor: ownerFor(modeChange.playerId),
+      cardId: modeChange.cardId,
+      mode,
+      label: mode === "defense" ? "转为守备" : "转为攻击"
+    };
+  }
+
+  const drawn = latest("CARDS_DRAWN");
+  if (drawn?.sourceCardId) {
+    return {
+      id: Number(drawn.id) || 0,
+      kind: "draw",
+      actor: ownerFor(drawn.playerId),
+      count: Math.max(0, Number(drawn.count) || 0),
+      label: drawn.playerId === view?.viewerSeatId ? "效果抽卡" : "对手抽卡"
     };
   }
 

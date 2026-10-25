@@ -200,6 +200,25 @@ test("online action cues identify public spell and trap activations without expo
   });
 });
 
+test("online action cues show set positions and mode changes without requiring a public card name", () => {
+  const view = snapshot();
+  assert.deepEqual(onlineActionCue(view, [{ id: 70, type: "TRAP_SET", playerId: "p2", index: 3 }]), {
+    id: 70, kind: "set", actor: "ai", cardId: null, slotIndex: 3, label: "后场盖放"
+  });
+  view.players.p1.monsterZone[0] = { ...monster("guardian:1"), mode: "defense" };
+  assert.deepEqual(onlineActionCue(view, [{ id: 71, type: "MONSTER_MODE_CHANGED", playerId: "p1", cardId: "guardian:1", to: "defense" }]), {
+    id: 71, kind: "mode", actor: "player", cardId: "guardian:1", mode: "defense", label: "转为守备"
+  });
+});
+
+test("effect draws become compact cues while ordinary turn draws stay with the turn banner", () => {
+  const view = snapshot();
+  assert.equal(onlineActionCue(view, [{ id: 80, type: "CARDS_DRAWN", playerId: "p1", count: 1 }]), null);
+  assert.deepEqual(onlineActionCue(view, [{ id: 81, type: "CARDS_DRAWN", playerId: "p2", count: 2, sourceCardId: "seer:2" }]), {
+    id: 81, kind: "draw", actor: "ai", count: 2, label: "对手抽卡"
+  });
+});
+
 test("a selected attack-position monster can carry its intent from main into battle", () => {
   const view = snapshot();
   view.players.p1.monsterZone[0] = monster("attacker:1");
