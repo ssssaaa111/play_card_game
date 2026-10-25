@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -152,6 +152,52 @@ test("online event sounds distinguish summon, spell, attack and battle outcomes"
   assert.equal(onlineEventSound(view, { type: "BATTLE_RESOLVED", outcome: { kind: "direct" } }), "attack-direct");
   assert.equal(onlineEventSound(view, { type: "BATTLE_RESOLVED", outcome: { kind: "clash" } }), "attack-clash");
   assert.equal(onlineEventSound(view, { type: "ATTACK_CANCELED" }), "guard");
+});
+
+test("online action cues preserve attack direction and fold an immediate result into one visual beat", () => {
+  const view = snapshot();
+  view.players.p2.monsterZone[0] = { ...monster("attacker:2"), name: "暮影枪兵" };
+  view.players.p1.monsterZone[1] = { ...monster("target:1"), name: "守望铁卫" };
+  const events = [
+    { id: 40, type: "ATTACK_DECLARED", playerId: "p2", rivalId: "p1", attackerCardId: "attacker:2", targetCardId: "target:1", direct: false },
+    { id: 41, type: "DAMAGE_DEALT", playerId: "p1", amount: 250, sourceCardId: "attacker:2" },
+    { id: 42, type: "BATTLE_RESOLVED", playerId: "p2", rivalId: "p1", attackerCardId: "attacker:2", targetCardId: "target:1", declarationEventId: 40, outcome: { kind: "attackWin", finalDamage: 300, damagePlayerId: "p1" } }
+  ];
+  assert.deepEqual(onlineActionCue(view, events), {
+    id: 42,
+    kind: "attack",
+    actor: "ai",
+    rival: "player",
+    cardId: "attacker:2",
+    targetCardId: "target:1",
+    direct: false,
+    label: "攻击宣言",
+    resultType: "BATTLE_RESOLVED",
+    outcome: { kind: "attackWin", finalDamage: 300, damagePlayerId: "p1" },
+    damage: 250,
+    damagePlayerId: "p1"
+  });
+});
+
+test("online action cues prioritize a completed summon over its supporting activation", () => {
+  const view = snapshot();
+  view.players.p1.monsterZone[0] = { ...monster("ace:1"), name: "终局星神", stars: 8 };
+  view.players.p1.grave.push({ id: "spell:1", type: "spell", name: "星界召集" });
+  assert.deepEqual(onlineActionCue(view, [
+    { id: 50, type: "CARD_ACTIVATED", playerId: "p1", cardId: "spell:1" },
+    { id: 51, type: "MONSTER_SUMMONED", playerId: "p1", cardId: "ace:1" }
+  ]), {
+    id: 51, kind: "summon", actor: "player", cardId: "ace:1", label: "王牌降临"
+  });
+});
+
+test("online action cues identify public spell and trap activations without exposing hidden cards", () => {
+  const view = snapshot();
+  view.players.p2.grave.push({ id: "trap:2", type: "trap", name: "反射镜阵" });
+  assert.equal(onlineActionCue(view, [{ id: 60, type: "CARD_ACTIVATED", playerId: "p2", cardId: "trap:2" }]).kind, "trap");
+  assert.deepEqual(onlineActionCue(view, [{ id: 61, type: "CARD_ACTIVATED", playerId: "p2", cardId: "hidden:1" }]), {
+    id: 61, kind: "effect", actor: "ai", cardId: "hidden:1", label: "卡牌发动"
+  });
 });
 
 test("a selected attack-position monster can carry its intent from main into battle", () => {

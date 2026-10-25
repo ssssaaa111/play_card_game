@@ -206,6 +206,78 @@ export function onlineEventSound(view, event) {
   return "";
 }
 
+export function onlineActionCue(view, events = []) {
+  const fresh = (events || []).filter(Boolean);
+  if (!fresh.length) return null;
+  const latest = (type) => [...fresh].reverse().find((event) => event.type === type);
+  const ownerFor = (seatId) => seatId === view?.viewerSeatId ? "player" : "ai";
+  const rivalSeatFor = (event) => event.rivalId || (event.playerId === view?.viewerSeatId ? view?.opponentSeatId : view?.viewerSeatId);
+  const attack = latest("ATTACK_DECLARED");
+  if (attack) {
+    const result = [...fresh].reverse().find((event) =>
+      ["BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED"].includes(event.type)
+      && Number(event.id || 0) >= Number(attack.id || 0)
+    );
+    const damageEvent = [...fresh].reverse().find((event) =>
+      event.type === "DAMAGE_DEALT"
+      && Number(event.id || 0) >= Number(attack.id || 0)
+      && (!result || Number(event.id || 0) <= Number(result.id || 0))
+    );
+    return {
+      id: Number(result?.id || attack.id) || 0,
+      kind: "attack",
+      actor: ownerFor(attack.playerId),
+      rival: ownerFor(rivalSeatFor(attack)),
+      cardId: attack.attackerCardId,
+      targetCardId: attack.targetCardId || result?.targetCardId || null,
+      direct: Boolean(attack.direct),
+      label: attack.direct ? "直接攻击" : "攻击宣言",
+      resultType: result?.type || null,
+      outcome: result?.outcome || null,
+      damage: Math.max(0, Number(damageEvent?.amount ?? result?.outcome?.finalDamage) || 0),
+      damagePlayerId: damageEvent?.playerId || result?.outcome?.damagePlayerId || null
+    };
+  }
+
+  const summon = latest("MONSTER_SUMMONED");
+  if (summon) {
+    const card = onlineCard(view, summon.cardId);
+    return {
+      id: Number(summon.id) || 0,
+      kind: "summon",
+      actor: ownerFor(summon.playerId),
+      cardId: summon.cardId,
+      label: Number(card?.stars || 0) >= 7 ? "王牌降临" : "怪兽召唤"
+    };
+  }
+
+  const activated = latest("CARD_ACTIVATED");
+  if (activated) {
+    const card = onlineCard(view, activated.cardId);
+    return {
+      id: Number(activated.id) || 0,
+      kind: card?.type === "trap" ? "trap" : card?.type === "spell" ? "spell" : "effect",
+      actor: ownerFor(activated.playerId),
+      cardId: activated.cardId,
+      label: card?.type === "trap" ? "陷阱发动" : card?.type === "spell" ? "魔法发动" : "卡牌发动"
+    };
+  }
+
+  const result = latest("ATTACK_CANCELED") || latest("ATTACK_TARGET_CHANGED") || latest("BATTLE_RESOLVED");
+  if (!result) return null;
+  return {
+    id: Number(result.id) || 0,
+    kind: result.type === "ATTACK_CANCELED" ? "guard" : "impact",
+    actor: ownerFor(result.playerId),
+    rival: ownerFor(rivalSeatFor(result)),
+    cardId: result.attackerCardId,
+    targetCardId: result.targetCardId || null,
+    label: result.type === "ATTACK_CANCELED" ? "攻击被阻断" : result.type === "ATTACK_TARGET_CHANGED" ? "攻击目标改变" : "战斗结算",
+    resultType: result.type,
+    outcome: result.outcome || null
+  };
+}
+
 export function onlineCardActions(view, cardId) {
   if (view?.gameOver || view?.turn?.playerId !== view?.viewerSeatId) return [];
   return Object.values(view?.legalActions?.actions || {}).flat()

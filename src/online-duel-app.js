@@ -6,6 +6,7 @@ import { renderBattlePreviewElement } from "./battle-preview-renderer.js";
 import { createOnlineActionRunner } from "./online-action-runner.js";
 import { createDirectActivationTracker } from "./direct-activation.js";
 import { createAudioController, createAudioSettings } from "./audio.js";
+import { createAnimationController } from "./animation.js";
 import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js";
 import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
@@ -13,7 +14,7 @@ import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -24,7 +25,7 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseTitle", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError", "soundBtn"
+  "onlineResponse", "responseTitle", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError", "soundBtn", "effectLayer"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
@@ -41,6 +42,9 @@ let lastObservedEventId = 0;
 let actionReceipt = null;
 let actionReceiptTimer = null;
 let lastResponseSoundId = null;
+let pendingActionCue = null;
+let lastFieldPositions = new Map();
+let cueCleanupTimer = null;
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
 const audioController = createAudioController({
@@ -53,6 +57,30 @@ const audioController = createAudioController({
   announce: () => {}
 });
 const { playSound, toggleSound: toggleAudioSound, unlock: unlockAudio } = audioController;
+const animationController = createAnimationController({
+  document,
+  window,
+  els: {
+    effectLayer: elements.effectLayer,
+    playerField: elements.playerField,
+    aiField: elements.aiField,
+    playerTraps: elements.playerTraps,
+    aiTraps: elements.aiTraps,
+    playerPanel: elements.playerPanel,
+    aiPanel: elements.aiPanel
+  },
+  monsterAssets,
+  duelistName: (owner) => {
+    const view = client.view;
+    if (!view) return owner === "player" ? "你" : "对手";
+    return seatName(view, owner === "player" ? view.viewerSeatId : view.opponentSeatId);
+  },
+  totalAtk: (card) => Math.max(0, Number(card?.atk || 0) + Number(card?.tempAtk || 0)),
+  battleValue: (card) => card?.mode === "defense"
+    ? Math.max(0, Number(card?.def || 0) + Number(card?.tempDef || 0))
+    : Math.max(0, Number(card?.atk || 0) + Number(card?.tempAtk || 0)),
+  playSound
+});
 const runCommand = createOnlineActionRunner((pending) => {
   actionPending = pending;
   render(client.view);
@@ -113,9 +141,21 @@ function syncActionReceipt(view) {
     observedReceiptRoomCode = view.roomCode;
     lastObservedEventId = newestId;
     clearActionReceipt();
+    pendingActionCue = null;
+    lastFieldPositions = new Map();
     return;
   }
   const freshEvents = events.filter((event) => Number(event.id) > Number(lastObservedEventId || 0));
+  const cue = onlineActionCue(view, freshEvents);
+  if (cue) {
+    const previousSource = lastFieldPositions.get(cue.cardId);
+    const previousTarget = lastFieldPositions.get(cue.targetCardId);
+    pendingActionCue = {
+      ...cue,
+      sourceIndex: previousSource?.index ?? null,
+      targetIndex: previousTarget?.index ?? null
+    };
+  }
   const receipt = latestOnlineActionReceipt(view, lastObservedEventId);
   lastObservedEventId = Math.max(lastObservedEventId, newestId);
   const eventSound = [...freshEvents].reverse().map((event) => onlineEventSound(view, event)).find(Boolean);
@@ -128,6 +168,106 @@ function syncActionReceipt(view) {
     actionReceiptTimer = null;
     render(client.view);
   }, receipt.kind === "battle-result" ? 3800 : 2800);
+}
+
+function ownerForSeat(view, seatId) {
+  return seatId === view.viewerSeatId ? "player" : "ai";
+}
+
+function cardFieldIndex(view, cardId, owner) {
+  if (!cardId) return -1;
+  const seatId = owner === "player" ? view.viewerSeatId : view.opponentSeatId;
+  return view.players[seatId].monsterZone.findIndex((card) => card?.id === cardId);
+}
+
+function cardAnchor(view, cardId, owner) {
+  if (!cardId) return null;
+  const seatId = owner === "player" ? view.viewerSeatId : view.opponentSeatId;
+  const player = view.players[seatId];
+  const monsterIndex = player.monsterZone.findIndex((card) => card?.id === cardId);
+  if (monsterIndex >= 0) return animationController.fieldElement(owner, monsterIndex);
+  const trapIndex = player.spellTrapZone.findIndex((card) => card?.id === cardId);
+  if (trapIndex >= 0) return animationController.trapElement(owner, trapIndex);
+  return null;
+}
+
+function pulseActionAnchor(anchor, kind) {
+  if (!anchor) return;
+  anchor.classList.remove("online-action-focus", "summon", "spell", "trap", "effect");
+  void anchor.offsetWidth;
+  anchor.classList.add("online-action-focus", kind);
+  window.setTimeout(() => anchor.classList.remove("online-action-focus", "summon", "spell", "trap", "effect"), 1100);
+}
+
+function captureFieldPositions(view) {
+  const positions = new Map();
+  for (const seatId of [view.viewerSeatId, view.opponentSeatId]) {
+    view.players[seatId].monsterZone.forEach((card, index) => {
+      if (card?.id) positions.set(card.id, { owner: ownerForSeat(view, seatId), index });
+    });
+  }
+  lastFieldPositions = positions;
+}
+
+function playPendingActionCue(view) {
+  const cue = pendingActionCue;
+  pendingActionCue = null;
+  if (!cue || !elements.effectLayer) {
+    captureFieldPositions(view);
+    return;
+  }
+
+  const currentSourceIndex = cardFieldIndex(view, cue.cardId, cue.actor);
+  const sourceIndex = currentSourceIndex >= 0 ? currentSourceIndex : cue.sourceIndex;
+  const currentTargetIndex = cardFieldIndex(view, cue.targetCardId, cue.rival);
+  const targetIndex = currentTargetIndex >= 0 ? currentTargetIndex : cue.targetIndex;
+  const source = sourceIndex >= 0 ? animationController.fieldElement(cue.actor, sourceIndex) : animationController.panelElement(cue.actor);
+  const target = targetIndex >= 0 ? animationController.fieldElement(cue.rival, targetIndex) : animationController.panelElement(cue.rival);
+  elements.effectLayer.dataset.onlineCue = cue.kind;
+  elements.effectLayer.dataset.onlineActor = cue.actor;
+  if (cueCleanupTimer) clearTimeout(cueCleanupTimer);
+  cueCleanupTimer = window.setTimeout(() => {
+    if (elements.effectLayer.dataset.onlineCue === cue.kind) {
+      delete elements.effectLayer.dataset.onlineCue;
+      delete elements.effectLayer.dataset.onlineActor;
+    }
+    cueCleanupTimer = null;
+  }, 1500);
+
+  if (cue.kind === "attack") {
+    animationController.playArrow(source, target, "attack", cue.label);
+    animationController.playEpicAction(cue.label, "attack", 1050);
+    if (sourceIndex >= 0) animationController.playMonsterMotion(cue.actor, sourceIndex, "attack");
+    if (cue.resultType) window.setTimeout(() => {
+      if (cue.resultType === "ATTACK_CANCELED" || ["guardHold", "guardCounter"].includes(cue.outcome?.kind)) {
+        animationController.playGuardShield(target);
+      } else {
+        animationController.playSlashBurst(source, target);
+        const attackerOnlyDestroyed = Boolean(cue.outcome?.destroysAttacker && !cue.outcome?.destroysTarget);
+        animationController.playImpactExplosion(attackerOnlyDestroyed ? source : target);
+        if (cue.outcome?.destroysAttacker && cue.outcome?.destroysTarget) animationController.playImpactExplosion(source);
+        animationController.shakeScreen();
+      }
+      if (cue.damage) animationController.playLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
+    }, 320);
+  } else if (cue.kind === "summon") {
+    const anchor = cardAnchor(view, cue.cardId, cue.actor);
+    pulseActionAnchor(anchor, "summon");
+    animationController.playEpicAction(cue.label, "draw", 1000);
+  } else if (["spell", "trap", "effect"].includes(cue.kind)) {
+    const card = onlineCard(view, cue.cardId);
+    pulseActionAnchor(cardAnchor(view, cue.cardId, cue.actor), cue.kind);
+    animationController.playEpicAction(cue.label, cue.kind === "trap" ? "guard" : "draw", 1000);
+    if (card) animationController.playCenterCardEffect(card, cue.actor === "player" ? "我方效果发动" : "对手效果发动");
+  } else if (cue.kind === "guard") {
+    animationController.playEpicAction(cue.label, "guard", 1000);
+    animationController.playGuardShield(target);
+  } else if (cue.kind === "impact") {
+    animationController.playEpicAction(cue.label, "attack", 900);
+    animationController.playImpactExplosion(target);
+    animationController.shakeScreen();
+  }
+  captureFieldPositions(view);
 }
 
 function battleImpactForSeat(seatId) {
@@ -665,6 +805,7 @@ function render(view) {
   renderCommands(view, model);
   renderResponse(view);
   renderEvents(view);
+  playPendingActionCue(view);
 }
 
 client.on("view", render);

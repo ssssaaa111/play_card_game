@@ -227,3 +227,23 @@ body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).targe
 @media (prefers-reduced-motion: reduce) {
   .online-inspector-panel, .online-inspector-backdrop, .card.online-ready-located, #app .duel-table #duelHint[data-kind="receipt"], #app .duel-table #duelHint[data-kind="battle-result"], .player-card[data-battle-impact], .zone-row[data-battle-impact], #app .hand .card.action-ready, #app .duel-table :is(.slot, .trap-slot) { animation: none; }
 }
+
+body[data-online-status="playing"] > .online-effect-layer { z-index: 140; }
+.online-effect-layer[data-online-cue] { overflow: visible; }
+#app .duel-table :is(.slot, .trap-slot, .card).online-action-focus {
+  position: relative;
+  z-index: 12;
+  animation: online-action-focus 1.05s cubic-bezier(.2,.85,.2,1) both;
+}
+#app .duel-table .online-action-focus.summon { --online-focus-color: 246,189,96; }
+#app .duel-table .online-action-focus.spell { --online-focus-color: 84,210,210; }
+#app .duel-table .online-action-focus.trap { --online-focus-color: 195,149,255; }
+#app .duel-table .online-action-focus.effect { --online-focus-color: 255,255,255; }
+@keyframes online-action-focus {
+  0% { transform: translateY(8px) scale(.9); filter: brightness(2.1) saturate(1.7); box-shadow: 0 0 0 0 rgba(var(--online-focus-color, 246,189,96),0); }
+  34% { transform: translateY(-7px) scale(1.055); filter: brightness(1.45) saturate(1.35); box-shadow: 0 0 0 5px rgba(var(--online-focus-color, 246,189,96),.28), 0 0 38px rgba(var(--online-focus-color, 246,189,96),.58); }
+  100% { transform: none; filter: none; box-shadow: 0 0 0 1px rgba(var(--online-focus-color, 246,189,96),.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #app .duel-table .online-action-focus { animation: none; outline: 3px solid rgba(var(--online-focus-color, 246,189,96),.72); }
+}
