@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -38,6 +38,35 @@ test("online connection panels distinguish local recovery from an opponent pause
   assert.equal(self.status, "第 2 次重连中…");
   view.seats[1].connected = true;
   assert.equal(onlineConnectionView(view), null);
+});
+
+test("online response timer explains automatic passing and frozen disconnect time", () => {
+  const base = {
+    viewerSeatId: "p2",
+    machine: {
+      responseWindow: { playerId: "p2" },
+      pendingAttack: { declarationEventId: 42 }
+    },
+    responseTimer: { declarationEventId: 42, deadlineAt: 25_000, remainingMs: null, paused: false }
+  };
+  assert.deepEqual(onlineResponseTimerView(base, 18_400), {
+    declarationEventId: 42,
+    paused: false,
+    seconds: 7,
+    ownResponse: true,
+    label: "剩余 7 秒 · 到时自动放弃响应"
+  });
+  const waiting = { ...base, viewerSeatId: "p1" };
+  assert.equal(onlineResponseTimerView(waiting, 24_001).label, "等待对手响应 · 1 秒后自动结算");
+  const paused = { ...base, responseTimer: { declarationEventId: 42, deadlineAt: null, remainingMs: 6_000, paused: true } };
+  assert.deepEqual(onlineResponseTimerView(paused, 99_000), {
+    declarationEventId: 42,
+    paused: true,
+    seconds: 6,
+    ownResponse: true,
+    label: "对局已暂停，响应倒计时冻结"
+  });
+  assert.equal(onlineResponseTimerView({ ...base, responseTimer: { ...base.responseTimer, declarationEventId: 41 } }, 18_400), null);
 });
 
 test("online card details expose effect copy and current public values", () => {

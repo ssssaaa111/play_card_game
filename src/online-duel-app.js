@@ -15,7 +15,7 @@ import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -26,7 +26,7 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
+  "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby",
   "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
@@ -45,6 +45,7 @@ let lastObservedEventId = 0;
 let actionReceipt = null;
 let actionReceiptTimer = null;
 let lastResponseSoundId = null;
+let responseCountdownInterval = null;
 let pendingActionCue = null;
 let lastFieldPositions = new Map();
 let cueCleanupTimer = null;
@@ -887,6 +888,37 @@ function respondToAttack(activate, index = trapChoice?.selectedIndex) {
   return sendAction({ type: activate ? "RESPOND_TRAP" : "PASS_ATTACK_RESPONSE", declarationEventId: response.declarationEventId, ...(activate ? { cardId: candidate.cardId } : {}) });
 }
 
+function clearResponseCountdown() {
+  if (responseCountdownInterval) window.clearInterval(responseCountdownInterval);
+  responseCountdownInterval = null;
+  elements.responseCountdown.textContent = "";
+}
+
+function paintResponseCountdown(view = client.view) {
+  const countdown = onlineResponseTimerView(view);
+  if (!countdown) {
+    clearResponseCountdown();
+    return null;
+  }
+  elements.responseCountdown.textContent = countdown.label;
+  elements.responseCountdown.dataset.urgent = String(!countdown.paused && countdown.seconds <= 5);
+  elements.responseCountdown.dataset.paused = String(countdown.paused);
+  if (view.machine?.responseWindow) {
+    elements.commandSignal.textContent = countdown.paused ? "已暂停" : `${countdown.seconds}s`;
+    if (!countdown.ownResponse) {
+      elements.commandHint.textContent = countdown.label;
+      elements.duelHint.textContent = countdown.label;
+    }
+  }
+  return countdown;
+}
+
+function renderResponseCountdown(view) {
+  const countdown = paintResponseCountdown(view);
+  if (!countdown || countdown.paused || responseCountdownInterval) return;
+  responseCountdownInterval = window.setInterval(() => paintResponseCountdown(), 200);
+}
+
 function renderResponse(view) {
   renderResponseBattle(view);
   const responseSoundId = view.attackResponse?.declarationEventId || null;
@@ -918,6 +950,7 @@ function renderResponse(view) {
     }
   } else if (elements.onlineResponse.open) elements.onlineResponse.close();
   if (!view.machine.responseWindow) {
+    clearResponseCountdown();
     document.body.dataset.onlineResponse = "none";
     return;
   }
@@ -930,6 +963,7 @@ function renderResponse(view) {
   elements.commandSignal.textContent = "响应中";
   elements.duelHint.textContent = text;
   elements.duelHint.dataset.kind = "status";
+  renderResponseCountdown(view);
 }
 
 function renderGameResult(view) {

@@ -30,6 +30,7 @@ const roomStore = new DuelRoomStore(responseDemo ? { createRoom: (options) => ne
   } })
 }) } : {});
 const connections = new Map();
+const responseTimers = new Map();
 
 function send(socket, message) {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
@@ -59,12 +60,28 @@ function activeRoomFor(socket) {
 }
 
 function broadcastRoom(room) {
+  scheduleResponseTimeout(room);
   for (const [socket, connection] of connections) {
     if (connection.roomCode !== room.code || !connection.seatId) continue;
     const activeSeat = room.seatForConnection(connection.id);
     if (!activeSeat || activeSeat.seatId !== connection.seatId) continue;
     send(socket, { type: DuelServerMessage.roomState, data: room.viewFor(connection.seatId) });
   }
+}
+
+function scheduleResponseTimeout(room) {
+  const existing = responseTimers.get(room.code);
+  if (existing) clearTimeout(existing);
+  responseTimers.delete(room.code);
+  const delay = room.responseTimeoutDelay();
+  if (delay == null) return;
+  const timer = setTimeout(() => {
+    responseTimers.delete(room.code);
+    if (room.expireAttackResponse()) broadcastRoom(room);
+    else scheduleResponseTimeout(room);
+  }, delay + 5);
+  timer.unref();
+  responseTimers.set(room.code, timer);
 }
 
 async function handleMessage(socket, rawMessage) {

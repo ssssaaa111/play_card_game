@@ -8,7 +8,7 @@ import { createDuelSessionConfig, ControllerKind, DuelMode } from "../src/duel-s
 import { sanitizeOnlineAction } from "../src/duel-command.js";
 import { onlineTrapResponseChoice } from "../src/online-duel-ui.js";
 
-function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 4000, deckSize = 5 } = {}) {
+function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 4000, deckSize = 5, now, responseTimeoutMs } = {}) {
   const card = (id, uid) => ({ ...cardById(id), uid, mode: "attack", used: false, tempAtk: 0, tempDef: 0 });
   const p1 = createDuelist("p1"), p2 = createDuelist("p2");
   p1.field[0] = card("solar-knight", "attacker");
@@ -20,7 +20,7 @@ function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 
     ...createDuelSessionConfig({ mode: DuelMode.onlinePvp, seatIds: ["p1", "p2"], localPlayerId: "p1", controllers: { p1: ControllerKind.human, p2: ControllerKind.human } }),
     cardDefinitionsComplete: true, p1, p2, turn: "p1", phase: "battle", timing: "battleOpen", gameEvents: []
   });
-  const room = new DuelRoom({ code: "ABC234", createState });
+  const room = new DuelRoom({ code: "ABC234", createState, ...(now ? { now } : {}), ...(responseTimeoutMs ? { responseTimeoutMs } : {}) });
   room.join({ name: "攻击方", connectionId: "one" });
   const defender = room.join({ name: "防守方", connectionId: "two" });
   room.setReady("one", true); room.setReady("two", true);
@@ -74,6 +74,51 @@ test("passing resolves damage once, leaves traps hidden, and allows normal play 
   assert.ok(after.legalActions.can.endTurn);
   assert.equal(room.submit("two", envelope).duplicate, true);
   assert.deepEqual(room.viewFor("p1"), after);
+});
+
+test("an unanswered attack auto-resolves at the authoritative room deadline", () => {
+  let currentTime = 10_000;
+  const { room, declare } = battle({ now: () => currentTime, responseTimeoutMs: 15_000 });
+  declare();
+  assert.deepEqual(room.viewFor("p2").responseTimer, {
+    declarationEventId: room.viewFor("p2").attackResponse.declarationEventId,
+    deadlineAt: 25_000,
+    remainingMs: null,
+    paused: false
+  });
+  currentTime = 24_999;
+  assert.equal(room.expireAttackResponse(), false);
+  currentTime = 25_000;
+  assert.equal(room.expireAttackResponse(), true);
+  const after = room.viewFor("p2");
+  assert.equal(after.responseTimer, null);
+  assert.equal(after.machine.responseWindow, null);
+  assert.equal(after.machine.pendingAttack, null);
+  assert.equal(after.players.p2.lp, 2300);
+  assert.ok(after.recentEvents.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "online-response-timeout"));
+  assert.equal(room.expireAttackResponse(), false);
+});
+
+test("disconnect pauses an attack response deadline and reconnect resumes the remainder", () => {
+  let currentTime = 1_000;
+  const { room, declare, defender } = battle({ now: () => currentTime, responseTimeoutMs: 15_000 });
+  declare();
+  currentTime = 6_000;
+  room.disconnect("two");
+  assert.deepEqual(room.viewFor("p2").responseTimer, {
+    declarationEventId: room.viewFor("p2").attackResponse.declarationEventId,
+    deadlineAt: null,
+    remainingMs: 10_000,
+    paused: true
+  });
+  currentTime = 60_000;
+  assert.equal(room.expireAttackResponse(), false);
+  room.join({ connectionId: "two-again", reconnectToken: defender.reconnectToken });
+  assert.equal(room.viewFor("p2").responseTimer.deadlineAt, 70_000);
+  currentTime = 69_999;
+  assert.equal(room.expireAttackResponse(), false);
+  currentTime = 70_000;
+  assert.equal(room.expireAttackResponse(), true);
 });
 
 for (const [trap, p1Lp, p2Lp, destroyed] of [

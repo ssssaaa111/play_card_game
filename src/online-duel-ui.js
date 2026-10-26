@@ -21,6 +21,29 @@ export function onlineTrapResponseChoice(view, previous = null) {
     ? selectTrapResponse(choice, previous.selectedIndex) || choice : choice;
 }
 
+export function onlineResponseTimerView(view, now = Date.now()) {
+  const timer = view?.responseTimer;
+  const responseWindow = view?.machine?.responseWindow;
+  if (!timer || !responseWindow || timer.declarationEventId !== view.machine?.pendingAttack?.declarationEventId) return null;
+  const paused = Boolean(timer.paused);
+  const remainingMs = paused
+    ? Math.max(0, Number(timer.remainingMs) || 0)
+    : Math.max(0, Number(timer.deadlineAt) - Number(now));
+  const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+  const ownResponse = responseWindow.playerId === view.viewerSeatId;
+  return {
+    declarationEventId: timer.declarationEventId,
+    paused,
+    seconds,
+    ownResponse,
+    label: paused
+      ? "对局已暂停，响应倒计时冻结"
+      : ownResponse
+        ? `剩余 ${seconds} 秒 · 到时自动放弃响应`
+        : `等待对手响应 · ${seconds} 秒后自动结算`
+  };
+}
+
 // Translate the server's public snapshot into the cards used by the solo UI.
 // Display IDs are templates; commands always retain server instance IDs.
 export function onlineDisplayCard(card) {

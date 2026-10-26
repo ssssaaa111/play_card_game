@@ -8,6 +8,7 @@ import { onlineAttackResponse, onlineTrapAction, activateOnlineTrap, settleOnlin
 
 const ROOM_SEAT_IDS = Object.freeze(["p1", "p2"]);
 const MAX_REMEMBERED_COMMANDS = 100;
+const DEFAULT_RESPONSE_TIMEOUT_MS = 15_000;
 
 function token() {
   return randomBytes(24).toString("base64url");
@@ -34,7 +35,7 @@ function publicSeat(seat) {
 }
 
 export class DuelRoom {
-  constructor({ code, createState = createOnlineDuelState, now = () => Date.now() } = {}) {
+  constructor({ code, createState = createOnlineDuelState, now = () => Date.now(), responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS } = {}) {
     if (!code) throw new DuelRoomError("Room code is required");
     this.code = code;
     this.createState = createState;
@@ -44,6 +45,10 @@ export class DuelRoom {
     this.engine = null;
     this.createdAt = now();
     this.updatedAt = this.createdAt;
+    this.responseTimeoutMs = Math.max(1_000, Number(responseTimeoutMs) || DEFAULT_RESPONSE_TIMEOUT_MS);
+    this.responseDeclarationEventId = null;
+    this.responseDeadlineAt = null;
+    this.responseRemainingMs = null;
     this.seats = new Map();
     this.commandReceipts = new Map();
   }
@@ -67,6 +72,7 @@ export class DuelRoom {
       resumed.connectionId = connectionId;
       resumed.connected = true;
       resumed.lastSeenAt = this.now();
+      this.#resumeResponseTimer();
       this.#touch();
       this.#startIfReady();
       return this.#joinResult(resumed, true);
@@ -103,6 +109,7 @@ export class DuelRoom {
   disconnect(connectionId) {
     const seat = this.seatForConnection(connectionId);
     if (!seat) return false;
+    this.#pauseResponseTimer();
     seat.connected = false;
     seat.connectionId = null;
     seat.lastSeenAt = this.now();
@@ -181,12 +188,14 @@ export class DuelRoom {
         seats
       };
     }
-    return buildDuelView(this.engine.getState(), seatId, {
+    const view = buildDuelView(this.engine.getState(), seatId, {
       roomCode: this.code,
       revision: this.revision,
       status: this.status,
       seats
     });
+    view.responseTimer = this.responseTimeoutView();
+    return view;
   }
 
   #dispatchAction(action) {
@@ -223,7 +232,42 @@ export class DuelRoom {
       events.push(...engine.dispatch({ type: "RESOLVE_TURN_DRAW", playerId: nextPlayerId }));
     }
     this.engine = engine;
+    this.#syncResponseTimer();
     return events;
+  }
+
+  responseTimeoutView() {
+    if (!this.responseDeclarationEventId) return null;
+    return {
+      declarationEventId: this.responseDeclarationEventId,
+      deadlineAt: this.responseDeadlineAt,
+      remainingMs: this.responseRemainingMs,
+      paused: this.responseDeadlineAt == null
+    };
+  }
+
+  responseTimeoutDelay() {
+    if (this.responseDeadlineAt == null) return null;
+    return Math.max(0, this.responseDeadlineAt - this.now());
+  }
+
+  expireAttackResponse() {
+    if (!this.engine || this.responseDeadlineAt == null || this.now() < this.responseDeadlineAt) return false;
+    const state = this.engine.getState();
+    const pending = state.machine?.pendingAttack;
+    const response = pending ? onlineAttackResponse(state, pending.rivalId) : null;
+    if (!pending || !response || response.declarationEventId !== this.responseDeclarationEventId) {
+      this.#clearResponseTimer();
+      return false;
+    }
+    const engine = new GameEngine(state);
+    engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: pending.rivalId, reason: "online-response-timeout" });
+    settleOnlineAttack(engine);
+    this.engine = engine;
+    this.#clearResponseTimer();
+    this.#touch();
+    if (this.engine.getState().gameOver) this.status = "finished";
+    return true;
   }
 
   #start() {
@@ -238,6 +282,39 @@ export class DuelRoom {
     if (!this.seatList().every((entry) => entry.ready && entry.connected)) return false;
     this.#start();
     return true;
+  }
+
+  #syncResponseTimer() {
+    const pending = this.engine?.getState()?.machine?.pendingAttack;
+    const responseWindow = this.engine?.getState()?.machine?.responseWindow;
+    const declarationEventId = pending?.declarationEventId || null;
+    if (!pending || !responseWindow || !declarationEventId) {
+      this.#clearResponseTimer();
+      return;
+    }
+    if (this.responseDeclarationEventId === declarationEventId) return;
+    this.responseDeclarationEventId = declarationEventId;
+    this.responseDeadlineAt = this.now() + this.responseTimeoutMs;
+    this.responseRemainingMs = null;
+  }
+
+  #pauseResponseTimer() {
+    if (this.responseDeadlineAt == null) return;
+    this.responseRemainingMs = Math.max(0, this.responseDeadlineAt - this.now());
+    this.responseDeadlineAt = null;
+  }
+
+  #resumeResponseTimer() {
+    if (this.status !== "playing" || this.responseDeclarationEventId == null || this.responseRemainingMs == null) return;
+    if (!this.seatList().every((entry) => entry.connected)) return;
+    this.responseDeadlineAt = this.now() + this.responseRemainingMs;
+    this.responseRemainingMs = null;
+  }
+
+  #clearResponseTimer() {
+    this.responseDeclarationEventId = null;
+    this.responseDeadlineAt = null;
+    this.responseRemainingMs = null;
   }
 
   #touch() {

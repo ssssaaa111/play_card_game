@@ -228,6 +228,12 @@ body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-targe
 .online-response-battle[data-tone="guard"] .online-response-route { color: #80e4ff; }
 .online-response-battle[data-tone="danger"] .online-response-route { color: #ff6688; }
 .online-response-summary { margin: 0 0 12px; padding: 9px 12px; border-left: 3px solid rgba(246,189,96,.8); border-radius: 4px 9px 9px 4px; color: #ffe5aa; background: rgba(246,189,96,.08); }
+.online-response-countdown { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 10px; padding: 6px 10px; border: 1px solid rgba(195,149,255,.38); border-radius: 999px; color: #f0e4ff; background: rgba(195,149,255,.09); font-size: 11px !important; font-weight: 800; letter-spacing: .02em; }
+.online-response-countdown::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #c399ff; box-shadow: 0 0 12px rgba(195,149,255,.88); animation: online-response-dot 1s ease-in-out infinite; }
+.online-response-countdown[data-urgent="true"] { color: #ffe0a3; border-color: rgba(246,189,96,.58); background: rgba(246,189,96,.1); }
+.online-response-countdown[data-urgent="true"]::before { background: #f6bd60; box-shadow: 0 0 12px rgba(246,189,96,.9); animation-duration: .45s; }
+.online-response-countdown[data-paused="true"]::before { background: #8290a3; box-shadow: none; animation: none; }
+.online-response-countdown:empty { display: none; }
 .online-response-rule:empty { display: none; }
 .online-response .chain-choices { display: grid; gap: 8px; }
 .online-response .trap-choice-card { width: 100%; min-width: 0; }
