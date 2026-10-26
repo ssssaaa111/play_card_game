@@ -64,6 +64,32 @@ export function onlineIdentityView(view) {
   };
 }
 
+export function onlineConnectionView(view, { transportState = "connected", reconnectAttempt = 0, recoveryFailed = false } = {}) {
+  if (!view || view.status === "finished") return null;
+  if (transportState !== "connected") {
+    return {
+      kind: "self",
+      kicker: recoveryFailed ? "RECOVERY FAILED" : "RECONNECTING",
+      title: recoveryFailed ? "暂时无法恢复对局" : "正在恢复连接",
+      summary: recoveryFailed
+        ? "原房间可能已经失效。你可以立即重试，或返回大厅重新创建房间。"
+        : "对局已安全暂停，正在使用本页保存的身份找回原座位。",
+      status: recoveryFailed ? "等待你的选择" : reconnectAttempt > 0 ? `第 ${reconnectAttempt} 次重连中…` : "正在连接对战服务…",
+      showActions: true
+    };
+  }
+  const rival = view.seats?.find((seat) => seat.seatId === view.opponentSeatId);
+  if (!rival || rival.connected !== false) return null;
+  return {
+    kind: "opponent",
+    kicker: "DUEL PAUSED",
+    title: `等待${rival.name || "对手"}重连`,
+    summary: "对手的席位和当前牌局都已保留；重连完成前，双方不能继续出牌。",
+    status: "你可以查看场面、墓地和战斗记录",
+    showActions: false
+  };
+}
+
 export function onlineCard(view, cardId) {
   for (const player of Object.values(view?.players || {})) {
     for (const zone of ["hand", "monsterZone", "spellTrapZone", "grave", "banished"]) {

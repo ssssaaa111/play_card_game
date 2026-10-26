@@ -125,3 +125,35 @@ test("a reconnect token restores the same reserved seat", () => {
   assert.equal(resumed.resumed, true);
   assert.equal(room.viewFor("p1").seats.find((seat) => seat.seatId === "p2").connected, true);
 });
+
+test("a disconnected opponent pauses commands until the reserved seat reconnects", () => {
+  const { room, p2 } = startedRoom();
+  const before = room.viewFor("p1");
+  room.disconnect("connection-2");
+  assert.throws(() => room.submit("connection-1", {
+    revision: room.revision,
+    commandId: "paused-command",
+    action: before.legalActions.actions.summon[0]
+  }), (error) => error instanceof DuelRoomError && error.code === "OPPONENT_DISCONNECTED");
+
+  room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
+  const resumed = room.viewFor("p1");
+  const receipt = room.submit("connection-1", {
+    revision: resumed.revision,
+    commandId: "resumed-command",
+    action: resumed.legalActions.actions.summon[0]
+  });
+  assert.equal(receipt.duplicate, false);
+});
+
+test("a ready waiting room starts only after the disconnected seat resumes", () => {
+  const room = new DuelRoom({ code: "ABC234" });
+  room.join({ name: "星野", connectionId: "connection-1" });
+  const p2 = room.join({ name: "月见", connectionId: "connection-2" });
+  room.setReady("connection-2", true);
+  room.disconnect("connection-2");
+  room.setReady("connection-1", true);
+  assert.equal(room.status, "waiting");
+  room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
+  assert.equal(room.status, "playing");
+});

@@ -15,7 +15,7 @@ import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -27,7 +27,8 @@ const elements = Object.fromEntries([
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
   "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
-  "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby", "soundBtn", "effectLayer", "phaseStage"
+  "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby",
+  "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY = "star-card-duel:online-session:v1";
@@ -52,6 +53,12 @@ let resultRevealTimer = null;
 let inspectorCollection = null;
 let eventLogRoomCode = null;
 let eventReadThroughId = 0;
+let transportState = "connecting";
+let reconnectAttempt = 0;
+let reconnectTimer = null;
+let reconnectInFlight = false;
+let recoveryFailed = false;
+let intentionalDisconnect = false;
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
 const audioController = createAudioController({
@@ -112,8 +119,80 @@ function renderSoundButton() {
   elements.soundBtn.setAttribute("aria-pressed", String(audioSettings.soundOn));
 }
 function setConnection(state, text) {
+  transportState = state;
+  document.body.dataset.onlineConnection = state;
   elements.connectionStatus.dataset.state = state;
   elements.connectionStatus.textContent = text;
+}
+
+function connectionPaused(view = client.view) {
+  return Boolean(onlineConnectionView(view, { transportState, reconnectAttempt, recoveryFailed }));
+}
+
+function renderConnectionState(view = client.view) {
+  const panel = onlineConnectionView(view, { transportState, reconnectAttempt, recoveryFailed });
+  const paused = Boolean(panel);
+  document.body.dataset.onlinePaused = String(paused);
+  elements.connectionOverlay.hidden = !paused;
+  elements.handPanel.inert = paused;
+  elements.duelPanel.dataset.connectionPaused = String(paused);
+  if (!paused) return;
+  selection = null;
+  elements.connectionOverlay.dataset.connectionKind = panel.kind;
+  elements.connectionKicker.textContent = panel.kicker;
+  elements.connectionTitle.textContent = panel.title;
+  elements.connectionSummary.textContent = panel.summary;
+  elements.connectionDetail.textContent = panel.status;
+  elements.connectionActions.hidden = !panel.showActions;
+  elements.battleButton.disabled = true;
+  elements.endTurnButton.disabled = true;
+  elements.responseActivate.disabled = true;
+  elements.responsePass.disabled = true;
+}
+
+function clearReconnectTimer() {
+  if (reconnectTimer) window.clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+}
+
+function scheduleReconnect(delay = Math.min(6000, 700 * Math.max(1, reconnectAttempt + 1))) {
+  if (intentionalDisconnect || reconnectTimer || reconnectInFlight || !storedSession()) return;
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = null;
+    void attemptReconnect();
+  }, delay);
+}
+
+async function attemptReconnect({ immediate = false } = {}) {
+  if (intentionalDisconnect || reconnectInFlight) return false;
+  const session = storedSession();
+  if (!session) return false;
+  clearReconnectTimer();
+  reconnectInFlight = true;
+  reconnectAttempt += 1;
+  recoveryFailed = false;
+  setConnection("reconnecting", `正在恢复身份 · 第 ${reconnectAttempt} 次尝试`);
+  renderConnectionState();
+  try {
+    await client.connect();
+    const result = await client.resumeRoom(session);
+    saveSession();
+    reconnectAttempt = 0;
+    recoveryFailed = false;
+    setConnection("connected", `连接已恢复 · ${seatName(result.view, result.seatId)}`);
+    render(result.view);
+    return true;
+  } catch (error) {
+    const terminal = ["ROOM_NOT_FOUND", "UNKNOWN_SEAT", "INVALID_MESSAGE"].includes(error.code);
+    recoveryFailed = terminal || reconnectAttempt >= 8;
+    setConnection(recoveryFailed ? "error" : "reconnecting", recoveryFailed ? "无法恢复原房间" : "连接中断 · 正在重试");
+    renderConnectionState();
+    if (!recoveryFailed) scheduleReconnect(immediate ? 700 : undefined);
+    return false;
+  } finally {
+    reconnectInFlight = false;
+    if (!recoveryFailed && transportState !== "connected") scheduleReconnect();
+  }
 }
 function setError(message = "") {
   (client.view?.status === "playing" ? elements.duelError : elements.lobbyError).textContent = message;
@@ -121,6 +200,13 @@ function setError(message = "") {
 }
 function saveSession() {
   if (client.session) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(client.session));
+}
+function syncRoomUrl(roomCode) {
+  if (!roomCode) return;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("room") === roomCode) return;
+  url.searchParams.set("room", roomCode);
+  window.history.replaceState(null, "", url);
 }
 function storedSession() {
   try { return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null"); } catch { return null; }
@@ -454,7 +540,7 @@ function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
 }
 
 async function sendAction(action) {
-  if (actionPending || !action) return;
+  if (actionPending || !action || connectionPaused()) return;
   clearActionReceipt();
   selection = null;
   setError();
@@ -879,8 +965,12 @@ function renderGameResult(view) {
 }
 
 async function returnToOnlineLobby() {
-  if (elements.resultLobby.disabled) return;
+  if (intentionalDisconnect) return;
+  intentionalDisconnect = true;
+  clearReconnectTimer();
   elements.resultLobby.disabled = true;
+  elements.connectionLobby.disabled = true;
+  if (!elements.connectionLobby.hidden) elements.connectionLobby.textContent = "正在返回…";
   elements.resultLobby.textContent = "正在返回…";
   try { await client.leaveRoom(); } catch {}
   try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
@@ -972,6 +1062,7 @@ function renderEvents(view) {
 
 function render(view) {
   if (!view) return;
+  syncRoomUrl(view.roomCode);
   renderRoom(view);
   syncActionReceipt(view);
   elements.duelPanel.hidden = view.status === "waiting";
@@ -1006,11 +1097,22 @@ function render(view) {
   renderResponse(view);
   renderGameResult(view);
   renderEvents(view);
+  renderConnectionState(view);
   playPendingActionCue(view);
 }
 
 client.on("view", render);
-client.on("connection", ({ connected }) => setConnection(connected ? "connected" : "error", connected ? "服务已连接" : "连接已断开"));
+client.on("connection", ({ connected }) => {
+  if (connected) {
+    if (transportState === "connecting") setConnection("connected", "服务已连接");
+    return;
+  }
+  if (intentionalDisconnect) return;
+  recoveryFailed = false;
+  setConnection(storedSession() ? "reconnecting" : "error", storedSession() ? "连接中断 · 正在恢复" : "连接已断开");
+  renderConnectionState();
+  scheduleReconnect(500);
+});
 client.on("error", (error) => setError(error.message));
 for (const [id, join] of [["createRoom", false], ["joinRoom", true]]) elements[id].addEventListener("click", async () => {
   try {
@@ -1031,6 +1133,8 @@ elements.responsePass.addEventListener("click", () => respondToAttack(false));
 elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());
 elements.resultReview.addEventListener("click", () => elements.onlineResult.close());
 elements.resultLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
+elements.connectionRetry.addEventListener("click", () => { recoveryFailed = false; reconnectAttempt = 0; void attemptReconnect({ immediate: true }); });
+elements.connectionLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
 for (const id of ["fieldCancelBtn", "choiceCancelBtn"]) elements[id].addEventListener("click", cancelSelection);
 elements.fieldAttackBtn.addEventListener("click", prepareSelectedAttack);
 elements.fieldModeBtn.addEventListener("click", () => sendAction(onlineCardActions(client.view, selection?.cardId).find((action) => action.type === "CHANGE_MONSTER_MODE")));
@@ -1100,6 +1204,14 @@ try {
   const session = storedSession();
   if (session) {
     try { const result = await client.resumeRoom(session); saveSession(); setConnection("connected", `身份已恢复 · ${seatName(result.view, result.seatId)}`); render(result.view); }
-    catch { sessionStorage.removeItem(STORAGE_KEY); }
+    catch (error) {
+      if (["ROOM_NOT_FOUND", "UNKNOWN_SEAT", "INVALID_MESSAGE"].includes(error.code)) sessionStorage.removeItem(STORAGE_KEY);
+      else { setConnection("reconnecting", "身份恢复失败 · 正在重试"); scheduleReconnect(700); }
+    }
   }
-} catch (error) { setConnection("error", "服务未启动"); setError(`${error.message}。请先启动对战服务。`); }
+} catch (error) {
+  const session = storedSession();
+  setConnection(session ? "reconnecting" : "error", session ? "服务未连接 · 正在重试" : "服务未启动");
+  setError(`${error.message}。${session ? "正在自动恢复。" : "请先启动对战服务。"}`);
+  if (session) scheduleReconnect(700);
+}

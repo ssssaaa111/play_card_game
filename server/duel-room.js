@@ -68,6 +68,7 @@ export class DuelRoom {
       resumed.connected = true;
       resumed.lastSeenAt = this.now();
       this.#touch();
+      this.#startIfReady();
       return this.#joinResult(resumed, true);
     }
     if (this.status !== "waiting") throw new DuelRoomError("The duel has already started", "ROOM_STARTED");
@@ -95,9 +96,7 @@ export class DuelRoom {
     seat.ready = Boolean(ready);
     seat.lastSeenAt = this.now();
     this.#touch();
-    if (this.seats.size === ROOM_SEAT_IDS.length && this.seatList().every((entry) => entry.ready)) {
-      this.#start();
-    }
+    this.#startIfReady();
     return this.viewFor(seat.seatId);
   }
 
@@ -129,6 +128,9 @@ export class DuelRoom {
     const receiptKey = `${seat.seatId}:${envelope.commandId}`;
     if (this.commandReceipts.has(receiptKey)) {
       return { ...clone(this.commandReceipts.get(receiptKey)), duplicate: true };
+    }
+    if (this.seatList().some((entry) => entry.seatId !== seat.seatId && !entry.connected)) {
+      throw new DuelRoomError("对手正在重连，对局已暂停", "OPPONENT_DISCONNECTED");
     }
     if (envelope.revision !== this.revision) {
       throw new DuelRoomError(
@@ -229,6 +231,13 @@ export class DuelRoom {
     this.engine = new GameEngine(initialState);
     this.status = "playing";
     this.#touch();
+  }
+
+  #startIfReady() {
+    if (this.status !== "waiting" || this.seats.size !== ROOM_SEAT_IDS.length) return false;
+    if (!this.seatList().every((entry) => entry.ready && entry.connected)) return false;
+    this.#start();
+    return true;
   }
 
   #touch() {

@@ -17,6 +17,7 @@ export class OnlineDuelClient {
     this.WebSocketImpl = WebSocketImpl;
     this.requestTimeoutMs = requestTimeoutMs;
     this.socket = null;
+    this.connectionPromise = null;
     this.view = null;
     this.session = null;
     this.pending = new Map();
@@ -32,15 +33,19 @@ export class OnlineDuelClient {
 
   connect() {
     if (this.socket?.readyState === this.WebSocketImpl.OPEN) return Promise.resolve();
-    return new Promise((resolve, reject) => {
+    if (this.connectionPromise) return this.connectionPromise;
+    this.connectionPromise = new Promise((resolve, reject) => {
       const socket = new this.WebSocketImpl(this.url);
       this.socket = socket;
       const handleOpen = () => {
         cleanup();
+        this.connectionPromise = null;
         resolve();
       };
       const handleError = () => {
         cleanup();
+        if (this.socket === socket) this.socket = null;
+        this.connectionPromise = null;
         reject(new Error(`Unable to connect to ${this.url}`));
       };
       const cleanup = () => {
@@ -51,10 +56,14 @@ export class OnlineDuelClient {
       socket.addEventListener("error", handleError);
       socket.addEventListener("message", (event) => this.#handleMessage(event.data));
       socket.addEventListener("close", () => {
+        if (this.socket !== socket) return;
+        this.socket = null;
+        this.connectionPromise = null;
         this.#rejectPending(new Error("Duel server connection closed"));
         this.#emit("connection", { connected: false });
       });
     });
+    return this.connectionPromise;
   }
 
   disconnect() {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -22,6 +22,22 @@ test("viewer identity keeps two tabs visually tied to their own reserved seats",
   assert.deepEqual(onlineIdentityView(view), {
     name: "月见", seatId: "p2", seatNumber: "2P", seatRole: "挑战者", opponentName: "星野"
   });
+});
+
+test("online connection panels distinguish local recovery from an opponent pause", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野", connected: true }, { seatId: "p2", name: "月见", connected: false }];
+  assert.deepEqual(onlineConnectionView(view), {
+    kind: "opponent", kicker: "DUEL PAUSED", title: "等待月见重连",
+    summary: "对手的席位和当前牌局都已保留；重连完成前，双方不能继续出牌。",
+    status: "你可以查看场面、墓地和战斗记录", showActions: false
+  });
+  const self = onlineConnectionView(view, { transportState: "reconnecting", reconnectAttempt: 2 });
+  assert.equal(self.kind, "self");
+  assert.equal(self.title, "正在恢复连接");
+  assert.equal(self.status, "第 2 次重连中…");
+  view.seats[1].connected = true;
+  assert.equal(onlineConnectionView(view), null);
 });
 
 test("online card details expose effect copy and current public values", () => {
