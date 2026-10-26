@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -120,6 +120,51 @@ test("public duel actions become concise viewer-relative receipts", () => {
     id: 9, type: "ATTACK_DECLARED", actor: "self", text: "星野以《天岚突袭者》发起直接攻击"
   });
   assert.equal(latestOnlineActionReceipt(view, 9), null);
+});
+
+test("online timeline turns public events into categorized inspectable entries", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.monsterZone[0] = { ...monster("attacker:1"), name: "日冕骑士" };
+  view.players.p2.grave = [{ ...monster("target:1"), name: "铁壁守卫" }];
+  view.recentEvents = [
+    { id: 40, type: "TURN_STARTED", playerId: "p1" },
+    { id: 41, type: "ATTACK_DECLARED", playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", targetCardId: "target:1" },
+    { id: 42, type: "BATTLE_RESOLVED", playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", targetCardId: "target:1", declarationEventId: 41, outcome: { kind: "attackWin", finalDamage: 800, damagePlayerId: "p2", destroysTarget: true } }
+  ];
+  const timeline = onlineEventTimeline(view);
+  assert.deepEqual(timeline.map((entry) => [entry.id, entry.category, entry.actor]), [
+    [42, "battle", "self"], [41, "battle", "self"], [40, "turn", "self"]
+  ]);
+  assert.match(timeline[0].text, /日冕骑士.*铁壁守卫.*800/);
+  assert.deepEqual(timeline[0].cardIds, ["attacker:1", "target:1"]);
+  assert.equal(timeline[2].text, "星野的回合开始");
+});
+
+test("online timeline never exposes a concealed card reference", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.recentEvents = [{ id: 9, type: "TRAP_SET", playerId: "p2", index: 2 }];
+  assert.deepEqual(onlineEventTimeline(view)[0].cardIds, []);
+  assert.equal(onlineEventTimeline(view)[0].text, "月见盖放了 1 张陷阱");
+});
+
+test("online timeline folds summon setup and battle internals into readable outcomes", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.monsterZone[0] = { ...monster("attacker:1"), name: "日冕骑士" };
+  view.players.p2.grave = [{ ...monster("target:1"), name: "铁壁守卫" }];
+  view.recentEvents = [
+    { id: 10, type: "CARD_ACTIVATED", playerId: "p2", cardId: "target:1" },
+    { id: 12, type: "MONSTER_SUMMONED", playerId: "p2", cardId: "target:1" },
+    { id: 20, type: "ATTACK_DECLARED", playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", targetCardId: "target:1" },
+    { id: 25, type: "DAMAGE_DEALT", playerId: "p2", sourceCardId: "attacker:1", amount: 800 },
+    { id: 26, type: "CARD_DESTROYED", playerId: "p2", sourceCardId: "attacker:1", cardId: "target:1" },
+    { id: 27, type: "BATTLE_RESOLVED", playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", targetCardId: "target:1", declarationEventId: 20, outcome: { kind: "attackWin", finalDamage: 800, damagePlayerId: "p2", destroysTarget: true } }
+  ];
+  const timeline = onlineEventTimeline(view);
+  assert.deepEqual(timeline.map((entry) => entry.type), ["BATTLE_RESOLVED", "ATTACK_DECLARED", "MONSTER_SUMMONED"]);
+  assert.match(timeline[0].text, /800 伤害/);
 });
 
 test("a summon receipt wins over the activation event from the same action batch", () => {

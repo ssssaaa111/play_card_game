@@ -57,8 +57,13 @@
       </section>
       <aside class="side duel-hud" aria-label="玩家状态"><section class="player-card" id="playerPanel"></section><section class="piles"><div class="pile"><span><small>牌库</small><strong id="playerDeckCount">0</strong></span></div><button class="pile" id="playerGrave" type="button"><span><small>墓地</small><strong id="playerGraveCount">0</strong></span></button></section></aside>
       <div class="online-notice" id="duelError" role="alert"></div>
-      <button class="btn online-log-toggle" id="logToggle" type="button" aria-expanded="false" aria-controls="eventLog">战斗记录</button>
-      <aside class="online-event-log" id="eventLog" aria-label="战斗记录" hidden></aside>
+      <button class="btn online-log-toggle" id="logToggle" type="button" aria-expanded="false" aria-controls="eventLog"><span>战斗记录</span><b id="logUnread" hidden>0</b></button>
+      <aside class="online-event-log" id="eventLog" aria-label="战斗记录" hidden>
+        <header><div><span>DUEL TIMELINE</span><strong>战斗记录</strong></div><button class="btn" id="eventLogClose" type="button" aria-label="关闭战斗记录">×</button></header>
+        <p class="online-event-log-guide">按时间查看本局公开事件，点击卡牌名称可查看详情。</p>
+        <nav class="online-event-zones" aria-label="公开区域"><button id="logSelfGrave" type="button"><span>我方墓地</span><b id="logSelfGraveCount">0</b></button><button id="logRivalGrave" type="button"><span>对手墓地</span><b id="logRivalGraveCount">0</b></button></nav>
+        <div id="eventLogList" class="online-event-log-list" role="feed" aria-live="polite"></div>
+      </aside>
     </main>
 
     <section class="hand-panel" id="handPanel" aria-label="玩家手牌" hidden>
@@ -88,7 +93,7 @@
       <span class="phase-stage-detail" data-phase-stage-detail>部署怪兽 · 发动支援 · 构筑战线</span>
     </div>
   </div>
-  <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><h2 id="inspectorTitle">卡牌详情</h2><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
+  <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><div class="online-inspector-heading"><button class="btn online-inspector-back" id="inspectorBack" type="button" hidden>← 返回墓地</button><span id="inspectorKicker">CARD ARCHIVE</span><h2 id="inspectorTitle">卡牌详情</h2></div><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
   <dialog id="onlineResponse" class="online-response" aria-labelledby="responseTitle" aria-describedby="responseLead responseBattleSummary responseText">
     <section class="online-response-panel">
       <header><span>ATTACK RESPONSE</span><h2 id="responseTitle">对手发起攻击 · 你的响应</h2><p id="responseLead">攻击已锁定，选择发动陷阱或放弃响应。</p></header>

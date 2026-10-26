@@ -241,6 +241,84 @@ export function latestOnlineActionReceipt(view, afterEventId = 0) {
     .find(Boolean) || null;
 }
 
+const ONLINE_TIMELINE_TYPES = new Set([
+  "MONSTER_SUMMONED", "CARD_ACTIVATED", "TRAP_SET", "MONSTER_MODE_CHANGED",
+  "ATTACK_DECLARED", "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED",
+  "DAMAGE_DEALT", "LP_HEALED", "CARD_DESTROYED", "EFFECT_SKIPPED",
+  "TURN_STARTED", "TURN_ENDED", "PHASE_CHANGED", "CARDS_DRAWN", "GAME_OVER_DECLARED"
+]);
+
+const ONLINE_TIMELINE_META = {
+  MONSTER_SUMMONED: ["召唤", "summon"], CARD_ACTIVATED: ["发动", "effect"], TRAP_SET: ["盖放", "effect"],
+  MONSTER_MODE_CHANGED: ["表示", "effect"], ATTACK_DECLARED: ["攻击", "battle"],
+  BATTLE_RESOLVED: ["结算", "battle"], ATTACK_CANCELED: ["阻断", "battle"], ATTACK_TARGET_CHANGED: ["转移", "battle"],
+  DAMAGE_DEALT: ["伤害", "damage"], LP_HEALED: ["恢复", "heal"], CARD_DESTROYED: ["破坏", "damage"],
+  EFFECT_SKIPPED: ["未生效", "system"], TURN_STARTED: ["回合", "turn"], TURN_ENDED: ["结束", "turn"],
+  PHASE_CHANGED: ["阶段", "turn"], CARDS_DRAWN: ["抽卡", "turn"], GAME_OVER_DECLARED: ["终局", "result"]
+};
+
+function onlineTimelineFallback(view, event) {
+  const playerName = event.playerId
+    ? view?.seats?.find((seat) => seat.seatId === event.playerId)?.name || event.playerId
+    : "系统";
+  const cardId = event.cardId || event.attackerCardId || event.sourceCardId;
+  const card = cardId ? onlineCard(view, cardId) : null;
+  const cardLabel = card?.name ? `《${card.name}》` : "卡牌";
+  const phaseName = { main: "主要阶段", battle: "战斗阶段", end: "结束阶段" }[event.to || event.phase] || "下一阶段";
+  if (event.type === "DAMAGE_DEALT") return `${playerName}受到 ${Math.max(0, Number(event.amount || event.damage) || 0)} 点伤害`;
+  if (event.type === "LP_HEALED") return `${playerName}恢复 ${Math.max(0, Number(event.amount) || 0)} LP`;
+  if (event.type === "CARD_DESTROYED") return `${cardLabel}被破坏并送入墓地`;
+  if (event.type === "EFFECT_SKIPPED") return `${cardLabel}的效果条件不足，未能生效`;
+  if (event.type === "TURN_STARTED") return `${playerName}的回合开始`;
+  if (event.type === "TURN_ENDED") return `${playerName}结束回合`;
+  if (event.type === "PHASE_CHANGED") return `${playerName}进入${phaseName}`;
+  if (event.type === "GAME_OVER_DECLARED") {
+    const winner = view?.seats?.find((seat) => seat.seatId === event.winnerId)?.name;
+    return winner ? `${winner}赢得本局决斗` : "本局决斗结束";
+  }
+  return ONLINE_TIMELINE_META[event.type]?.[0] || "对局事件";
+}
+
+export function onlineEventTimeline(view, { limit = 24 } = {}) {
+  const publicEvents = view?.recentEvents || [];
+  const foldedIntoLaterEvent = (event) => {
+    if (event.type === "CARD_ACTIVATED") {
+      return publicEvents.some((candidate) => candidate.type === "MONSTER_SUMMONED"
+        && candidate.playerId === event.playerId
+        && candidate.cardId === event.cardId
+        && Number(candidate.id) > Number(event.id)
+        && Number(candidate.id) - Number(event.id) <= 3);
+    }
+    if (!["DAMAGE_DEALT", "CARD_DESTROYED"].includes(event.type)) return false;
+    return publicEvents.some((candidate) => {
+      if (candidate.type !== "BATTLE_RESOLVED") return false;
+      const declarationId = Number(candidate.declarationEventId || 0);
+      if (Number(event.id) <= declarationId || Number(event.id) >= Number(candidate.id)) return false;
+      if (event.type === "DAMAGE_DEALT") return event.playerId === candidate.outcome?.damagePlayerId;
+      return [candidate.attackerCardId, candidate.targetCardId].includes(event.cardId);
+    });
+  };
+  const events = publicEvents.filter((event) => ONLINE_TIMELINE_TYPES.has(event.type) && !foldedIntoLaterEvent(event));
+  return events.slice(-Math.max(1, Number(limit) || 24)).reverse().map((event) => {
+    const receipt = onlineActionReceipt(view, event, { events: publicEvents });
+    const [label, category] = ONLINE_TIMELINE_META[event.type] || ["事件", "system"];
+    const actor = event.playerId === view?.viewerSeatId ? "self" : event.playerId ? "opponent" : "system";
+    const cardIds = [...new Set([
+      event.cardId, event.attackerCardId, event.targetCardId, event.sourceCardId
+    ].filter((cardId) => cardId && onlineCard(view, cardId)))];
+    return {
+      id: Number(event.id) || 0,
+      type: event.type,
+      label,
+      category,
+      actor,
+      tone: receipt?.tone || (category === "damage" ? "danger" : category),
+      text: receipt?.text || onlineTimelineFallback(view, event),
+      cardIds
+    };
+  });
+}
+
 export function onlineEventSound(view, event) {
   if (!event) return "";
   if (event.type === "MONSTER_SUMMONED") {

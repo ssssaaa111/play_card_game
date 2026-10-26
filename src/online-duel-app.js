@@ -15,17 +15,17 @@ import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
   "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "duelPanel", "aiPanel", "playerPanel",
-  "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "eventLog", "logToggle",
+  "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
   "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "duelHint", "duelError", "versusStage", "versusPhase",
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
-  "cardInspector", "inspectorTitle", "inspectorContent", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
+  "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
   "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
@@ -49,6 +49,9 @@ let lastFieldPositions = new Map();
 let cueCleanupTimer = null;
 let lastResultKey = null;
 let resultRevealTimer = null;
+let inspectorCollection = null;
+let eventLogRoomCode = null;
+let eventReadThroughId = 0;
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
 const audioController = createAudioController({
@@ -91,14 +94,6 @@ const runCommand = createOnlineActionRunner((pending) => {
   render(client.view);
 });
 const assetForCard = (card) => monsterAssets[card.id] || "";
-const EVENT_LABELS = {
-  MONSTER_SUMMONED: "怪兽登场", CARD_ACTIVATED: "卡牌发动", CARD_MOVED: "卡牌移动", DAMAGE_DEALT: "生命值受创",
-  LP_HEALED: "生命值恢复", ATTACK_DECLARED: "攻击宣言", BATTLE_RESOLVED: "战斗结算", CARD_DESTROYED: "卡牌破坏",
-  TURN_STARTED: "新回合开始", TURN_ENDED: "回合结束", CARDS_DRAWN: "抽取卡牌", TURN_DRAW_RESOLVED: "回合抽卡",
-  MONSTER_MODE_CHANGED: "表示形式切换", PHASE_CHANGED: "阶段推进", GAME_OVER_DECLARED: "决斗结束", EFFECT_SKIPPED: "效果条件不足",
-  CONTINUOUS_EFFECT_REGISTERED: "持续效果生效", TRAP_SET: "陷阱盖放", ATTACK_CANCELED: "攻击被取消", ATTACK_TARGET_CHANGED: "攻击目标改变"
-};
-
 function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
@@ -305,6 +300,11 @@ function battleImpactForSeat(seatId) {
 function setEventLogOpen(open) {
   elements.eventLog.hidden = !open;
   elements.logToggle.setAttribute("aria-expanded", String(open));
+  if (open) {
+    eventReadThroughId = Math.max(eventReadThroughId, ...onlineEventTimeline(client.view).map((entry) => entry.id));
+    renderEvents(client.view);
+    elements.eventLogClose.focus({ preventScroll: true });
+  }
 }
 
 function cancelSelection() {
@@ -320,39 +320,78 @@ function closeInspector() {
   if (elements.cardInspector.open) elements.cardInspector.close();
 }
 
-function showCards(cards, title = "卡牌详情") {
-  elements.inspectorTitle.textContent = title;
-  elements.inspectorContent.replaceChildren();
-  for (const card of cards.filter((entry) => entry && !entry.hidden)) {
+function appendCardDetail(card) {
+  const display = onlineDisplayCard(card);
+  const detail = onlineCardDetailView(card);
+  const entry = document.createElement("article");
+  entry.className = "online-inspector-entry";
+  entry.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: true }));
+  const copy = document.createElement("section");
+  copy.className = "online-inspector-copy";
+  const kicker = document.createElement("span");
+  kicker.className = "online-inspector-kicker";
+  kicker.textContent = `${detail.typeLabel} · 效果说明`;
+  const effect = document.createElement("p");
+  effect.className = "online-inspector-effect";
+  effect.textContent = detail.effectText;
+  const meta = document.createElement("dl");
+  meta.className = "online-inspector-meta";
+  for (const [label, value] of detail.rows) {
+    const row = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value;
+    row.append(term, description);
+    meta.appendChild(row);
+  }
+  copy.append(kicker, effect, meta);
+  entry.appendChild(copy);
+  elements.inspectorContent.appendChild(entry);
+}
+
+function appendCardCollection(cards, title) {
+  const visibleCards = cards.filter((entry) => entry && !entry.hidden);
+  const summary = document.createElement("p");
+  summary.className = "online-zone-summary";
+  summary.innerHTML = `<strong>${visibleCards.length} 张公开卡牌</strong><span>按入墓顺序排列 · 点击查看完整效果</span>`;
+  const grid = document.createElement("section");
+  grid.className = "online-zone-browser";
+  grid.setAttribute("aria-label", title);
+  for (const card of [...visibleCards].reverse()) {
     const display = onlineDisplayCard(card);
     const detail = onlineCardDetailView(card);
-    const entry = document.createElement("article");
-    entry.className = "online-inspector-entry";
-    entry.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: true }));
-    const copy = document.createElement("section");
-    copy.className = "online-inspector-copy";
-    const kicker = document.createElement("span");
-    kicker.className = "online-inspector-kicker";
-    kicker.textContent = `${detail.typeLabel} · 效果说明`;
-    const effect = document.createElement("p");
-    effect.className = "online-inspector-effect";
-    effect.textContent = detail.effectText;
-    const meta = document.createElement("dl");
-    meta.className = "online-inspector-meta";
-    for (const [label, value] of detail.rows) {
-      const row = document.createElement("div");
-      const term = document.createElement("dt");
-      const description = document.createElement("dd");
-      term.textContent = label;
-      description.textContent = value;
-      row.append(term, description);
-      meta.appendChild(row);
-    }
-    copy.append(kicker, effect, meta);
-    entry.appendChild(copy);
-    elements.inspectorContent.appendChild(entry);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "online-zone-card";
+    button.dataset.cardId = card.id;
+    button.setAttribute("aria-label", `查看${card.name}详情`);
+    button.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: false }));
+    const caption = document.createElement("span");
+    caption.className = "online-zone-card-caption";
+    caption.innerHTML = `<strong>${escapeHtml(card.name)}</strong><small>${escapeHtml(detail.typeLabel)}${card.type === "monster" ? ` · ATK ${Math.max(0, Number(card.atk || 0) + Number(card.tempAtk || 0))}` : ""}</small>`;
+    button.appendChild(caption);
+    grid.appendChild(button);
   }
-  if (!elements.inspectorContent.childElementCount) elements.inspectorContent.textContent = "这里还没有卡牌。";
+  elements.inspectorContent.append(summary, grid);
+}
+
+function showCards(cards, title = "卡牌详情", { collection = false, preserveCollection = false } = {}) {
+  if (collection) inspectorCollection = { cards: cards.filter(Boolean), title };
+  else if (!preserveCollection) inspectorCollection = null;
+  elements.inspectorTitle.textContent = title;
+  elements.inspectorKicker.textContent = collection ? "PUBLIC ZONE" : "CARD ARCHIVE";
+  elements.inspectorBack.hidden = !(!collection && inspectorCollection);
+  elements.inspectorContent.replaceChildren();
+  const visibleCards = cards.filter((entry) => entry && !entry.hidden);
+  if (collection && visibleCards.length) appendCardCollection(visibleCards, title);
+  else visibleCards.forEach(appendCardDetail);
+  if (!elements.inspectorContent.childElementCount) {
+    const empty = document.createElement("div");
+    empty.className = "online-zone-empty";
+    empty.innerHTML = "<b>墓地还是空的</b><span>被破坏或结算后的公开卡牌会出现在这里。</span>";
+    elements.inspectorContent.appendChild(empty);
+  }
   if (!elements.cardInspector.open) {
     inspectorReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.body.dataset.onlineOverlay = "detail";
@@ -497,6 +536,10 @@ function renderDuelist(root, view, seatId, rival) {
   root.setAttribute("aria-label", `${rival ? "对手" : "当前玩家"} ${seatName(view, seatId)}，${seatNumber}${!rival && identity ? `，${identity.seatRole}` : ""}`);
   elements[rival ? "rivalDeckCount" : "playerDeckCount"].textContent = player.deckCount;
   elements[rival ? "rivalGraveCount" : "playerGraveCount"].textContent = player.grave.length;
+  elements[rival ? "logRivalGraveCount" : "logSelfGraveCount"].textContent = player.grave.length;
+  const graveButton = elements[rival ? "rivalGrave" : "playerGrave"];
+  graveButton.dataset.empty = String(player.grave.length === 0);
+  graveButton.title = player.grave.length ? `查看${rival ? "对手" : "我方"}墓地的 ${player.grave.length} 张卡` : `${rival ? "对手" : "我方"}墓地为空`;
 }
 
 function renderBoard(view, model) {
@@ -868,13 +911,63 @@ function renderRoom(view) {
 }
 
 function renderEvents(view) {
-  elements.eventLog.innerHTML = view.recentEvents.filter((event) => EVENT_LABELS[event.type]).slice(-20).reverse().map((event) => {
-    const player = event.playerId ? seatName(view, event.playerId) : "系统";
-    const text = event.type === "DAMAGE_DEALT" ? `受到 ${event.amount || event.damage || 0} 点伤害`
-      : event.type === "LP_HEALED" ? `恢复 ${event.amount || 0} LP` : EVENT_LABELS[event.type];
-    const id = event.cardId || event.attackerCardId || event.sourceCardId;
-    return `<span>${escapeHtml(player)} · ${escapeHtml(text)}${id ? ` · ${escapeHtml(cardName(view, id))}` : ""}</span>`;
-  }).join("") || "<span>等待第一步行动</span>";
+  const timeline = onlineEventTimeline(view);
+  const latestId = timeline.reduce((max, entry) => Math.max(max, entry.id), 0);
+  if (eventLogRoomCode !== view.roomCode || latestId < eventReadThroughId) {
+    eventLogRoomCode = view.roomCode;
+    eventReadThroughId = latestId;
+  }
+  if (!elements.eventLog.hidden) eventReadThroughId = latestId;
+  const unread = timeline.filter((entry) => entry.id > eventReadThroughId).length;
+  elements.logUnread.hidden = unread === 0;
+  elements.logUnread.textContent = String(Math.min(99, unread));
+  elements.logToggle.dataset.unread = String(unread > 0);
+  elements.logToggle.setAttribute("aria-label", unread ? `战斗记录，${unread} 条新事件` : "战斗记录");
+  elements.eventLogList.replaceChildren();
+  if (!timeline.length) {
+    const empty = document.createElement("p");
+    empty.className = "online-event-empty";
+    empty.textContent = "等待第一步行动";
+    elements.eventLogList.appendChild(empty);
+    return;
+  }
+  timeline.forEach((entry, index) => {
+    const article = document.createElement("article");
+    article.className = "online-event-entry";
+    article.dataset.category = entry.category;
+    article.dataset.actor = entry.actor;
+    article.dataset.tone = entry.tone;
+    article.dataset.unread = String(entry.id > eventReadThroughId);
+    article.setAttribute("aria-posinset", String(timeline.length - index));
+    article.setAttribute("aria-setsize", String(timeline.length));
+    const marker = document.createElement("span");
+    marker.className = "online-event-marker";
+    marker.textContent = entry.label;
+    const copy = document.createElement("div");
+    copy.className = "online-event-copy";
+    const meta = document.createElement("small");
+    meta.textContent = `${entry.actor === "self" ? "你的行动" : entry.actor === "opponent" ? "对手行动" : "系统"} · #${entry.id}`;
+    const text = document.createElement("strong");
+    text.textContent = entry.text;
+    copy.append(meta, text);
+    if (entry.cardIds.length) {
+      const cards = document.createElement("div");
+      cards.className = "online-event-cards";
+      for (const cardId of entry.cardIds) {
+        const card = onlineCard(view, cardId);
+        if (!card) continue;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.cardId = cardId;
+        button.textContent = card.name;
+        button.title = `查看${card.name}详情`;
+        cards.appendChild(button);
+      }
+      copy.appendChild(cards);
+    }
+    article.append(marker, copy);
+    elements.eventLogList.appendChild(article);
+  });
 }
 
 function render(view) {
@@ -945,6 +1038,9 @@ elements.fieldDetailBtn.addEventListener("click", () => { const card = onlineCar
 elements.battleButton.addEventListener("click", () => sendAction({ type: "CHANGE_PHASE", phase: "battle" }));
 elements.endTurnButton.addEventListener("click", () => sendAction({ type: "END_TURN" }));
 elements.inspectorClose.addEventListener("click", closeInspector);
+elements.inspectorBack.addEventListener("click", () => {
+  if (inspectorCollection) showCards(inspectorCollection.cards, inspectorCollection.title, { collection: true });
+});
 elements.inspectorBackdrop.addEventListener("click", closeInspector);
 elements.cardInspector.addEventListener("click", (event) => { if (event.target === elements.cardInspector) closeInspector(); });
 elements.cardInspector.addEventListener("close", () => {
@@ -966,6 +1062,15 @@ elements.soundBtn?.addEventListener("click", () => {
 });
 document.addEventListener("pointerdown", unlockAudio, { capture: true, once: true });
 elements.logToggle.addEventListener("click", () => setEventLogOpen(elements.eventLog.hidden));
+elements.eventLogClose.addEventListener("click", () => {
+  setEventLogOpen(false);
+  elements.logToggle.focus({ preventScroll: true });
+});
+elements.eventLogList.addEventListener("click", (event) => {
+  const button = event.target.closest?.("button[data-card-id]");
+  const card = button ? onlineCard(client.view, button.dataset.cardId) : null;
+  if (card) showCards([card], card.name);
+});
 document.addEventListener("click", (event) => {
   if (!runCommand.blocksRepeatedClick(event.detail)) return;
   event.preventDefault();
@@ -979,7 +1084,14 @@ elements.duelPanel.addEventListener("click", (event) => {
 elements.hand.addEventListener("click", (event) => {
   if (!event.target.closest?.(".card, button")) cancelSelection();
 });
-for (const [id, own] of [["playerGrave", true], ["rivalGrave", false]]) elements[id].addEventListener("click", () => showCards(client.view.players[own ? client.view.viewerSeatId : client.view.opponentSeatId].grave, own ? "我方墓地" : "对手墓地"));
+for (const [id, own] of [["playerGrave", true], ["rivalGrave", false]]) elements[id].addEventListener("click", () => showCards(client.view.players[own ? client.view.viewerSeatId : client.view.opponentSeatId].grave, own ? "我方墓地" : "对手墓地", { collection: true }));
+for (const [id, own] of [["logSelfGrave", true], ["logRivalGrave", false]]) elements[id].addEventListener("click", () => showCards(client.view.players[own ? client.view.viewerSeatId : client.view.opponentSeatId].grave, own ? "我方墓地" : "对手墓地", { collection: true }));
+elements.inspectorContent.addEventListener("click", (event) => {
+  const button = event.target.closest?.(".online-zone-card[data-card-id]");
+  if (!button) return;
+  const card = onlineCard(client.view, button.dataset.cardId);
+  if (card) showCards([card], card.name, { preserveCollection: true });
+});
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !elements.cardInspector.open) cancelSelection(); });
 elements.roomCodeInput.value = new URLSearchParams(window.location.search).get("room") || "";
 renderSoundButton();
