@@ -55,9 +55,13 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/combos.js");
   checkModuleSyntax("src/data.js");
   checkModuleSyntax("src/deck.js");
+  checkModuleSyntax("src/duel-command.js");
+  checkModuleSyntax("src/duel-view.js");
   checkModuleSyntax("src/engine-adapter.js");
   checkModuleSyntax("src/log-audit.js");
   checkModuleSyntax("src/music.js");
+  checkModuleSyntax("src/online-duel-app.js");
+  checkModuleSyntax("src/online-duel-client.js");
   checkModuleSyntax("src/pre-duel-preview.js");
   checkModuleSyntax("src/response-state.js");
   checkModuleSyntax("src/selection-state.js");
@@ -71,6 +75,52 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/traps.js");
   checkModuleSyntax("src/turn-state.js");
   checkModuleSyntax("src/view-model.js");
+});
+
+test("online duel page keeps its room, board, and action mounts wired", () => {
+  const html = readProjectFile("online.html");
+  const css = readProjectFile("online-duel.css");
+  const app = readProjectFile("src/online-duel-app.js");
+
+  assert.match(html, /<link rel="stylesheet" href="online-duel\.css"/);
+  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js"><\/script>/);
+  assert.match(html, /id="lobbyPanel"/);
+  assert.match(html, /id="roomPanel"[^>]*hidden/);
+  assert.match(html, /id="duelPanel"[^>]*hidden/);
+  assert.match(html, /id="hand"/);
+  assert.match(html, /id="handReadyJump"[^>]*disabled/);
+  assert.match(html, /id="choiceActions"/);
+  assert.match(html, /id="eventLog"/);
+  assert.match(html, /id="duelHint"[^>]*aria-live="polite"/);
+  assert.match(html, /id="viewerIdentity"[^>]*hidden/);
+  assert.match(html, /每个标签页保存一名玩家身份/);
+  assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
+  assert.match(html, /href="duel-table\.css"/);
+  assert.match(html, /href="duel-focus\.css"/);
+  assert.match(app, /import \{ renderHandCards \} from "\.\/hand-renderer\.js"/);
+  assert.match(app, /import \{ renderMonsterZones, renderSupportZones \} from "\.\/field-renderer\.js"/);
+  assert.match(app, /import \{ monsterAssets \} from "\.\/data\.js"/);
+  assert.match(app, /onlineSelectionModel\(client\.view, selection\)\?\.action/);
+  assert.match(app, /sessionStorage\.setItem\(STORAGE_KEY/);
+  assert.match(app, /身份已恢复/);
+  assert.match(app, /event\.target === elements\.cardInspector/);
+  assert.match(app, /elements\.inspectorBackdrop\.addEventListener\("click", closeInspector\)/);
+  // Toggle/cancel behavior is covered by online-duel-ui.test.mjs, independent
+  // of whether its implementation lives in the app or an extracted helper.
+  const chooseCardSource = app.slice(app.indexOf("function chooseCard"), app.indexOf("function chooseSlot"));
+  assert.doesNotMatch(chooseCardSource, /showCards\(/, "primary hand-card clicks must not open the detail dialog");
+  assert.match(app, /elements\.duelPanel\.addEventListener\("click"/);
+  assert.match(app, /elements\.hand\.addEventListener\("click"/);
+  assert.match(html, /点击弹窗外空白处或按 Esc 关闭/);
+  assert.match(app, /async function prepareSelectedAttack\(\)/);
+  assert.match(app, /fieldAttackBtn\.addEventListener\("click", prepareSelectedAttack\)/);
+  assert.match(app, /进入战斗阶段并发起攻击/);
+  assert.match(app, /function locateNextReadyHandCard\(\)/);
+  assert.match(app, /handReadyJump\.addEventListener\("click", locateNextReadyHandCard\)/);
+  assert.match(app, /battleButton\.dataset\.currentPhase/);
+  assert.match(app, /handPanel\.dataset\.commandActive/);
+  assert.match(app, /syncActionReceipt\(view\)/);
+  assert.match(app, /actionReceipt\?\.text/);
 });
 
 test("index keeps critical app mount points wired", () => {
@@ -854,6 +904,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /aiReveal: \{/);
   assert.match(smoke, /function assertScenarioBrief/);
   assert.match(smoke, /async function clickSmokeElementTwiceAcrossRender/);
+  assert.match(smoke, /async function enterSmokeAttackTargeting/);
+  assert.match(smoke, /clickSmokeElement\(ctx\.els\.fieldAttackBtn, `\$\{label\}: enter attack targeting`\)/);
   assert.doesNotMatch(smoke, /new MouseEvent\("dblclick"/);
   assert.match(smoke, /"lunar-dominion-target-loss-basic": runLunarDominionTargetLossSmoke/);
   assert.match(smoke, /"lunar-dominion-persistence-basic": runLunarDominionTargetLossSmoke/);

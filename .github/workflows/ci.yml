@@ -16,6 +16,8 @@ jobs:
         with:
           node-version-file: .node-version
           package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci
       - name: Run all tests
         run: npm test
       - name: Run deterministic rule simulation
@@ -33,6 +35,8 @@ jobs:
         with:
           node-version-file: .node-version
           package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci
       - name: Run browser regression scenarios
         shell: bash
         run: |
@@ -46,3 +50,29 @@ jobs:
             sleep 0.25
           done
           npm run smoke:browser
+
+  online-smoke:
+    name: Online duel smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci
+      - name: Run two-client online duel smoke
+        shell: bash
+        run: |
+          node scripts/duel-server.mjs --scenario=trap-response > duel-server.out.log 2> duel-server.err.log &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:5178/health > /dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          npm run smoke:online -- --scenario=trap-response

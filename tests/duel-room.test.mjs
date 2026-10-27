@@ -1,0 +1,195 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
+import { createOnlineDuelState } from "../server/online-duel-state.js";
+
+function startedRoom() {
+  const room = new DuelRoom({ code: "ABC234", createState: (options) => createOnlineDuelState({ ...options, openingHands: {
+    p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"]
+  } }) });
+  const p1 = room.join({ name: "星野", connectionId: "connection-1" });
+  const p2 = room.join({ name: "月见", connectionId: "connection-2" });
+  room.setReady("connection-1", true);
+  room.setReady("connection-2", true);
+  return { room, p1, p2 };
+}
+
+test("room starts only after two authenticated seats are ready", () => {
+  const room = new DuelRoom({ code: "ABC234" });
+  const first = room.join({ name: "星野", connectionId: "connection-1" });
+  room.setReady("connection-1", true);
+  assert.equal(room.status, "waiting");
+  const second = room.join({ name: "月见", connectionId: "connection-2" });
+  room.setReady("connection-2", true);
+
+  assert.equal(first.seatId, "p1");
+  assert.equal(second.seatId, "p2");
+  assert.equal(room.status, "playing");
+  assert.equal(room.viewFor("p1").turn.playerId, "p1");
+});
+test("room dispatches legal commands once and rejects stale revisions", () => {
+  const { room } = startedRoom();
+  const view = room.viewFor("p1");
+  const summon = view.legalActions.actions.summon[0];
+  assert.ok(summon);
+  const receipt = room.submit("connection-1", {
+    revision: view.revision,
+    commandId: "command-summon-1",
+    action: { ...summon, playerId: "p2" }
+  });
+
+  assert.equal(receipt.duplicate, false);
+  const summonedMonster = room.viewFor("p1").players.p1.monsterZone.find(Boolean);
+  assert.ok(summonedMonster);
+  assert.equal(typeof summonedMonster.icon, "string");
+  assert.equal(typeof summonedMonster.stars, "number");
+  const duplicate = room.submit("connection-1", {
+    revision: view.revision,
+    commandId: "command-summon-1",
+    action: summon
+  });
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.revision, receipt.revision);
+  assert.throws(
+    () => room.submit("connection-1", {
+      revision: view.revision,
+      commandId: "command-stale",
+      action: { type: "END_TURN" }
+    }),
+    (error) => error instanceof DuelRoomError && error.code === "STALE_REVISION"
+  );
+});
+
+test("ending a turn automatically starts and draws for the opponent", () => {
+  const { room } = startedRoom();
+  const before = room.viewFor("p2");
+  const handBefore = before.players.p2.handCount;
+  room.submit("connection-1", {
+    revision: room.revision,
+    commandId: "command-end-1",
+    action: { type: "END_TURN" }
+  });
+  const after = room.viewFor("p2");
+
+  assert.equal(after.turn.playerId, "p2");
+  assert.equal(after.turn.phase, "main");
+  assert.equal(after.players.p2.handCount, handBefore + 1);
+});
+
+test("declaring an attack auto-resolves when no legal trap is set", () => {
+  const { room } = startedRoom();
+  const opening = room.viewFor("p1");
+  const summon = opening.legalActions.actions.summon[0];
+  assert.ok(summon);
+  room.submit("connection-1", {
+    revision: opening.revision,
+    commandId: "command-summon-for-attack",
+    action: summon
+  });
+
+  room.submit("connection-1", {
+    revision: room.revision,
+    commandId: "command-enter-battle",
+    action: { type: "CHANGE_PHASE", phase: "battle" }
+  });
+  const battleView = room.viewFor("p1");
+  const attack = battleView.legalActions.actions.declareAttack[0];
+  assert.ok(attack);
+  const opponentLp = battleView.players.p2.lp;
+
+  room.submit("connection-1", {
+    revision: battleView.revision,
+    commandId: "command-direct-attack",
+    action: attack
+  });
+  const resolved = room.viewFor("p1");
+
+  assert.equal(resolved.machine.pendingAttack, null);
+  assert.equal(resolved.machine.responseWindow, null);
+  assert.ok(resolved.players.p2.lp < opponentLp);
+});
+
+test("a reconnect token restores the same reserved seat", () => {
+  const { room, p2 } = startedRoom();
+  room.disconnect("connection-2");
+  const disconnected = room.viewFor("p1").seats.find((seat) => seat.seatId === "p2");
+  assert.equal(disconnected.connected, false);
+
+  const resumed = room.join({
+    name: "ignored",
+    connectionId: "connection-2b",
+    reconnectToken: p2.reconnectToken
+  });
+  assert.equal(resumed.seatId, "p2");
+  assert.equal(resumed.resumed, true);
+  assert.equal(room.viewFor("p1").seats.find((seat) => seat.seatId === "p2").connected, true);
+});
+
+test("a disconnected opponent pauses commands until the reserved seat reconnects", () => {
+  const { room, p2 } = startedRoom();
+  const before = room.viewFor("p1");
+  room.disconnect("connection-2");
+  assert.throws(() => room.submit("connection-1", {
+    revision: room.revision,
+    commandId: "paused-command",
+    action: before.legalActions.actions.summon[0]
+  }), (error) => error instanceof DuelRoomError && error.code === "OPPONENT_DISCONNECTED");
+
+  room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
+  const resumed = room.viewFor("p1");
+  const receipt = room.submit("connection-1", {
+    revision: resumed.revision,
+    commandId: "resumed-command",
+    action: resumed.legalActions.actions.summon[0]
+  });
+  assert.equal(receipt.duplicate, false);
+});
+
+test("a ready waiting room starts only after the disconnected seat resumes", () => {
+  const room = new DuelRoom({ code: "ABC234" });
+  room.join({ name: "星野", connectionId: "connection-1" });
+  const p2 = room.join({ name: "月见", connectionId: "connection-2" });
+  room.setReady("connection-2", true);
+  room.disconnect("connection-2");
+  room.setReady("connection-1", true);
+  assert.equal(room.status, "waiting");
+  room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
+  assert.equal(room.status, "playing");
+});
+
+test("forfeiting finishes the room and publishes the same winner to both seats", () => {
+  const { room } = startedRoom();
+  const before = room.viewFor("p2");
+  const result = room.forfeit("connection-2");
+
+  assert.equal(room.status, "finished");
+  assert.equal(result.revision, before.revision + 1);
+  assert.deepEqual(result.gameOver, {
+    winnerId: "p1",
+    loserIds: ["p2"],
+    reason: "concede",
+    sourceCardId: null,
+    triggerEventId: null
+  });
+  assert.deepEqual(room.viewFor("p1").gameOver, result.gameOver);
+  assert.equal(result.legalActions.actions.summon.length, 0);
+  assert.throws(
+    () => room.submit("connection-1", { revision: room.revision, commandId: "after-forfeit", action: { type: "END_TURN" } }),
+    (error) => error instanceof DuelRoomError && error.code === "DUEL_NOT_RUNNING"
+  );
+});
+
+test("a connected player may forfeit while the opponent seat is reconnecting", () => {
+  const { room } = startedRoom();
+  room.disconnect("connection-2");
+  room.forfeit("connection-1");
+  assert.equal(room.status, "finished");
+  assert.deepEqual(room.viewFor("p1").gameOver, {
+    winnerId: "p2",
+    loserIds: ["p1"],
+    reason: "concede",
+    sourceCardId: null,
+    triggerEventId: null
+  });
+});

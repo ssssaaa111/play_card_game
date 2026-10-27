@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>星魂决斗 · 真人对战</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="duel-table.css">
+  <link rel="stylesheet" href="target-selection.css">
+  <link rel="stylesheet" href="ui-polish.css">
+  <link rel="stylesheet" href="duel-focus.css">
+  <link rel="stylesheet" href="online-duel.css">
+</head>
+<body data-online-status="waiting" data-duel-focus="idle">
+  <div id="app">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">S</div><div><h1>星魂决斗</h1><div class="subtitle">真人对战 <button id="copyRoomCode" class="online-room-code" type="button" title="复制邀请链接" hidden></button></div></div></div>
+      <div class="phase">
+        <strong id="phaseLabel">等待开局</strong><span id="turnLabel">创建或加入房间</span>
+        <div class="phase-rail" aria-label="回合阶段">
+          <span class="phase-step" data-phase-step="draw"><i>1</i><em>抽卡</em></span>
+          <span class="phase-step" data-phase-step="main"><i>2</i><em>主要</em></span>
+          <span class="phase-step" data-phase-step="battle"><i>3</i><em>战斗</em></span>
+        </div>
+      </div>
+      <div class="actions" aria-label="回合操作">
+        <button class="btn online-sound-btn" id="soundBtn" type="button" title="关闭联机决斗音效" aria-pressed="true">音效 开</button>
+        <button class="btn online-forfeit-btn" id="forfeitButton" type="button" hidden>认输</button>
+        <button class="btn primary turn-control" id="battleButton" type="button" disabled>进入战斗</button>
+        <button class="btn turn-control" id="endTurnButton" type="button" disabled>结束回合</button>
+        <a class="btn" href="/">单人模式</a>
+      </div>
+      <div class="online-session-hud">
+        <div class="online-identity" id="viewerIdentity" hidden>
+          <span>本页身份</span><strong id="viewerName">决斗者</strong><small id="viewerSeatLabel">1P · 房主</small>
+        </div>
+        <div class="connection-pill" id="connectionStatus" data-state="connecting" aria-live="polite">连接中</div>
+      </div>
+    </header>
+
+    <section class="lobby-card" id="lobbyPanel">
+      <h2>邀请好友来一局</h2><p>创建房间，把房间码或邀请链接发给好友。双方准备后开局。</p><p class="online-session-note">每个标签页保存一名玩家身份；刷新页面会自动回到该席位。</p>
+      <label for="playerName">玩家名称</label><input id="playerName" maxlength="24" autocomplete="nickname" value="决斗者">
+      <div class="lobby-actions"><button class="btn primary" id="createRoom" type="button">创建房间</button><input id="roomCodeInput" maxlength="6" placeholder="房间码" autocomplete="off" aria-label="房间码"><button class="btn" id="joinRoom" type="button">加入房间</button></div>
+      <p class="error-copy" id="lobbyError" role="alert"></p>
+    </section>
+    <section class="room-card" id="roomPanel" hidden>
+      <h2>等待好友准备</h2><div class="seat-grid" id="seatGrid"></div><p id="roomHint"></p><button id="readyButton" class="btn primary" type="button">准备</button>
+    </section>
+
+    <main class="arena duel-table" id="duelPanel" hidden>
+      <section class="versus-stage" aria-label="双方对战状态" id="versusStage"><span class="versus-turn">ONLINE DUEL</span><strong class="versus-mark" aria-hidden="true"><i>V</i><i>S</i></strong><span class="versus-phase" id="versusPhase">主要阶段</span></section>
+      <aside class="side enemy duel-hud" aria-label="对手状态"><section class="player-card" id="aiPanel"></section><section class="piles"><div class="pile"><span><small>牌库</small><strong id="rivalDeckCount">0</strong></span></div><button class="pile" id="rivalGrave" type="button"><span><small>墓地</small><strong id="rivalGraveCount">0</strong></span></button></section></aside>
+      <section class="field" id="duelField" aria-label="决斗场地">
+        <div class="zone-row" id="aiField" aria-label="对手怪兽区"></div><div class="trap-row" id="aiTraps" aria-label="对手魔陷区"></div>
+        <div class="center-line"><span id="duelHint" role="status" aria-live="polite" aria-atomic="true">选择手牌，规划你的行动</span></div>
+        <div class="trap-row" id="playerTraps" aria-label="我方魔陷区"></div><div class="zone-row" id="playerField" aria-label="我方怪兽区"></div>
+      </section>
+      <aside class="side duel-hud" aria-label="玩家状态"><section class="player-card" id="playerPanel"></section><section class="piles"><div class="pile"><span><small>牌库</small><strong id="playerDeckCount">0</strong></span></div><button class="pile" id="playerGrave" type="button"><span><small>墓地</small><strong id="playerGraveCount">0</strong></span></button></section></aside>
+      <div class="online-notice" id="duelError" role="alert"></div>
+      <section class="online-connection-overlay" id="connectionOverlay" aria-live="assertive" hidden>
+        <div class="online-connection-card">
+          <span id="connectionKicker">DUEL PAUSED</span><h2 id="connectionTitle">等待连接恢复</h2><p id="connectionSummary">当前牌局和双方席位已经保留。</p>
+          <div class="online-connection-progress"><i aria-hidden="true"></i><strong id="connectionDetail">正在重连…</strong></div>
+          <footer id="connectionActions" hidden><button class="btn primary" id="connectionRetry" type="button">立即重试</button><button class="btn" id="connectionLobby" type="button">返回大厅</button></footer>
+        </div>
+      </section>
+      <button class="btn online-log-toggle" id="logToggle" type="button" aria-expanded="false" aria-controls="eventLog"><span>战斗记录</span><b id="logUnread" hidden>0</b></button>
+      <aside class="online-event-log" id="eventLog" aria-label="战斗记录" hidden>
+        <header><div><span>DUEL TIMELINE</span><strong>战斗记录</strong></div><button class="btn" id="eventLogClose" type="button" aria-label="关闭战斗记录">×</button></header>
+        <p class="online-event-log-guide">按时间查看本局公开事件，点击卡牌名称可查看详情。</p>
+        <nav class="online-event-zones" aria-label="公开区域"><button id="logSelfGrave" type="button"><span>我方墓地</span><b id="logSelfGraveCount">0</b></button><button id="logRivalGrave" type="button"><span>对手墓地</span><b id="logRivalGraveCount">0</b></button></nav>
+        <div id="eventLogList" class="online-event-log-list" role="feed" aria-live="polite"></div>
+      </aside>
+    </main>
+
+    <section class="hand-panel" id="handPanel" aria-label="玩家手牌" hidden>
+      <div class="hand-title"><div class="hand-title-copy"><strong>手牌</strong><span id="handGuide">选择卡牌 · 再选择落点或目标</span></div><button class="hand-readiness hand-ready-jump" id="handReadyJump" type="button" disabled><strong id="handCount">0 张</strong><small id="handReadyCount">0 可操作</small></button></div>
+      <div class="hand-stack"><div class="hand-toolbar" id="handToolbar"><span id="handOrderStatus">拖动可调整手牌顺序</span><button class="btn ghost hand-order-shortcut" id="handSortType" type="button">按类型</button></div><div class="hand" id="hand"></div></div>
+      <aside class="hand-command" id="handCommand" aria-label="战术指令">
+        <div class="hand-command-head"><span>TACTICAL COMMAND</span><span class="hand-command-signal" id="commandSignal">待命</span></div>
+        <div class="hand-command-idle" id="commandIdle"><strong id="commandTitle">选择一张手牌</strong><span id="commandHint">选择卡牌，再选择落点或目标。</span><div class="hand-command-flow" aria-hidden="true"><span class="is-current"><b>01</b> 选牌</span><span><b>02</b> 定位</span><span><b>03</b> 执行</span></div></div>
+        <nav class="field-action-bar" id="fieldActionBar" aria-label="所选怪兽操作" hidden>
+          <span class="field-action-context"><small>已选择</small><strong id="fieldActionName"></strong><span id="fieldActionStatus"></span></span>
+          <button class="field-action-btn field-attack-btn" id="fieldAttackBtn" type="button">⚔ 攻击</button><button class="field-action-btn field-mode-tab" id="fieldModeBtn" type="button">↕ 转守备</button><button class="field-action-btn field-detail-btn" id="fieldDetailBtn" type="button">◇ 详情</button><button class="field-action-btn field-cancel-btn" id="fieldCancelBtn" type="button">× 取消</button>
+        </nav>
+        <div class="choice-actions" id="choiceActions" hidden>
+          <span id="choiceText" aria-live="polite"></span><div class="target-options" id="fieldTargets" aria-label="可选目标" hidden></div>
+          <div class="battle-preview online-battle-preview empty" id="onlineBattlePreview" data-preview-variant="online-battle-preview" aria-live="polite" hidden></div>
+          <button class="btn primary" id="choiceConfirmBtn" type="button">确认</button><button class="btn" id="choiceCancelBtn" type="button">取消</button>
+        </div>
+      </aside>
+    </section>
+  </div>
+  <div class="effect-layer online-effect-layer" id="effectLayer" aria-hidden="true"></div>
+  <div class="phase-stage" id="phaseStage" data-active="false" hidden aria-live="polite" aria-atomic="true">
+    <div class="phase-stage-frame">
+      <span class="phase-stage-code" data-phase-stage-code>MAIN PHASE</span>
+      <strong class="phase-stage-title" data-phase-stage-title>主要阶段</strong>
+      <span class="phase-stage-actor" data-phase-stage-actor>你的回合</span>
+      <span class="phase-stage-detail" data-phase-stage-detail>部署怪兽 · 发动支援 · 构筑战线</span>
+    </div>
+  </div>
+  <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><div class="online-inspector-heading"><button class="btn online-inspector-back" id="inspectorBack" type="button" hidden>← 返回墓地</button><span id="inspectorKicker">CARD ARCHIVE</span><h2 id="inspectorTitle">卡牌详情</h2></div><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
+  <dialog id="onlineResponse" class="online-response" aria-labelledby="responseTitle" aria-describedby="responseLead responseBattleSummary responseText">
+    <section class="online-response-panel">
+      <header><span>ATTACK RESPONSE</span><h2 id="responseTitle">对手发起攻击 · 你的响应</h2><p id="responseLead">攻击已锁定，选择发动陷阱或放弃响应。</p></header>
+      <div id="responseBattle" class="online-response-battle" hidden>
+        <article class="online-response-combatant attacker"><span>攻击方</span><strong id="responseAttackerName">攻击怪兽</strong><b id="responseAttackerStat">ATK 0</b></article>
+        <div class="online-response-route"><span aria-hidden="true">→</span><b id="responseBattleBadge">攻击</b></div>
+        <article class="online-response-combatant target"><span>目标</span><strong id="responseTargetName">防守目标</strong><b id="responseTargetStat">DEF 0</b></article>
+      </div>
+      <p id="responseBattleSummary" class="online-response-summary" hidden></p>
+      <p id="responseCountdown" class="online-response-countdown" role="timer" aria-live="off"></p>
+      <p id="responseText" class="online-response-rule"></p>
+      <div id="responseChoices" class="chain-choices"></div>
+      <p id="responseStatus" role="status" aria-live="polite"></p>
+      <p id="responseError" class="error-copy" role="alert"></p>
+      <footer><button id="responseActivate" class="btn primary" type="button">发动陷阱</button><button id="responsePass" class="btn" type="button">放弃响应，继续结算</button></footer>
+    </section>
+  </dialog>
+  <dialog id="onlineResult" class="online-result" aria-labelledby="resultTitle" aria-describedby="resultSummary">
+    <section class="online-result-panel">
+      <span id="resultKicker" class="online-result-kicker">DUEL COMPLETE</span>
+      <h2 id="resultTitle">决斗结束</h2>
+      <p id="resultSummary">本局决斗已经结束。</p>
+      <div class="online-result-score" aria-label="最终生命值">
+        <article><span>你</span><strong id="resultSelfName">玩家</strong><b id="resultSelfLp">4000 LP</b></article>
+        <i>VS</i>
+        <article><span>对手</span><strong id="resultRivalName">对手</strong><b id="resultRivalLp">4000 LP</b></article>
+      </div>
+      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button id="resultLobby" class="btn primary" type="button">返回大厅</button></footer>
+    </section>
+  </dialog>
+  <dialog id="onlineForfeit" class="online-forfeit" aria-labelledby="forfeitTitle" aria-describedby="forfeitSummary">
+    <section class="online-forfeit-panel">
+      <span>LEAVE THE DUEL</span>
+      <h2 id="forfeitTitle">确认认输？</h2>
+      <p id="forfeitSummary">认输后本局立即结束，对手获得胜利；这个操作无法撤销。</p>
+      <p id="forfeitError" class="error-copy" role="alert"></p>
+      <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
+    </section>
+  </dialog>
+  <script type="module" src="/src/online-duel-app.js"></script>
+</body>
+</html>

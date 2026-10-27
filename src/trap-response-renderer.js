@@ -34,6 +34,7 @@ export function buildTrapResponseView({
       statusText: "",
       actionText: "发动陷阱",
       actionDisabled: false,
+      singleChoice: false,
       choices: [],
       stackEntries: [],
       resolutionOrder: ""
@@ -61,15 +62,21 @@ export function buildTrapResponseView({
   const selectedChainIndex = selectedCard
     ? stackEntries.find((entry) => entry.pending)?.chainIndex || chain.length + 1
     : null;
+  const singleChoice = choices.length === 1 && choice.eventName !== "chain";
 
   return {
     visible: true,
     detailsText: trapResponsePromptText(choice, traps, activationText),
     statusText: selectedCard
-      ? `已选择：${selectedCard.name} · 将加入 CL${selectedChainIndex}`
+      ? singleChoice
+        ? `唯一可发动：${selectedCard.name} · 已自动选中`
+        : `已选择：${selectedCard.name} · 将加入 CL${selectedChainIndex}`
       : `可响应 ${choices.length} 张 · 本事件限发动 1 张`,
-    actionText: selectedCard ? `发动 ${selectedCard.name} · CL${selectedChainIndex}` : "发动陷阱",
+    actionText: selectedCard
+      ? singleChoice ? `发动《${selectedCard.name}》` : `发动 ${selectedCard.name} · CL${selectedChainIndex}`
+      : "发动陷阱",
     actionDisabled: !canActivateTrapResponse(choice, traps),
+    singleChoice,
     choices,
     stackEntries,
     resolutionOrder: chainResolutionOrderText(stackEntries)
