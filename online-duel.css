@@ -271,6 +271,20 @@ body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-targe
 body[data-online-result="victory"] #app .duel-table #duelHint { border-color: rgba(246,189,96,.8); color: #fff2c7; background: rgba(61,42,12,.94); }
 body[data-online-result="defeat"] #app .duel-table #duelHint { border-color: rgba(239,71,111,.8); color: #ffdce4; background: rgba(65,14,28,.94); }
 
+.online-forfeit { width: min(450px, calc(100vw - 24px)); padding: 0; margin: auto; overflow: hidden; color: var(--ink); border: 1px solid rgba(239,71,111,.58); border-radius: 17px; background: #111923; box-shadow: 0 28px 100px #000d, 0 0 42px rgba(239,71,111,.16); }
+.online-forfeit::backdrop { background: rgba(3,7,12,.74); backdrop-filter: blur(4px) saturate(.82); }
+.online-forfeit-panel { display: grid; justify-items: center; padding: clamp(22px, 5vw, 34px); text-align: center; }
+.online-forfeit-panel > span { color: #ff91aa; font-size: 10px; font-weight: 900; letter-spacing: .18em; }
+.online-forfeit h2 { margin: 9px 0 6px; color: #ffe6ec; font-size: 28px; }
+.online-forfeit #forfeitSummary { max-width: 360px; margin: 8px 0 14px; color: #cbd5e1; font-size: 14px; line-height: 1.65; }
+.online-forfeit #forfeitError:empty { display: none; }
+.online-forfeit footer { display: flex; gap: 10px; width: 100%; margin-top: 8px; }
+.online-forfeit footer .btn { flex: 1 1 0; min-height: 46px; }
+.online-danger-btn { border-color: rgba(239,71,111,.75); color: #fff2f5; background: linear-gradient(135deg, rgba(154,32,62,.96), rgba(103,22,44,.98)); }
+.online-danger-btn:hover:not(:disabled) { border-color: #ff94ad; background: linear-gradient(135deg, rgba(190,40,76,.98), rgba(126,25,52,.98)); }
+.online-forfeit-btn:not([hidden]) { color: #ffc1cf; border-color: rgba(239,71,111,.38); background: rgba(75,19,35,.56); }
+.online-forfeit-btn:hover:not(:disabled) { border-color: rgba(239,71,111,.72); background: rgba(112,24,49,.72); }
+
 @media (max-width: 520px) {
   .online-result-score { gap: 6px; }
   .online-result-score article { padding: 10px; }

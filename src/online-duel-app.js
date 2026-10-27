@@ -28,6 +28,7 @@ const elements = Object.fromEntries([
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
   "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby",
+  "forfeitButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
   "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
 
@@ -60,6 +61,7 @@ let reconnectTimer = null;
 let reconnectInFlight = false;
 let recoveryFailed = false;
 let intentionalDisconnect = false;
+let forfeitPending = false;
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
 const audioController = createAudioController({
@@ -137,6 +139,7 @@ function renderConnectionState(view = client.view) {
   elements.connectionOverlay.hidden = !paused;
   elements.handPanel.inert = paused;
   elements.duelPanel.dataset.connectionPaused = String(paused);
+  elements.forfeitButton.disabled = paused || actionPending || forfeitPending;
   if (!paused) return;
   selection = null;
   elements.connectionOverlay.dataset.connectionKind = panel.kind;
@@ -985,6 +988,7 @@ function renderGameResult(view) {
   elements.resultSelfLp.textContent = `${result.selfLp} LP`;
   elements.resultRivalName.textContent = result.rivalName;
   elements.resultRivalLp.textContent = `${result.rivalLp} LP`;
+  if (elements.onlineForfeit.open) elements.onlineForfeit.close();
   elements.duelHint.textContent = `${result.title} · ${result.summary}`;
   elements.duelHint.dataset.kind = "status";
   elements.duelHint.dataset.tone = result.tone;
@@ -1014,6 +1018,42 @@ async function returnToOnlineLobby() {
   window.location.assign(url.toString());
 }
 
+function openForfeitDialog() {
+  if (client.view?.status !== "playing" || client.view?.gameOver || forfeitPending || connectionPaused()) return;
+  closeInspector();
+  elements.forfeitError.textContent = "";
+  elements.forfeitConfirm.disabled = false;
+  elements.forfeitConfirm.textContent = "确认认输";
+  if (!elements.onlineForfeit.open) elements.onlineForfeit.showModal();
+  elements.forfeitCancel.focus({ preventScroll: true });
+}
+
+function closeForfeitDialog() {
+  if (!forfeitPending && elements.onlineForfeit.open) elements.onlineForfeit.close();
+}
+
+async function confirmForfeit() {
+  if (forfeitPending || client.view?.status !== "playing" || client.view?.gameOver) return;
+  forfeitPending = true;
+  elements.forfeitError.textContent = "";
+  elements.forfeitCancel.disabled = true;
+  elements.forfeitConfirm.disabled = true;
+  elements.forfeitConfirm.textContent = "正在结算…";
+  elements.forfeitButton.disabled = true;
+  try {
+    await client.forfeitRoom();
+    if (elements.onlineForfeit.open) elements.onlineForfeit.close();
+  } catch (error) {
+    elements.forfeitError.textContent = error.message;
+  } finally {
+    forfeitPending = false;
+    elements.forfeitCancel.disabled = false;
+    elements.forfeitConfirm.disabled = false;
+    elements.forfeitConfirm.textContent = "确认认输";
+    render(client.view);
+  }
+}
+
 function renderRoom(view) {
   const playing = view.status !== "waiting";
   document.body.dataset.onlineStatus = playing ? "playing" : "waiting";
@@ -1021,6 +1061,8 @@ function renderRoom(view) {
   elements.roomPanel.hidden = playing;
   elements.copyRoomCode.hidden = false;
   elements.copyRoomCode.textContent = view.roomCode;
+  elements.forfeitButton.hidden = view.status !== "playing" || Boolean(view.gameOver);
+  elements.forfeitButton.disabled = actionPending || forfeitPending || connectionPaused(view);
   const identity = onlineIdentityView(view);
   elements.viewerIdentity.hidden = !identity;
   elements.viewerName.textContent = identity?.name || "";
@@ -1167,6 +1209,12 @@ elements.responsePass.addEventListener("click", () => respondToAttack(false));
 elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());
 elements.resultReview.addEventListener("click", () => elements.onlineResult.close());
 elements.resultLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
+elements.forfeitButton.addEventListener("click", openForfeitDialog);
+elements.forfeitCancel.addEventListener("click", closeForfeitDialog);
+elements.forfeitConfirm.addEventListener("click", () => { void confirmForfeit(); });
+elements.onlineForfeit.addEventListener("cancel", (event) => {
+  if (forfeitPending) event.preventDefault();
+});
 elements.connectionRetry.addEventListener("click", () => { recoveryFailed = false; reconnectAttempt = 0; void attemptReconnect({ immediate: true }); });
 elements.connectionLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
 for (const id of ["fieldCancelBtn", "choiceCancelBtn"]) elements[id].addEventListener("click", cancelSelection);

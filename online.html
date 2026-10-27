@@ -25,6 +25,7 @@
       </div>
       <div class="actions" aria-label="回合操作">
         <button class="btn online-sound-btn" id="soundBtn" type="button" title="关闭联机决斗音效" aria-pressed="true">音效 开</button>
+        <button class="btn online-forfeit-btn" id="forfeitButton" type="button" hidden>认输</button>
         <button class="btn primary turn-control" id="battleButton" type="button" disabled>进入战斗</button>
         <button class="btn turn-control" id="endTurnButton" type="button" disabled>结束回合</button>
         <a class="btn" href="/">单人模式</a>
@@ -129,6 +130,15 @@
         <article><span>对手</span><strong id="resultRivalName">对手</strong><b id="resultRivalLp">4000 LP</b></article>
       </div>
       <footer><button id="resultReview" class="btn" type="button">查看残局</button><button id="resultLobby" class="btn primary" type="button">返回大厅</button></footer>
+    </section>
+  </dialog>
+  <dialog id="onlineForfeit" class="online-forfeit" aria-labelledby="forfeitTitle" aria-describedby="forfeitSummary">
+    <section class="online-forfeit-panel">
+      <span>LEAVE THE DUEL</span>
+      <h2 id="forfeitTitle">确认认输？</h2>
+      <p id="forfeitSummary">认输后本局立即结束，对手获得胜利；这个操作无法撤销。</p>
+      <p id="forfeitError" class="error-copy" role="alert"></p>
+      <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
   <script type="module" src="/src/online-duel-app.js"></script>

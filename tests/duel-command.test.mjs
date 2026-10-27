@@ -17,6 +17,9 @@ test("duel protocol parses bounded request envelopes", () => {
   assert.equal(normalizeRoomCode(" abc234 "), "ABC234");
   assert.throws(() => parseClientMessage("not-json"), DuelProtocolError);
   assert.throws(() => parseClientMessage(JSON.stringify({ type: "unknown", requestId: "r", payload: {} })), /Unknown message type/);
+  assert.deepEqual(parseClientMessage(JSON.stringify(createClientMessage(DuelClientMessage.forfeitRoom, {}, "forfeit-1"))), {
+    type: "duel/forfeit", requestId: "forfeit-1", payload: {}
+  });
 });
 test("online action sanitizer binds commands to the authenticated seat", () => {
   const action = sanitizeOnlineAction({
@@ -42,5 +45,9 @@ test("online protocol rejects server-only commands and malformed revisions", () 
   assert.throws(
     () => normalizeCommandEnvelope({ revision: -1, commandId: "bad", action: { type: "END_TURN" } }),
     /revision/
+  );
+  assert.throws(
+    () => sanitizeOnlineAction({ type: "DECLARE_GAME_OVER" }, { seatId: "p1", rivalId: "p2" }),
+    /not available online/
   );
 });

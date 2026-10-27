@@ -98,6 +98,10 @@ export class OnlineDuelClient {
     return this.request(DuelClientMessage.leaveRoom, {});
   }
 
+  forfeitRoom() {
+    return this.request(DuelClientMessage.forfeitRoom, {});
+  }
+
   sync() {
     return this.request(DuelClientMessage.syncRoom, {});
   }

@@ -919,6 +919,9 @@ export class GameEngine {
       case "DECLARE_ATTACK":
         this.#declareAttack(workingState, emit, action);
         break;
+      case "DECLARE_GAME_OVER":
+        this.#declareGameOver(workingState, emit, action);
+        break;
       case "RESOLVE_BATTLE":
         this.#resolveBattle(workingState, ctx, emit, action);
         break;
@@ -2224,6 +2227,25 @@ export class GameEngine {
       duration: action.duration || "turn",
       sourceCardId: action.sourceCardId || null,
       targetCardId: action.targetCardId || null
+    });
+  }
+
+  #declareGameOver(state, emit, action) {
+    requirePlayer(state, action.playerId);
+    const loserIds = Array.isArray(action.loserIds) ? [...new Set(action.loserIds)] : [];
+    if (!loserIds.length) throw new GameRuleError("DECLARE_GAME_OVER requires at least one loser");
+    loserIds.forEach((playerId) => requirePlayer(state, playerId));
+    const winnerId = action.winnerId || null;
+    if (winnerId) requirePlayer(state, winnerId);
+    if (winnerId && loserIds.includes(winnerId)) throw new GameRuleError("A game winner cannot also be a loser");
+    emit("GAME_OVER_DECLARED", {
+      playerId: action.playerId,
+      winnerId,
+      loserIds,
+      reason: action.reason || "declared",
+      sourceCardId: action.sourceCardId || null,
+      triggerEventId: action.triggerEventId || null,
+      declaredAt: Number(action.declaredAt) || undefined
     });
   }
 

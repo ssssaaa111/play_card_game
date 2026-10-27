@@ -148,6 +148,20 @@ test("online game results are viewer-relative and include the final life totals"
   });
 });
 
+test("online surrender results explain who conceded without changing the final life totals", () => {
+  const view = snapshot();
+  view.roomCode = "STAR42";
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.lp = 4000;
+  view.players.p2.lp = 4000;
+  view.gameOver = { winnerId: "p1", loserIds: ["p2"], reason: "concede", triggerEventId: null };
+  assert.equal(onlineGameResultView(view).summary, "月见选择认输，你赢得了本局决斗。");
+
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  assert.equal(onlineGameResultView(view).summary, "你选择认输，星野赢得了本局决斗。");
+});
+
 test("public duel actions become concise viewer-relative receipts", () => {
   const view = snapshot();
   view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];

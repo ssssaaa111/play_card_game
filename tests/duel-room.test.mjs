@@ -157,3 +157,39 @@ test("a ready waiting room starts only after the disconnected seat resumes", () 
   room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
   assert.equal(room.status, "playing");
 });
+
+test("forfeiting finishes the room and publishes the same winner to both seats", () => {
+  const { room } = startedRoom();
+  const before = room.viewFor("p2");
+  const result = room.forfeit("connection-2");
+
+  assert.equal(room.status, "finished");
+  assert.equal(result.revision, before.revision + 1);
+  assert.deepEqual(result.gameOver, {
+    winnerId: "p1",
+    loserIds: ["p2"],
+    reason: "concede",
+    sourceCardId: null,
+    triggerEventId: null
+  });
+  assert.deepEqual(room.viewFor("p1").gameOver, result.gameOver);
+  assert.equal(result.legalActions.actions.summon.length, 0);
+  assert.throws(
+    () => room.submit("connection-1", { revision: room.revision, commandId: "after-forfeit", action: { type: "END_TURN" } }),
+    (error) => error instanceof DuelRoomError && error.code === "DUEL_NOT_RUNNING"
+  );
+});
+
+test("a connected player may forfeit while the opponent seat is reconnecting", () => {
+  const { room } = startedRoom();
+  room.disconnect("connection-2");
+  room.forfeit("connection-1");
+  assert.equal(room.status, "finished");
+  assert.deepEqual(room.viewFor("p1").gameOver, {
+    winnerId: "p2",
+    loserIds: ["p1"],
+    reason: "concede",
+    sourceCardId: null,
+    triggerEventId: null
+  });
+});

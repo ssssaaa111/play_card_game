@@ -162,10 +162,13 @@ export function onlineGameResultView(view) {
   const rival = view.players?.[view.opponentSeatId];
   const reason = gameOver.reason || "lp-zero";
   const winnerName = view.seats?.find((seat) => seat.seatId === winnerId)?.name || "胜者";
+  const loserName = view.seats?.find((seat) => gameOver.loserIds?.includes(seat.seatId))?.name || "败方";
   const summary = draw
     ? "双方同时失去全部生命值，本局以平局结束。"
     : reason === "lp-zero"
       ? won ? `${rivalSeat?.name || "对手"}的生命值归零，你赢得了本局决斗。` : `你的生命值归零，${winnerName}赢得了本局决斗。`
+      : reason === "concede"
+        ? won ? `${loserName}选择认输，你赢得了本局决斗。` : `你选择认输，${winnerName}赢得了本局决斗。`
       : won ? "你完成了本局的胜利条件。" : `${winnerName}完成了本局的胜利条件。`;
   return {
     key: `${view.roomCode || "room"}:${gameOver.triggerEventId || gameOver.reason || "finished"}`,

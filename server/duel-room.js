@@ -128,6 +128,26 @@ export class DuelRoom {
     return true;
   }
 
+  forfeit(connectionId) {
+    if (this.status !== "playing" || !this.engine) throw new DuelRoomError("The duel is not running", "DUEL_NOT_RUNNING");
+    const seat = this.#requireConnectionSeat(connectionId);
+    const winnerId = ROOM_SEAT_IDS.find((seatId) => seatId !== seat.seatId);
+    const engine = new GameEngine(this.engine.getState());
+    engine.dispatch({
+      type: "DECLARE_GAME_OVER",
+      playerId: seat.seatId,
+      winnerId,
+      loserIds: [seat.seatId],
+      reason: "concede",
+      declaredAt: this.now()
+    });
+    this.engine = engine;
+    this.status = "finished";
+    this.#clearResponseTimer();
+    this.#touch();
+    return this.viewFor(seat.seatId);
+  }
+
   submit(connectionId, payload) {
     if (this.status !== "playing" || !this.engine) throw new DuelRoomError("The duel is not running", "DUEL_NOT_RUNNING");
     const seat = this.#requireConnectionSeat(connectionId);
