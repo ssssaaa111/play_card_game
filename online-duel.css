@@ -261,8 +261,15 @@ body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-targe
 .online-result-score strong { overflow: hidden; color: #f8fbff; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .online-result-score b { color: #83f1cd; font-size: 15px; }
 .online-result-score i { color: #f6bd60; font-size: 11px; font-style: normal; font-weight: 900; letter-spacing: .12em; }
+.online-rematch-status { min-height: 22px; margin: 16px 0 0; color: #aebdca; font-size: 12px; line-height: 1.55; }
+.online-rematch-status[data-state="ready"] { color: #83f1cd; }
+.online-rematch-status[data-state="waiting"] { color: #f8d48c; }
+.online-rematch-status[data-state="error"] { color: #ff9fb4; }
 .online-result footer { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; margin-top: 22px; }
-.online-result footer .btn { flex: 1 1 180px; min-height: 48px; }
+.online-result footer .btn { flex: 1 1 130px; min-height: 48px; }
+.online-result footer .btn.primary { color: #17130b; border-color: rgba(255,220,150,.88); background: linear-gradient(135deg, #f6bd60, #ffdc96); box-shadow: 0 8px 24px rgba(246,189,96,.18); }
+.online-result footer .btn.primary:hover:not(:disabled) { background: linear-gradient(135deg, #ffd27e, #ffe7b1); box-shadow: 0 10px 30px rgba(246,189,96,.3); transform: translateY(-1px); }
+.online-result footer .btn.primary:disabled { opacity: .48; box-shadow: none; cursor: wait; }
 .online-result[data-result-tone="defeat"] { border-color: rgba(239,71,111,.76); box-shadow: 0 28px 110px #000d, 0 0 52px rgba(239,71,111,.2); }
 .online-result[data-result-tone="defeat"] .online-result-panel::before { background: linear-gradient(90deg, transparent, #ef476f, #ffb0c2, #ef476f, transparent); box-shadow: 0 0 24px rgba(239,71,111,.68); }
 .online-result[data-result-tone="defeat"] :is(.online-result-kicker, h2) { color: #ffb4c5; text-shadow: 0 0 28px rgba(239,71,111,.38); }

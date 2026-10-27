@@ -191,6 +191,8 @@ export function buildDuelView(state, viewerSeatId, {
   roomCode = "",
   revision = 0,
   status = "playing",
+  duelNumber = 1,
+  nextFirstPlayerId = null,
   seats = []
 } = {}) {
   const seatIds = seatIdsForState(state);
@@ -207,6 +209,8 @@ export function buildDuelView(state, viewerSeatId, {
     roomCode,
     revision,
     status,
+    duelNumber,
+    nextFirstPlayerId,
     viewerSeatId,
     opponentSeatId,
     seats: seats.map((seat) => ({

@@ -20,6 +20,9 @@ test("duel protocol parses bounded request envelopes", () => {
   assert.deepEqual(parseClientMessage(JSON.stringify(createClientMessage(DuelClientMessage.forfeitRoom, {}, "forfeit-1"))), {
     type: "duel/forfeit", requestId: "forfeit-1", payload: {}
   });
+  assert.deepEqual(parseClientMessage(JSON.stringify(createClientMessage(DuelClientMessage.requestRematch, {}, "rematch-1"))), {
+    type: "room/rematch", requestId: "rematch-1", payload: {}
+  });
 });
 test("online action sanitizer binds commands to the authenticated seat", () => {
   const action = sanitizeOnlineAction({

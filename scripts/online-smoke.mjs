@@ -163,7 +163,23 @@ try {
     assert.equal(resumed.view.machine.responseWindow, null);
   }
 
-  console.log(`online-duel-smoke passed (${created.roomCode}${responseScenario ? ", trap-response + resume" : ""})`);
+  await first.request(DuelClientMessage.forfeitRoom);
+  await Promise.all([
+    first.waitForView((view) => view.status === "finished" && view.gameOver?.reason === "concede"),
+    resumed.waitForView((view) => view.status === "finished" && view.gameOver?.reason === "concede")
+  ]);
+  await first.request(DuelClientMessage.requestRematch);
+  await resumed.waitForView((view) => view.status === "finished" && view.seats.find((seat) => seat.seatId === "p1")?.ready);
+  await resumed.request(DuelClientMessage.requestRematch);
+  const [firstRematch, secondRematch] = await Promise.all([
+    first.waitForView((view) => view.status === "playing" && view.duelNumber === 2),
+    resumed.waitForView((view) => view.status === "playing" && view.duelNumber === 2)
+  ]);
+  assert.equal(firstRematch.turn.playerId, "p2");
+  assert.equal(secondRematch.turn.playerId, "p2");
+  assert.equal(firstRematch.roomCode, created.roomCode);
+
+  console.log(`online-duel-smoke passed (${created.roomCode}${responseScenario ? ", trap-response + resume" : ""}, rematch)`);
 } finally {
   first.close();
   second.close();

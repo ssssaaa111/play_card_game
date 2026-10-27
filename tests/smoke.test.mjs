@@ -93,11 +93,14 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="eventLog"/);
   assert.match(html, /id="duelHint"[^>]*aria-live="polite"/);
   assert.match(html, /id="viewerIdentity"[^>]*hidden/);
+  assert.match(html, /id="resultRematch"/);
+  assert.match(html, /id="resultRematchStatus"[^>]*aria-live="polite"/);
   assert.match(html, /每个标签页保存一名玩家身份/);
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
   assert.match(html, /href="duel-table\.css"/);
   assert.match(html, /href="duel-focus\.css"/);
   assert.match(app, /import \{ renderHandCards \} from "\.\/hand-renderer\.js"/);
+  assert.match(app, /client\.requestRematch\(\)/);
   assert.match(app, /import \{ renderMonsterZones, renderSupportZones \} from "\.\/field-renderer\.js"/);
   assert.match(app, /import \{ monsterAssets \} from "\.\/data\.js"/);
   assert.match(app, /onlineSelectionModel\(client\.view, selection\)\?\.action/);

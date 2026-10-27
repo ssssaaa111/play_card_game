@@ -43,6 +43,7 @@ export class DuelRoom {
     this.revision = 0;
     this.status = "waiting";
     this.engine = null;
+    this.duelNumber = 0;
     this.createdAt = now();
     this.updatedAt = this.createdAt;
     this.responseTimeoutMs = Math.max(1_000, Number(responseTimeoutMs) || DEFAULT_RESPONSE_TIMEOUT_MS);
@@ -102,6 +103,20 @@ export class DuelRoom {
     seat.ready = Boolean(ready);
     seat.lastSeenAt = this.now();
     this.#touch();
+    this.#startIfReady();
+    return this.viewFor(seat.seatId);
+  }
+
+  requestRematch(connectionId) {
+    if (this.status !== "finished" || !this.engine?.getState()?.gameOver) {
+      throw new DuelRoomError("A rematch is only available after the duel ends", "REMATCH_NOT_AVAILABLE");
+    }
+    const seat = this.#requireConnectionSeat(connectionId);
+    if (!seat.ready) {
+      seat.ready = true;
+      seat.lastSeenAt = this.now();
+      this.#touch();
+    }
     this.#startIfReady();
     return this.viewFor(seat.seatId);
   }
@@ -203,6 +218,8 @@ export class DuelRoom {
         roomCode: this.code,
         revision: this.revision,
         status: this.status,
+        duelNumber: this.duelNumber,
+        nextFirstPlayerId: this.#nextFirstPlayerId(),
         viewerSeatId: seatId,
         opponentSeatId: ROOM_SEAT_IDS.find((candidate) => candidate !== seatId),
         seats
@@ -212,6 +229,8 @@ export class DuelRoom {
       roomCode: this.code,
       revision: this.revision,
       status: this.status,
+      duelNumber: this.duelNumber,
+      nextFirstPlayerId: this.#nextFirstPlayerId(),
       seats
     });
     view.responseTimer = this.responseTimeoutView();
@@ -291,17 +310,27 @@ export class DuelRoom {
   }
 
   #start() {
-    const initialState = this.createState({ seatIds: ROOM_SEAT_IDS });
+    const firstPlayerId = this.#nextFirstPlayerId();
+    const seatIds = [firstPlayerId, ...ROOM_SEAT_IDS.filter((seatId) => seatId !== firstPlayerId)];
+    const initialState = this.createState({ seatIds });
     this.engine = new GameEngine(initialState);
+    this.duelNumber += 1;
     this.status = "playing";
+    this.commandReceipts.clear();
+    this.#clearResponseTimer();
+    this.seatList().forEach((seat) => { seat.ready = false; });
     this.#touch();
   }
 
   #startIfReady() {
-    if (this.status !== "waiting" || this.seats.size !== ROOM_SEAT_IDS.length) return false;
+    if (!["waiting", "finished"].includes(this.status) || this.seats.size !== ROOM_SEAT_IDS.length) return false;
     if (!this.seatList().every((entry) => entry.ready && entry.connected)) return false;
     this.#start();
     return true;
+  }
+
+  #nextFirstPlayerId() {
+    return ROOM_SEAT_IDS[this.duelNumber % ROOM_SEAT_IDS.length];
   }
 
   #syncResponseTimer() {

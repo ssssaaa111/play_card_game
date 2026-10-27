@@ -193,3 +193,45 @@ test("a connected player may forfeit while the opponent seat is reconnecting", (
     triggerEventId: null
   });
 });
+
+test("both players can accept a rematch in the same room and alternate the first turn", () => {
+  const { room } = startedRoom();
+  assert.equal(room.duelNumber, 1);
+  assert.equal(room.viewFor("p1").turn.playerId, "p1");
+  room.forfeit("connection-2");
+
+  const waiting = room.requestRematch("connection-1");
+  assert.equal(room.status, "finished");
+  assert.equal(waiting.seats.find((seat) => seat.seatId === "p1").ready, true);
+  assert.equal(waiting.seats.find((seat) => seat.seatId === "p2").ready, false);
+  assert.equal(waiting.nextFirstPlayerId, "p2");
+
+  const restarted = room.requestRematch("connection-2");
+  assert.equal(room.status, "playing");
+  assert.equal(room.duelNumber, 2);
+  assert.equal(restarted.gameOver, null);
+  assert.equal(restarted.turn.playerId, "p2");
+  assert.equal(restarted.nextFirstPlayerId, "p1");
+  assert.ok(restarted.seats.every((seat) => seat.ready === false));
+});
+
+test("a rematch waits for a disconnected player and starts after their seat resumes", () => {
+  const { room, p2 } = startedRoom();
+  room.forfeit("connection-1");
+  room.requestRematch("connection-2");
+  room.disconnect("connection-2");
+  room.requestRematch("connection-1");
+  assert.equal(room.status, "finished");
+
+  room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
+  assert.equal(room.status, "playing");
+  assert.equal(room.viewFor("p2").turn.playerId, "p2");
+});
+
+test("rematch requests are rejected before a duel finishes", () => {
+  const { room } = startedRoom();
+  assert.throws(
+    () => room.requestRematch("connection-1"),
+    (error) => error instanceof DuelRoomError && error.code === "REMATCH_NOT_AVAILABLE"
+  );
+});

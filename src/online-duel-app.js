@@ -15,7 +15,7 @@ import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
@@ -27,7 +27,7 @@ const elements = Object.fromEntries([
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
   "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
-  "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby",
+  "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
   "forfeitButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
   "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
@@ -62,6 +62,8 @@ let reconnectInFlight = false;
 let recoveryFailed = false;
 let intentionalDisconnect = false;
 let forfeitPending = false;
+let rematchPending = false;
+let rematchError = "";
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
 const audioController = createAudioController({
@@ -972,6 +974,7 @@ function renderResponse(view) {
 function renderGameResult(view) {
   const result = onlineGameResultView(view);
   if (!result) {
+    rematchError = "";
     document.body.dataset.onlineResult = "none";
     lastResultKey = null;
     if (resultRevealTimer) clearTimeout(resultRevealTimer);
@@ -988,6 +991,11 @@ function renderGameResult(view) {
   elements.resultSelfLp.textContent = `${result.selfLp} LP`;
   elements.resultRivalName.textContent = result.rivalName;
   elements.resultRivalLp.textContent = `${result.rivalLp} LP`;
+  const rematch = onlineRematchView(view);
+  elements.resultRematch.disabled = rematchPending || rematch?.disabled || transportState !== "connected";
+  elements.resultRematch.textContent = rematchPending ? "正在确认…" : rematch?.label || "再来一局";
+  elements.resultRematchStatus.textContent = rematchError || rematch?.status || "双方确认后可在当前房间再来一局。";
+  elements.resultRematchStatus.dataset.state = rematchError ? "error" : rematchPending ? "ready" : rematch?.selfReady ? "waiting" : rematch?.rivalReady ? "ready" : "idle";
   if (elements.onlineForfeit.open) elements.onlineForfeit.close();
   elements.duelHint.textContent = `${result.title} · ${result.summary}`;
   elements.duelHint.dataset.kind = "status";
@@ -998,8 +1006,26 @@ function renderGameResult(view) {
   resultRevealTimer = window.setTimeout(() => {
     resultRevealTimer = null;
     if (!elements.onlineResult.open) elements.onlineResult.showModal();
-    elements.resultReview.focus({ preventScroll: true });
+    elements.resultRematch.focus({ preventScroll: true });
   }, 1050);
+}
+
+async function requestOnlineRematch() {
+  if (rematchPending || !client.view?.gameOver) return;
+  rematchPending = true;
+  rematchError = "";
+  elements.resultRematch.disabled = true;
+  elements.resultRematch.textContent = "正在确认…";
+  elements.resultRematchStatus.dataset.state = "ready";
+  elements.resultRematchStatus.textContent = "正在向对手发送再战请求…";
+  try {
+    await client.requestRematch();
+  } catch (error) {
+    rematchError = error.message || "再战请求失败，请稍后重试。";
+  } finally {
+    rematchPending = false;
+    render(client.view);
+  }
 }
 
 async function returnToOnlineLobby() {
@@ -1209,6 +1235,7 @@ elements.responsePass.addEventListener("click", () => respondToAttack(false));
 elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());
 elements.resultReview.addEventListener("click", () => elements.onlineResult.close());
 elements.resultLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
+elements.resultRematch.addEventListener("click", () => { void requestOnlineRematch(); });
 elements.forfeitButton.addEventListener("click", openForfeitDialog);
 elements.forfeitCancel.addEventListener("click", closeForfeitDialog);
 elements.forfeitConfirm.addEventListener("click", () => { void confirmForfeit(); });

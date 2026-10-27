@@ -133,6 +133,12 @@ async function handleMessage(socket, rawMessage) {
       ack(socket, requestId, { view: room.viewFor(connection.seatId) });
       return;
     }
+    if (message.type === DuelClientMessage.requestRematch) {
+      const view = room.requestRematch(connection.id);
+      ack(socket, requestId, { revision: room.revision, status: room.status, view });
+      broadcastRoom(room);
+      return;
+    }
     if (message.type === DuelClientMessage.forfeitRoom) {
       const view = room.forfeit(connection.id);
       ack(socket, requestId, { revision: room.revision, status: room.status, view });

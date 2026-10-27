@@ -183,6 +183,30 @@ export function onlineGameResultView(view) {
   };
 }
 
+export function onlineRematchView(view) {
+  if (!view?.gameOver) return null;
+  const selfSeat = view.seats?.find((seat) => seat.seatId === view.viewerSeatId);
+  const rivalSeat = view.seats?.find((seat) => seat.seatId === view.opponentSeatId);
+  const selfReady = Boolean(selfSeat?.ready);
+  const rivalReady = Boolean(rivalSeat?.ready);
+  const nextDuelNumber = Math.max(1, Number(view.duelNumber) || 1) + 1;
+  const nextStarter = view.seats?.find((seat) => seat.seatId === view.nextFirstPlayerId);
+  const starterText = nextStarter
+    ? `${nextStarter.seatId === view.viewerSeatId ? "你" : nextStarter.name || "对手"}先手`
+    : "重新决定先后手";
+  let status = `双方确认后开始第 ${nextDuelNumber} 局，${starterText}。`;
+  if (rivalReady && !selfReady) status = `${rivalSeat?.name || "对手"}已发起再战，确认后立即开始第 ${nextDuelNumber} 局。`;
+  if (selfReady && !rivalReady) status = `你已接受再战，等待${rivalSeat?.name || "对手"}确认。`;
+  if (rivalSeat?.connected === false) status += " 对手重连后仍可继续。";
+  return {
+    selfReady,
+    rivalReady,
+    disabled: selfReady,
+    label: selfReady ? "等待对手…" : rivalReady ? "接受再战" : "再来一局",
+    status
+  };
+}
+
 const ACTION_RECEIPT_TYPES = new Set([
   "MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED",
   "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN"
