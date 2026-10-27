@@ -28,7 +28,7 @@ const elements = Object.fromEntries([
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
   "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
-  "forfeitButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
+  "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
   "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
 
@@ -1010,6 +1010,18 @@ function renderGameResult(view) {
   }, 1050);
 }
 
+function openOnlineResult() {
+  if (!client.view?.gameOver) return;
+  closeInspector();
+  if (!elements.onlineResult.open) elements.onlineResult.showModal();
+  elements.resultRematch.focus({ preventScroll: true });
+}
+
+function reviewFinalBoard() {
+  if (elements.onlineResult.open) elements.onlineResult.close();
+  elements.resultReopenButton.focus({ preventScroll: true });
+}
+
 async function requestOnlineRematch() {
   if (rematchPending || !client.view?.gameOver) return;
   rematchPending = true;
@@ -1089,6 +1101,9 @@ function renderRoom(view) {
   elements.copyRoomCode.textContent = view.roomCode;
   elements.forfeitButton.hidden = view.status !== "playing" || Boolean(view.gameOver);
   elements.forfeitButton.disabled = actionPending || forfeitPending || connectionPaused(view);
+  elements.resultReopenButton.hidden = !view.gameOver;
+  elements.battleButton.hidden = Boolean(view.gameOver);
+  elements.endTurnButton.hidden = Boolean(view.gameOver);
   const identity = onlineIdentityView(view);
   elements.viewerIdentity.hidden = !identity;
   elements.viewerName.textContent = identity?.name || "";
@@ -1233,9 +1248,10 @@ elements.choiceConfirmBtn.addEventListener("click", () => sendAction(onlineSelec
 elements.responseActivate.addEventListener("click", () => respondToAttack(true));
 elements.responsePass.addEventListener("click", () => respondToAttack(false));
 elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());
-elements.resultReview.addEventListener("click", () => elements.onlineResult.close());
+elements.resultReview.addEventListener("click", reviewFinalBoard);
 elements.resultLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
 elements.resultRematch.addEventListener("click", () => { void requestOnlineRematch(); });
+elements.resultReopenButton.addEventListener("click", openOnlineResult);
 elements.forfeitButton.addEventListener("click", openForfeitDialog);
 elements.forfeitCancel.addEventListener("click", closeForfeitDialog);
 elements.forfeitConfirm.addEventListener("click", () => { void confirmForfeit(); });

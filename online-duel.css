@@ -291,6 +291,7 @@ body[data-online-result="defeat"] #app .duel-table #duelHint { border-color: rgb
 .online-danger-btn:hover:not(:disabled) { border-color: #ff94ad; background: linear-gradient(135deg, rgba(190,40,76,.98), rgba(126,25,52,.98)); }
 .online-forfeit-btn:not([hidden]) { color: #ffc1cf; border-color: rgba(239,71,111,.38); background: rgba(75,19,35,.56); }
 .online-forfeit-btn:hover:not(:disabled) { border-color: rgba(239,71,111,.72); background: rgba(112,24,49,.72); }
+.topbar .online-result-reopen:not([hidden]) { min-width: 92px; box-shadow: 0 0 0 1px rgba(255,244,212,.16), 0 8px 24px rgba(246,189,96,.2); }
 
 @media (max-width: 520px) {
   .online-result-score { gap: 6px; }
