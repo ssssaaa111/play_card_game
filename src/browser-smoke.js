@@ -341,6 +341,38 @@ function clickSmokeElementCenter(element, label) {
   hit.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
 }
 
+async function enterSmokeAttackTargeting(ctx, attackerId, resolveTarget, label, { targetClass = "attack-target" } = {}) {
+  const targetHighlighted = () => resolveTarget()?.classList.contains(targetClass);
+  const attackerSelected = () => {
+    const selected = selectedCardSnapshot(ctx.state);
+    return selected?.zone === "playerField" && selected.id === attackerId;
+  };
+  await waitForSmoke(
+    () => targetHighlighted() || (
+      !ctx.state.presentationBusy &&
+      ctx.currentPlayerActions().attack &&
+      Boolean(fieldCard(ctx.els, "player", attackerId))
+    ),
+    `${label}: attacker becomes actionable`,
+    12000
+  );
+  if (!targetHighlighted()) {
+    clickSmokeElement(fieldCard(ctx.els, "player", attackerId), `${label}: select attacker`);
+  }
+  await waitForSmoke(
+    () => targetHighlighted() || (
+      attackerSelected() &&
+      !ctx.els.fieldActionBar.hidden &&
+      !ctx.els.fieldAttackBtn.disabled
+    ),
+    `${label}: attacker command becomes available`
+  );
+  if (!targetHighlighted()) {
+    clickSmokeElement(ctx.els.fieldAttackBtn, `${label}: enter attack targeting`);
+  }
+  await waitForSmoke(targetHighlighted, `${label}: target highlighted`);
+}
+
 async function selectSpellTarget(ctx, element, label, { center = false } = {}) {
   const pendingUid = ctx.state.pendingTarget?.handUid;
   if (!pendingUid) throw new Error(`${label}: spell target window is not open`);
@@ -4423,8 +4455,12 @@ async function runTrioOmegaDemoCorrectLine(ctx, scenarioId, smokeName, expectedD
     12000
   );
 
-  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}：选择余烁小卫第二次攻击`);
-  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), `${smokeName}：星曜目标高亮`);
+  await enterSmokeAttackTargeting(
+    ctx,
+    "trio-ember-pawn",
+    () => fieldCard(ctx.els, "ai", "trio-star-herald"),
+    `${smokeName}：余烁小卫第二次攻击`
+  );
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}：余烁小卫击破星曜`);
   await waitForSmoke(
     () => ctx.state.gameOver && ctx.state.gameOverWinner === "player" &&
@@ -4603,8 +4639,12 @@ async function runTrioOmegaChallengeSmoke(ctx) {
     throw new Error(`trio-omega-challenge: attack reset log should name its source. ${trioOmegaFailureSnapshot(ctx)}`);
   }
 
-  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), "challenge: pawn second attack");
-  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), "challenge: star target highlighted");
+  await enterSmokeAttackTargeting(
+    ctx,
+    "trio-ember-pawn",
+    () => fieldCard(ctx.els, "ai", "trio-star-herald"),
+    "challenge: pawn second attack"
+  );
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), "challenge: pawn breaks star");
   await waitForSmoke(
     () => ctx.state.gameOver && ctx.state.gameOverWinner === "player" &&
@@ -4698,10 +4738,11 @@ async function runTrioOmegaStoryDemoSmoke(ctx) {
   );
   await waitForSmoke(() => storyLog().includes("第二尊神"), `${smokeName}: moon falls story beat`, 8000);
 
-  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn second attack`);
-  await waitForSmoke(
-    () => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"),
-    `${smokeName}: star target highlighted. ${trioOmegaFailureSnapshot(ctx)}`
+  await enterSmokeAttackTargeting(
+    ctx,
+    "trio-ember-pawn",
+    () => fieldCard(ctx.els, "ai", "trio-star-herald"),
+    `${smokeName}: pawn second attack. ${trioOmegaFailureSnapshot(ctx)}`
   );
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}: pawn breaks star`);
   await waitForSmoke(
@@ -5400,10 +5441,11 @@ async function runTrioOmegaFinaleSmoke(ctx) {
   );
   await waitForSmoke(() => storyLog().includes("第二尊神"), `${smokeName}: moon falls beat`, 8000);
 
-  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn second attack`);
-  await waitForSmoke(
-    () => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"),
-    `${smokeName}: star target highlighted`
+  await enterSmokeAttackTargeting(
+    ctx,
+    "trio-ember-pawn",
+    () => fieldCard(ctx.els, "ai", "trio-star-herald"),
+    `${smokeName}: pawn second attack`
   );
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}: pawn breaks star`);
   await waitForSmoke(
@@ -5722,10 +5764,11 @@ async function runTrioOmegaFinaleRushSmoke(ctx) {
   );
   await waitForSmoke(() => storyLog().includes("第二尊神"), `${smokeName}: moon falls beat`, 8000);
 
-  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: pawn second attack`);
-  await waitForSmoke(
-    () => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"),
-    `${smokeName}: star target highlighted`
+  await enterSmokeAttackTargeting(
+    ctx,
+    "trio-ember-pawn",
+    () => fieldCard(ctx.els, "ai", "trio-star-herald"),
+    `${smokeName}: pawn second attack`
   );
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}: pawn breaks star`);
   await waitForSmoke(
@@ -5937,8 +5980,12 @@ async function runTrioGauntletSmoke(ctx) {
   await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-moon-warden")?.classList.contains("attack-target"), `${smokeName}: c1 moon target`);
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-moon-warden"), `${smokeName}: c1 break moon`);
   await waitForSmoke(() => !ctx.state.ai.field.some((card) => card?.id === "trio-moon-warden"), `${smokeName}: c1 moon destroyed`);
-  clickSmokeElement(fieldCard(ctx.els, "player", "trio-ember-pawn"), `${smokeName}: c1 pawn second attack`);
-  await waitForSmoke(() => fieldCard(ctx.els, "ai", "trio-star-herald")?.classList.contains("attack-target"), `${smokeName}: c1 star target`);
+  await enterSmokeAttackTargeting(
+    ctx,
+    "trio-ember-pawn",
+    () => fieldCard(ctx.els, "ai", "trio-star-herald"),
+    `${smokeName}: c1 pawn second attack`
+  );
   clickSmokeElement(fieldCard(ctx.els, "ai", "trio-star-herald"), `${smokeName}: c1 break star`);
   await waitForSmoke(
     () => ctx.state.gameOver && ctx.state.gameOverWinner === "player",
@@ -7637,8 +7684,13 @@ async function runDoubleAttackSmoke(ctx) {
     throw new Error("攻击重置必须通过能力消费和怪兽恢复事件结算");
   }
   const aiLpAfterFirstAttack = ctx.state.ai.lp;
-  clickSmokeElement(fieldCard(ctx.els, "player", "star-lancer"), "重置后再次选择星轨枪兵");
-  await waitForSmoke(() => ctx.els.aiPanel.classList.contains("direct-target"), "第二次攻击可直击玩家");
+  await enterSmokeAttackTargeting(
+    ctx,
+    "star-lancer",
+    () => ctx.els.aiPanel,
+    "重置后星轨枪兵第二次攻击",
+    { targetClass: "direct-target" }
+  );
   clickSmokeElement(ctx.els.aiPanel, "第二次攻击直击 AI");
   await waitForSmoke(
     () => ctx.state.player.field[0]?.used && ctx.state.ai.lp < aiLpAfterFirstAttack,

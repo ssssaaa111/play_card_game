@@ -904,6 +904,8 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(smoke, /aiReveal: \{/);
   assert.match(smoke, /function assertScenarioBrief/);
   assert.match(smoke, /async function clickSmokeElementTwiceAcrossRender/);
+  assert.match(smoke, /async function enterSmokeAttackTargeting/);
+  assert.match(smoke, /clickSmokeElement\(ctx\.els\.fieldAttackBtn, `\$\{label\}: enter attack targeting`\)/);
   assert.doesNotMatch(smoke, /new MouseEvent\("dblclick"/);
   assert.match(smoke, /"lunar-dominion-target-loss-basic": runLunarDominionTargetLossSmoke/);
   assert.match(smoke, /"lunar-dominion-persistence-basic": runLunarDominionTargetLossSmoke/);
