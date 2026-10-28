@@ -74,10 +74,10 @@
       </section>
       <aside class="side duel-hud" aria-label="玩家状态"><section class="player-card" id="playerPanel"></section><section class="piles"><div class="pile"><span><small>牌库</small><strong id="playerDeckCount">0</strong></span></div><button class="pile" id="playerGrave" type="button"><span><small>墓地</small><strong id="playerGraveCount">0</strong></span></button></section></aside>
       <div class="online-notice" id="duelError" role="alert"></div>
-      <section class="online-connection-overlay" id="connectionOverlay" aria-live="assertive" hidden>
+      <section class="online-connection-overlay" id="connectionOverlay" aria-live="polite" hidden>
         <div class="online-connection-card">
           <span id="connectionKicker">DUEL PAUSED</span><h2 id="connectionTitle">等待连接恢复</h2><p id="connectionSummary">当前牌局和双方席位已经保留。</p>
-          <div class="online-connection-progress"><i aria-hidden="true"></i><strong id="connectionDetail">正在重连…</strong></div>
+          <div class="online-connection-progress"><i aria-hidden="true"></i><strong id="connectionDetail" role="timer" aria-live="off">正在重连…</strong></div>
           <footer id="connectionActions" hidden><button class="btn primary" id="connectionRetry" type="button">立即重试</button><button class="btn" id="connectionLobby" type="button">返回大厅</button></footer>
         </div>
       </section>

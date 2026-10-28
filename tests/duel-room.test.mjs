@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 
-function startedRoom() {
-  const room = new DuelRoom({ code: "ABC234", createState: (options) => createOnlineDuelState({ ...options, openingHands: {
+function startedRoom(roomOptions = {}) {
+  const createState = roomOptions.createState || ((options) => createOnlineDuelState({ ...options, openingHands: {
     p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"]
-  } }) });
+  } }));
+  const room = new DuelRoom({ code: "ABC234", ...roomOptions, createState });
   const p1 = room.join({ name: "星野", connectionId: "connection-1" });
   const p2 = room.join({ name: "月见", connectionId: "connection-2" });
   room.setReady("connection-1", true);
@@ -163,6 +164,45 @@ test("a disconnected opponent pauses commands until the reserved seat reconnects
     action: resumed.legalActions.actions.summon[0]
   });
   assert.equal(receipt.duplicate, false);
+});
+
+test("a disconnected seat has a finite reconnect deadline and loses after it expires", () => {
+  let now = 10_000;
+  const { room } = startedRoom({ now: () => now, disconnectGraceMs: 5_000 });
+  room.disconnect("connection-2");
+
+  const disconnected = room.viewFor("p1").seats.find((seat) => seat.seatId === "p2");
+  assert.equal(disconnected.reconnectDeadlineAt, 15_000);
+  assert.equal(room.disconnectTimeoutDelay(), 5_000);
+  now = 14_999;
+  assert.equal(room.expireDisconnectTimeout(), false);
+  now = 15_000;
+  assert.equal(room.expireDisconnectTimeout(), true);
+
+  const finished = room.viewFor("p1");
+  assert.equal(finished.status, "finished");
+  assert.deepEqual(finished.gameOver, {
+    winnerId: "p1",
+    loserIds: ["p2"],
+    reason: "disconnect-timeout",
+    sourceCardId: null,
+    triggerEventId: null
+  });
+  assert.deepEqual(finished.series, { completed: 1, draws: 0, wins: { p1: 1, p2: 0 } });
+  assert.equal(room.disconnectTimeoutDelay(), null);
+});
+
+test("reconnecting inside the grace period cancels disconnect forfeiture", () => {
+  let now = 20_000;
+  const { room, p2 } = startedRoom({ now: () => now, disconnectGraceMs: 5_000 });
+  room.disconnect("connection-2");
+  now = 24_500;
+  room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
+  now = 30_000;
+
+  assert.equal(room.expireDisconnectTimeout(), false);
+  assert.equal(room.status, "playing");
+  assert.equal(room.viewFor("p1").seats.find((seat) => seat.seatId === "p2").reconnectDeadlineAt, null);
 });
 
 test("a ready waiting room starts only after the disconnected seat resumes", () => {

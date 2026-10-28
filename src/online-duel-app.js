@@ -53,6 +53,7 @@ let actionReceipt = null;
 let actionReceiptTimer = null;
 let lastResponseSoundId = null;
 let responseCountdownInterval = null;
+let connectionCountdownInterval = null;
 let pendingActionCue = null;
 let lastFieldPositions = new Map();
 let cueCleanupTimer = null;
@@ -137,18 +138,40 @@ function setConnection(state, text) {
   elements.connectionStatus.title = text;
 }
 
+function connectionPanel(view = client.view) {
+  return onlineConnectionView(view, { transportState, reconnectAttempt, recoveryFailed });
+}
+
 function connectionPaused(view = client.view) {
-  return Boolean(onlineConnectionView(view, { transportState, reconnectAttempt, recoveryFailed }));
+  return Boolean(connectionPanel(view));
+}
+
+function clearConnectionCountdown() {
+  if (connectionCountdownInterval) window.clearInterval(connectionCountdownInterval);
+  connectionCountdownInterval = null;
+}
+
+function syncConnectionCountdown(panel) {
+  if (panel?.kind !== "opponent" || panel.deadlineAt == null) {
+    clearConnectionCountdown();
+    return;
+  }
+  if (connectionCountdownInterval) return;
+  connectionCountdownInterval = window.setInterval(() => {
+    if (!client.view) return clearConnectionCountdown();
+    renderConnectionState(client.view);
+  }, 1_000);
 }
 
 function renderConnectionState(view = client.view) {
-  const panel = onlineConnectionView(view, { transportState, reconnectAttempt, recoveryFailed });
+  const panel = connectionPanel(view);
   const paused = Boolean(panel);
   document.body.dataset.onlinePaused = String(paused);
   elements.connectionOverlay.hidden = !paused;
   elements.handPanel.inert = paused;
   elements.duelPanel.dataset.connectionPaused = String(paused);
-  elements.forfeitButton.disabled = paused || actionPending || forfeitPending;
+  elements.forfeitButton.disabled = panel?.kind === "self" || actionPending || forfeitPending;
+  syncConnectionCountdown(panel);
   if (!paused) return;
   selection = null;
   elements.connectionOverlay.dataset.connectionKind = panel.kind;
@@ -334,6 +357,7 @@ async function logoutAccount() {
   elements.logoutButton.disabled = true;
   intentionalDisconnect = true;
   clearReconnectTimer();
+  clearConnectionCountdown();
   try { if (client.view) await client.leaveRoom(); } catch {}
   clearStoredSession();
   client.disconnect();
@@ -1181,6 +1205,7 @@ async function returnToOnlineLobby() {
   if (intentionalDisconnect) return;
   intentionalDisconnect = true;
   clearReconnectTimer();
+  clearConnectionCountdown();
   elements.resultLobby.disabled = true;
   elements.connectionLobby.disabled = true;
   if (!elements.connectionLobby.hidden) elements.connectionLobby.textContent = "正在返回…";
@@ -1194,7 +1219,7 @@ async function returnToOnlineLobby() {
 }
 
 function openForfeitDialog() {
-  if (client.view?.status !== "playing" || client.view?.gameOver || forfeitPending || connectionPaused()) return;
+  if (client.view?.status !== "playing" || client.view?.gameOver || forfeitPending || connectionPanel()?.kind === "self") return;
   closeInspector();
   elements.forfeitError.textContent = "";
   elements.forfeitConfirm.disabled = false;
@@ -1239,7 +1264,7 @@ function renderRoom(view) {
   elements.copyRoomCode.hidden = false;
   elements.copyRoomCode.textContent = view.roomCode;
   elements.forfeitButton.hidden = view.status !== "playing" || Boolean(view.gameOver);
-  elements.forfeitButton.disabled = actionPending || forfeitPending || connectionPaused(view);
+  elements.forfeitButton.disabled = actionPending || forfeitPending || connectionPanel(view)?.kind === "self";
   elements.resultReopenButton.hidden = !view.gameOver;
   elements.battleButton.hidden = Boolean(view.gameOver);
   elements.endTurnButton.hidden = Boolean(view.gameOver);

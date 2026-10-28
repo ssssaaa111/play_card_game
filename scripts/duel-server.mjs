@@ -32,17 +32,21 @@ const port = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPo
 const authStorePath = process.env.DUEL_AUTH_STORE || fileURLToPath(new URL("../.data/online-auth.json", import.meta.url));
 const authStore = new OnlineAuthStore({ filePath: authStorePath });
 const configuredOrigins = new Set(String(process.env.DUEL_ALLOWED_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean));
+const configuredDisconnectGraceMs = Number.parseInt(process.env.DUEL_DISCONNECT_GRACE_MS || "60000", 10);
+const disconnectGraceMs = Number.isFinite(configuredDisconnectGraceMs) ? Math.max(1_000, configuredDisconnectGraceMs) : 60_000;
 const responseDemo = process.argv.includes("--scenario=trap-response");
 if (responseDemo && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
-const roomStore = new DuelRoomStore(responseDemo ? { createRoom: (options) => new DuelRoom({
+const roomStore = new DuelRoomStore({ createRoom: (options) => new DuelRoom({
   ...options,
-  createState: (config) => createOnlineDuelState({ ...config, openingHands: {
+  disconnectGraceMs,
+  ...(responseDemo ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: {
     p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"],
     p2: ["mirror-snare", "weakening-web", "storm-shift", "guard-sigil", "iron-guardian"]
-  } })
-}) } : {});
+  } }) } : {})
+}) });
 const connections = new Map();
 const responseTimers = new Map();
+const disconnectTimers = new Map();
 
 function requestIsSecure(request) {
   return request.socket?.encrypted === true || String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "https";
@@ -134,12 +138,28 @@ function activeRoomFor(socket) {
 
 function broadcastRoom(room) {
   scheduleResponseTimeout(room);
+  scheduleDisconnectTimeout(room);
   for (const [socket, connection] of connections) {
     if (connection.roomCode !== room.code || !connection.seatId) continue;
     const activeSeat = room.seatForConnection(connection.id);
     if (!activeSeat || activeSeat.seatId !== connection.seatId) continue;
     send(socket, { type: DuelServerMessage.roomState, data: room.viewFor(connection.seatId) });
   }
+}
+
+function scheduleDisconnectTimeout(room) {
+  const existing = disconnectTimers.get(room.code);
+  if (existing) clearTimeout(existing);
+  disconnectTimers.delete(room.code);
+  const delay = room.disconnectTimeoutDelay();
+  if (delay == null) return;
+  const timer = setTimeout(() => {
+    disconnectTimers.delete(room.code);
+    if (room.expireDisconnectTimeout()) broadcastRoom(room);
+    else scheduleDisconnectTimeout(room);
+  }, delay + 5);
+  timer.unref();
+  disconnectTimers.set(room.code, timer);
 }
 
 function scheduleResponseTimeout(room) {

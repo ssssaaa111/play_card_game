@@ -44,11 +44,14 @@ test("online series score stays viewer-relative across rematches", () => {
 
 test("online connection panels distinguish local recovery from an opponent pause", () => {
   const view = snapshot();
-  view.seats = [{ seatId: "p1", name: "星野", connected: true }, { seatId: "p2", name: "月见", connected: false }];
-  assert.deepEqual(onlineConnectionView(view), {
-    kind: "opponent", kicker: "DUEL PAUSED", title: "等待月见重连",
-    summary: "对手的席位和当前牌局都已保留；重连完成前，双方不能继续出牌。",
-    status: "你可以查看场面、墓地和战斗记录", showActions: false
+  view.seats = [
+    { seatId: "p1", name: "星野", connected: true, reconnectDeadlineAt: null },
+    { seatId: "p2", name: "月见", connected: false, reconnectDeadlineAt: 30_000 }
+  ];
+  assert.deepEqual(onlineConnectionView(view, { now: 18_400 }), {
+    kind: "opponent", kicker: "OPPONENT OFFLINE · 12S", title: "等待月见重连",
+    summary: "服务器正在为对手保留席位；倒计时结束仍未恢复连接，你将赢得本局。",
+    status: "重连保护剩余 12 秒", showActions: false, deadlineAt: 30_000, seconds: 12
   });
   const self = onlineConnectionView(view, { transportState: "reconnecting", reconnectAttempt: 2 });
   assert.equal(self.kind, "self");
@@ -178,6 +181,20 @@ test("online surrender results explain who conceded without changing the final l
   view.viewerSeatId = "p2";
   view.opponentSeatId = "p1";
   assert.equal(onlineGameResultView(view).summary, "你选择认输，星野赢得了本局决斗。");
+});
+
+test("online disconnect timeout results explain the automatic ruling", () => {
+  const view = snapshot();
+  view.roomCode = "STAR42";
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.lp = 4000;
+  view.players.p2.lp = 4000;
+  view.gameOver = { winnerId: "p1", loserIds: ["p2"], reason: "disconnect-timeout", triggerEventId: null };
+  assert.equal(onlineGameResultView(view).summary, "月见未在时限内重连，你赢得了本局决斗。");
+
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  assert.equal(onlineGameResultView(view).summary, "你未在时限内重连，星野赢得了本局决斗。");
 });
 
 test("online rematch copy reflects both players' confirmations and the next starter", () => {

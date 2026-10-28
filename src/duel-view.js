@@ -219,7 +219,8 @@ export function buildDuelView(state, viewerSeatId, {
       seatId: seat.seatId,
       name: seat.name,
       ready: Boolean(seat.ready),
-      connected: Boolean(seat.connected)
+      connected: Boolean(seat.connected),
+      reconnectDeadlineAt: seat.connected ? null : Number(seat.reconnectDeadlineAt) || null
     })),
     turn: {
       playerId: state.turn.playerId,

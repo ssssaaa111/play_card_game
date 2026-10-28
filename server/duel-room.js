@@ -9,6 +9,7 @@ import { onlineAttackResponse, onlineTrapAction, activateOnlineTrap, settleOnlin
 const ROOM_SEAT_IDS = Object.freeze(["p1", "p2"]);
 const MAX_REMEMBERED_COMMANDS = 100;
 const DEFAULT_RESPONSE_TIMEOUT_MS = 15_000;
+const DEFAULT_DISCONNECT_GRACE_MS = 60_000;
 
 function token() {
   return randomBytes(24).toString("base64url");
@@ -30,12 +31,19 @@ function publicSeat(seat) {
     seatId: seat.seatId,
     name: seat.name,
     ready: seat.ready,
-    connected: seat.connected
+    connected: seat.connected,
+    reconnectDeadlineAt: seat.connected ? null : seat.reconnectDeadlineAt || null
   };
 }
 
 export class DuelRoom {
-  constructor({ code, createState = createOnlineDuelState, now = () => Date.now(), responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS } = {}) {
+  constructor({
+    code,
+    createState = createOnlineDuelState,
+    now = () => Date.now(),
+    responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS,
+    disconnectGraceMs = DEFAULT_DISCONNECT_GRACE_MS
+  } = {}) {
     if (!code) throw new DuelRoomError("Room code is required");
     this.code = code;
     this.createState = createState;
@@ -49,6 +57,7 @@ export class DuelRoom {
     this.createdAt = now();
     this.updatedAt = this.createdAt;
     this.responseTimeoutMs = Math.max(1_000, Number(responseTimeoutMs) || DEFAULT_RESPONSE_TIMEOUT_MS);
+    this.disconnectGraceMs = Math.max(1_000, Number(disconnectGraceMs) || DEFAULT_DISCONNECT_GRACE_MS);
     this.responseDeclarationEventId = null;
     this.responseDeadlineAt = null;
     this.responseRemainingMs = null;
@@ -75,8 +84,12 @@ export class DuelRoom {
       if (resumed.accountId && resumed.accountId !== accountId) {
         throw new DuelRoomError("This room seat belongs to another account", "ACCOUNT_MISMATCH");
       }
+      if (this.status === "playing" && resumed.reconnectDeadlineAt != null && this.now() >= resumed.reconnectDeadlineAt) {
+        this.expireDisconnectTimeout();
+      }
       resumed.connectionId = connectionId;
       resumed.connected = true;
+      resumed.reconnectDeadlineAt = null;
       resumed.lastSeenAt = this.now();
       this.#resumeResponseTimer();
       this.#touch();
@@ -98,6 +111,7 @@ export class DuelRoom {
       reconnectToken: token(),
       ready: false,
       connected: true,
+      reconnectDeadlineAt: null,
       joinedAt: this.now(),
       lastSeenAt: this.now()
     };
@@ -137,6 +151,7 @@ export class DuelRoom {
     seat.connected = false;
     seat.connectionId = null;
     seat.lastSeenAt = this.now();
+    seat.reconnectDeadlineAt = this.status === "playing" ? seat.lastSeenAt + this.disconnectGraceMs : null;
     this.#touch();
     return true;
   }
@@ -169,6 +184,7 @@ export class DuelRoom {
     this.status = "finished";
     this.#recordDuelResult();
     this.#clearResponseTimer();
+    this.#clearDisconnectDeadlines();
     this.#touch();
     return this.viewFor(seat.seatId);
   }
@@ -305,6 +321,42 @@ export class DuelRoom {
     return Math.max(0, this.responseDeadlineAt - this.now());
   }
 
+  disconnectTimeoutDelay() {
+    if (this.status !== "playing") return null;
+    const deadlines = this.seatList()
+      .filter((seat) => !seat.connected && seat.reconnectDeadlineAt != null)
+      .map((seat) => seat.reconnectDeadlineAt);
+    if (!deadlines.length) return null;
+    return Math.max(0, Math.min(...deadlines) - this.now());
+  }
+
+  expireDisconnectTimeout() {
+    if (this.status !== "playing" || !this.engine) return false;
+    const expired = this.seatList().filter((seat) => (
+      !seat.connected && seat.reconnectDeadlineAt != null && this.now() >= seat.reconnectDeadlineAt
+    ));
+    if (!expired.length) return false;
+    const connected = this.seatList().filter((seat) => seat.connected);
+    const winnerId = connected.length === 1 ? connected[0].seatId : null;
+    const loserIds = winnerId ? ROOM_SEAT_IDS.filter((seatId) => seatId !== winnerId) : ROOM_SEAT_IDS;
+    const engine = new GameEngine(this.engine.getState());
+    engine.dispatch({
+      type: "DECLARE_GAME_OVER",
+      playerId: expired[0].seatId,
+      winnerId,
+      loserIds,
+      reason: "disconnect-timeout",
+      declaredAt: this.now()
+    });
+    this.engine = engine;
+    this.status = "finished";
+    this.#recordDuelResult();
+    this.#clearResponseTimer();
+    this.#clearDisconnectDeadlines();
+    this.#touch();
+    return true;
+  }
+
   expireAttackResponse() {
     if (!this.engine || this.responseDeadlineAt == null || this.now() < this.responseDeadlineAt) return false;
     const state = this.engine.getState();
@@ -336,7 +388,10 @@ export class DuelRoom {
     this.status = "playing";
     this.commandReceipts.clear();
     this.#clearResponseTimer();
-    this.seatList().forEach((seat) => { seat.ready = false; });
+    this.seatList().forEach((seat) => {
+      seat.ready = false;
+      seat.reconnectDeadlineAt = null;
+    });
     this.#touch();
   }
 
@@ -394,6 +449,10 @@ export class DuelRoom {
     this.responseDeclarationEventId = null;
     this.responseDeadlineAt = null;
     this.responseRemainingMs = null;
+  }
+
+  #clearDisconnectDeadlines() {
+    this.seatList().forEach((seat) => { seat.reconnectDeadlineAt = null; });
   }
 
   #touch() {

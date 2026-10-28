@@ -106,7 +106,12 @@ export function onlineSeriesView(view) {
   };
 }
 
-export function onlineConnectionView(view, { transportState = "connected", reconnectAttempt = 0, recoveryFailed = false } = {}) {
+export function onlineConnectionView(view, {
+  transportState = "connected",
+  reconnectAttempt = 0,
+  recoveryFailed = false,
+  now = Date.now()
+} = {}) {
   if (!view || view.status === "finished") return null;
   if (transportState !== "connected") {
     return {
@@ -122,13 +127,19 @@ export function onlineConnectionView(view, { transportState = "connected", recon
   }
   const rival = view.seats?.find((seat) => seat.seatId === view.opponentSeatId);
   if (!rival || rival.connected !== false) return null;
+  const deadlineAt = Number(rival.reconnectDeadlineAt) || null;
+  const seconds = deadlineAt == null ? null : Math.max(0, Math.ceil((deadlineAt - Number(now)) / 1000));
   return {
     kind: "opponent",
-    kicker: "DUEL PAUSED",
+    kicker: seconds == null ? "DUEL PAUSED" : `OPPONENT OFFLINE · ${seconds}S`,
     title: `等待${rival.name || "对手"}重连`,
-    summary: "对手的席位和当前牌局都已保留；重连完成前，双方不能继续出牌。",
-    status: "你可以查看场面、墓地和战斗记录",
-    showActions: false
+    summary: seconds == null
+      ? "对手的席位和当前牌局都已保留；重连完成前，双方不能继续出牌。"
+      : "服务器正在为对手保留席位；倒计时结束仍未恢复连接，你将赢得本局。",
+    status: seconds == null ? "你可以查看场面、墓地和战斗记录" : `重连保护剩余 ${seconds} 秒`,
+    showActions: false,
+    deadlineAt,
+    seconds
   };
 }
 
@@ -183,11 +194,15 @@ export function onlineGameResultView(view) {
   const winnerName = view.seats?.find((seat) => seat.seatId === winnerId)?.name || "胜者";
   const loserName = view.seats?.find((seat) => gameOver.loserIds?.includes(seat.seatId))?.name || "败方";
   const summary = draw
-    ? "双方同时失去全部生命值，本局以平局结束。"
+    ? reason === "disconnect-timeout"
+      ? "双方均未在时限内恢复连接，本局记为平局。"
+      : "双方同时失去全部生命值，本局以平局结束。"
     : reason === "lp-zero"
       ? won ? `${rivalSeat?.name || "对手"}的生命值归零，你赢得了本局决斗。` : `你的生命值归零，${winnerName}赢得了本局决斗。`
       : reason === "concede"
         ? won ? `${loserName}选择认输，你赢得了本局决斗。` : `你选择认输，${winnerName}赢得了本局决斗。`
+        : reason === "disconnect-timeout"
+          ? won ? `${rivalSeat?.name || "对手"}未在时限内重连，你赢得了本局决斗。` : `你未在时限内重连，${winnerName}赢得了本局决斗。`
       : won ? "你完成了本局的胜利条件。" : `${winnerName}完成了本局的胜利条件。`;
   return {
     key: `${view.roomCode || "room"}:${gameOver.triggerEventId || gameOver.reason || "finished"}`,
