@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -24,13 +24,34 @@ test("viewer identity keeps two tabs visually tied to their own reserved seats",
   });
 });
 
+test("online series score stays viewer-relative across rematches", () => {
+  const view = snapshot();
+  view.duelNumber = 3;
+  view.series = { completed: 2, draws: 1, wins: { p1: 1, p2: 0 } };
+  assert.deepEqual(onlineSeriesView(view), {
+    duelNumber: 3,
+    selfWins: 1,
+    rivalWins: 0,
+    draws: 1,
+    completed: 2,
+    score: "1 : 0",
+    detail: "已完成 2 局 · 1 场平局"
+  });
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  assert.equal(onlineSeriesView(view).score, "0 : 1");
+});
+
 test("online connection panels distinguish local recovery from an opponent pause", () => {
   const view = snapshot();
-  view.seats = [{ seatId: "p1", name: "星野", connected: true }, { seatId: "p2", name: "月见", connected: false }];
-  assert.deepEqual(onlineConnectionView(view), {
-    kind: "opponent", kicker: "DUEL PAUSED", title: "等待月见重连",
-    summary: "对手的席位和当前牌局都已保留；重连完成前，双方不能继续出牌。",
-    status: "你可以查看场面、墓地和战斗记录", showActions: false
+  view.seats = [
+    { seatId: "p1", name: "星野", connected: true, reconnectDeadlineAt: null },
+    { seatId: "p2", name: "月见", connected: false, reconnectDeadlineAt: 30_000 }
+  ];
+  assert.deepEqual(onlineConnectionView(view, { now: 18_400 }), {
+    kind: "opponent", kicker: "OPPONENT OFFLINE · 12S", title: "等待月见重连",
+    summary: "服务器正在为对手保留席位；倒计时结束仍未恢复连接，你将赢得本局。",
+    status: "重连保护剩余 12 秒", showActions: false, deadlineAt: 30_000, seconds: 12
   });
   const self = onlineConnectionView(view, { transportState: "reconnecting", reconnectAttempt: 2 });
   assert.equal(self.kind, "self");
@@ -160,6 +181,47 @@ test("online surrender results explain who conceded without changing the final l
   view.viewerSeatId = "p2";
   view.opponentSeatId = "p1";
   assert.equal(onlineGameResultView(view).summary, "你选择认输，星野赢得了本局决斗。");
+});
+
+test("online disconnect timeout results explain the automatic ruling", () => {
+  const view = snapshot();
+  view.roomCode = "STAR42";
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.lp = 4000;
+  view.players.p2.lp = 4000;
+  view.gameOver = { winnerId: "p1", loserIds: ["p2"], reason: "disconnect-timeout", triggerEventId: null };
+  assert.equal(onlineGameResultView(view).summary, "月见未在时限内重连，你赢得了本局决斗。");
+
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  assert.equal(onlineGameResultView(view).summary, "你未在时限内重连，星野赢得了本局决斗。");
+});
+
+test("online rematch copy reflects both players' confirmations and the next starter", () => {
+  const view = snapshot();
+  view.gameOver = { winnerId: "p1", loserIds: ["p2"], reason: "lp-zero" };
+  view.duelNumber = 1;
+  view.nextFirstPlayerId = "p2";
+  view.seats = [
+    { seatId: "p1", name: "星野", ready: false, connected: true },
+    { seatId: "p2", name: "月见", ready: false, connected: true }
+  ];
+  assert.deepEqual(onlineRematchView(view), {
+    selfReady: false,
+    rivalReady: false,
+    disabled: false,
+    label: "再来一局",
+    status: "双方确认后开始第 2 局，月见先手。"
+  });
+
+  view.seats[1].ready = true;
+  assert.equal(onlineRematchView(view).label, "接受再战");
+  assert.equal(onlineRematchView(view).status, "月见已发起再战，确认后立即开始第 2 局。");
+
+  view.seats[0].ready = true;
+  view.seats[1].ready = false;
+  assert.equal(onlineRematchView(view).disabled, true);
+  assert.equal(onlineRematchView(view).status, "你已接受再战，等待月见确认。");
 });
 
 test("public duel actions become concise viewer-relative receipts", () => {

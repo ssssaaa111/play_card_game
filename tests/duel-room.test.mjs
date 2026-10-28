@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 
-function startedRoom() {
-  const room = new DuelRoom({ code: "ABC234", createState: (options) => createOnlineDuelState({ ...options, openingHands: {
+function startedRoom(roomOptions = {}) {
+  const createState = roomOptions.createState || ((options) => createOnlineDuelState({ ...options, openingHands: {
     p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"]
-  } }) });
+  } }));
+  const room = new DuelRoom({ code: "ABC234", ...roomOptions, createState });
   const p1 = room.join({ name: "星野", connectionId: "connection-1" });
   const p2 = room.join({ name: "月见", connectionId: "connection-2" });
   room.setReady("connection-1", true);
@@ -126,6 +127,25 @@ test("a reconnect token restores the same reserved seat", () => {
   assert.equal(room.viewFor("p1").seats.find((seat) => seat.seatId === "p2").connected, true);
 });
 
+test("room seats stay bound to the authenticated account", () => {
+  const room = new DuelRoom({ code: "ABC234" });
+  const first = room.join({ name: "星野", accountId: "account-one", connectionId: "connection-1" });
+
+  assert.throws(
+    () => room.join({ name: "星野分身", accountId: "account-one", connectionId: "connection-2" }),
+    (error) => error instanceof DuelRoomError && error.code === "ACCOUNT_ALREADY_SEATED"
+  );
+
+  room.disconnect("connection-1");
+  assert.throws(
+    () => room.join({ name: "冒用者", accountId: "account-two", connectionId: "connection-3", reconnectToken: first.reconnectToken }),
+    (error) => error instanceof DuelRoomError && error.code === "ACCOUNT_MISMATCH"
+  );
+  const resumed = room.join({ name: "星野", accountId: "account-one", connectionId: "connection-4", reconnectToken: first.reconnectToken });
+  assert.equal(resumed.resumed, true);
+  assert.equal(resumed.seatId, "p1");
+});
+
 test("a disconnected opponent pauses commands until the reserved seat reconnects", () => {
   const { room, p2 } = startedRoom();
   const before = room.viewFor("p1");
@@ -144,6 +164,45 @@ test("a disconnected opponent pauses commands until the reserved seat reconnects
     action: resumed.legalActions.actions.summon[0]
   });
   assert.equal(receipt.duplicate, false);
+});
+
+test("a disconnected seat has a finite reconnect deadline and loses after it expires", () => {
+  let now = 10_000;
+  const { room } = startedRoom({ now: () => now, disconnectGraceMs: 5_000 });
+  room.disconnect("connection-2");
+
+  const disconnected = room.viewFor("p1").seats.find((seat) => seat.seatId === "p2");
+  assert.equal(disconnected.reconnectDeadlineAt, 15_000);
+  assert.equal(room.disconnectTimeoutDelay(), 5_000);
+  now = 14_999;
+  assert.equal(room.expireDisconnectTimeout(), false);
+  now = 15_000;
+  assert.equal(room.expireDisconnectTimeout(), true);
+
+  const finished = room.viewFor("p1");
+  assert.equal(finished.status, "finished");
+  assert.deepEqual(finished.gameOver, {
+    winnerId: "p1",
+    loserIds: ["p2"],
+    reason: "disconnect-timeout",
+    sourceCardId: null,
+    triggerEventId: null
+  });
+  assert.deepEqual(finished.series, { completed: 1, draws: 0, wins: { p1: 1, p2: 0 } });
+  assert.equal(room.disconnectTimeoutDelay(), null);
+});
+
+test("reconnecting inside the grace period cancels disconnect forfeiture", () => {
+  let now = 20_000;
+  const { room, p2 } = startedRoom({ now: () => now, disconnectGraceMs: 5_000 });
+  room.disconnect("connection-2");
+  now = 24_500;
+  room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
+  now = 30_000;
+
+  assert.equal(room.expireDisconnectTimeout(), false);
+  assert.equal(room.status, "playing");
+  assert.equal(room.viewFor("p1").seats.find((seat) => seat.seatId === "p2").reconnectDeadlineAt, null);
 });
 
 test("a ready waiting room starts only after the disconnected seat resumes", () => {
@@ -192,4 +251,50 @@ test("a connected player may forfeit while the opponent seat is reconnecting", (
     sourceCardId: null,
     triggerEventId: null
   });
+});
+
+test("both players can accept a rematch in the same room and alternate the first turn", () => {
+  const { room } = startedRoom();
+  assert.equal(room.duelNumber, 1);
+  assert.equal(room.viewFor("p1").turn.playerId, "p1");
+  room.forfeit("connection-2");
+  assert.deepEqual(room.viewFor("p1").series, { completed: 1, draws: 0, wins: { p1: 1, p2: 0 } });
+
+  const waiting = room.requestRematch("connection-1");
+  assert.equal(room.status, "finished");
+  assert.equal(waiting.seats.find((seat) => seat.seatId === "p1").ready, true);
+  assert.equal(waiting.seats.find((seat) => seat.seatId === "p2").ready, false);
+  assert.equal(waiting.nextFirstPlayerId, "p2");
+
+  const restarted = room.requestRematch("connection-2");
+  assert.equal(room.status, "playing");
+  assert.equal(room.duelNumber, 2);
+  assert.equal(restarted.gameOver, null);
+  assert.equal(restarted.turn.playerId, "p2");
+  assert.equal(restarted.nextFirstPlayerId, "p1");
+  assert.ok(restarted.seats.every((seat) => seat.ready === false));
+
+  room.forfeit("connection-1");
+  assert.deepEqual(room.viewFor("p2").series, { completed: 2, draws: 0, wins: { p1: 1, p2: 1 } });
+});
+
+test("a rematch waits for a disconnected player and starts after their seat resumes", () => {
+  const { room, p2 } = startedRoom();
+  room.forfeit("connection-1");
+  room.requestRematch("connection-2");
+  room.disconnect("connection-2");
+  room.requestRematch("connection-1");
+  assert.equal(room.status, "finished");
+
+  room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
+  assert.equal(room.status, "playing");
+  assert.equal(room.viewFor("p2").turn.playerId, "p2");
+});
+
+test("rematch requests are rejected before a duel finishes", () => {
+  const { room } = startedRoom();
+  assert.throws(
+    () => room.requestRematch("connection-1"),
+    (error) => error instanceof DuelRoomError && error.code === "REMATCH_NOT_AVAILABLE"
+  );
 });

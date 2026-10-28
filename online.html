@@ -26,11 +26,15 @@
       <div class="actions" aria-label="回合操作">
         <button class="btn online-sound-btn" id="soundBtn" type="button" title="关闭联机决斗音效" aria-pressed="true">音效 开</button>
         <button class="btn online-forfeit-btn" id="forfeitButton" type="button" hidden>认输</button>
+        <button class="btn primary online-result-reopen" id="resultReopenButton" type="button" aria-haspopup="dialog" hidden>对局结果</button>
         <button class="btn primary turn-control" id="battleButton" type="button" disabled>进入战斗</button>
         <button class="btn turn-control" id="endTurnButton" type="button" disabled>结束回合</button>
         <a class="btn" href="/">单人模式</a>
       </div>
       <div class="online-session-hud">
+        <div class="online-account" id="accountBadge" hidden>
+          <span>当前账号</span><strong id="accountName">决斗者</strong><small id="accountHandle">@duelist</small><button id="logoutButton" type="button">退出</button>
+        </div>
         <div class="online-identity" id="viewerIdentity" hidden>
           <span>本页身份</span><strong id="viewerName">决斗者</strong><small id="viewerSeatLabel">1P · 房主</small>
         </div>
@@ -38,9 +42,21 @@
       </div>
     </header>
 
-    <section class="lobby-card" id="lobbyPanel">
-      <h2>邀请好友来一局</h2><p>创建房间，把房间码或邀请链接发给好友。双方准备后开局。</p><p class="online-session-note">每个标签页保存一名玩家身份；刷新页面会自动回到该席位。</p>
-      <label for="playerName">玩家名称</label><input id="playerName" maxlength="24" autocomplete="nickname" value="决斗者">
+    <section class="online-auth-card" id="authPanel">
+      <div class="online-auth-intro"><span>PLAYER ACCOUNT</span><h2 id="authTitle">登录决斗账号</h2><p id="authLead">账号保存在对战服务中，浏览器通过安全 Cookie 保持登录。</p></div>
+      <div class="online-auth-tabs" role="tablist" aria-label="账号操作"><button id="authLoginTab" type="button" role="tab" aria-selected="true">登录</button><button id="authRegisterTab" type="button" role="tab" aria-selected="false">注册</button></div>
+      <form id="authForm" autocomplete="on">
+        <label for="authHandle">账号</label><input id="authHandle" name="username" maxlength="24" autocomplete="username" placeholder="例如 star_duelist" required>
+        <div id="authDisplayField" hidden><label for="authDisplayName">对战昵称</label><input id="authDisplayName" name="nickname" maxlength="24" autocomplete="nickname" placeholder="其他玩家看到的名字"></div>
+        <label for="authPassword">密码</label><input id="authPassword" name="password" type="password" minlength="6" maxlength="72" autocomplete="current-password" required>
+        <button class="btn primary" id="authSubmit" type="submit">登录</button>
+      </form>
+      <p class="online-auth-note">同一浏览器保持一个当前账号；换浏览器即可分别登录其他账号。</p><p class="error-copy" id="authError" role="alert"></p>
+    </section>
+
+    <section class="lobby-card" id="lobbyPanel" hidden>
+      <h2>邀请好友来一局</h2><p>创建房间，把房间码或邀请链接发给好友。双方准备后开局。</p><p class="online-session-note">登录状态会跨刷新保留；未结束的房间也会按账号自动恢复。</p>
+      <label for="playerName">对战昵称</label><input id="playerName" maxlength="24" autocomplete="nickname" value="决斗者" readonly>
       <div class="lobby-actions"><button class="btn primary" id="createRoom" type="button">创建房间</button><input id="roomCodeInput" maxlength="6" placeholder="房间码" autocomplete="off" aria-label="房间码"><button class="btn" id="joinRoom" type="button">加入房间</button></div>
       <p class="error-copy" id="lobbyError" role="alert"></p>
     </section>
@@ -58,10 +74,10 @@
       </section>
       <aside class="side duel-hud" aria-label="玩家状态"><section class="player-card" id="playerPanel"></section><section class="piles"><div class="pile"><span><small>牌库</small><strong id="playerDeckCount">0</strong></span></div><button class="pile" id="playerGrave" type="button"><span><small>墓地</small><strong id="playerGraveCount">0</strong></span></button></section></aside>
       <div class="online-notice" id="duelError" role="alert"></div>
-      <section class="online-connection-overlay" id="connectionOverlay" aria-live="assertive" hidden>
+      <section class="online-connection-overlay" id="connectionOverlay" aria-live="polite" hidden>
         <div class="online-connection-card">
           <span id="connectionKicker">DUEL PAUSED</span><h2 id="connectionTitle">等待连接恢复</h2><p id="connectionSummary">当前牌局和双方席位已经保留。</p>
-          <div class="online-connection-progress"><i aria-hidden="true"></i><strong id="connectionDetail">正在重连…</strong></div>
+          <div class="online-connection-progress"><i aria-hidden="true"></i><strong id="connectionDetail" role="timer" aria-live="off">正在重连…</strong></div>
           <footer id="connectionActions" hidden><button class="btn primary" id="connectionRetry" type="button">立即重试</button><button class="btn" id="connectionLobby" type="button">返回大厅</button></footer>
         </div>
       </section>
@@ -129,7 +145,9 @@
         <i>VS</i>
         <article><span>对手</span><strong id="resultRivalName">对手</strong><b id="resultRivalLp">4000 LP</b></article>
       </div>
-      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button id="resultLobby" class="btn primary" type="button">返回大厅</button></footer>
+      <div class="online-series-score" id="resultSeries" aria-label="本房间系列战绩"><span>ROOM SERIES</span><strong id="resultSeriesScore">0 : 0</strong><small id="resultSeriesDetail">已完成 0 局</small></div>
+      <p id="resultRematchStatus" class="online-rematch-status" role="status" aria-live="polite">双方确认后可在当前房间再来一局。</p>
+      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button id="resultLobby" class="btn" type="button">返回大厅</button><button id="resultRematch" class="btn primary" type="button">再来一局</button></footer>
     </section>
   </dialog>
   <dialog id="onlineForfeit" class="online-forfeit" aria-labelledby="forfeitTitle" aria-describedby="forfeitSummary">

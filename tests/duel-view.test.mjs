@@ -7,7 +7,7 @@ import { createOnlineDuelState } from "../server/online-duel-state.js";
 
 test("duel views reveal only the viewer hand and never reveal either deck order", () => {
   const state = createOnlineDuelState();
-  const p1View = buildDuelView(state, "p1", { roomCode: "ABC234", revision: 4 });
+  const p1View = buildDuelView(state, "p1", { roomCode: "ABC234", revision: 4, duelNumber: 3, series: { completed: 2, draws: 0, wins: { p1: 2, p2: 0 } } });
   const p2View = buildDuelView(state, "p2", { roomCode: "ABC234", revision: 4 });
 
   assert.equal(p1View.players.p1.hand.length, 5);
@@ -18,6 +18,8 @@ test("duel views reveal only the viewer hand and never reveal either deck order"
   assert.equal(p1View.players.p1.deckCount, 35);
   assert.equal("deck" in p1View.players.p1, false);
   assert.equal("cards" in p1View, false);
+  assert.equal(p1View.duelNumber, 3);
+  assert.deepEqual(p1View.series, { completed: 2, draws: 0, wins: { p1: 2, p2: 0 } });
 });
 test("opponent draw events keep drawn card ids private", () => {
   const engine = new GameEngine(createOnlineDuelState());

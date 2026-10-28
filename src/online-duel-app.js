@@ -15,9 +15,11 @@ import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js";
+import { OnlineAuthClient } from "./online-auth-client.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js";
 
 const elements = Object.fromEntries([
+  "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
   "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "duelPanel", "aiPanel", "playerPanel",
   "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
@@ -27,14 +29,18 @@ const elements = Object.fromEntries([
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
   "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
-  "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultReview", "resultLobby",
-  "forfeitButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
+  "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
+  "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
   "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
 
-const STORAGE_KEY = "star-card-duel:online-session:v1";
+const STORAGE_KEY_PREFIX = "star-card-duel:online-session:v2";
 const AUDIO_STORAGE_KEY = "star-card-duel:online-audio:v1";
 const client = new OnlineDuelClient();
+const authClient = new OnlineAuthClient();
+let currentAccount = null;
+let authMode = "login";
+let authPending = false;
 let actionPending = false;
 let selection = null;
 let trapChoice = null;
@@ -47,6 +53,7 @@ let actionReceipt = null;
 let actionReceiptTimer = null;
 let lastResponseSoundId = null;
 let responseCountdownInterval = null;
+let connectionCountdownInterval = null;
 let pendingActionCue = null;
 let lastFieldPositions = new Map();
 let cueCleanupTimer = null;
@@ -62,6 +69,8 @@ let reconnectInFlight = false;
 let recoveryFailed = false;
 let intentionalDisconnect = false;
 let forfeitPending = false;
+let rematchPending = false;
+let rematchError = "";
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
 const audioController = createAudioController({
@@ -126,20 +135,43 @@ function setConnection(state, text) {
   document.body.dataset.onlineConnection = state;
   elements.connectionStatus.dataset.state = state;
   elements.connectionStatus.textContent = text;
+  elements.connectionStatus.title = text;
+}
+
+function connectionPanel(view = client.view) {
+  return onlineConnectionView(view, { transportState, reconnectAttempt, recoveryFailed });
 }
 
 function connectionPaused(view = client.view) {
-  return Boolean(onlineConnectionView(view, { transportState, reconnectAttempt, recoveryFailed }));
+  return Boolean(connectionPanel(view));
+}
+
+function clearConnectionCountdown() {
+  if (connectionCountdownInterval) window.clearInterval(connectionCountdownInterval);
+  connectionCountdownInterval = null;
+}
+
+function syncConnectionCountdown(panel) {
+  if (panel?.kind !== "opponent" || panel.deadlineAt == null) {
+    clearConnectionCountdown();
+    return;
+  }
+  if (connectionCountdownInterval) return;
+  connectionCountdownInterval = window.setInterval(() => {
+    if (!client.view) return clearConnectionCountdown();
+    renderConnectionState(client.view);
+  }, 1_000);
 }
 
 function renderConnectionState(view = client.view) {
-  const panel = onlineConnectionView(view, { transportState, reconnectAttempt, recoveryFailed });
+  const panel = connectionPanel(view);
   const paused = Boolean(panel);
   document.body.dataset.onlinePaused = String(paused);
   elements.connectionOverlay.hidden = !paused;
   elements.handPanel.inert = paused;
   elements.duelPanel.dataset.connectionPaused = String(paused);
-  elements.forfeitButton.disabled = paused || actionPending || forfeitPending;
+  elements.forfeitButton.disabled = panel?.kind === "self" || actionPending || forfeitPending;
+  syncConnectionCountdown(panel);
   if (!paused) return;
   selection = null;
   elements.connectionOverlay.dataset.connectionKind = panel.kind;
@@ -202,8 +234,12 @@ function setError(message = "") {
   (client.view?.status === "playing" ? elements.duelError : elements.lobbyError).textContent = message;
   elements.responseError.textContent = message;
 }
+function roomStorageKey() {
+  return currentAccount?.id ? `${STORAGE_KEY_PREFIX}:${currentAccount.id}` : "";
+}
 function saveSession() {
-  if (client.session) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(client.session));
+  const key = roomStorageKey();
+  if (key && client.session) localStorage.setItem(key, JSON.stringify(client.session));
 }
 function syncRoomUrl(roomCode) {
   if (!roomCode) return;
@@ -213,7 +249,130 @@ function syncRoomUrl(roomCode) {
   window.history.replaceState(null, "", url);
 }
 function storedSession() {
-  try { return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null"); } catch { return null; }
+  const key = roomStorageKey();
+  if (!key) return null;
+  try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
+}
+function clearStoredSession() {
+  const key = roomStorageKey();
+  if (!key) return;
+  try { localStorage.removeItem(key); } catch {}
+}
+function renderAccountState() {
+  const signedIn = Boolean(currentAccount);
+  document.body.dataset.onlineAuth = signedIn ? "signed-in" : "signed-out";
+  elements.authPanel.hidden = signedIn;
+  elements.accountBadge.hidden = !signedIn;
+  elements.accountName.textContent = currentAccount ? `@${currentAccount.handle}` : "";
+  elements.accountHandle.textContent = currentAccount ? `@${currentAccount.handle}` : "";
+  elements.accountBadge.title = currentAccount ? `${currentAccount.displayName} · @${currentAccount.handle}` : "";
+  elements.playerName.value = currentAccount?.displayName || "决斗者";
+  if (!signedIn) {
+    elements.lobbyPanel.hidden = true;
+    elements.roomPanel.hidden = true;
+    elements.duelPanel.hidden = true;
+    elements.handPanel.hidden = true;
+    elements.viewerIdentity.hidden = true;
+    elements.copyRoomCode.hidden = true;
+    setConnection("error", "请先登录");
+    return;
+  }
+  if (!client.view) elements.lobbyPanel.hidden = false;
+}
+
+function setAuthMode(mode) {
+  authMode = mode === "register" ? "register" : "login";
+  const registering = authMode === "register";
+  elements.authLoginTab.setAttribute("aria-selected", String(!registering));
+  elements.authRegisterTab.setAttribute("aria-selected", String(registering));
+  elements.authDisplayField.hidden = !registering;
+  elements.authDisplayName.required = registering;
+  elements.authPassword.autocomplete = registering ? "new-password" : "current-password";
+  elements.authTitle.textContent = registering ? "创建决斗账号" : "登录决斗账号";
+  elements.authLead.textContent = registering
+    ? "注册后由服务端保存账号，当前浏览器会自动保持登录。"
+    : "登录后刷新或重新打开浏览器，仍会恢复当前账号。";
+  elements.authSubmit.textContent = registering ? "创建账号并登录" : "登录";
+  elements.authError.textContent = "";
+}
+
+async function connectOnlineService() {
+  setConnection("connecting", "连接对战服务");
+  await client.connect();
+  setConnection("connected", "服务已连接");
+  const session = storedSession();
+  if (!session) {
+    elements.lobbyPanel.hidden = false;
+    return;
+  }
+  try {
+    const result = await client.resumeRoom(session);
+    saveSession();
+    setConnection("connected", `房间已恢复 · ${seatName(result.view, result.seatId)}`);
+    render(result.view);
+  } catch (error) {
+    if (["ROOM_NOT_FOUND", "UNKNOWN_SEAT", "INVALID_MESSAGE", "ACCOUNT_MISMATCH"].includes(error.code)) {
+      clearStoredSession();
+      elements.lobbyPanel.hidden = false;
+      return;
+    }
+    throw error;
+  }
+}
+
+async function submitAuth(event) {
+  event.preventDefault();
+  if (authPending) return;
+  authPending = true;
+  elements.authError.textContent = "";
+  elements.authSubmit.disabled = true;
+  elements.authSubmit.textContent = authMode === "register" ? "正在创建…" : "正在登录…";
+  try {
+    const credentials = { handle: elements.authHandle.value, password: elements.authPassword.value };
+    const result = authMode === "register"
+      ? await authClient.register({ ...credentials, displayName: elements.authDisplayName.value })
+      : await authClient.login(credentials);
+    currentAccount = result.account;
+    elements.authPassword.value = "";
+    renderAccountState();
+    await connectOnlineService();
+  } catch (error) {
+    if (currentAccount) {
+      setConnection("error", "对战服务不可用");
+      elements.lobbyPanel.hidden = false;
+      setError(error.message);
+    } else {
+      elements.authError.textContent = error.message;
+    }
+  } finally {
+    authPending = false;
+    elements.authSubmit.disabled = false;
+    elements.authSubmit.textContent = authMode === "register" ? "创建账号并登录" : "登录";
+  }
+}
+
+async function logoutAccount() {
+  if (!currentAccount || authPending) return;
+  authPending = true;
+  elements.logoutButton.disabled = true;
+  intentionalDisconnect = true;
+  clearReconnectTimer();
+  clearConnectionCountdown();
+  try { if (client.view) await client.leaveRoom(); } catch {}
+  clearStoredSession();
+  client.disconnect();
+  client.view = null;
+  client.session = null;
+  try { await authClient.logout(); } catch (error) { elements.authError.textContent = error.message; }
+  currentAccount = null;
+  const url = new URL(window.location.href);
+  url.searchParams.delete("room");
+  window.history.replaceState(null, "", url);
+  intentionalDisconnect = false;
+  authPending = false;
+  elements.logoutButton.disabled = false;
+  renderAccountState();
+  setAuthMode("login");
 }
 function seatName(view, id) { return view.seats?.find((seat) => seat.seatId === id)?.name || id; }
 function cardName(view, id) { return onlineCard(view, id)?.name || "盖放卡牌"; }
@@ -972,6 +1131,7 @@ function renderResponse(view) {
 function renderGameResult(view) {
   const result = onlineGameResultView(view);
   if (!result) {
+    rematchError = "";
     document.body.dataset.onlineResult = "none";
     lastResultKey = null;
     if (resultRevealTimer) clearTimeout(resultRevealTimer);
@@ -988,6 +1148,15 @@ function renderGameResult(view) {
   elements.resultSelfLp.textContent = `${result.selfLp} LP`;
   elements.resultRivalName.textContent = result.rivalName;
   elements.resultRivalLp.textContent = `${result.rivalLp} LP`;
+  const series = onlineSeriesView(view);
+  elements.resultSeries.hidden = !series;
+  elements.resultSeriesScore.textContent = series?.score || "0 : 0";
+  elements.resultSeriesDetail.textContent = series?.detail || "已完成 0 局";
+  const rematch = onlineRematchView(view);
+  elements.resultRematch.disabled = rematchPending || rematch?.disabled || transportState !== "connected";
+  elements.resultRematch.textContent = rematchPending ? "正在确认…" : rematch?.label || "再来一局";
+  elements.resultRematchStatus.textContent = rematchError || rematch?.status || "双方确认后可在当前房间再来一局。";
+  elements.resultRematchStatus.dataset.state = rematchError ? "error" : rematchPending ? "ready" : rematch?.selfReady ? "waiting" : rematch?.rivalReady ? "ready" : "idle";
   if (elements.onlineForfeit.open) elements.onlineForfeit.close();
   elements.duelHint.textContent = `${result.title} · ${result.summary}`;
   elements.duelHint.dataset.kind = "status";
@@ -998,20 +1167,51 @@ function renderGameResult(view) {
   resultRevealTimer = window.setTimeout(() => {
     resultRevealTimer = null;
     if (!elements.onlineResult.open) elements.onlineResult.showModal();
-    elements.resultReview.focus({ preventScroll: true });
+    elements.resultRematch.focus({ preventScroll: true });
   }, 1050);
+}
+
+function openOnlineResult() {
+  if (!client.view?.gameOver) return;
+  closeInspector();
+  if (!elements.onlineResult.open) elements.onlineResult.showModal();
+  elements.resultRematch.focus({ preventScroll: true });
+}
+
+function reviewFinalBoard() {
+  if (elements.onlineResult.open) elements.onlineResult.close();
+  elements.resultReopenButton.focus({ preventScroll: true });
+}
+
+async function requestOnlineRematch() {
+  if (rematchPending || !client.view?.gameOver) return;
+  rematchPending = true;
+  rematchError = "";
+  elements.resultRematch.disabled = true;
+  elements.resultRematch.textContent = "正在确认…";
+  elements.resultRematchStatus.dataset.state = "ready";
+  elements.resultRematchStatus.textContent = "正在向对手发送再战请求…";
+  try {
+    await client.requestRematch();
+  } catch (error) {
+    rematchError = error.message || "再战请求失败，请稍后重试。";
+  } finally {
+    rematchPending = false;
+    render(client.view);
+  }
 }
 
 async function returnToOnlineLobby() {
   if (intentionalDisconnect) return;
   intentionalDisconnect = true;
   clearReconnectTimer();
+  clearConnectionCountdown();
   elements.resultLobby.disabled = true;
   elements.connectionLobby.disabled = true;
   if (!elements.connectionLobby.hidden) elements.connectionLobby.textContent = "正在返回…";
   elements.resultLobby.textContent = "正在返回…";
   try { await client.leaveRoom(); } catch {}
-  try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+  clearStoredSession();
   client.disconnect();
   const url = new URL(window.location.href);
   url.searchParams.delete("room");
@@ -1019,7 +1219,7 @@ async function returnToOnlineLobby() {
 }
 
 function openForfeitDialog() {
-  if (client.view?.status !== "playing" || client.view?.gameOver || forfeitPending || connectionPaused()) return;
+  if (client.view?.status !== "playing" || client.view?.gameOver || forfeitPending || connectionPanel()?.kind === "self") return;
   closeInspector();
   elements.forfeitError.textContent = "";
   elements.forfeitConfirm.disabled = false;
@@ -1056,17 +1256,26 @@ async function confirmForfeit() {
 
 function renderRoom(view) {
   const playing = view.status !== "waiting";
+  elements.logoutButton.disabled = view.status === "playing" && !view.gameOver;
+  elements.logoutButton.title = elements.logoutButton.disabled ? "对局进行中，请先完成或认输本局" : "退出当前账号";
   document.body.dataset.onlineStatus = playing ? "playing" : "waiting";
   elements.lobbyPanel.hidden = true;
   elements.roomPanel.hidden = playing;
   elements.copyRoomCode.hidden = false;
   elements.copyRoomCode.textContent = view.roomCode;
   elements.forfeitButton.hidden = view.status !== "playing" || Boolean(view.gameOver);
-  elements.forfeitButton.disabled = actionPending || forfeitPending || connectionPaused(view);
+  elements.forfeitButton.disabled = actionPending || forfeitPending || connectionPanel(view)?.kind === "self";
+  elements.resultReopenButton.hidden = !view.gameOver;
+  elements.battleButton.hidden = Boolean(view.gameOver);
+  elements.endTurnButton.hidden = Boolean(view.gameOver);
   const identity = onlineIdentityView(view);
+  const series = onlineSeriesView(view);
   elements.viewerIdentity.hidden = !identity;
   elements.viewerName.textContent = identity?.name || "";
-  elements.viewerSeatLabel.textContent = identity ? `${identity.seatNumber} · ${identity.seatRole}` : "";
+  elements.viewerSeatLabel.textContent = identity
+    ? `${identity.seatNumber} · ${identity.seatRole}${series?.duelNumber ? ` · 第 ${series.duelNumber} 局` : ""}`
+    : "";
+  elements.viewerIdentity.title = series ? `本房间战绩 ${series.score}${series.draws ? `，${series.draws} 场平局` : ""}` : "";
   elements.viewerIdentity.dataset.seat = identity?.seatId || "";
   document.body.dataset.onlineViewerSeat = identity?.seatId || "none";
   elements.seatGrid.innerHTML = view.seats.map((seat) => `<div class="seat-card" data-ready="${seat.ready}"><strong>${escapeHtml(seat.name)}${seat.seatId === view.viewerSeatId ? "（你）" : ""}</strong><span>${seat.connected ? "在线" : "已断线"} · ${seat.ready ? "已准备" : "未准备"}</span></div>`).join("");
@@ -1187,9 +1396,13 @@ client.on("connection", ({ connected }) => {
   recoveryFailed = false;
   setConnection(storedSession() ? "reconnecting" : "error", storedSession() ? "连接中断 · 正在恢复" : "连接已断开");
   renderConnectionState();
-  scheduleReconnect(500);
+  if (currentAccount) scheduleReconnect(500);
 });
 client.on("error", (error) => setError(error.message));
+elements.authLoginTab.addEventListener("click", () => setAuthMode("login"));
+elements.authRegisterTab.addEventListener("click", () => setAuthMode("register"));
+elements.authForm.addEventListener("submit", submitAuth);
+elements.logoutButton.addEventListener("click", () => { void logoutAccount(); });
 for (const [id, join] of [["createRoom", false], ["joinRoom", true]]) elements[id].addEventListener("click", async () => {
   try {
     setError();
@@ -1207,8 +1420,10 @@ elements.choiceConfirmBtn.addEventListener("click", () => sendAction(onlineSelec
 elements.responseActivate.addEventListener("click", () => respondToAttack(true));
 elements.responsePass.addEventListener("click", () => respondToAttack(false));
 elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());
-elements.resultReview.addEventListener("click", () => elements.onlineResult.close());
+elements.resultReview.addEventListener("click", reviewFinalBoard);
 elements.resultLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
+elements.resultRematch.addEventListener("click", () => { void requestOnlineRematch(); });
+elements.resultReopenButton.addEventListener("click", openOnlineResult);
 elements.forfeitButton.addEventListener("click", openForfeitDialog);
 elements.forfeitCancel.addEventListener("click", closeForfeitDialog);
 elements.forfeitConfirm.addEventListener("click", () => { void confirmForfeit(); });
@@ -1281,19 +1496,23 @@ elements.inspectorContent.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !elements.cardInspector.open) cancelSelection(); });
 elements.roomCodeInput.value = new URLSearchParams(window.location.search).get("room") || "";
 renderSoundButton();
+setAuthMode("login");
+renderAccountState();
 try {
-  await client.connect(); setConnection("connected", "服务已连接");
-  const session = storedSession();
-  if (session) {
-    try { const result = await client.resumeRoom(session); saveSession(); setConnection("connected", `身份已恢复 · ${seatName(result.view, result.seatId)}`); render(result.view); }
-    catch (error) {
-      if (["ROOM_NOT_FOUND", "UNKNOWN_SEAT", "INVALID_MESSAGE"].includes(error.code)) sessionStorage.removeItem(STORAGE_KEY);
-      else { setConnection("reconnecting", "身份恢复失败 · 正在重试"); scheduleReconnect(700); }
-    }
+  const auth = await authClient.session();
+  if (auth.authenticated) {
+    currentAccount = auth.account;
+    renderAccountState();
+    await connectOnlineService();
   }
 } catch (error) {
-  const session = storedSession();
-  setConnection(session ? "reconnecting" : "error", session ? "服务未连接 · 正在重试" : "服务未启动");
-  setError(`${error.message}。${session ? "正在自动恢复。" : "请先启动对战服务。"}`);
-  if (session) scheduleReconnect(700);
+  if (!currentAccount) {
+    setConnection("error", "登录服务不可用");
+    elements.authError.textContent = `${error.message}，请确认对战服务已启动。`;
+  } else {
+    const session = storedSession();
+    setConnection(session ? "reconnecting" : "error", session ? "服务未连接 · 正在重试" : "服务未启动");
+    setError(`${error.message}。${session ? "正在自动恢复。" : "请稍后重试。"}`);
+    if (session) scheduleReconnect(700);
+  }
 }

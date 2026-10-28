@@ -9,6 +9,7 @@ import { onlineAttackResponse, onlineTrapAction, activateOnlineTrap, settleOnlin
 const ROOM_SEAT_IDS = Object.freeze(["p1", "p2"]);
 const MAX_REMEMBERED_COMMANDS = 100;
 const DEFAULT_RESPONSE_TIMEOUT_MS = 15_000;
+const DEFAULT_DISCONNECT_GRACE_MS = 60_000;
 
 function token() {
   return randomBytes(24).toString("base64url");
@@ -30,12 +31,19 @@ function publicSeat(seat) {
     seatId: seat.seatId,
     name: seat.name,
     ready: seat.ready,
-    connected: seat.connected
+    connected: seat.connected,
+    reconnectDeadlineAt: seat.connected ? null : seat.reconnectDeadlineAt || null
   };
 }
 
 export class DuelRoom {
-  constructor({ code, createState = createOnlineDuelState, now = () => Date.now(), responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS } = {}) {
+  constructor({
+    code,
+    createState = createOnlineDuelState,
+    now = () => Date.now(),
+    responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS,
+    disconnectGraceMs = DEFAULT_DISCONNECT_GRACE_MS
+  } = {}) {
     if (!code) throw new DuelRoomError("Room code is required");
     this.code = code;
     this.createState = createState;
@@ -43,9 +51,13 @@ export class DuelRoom {
     this.revision = 0;
     this.status = "waiting";
     this.engine = null;
+    this.duelNumber = 0;
+    this.recordedDuelNumber = 0;
+    this.series = { completed: 0, draws: 0, wins: { p1: 0, p2: 0 } };
     this.createdAt = now();
     this.updatedAt = this.createdAt;
     this.responseTimeoutMs = Math.max(1_000, Number(responseTimeoutMs) || DEFAULT_RESPONSE_TIMEOUT_MS);
+    this.disconnectGraceMs = Math.max(1_000, Number(disconnectGraceMs) || DEFAULT_DISCONNECT_GRACE_MS);
     this.responseDeclarationEventId = null;
     this.responseDeadlineAt = null;
     this.responseRemainingMs = null;
@@ -65,12 +77,19 @@ export class DuelRoom {
     return this.seatList().find((seat) => seat.reconnectToken === reconnectToken) || null;
   }
 
-  join({ name, connectionId, reconnectToken = "" } = {}) {
+  join({ name, accountId = "", connectionId, reconnectToken = "" } = {}) {
     if (!connectionId) throw new DuelRoomError("Connection id is required", "INVALID_CONNECTION");
     const resumed = reconnectToken ? this.seatForToken(reconnectToken) : null;
     if (resumed) {
+      if (resumed.accountId && resumed.accountId !== accountId) {
+        throw new DuelRoomError("This room seat belongs to another account", "ACCOUNT_MISMATCH");
+      }
+      if (this.status === "playing" && resumed.reconnectDeadlineAt != null && this.now() >= resumed.reconnectDeadlineAt) {
+        this.expireDisconnectTimeout();
+      }
       resumed.connectionId = connectionId;
       resumed.connected = true;
+      resumed.reconnectDeadlineAt = null;
       resumed.lastSeenAt = this.now();
       this.#resumeResponseTimer();
       this.#touch();
@@ -79,15 +98,20 @@ export class DuelRoom {
     }
     if (this.status !== "waiting") throw new DuelRoomError("The duel has already started", "ROOM_STARTED");
     if (this.seatForConnection(connectionId)) throw new DuelRoomError("Connection already joined this room", "ALREADY_JOINED");
+    if (accountId && this.seatList().some((seat) => seat.accountId === accountId)) {
+      throw new DuelRoomError("This account already owns a seat in the room", "ACCOUNT_ALREADY_SEATED");
+    }
     const seatId = ROOM_SEAT_IDS.find((candidate) => !this.seats.has(candidate));
     if (!seatId) throw new DuelRoomError("The room is full", "ROOM_FULL");
     const seat = {
       seatId,
       name: normalizeDisplayName(name),
+      accountId,
       connectionId,
       reconnectToken: token(),
       ready: false,
       connected: true,
+      reconnectDeadlineAt: null,
       joinedAt: this.now(),
       lastSeenAt: this.now()
     };
@@ -106,6 +130,20 @@ export class DuelRoom {
     return this.viewFor(seat.seatId);
   }
 
+  requestRematch(connectionId) {
+    if (this.status !== "finished" || !this.engine?.getState()?.gameOver) {
+      throw new DuelRoomError("A rematch is only available after the duel ends", "REMATCH_NOT_AVAILABLE");
+    }
+    const seat = this.#requireConnectionSeat(connectionId);
+    if (!seat.ready) {
+      seat.ready = true;
+      seat.lastSeenAt = this.now();
+      this.#touch();
+    }
+    this.#startIfReady();
+    return this.viewFor(seat.seatId);
+  }
+
   disconnect(connectionId) {
     const seat = this.seatForConnection(connectionId);
     if (!seat) return false;
@@ -113,6 +151,7 @@ export class DuelRoom {
     seat.connected = false;
     seat.connectionId = null;
     seat.lastSeenAt = this.now();
+    seat.reconnectDeadlineAt = this.status === "playing" ? seat.lastSeenAt + this.disconnectGraceMs : null;
     this.#touch();
     return true;
   }
@@ -143,7 +182,9 @@ export class DuelRoom {
     });
     this.engine = engine;
     this.status = "finished";
+    this.#recordDuelResult();
     this.#clearResponseTimer();
+    this.#clearDisconnectDeadlines();
     this.#touch();
     return this.viewFor(seat.seatId);
   }
@@ -178,8 +219,11 @@ export class DuelRoom {
       throw error;
     }
 
+    if (this.engine.getState().gameOver) {
+      this.status = "finished";
+      this.#recordDuelResult();
+    }
     this.#touch();
-    if (this.engine.getState().gameOver) this.status = "finished";
     const receipt = {
       commandId: envelope.commandId,
       revision: this.revision,
@@ -203,6 +247,9 @@ export class DuelRoom {
         roomCode: this.code,
         revision: this.revision,
         status: this.status,
+        duelNumber: this.duelNumber,
+        nextFirstPlayerId: this.#nextFirstPlayerId(),
+        series: clone(this.series),
         viewerSeatId: seatId,
         opponentSeatId: ROOM_SEAT_IDS.find((candidate) => candidate !== seatId),
         seats
@@ -212,6 +259,9 @@ export class DuelRoom {
       roomCode: this.code,
       revision: this.revision,
       status: this.status,
+      duelNumber: this.duelNumber,
+      nextFirstPlayerId: this.#nextFirstPlayerId(),
+      series: clone(this.series),
       seats
     });
     view.responseTimer = this.responseTimeoutView();
@@ -271,6 +321,42 @@ export class DuelRoom {
     return Math.max(0, this.responseDeadlineAt - this.now());
   }
 
+  disconnectTimeoutDelay() {
+    if (this.status !== "playing") return null;
+    const deadlines = this.seatList()
+      .filter((seat) => !seat.connected && seat.reconnectDeadlineAt != null)
+      .map((seat) => seat.reconnectDeadlineAt);
+    if (!deadlines.length) return null;
+    return Math.max(0, Math.min(...deadlines) - this.now());
+  }
+
+  expireDisconnectTimeout() {
+    if (this.status !== "playing" || !this.engine) return false;
+    const expired = this.seatList().filter((seat) => (
+      !seat.connected && seat.reconnectDeadlineAt != null && this.now() >= seat.reconnectDeadlineAt
+    ));
+    if (!expired.length) return false;
+    const connected = this.seatList().filter((seat) => seat.connected);
+    const winnerId = connected.length === 1 ? connected[0].seatId : null;
+    const loserIds = winnerId ? ROOM_SEAT_IDS.filter((seatId) => seatId !== winnerId) : ROOM_SEAT_IDS;
+    const engine = new GameEngine(this.engine.getState());
+    engine.dispatch({
+      type: "DECLARE_GAME_OVER",
+      playerId: expired[0].seatId,
+      winnerId,
+      loserIds,
+      reason: "disconnect-timeout",
+      declaredAt: this.now()
+    });
+    this.engine = engine;
+    this.status = "finished";
+    this.#recordDuelResult();
+    this.#clearResponseTimer();
+    this.#clearDisconnectDeadlines();
+    this.#touch();
+    return true;
+  }
+
   expireAttackResponse() {
     if (!this.engine || this.responseDeadlineAt == null || this.now() < this.responseDeadlineAt) return false;
     const state = this.engine.getState();
@@ -285,22 +371,50 @@ export class DuelRoom {
     settleOnlineAttack(engine);
     this.engine = engine;
     this.#clearResponseTimer();
+    if (this.engine.getState().gameOver) {
+      this.status = "finished";
+      this.#recordDuelResult();
+    }
     this.#touch();
-    if (this.engine.getState().gameOver) this.status = "finished";
     return true;
   }
 
   #start() {
-    const initialState = this.createState({ seatIds: ROOM_SEAT_IDS });
+    const firstPlayerId = this.#nextFirstPlayerId();
+    const seatIds = [firstPlayerId, ...ROOM_SEAT_IDS.filter((seatId) => seatId !== firstPlayerId)];
+    const initialState = this.createState({ seatIds });
     this.engine = new GameEngine(initialState);
+    this.duelNumber += 1;
     this.status = "playing";
+    this.commandReceipts.clear();
+    this.#clearResponseTimer();
+    this.seatList().forEach((seat) => {
+      seat.ready = false;
+      seat.reconnectDeadlineAt = null;
+    });
     this.#touch();
   }
 
   #startIfReady() {
-    if (this.status !== "waiting" || this.seats.size !== ROOM_SEAT_IDS.length) return false;
+    if (!["waiting", "finished"].includes(this.status) || this.seats.size !== ROOM_SEAT_IDS.length) return false;
     if (!this.seatList().every((entry) => entry.ready && entry.connected)) return false;
     this.#start();
+    return true;
+  }
+
+  #nextFirstPlayerId() {
+    return ROOM_SEAT_IDS[this.duelNumber % ROOM_SEAT_IDS.length];
+  }
+
+  #recordDuelResult() {
+    if (!this.engine || this.recordedDuelNumber === this.duelNumber) return false;
+    const gameOver = this.engine.getState().gameOver;
+    if (!gameOver) return false;
+    const winnerId = gameOver.winnerId;
+    if (winnerId && Object.hasOwn(this.series.wins, winnerId)) this.series.wins[winnerId] += 1;
+    else this.series.draws += 1;
+    this.series.completed += 1;
+    this.recordedDuelNumber = this.duelNumber;
     return true;
   }
 
@@ -335,6 +449,10 @@ export class DuelRoom {
     this.responseDeclarationEventId = null;
     this.responseDeadlineAt = null;
     this.responseRemainingMs = null;
+  }
+
+  #clearDisconnectDeadlines() {
+    this.seatList().forEach((seat) => { seat.reconnectDeadlineAt = null; });
   }
 
   #touch() {

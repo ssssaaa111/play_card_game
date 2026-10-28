@@ -191,6 +191,9 @@ export function buildDuelView(state, viewerSeatId, {
   roomCode = "",
   revision = 0,
   status = "playing",
+  duelNumber = 1,
+  nextFirstPlayerId = null,
+  series = null,
   seats = []
 } = {}) {
   const seatIds = seatIdsForState(state);
@@ -207,13 +210,17 @@ export function buildDuelView(state, viewerSeatId, {
     roomCode,
     revision,
     status,
+    duelNumber,
+    nextFirstPlayerId,
+    series: clone(series || { completed: 0, draws: 0, wins: {} }),
     viewerSeatId,
     opponentSeatId,
     seats: seats.map((seat) => ({
       seatId: seat.seatId,
       name: seat.name,
       ready: Boolean(seat.ready),
-      connected: Boolean(seat.connected)
+      connected: Boolean(seat.connected),
+      reconnectDeadlineAt: seat.connected ? null : Number(seat.reconnectDeadlineAt) || null
     })),
     turn: {
       playerId: state.turn.playerId,

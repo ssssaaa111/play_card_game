@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
 
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -14,23 +15,99 @@ import {
 import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
 import { DuelRoomStore } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
+import {
+  ONLINE_AUTH_COOKIE,
+  OnlineAuthError,
+  OnlineAuthStore,
+  authCookie,
+  clearAuthCookie,
+  parseCookieHeader
+} from "../server/online-auth.js";
 
 const hostArgument = process.argv.find((argument) => argument.startsWith("--host="));
 const portArgument = process.argv.find((argument) => argument.startsWith("--port="));
 const host = hostArgument?.slice("--host=".length) || process.env.DUEL_HOST || "127.0.0.1";
 const requestedPort = Number.parseInt(portArgument?.slice("--port=".length) || process.env.DUEL_PORT || "5178", 10);
 const port = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort <= 65535 ? requestedPort : 5178;
+const authStorePath = process.env.DUEL_AUTH_STORE || fileURLToPath(new URL("../.data/online-auth.json", import.meta.url));
+const authStore = new OnlineAuthStore({ filePath: authStorePath });
+const configuredOrigins = new Set(String(process.env.DUEL_ALLOWED_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean));
+const configuredDisconnectGraceMs = Number.parseInt(process.env.DUEL_DISCONNECT_GRACE_MS || "60000", 10);
+const disconnectGraceMs = Number.isFinite(configuredDisconnectGraceMs) ? Math.max(1_000, configuredDisconnectGraceMs) : 60_000;
 const responseDemo = process.argv.includes("--scenario=trap-response");
 if (responseDemo && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
-const roomStore = new DuelRoomStore(responseDemo ? { createRoom: (options) => new DuelRoom({
+const roomStore = new DuelRoomStore({ createRoom: (options) => new DuelRoom({
   ...options,
-  createState: (config) => createOnlineDuelState({ ...config, openingHands: {
+  disconnectGraceMs,
+  ...(responseDemo ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: {
     p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"],
     p2: ["mirror-snare", "weakening-web", "storm-shift", "guard-sigil", "iron-guardian"]
-  } })
-}) } : {});
+  } }) } : {})
+}) });
 const connections = new Map();
 const responseTimers = new Map();
+const disconnectTimers = new Map();
+
+function requestIsSecure(request) {
+  return request.socket?.encrypted === true || String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "https";
+}
+
+function originAllowed(origin = "") {
+  if (!origin) return true;
+  if (configuredOrigins.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    return ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function corsHeaders(request) {
+  const origin = String(request.headers.origin || "");
+  if (!originAllowed(origin)) return {};
+  return origin ? {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    Vary: "Origin"
+  } : {};
+}
+
+function sendJson(request, response, status, body, extraHeaders = {}) {
+  response.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...corsHeaders(request),
+    ...extraHeaders
+  });
+  response.end(JSON.stringify(body));
+}
+
+async function readJsonBody(request) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > 8_192) throw new OnlineAuthError("请求内容过大", "REQUEST_TOO_LARGE", 413);
+    chunks.push(chunk);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
+    throw new OnlineAuthError("请求内容不是有效 JSON", "INVALID_JSON");
+  }
+}
+
+function requestToken(request) {
+  return parseCookieHeader(request.headers.cookie || "")[ONLINE_AUTH_COOKIE] || "";
+}
+
+function requireConnectionAccount(connection) {
+  if (!connection?.account) throw new DuelRoomError("Please sign in before joining an online duel", "AUTH_REQUIRED");
+  return connection.account;
+}
 
 function send(socket, message) {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
@@ -61,12 +138,28 @@ function activeRoomFor(socket) {
 
 function broadcastRoom(room) {
   scheduleResponseTimeout(room);
+  scheduleDisconnectTimeout(room);
   for (const [socket, connection] of connections) {
     if (connection.roomCode !== room.code || !connection.seatId) continue;
     const activeSeat = room.seatForConnection(connection.id);
     if (!activeSeat || activeSeat.seatId !== connection.seatId) continue;
     send(socket, { type: DuelServerMessage.roomState, data: room.viewFor(connection.seatId) });
   }
+}
+
+function scheduleDisconnectTimeout(room) {
+  const existing = disconnectTimers.get(room.code);
+  if (existing) clearTimeout(existing);
+  disconnectTimers.delete(room.code);
+  const delay = room.disconnectTimeoutDelay();
+  if (delay == null) return;
+  const timer = setTimeout(() => {
+    disconnectTimers.delete(room.code);
+    if (room.expireDisconnectTimeout()) broadcastRoom(room);
+    else scheduleDisconnectTimeout(room);
+  }, delay + 5);
+  timer.unref();
+  disconnectTimers.set(room.code, timer);
 }
 
 function scheduleResponseTimeout(room) {
@@ -98,9 +191,10 @@ async function handleMessage(socket, rawMessage) {
 
     if (message.type === DuelClientMessage.createRoom) {
       if (connection.roomCode) throw new DuelRoomError("Connection already belongs to a room", "ALREADY_JOINED");
-      const name = normalizeDisplayName(message.payload.name);
+      const account = requireConnectionAccount(connection);
+      const name = normalizeDisplayName(account.displayName);
       const room = roomStore.create();
-      const result = room.join({ name, connectionId: connection.id });
+      const result = room.join({ name, accountId: account.id, connectionId: connection.id });
       bindConnection(socket, room, result);
       ack(socket, requestId, result);
       broadcastRoom(room);
@@ -109,10 +203,12 @@ async function handleMessage(socket, rawMessage) {
 
     if (message.type === DuelClientMessage.joinRoom || message.type === DuelClientMessage.resumeRoom) {
       if (connection.roomCode) throw new DuelRoomError("Connection already belongs to a room", "ALREADY_JOINED");
+      const account = requireConnectionAccount(connection);
       const roomCode = normalizeRoomCode(message.payload.roomCode);
       const room = roomStore.require(roomCode);
       const result = room.join({
-        name: message.payload.name || "重连玩家",
+        name: account.displayName,
+        accountId: account.id,
         connectionId: connection.id,
         reconnectToken: message.type === DuelClientMessage.resumeRoom ? message.payload.reconnectToken : ""
       });
@@ -131,6 +227,12 @@ async function handleMessage(socket, rawMessage) {
     }
     if (message.type === DuelClientMessage.syncRoom) {
       ack(socket, requestId, { view: room.viewFor(connection.seatId) });
+      return;
+    }
+    if (message.type === DuelClientMessage.requestRematch) {
+      const view = room.requestRematch(connection.id);
+      ack(socket, requestId, { revision: room.revision, status: room.status, view });
+      broadcastRoom(room);
       return;
     }
     if (message.type === DuelClientMessage.forfeitRoom) {
@@ -162,20 +264,65 @@ async function handleMessage(socket, rawMessage) {
   }
 }
 
-const httpServer = createServer((request, response) => {
-  if (request.url === "/health") {
-    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-    response.end(JSON.stringify({ ok: true, rooms: roomStore.rooms.size, now: Date.now() }));
+const httpServer = createServer(async (request, response) => {
+  const requestUrl = new URL(request.url || "/", `http://${request.headers.host || `${host}:${port}`}`);
+  if (request.method === "OPTIONS" && requestUrl.pathname.startsWith("/auth/")) {
+    if (!originAllowed(String(request.headers.origin || ""))) {
+      sendJson(request, response, 403, { error: { code: "ORIGIN_NOT_ALLOWED", message: "Origin is not allowed" } });
+      return;
+    }
+    response.writeHead(204, corsHeaders(request));
+    response.end();
     return;
   }
-  response.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
-  response.end(JSON.stringify({ error: "Not found" }));
+  try {
+    if (!originAllowed(String(request.headers.origin || ""))) {
+      sendJson(request, response, 403, { error: { code: "ORIGIN_NOT_ALLOWED", message: "Origin is not allowed" } });
+      return;
+    }
+    if (requestUrl.pathname === "/health" && request.method === "GET") {
+      sendJson(request, response, 200, { ok: true, rooms: roomStore.rooms.size, now: Date.now() });
+      return;
+    }
+    if (requestUrl.pathname === "/auth/session" && request.method === "GET") {
+      const account = authStore.accountForToken(requestToken(request));
+      sendJson(request, response, 200, { authenticated: Boolean(account), account });
+      return;
+    }
+    if (requestUrl.pathname === "/auth/register" && request.method === "POST") {
+      const result = authStore.register(await readJsonBody(request));
+      sendJson(request, response, 201, { authenticated: true, account: result.account }, {
+        "Set-Cookie": authCookie(result.token, { secure: requestIsSecure(request) })
+      });
+      return;
+    }
+    if (requestUrl.pathname === "/auth/login" && request.method === "POST") {
+      const result = authStore.login(await readJsonBody(request));
+      sendJson(request, response, 200, { authenticated: true, account: result.account }, {
+        "Set-Cookie": authCookie(result.token, { secure: requestIsSecure(request) })
+      });
+      return;
+    }
+    if (requestUrl.pathname === "/auth/logout" && request.method === "POST") {
+      authStore.logout(requestToken(request));
+      sendJson(request, response, 200, { authenticated: false, account: null }, {
+        "Set-Cookie": clearAuthCookie({ secure: requestIsSecure(request) })
+      });
+      return;
+    }
+    sendJson(request, response, 404, { error: { code: "NOT_FOUND", message: "Not found" } });
+  } catch (error) {
+    const status = error instanceof OnlineAuthError ? error.status : 500;
+    if (!(error instanceof OnlineAuthError)) console.error(error);
+    sendJson(request, response, status, { error: { code: error.code || "SERVER_ERROR", message: error.message || "Unexpected server error" } });
+  }
 });
 const webSocketServer = new WebSocketServer({ server: httpServer, path: "/duel", maxPayload: 32_768 });
-webSocketServer.on("connection", (socket) => {
-  const connection = { id: randomUUID(), roomCode: null, seatId: null };
+webSocketServer.on("connection", (socket, request) => {
+  const account = authStore.accountForCookieHeader(request.headers.cookie || "");
+  const connection = { id: randomUUID(), roomCode: null, seatId: null, account };
   connections.set(socket, connection);
-  send(socket, { type: DuelServerMessage.connected, data: { connectionId: connection.id, protocolVersion: 1 } });
+  send(socket, { type: DuelServerMessage.connected, data: { connectionId: connection.id, protocolVersion: 1, authenticated: Boolean(account), account } });
   socket.on("message", (message) => { void handleMessage(socket, message); });
   socket.on("close", () => {
     const current = connections.get(socket);

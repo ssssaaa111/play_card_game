@@ -20,7 +20,7 @@
     "sim:finale": "node scripts/finale-sim.mjs",
     "audit:finale": "node scripts/finale-balance-audit.mjs",
     "test:smoke": "node --test tests/smoke.test.mjs",
-    "test:online": "node --test tests/duel-command.test.mjs tests/duel-view.test.mjs tests/duel-room.test.mjs tests/online-duel-ui.test.mjs tests/online-action-runner.test.mjs tests/online-regression.test.mjs tests/online-response.test.mjs",
+    "test:online": "node --test tests/duel-command.test.mjs tests/duel-view.test.mjs tests/duel-room.test.mjs tests/online-auth.test.mjs tests/online-auth-client.test.mjs tests/online-duel-ui.test.mjs tests/online-action-runner.test.mjs tests/online-regression.test.mjs tests/online-response.test.mjs",
     "smoke:online": "node scripts/online-smoke.mjs",
     "smoke:browser": "node scripts/browser-smoke.mjs"
   },

@@ -61,6 +61,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/log-audit.js");
   checkModuleSyntax("src/music.js");
   checkModuleSyntax("src/online-duel-app.js");
+  checkModuleSyntax("src/online-auth-client.js");
   checkModuleSyntax("src/online-duel-client.js");
   checkModuleSyntax("src/pre-duel-preview.js");
   checkModuleSyntax("src/response-state.js");
@@ -85,6 +86,9 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /<link rel="stylesheet" href="online-duel\.css"/);
   assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js"><\/script>/);
   assert.match(html, /id="lobbyPanel"/);
+  assert.match(html, /id="authPanel"/);
+  assert.match(html, /id="authForm"[^>]*autocomplete="on"/);
+  assert.match(html, /id="accountBadge"[^>]*hidden/);
   assert.match(html, /id="roomPanel"[^>]*hidden/);
   assert.match(html, /id="duelPanel"[^>]*hidden/);
   assert.match(html, /id="hand"/);
@@ -93,16 +97,24 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="eventLog"/);
   assert.match(html, /id="duelHint"[^>]*aria-live="polite"/);
   assert.match(html, /id="viewerIdentity"[^>]*hidden/);
-  assert.match(html, /每个标签页保存一名玩家身份/);
+  assert.match(html, /id="resultRematch"/);
+  assert.match(html, /id="resultRematchStatus"[^>]*aria-live="polite"/);
+  assert.match(html, /id="resultReopenButton"[^>]*aria-haspopup="dialog"[^>]*hidden/);
+  assert.match(html, /id="resultSeries"[^>]*aria-label="本房间系列战绩"/);
+  assert.match(html, /浏览器通过安全 Cookie 保持登录/);
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
   assert.match(html, /href="duel-table\.css"/);
   assert.match(html, /href="duel-focus\.css"/);
   assert.match(app, /import \{ renderHandCards \} from "\.\/hand-renderer\.js"/);
+  assert.match(app, /client\.requestRematch\(\)/);
+  assert.match(app, /onlineSeriesView\(view\)/);
+  assert.match(app, /elements\.resultReopenButton\.addEventListener\("click", openOnlineResult\)/);
   assert.match(app, /import \{ renderMonsterZones, renderSupportZones \} from "\.\/field-renderer\.js"/);
   assert.match(app, /import \{ monsterAssets \} from "\.\/data\.js"/);
   assert.match(app, /onlineSelectionModel\(client\.view, selection\)\?\.action/);
-  assert.match(app, /sessionStorage\.setItem\(STORAGE_KEY/);
-  assert.match(app, /身份已恢复/);
+  assert.match(app, /localStorage\.setItem\(key, JSON\.stringify\(client\.session\)\)/);
+  assert.match(app, /await authClient\.session\(\)/);
+  assert.match(app, /房间已恢复/);
   assert.match(app, /event\.target === elements\.cardInspector/);
   assert.match(app, /elements\.inspectorBackdrop\.addEventListener\("click", closeInspector\)/);
   // Toggle/cancel behavior is covered by online-duel-ui.test.mjs, independent
