@@ -44,6 +44,8 @@ export class DuelRoom {
     this.status = "waiting";
     this.engine = null;
     this.duelNumber = 0;
+    this.recordedDuelNumber = 0;
+    this.series = { completed: 0, draws: 0, wins: { p1: 0, p2: 0 } };
     this.createdAt = now();
     this.updatedAt = this.createdAt;
     this.responseTimeoutMs = Math.max(1_000, Number(responseTimeoutMs) || DEFAULT_RESPONSE_TIMEOUT_MS);
@@ -66,10 +68,13 @@ export class DuelRoom {
     return this.seatList().find((seat) => seat.reconnectToken === reconnectToken) || null;
   }
 
-  join({ name, connectionId, reconnectToken = "" } = {}) {
+  join({ name, accountId = "", connectionId, reconnectToken = "" } = {}) {
     if (!connectionId) throw new DuelRoomError("Connection id is required", "INVALID_CONNECTION");
     const resumed = reconnectToken ? this.seatForToken(reconnectToken) : null;
     if (resumed) {
+      if (resumed.accountId && resumed.accountId !== accountId) {
+        throw new DuelRoomError("This room seat belongs to another account", "ACCOUNT_MISMATCH");
+      }
       resumed.connectionId = connectionId;
       resumed.connected = true;
       resumed.lastSeenAt = this.now();
@@ -80,11 +85,15 @@ export class DuelRoom {
     }
     if (this.status !== "waiting") throw new DuelRoomError("The duel has already started", "ROOM_STARTED");
     if (this.seatForConnection(connectionId)) throw new DuelRoomError("Connection already joined this room", "ALREADY_JOINED");
+    if (accountId && this.seatList().some((seat) => seat.accountId === accountId)) {
+      throw new DuelRoomError("This account already owns a seat in the room", "ACCOUNT_ALREADY_SEATED");
+    }
     const seatId = ROOM_SEAT_IDS.find((candidate) => !this.seats.has(candidate));
     if (!seatId) throw new DuelRoomError("The room is full", "ROOM_FULL");
     const seat = {
       seatId,
       name: normalizeDisplayName(name),
+      accountId,
       connectionId,
       reconnectToken: token(),
       ready: false,
@@ -158,6 +167,7 @@ export class DuelRoom {
     });
     this.engine = engine;
     this.status = "finished";
+    this.#recordDuelResult();
     this.#clearResponseTimer();
     this.#touch();
     return this.viewFor(seat.seatId);
@@ -193,8 +203,11 @@ export class DuelRoom {
       throw error;
     }
 
+    if (this.engine.getState().gameOver) {
+      this.status = "finished";
+      this.#recordDuelResult();
+    }
     this.#touch();
-    if (this.engine.getState().gameOver) this.status = "finished";
     const receipt = {
       commandId: envelope.commandId,
       revision: this.revision,
@@ -220,6 +233,7 @@ export class DuelRoom {
         status: this.status,
         duelNumber: this.duelNumber,
         nextFirstPlayerId: this.#nextFirstPlayerId(),
+        series: clone(this.series),
         viewerSeatId: seatId,
         opponentSeatId: ROOM_SEAT_IDS.find((candidate) => candidate !== seatId),
         seats
@@ -231,6 +245,7 @@ export class DuelRoom {
       status: this.status,
       duelNumber: this.duelNumber,
       nextFirstPlayerId: this.#nextFirstPlayerId(),
+      series: clone(this.series),
       seats
     });
     view.responseTimer = this.responseTimeoutView();
@@ -304,8 +319,11 @@ export class DuelRoom {
     settleOnlineAttack(engine);
     this.engine = engine;
     this.#clearResponseTimer();
+    if (this.engine.getState().gameOver) {
+      this.status = "finished";
+      this.#recordDuelResult();
+    }
     this.#touch();
-    if (this.engine.getState().gameOver) this.status = "finished";
     return true;
   }
 
@@ -331,6 +349,18 @@ export class DuelRoom {
 
   #nextFirstPlayerId() {
     return ROOM_SEAT_IDS[this.duelNumber % ROOM_SEAT_IDS.length];
+  }
+
+  #recordDuelResult() {
+    if (!this.engine || this.recordedDuelNumber === this.duelNumber) return false;
+    const gameOver = this.engine.getState().gameOver;
+    if (!gameOver) return false;
+    const winnerId = gameOver.winnerId;
+    if (winnerId && Object.hasOwn(this.series.wins, winnerId)) this.series.wins[winnerId] += 1;
+    else this.series.draws += 1;
+    this.series.completed += 1;
+    this.recordedDuelNumber = this.duelNumber;
+    return true;
   }
 
   #syncResponseTimer() {

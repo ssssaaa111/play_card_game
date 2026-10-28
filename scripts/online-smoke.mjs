@@ -7,10 +7,30 @@ import { DuelClientMessage, DuelServerMessage } from "../src/duel-command.js";
 
 const serverUrl = process.env.DUEL_SERVER_URL || "ws://127.0.0.1:5178/duel";
 const responseScenario = process.argv.includes("--scenario=trap-response");
+const authBaseUrl = (() => {
+  const url = new URL(serverUrl);
+  url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+  return url.origin;
+})();
+
+async function registerSmokeAccount(name) {
+  const handle = `smoke_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  const response = await fetch(`${authBaseUrl}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ handle, password: "smoke-pass-1", displayName: name })
+  });
+  const body = await response.json();
+  assert.equal(response.status, 201, body.error?.message || "smoke account registration failed");
+  const cookie = response.headers.get("set-cookie")?.split(";")[0] || "";
+  assert.match(cookie, /^star_duel_session=/);
+  return cookie;
+}
 
 class SmokeClient {
-  constructor(name) {
+  constructor(name, cookie) {
     this.name = name;
+    this.cookie = cookie;
     this.socket = null;
     this.pending = new Map();
     this.view = null;
@@ -19,7 +39,7 @@ class SmokeClient {
 
   connect() {
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(serverUrl);
+      const socket = new WebSocket(serverUrl, { headers: { Cookie: this.cookie } });
       this.socket = socket;
       socket.once("open", resolve);
       socket.once("error", reject);
@@ -79,9 +99,11 @@ class SmokeClient {
     this.socket?.close();
   }
 }
-const first = new SmokeClient("first");
-const second = new SmokeClient("second");
-const resumed = new SmokeClient("resumed");
+const firstCookie = await registerSmokeAccount("星野");
+const secondCookie = await registerSmokeAccount("月见");
+const first = new SmokeClient("first", firstCookie);
+const second = new SmokeClient("second", secondCookie);
+const resumed = new SmokeClient("resumed", secondCookie);
 
 try {
   await Promise.all([first.connect(), second.connect()]);
@@ -164,10 +186,12 @@ try {
   }
 
   await first.request(DuelClientMessage.forfeitRoom);
-  await Promise.all([
+  const [firstFinished, secondFinished] = await Promise.all([
     first.waitForView((view) => view.status === "finished" && view.gameOver?.reason === "concede"),
     resumed.waitForView((view) => view.status === "finished" && view.gameOver?.reason === "concede")
   ]);
+  assert.deepEqual(firstFinished.series, { completed: 1, draws: 0, wins: { p1: 0, p2: 1 } });
+  assert.deepEqual(secondFinished.series, firstFinished.series);
   await first.request(DuelClientMessage.requestRematch);
   await resumed.waitForView((view) => view.status === "finished" && view.seats.find((seat) => seat.seatId === "p1")?.ready);
   await resumed.request(DuelClientMessage.requestRematch);
@@ -178,6 +202,7 @@ try {
   assert.equal(firstRematch.turn.playerId, "p2");
   assert.equal(secondRematch.turn.playerId, "p2");
   assert.equal(firstRematch.roomCode, created.roomCode);
+  assert.deepEqual(firstRematch.series, firstFinished.series);
 
   console.log(`online-duel-smoke passed (${created.roomCode}${responseScenario ? ", trap-response + resume" : ""}, rematch)`);
 } finally {

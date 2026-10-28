@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -22,6 +22,24 @@ test("viewer identity keeps two tabs visually tied to their own reserved seats",
   assert.deepEqual(onlineIdentityView(view), {
     name: "月见", seatId: "p2", seatNumber: "2P", seatRole: "挑战者", opponentName: "星野"
   });
+});
+
+test("online series score stays viewer-relative across rematches", () => {
+  const view = snapshot();
+  view.duelNumber = 3;
+  view.series = { completed: 2, draws: 1, wins: { p1: 1, p2: 0 } };
+  assert.deepEqual(onlineSeriesView(view), {
+    duelNumber: 3,
+    selfWins: 1,
+    rivalWins: 0,
+    draws: 1,
+    completed: 2,
+    score: "1 : 0",
+    detail: "已完成 2 局 · 1 场平局"
+  });
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  assert.equal(onlineSeriesView(view).score, "0 : 1");
 });
 
 test("online connection panels distinguish local recovery from an opponent pause", () => {

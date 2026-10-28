@@ -126,6 +126,25 @@ test("a reconnect token restores the same reserved seat", () => {
   assert.equal(room.viewFor("p1").seats.find((seat) => seat.seatId === "p2").connected, true);
 });
 
+test("room seats stay bound to the authenticated account", () => {
+  const room = new DuelRoom({ code: "ABC234" });
+  const first = room.join({ name: "星野", accountId: "account-one", connectionId: "connection-1" });
+
+  assert.throws(
+    () => room.join({ name: "星野分身", accountId: "account-one", connectionId: "connection-2" }),
+    (error) => error instanceof DuelRoomError && error.code === "ACCOUNT_ALREADY_SEATED"
+  );
+
+  room.disconnect("connection-1");
+  assert.throws(
+    () => room.join({ name: "冒用者", accountId: "account-two", connectionId: "connection-3", reconnectToken: first.reconnectToken }),
+    (error) => error instanceof DuelRoomError && error.code === "ACCOUNT_MISMATCH"
+  );
+  const resumed = room.join({ name: "星野", accountId: "account-one", connectionId: "connection-4", reconnectToken: first.reconnectToken });
+  assert.equal(resumed.resumed, true);
+  assert.equal(resumed.seatId, "p1");
+});
+
 test("a disconnected opponent pauses commands until the reserved seat reconnects", () => {
   const { room, p2 } = startedRoom();
   const before = room.viewFor("p1");
@@ -199,6 +218,7 @@ test("both players can accept a rematch in the same room and alternate the first
   assert.equal(room.duelNumber, 1);
   assert.equal(room.viewFor("p1").turn.playerId, "p1");
   room.forfeit("connection-2");
+  assert.deepEqual(room.viewFor("p1").series, { completed: 1, draws: 0, wins: { p1: 1, p2: 0 } });
 
   const waiting = room.requestRematch("connection-1");
   assert.equal(room.status, "finished");
@@ -213,6 +233,9 @@ test("both players can accept a rematch in the same room and alternate the first
   assert.equal(restarted.turn.playerId, "p2");
   assert.equal(restarted.nextFirstPlayerId, "p1");
   assert.ok(restarted.seats.every((seat) => seat.ready === false));
+
+  room.forfeit("connection-1");
+  assert.deepEqual(room.viewFor("p2").series, { completed: 2, draws: 0, wins: { p1: 1, p2: 1 } });
 });
 
 test("a rematch waits for a disconnected player and starts after their seat resumes", () => {

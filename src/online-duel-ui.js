@@ -87,6 +87,25 @@ export function onlineIdentityView(view) {
   };
 }
 
+export function onlineSeriesView(view) {
+  const series = view?.series;
+  if (!series || !view?.viewerSeatId || !view?.opponentSeatId) return null;
+  const selfWins = Math.max(0, Number(series.wins?.[view.viewerSeatId]) || 0);
+  const rivalWins = Math.max(0, Number(series.wins?.[view.opponentSeatId]) || 0);
+  const draws = Math.max(0, Number(series.draws) || 0);
+  const completed = Math.max(0, Number(series.completed) || 0);
+  const duelNumber = Math.max(0, Number(view.duelNumber) || 0);
+  return {
+    duelNumber,
+    selfWins,
+    rivalWins,
+    draws,
+    completed,
+    score: `${selfWins} : ${rivalWins}`,
+    detail: draws > 0 ? `已完成 ${completed} 局 · ${draws} 场平局` : `已完成 ${completed} 局`
+  };
+}
+
 export function onlineConnectionView(view, { transportState = "connected", reconnectAttempt = 0, recoveryFailed = false } = {}) {
   if (!view || view.status === "finished") return null;
   if (transportState !== "connected") {
