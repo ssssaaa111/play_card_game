@@ -640,6 +640,39 @@ export function onlineTurnActionSummary(view) {
   };
 }
 
+export function onlineTurnControlView(view, { endTurnArmed = false } = {}) {
+  const summary = onlineTurnActionSummary(view);
+  const ownTurn = view?.turn?.playerId === view?.viewerSeatId;
+  const blocked = !ownTurn || Boolean(view?.gameOver) || Boolean(view?.machine?.responseWindow) || !view?.legalActions?.can?.endTurn;
+  const inBattle = view?.turn?.phase === "battle";
+  const attackCount = summary.attackCardIds.length;
+  const confirming = Boolean(endTurnArmed && summary.total > 0 && !blocked);
+  return {
+    actionCount: summary.total,
+    attackCount,
+    requiresEndTurnConfirmation: summary.total > 0,
+    battle: {
+      label: inBattle ? "战斗阶段" : attackCount > 0 ? `进入战斗 · ${attackCount} 可攻击` : "进入战斗",
+      title: inBattle ? "当前处于战斗阶段" : attackCount > 0 ? `进入战斗阶段，${attackCount} 只怪兽可以攻击` : "进入战斗阶段"
+    },
+    endTurn: {
+      confirming,
+      label: confirming
+        ? `确认结束 · 放弃 ${summary.total} 项`
+        : summary.total > 0
+          ? `结束回合 · ${summary.total} 未行动`
+          : "结束回合",
+      title: blocked
+        ? "当前不能结束回合"
+        : confirming
+          ? `再次点击结束回合；将放弃 ${summary.detail}`
+          : summary.total > 0
+            ? `仍有 ${summary.detail}；点击后需再次确认结束回合`
+            : "当前没有剩余行动，结束回合"
+    }
+  };
+}
+
 export function onlineAttackIntent(view, model) {
   const attacks = model?.actions?.filter((action) => action.type === "DECLARE_ATTACK") || [];
   const ownTurn = view?.turn?.playerId === view?.viewerSeatId;

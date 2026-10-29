@@ -16,7 +16,7 @@ import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType 
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js?v=20261030-interaction-v2-2";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js?v=20261030-turn-close-2";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -71,6 +71,8 @@ let intentionalDisconnect = false;
 let forfeitPending = false;
 let rematchPending = false;
 let rematchError = "";
+let endTurnConfirmation = null;
+let endTurnConfirmationTimer = null;
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
 const audioController = createAudioController({
@@ -383,6 +385,45 @@ function clearActionReceipt() {
   actionReceiptTimer = null;
 }
 
+function clearEndTurnConfirmation() {
+  endTurnConfirmation = null;
+  if (endTurnConfirmationTimer) window.clearTimeout(endTurnConfirmationTimer);
+  endTurnConfirmationTimer = null;
+}
+
+function endTurnConfirmationActive(view = client.view) {
+  return Boolean(
+    endTurnConfirmation
+    && view
+    && endTurnConfirmation.revision === view.revision
+  );
+}
+
+function requestEndTurn() {
+  const view = client.view;
+  if (!view || actionPending || selection || connectionPaused()) return;
+  if (elements.endTurnButton.dataset.confirming === "true" || endTurnConfirmationActive(view)) {
+    clearEndTurnConfirmation();
+    sendAction({ type: "END_TURN" });
+    return;
+  }
+  const control = onlineTurnControlView(view);
+  if (control.requiresEndTurnConfirmation) {
+    clearEndTurnConfirmation();
+    endTurnConfirmation = { revision: view.revision };
+    endTurnConfirmationTimer = window.setTimeout(() => {
+      clearEndTurnConfirmation();
+      if (client.view) render(client.view);
+    }, 3_650);
+    playSound("click");
+    render(view);
+    elements.endTurnButton.focus({ preventScroll: true });
+    return;
+  }
+  clearEndTurnConfirmation();
+  sendAction({ type: "END_TURN" });
+}
+
 function syncActionReceipt(view) {
   const events = view?.recentEvents || [];
   const newestId = events.reduce((max, event) => Math.max(max, Number(event.id) || 0), 0);
@@ -558,6 +599,7 @@ function setEventLogOpen(open) {
 
 function cancelSelection() {
   if (actionPending || !selection) return false;
+  clearEndTurnConfirmation();
   selection = null;
   directActivationTracker.reset();
   playSound("click");
@@ -655,6 +697,7 @@ function chooseCard(id) {
   if (view.machine?.responseWindow) return;
   const next = chooseOnlineCard(view, selection, id);
   if (next === selection) return;
+  clearEndTurnConfirmation();
   clearActionReceipt();
   selection = next;
   playSound("click");
@@ -704,6 +747,7 @@ function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
 
 async function sendAction(action) {
   if (actionPending || !action || connectionPaused()) return;
+  clearEndTurnConfirmation();
   clearActionReceipt();
   selection = null;
   setError();
@@ -914,6 +958,11 @@ function locateNextReadyAction() {
 function renderCommands(view, model) {
   const ownTurn = view.turn.playerId === view.viewerSeatId;
   const canAct = ownTurn && !actionPending && !view.gameOver && !view.machine.responseWindow;
+  if (endTurnConfirmation && (!ownTurn || Boolean(selection) || view.machine.responseWindow || endTurnConfirmation.revision !== view.revision)) {
+    clearEndTurnConfirmation();
+  }
+  const turnControl = onlineTurnControlView(view, { endTurnArmed: endTurnConfirmationActive(view) });
+  const endTurnWarning = turnControl.endTurn.confirming ? `本回合还有 ${turnControl.actionCount} 项可行动，再次点击才会结束回合。` : "";
   const inHand = view.players[view.viewerSeatId].hand.some((card) => card.id === selection?.cardId);
   const attacks = model?.actions.filter((action) => action.type === "DECLARE_ATTACK") || [];
   const attackIntent = onlineAttackIntent(view, model);
@@ -973,17 +1022,22 @@ function renderCommands(view, model) {
   elements.commandSignal.textContent = view.gameOver ? "结束" : actionPending ? "结算中" : model ? "操作中" : canAct ? "待命" : "等待";
   elements.commandTitle.textContent = view.gameOver ? "决斗结束" : canAct ? "选择一张手牌或场上怪兽" : "对手正在行动";
   elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "单击选择，双击快捷执行；需要目标时，合法候选会高亮。" : "可以查看公开卡牌和墓地。";
-  elements.duelHint.textContent = model ? prompt : actionReceipt?.text || elements.commandTitle.textContent;
-  elements.duelHint.dataset.kind = model ? "action" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
+  elements.duelHint.textContent = model ? prompt : endTurnWarning || actionReceipt?.text || elements.commandTitle.textContent;
+  elements.duelHint.dataset.kind = model ? "action" : endTurnWarning ? "turn-warning" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
   elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor : "none";
   elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type : "none";
   elements.duelHint.dataset.tone = !model && actionReceipt ? actionReceipt.tone || "neutral" : "neutral";
   elements.duelPanel.dataset.battleResult = !model && actionReceipt?.kind === "battle-result" ? actionReceipt.result : "none";
   elements.handGuide.textContent = view.gameOver ? "决斗已结束 · 可查看卡牌详情" : model ? "确认或双击高亮候选执行" : "单击选择 · 双击快捷出牌";
   const inBattle = view.turn.phase === "battle";
-  elements.battleButton.textContent = inBattle ? "战斗阶段" : "进入战斗";
+  elements.battleButton.textContent = turnControl.battle.label;
+  elements.battleButton.title = turnControl.battle.title;
   elements.battleButton.dataset.currentPhase = String(inBattle);
   elements.battleButton.disabled = !canAct || Boolean(selection) || view.turn.phase !== "main" || !view.legalActions.can.endTurn;
+  elements.endTurnButton.textContent = turnControl.endTurn.label;
+  elements.endTurnButton.title = turnControl.endTurn.title;
+  elements.endTurnButton.dataset.pendingActions = String(turnControl.requiresEndTurnConfirmation);
+  elements.endTurnButton.dataset.confirming = String(turnControl.endTurn.confirming);
   elements.endTurnButton.disabled = !canAct || Boolean(selection) || !view.legalActions.can.endTurn;
   const directAttackReady = Boolean(isAttack && model?.action && model.targetIds.length === 0);
   elements.aiPanel.classList.toggle("online-direct-target", directAttackReady);
@@ -1437,7 +1491,17 @@ elements.fieldAttackBtn.addEventListener("click", prepareSelectedAttack);
 elements.fieldModeBtn.addEventListener("click", () => sendAction(onlineCardActions(client.view, selection?.cardId).find((action) => action.type === "CHANGE_MONSTER_MODE")));
 elements.fieldDetailBtn.addEventListener("click", () => { const card = onlineCard(client.view, selection?.cardId); if (card) showCards([card], card.name); });
 elements.battleButton.addEventListener("click", () => sendAction({ type: "CHANGE_PHASE", phase: "battle" }));
-elements.endTurnButton.addEventListener("click", () => sendAction({ type: "END_TURN" }));
+elements.endTurnButton.addEventListener("click", requestEndTurn);
+elements.endTurnButton.addEventListener("pointerdown", (event) => {
+  if (elements.endTurnButton.dataset.confirming !== "true") return;
+  event.preventDefault();
+  requestEndTurn();
+});
+elements.endTurnButton.addEventListener("keydown", (event) => {
+  if (!["Enter", " "].includes(event.key) || elements.endTurnButton.dataset.confirming !== "true") return;
+  event.preventDefault();
+  requestEndTurn();
+});
 elements.inspectorClose.addEventListener("click", closeInspector);
 elements.inspectorBack.addEventListener("click", () => {
   if (inspectorCollection) showCards(inspectorCollection.cards, inspectorCollection.title, { collection: true });
@@ -1478,6 +1542,7 @@ elements.eventLogList.addEventListener("click", (event) => {
   if (card) showCards([card], card.name);
 });
 document.addEventListener("click", (event) => {
+  if (event.composedPath().includes(elements.endTurnButton)) return;
   if (!runCommand.blocksRepeatedClick(event.detail)) return;
   event.preventDefault();
   event.stopImmediatePropagation();

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -58,6 +58,21 @@ test("online action guidance counts playable hand cards and attack-ready monster
     label: "3 可行动",
     detail: "2 张手牌 · 1 只怪兽可发起攻击"
   });
+  assert.deepEqual(onlineTurnControlView(view), {
+    actionCount: 3,
+    attackCount: 1,
+    requiresEndTurnConfirmation: true,
+    battle: {
+      label: "进入战斗 · 1 可攻击",
+      title: "进入战斗阶段，1 只怪兽可以攻击"
+    },
+    endTurn: {
+      confirming: false,
+      label: "结束回合 · 3 未行动",
+      title: "仍有 2 张手牌 · 1 只怪兽可发起攻击；点击后需再次确认结束回合"
+    }
+  });
+  assert.equal(onlineTurnControlView(view, { endTurnArmed: true }).endTurn.label, "确认结束 · 放弃 3 项");
 
   view.viewerSeatId = "p2";
   view.opponentSeatId = "p1";

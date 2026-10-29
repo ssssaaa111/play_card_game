@@ -83,11 +83,11 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   const css = readProjectFile("online-duel.css");
   const app = readProjectFile("src/online-duel-app.js");
 
-  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=20261030-interaction-v2"/);
-  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=20261030-interaction-v2-2"><\/script>/);
+  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=20261030-turn-close-2"/);
+  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=20261030-turn-close-7"><\/script>/);
   assert.match(app, /hand-renderer\.js\?v=20261030-interaction-v2-2/);
   assert.match(app, /field-renderer\.js\?v=20261030-interaction-v2-2/);
-  assert.match(app, /online-duel-ui\.js\?v=20261030-interaction-v2-2/);
+  assert.match(app, /online-duel-ui\.js\?v=20261030-turn-close-2/);
   assert.match(html, /id="lobbyPanel"/);
   assert.match(html, /id="authPanel"/);
   assert.match(html, /id="authForm"[^>]*autocomplete="on"/);
@@ -132,6 +132,11 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /进入战斗阶段并发起攻击/);
   assert.match(app, /function locateNextReadyAction\(\)/);
   assert.match(app, /handReadyJump\.addEventListener\("click", locateNextReadyAction\)/);
+  assert.match(app, /endTurnButton\.addEventListener\("click", requestEndTurn\)/);
+  assert.match(app, /endTurnButton\.addEventListener\("pointerdown"/);
+  assert.match(app, /endTurnButton\.addEventListener\("keydown"/);
+  assert.match(app, /endTurnButton\.dataset\.confirming/);
+  assert.match(app, /composedPath\(\)\.includes\(elements\.endTurnButton\)/);
   assert.match(app, /battleButton\.dataset\.currentPhase/);
   assert.match(app, /handPanel\.dataset\.commandActive/);
   assert.match(app, /syncActionReceipt\(view\)/);
