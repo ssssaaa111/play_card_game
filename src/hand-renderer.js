@@ -136,6 +136,7 @@ export function renderHandCards({
     cardEl.setAttribute("aria-grabbed", "false");
     view.cardClasses.forEach((className) => cardEl.classList.add(className));
     cardEl.title = view.title;
+    cardEl.setAttribute("aria-label", `${card.name || "卡牌"}，${view.actionLabel || "卡牌"}`);
 
     const actionTag = document.createElement("span");
     actionTag.className = "action-tag";
@@ -164,7 +165,7 @@ export function renderHandCards({
 
     if (directReorder) {
       cardEl.tabIndex = 0;
-      cardEl.setAttribute("aria-description", "双方回合均可拖动插入；按住 Alt 再按左右方向键可微调顺序");
+      cardEl.setAttribute("aria-description", `${view.actionReason ? `${view.actionReason}；` : ""}双方回合均可拖动插入；按住 Alt 再按左右方向键可微调顺序`);
       let pointerDrag = null;
       let dragGhost = null;
       let placeholder = null;

@@ -10,6 +10,7 @@ const ROOM_SEAT_IDS = Object.freeze(["p1", "p2"]);
 const MAX_REMEMBERED_COMMANDS = 100;
 const DEFAULT_RESPONSE_TIMEOUT_MS = 15_000;
 const DEFAULT_DISCONNECT_GRACE_MS = 60_000;
+const DEFAULT_TURN_TIMEOUT_MS = 90_000;
 
 function token() {
   return randomBytes(24).toString("base64url");
@@ -42,7 +43,8 @@ export class DuelRoom {
     createState = createOnlineDuelState,
     now = () => Date.now(),
     responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS,
-    disconnectGraceMs = DEFAULT_DISCONNECT_GRACE_MS
+    disconnectGraceMs = DEFAULT_DISCONNECT_GRACE_MS,
+    turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS
   } = {}) {
     if (!code) throw new DuelRoomError("Room code is required");
     this.code = code;
@@ -58,9 +60,13 @@ export class DuelRoom {
     this.updatedAt = this.createdAt;
     this.responseTimeoutMs = Math.max(1_000, Number(responseTimeoutMs) || DEFAULT_RESPONSE_TIMEOUT_MS);
     this.disconnectGraceMs = Math.max(1_000, Number(disconnectGraceMs) || DEFAULT_DISCONNECT_GRACE_MS);
+    this.turnTimeoutMs = Math.max(1_000, Number(turnTimeoutMs) || DEFAULT_TURN_TIMEOUT_MS);
     this.responseDeclarationEventId = null;
     this.responseDeadlineAt = null;
     this.responseRemainingMs = null;
+    this.turnTimerPlayerId = null;
+    this.turnDeadlineAt = null;
+    this.turnRemainingMs = null;
     this.seats = new Map();
     this.commandReceipts = new Map();
   }
@@ -92,6 +98,7 @@ export class DuelRoom {
       resumed.reconnectDeadlineAt = null;
       resumed.lastSeenAt = this.now();
       this.#resumeResponseTimer();
+      this.#resumeTurnTimer();
       this.#touch();
       this.#startIfReady();
       return this.#joinResult(resumed, true);
@@ -148,6 +155,7 @@ export class DuelRoom {
     const seat = this.seatForConnection(connectionId);
     if (!seat) return false;
     this.#pauseResponseTimer();
+    this.#pauseTurnTimer();
     seat.connected = false;
     seat.connectionId = null;
     seat.lastSeenAt = this.now();
@@ -184,6 +192,7 @@ export class DuelRoom {
     this.status = "finished";
     this.#recordDuelResult();
     this.#clearResponseTimer();
+    this.#clearTurnTimer();
     this.#clearDisconnectDeadlines();
     this.#touch();
     return this.viewFor(seat.seatId);
@@ -265,6 +274,7 @@ export class DuelRoom {
       seats
     });
     view.responseTimer = this.responseTimeoutView();
+    view.turnTimer = this.turnTimeoutView();
     return view;
   }
 
@@ -303,6 +313,7 @@ export class DuelRoom {
     }
     this.engine = engine;
     this.#syncResponseTimer();
+    this.#syncTurnTimer();
     return events;
   }
 
@@ -319,6 +330,22 @@ export class DuelRoom {
   responseTimeoutDelay() {
     if (this.responseDeadlineAt == null) return null;
     return Math.max(0, this.responseDeadlineAt - this.now());
+  }
+
+  turnTimeoutView() {
+    if (!this.turnTimerPlayerId || this.status !== "playing") return null;
+    return {
+      playerId: this.turnTimerPlayerId,
+      deadlineAt: this.turnDeadlineAt,
+      remainingMs: this.turnRemainingMs,
+      durationMs: this.turnTimeoutMs,
+      paused: this.turnDeadlineAt == null
+    };
+  }
+
+  turnTimeoutDelay() {
+    if (this.turnDeadlineAt == null || this.status !== "playing") return null;
+    return Math.max(0, this.turnDeadlineAt - this.now());
   }
 
   disconnectTimeoutDelay() {
@@ -352,6 +379,7 @@ export class DuelRoom {
     this.status = "finished";
     this.#recordDuelResult();
     this.#clearResponseTimer();
+    this.#clearTurnTimer();
     this.#clearDisconnectDeadlines();
     this.#touch();
     return true;
@@ -375,6 +403,29 @@ export class DuelRoom {
       this.status = "finished";
       this.#recordDuelResult();
     }
+    this.#syncTurnTimer();
+    this.#touch();
+    return true;
+  }
+
+  expireTurnTimeout() {
+    if (this.status !== "playing" || !this.engine || this.turnDeadlineAt == null || this.now() < this.turnDeadlineAt) return false;
+    if (!this.seatList().every((seat) => seat.connected)) return false;
+    const state = this.engine.getState();
+    if (state.machine?.responseWindow || state.machine?.pendingAttack || state.machine?.chain?.length) {
+      this.#syncTurnTimer();
+      return false;
+    }
+    const playerId = state.turn.playerId;
+    const rivalId = ROOM_SEAT_IDS.find((seatId) => seatId !== playerId);
+    this.#dispatchAction({
+      type: "END_TURN",
+      playerId,
+      rivalId,
+      reason: "online-turn-timeout",
+      endedBy: "timeout",
+      endedAt: this.now()
+    });
     this.#touch();
     return true;
   }
@@ -388,10 +439,12 @@ export class DuelRoom {
     this.status = "playing";
     this.commandReceipts.clear();
     this.#clearResponseTimer();
+    this.#clearTurnTimer();
     this.seatList().forEach((seat) => {
       seat.ready = false;
       seat.reconnectDeadlineAt = null;
     });
+    this.#syncTurnTimer();
     this.#touch();
   }
 
@@ -449,6 +502,45 @@ export class DuelRoom {
     this.responseDeclarationEventId = null;
     this.responseDeadlineAt = null;
     this.responseRemainingMs = null;
+  }
+
+  #syncTurnTimer() {
+    if (this.status !== "playing" || !this.engine || this.engine.getState().gameOver) {
+      this.#clearTurnTimer();
+      return;
+    }
+    const state = this.engine.getState();
+    const playerId = state.turn.playerId;
+    if (this.turnTimerPlayerId !== playerId) {
+      this.turnTimerPlayerId = playerId;
+      this.turnRemainingMs = null;
+      this.turnDeadlineAt = this.now() + this.turnTimeoutMs;
+    }
+    if (state.machine?.responseWindow || !this.seatList().every((seat) => seat.connected)) {
+      this.#pauseTurnTimer();
+      return;
+    }
+    this.#resumeTurnTimer();
+  }
+
+  #pauseTurnTimer() {
+    if (this.turnDeadlineAt == null) return;
+    this.turnRemainingMs = Math.max(0, this.turnDeadlineAt - this.now());
+    this.turnDeadlineAt = null;
+  }
+
+  #resumeTurnTimer() {
+    if (this.status !== "playing" || !this.turnTimerPlayerId || this.turnRemainingMs == null) return;
+    if (!this.seatList().every((seat) => seat.connected)) return;
+    if (this.engine?.getState()?.machine?.responseWindow) return;
+    this.turnDeadlineAt = this.now() + this.turnRemainingMs;
+    this.turnRemainingMs = null;
+  }
+
+  #clearTurnTimer() {
+    this.turnTimerPlayerId = null;
+    this.turnDeadlineAt = null;
+    this.turnRemainingMs = null;
   }
 
   #clearDisconnectDeadlines() {

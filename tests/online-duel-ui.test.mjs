@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -21,6 +21,72 @@ test("viewer identity keeps two tabs visually tied to their own reserved seats",
   view.opponentSeatId = "p1";
   assert.deepEqual(onlineIdentityView(view), {
     name: "月见", seatId: "p2", seatNumber: "2P", seatRole: "挑战者", opponentName: "星野"
+  });
+});
+
+test("online action guidance counts playable hand cards and attack-ready monsters for either seat", () => {
+  const view = snapshot();
+  view.legalActions.can = { endTurn: true };
+  view.players.p1.hand = [
+    { ...monster("hand:monster"), type: "monster" },
+    { id: "hand:spell", name: "双向星芒", type: "spell" }
+  ];
+  view.players.p1.monsterZone[0] = { ...monster("field:p1"), mode: "attack", used: false };
+  view.players.p2.monsterZone[0] = { ...monster("field:p2-a") };
+  view.players.p2.monsterZone[1] = { ...monster("field:p2-b") };
+  view.legalActions.actions = {
+    summon: [{ type: "SUMMON_MONSTER", cardId: "hand:monster", index: 1 }],
+    spell: [
+      { type: "ACTIVATE_SPELL", cardId: "hand:spell", targetCardId: "field:p2-a" },
+      { type: "ACTIVATE_SPELL", cardId: "hand:spell", targetCardId: "field:p2-b" }
+    ]
+  };
+
+  assert.deepEqual(onlineHandActionView(view, "hand:monster"), {
+    ok: true,
+    ruleOk: true,
+    label: "召唤",
+    reason: "双击使用推荐落点，单击可自行选择位置。",
+    target: { count: 0, scope: "" },
+    actionTypes: ["SUMMON_MONSTER"]
+  });
+  assert.equal(onlineHandActionView(view, "hand:spell").reason, "单击后从 2 个合法目标中选择。");
+  assert.deepEqual(onlineTurnActionSummary(view), {
+    handCardIds: ["hand:monster", "hand:spell"],
+    attackCardIds: ["field:p1"],
+    total: 3,
+    label: "3 可行动",
+    detail: "2 张手牌 · 1 只怪兽可发起攻击"
+  });
+  assert.deepEqual(onlineTurnControlView(view), {
+    actionCount: 3,
+    attackCount: 1,
+    requiresEndTurnConfirmation: true,
+    battle: {
+      label: "进入战斗 · 1 可攻击",
+      title: "进入战斗阶段，1 只怪兽可以攻击"
+    },
+    endTurn: {
+      confirming: false,
+      label: "结束回合 · 3 未行动",
+      title: "仍有 2 张手牌 · 1 只怪兽可发起攻击；点击后需再次确认结束回合"
+    }
+  });
+  assert.equal(onlineTurnControlView(view, { endTurnArmed: true }).endTurn.label, "确认结束 · 放弃 3 项");
+
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  view.turn.playerId = "p2";
+  view.players.p2.hand = [{ id: "hand:p2", name: "挑战者手牌", type: "trap" }];
+  view.players.p2.monsterZone[0] = { ...monster("field:p2"), mode: "attack", used: false };
+  view.players.p2.monsterZone[1] = null;
+  view.legalActions.actions = { trap: [{ type: "SET_TRAP", cardId: "hand:p2", index: 2 }] };
+  assert.deepEqual(onlineTurnActionSummary(view), {
+    handCardIds: ["hand:p2"],
+    attackCardIds: ["field:p2"],
+    total: 2,
+    label: "2 可行动",
+    detail: "1 张手牌 · 1 只怪兽可发起攻击"
   });
 });
 
@@ -88,6 +154,28 @@ test("online response timer explains automatic passing and frozen disconnect tim
     label: "对局已暂停，响应倒计时冻结"
   });
   assert.equal(onlineResponseTimerView({ ...base, responseTimer: { ...base.responseTimer, declarationEventId: 41 } }, 18_400), null);
+});
+
+test("online whole-turn clock stays viewer-relative and exposes pause and danger states", () => {
+  const view = snapshot();
+  view.turnTimer = { playerId: "p1", deadlineAt: 100_000, remainingMs: null, durationMs: 90_000, paused: false };
+  assert.deepEqual(onlineTurnTimerView(view, 18_400), {
+    playerId: "p1",
+    paused: false,
+    seconds: 82,
+    clock: "1:22",
+    ownTurn: true,
+    danger: false,
+    label: "1:22 · 你的回合"
+  });
+  assert.equal(onlineTurnTimerView(view, 85_001).danger, true);
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  assert.equal(onlineTurnTimerView(view, 90_500).label, "0:10 · 对手回合");
+  view.turnTimer = { ...view.turnTimer, deadlineAt: null, remainingMs: 8_400, paused: true };
+  assert.equal(onlineTurnTimerView(view, 999_000).label, "0:09 · 回合计时已暂停");
+  view.status = "finished";
+  assert.equal(onlineTurnTimerView(view), null);
 });
 
 test("online card details expose effect copy and current public values", () => {
@@ -240,7 +328,11 @@ test("public duel actions become concise viewer-relative receipts", () => {
   assert.deepEqual(latestOnlineActionReceipt(view, 8), {
     id: 9, type: "ATTACK_DECLARED", actor: "self", text: "星野以《天岚突袭者》发起直接攻击"
   });
-  assert.equal(latestOnlineActionReceipt(view, 9), null);
+  view.recentEvents.push({ id: 10, type: "TURN_ENDED", playerId: "p1", reason: "online-turn-timeout", endedBy: "timeout" });
+  assert.deepEqual(latestOnlineActionReceipt(view, 9), {
+    id: 10, type: "TURN_ENDED", actor: "self", text: "星野回合超时，已自动结束"
+  });
+  assert.equal(onlineEventTimeline(view)[0].text, "星野回合超时，已自动结束");
 });
 
 test("online timeline turns public events into categorized inspectable entries", () => {

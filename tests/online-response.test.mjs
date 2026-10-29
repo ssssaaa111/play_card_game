@@ -86,6 +86,13 @@ test("an unanswered attack auto-resolves at the authoritative room deadline", ()
     remainingMs: null,
     paused: false
   });
+  assert.deepEqual(room.viewFor("p1").turnTimer, {
+    playerId: "p1",
+    deadlineAt: null,
+    remainingMs: 90_000,
+    durationMs: 90_000,
+    paused: true
+  });
   currentTime = 24_999;
   assert.equal(room.expireAttackResponse(), false);
   currentTime = 25_000;
@@ -95,6 +102,7 @@ test("an unanswered attack auto-resolves at the authoritative room deadline", ()
   assert.equal(after.machine.responseWindow, null);
   assert.equal(after.machine.pendingAttack, null);
   assert.equal(after.players.p2.lp, 2300);
+  assert.equal(after.turnTimer.deadlineAt, 115_000);
   assert.ok(after.recentEvents.some((event) => event.type === "RESPONSE_WINDOW_CLOSED" && event.reason === "online-response-timeout"));
   assert.equal(room.expireAttackResponse(), false);
 });

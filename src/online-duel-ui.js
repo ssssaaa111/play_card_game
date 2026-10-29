@@ -44,6 +44,28 @@ export function onlineResponseTimerView(view, now = Date.now()) {
   };
 }
 
+export function onlineTurnTimerView(view, now = Date.now()) {
+  const timer = view?.turnTimer;
+  if (!timer || view?.status !== "playing" || view?.gameOver || timer.playerId !== view?.turn?.playerId) return null;
+  const paused = Boolean(timer.paused);
+  const remainingMs = paused
+    ? Math.max(0, Number(timer.remainingMs) || 0)
+    : Math.max(0, Number(timer.deadlineAt) - Number(now));
+  const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const clock = `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+  const ownTurn = timer.playerId === view.viewerSeatId;
+  return {
+    playerId: timer.playerId,
+    paused,
+    seconds,
+    clock,
+    ownTurn,
+    danger: !paused && seconds <= 15,
+    label: paused ? `${clock} · 回合计时已暂停` : `${clock} · ${ownTurn ? "你的回合" : "对手回合"}`
+  };
+}
+
 // Translate the server's public snapshot into the cards used by the solo UI.
 // Display IDs are templates; commands always retain server instance IDs.
 export function onlineDisplayCard(card) {
@@ -243,7 +265,7 @@ export function onlineRematchView(view) {
 
 const ACTION_RECEIPT_TYPES = new Set([
   "MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED",
-  "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN"
+  "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN", "TURN_ENDED"
 ]);
 
 function battleResultReceipt(view, event, events = []) {
@@ -338,6 +360,7 @@ export function onlineActionReceipt(view, event, { events = [] } = {}) {
       : event.type === "ATTACK_DECLARED" ? `${actorName}以${cardLabel}${event.direct ? "发起直接攻击" : "发起攻击"}`
         : event.type === "TRAP_SET" ? `${actorName}盖放了 1 张陷阱`
           : event.type === "CARDS_DRAWN" ? `${actorName}抽取了 ${Math.max(0, Number(event.count) || 0)} 张卡`
+            : event.type === "TURN_ENDED" ? event.reason === "online-turn-timeout" ? `${actorName}回合超时，已自动结束` : `${actorName}结束回合`
             : `${actorName}将${cardLabel}切换为${event.mode === "defense" || event.to === "defense" ? "守备" : "攻击"}表示`;
   return { id: Number(event.id) || 0, type: event.type, actor, text };
 }
@@ -380,7 +403,7 @@ function onlineTimelineFallback(view, event) {
   if (event.type === "CARD_DESTROYED") return `${cardLabel}被破坏并送入墓地`;
   if (event.type === "EFFECT_SKIPPED") return `${cardLabel}的效果条件不足，未能生效`;
   if (event.type === "TURN_STARTED") return `${playerName}的回合开始`;
-  if (event.type === "TURN_ENDED") return `${playerName}结束回合`;
+  if (event.type === "TURN_ENDED") return event.reason === "online-turn-timeout" ? `${playerName}回合超时，系统自动结束回合` : `${playerName}结束回合`;
   if (event.type === "PHASE_CHANGED") return `${playerName}进入${phaseName}`;
   if (event.type === "GAME_OVER_DECLARED") {
     const winner = view?.seats?.find((seat) => seat.seatId === event.winnerId)?.name;
@@ -567,6 +590,110 @@ export function onlineCardActions(view, cardId) {
   if (view?.gameOver || view?.turn?.playerId !== view?.viewerSeatId) return [];
   return Object.values(view?.legalActions?.actions || {}).flat()
     .filter((action) => (action.cardId || action.attackerCardId) === cardId);
+}
+
+function handActionLabel(card, actions = []) {
+  const types = new Set(actions.map((action) => action.type));
+  if (types.has("SUMMON_MONSTER")) return "召唤";
+  if (types.has("SET_TRAP")) return "盖放";
+  if (card?.type === "spell") return "发动";
+  return "可操作";
+}
+
+export function onlineHandActionView(view, cardId) {
+  const self = view?.players?.[view?.viewerSeatId];
+  const card = self?.hand?.find((entry) => entry?.id === cardId);
+  if (!card) return { ok: false, ruleOk: false, label: "不可用", reason: "这张卡已不在手牌中。", target: { count: 0, scope: "" } };
+  if (view?.gameOver) return { ok: false, ruleOk: false, label: "已结束", reason: "决斗已结束，可查看卡牌详情。", target: { count: 0, scope: "" } };
+  if (view?.machine?.responseWindow) return { ok: false, ruleOk: false, label: "响应中", reason: "先完成当前响应，再进行回合操作。", target: { count: 0, scope: "" } };
+  if (view?.turn?.playerId !== view?.viewerSeatId) return { ok: false, ruleOk: false, label: "对手回合", reason: "等待对手行动；仍可整理手牌或查看详情。", target: { count: 0, scope: "" } };
+
+  const actions = onlineCardActions(view, cardId);
+  const targetIds = [...new Set(actions.map((action) => action.targetCardId).filter(Boolean))];
+  if (actions.length) {
+    const placement = actions.some((action) => ["SUMMON_MONSTER", "SET_TRAP"].includes(action.type));
+    const label = handActionLabel(card, actions);
+    const reason = targetIds.length > 1
+      ? `单击后从 ${targetIds.length} 个合法目标中选择。`
+      : targetIds.length === 1
+        ? "唯一合法目标已锁定，双击可直接执行。"
+        : placement
+          ? "双击使用推荐落点，单击可自行选择位置。"
+          : "双击可直接执行，单击可先查看操作。";
+    return {
+      ok: true,
+      ruleOk: true,
+      label,
+      reason,
+      target: { count: targetIds.length, scope: targetIds.length ? "field" : "" },
+      actionTypes: [...new Set(actions.map((action) => action.type))]
+    };
+  }
+
+  const phase = view?.turn?.phase;
+  const reason = phase !== "main"
+    ? `${card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "魔法发动"}需要在主要阶段进行。`
+    : card.type === "monster"
+      ? "召唤位、祭品或本回合召唤条件不足。"
+      : card.type === "trap"
+        ? "魔陷区没有可用位置，或当前盖放条件不足。"
+        : "当前发动条件、合法目标或所需资源不足。";
+  return { ok: false, ruleOk: false, label: "暂不可用", reason, target: { count: 0, scope: "" }, actionTypes: [] };
+}
+
+export function onlineTurnActionSummary(view) {
+  const self = view?.players?.[view?.viewerSeatId];
+  if (!self || view?.gameOver || view?.turn?.playerId !== view?.viewerSeatId || view?.machine?.responseWindow) {
+    return { handCardIds: [], attackCardIds: [], total: 0, label: "0 可行动", detail: "当前没有可执行的回合操作" };
+  }
+  const handCardIds = self.hand
+    .filter((card) => card && onlineCardActions(view, card.id).length > 0)
+    .map((card) => card.id);
+  const attackCardIds = self.monsterZone
+    .filter(Boolean)
+    .filter((card) => onlineAttackIntent(view, onlineSelectionModel(view, selectOnlineCard(view, card.id))).available)
+    .map((card) => card.id);
+  const total = handCardIds.length + attackCardIds.length;
+  return {
+    handCardIds,
+    attackCardIds,
+    total,
+    label: `${total} 可行动`,
+    detail: `${handCardIds.length} 张手牌 · ${attackCardIds.length} 只怪兽可发起攻击`
+  };
+}
+
+export function onlineTurnControlView(view, { endTurnArmed = false } = {}) {
+  const summary = onlineTurnActionSummary(view);
+  const ownTurn = view?.turn?.playerId === view?.viewerSeatId;
+  const blocked = !ownTurn || Boolean(view?.gameOver) || Boolean(view?.machine?.responseWindow) || !view?.legalActions?.can?.endTurn;
+  const inBattle = view?.turn?.phase === "battle";
+  const attackCount = summary.attackCardIds.length;
+  const confirming = Boolean(endTurnArmed && summary.total > 0 && !blocked);
+  return {
+    actionCount: summary.total,
+    attackCount,
+    requiresEndTurnConfirmation: summary.total > 0,
+    battle: {
+      label: inBattle ? "战斗阶段" : attackCount > 0 ? `进入战斗 · ${attackCount} 可攻击` : "进入战斗",
+      title: inBattle ? "当前处于战斗阶段" : attackCount > 0 ? `进入战斗阶段，${attackCount} 只怪兽可以攻击` : "进入战斗阶段"
+    },
+    endTurn: {
+      confirming,
+      label: confirming
+        ? `确认结束 · 放弃 ${summary.total} 项`
+        : summary.total > 0
+          ? `结束回合 · ${summary.total} 未行动`
+          : "结束回合",
+      title: blocked
+        ? "当前不能结束回合"
+        : confirming
+          ? `再次点击结束回合；将放弃 ${summary.detail}`
+          : summary.total > 0
+            ? `仍有 ${summary.detail}；点击后需再次确认结束回合`
+            : "当前没有剩余行动，结束回合"
+    }
+  };
 }
 
 export function onlineAttackIntent(view, model) {
