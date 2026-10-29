@@ -44,6 +44,28 @@ export function onlineResponseTimerView(view, now = Date.now()) {
   };
 }
 
+export function onlineTurnTimerView(view, now = Date.now()) {
+  const timer = view?.turnTimer;
+  if (!timer || view?.status !== "playing" || view?.gameOver || timer.playerId !== view?.turn?.playerId) return null;
+  const paused = Boolean(timer.paused);
+  const remainingMs = paused
+    ? Math.max(0, Number(timer.remainingMs) || 0)
+    : Math.max(0, Number(timer.deadlineAt) - Number(now));
+  const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const clock = `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+  const ownTurn = timer.playerId === view.viewerSeatId;
+  return {
+    playerId: timer.playerId,
+    paused,
+    seconds,
+    clock,
+    ownTurn,
+    danger: !paused && seconds <= 15,
+    label: paused ? `${clock} · 回合计时已暂停` : `${clock} · ${ownTurn ? "你的回合" : "对手回合"}`
+  };
+}
+
 // Translate the server's public snapshot into the cards used by the solo UI.
 // Display IDs are templates; commands always retain server instance IDs.
 export function onlineDisplayCard(card) {
@@ -243,7 +265,7 @@ export function onlineRematchView(view) {
 
 const ACTION_RECEIPT_TYPES = new Set([
   "MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED",
-  "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN"
+  "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN", "TURN_ENDED"
 ]);
 
 function battleResultReceipt(view, event, events = []) {
@@ -338,6 +360,7 @@ export function onlineActionReceipt(view, event, { events = [] } = {}) {
       : event.type === "ATTACK_DECLARED" ? `${actorName}以${cardLabel}${event.direct ? "发起直接攻击" : "发起攻击"}`
         : event.type === "TRAP_SET" ? `${actorName}盖放了 1 张陷阱`
           : event.type === "CARDS_DRAWN" ? `${actorName}抽取了 ${Math.max(0, Number(event.count) || 0)} 张卡`
+            : event.type === "TURN_ENDED" ? event.reason === "online-turn-timeout" ? `${actorName}回合超时，已自动结束` : `${actorName}结束回合`
             : `${actorName}将${cardLabel}切换为${event.mode === "defense" || event.to === "defense" ? "守备" : "攻击"}表示`;
   return { id: Number(event.id) || 0, type: event.type, actor, text };
 }
@@ -380,7 +403,7 @@ function onlineTimelineFallback(view, event) {
   if (event.type === "CARD_DESTROYED") return `${cardLabel}被破坏并送入墓地`;
   if (event.type === "EFFECT_SKIPPED") return `${cardLabel}的效果条件不足，未能生效`;
   if (event.type === "TURN_STARTED") return `${playerName}的回合开始`;
-  if (event.type === "TURN_ENDED") return `${playerName}结束回合`;
+  if (event.type === "TURN_ENDED") return event.reason === "online-turn-timeout" ? `${playerName}回合超时，系统自动结束回合` : `${playerName}结束回合`;
   if (event.type === "PHASE_CHANGED") return `${playerName}进入${phaseName}`;
   if (event.type === "GAME_OVER_DECLARED") {
     const winner = view?.seats?.find((seat) => seat.seatId === event.winnerId)?.name;

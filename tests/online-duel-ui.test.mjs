@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -156,6 +156,28 @@ test("online response timer explains automatic passing and frozen disconnect tim
   assert.equal(onlineResponseTimerView({ ...base, responseTimer: { ...base.responseTimer, declarationEventId: 41 } }, 18_400), null);
 });
 
+test("online whole-turn clock stays viewer-relative and exposes pause and danger states", () => {
+  const view = snapshot();
+  view.turnTimer = { playerId: "p1", deadlineAt: 100_000, remainingMs: null, durationMs: 90_000, paused: false };
+  assert.deepEqual(onlineTurnTimerView(view, 18_400), {
+    playerId: "p1",
+    paused: false,
+    seconds: 82,
+    clock: "1:22",
+    ownTurn: true,
+    danger: false,
+    label: "1:22 · 你的回合"
+  });
+  assert.equal(onlineTurnTimerView(view, 85_001).danger, true);
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  assert.equal(onlineTurnTimerView(view, 90_500).label, "0:10 · 对手回合");
+  view.turnTimer = { ...view.turnTimer, deadlineAt: null, remainingMs: 8_400, paused: true };
+  assert.equal(onlineTurnTimerView(view, 999_000).label, "0:09 · 回合计时已暂停");
+  view.status = "finished";
+  assert.equal(onlineTurnTimerView(view), null);
+});
+
 test("online card details expose effect copy and current public values", () => {
   assert.deepEqual(onlineCardDetailView({
     name: "星轨枪兵", type: "monster", text: "风属性前线怪兽。", atk: 1800, tempAtk: 200, def: 1000, element: "wind", stars: 4
@@ -306,7 +328,11 @@ test("public duel actions become concise viewer-relative receipts", () => {
   assert.deepEqual(latestOnlineActionReceipt(view, 8), {
     id: 9, type: "ATTACK_DECLARED", actor: "self", text: "星野以《天岚突袭者》发起直接攻击"
   });
-  assert.equal(latestOnlineActionReceipt(view, 9), null);
+  view.recentEvents.push({ id: 10, type: "TURN_ENDED", playerId: "p1", reason: "online-turn-timeout", endedBy: "timeout" });
+  assert.deepEqual(latestOnlineActionReceipt(view, 9), {
+    id: 10, type: "TURN_ENDED", actor: "self", text: "星野回合超时，已自动结束"
+  });
+  assert.equal(onlineEventTimeline(view)[0].text, "星野回合超时，已自动结束");
 });
 
 test("online timeline turns public events into categorized inspectable entries", () => {

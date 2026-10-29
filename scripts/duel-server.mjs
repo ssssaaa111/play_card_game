@@ -43,11 +43,14 @@ const authAttemptLimiter = new OnlineAuthAttemptLimiter({
 });
 const configuredDisconnectGraceMs = Number.parseInt(process.env.DUEL_DISCONNECT_GRACE_MS || "60000", 10);
 const disconnectGraceMs = Number.isFinite(configuredDisconnectGraceMs) ? Math.max(1_000, configuredDisconnectGraceMs) : 60_000;
+const configuredTurnTimeoutMs = Number.parseInt(process.env.DUEL_TURN_TIMEOUT_MS || "90000", 10);
+const turnTimeoutMs = Number.isFinite(configuredTurnTimeoutMs) ? Math.max(1_000, configuredTurnTimeoutMs) : 90_000;
 const responseDemo = process.argv.includes("--scenario=trap-response");
 if (responseDemo && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
 const roomStore = new DuelRoomStore({ createRoom: (options) => new DuelRoom({
   ...options,
   disconnectGraceMs,
+  turnTimeoutMs,
   ...(responseDemo ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: {
     p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"],
     p2: ["mirror-snare", "weakening-web", "storm-shift", "guard-sigil", "iron-guardian"]
@@ -56,6 +59,7 @@ const roomStore = new DuelRoomStore({ createRoom: (options) => new DuelRoom({
 const connections = new Map();
 const responseTimers = new Map();
 const disconnectTimers = new Map();
+const turnTimers = new Map();
 
 function requestIsSecure(request) {
   return request.socket?.encrypted === true || (
@@ -156,6 +160,7 @@ function activeRoomFor(socket) {
 function broadcastRoom(room) {
   scheduleResponseTimeout(room);
   scheduleDisconnectTimeout(room);
+  scheduleTurnTimeout(room);
   for (const [socket, connection] of connections) {
     if (connection.roomCode !== room.code || !connection.seatId) continue;
     const activeSeat = room.seatForConnection(connection.id);
@@ -192,6 +197,21 @@ function scheduleResponseTimeout(room) {
   }, delay + 5);
   timer.unref();
   responseTimers.set(room.code, timer);
+}
+
+function scheduleTurnTimeout(room) {
+  const existing = turnTimers.get(room.code);
+  if (existing) clearTimeout(existing);
+  turnTimers.delete(room.code);
+  const delay = room.turnTimeoutDelay();
+  if (delay == null) return;
+  const timer = setTimeout(() => {
+    turnTimers.delete(room.code);
+    if (room.expireTurnTimeout()) broadcastRoom(room);
+    else scheduleTurnTimeout(room);
+  }, delay + 5);
+  timer.unref();
+  turnTimers.set(room.code, timer);
 }
 
 async function handleMessage(socket, rawMessage) {

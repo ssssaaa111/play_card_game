@@ -83,11 +83,11 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   const css = readProjectFile("online-duel.css");
   const app = readProjectFile("src/online-duel-app.js");
 
-  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=20261030-turn-close-2"/);
-  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=20261030-turn-close-7"><\/script>/);
+  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=20261030-turn-clock-1"/);
+  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=20261030-turn-clock-1"><\/script>/);
   assert.match(app, /hand-renderer\.js\?v=20261030-interaction-v2-2/);
   assert.match(app, /field-renderer\.js\?v=20261030-interaction-v2-2/);
-  assert.match(app, /online-duel-ui\.js\?v=20261030-turn-close-2/);
+  assert.match(app, /online-duel-ui\.js\?v=20261030-turn-clock-1/);
   assert.match(html, /id="lobbyPanel"/);
   assert.match(html, /id="authPanel"/);
   assert.match(html, /id="authForm"[^>]*autocomplete="on"/);
@@ -99,6 +99,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="choiceActions"/);
   assert.match(html, /id="eventLog"/);
   assert.match(html, /id="duelHint"[^>]*aria-live="polite"/);
+  assert.match(html, /id="turnClock"[^>]*role="timer"/);
   assert.match(html, /id="viewerIdentity"[^>]*hidden/);
   assert.match(html, /id="resultRematch"/);
   assert.match(html, /id="resultRematchStatus"[^>]*aria-live="polite"/);
@@ -140,6 +141,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /battleButton\.dataset\.currentPhase/);
   assert.match(app, /handPanel\.dataset\.commandActive/);
   assert.match(app, /syncActionReceipt\(view\)/);
+  assert.match(app, /function renderTurnCountdown\(view\)/);
   assert.match(app, /actionReceipt\?\.text/);
 });
 

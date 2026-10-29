@@ -16,13 +16,13 @@ import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType 
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js?v=20261030-turn-close-2";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView } from "./online-duel-ui.js?v=20261030-turn-clock-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
   "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "duelPanel", "aiPanel", "playerPanel",
-  "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
+  "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
   "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "duelHint", "duelError", "versusStage", "versusPhase",
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
@@ -53,6 +53,7 @@ let actionReceipt = null;
 let actionReceiptTimer = null;
 let lastResponseSoundId = null;
 let responseCountdownInterval = null;
+let turnCountdownInterval = null;
 let connectionCountdownInterval = null;
 let pendingActionCue = null;
 let lastFieldPositions = new Map();
@@ -1056,6 +1057,34 @@ function renderCommands(view, model) {
   }
 }
 
+function clearTurnCountdown() {
+  if (turnCountdownInterval) window.clearInterval(turnCountdownInterval);
+  turnCountdownInterval = null;
+}
+
+function paintTurnCountdown(view = client.view) {
+  const clock = onlineTurnTimerView(view);
+  elements.turnClock.hidden = !clock;
+  if (!clock) {
+    clearTurnCountdown();
+    return null;
+  }
+  elements.turnClock.textContent = clock.clock;
+  elements.turnClock.title = clock.label;
+  elements.turnClock.setAttribute("aria-label", clock.label);
+  elements.turnClock.dataset.owner = clock.ownTurn ? "self" : "opponent";
+  elements.turnClock.dataset.danger = String(clock.danger);
+  elements.turnClock.dataset.paused = String(clock.paused);
+  return clock;
+}
+
+function renderTurnCountdown(view) {
+  clearTurnCountdown();
+  const clock = paintTurnCountdown(view);
+  if (!clock || clock.paused) return;
+  turnCountdownInterval = window.setInterval(() => paintTurnCountdown(), 250);
+}
+
 function responseRendererOptions(view) {
   return { choice: trapChoice, traps: view.players[view.viewerSeatId].spellTrapZone.map(onlineDisplayCard), activationText: trapActivationText };
 }
@@ -1404,6 +1433,7 @@ function render(view) {
   syncRoomUrl(view.roomCode);
   renderRoom(view);
   syncActionReceipt(view);
+  renderTurnCountdown(view);
   elements.duelPanel.hidden = view.status === "waiting";
   elements.handPanel.hidden = view.status === "waiting";
   if (view.status === "waiting") return;
