@@ -1,6 +1,6 @@
 import { createCardElement } from "./card-renderer.js";
-import { renderHandCards } from "./hand-renderer.js";
-import { renderMonsterZones, renderSupportZones } from "./field-renderer.js";
+import { renderHandCards } from "./hand-renderer.js?v=20261030-interaction-v2-2";
+import { renderMonsterZones, renderSupportZones } from "./field-renderer.js?v=20261030-interaction-v2-2";
 import { buildDuelControlsView } from "./control-renderer.js";
 import { renderBattlePreviewElement } from "./battle-preview-renderer.js";
 import { createOnlineActionRunner } from "./online-action-runner.js";
@@ -16,7 +16,7 @@ import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType 
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "./online-duel-ui.js?v=20261030-interaction-v2-2";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -866,23 +866,20 @@ function renderBoard(view, model) {
     onMoveCard: (card, direction) => { handOrder = shiftHandCard(handOrder, card.uid, direction); render(client.view); },
     onInsertCard: (uid, beforeUid) => { handOrder = insertHandCard(handOrder, uid, beforeUid); render(client.view); },
     selectedZone: "hand", selectedUid: selection?.cardId,
-    actionForCard: (card) => {
-      const ready = canAct && onlineCardActions(view, card.uid).length > 0;
-      return { ok: ready, label: view.gameOver ? "已结束" : ready ? card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "发动" : "暂不可用", reason: view.gameOver ? "决斗已结束，可查看卡牌详情" : !canAct ? "等待对手行动，可查看卡牌详情" : ready ? `单击选择 · 双击${card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "发动"}` : "当前阶段或场上条件不满足" };
-    },
+    actionForCard: (card) => onlineHandActionView(view, card.uid),
     onCardClick: (card) => chooseHandCard(card.uid, { directActivate: directActivationTracker.register(`hand:${card.uid}`) }),
     onCardDoubleClick: (card) => chooseHandCard(card.uid, { directActivate: true }),
     onCardDetail: (card) => showCards([onlineCard(view, card.uid)], card.name)
   });
-  const readyCards = canAct ? state.player.hand.filter((card) => onlineCardActions(view, card.uid).length) : [];
-  if (!readyCards.some((card) => card.uid === locatedReadyCardId)) locatedReadyCardId = null;
-  elements.handPanel.dataset.readyCount = String(readyCards.length);
+  const actionSummary = onlineTurnActionSummary(view);
+  if (![...actionSummary.handCardIds.map((id) => `hand:${id}`), ...actionSummary.attackCardIds.map((id) => `field:${id}`)].includes(locatedReadyCardId)) locatedReadyCardId = null;
+  elements.handPanel.dataset.readyCount = String(actionSummary.total);
   elements.handPanel.dataset.hasSelection = String(Boolean(selection));
   elements.handPanel.dataset.attention = model?.stage || "none";
   elements.handCount.textContent = `${state.player.handCount} 张`;
-  elements.handReadyCount.textContent = `${readyCards.length} 可操作`;
-  elements.handReadyJump.disabled = readyCards.length === 0;
-  elements.handReadyJump.title = readyCards.length ? "定位下一张可操作手牌" : "当前没有可操作手牌";
+  elements.handReadyCount.textContent = actionSummary.label;
+  elements.handReadyJump.disabled = actionSummary.total === 0;
+  elements.handReadyJump.title = actionSummary.total ? `定位下一项可行动卡牌 · ${actionSummary.detail}` : "当前没有可执行的回合操作";
   elements.handReadyJump.setAttribute("aria-label", elements.handReadyJump.title);
   elements.aiPanel.classList.remove("online-response-direct-target");
   elements.playerPanel.classList.remove("online-response-direct-target");
@@ -899,16 +896,19 @@ function renderBoard(view, model) {
   }
 }
 
-function locateNextReadyHandCard() {
-  const cards = [...elements.hand.querySelectorAll(".card.action-ready:not(.action-blocked)")];
-  if (!cards.length) return;
-  const current = cards.findIndex((card) => card.dataset.cardUid === locatedReadyCardId);
-  const card = cards[(current + 1) % cards.length];
-  locatedReadyCardId = card.dataset.cardUid;
-  card.focus({ preventScroll: true });
-  card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-  card.classList.remove("online-ready-located");
-  requestAnimationFrame(() => card.classList.add("online-ready-located"));
+function locateNextReadyAction() {
+  const actions = [
+    ...[...elements.hand.querySelectorAll(".card.action-ready:not(.action-blocked)")].map((element) => ({ key: `hand:${element.dataset.cardUid}`, element })),
+    ...[...elements.playerField.querySelectorAll('.slot[data-attack-state="ready"]')].map((element) => ({ key: `field:${element.dataset.cardUid || element.dataset.index}`, element }))
+  ];
+  if (!actions.length) return;
+  const current = actions.findIndex((entry) => entry.key === locatedReadyCardId);
+  const next = actions[(current + 1) % actions.length];
+  locatedReadyCardId = next.key;
+  next.element.focus({ preventScroll: true });
+  next.element.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  next.element.classList.remove("online-ready-located");
+  requestAnimationFrame(() => next.element.classList.add("online-ready-located"));
 }
 
 function renderCommands(view, model) {
@@ -1451,11 +1451,16 @@ elements.cardInspector.addEventListener("close", () => {
   if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
 });
 elements.handSortType.addEventListener("click", () => { handOrder = sortHandCardsByType(onlineBoardState(client.view, selection).player.hand, handOrder).map((card) => card.uid); render(client.view); });
-elements.handReadyJump.addEventListener("click", locateNextReadyHandCard);
+elements.handReadyJump.addEventListener("click", locateNextReadyAction);
 elements.hand.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key) || event.target.closest("button")) return;
   const card = event.target.closest(".card[data-card-uid]");
-  if (card) { event.preventDefault(); chooseHandCard(card.dataset.cardUid); }
+  if (!card) return;
+  event.preventDefault();
+  const cardId = card.dataset.cardUid;
+  const model = onlineSelectionModel(client.view, selection);
+  if (selection?.cardId === cardId && model?.action) void sendAction(model.action);
+  else if (selection?.cardId !== cardId) chooseHandCard(cardId);
 });
 elements.soundBtn?.addEventListener("click", () => {
   const enabled = toggleAudioSound({ previewSound: "click" });

@@ -569,6 +569,77 @@ export function onlineCardActions(view, cardId) {
     .filter((action) => (action.cardId || action.attackerCardId) === cardId);
 }
 
+function handActionLabel(card, actions = []) {
+  const types = new Set(actions.map((action) => action.type));
+  if (types.has("SUMMON_MONSTER")) return "召唤";
+  if (types.has("SET_TRAP")) return "盖放";
+  if (card?.type === "spell") return "发动";
+  return "可操作";
+}
+
+export function onlineHandActionView(view, cardId) {
+  const self = view?.players?.[view?.viewerSeatId];
+  const card = self?.hand?.find((entry) => entry?.id === cardId);
+  if (!card) return { ok: false, ruleOk: false, label: "不可用", reason: "这张卡已不在手牌中。", target: { count: 0, scope: "" } };
+  if (view?.gameOver) return { ok: false, ruleOk: false, label: "已结束", reason: "决斗已结束，可查看卡牌详情。", target: { count: 0, scope: "" } };
+  if (view?.machine?.responseWindow) return { ok: false, ruleOk: false, label: "响应中", reason: "先完成当前响应，再进行回合操作。", target: { count: 0, scope: "" } };
+  if (view?.turn?.playerId !== view?.viewerSeatId) return { ok: false, ruleOk: false, label: "对手回合", reason: "等待对手行动；仍可整理手牌或查看详情。", target: { count: 0, scope: "" } };
+
+  const actions = onlineCardActions(view, cardId);
+  const targetIds = [...new Set(actions.map((action) => action.targetCardId).filter(Boolean))];
+  if (actions.length) {
+    const placement = actions.some((action) => ["SUMMON_MONSTER", "SET_TRAP"].includes(action.type));
+    const label = handActionLabel(card, actions);
+    const reason = targetIds.length > 1
+      ? `单击后从 ${targetIds.length} 个合法目标中选择。`
+      : targetIds.length === 1
+        ? "唯一合法目标已锁定，双击可直接执行。"
+        : placement
+          ? "双击使用推荐落点，单击可自行选择位置。"
+          : "双击可直接执行，单击可先查看操作。";
+    return {
+      ok: true,
+      ruleOk: true,
+      label,
+      reason,
+      target: { count: targetIds.length, scope: targetIds.length ? "field" : "" },
+      actionTypes: [...new Set(actions.map((action) => action.type))]
+    };
+  }
+
+  const phase = view?.turn?.phase;
+  const reason = phase !== "main"
+    ? `${card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "魔法发动"}需要在主要阶段进行。`
+    : card.type === "monster"
+      ? "召唤位、祭品或本回合召唤条件不足。"
+      : card.type === "trap"
+        ? "魔陷区没有可用位置，或当前盖放条件不足。"
+        : "当前发动条件、合法目标或所需资源不足。";
+  return { ok: false, ruleOk: false, label: "暂不可用", reason, target: { count: 0, scope: "" }, actionTypes: [] };
+}
+
+export function onlineTurnActionSummary(view) {
+  const self = view?.players?.[view?.viewerSeatId];
+  if (!self || view?.gameOver || view?.turn?.playerId !== view?.viewerSeatId || view?.machine?.responseWindow) {
+    return { handCardIds: [], attackCardIds: [], total: 0, label: "0 可行动", detail: "当前没有可执行的回合操作" };
+  }
+  const handCardIds = self.hand
+    .filter((card) => card && onlineCardActions(view, card.id).length > 0)
+    .map((card) => card.id);
+  const attackCardIds = self.monsterZone
+    .filter(Boolean)
+    .filter((card) => onlineAttackIntent(view, onlineSelectionModel(view, selectOnlineCard(view, card.id))).available)
+    .map((card) => card.id);
+  const total = handCardIds.length + attackCardIds.length;
+  return {
+    handCardIds,
+    attackCardIds,
+    total,
+    label: `${total} 可行动`,
+    detail: `${handCardIds.length} 张手牌 · ${attackCardIds.length} 只怪兽可发起攻击`
+  };
+}
+
 export function onlineAttackIntent(view, model) {
   const attacks = model?.actions?.filter((action) => action.type === "DECLARE_ATTACK") || [];
   const ownTurn = view?.turn?.playerId === view?.viewerSeatId;

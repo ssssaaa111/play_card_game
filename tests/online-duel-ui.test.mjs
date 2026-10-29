@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -21,6 +21,57 @@ test("viewer identity keeps two tabs visually tied to their own reserved seats",
   view.opponentSeatId = "p1";
   assert.deepEqual(onlineIdentityView(view), {
     name: "月见", seatId: "p2", seatNumber: "2P", seatRole: "挑战者", opponentName: "星野"
+  });
+});
+
+test("online action guidance counts playable hand cards and attack-ready monsters for either seat", () => {
+  const view = snapshot();
+  view.legalActions.can = { endTurn: true };
+  view.players.p1.hand = [
+    { ...monster("hand:monster"), type: "monster" },
+    { id: "hand:spell", name: "双向星芒", type: "spell" }
+  ];
+  view.players.p1.monsterZone[0] = { ...monster("field:p1"), mode: "attack", used: false };
+  view.players.p2.monsterZone[0] = { ...monster("field:p2-a") };
+  view.players.p2.monsterZone[1] = { ...monster("field:p2-b") };
+  view.legalActions.actions = {
+    summon: [{ type: "SUMMON_MONSTER", cardId: "hand:monster", index: 1 }],
+    spell: [
+      { type: "ACTIVATE_SPELL", cardId: "hand:spell", targetCardId: "field:p2-a" },
+      { type: "ACTIVATE_SPELL", cardId: "hand:spell", targetCardId: "field:p2-b" }
+    ]
+  };
+
+  assert.deepEqual(onlineHandActionView(view, "hand:monster"), {
+    ok: true,
+    ruleOk: true,
+    label: "召唤",
+    reason: "双击使用推荐落点，单击可自行选择位置。",
+    target: { count: 0, scope: "" },
+    actionTypes: ["SUMMON_MONSTER"]
+  });
+  assert.equal(onlineHandActionView(view, "hand:spell").reason, "单击后从 2 个合法目标中选择。");
+  assert.deepEqual(onlineTurnActionSummary(view), {
+    handCardIds: ["hand:monster", "hand:spell"],
+    attackCardIds: ["field:p1"],
+    total: 3,
+    label: "3 可行动",
+    detail: "2 张手牌 · 1 只怪兽可发起攻击"
+  });
+
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  view.turn.playerId = "p2";
+  view.players.p2.hand = [{ id: "hand:p2", name: "挑战者手牌", type: "trap" }];
+  view.players.p2.monsterZone[0] = { ...monster("field:p2"), mode: "attack", used: false };
+  view.players.p2.monsterZone[1] = null;
+  view.legalActions.actions = { trap: [{ type: "SET_TRAP", cardId: "hand:p2", index: 2 }] };
+  assert.deepEqual(onlineTurnActionSummary(view), {
+    handCardIds: ["hand:p2"],
+    attackCardIds: ["field:p2"],
+    total: 2,
+    label: "2 可行动",
+    detail: "1 张手牌 · 1 只怪兽可发起攻击"
   });
 });
 

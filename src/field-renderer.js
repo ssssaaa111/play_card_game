@@ -356,6 +356,7 @@ export function renderMonsterZones({
     slot.dataset.owner = owner;
     slot.dataset.index = String(index);
     slot.dataset.testid = `${owner}-field-${index}`;
+    if (card) slot.dataset.cardUid = card.uid || card.id || "";
     addClasses(slot, view.slotClasses);
     if (view.materialState) slot.dataset.materialState = view.materialState;
     if (view.materialReason) slot.dataset.materialReason = view.materialReason;

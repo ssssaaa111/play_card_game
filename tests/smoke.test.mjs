@@ -83,8 +83,11 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   const css = readProjectFile("online-duel.css");
   const app = readProjectFile("src/online-duel-app.js");
 
-  assert.match(html, /<link rel="stylesheet" href="online-duel\.css"/);
-  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js"><\/script>/);
+  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=20261030-interaction-v2"/);
+  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=20261030-interaction-v2-2"><\/script>/);
+  assert.match(app, /hand-renderer\.js\?v=20261030-interaction-v2-2/);
+  assert.match(app, /field-renderer\.js\?v=20261030-interaction-v2-2/);
+  assert.match(app, /online-duel-ui\.js\?v=20261030-interaction-v2-2/);
   assert.match(html, /id="lobbyPanel"/);
   assert.match(html, /id="authPanel"/);
   assert.match(html, /id="authForm"[^>]*autocomplete="on"/);
@@ -105,11 +108,11 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
   assert.match(html, /href="duel-table\.css"/);
   assert.match(html, /href="duel-focus\.css"/);
-  assert.match(app, /import \{ renderHandCards \} from "\.\/hand-renderer\.js"/);
+  assert.match(app, /import \{ renderHandCards \} from "\.\/hand-renderer\.js\?v=20261030-interaction-v2-2"/);
   assert.match(app, /client\.requestRematch\(\)/);
   assert.match(app, /onlineSeriesView\(view\)/);
   assert.match(app, /elements\.resultReopenButton\.addEventListener\("click", openOnlineResult\)/);
-  assert.match(app, /import \{ renderMonsterZones, renderSupportZones \} from "\.\/field-renderer\.js"/);
+  assert.match(app, /import \{ renderMonsterZones, renderSupportZones \} from "\.\/field-renderer\.js\?v=20261030-interaction-v2-2"/);
   assert.match(app, /import \{ monsterAssets \} from "\.\/data\.js"/);
   assert.match(app, /onlineSelectionModel\(client\.view, selection\)\?\.action/);
   assert.match(app, /localStorage\.setItem\(key, JSON\.stringify\(client\.session\)\)/);
@@ -127,8 +130,8 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /async function prepareSelectedAttack\(\)/);
   assert.match(app, /fieldAttackBtn\.addEventListener\("click", prepareSelectedAttack\)/);
   assert.match(app, /进入战斗阶段并发起攻击/);
-  assert.match(app, /function locateNextReadyHandCard\(\)/);
-  assert.match(app, /handReadyJump\.addEventListener\("click", locateNextReadyHandCard\)/);
+  assert.match(app, /function locateNextReadyAction\(\)/);
+  assert.match(app, /handReadyJump\.addEventListener\("click", locateNextReadyAction\)/);
   assert.match(app, /battleButton\.dataset\.currentPhase/);
   assert.match(app, /handPanel\.dataset\.commandActive/);
   assert.match(app, /syncActionReceipt\(view\)/);

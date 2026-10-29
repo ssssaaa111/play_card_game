@@ -179,7 +179,7 @@ body[data-online-viewer-seat="p2"] .player-card[data-online-role="self"] .online
 .hand-ready-jump:not(:disabled):hover, .hand-ready-jump:not(:disabled):focus-visible { border-color: rgba(246,189,96,.68); background: rgba(71,48,12,.76); color: #fff0c8; transform: translateY(-1px); outline: none; }
 .hand-ready-jump:not(:disabled) small::after { content: "  ›"; color: var(--gold); }
 .hand-ready-jump:disabled { cursor: default; }
-.card.online-ready-located { animation: online-ready-locate .72s ease-out; }
+.card.online-ready-located, .slot.online-ready-located { animation: online-ready-locate .72s ease-out; }
 @keyframes online-ready-locate { 0% { box-shadow: 0 0 0 0 rgba(246,189,96,.82), 0 12px 28px rgba(0,0,0,.38); } 45% { box-shadow: 0 0 0 5px rgba(246,189,96,.34), 0 12px 28px rgba(0,0,0,.38); } 100% { box-shadow: 0 0 0 1px rgba(246,189,96,.08), 0 12px 28px rgba(0,0,0,.38); } }
 #app .duel-table #duelHint[data-kind="receipt"] { border-color: rgba(246,189,96,.72); color: #fff0c8; background: rgba(54,35,10,.9); box-shadow: 0 0 0 3px rgba(246,189,96,.08), 0 0 28px rgba(246,189,96,.2); animation: online-receipt-in .28s ease-out; }
 #app .duel-table #duelHint[data-kind="receipt"][data-actor="opponent"] { border-color: rgba(239,71,111,.68); color: #ffd9e2; background: rgba(57,13,25,.9); box-shadow: 0 0 0 3px rgba(239,71,111,.08), 0 0 28px rgba(239,71,111,.2); }
@@ -418,7 +418,7 @@ body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).targe
   50% { filter: brightness(1.24); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .online-inspector-panel, .online-inspector-backdrop, .card.online-ready-located, #app .duel-table #duelHint[data-kind="receipt"], #app .duel-table #duelHint[data-kind="battle-result"], body[data-online-response="waiting"] #app .duel-table #duelHint[data-kind="status"]::before, .player-card[data-battle-impact], .zone-row[data-battle-impact], #app .hand .card.action-ready, #app .duel-table :is(.slot, .trap-slot), .connection-pill[data-state="reconnecting"], .online-connection-progress i { animation: none; }
+  .online-inspector-panel, .online-inspector-backdrop, .card.online-ready-located, .slot.online-ready-located, #app .duel-table #duelHint[data-kind="receipt"], #app .duel-table #duelHint[data-kind="battle-result"], body[data-online-response="waiting"] #app .duel-table #duelHint[data-kind="status"]::before, .player-card[data-battle-impact], .zone-row[data-battle-impact], #app .hand .card.action-ready, #app .duel-table :is(.slot, .trap-slot), .connection-pill[data-state="reconnecting"], .online-connection-progress i { animation: none; }
 }
 
 body[data-online-status="playing"] > .online-effect-layer { z-index: 140; }
