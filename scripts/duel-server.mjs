@@ -17,12 +17,14 @@ import { DuelRoomStore } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import {
   ONLINE_AUTH_COOKIE,
+  OnlineAuthAttemptLimiter,
   OnlineAuthError,
   OnlineAuthStore,
   authCookie,
   clearAuthCookie,
   parseCookieHeader
 } from "../server/online-auth.js";
+import { isLoopbackHost, onlineOriginAllowed } from "../server/online-origin.js";
 
 const hostArgument = process.argv.find((argument) => argument.startsWith("--host="));
 const portArgument = process.argv.find((argument) => argument.startsWith("--port="));
@@ -32,6 +34,13 @@ const port = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPo
 const authStorePath = process.env.DUEL_AUTH_STORE || fileURLToPath(new URL("../.data/online-auth.json", import.meta.url));
 const authStore = new OnlineAuthStore({ filePath: authStorePath });
 const configuredOrigins = new Set(String(process.env.DUEL_ALLOWED_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean));
+const trustProxy = process.env.DUEL_TRUST_PROXY === "1";
+const configuredAuthAttemptLimit = Number.parseInt(process.env.DUEL_AUTH_ATTEMPT_LIMIT || "8", 10);
+const configuredAuthWindowMs = Number.parseInt(process.env.DUEL_AUTH_WINDOW_MS || "600000", 10);
+const authAttemptLimiter = new OnlineAuthAttemptLimiter({
+  limit: Number.isFinite(configuredAuthAttemptLimit) ? configuredAuthAttemptLimit : 8,
+  windowMs: Number.isFinite(configuredAuthWindowMs) ? configuredAuthWindowMs : 600_000
+});
 const configuredDisconnectGraceMs = Number.parseInt(process.env.DUEL_DISCONNECT_GRACE_MS || "60000", 10);
 const disconnectGraceMs = Number.isFinite(configuredDisconnectGraceMs) ? Math.max(1_000, configuredDisconnectGraceMs) : 60_000;
 const responseDemo = process.argv.includes("--scenario=trap-response");
@@ -49,18 +58,26 @@ const responseTimers = new Map();
 const disconnectTimers = new Map();
 
 function requestIsSecure(request) {
-  return request.socket?.encrypted === true || String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "https";
+  return request.socket?.encrypted === true || (
+    trustProxy && String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "https"
+  );
 }
 
 function originAllowed(origin = "") {
-  if (!origin) return true;
-  if (configuredOrigins.has(origin)) return true;
-  try {
-    const url = new URL(origin);
-    return ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
-  } catch {
-    return false;
+  return onlineOriginAllowed(origin, { allowedOrigins: configuredOrigins, allowLoopback: isLoopbackHost(host) });
+}
+
+function requestAddress(request) {
+  if (trustProxy) {
+    const forwarded = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
+    if (forwarded) return forwarded;
   }
+  return String(request.socket?.remoteAddress || "unknown");
+}
+
+function loginAttemptKey(request, handle = "") {
+  const normalizedHandle = String(handle || "").trim().toLowerCase().slice(0, 64);
+  return `login:${requestAddress(request)}:${normalizedHandle || "unknown"}`;
 }
 
 function corsHeaders(request) {
@@ -290,6 +307,7 @@ const httpServer = createServer(async (request, response) => {
       return;
     }
     if (requestUrl.pathname === "/auth/register" && request.method === "POST") {
+      authAttemptLimiter.attempt(`register:${requestAddress(request)}`);
       const result = authStore.register(await readJsonBody(request));
       sendJson(request, response, 201, { authenticated: true, account: result.account }, {
         "Set-Cookie": authCookie(result.token, { secure: requestIsSecure(request) })
@@ -297,7 +315,11 @@ const httpServer = createServer(async (request, response) => {
       return;
     }
     if (requestUrl.pathname === "/auth/login" && request.method === "POST") {
-      const result = authStore.login(await readJsonBody(request));
+      const body = await readJsonBody(request);
+      const attemptKey = loginAttemptKey(request, body.handle);
+      authAttemptLimiter.attempt(attemptKey);
+      const result = authStore.login(body);
+      authAttemptLimiter.reset(attemptKey);
       sendJson(request, response, 200, { authenticated: true, account: result.account }, {
         "Set-Cookie": authCookie(result.token, { secure: requestIsSecure(request) })
       });
@@ -314,10 +336,28 @@ const httpServer = createServer(async (request, response) => {
   } catch (error) {
     const status = error instanceof OnlineAuthError ? error.status : 500;
     if (!(error instanceof OnlineAuthError)) console.error(error);
-    sendJson(request, response, status, { error: { code: error.code || "SERVER_ERROR", message: error.message || "Unexpected server error" } });
+    const retryAfterSeconds = error instanceof OnlineAuthError ? error.retryAfterSeconds : null;
+    sendJson(request, response, status, {
+      error: {
+        code: error.code || "SERVER_ERROR",
+        message: error.message || "Unexpected server error",
+        ...(retryAfterSeconds ? { retryAfterSeconds } : {})
+      }
+    }, retryAfterSeconds ? { "Retry-After": String(retryAfterSeconds) } : {});
   }
 });
-const webSocketServer = new WebSocketServer({ server: httpServer, path: "/duel", maxPayload: 32_768 });
+const webSocketServer = new WebSocketServer({
+  server: httpServer,
+  path: "/duel",
+  maxPayload: 32_768,
+  verifyClient: ({ origin }, done) => {
+    if (!originAllowed(String(origin || ""))) {
+      done(false, 403, "Origin not allowed");
+      return;
+    }
+    done(true);
+  }
+});
 webSocketServer.on("connection", (socket, request) => {
   const account = authStore.accountForCookieHeader(request.headers.cookie || "");
   const connection = { id: randomUUID(), roomCode: null, seatId: null, account };
