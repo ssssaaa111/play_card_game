@@ -31,12 +31,13 @@ function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 
   return { room, submit, declare, respond, defender };
 }
 
-function summonBattle({ now, responseTimeoutMs, responderLp = 4000 } = {}) {
+function summonBattle({ now, responseTimeoutMs, responderLp = 4000, counter = false } = {}) {
   const card = (id, uid) => ({ ...cardById(id), uid, mode: "attack", used: false, tempAtk: 0, tempDef: 0 });
   const p1 = createDuelist("p1"), p2 = createDuelist("p2");
   p1.traps[0] = card("summon-flare", "summon-trap");
   p1.lp = responderLp;
   p2.hand = [card("ember-drake", "summoned-monster")];
+  if (counter) p2.traps[0] = card("chain-nullifier", "chain-trap");
   for (const [id, player] of [["p1", p1], ["p2", p2]]) {
     player.deck = Array.from({ length: 5 }, (_, index) => card("iron-guardian", `${id}:deck:${index}`));
   }
@@ -56,7 +57,12 @@ function summonBattle({ now, responseTimeoutMs, responderLp = 4000 } = {}) {
     triggerEventId: room.viewFor("p1").summonResponse.triggerEventId,
     ...(type === "RESPOND_SUMMON_TRAP" ? { cardId: "summon-trap" } : {})
   });
-  return { room, submit, summon, respond };
+  const counterResponse = (type = "RESPOND_CHAIN_TRAP") => submit("two", {
+    type,
+    triggerEventId: room.viewFor("p2").chainResponse.triggerEventId,
+    ...(type === "RESPOND_CHAIN_TRAP" ? { cardId: "chain-trap" } : {})
+  });
+  return { room, submit, summon, respond, counterResponse };
 }
 
 test("response commands bind the authenticated seat and discard forged effects/targets", () => {
@@ -303,6 +309,53 @@ test("a summon trap set through the normal online turn flow opens the responder 
   assert.equal(onlineTrapResponseChoice(responder)?.selectedIndex, 0);
 });
 
+test("the summoner can chain a nullifier to the summon trap and resolve CL2 before CL1", () => {
+  const { room, summon, respond, counterResponse } = summonBattle({ counter: true });
+  summon();
+  respond();
+
+  const counterView = room.viewFor("p2");
+  assert.equal(counterView.summonResponse, null);
+  assert.equal(counterView.chainResponse.eventName, "chain");
+  assert.equal(counterView.chainResponse.targetCardId, "summon-trap");
+  assert.deepEqual(counterView.chainResponse.candidates, [{ index: 0, cardId: "chain-trap" }]);
+  assert.equal(counterView.machine.chainLength, 1);
+  assert.equal(counterView.machine.chain[0].card.templateId, "summon-flare");
+  assert.equal(counterView.players.p2.lp, 4000, "CL1 waits instead of resolving before the counter choice");
+
+  counterResponse();
+  const after = room.viewFor("p2");
+  assert.equal(after.players.p2.lp, 4000);
+  assert.equal(after.machine.responseWindow, null);
+  assert.equal(after.machine.chainLength, 0);
+  assert.equal(after.players.p1.grave[0].templateId, "summon-flare");
+  assert.equal(after.players.p2.grave[0].templateId, "chain-nullifier");
+  assert.ok(after.recentEvents.some((event) => event.type === "EFFECT_SKIPPED" && event.cardId === "summon-trap"));
+});
+
+test("passing or timing out on the chain response resolves the original summon trap once", () => {
+  let currentTime = 1_000;
+  const passed = summonBattle({ counter: true });
+  passed.summon();
+  passed.respond();
+  passed.counterResponse("PASS_CHAIN_RESPONSE");
+  assert.equal(passed.room.viewFor("p2").players.p2.lp, 3600);
+  assert.equal(passed.room.viewFor("p2").players.p2.spellTrapZone[0].templateId, "chain-nullifier");
+
+  const timed = summonBattle({ counter: true, now: () => currentTime, responseTimeoutMs: 5_000 });
+  timed.summon();
+  const firstDeadline = timed.room.viewFor("p1").responseTimer.deadlineAt;
+  currentTime = 2_000;
+  timed.respond();
+  const chainView = timed.room.viewFor("p2");
+  assert.equal(firstDeadline, 6_000);
+  assert.equal(chainView.responseTimer.deadlineAt, 7_000, "the new priority holder receives a fresh response window");
+  currentTime = 7_000;
+  assert.equal(timed.room.expireAttackResponse(), true);
+  assert.equal(timed.room.viewFor("p2").players.p2.lp, 3600);
+  assert.equal(timed.room.viewFor("p2").machine.responseWindow, null);
+});
+
 test("summon responses can be passed or expire without replaying the summon", () => {
   let currentTime = 1_000;
   const passed = summonBattle();
@@ -335,7 +388,7 @@ test("normal online deck includes supported traps, QA openings are explicit and 
     assert.equal(cards.length, 40);
     assert.ok(cards.some((card) => card.type === "trap"));
     assert.ok(cards.some((card) => card.trigger === "summonBurn"));
-    assert.ok(!cards.some((card) => card.trigger === "chainNegate"));
+    assert.ok(cards.some((card) => card.trigger === "chainNegate"));
   }
   assert.equal(state.cards[state.players.p2.hand[0]].templateId, "mirror-snare");
 });

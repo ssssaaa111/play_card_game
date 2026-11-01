@@ -41,6 +41,17 @@ test("appends the selected response as a pending chain link", () => {
   });
 });
 
+test("allows a realtime duel to replace the single-player AI owner label", () => {
+  const entries = buildChainStackEntries({
+    chain: [{ linkId: 1, playerId: "ai", cardId: "mirror-runtime" }],
+    findCard: () => ({ id: "mirror-snare", name: "镜光反制" }),
+    ownerLabels: { player: "你", ai: "对手" }
+  });
+
+  assert.equal(entries[0].owner, "ai");
+  assert.equal(entries[0].ownerLabel, "对手");
+});
+
 test("describes chain resolution in last-in-first-out order", () => {
   const entries = [
     { chainIndex: 1 },

@@ -15,7 +15,7 @@ import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType 
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261030-summon-response-4";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261102-chain-response-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -27,7 +27,7 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
+  "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChain", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
   "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
   "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "phaseStage"
@@ -1085,7 +1085,21 @@ function renderTurnCountdown(view) {
 }
 
 function responseRendererOptions(view) {
-  return { choice: trapChoice, traps: view.players[view.viewerSeatId].spellTrapZone.map(onlineDisplayCard), activationText: trapActivationText };
+  const chain = (view.machine?.chain || []).map((link) => ({
+    ...link,
+    playerId: ownerForSeat(view, link.playerId)
+  }));
+  return {
+    choice: trapChoice,
+    traps: view.players[view.viewerSeatId].spellTrapZone.map(onlineDisplayCard),
+    chain,
+    findCard: (cardId) => {
+      const card = (view.machine?.chain || []).find((link) => link.cardId === cardId)?.card || onlineCard(view, cardId);
+      return card ? onlineDisplayCard(card) : null;
+    },
+    ownerLabels: { player: "你", ai: "对手" },
+    activationText: trapActivationText
+  };
 }
 
 function renderResponseBattle(view) {
@@ -1125,16 +1139,17 @@ function selectResponse(index) {
 }
 
 function respondToTrap(activate, index = trapChoice?.selectedIndex) {
-  const response = client.view?.attackResponse || client.view?.summonResponse;
+  const response = client.view?.attackResponse || client.view?.summonResponse || client.view?.chainResponse;
   if (!response || actionPending) return;
   const candidate = response.candidates.find((entry) => entry.index === index);
   if (activate && !candidate) return;
   const summon = response.eventName === "summon";
+  const chain = response.eventName === "chain";
   return sendAction({
     type: activate
-      ? (summon ? "RESPOND_SUMMON_TRAP" : "RESPOND_TRAP")
-      : (summon ? "PASS_SUMMON_RESPONSE" : "PASS_ATTACK_RESPONSE"),
-    ...(summon ? { triggerEventId: response.triggerEventId } : { declarationEventId: response.declarationEventId }),
+      ? (chain ? "RESPOND_CHAIN_TRAP" : summon ? "RESPOND_SUMMON_TRAP" : "RESPOND_TRAP")
+      : (chain ? "PASS_CHAIN_RESPONSE" : summon ? "PASS_SUMMON_RESPONSE" : "PASS_ATTACK_RESPONSE"),
+    ...(summon || chain ? { triggerEventId: response.triggerEventId } : { declarationEventId: response.declarationEventId }),
     ...(activate ? { cardId: candidate.cardId } : {})
   });
 }
@@ -1172,33 +1187,42 @@ function renderResponseCountdown(view) {
 
 function renderResponse(view) {
   renderResponseBattle(view);
-  const activeResponse = view.attackResponse || view.summonResponse;
+  const activeResponse = view.attackResponse || view.summonResponse || view.chainResponse;
   const summonResponse = activeResponse?.eventName === "summon";
+  const chainResponse = activeResponse?.eventName === "chain";
   elements.onlineResponse.dataset.responseAvailable = String(Boolean(activeResponse));
   elements.onlineResponse.dataset.responseCandidates = String(activeResponse?.candidates?.length || 0);
   elements.onlineResponse.dataset.responsePrompt = activeResponse?.eventName || view.machine.responseWindow?.prompt || "none";
-  const responseSoundId = activeResponse?.declarationEventId || activeResponse?.triggerEventId || null;
+  const responseEventId = activeResponse?.declarationEventId || activeResponse?.triggerEventId || null;
+  const responseSoundId = responseEventId ? `${responseEventId}:${activeResponse.eventName}:${view.machine?.chainLength || 0}` : null;
   if (responseSoundId && responseSoundId !== lastResponseSoundId) {
     lastResponseSoundId = responseSoundId;
     playSound("trap");
   } else if (!responseSoundId) lastResponseSoundId = null;
   if (trapChoice) {
     const panel = renderTrapResponsePanel({ document, ...responseRendererOptions(view), elements: {
-      chainText: elements.responseText, chainStatus: elements.responseStatus, chainYes: elements.responseActivate, chainChoices: elements.responseChoices
-    }, onSelect: selectResponse, onActivate: (index) => respondToTrap(true, index) });
+      chainText: elements.responseText, chainStatus: elements.responseStatus, chainYes: elements.responseActivate,
+      chainChoices: elements.responseChoices, chainStack: elements.responseChain
+    }, onSelect: selectResponse, onActivate: (index) => respondToTrap(true, index), onCardClick: (cardId) => {
+      const card = (view.machine?.chain || []).find((link) => link.cardId === cardId)?.card || onlineCard(view, cardId);
+      if (card) showCards([card], card.name);
+    } });
     elements.onlineResponse.dataset.responseMode = panel.singleChoice ? "single" : "multiple";
     elements.onlineResponse.classList.toggle("single-response", panel.singleChoice);
     elements.responseChoices.hidden = panel.choices.length === 0;
-    elements.responseKicker.textContent = summonResponse ? "SUMMON RESPONSE" : "ATTACK RESPONSE";
+    elements.responseKicker.textContent = chainResponse ? "CHAIN RESPONSE" : summonResponse ? "SUMMON RESPONSE" : "ATTACK RESPONSE";
     elements.responseTitle.textContent = panel.singleChoice
       ? (summonResponse ? "召唤完成 · 可发动一张陷阱" : "可发动一张陷阱")
-      : (summonResponse ? "选择本次召唤的响应" : "选择本次攻击的响应");
-    elements.responseLead.textContent = panel.singleChoice
+      : chainResponse ? `是否加入 CL${(view.machine?.chainLength || 0) + 1} 反制` : (summonResponse ? "选择本次召唤的响应" : "选择本次攻击的响应");
+    elements.responseLead.textContent = chainResponse
+      ? "对手陷阱已加入连锁；发动反制将无效上一段效果，放弃则立即按后进先出结算。"
+      : panel.singleChoice
       ? "唯一可用陷阱已自动选中，直接决定发动或放弃。"
       : `选择一张陷阱响应本次${summonResponse ? "召唤" : "攻击"}，双击候选可直接发动。`;
     elements.responseText.hidden = panel.singleChoice;
     elements.responseActivate.disabled ||= actionPending;
     elements.responsePass.disabled = actionPending;
+    elements.responsePass.textContent = chainResponse ? "不再连锁，开始结算" : "放弃响应，继续结算";
     elements.responseChoices.querySelectorAll("button").forEach((button) => {
       button.disabled = actionPending || panel.singleChoice;
       button.classList.toggle("single-ready", panel.singleChoice);
@@ -1217,10 +1241,10 @@ function renderResponse(view) {
   }
   const ownResponse = view.machine.responseWindow.playerId === view.viewerSeatId;
   document.body.dataset.onlineResponse = ownResponse ? "acting" : "waiting";
-  const responseLabel = view.machine.responseWindow.prompt === "summon" ? "召唤" : "攻击";
+  const responseLabel = chainResponse || view.machine.chainLength > 0 ? "连锁" : view.machine.responseWindow.prompt === "summon" ? "召唤" : "攻击";
   const text = ownResponse
-    ? `对手完成${responseLabel}，请选择陷阱或放弃响应。`
-    : `等待对手选择是否发动陷阱，${responseLabel}响应尚未结算。`;
+    ? responseLabel === "连锁" ? "对手发动了陷阱，请选择是否追加反制。" : `对手完成${responseLabel}，请选择陷阱或放弃响应。`
+    : `等待对手选择是否发动陷阱，${responseLabel}尚未结算。`;
   document.body.dataset.duelFocus = ownResponse ? "response" : "idle";
   elements.commandTitle.textContent = ownResponse ? `轮到你响应${responseLabel}` : "等待对手响应";
   elements.commandHint.textContent = text;

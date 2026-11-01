@@ -51,6 +51,18 @@ test("online action sanitizer binds commands to the authenticated seat", () => {
     triggerEventId: 17,
     cardId: "summon-trap"
   });
+  assert.deepEqual(sanitizeOnlineAction({
+    type: "RESPOND_CHAIN_TRAP",
+    playerId: "p1",
+    triggerEventId: 18,
+    cardId: "chain-trap",
+    targetEffectId: "forged-target"
+  }, { seatId: "p2", rivalId: "p1" }), {
+    type: "RESPOND_CHAIN_TRAP",
+    playerId: "p2",
+    triggerEventId: 18,
+    cardId: "chain-trap"
+  });
 });
 
 test("online protocol rejects server-only commands and malformed revisions", () => {
@@ -68,6 +80,10 @@ test("online protocol rejects server-only commands and malformed revisions", () 
   );
   assert.throws(
     () => sanitizeOnlineAction({ type: "PASS_SUMMON_RESPONSE", triggerEventId: "17" }, { seatId: "p1", rivalId: "p2" }),
+    /triggerEventId/
+  );
+  assert.throws(
+    () => sanitizeOnlineAction({ type: "PASS_CHAIN_RESPONSE", triggerEventId: 0 }, { seatId: "p1", rivalId: "p2" }),
     /triggerEventId/
   );
 });

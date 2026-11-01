@@ -1,6 +1,6 @@
 import { getLegalActions } from "./game-engine.js";
 import { otherSeatId, seatIdsForState } from "./duel-session.js";
-import { onlineAttackResponse, onlineSummonResponse } from "./online-response.js";
+import { onlineAttackResponse, onlineChainResponse, onlineSummonResponse } from "./online-response.js";
 
 const PUBLIC_EVENT_FIELDS = new Set([
   "id", "type", "playerId", "rivalId", "winnerId", "loserId", "loserIds",
@@ -157,7 +157,7 @@ function emptyLegalActions(state, viewerSeatId) {
   };
 }
 
-function publicMachineState(machine = {}) {
+function publicMachineState(machine = {}, state = {}) {
   const responseWindow = machine.responseWindow ? {
     playerId: machine.responseWindow.playerId,
     type: machine.responseWindow.type,
@@ -181,11 +181,20 @@ function publicMachineState(machine = {}) {
     direct: Boolean(machine.pendingAttack.direct),
     declarationEventId: machine.pendingAttack.declarationEventId
   } : null;
+  const chain = (machine.chain || []).map((link) => ({
+    linkId: link.linkId,
+    playerId: link.playerId,
+    cardId: link.cardId || null,
+    targetEffectId: link.targetEffectId || null,
+    committed: Boolean(link.committed),
+    card: link.cardId ? publicCard(state.cards?.[link.cardId]) : null
+  }));
   return {
     responseWindow,
     actionWindow,
     pendingAttack,
-    chainLength: machine.chain?.length || 0
+    chain,
+    chainLength: chain.length
   };
 }
 
@@ -229,9 +238,10 @@ export function buildDuelView(state, viewerSeatId, {
       phase: state.turn.phase,
       timing: state.machine?.timing || state.turn.phase
     },
-    machine: publicMachineState(state.machine),
+    machine: publicMachineState(state.machine, state),
     attackResponse: canRequestLegalActions ? onlineAttackResponse(state, viewerSeatId) : null,
     summonResponse: canRequestLegalActions ? onlineSummonResponse(state, viewerSeatId) : null,
+    chainResponse: canRequestLegalActions ? onlineChainResponse(state, viewerSeatId) : null,
     players: Object.fromEntries(seatIds.map((seatId) => [
       seatId,
       projectedPlayer(state, seatId, viewerSeatId)

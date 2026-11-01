@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="target-selection.css">
   <link rel="stylesheet" href="ui-polish.css">
   <link rel="stylesheet" href="duel-focus.css">
-  <link rel="stylesheet" href="online-duel.css?v=20261030-summon-response-4">
+  <link rel="stylesheet" href="online-duel.css?v=20261102-chain-response-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
@@ -129,6 +129,7 @@
       <p id="responseBattleSummary" class="online-response-summary" hidden></p>
       <p id="responseCountdown" class="online-response-countdown" role="timer" aria-live="off"></p>
       <p id="responseText" class="online-response-rule"></p>
+      <div id="responseChain" class="chain-stack" hidden></div>
       <div id="responseChoices" class="chain-choices"></div>
       <p id="responseStatus" role="status" aria-live="polite"></p>
       <p id="responseError" class="error-copy" role="alert"></p>
@@ -159,6 +160,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js?v=20261030-summon-response-4"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261102-chain-response-1"></script>
 </body>
 </html>

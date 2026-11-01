@@ -47,13 +47,16 @@ const configuredTurnTimeoutMs = Number.parseInt(process.env.DUEL_TURN_TIMEOUT_MS
 const turnTimeoutMs = Number.isFinite(configuredTurnTimeoutMs) ? Math.max(1_000, configuredTurnTimeoutMs) : 90_000;
 const responseDemo = process.argv.includes("--scenario=trap-response");
 const summonResponseDemo = process.argv.includes("--scenario=summon-response");
-if ((responseDemo || summonResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const chainResponseDemo = process.argv.includes("--scenario=chain-response");
+if ((responseDemo || summonResponseDemo || chainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
 const demoOpeningHands = responseDemo ? {
   p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"],
   p2: ["mirror-snare", "weakening-web", "storm-shift", "guard-sigil", "iron-guardian"]
-} : summonResponseDemo ? {
+} : summonResponseDemo || chainResponseDemo ? {
   p1: ["summon-flare", "solar-knight", "iron-guardian", "void-hound", "gale-mage"],
-  p2: ["ember-drake", "iron-guardian", "solar-knight", "void-hound", "gale-mage"]
+  p2: chainResponseDemo
+    ? ["chain-nullifier", "ember-drake", "iron-guardian", "solar-knight", "void-hound"]
+    : ["ember-drake", "iron-guardian", "solar-knight", "void-hound", "gale-mage"]
 } : null;
 const roomStore = new DuelRoomStore({ createRoom: (options) => new DuelRoom({
   ...options,

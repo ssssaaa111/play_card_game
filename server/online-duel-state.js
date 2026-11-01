@@ -5,15 +5,21 @@ import { PHASES, TIMINGS } from "../src/turn-state.js";
 import { trapDefinition } from "../src/traps.js";
 
 function onlineCardSupported(card) {
-  return card.type !== "trap" || ["attack", "direct", "summon"].includes(trapDefinition(card.trigger)?.event);
+  return card.type !== "trap" || ["attack", "direct", "summon", "chain"].includes(trapDefinition(card.trigger)?.event);
 }
 
 function onlineDeck(preset) {
   const cards = [];
+  const supported = buildDeck(preset).filter(onlineCardSupported);
   while (cards.length < 40) {
     cards.push(...buildDeck(preset).filter(onlineCardSupported));
   }
-  return cards.slice(0, 40);
+  const deck = cards.slice(0, 40);
+  if (!deck.some((card) => card.trigger === "chainNegate")) {
+    const counter = supported.find((card) => card.trigger === "chainNegate");
+    if (counter) deck[deck.length - 1] = counter;
+  }
+  return deck;
 }
 function prepareDuelist(seatId, deckPreset, openingHand = null) {
   const duelist = createDuelist(seatId);

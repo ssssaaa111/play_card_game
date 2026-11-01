@@ -290,6 +290,11 @@ body[data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-targe
 .online-response[data-response-prompt="summon"] header > span { color: #75e2e2; }
 .online-response[data-response-prompt="summon"] .online-response-countdown { border-color: rgba(84,210,210,.4); color: #d8ffff; background: rgba(84,210,210,.08); }
 .online-response[data-response-prompt="summon"] .online-response-countdown::before { background: #54d2d2; box-shadow: 0 0 12px rgba(84,210,210,.9); }
+.online-response[data-response-prompt="chain"] { border-color: rgba(255,116,176,.78); box-shadow: 0 22px 90px #000b, 0 0 44px rgba(255,72,147,.16); }
+.online-response[data-response-prompt="chain"] header > span { color: #ff9ac5; }
+.online-response[data-response-prompt="chain"] .online-response-countdown { border-color: rgba(255,116,176,.44); color: #ffe1ee; background: rgba(255,72,147,.09); }
+.online-response[data-response-prompt="chain"] .online-response-countdown::before { background: #ff74b0; box-shadow: 0 0 14px rgba(255,72,147,.92); }
+.online-response #responseChain { margin: 12px 0; }
 
 .online-result { width: min(580px, calc(100vw - 24px)); padding: 0; margin: auto; overflow: hidden; color: var(--ink); border: 1px solid rgba(246,189,96,.72); border-radius: 18px; background: #111923; box-shadow: 0 28px 110px #000d, 0 0 48px rgba(246,189,96,.18); }
 .online-result::backdrop { background: rgba(3,7,12,.8); backdrop-filter: blur(5px) saturate(.8); }

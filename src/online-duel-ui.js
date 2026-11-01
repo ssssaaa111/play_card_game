@@ -3,14 +3,16 @@ import { createTrapResponse, selectTrapResponse } from "./response-state.js";
 import { describeBattleOutcome } from "./battle.js";
 
 export function onlineTrapResponseChoice(view, previous = null) {
-  const response = view?.attackResponse || view?.summonResponse;
+  const response = view?.attackResponse || view?.summonResponse || view?.chainResponse;
   if (!response || !response.candidates.length || view.gameOver) return null;
   const state = onlineBoardState(view);
   const pending = view.machine?.pendingAttack;
   const responseId = response.declarationEventId || response.triggerEventId;
   const context = response.eventName === "summon"
     ? { summoned: state.ai.field.find((card) => card?.uid === response.summonedCardId) || null }
-    : {
+    : response.eventName === "chain"
+      ? { targetEffectId: response.targetCardId }
+      : {
       attackerIndex: state.ai.field.findIndex((card) => card?.uid === pending?.attackerCardId),
       targetIndex: state.player.field.findIndex((card) => card?.uid === pending?.targetCardId)
     };
@@ -29,7 +31,7 @@ export function onlineTrapResponseChoice(view, previous = null) {
 export function onlineResponseTimerView(view, now = Date.now()) {
   const timer = view?.responseTimer;
   const responseWindow = view?.machine?.responseWindow;
-  const responseId = view?.attackResponse?.declarationEventId || view?.summonResponse?.triggerEventId || view?.machine?.pendingAttack?.declarationEventId || responseWindow?.triggerEventId;
+  const responseId = view?.attackResponse?.declarationEventId || view?.summonResponse?.triggerEventId || view?.chainResponse?.triggerEventId || view?.machine?.pendingAttack?.declarationEventId || responseWindow?.triggerEventId;
   if (!timer || !responseWindow || timer.declarationEventId !== responseId) return null;
   const paused = Boolean(timer.paused);
   const remainingMs = paused

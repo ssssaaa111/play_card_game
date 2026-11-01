@@ -4,11 +4,11 @@ function ownerLabel(owner) {
   return "未知方";
 }
 
-function viewEntry({ chainIndex, owner, card, runtimeCardId = "", pending = false }) {
+function viewEntry({ chainIndex, owner, card, runtimeCardId = "", pending = false, ownerLabels = {} }) {
   return {
     chainIndex,
     owner,
-    ownerLabel: ownerLabel(owner),
+    ownerLabel: ownerLabels[owner] || ownerLabel(owner),
     cardId: card?.templateId || card?.id || "",
     runtimeCardId,
     name: card?.name || "公开效果",
@@ -20,7 +20,8 @@ export function buildChainStackEntries({
   chain = [],
   findCard = () => null,
   pendingCard = null,
-  pendingOwner = "player"
+  pendingOwner = "player",
+  ownerLabels = {}
 } = {}) {
   const entries = chain.map((link, index) => {
     const found = findCard(link?.cardId);
@@ -29,7 +30,8 @@ export function buildChainStackEntries({
       chainIndex: Number(link?.linkId) || index + 1,
       owner: link?.playerId || found?.owner || "",
       card,
-      runtimeCardId: link?.cardId || ""
+      runtimeCardId: link?.cardId || "",
+      ownerLabels
     });
   });
 
@@ -39,7 +41,8 @@ export function buildChainStackEntries({
       owner: pendingOwner,
       card: pendingCard,
       runtimeCardId: pendingCard.uid || pendingCard.engineId || "",
-      pending: true
+      pending: true,
+      ownerLabels
     }));
   }
 
