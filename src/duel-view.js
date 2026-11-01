@@ -1,6 +1,6 @@
 import { getLegalActions } from "./game-engine.js";
 import { otherSeatId, seatIdsForState } from "./duel-session.js";
-import { onlineAttackResponse } from "./online-response.js";
+import { onlineAttackResponse, onlineSummonResponse } from "./online-response.js";
 
 const PUBLIC_EVENT_FIELDS = new Set([
   "id", "type", "playerId", "rivalId", "winnerId", "loserId", "loserIds",
@@ -163,7 +163,9 @@ function publicMachineState(machine = {}) {
     type: machine.responseWindow.type,
     timing: machine.responseWindow.timing,
     resumeTiming: machine.responseWindow.resumeTiming,
-    deadline: machine.responseWindow.deadline || null
+    deadline: machine.responseWindow.deadline || null,
+    triggerEventId: machine.responseWindow.triggerEventId || null,
+    prompt: machine.responseWindow.prompt || null
   } : null;
   const actionWindow = machine.actionWindow ? {
     playerId: machine.actionWindow.playerId,
@@ -229,6 +231,7 @@ export function buildDuelView(state, viewerSeatId, {
     },
     machine: publicMachineState(state.machine),
     attackResponse: canRequestLegalActions ? onlineAttackResponse(state, viewerSeatId) : null,
+    summonResponse: canRequestLegalActions ? onlineSummonResponse(state, viewerSeatId) : null,
     players: Object.fromEntries(seatIds.map((seatId) => [
       seatId,
       projectedPlayer(state, seatId, viewerSeatId)

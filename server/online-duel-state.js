@@ -4,10 +4,14 @@ import { ControllerKind, DuelMode, createDuelSessionConfig } from "../src/duel-s
 import { PHASES, TIMINGS } from "../src/turn-state.js";
 import { trapDefinition } from "../src/traps.js";
 
+function onlineCardSupported(card) {
+  return card.type !== "trap" || ["attack", "direct", "summon"].includes(trapDefinition(card.trigger)?.event);
+}
+
 function onlineDeck(preset) {
   const cards = [];
   while (cards.length < 40) {
-    cards.push(...buildDeck(preset).filter((card) => card.type !== "trap" || ["attack", "direct"].includes(trapDefinition(card.trigger)?.event)));
+    cards.push(...buildDeck(preset).filter(onlineCardSupported));
   }
   return cards.slice(0, 40);
 }
@@ -16,10 +20,16 @@ function prepareDuelist(seatId, deckPreset, openingHand = null) {
   duelist.deck = onlineDeck(deckPreset);
   // Server-only deterministic openings for repeatable browser QA, never a client option.
   duelist.hand = openingHand ? openingHand.map((id) => {
-    const index = duelist.deck.findIndex((card) => card.id === id);
-    if (index < 0) throw new Error(`Opening card ${id} is not in the online deck`);
+    let index = duelist.deck.findIndex((card) => card.id === id);
+    if (index < 0) {
+      const replacement = buildDeck(deckPreset).find((card) => card.id === id && onlineCardSupported(card));
+      if (!replacement) throw new Error(`Opening card ${id} is not supported by the online deck`);
+      duelist.deck.push(replacement);
+      index = duelist.deck.length - 1;
+    }
     return duelist.deck.splice(index, 1)[0];
   }) : duelist.deck.splice(0, 5);
+  duelist.deck = duelist.deck.slice(0, 35);
   return duelist;
 }
 

@@ -38,6 +38,19 @@ test("online action sanitizer binds commands to the authenticated seat", () => {
   assert.equal(action.rivalId, "p2");
   assert.equal(action.cardId, "monster-1");
   assert.deepEqual(action.tributeCardIds, ["tribute-1"]);
+
+  assert.deepEqual(sanitizeOnlineAction({
+    type: "RESPOND_SUMMON_TRAP",
+    playerId: "p2",
+    triggerEventId: 17,
+    cardId: "summon-trap",
+    summonedCardId: "forged-card"
+  }, { seatId: "p1", rivalId: "p2" }), {
+    type: "RESPOND_SUMMON_TRAP",
+    playerId: "p1",
+    triggerEventId: 17,
+    cardId: "summon-trap"
+  });
 });
 
 test("online protocol rejects server-only commands and malformed revisions", () => {
@@ -52,5 +65,9 @@ test("online protocol rejects server-only commands and malformed revisions", () 
   assert.throws(
     () => sanitizeOnlineAction({ type: "DECLARE_GAME_OVER" }, { seatId: "p1", rivalId: "p2" }),
     /not available online/
+  );
+  assert.throws(
+    () => sanitizeOnlineAction({ type: "PASS_SUMMON_RESPONSE", triggerEventId: "17" }, { seatId: "p1", rivalId: "p2" }),
+    /triggerEventId/
   );
 });

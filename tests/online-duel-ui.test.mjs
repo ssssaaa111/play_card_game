@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -154,6 +154,30 @@ test("online response timer explains automatic passing and frozen disconnect tim
     label: "对局已暂停，响应倒计时冻结"
   });
   assert.equal(onlineResponseTimerView({ ...base, responseTimer: { ...base.responseTimer, declarationEventId: 41 } }, 18_400), null);
+
+  const summon = {
+    viewerSeatId: "p1",
+    machine: { responseWindow: { playerId: "p1", prompt: "summon", triggerEventId: 73 }, pendingAttack: null },
+    summonResponse: { triggerEventId: 73, eventName: "summon", candidates: [{ index: 0, cardId: "trap:1" }] },
+    responseTimer: { declarationEventId: 73, deadlineAt: 30_000, remainingMs: null, paused: false }
+  };
+  assert.equal(onlineResponseTimerView(summon, 25_200).label, "剩余 5 秒 · 到时自动放弃响应");
+});
+
+test("summon responses reuse the trap picker with the public summoned monster context", () => {
+  const view = snapshot();
+  view.roomCode = "SUM234";
+  view.machine = { responseWindow: { playerId: "p1", prompt: "summon", triggerEventId: 73 }, pendingAttack: null };
+  view.players.p1.spellTrapZone[0] = { id: "trap:1", templateId: "summon-flare", name: "召雷陷阵", type: "trap", trigger: "summonBurn", text: "对手召唤时造成 400 点伤害" };
+  view.players.p2.monsterZone[0] = { ...monster("summoned:1"), templateId: "ember-drake", name: "余烬飞龙" };
+  view.summonResponse = { triggerEventId: 73, eventName: "summon", summonedCardId: "summoned:1", summonedPlayerId: "p2", candidates: [{ index: 0, cardId: "trap:1" }] };
+
+  const choice = onlineTrapResponseChoice(view);
+  assert.equal(choice.eventName, "summon");
+  assert.equal(choice.responseKind, "summon");
+  assert.equal(choice.declarationEventId, 73);
+  assert.equal(choice.selectedIndex, 0);
+  assert.equal(choice.details.context.summoned.name, "余烬飞龙");
 });
 
 test("online whole-turn clock stays viewer-relative and exposes pause and danger states", () => {

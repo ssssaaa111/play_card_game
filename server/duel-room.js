@@ -4,7 +4,14 @@ import { GameEngine, GameRuleError } from "../src/game-engine.js";
 import { DuelProtocolError, normalizeCommandEnvelope, normalizeDisplayName, sanitizeOnlineAction } from "../src/duel-command.js";
 import { buildDuelView } from "../src/duel-view.js";
 import { createOnlineDuelState } from "./online-duel-state.js";
-import { onlineAttackResponse, onlineTrapAction, activateOnlineTrap, settleOnlineAttack } from "../src/online-response.js";
+import {
+  onlineAttackResponse,
+  onlineSummonResponse,
+  onlineTrapAction,
+  onlineSummonTrapAction,
+  activateOnlineTrap,
+  settleOnlineAttack
+} from "../src/online-response.js";
 
 const ROOM_SEAT_IDS = Object.freeze(["p1", "p2"]);
 const MAX_REMEMBERED_COMMANDS = 100;
@@ -296,8 +303,39 @@ export class DuelRoom {
         events.push(...engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: action.playerId, reason: "online-player-pass" }));
       }
       events.push(...settleOnlineAttack(engine, { canceledBy }));
+    } else if (["RESPOND_SUMMON_TRAP", "PASS_SUMMON_RESPONSE"].includes(action.type)) {
+      const state = engine.getState();
+      const response = onlineSummonResponse(state, action.playerId);
+      if (!response || response.triggerEventId !== action.triggerEventId) throw new GameRuleError("Summon response is no longer available");
+      if (action.type === "RESPOND_SUMMON_TRAP") {
+        if (!response.candidates.some((candidate) => candidate.cardId === action.cardId)) throw new GameRuleError("Trap is not a legal summon response");
+        events.push(...activateOnlineTrap(engine, onlineSummonTrapAction(state, action.playerId, action.cardId)));
+      } else {
+        events.push(...engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: action.playerId, reason: "online-player-pass" }));
+      }
     } else {
       events.push(...engine.dispatch(action));
+    }
+    if (action.type === "SUMMON_MONSTER" && !engine.getState().gameOver) {
+      const summonEvent = [...events].reverse().find((event) => event.type === "MONSTER_SUMMONED" && event.cardId === action.cardId);
+      if (summonEvent) {
+        const responsePlayerId = ROOM_SEAT_IDS.find((seatId) => seatId !== action.playerId);
+        const openAction = {
+          type: "OPEN_RESPONSE_WINDOW",
+          playerId: responsePlayerId,
+          timing: "summon",
+          resumeTiming: engine.getState().machine.timing,
+          windowType: "optional",
+          triggerEventId: summonEvent.id,
+          prompt: "summon",
+          context: { summonedPlayerId: action.playerId, summonedCardId: action.cardId }
+        };
+        const preview = new GameEngine(engine.getState());
+        preview.dispatch(openAction);
+        if (onlineSummonResponse(preview.getState(), responsePlayerId)?.candidates.length) {
+          events.push(...engine.dispatch(openAction));
+        }
+      }
     }
     if (action.type === "DECLARE_ATTACK" && !engine.getState().gameOver) {
       const pending = engine.getState().machine.pendingAttack;
@@ -389,14 +427,17 @@ export class DuelRoom {
     if (!this.engine || this.responseDeadlineAt == null || this.now() < this.responseDeadlineAt) return false;
     const state = this.engine.getState();
     const pending = state.machine?.pendingAttack;
-    const response = pending ? onlineAttackResponse(state, pending.rivalId) : null;
-    if (!pending || !response || response.declarationEventId !== this.responseDeclarationEventId) {
+    const responsePlayerId = state.machine?.responseWindow?.playerId;
+    const attackResponse = pending ? onlineAttackResponse(state, pending.rivalId) : null;
+    const summonResponse = responsePlayerId ? onlineSummonResponse(state, responsePlayerId) : null;
+    const activeResponseId = attackResponse?.declarationEventId || summonResponse?.triggerEventId || null;
+    if (!responsePlayerId || !activeResponseId || activeResponseId !== this.responseDeclarationEventId) {
       this.#clearResponseTimer();
       return false;
     }
     const engine = new GameEngine(state);
-    engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: pending.rivalId, reason: "online-response-timeout" });
-    settleOnlineAttack(engine);
+    engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: responsePlayerId, reason: "online-response-timeout" });
+    if (attackResponse) settleOnlineAttack(engine);
     this.engine = engine;
     this.#clearResponseTimer();
     if (this.engine.getState().gameOver) {
@@ -472,10 +513,11 @@ export class DuelRoom {
   }
 
   #syncResponseTimer() {
-    const pending = this.engine?.getState()?.machine?.pendingAttack;
-    const responseWindow = this.engine?.getState()?.machine?.responseWindow;
-    const declarationEventId = pending?.declarationEventId || null;
-    if (!pending || !responseWindow || !declarationEventId) {
+    const state = this.engine?.getState();
+    const pending = state?.machine?.pendingAttack;
+    const responseWindow = state?.machine?.responseWindow;
+    const declarationEventId = pending?.declarationEventId || responseWindow?.triggerEventId || null;
+    if (!responseWindow || !declarationEventId) {
       this.#clearResponseTimer();
       return;
     }

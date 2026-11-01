@@ -26,6 +26,26 @@ export function onlineTrapAction(state, playerId, cardId) {
   return action;
 }
 
+export function onlineSummonTrapAction(state, playerId, cardId) {
+  const responseWindow = state.machine?.responseWindow;
+  const context = responseWindow?.context || {};
+  if (state.gameOver || responseWindow?.playerId !== playerId || responseWindow?.prompt !== "summon" ||
+      !context.summonedPlayerId || !context.summonedCardId || context.summonedPlayerId === playerId) {
+    throw new GameRuleError("No summon response belongs to this player");
+  }
+  const owner = state.players[playerId];
+  const card = state.cards[cardId];
+  if (!owner.spellTrapZone.includes(cardId) || card?.type !== "trap" || !trapMatchesEvent(card, "summon")) {
+    throw new GameRuleError("This trap cannot respond to this summon");
+  }
+  return {
+    type: "ACTIVATE_TRAP",
+    playerId,
+    rivalId: context.summonedPlayerId,
+    cardId
+  };
+}
+
 export function activateOnlineTrap(engine, action) {
   const card = engine.getState().cards[action.cardId];
   return [
@@ -52,6 +72,32 @@ export function onlineAttackResponse(state, playerId) {
     }
   });
   return { declarationEventId: pending.declarationEventId, eventName: pending.direct ? "direct" : "attack", candidates };
+}
+
+export function onlineSummonResponse(state, playerId) {
+  const responseWindow = state.machine?.responseWindow;
+  const context = responseWindow?.context || {};
+  if (state.gameOver || responseWindow?.playerId !== playerId || responseWindow?.prompt !== "summon" ||
+      !context.summonedCardId || !responseWindow.triggerEventId) return null;
+  const slots = state.players[playerId].zoneSlots?.spellTrapZone || state.players[playerId].spellTrapZone;
+  const candidates = [];
+  slots.forEach((cardId, index) => {
+    if (!cardId) return;
+    try {
+      const action = onlineSummonTrapAction(state, playerId, cardId);
+      activateOnlineTrap(new GameEngine(state), action);
+      candidates.push({ index, cardId });
+    } catch (error) {
+      if (!(error instanceof GameRuleError)) throw error;
+    }
+  });
+  return {
+    triggerEventId: responseWindow.triggerEventId,
+    eventName: "summon",
+    summonedCardId: context.summonedCardId,
+    summonedPlayerId: context.summonedPlayerId,
+    candidates
+  };
 }
 
 export function settleOnlineAttack(engine, { canceledBy = null } = {}) {

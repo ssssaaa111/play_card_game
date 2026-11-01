@@ -11,12 +11,11 @@ import { createPhaseStageController, phaseStageCue } from "./phase-stage.js";
 import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js";
 import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
-import { onlineTrapResponseChoice } from "./online-duel-ui.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView } from "./online-duel-ui.js?v=20261030-turn-clock-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261030-summon-response-4";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -28,7 +27,7 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
+  "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
   "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
   "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "phaseStage"
@@ -1125,12 +1124,19 @@ function selectResponse(index) {
   }
 }
 
-function respondToAttack(activate, index = trapChoice?.selectedIndex) {
-  const response = client.view?.attackResponse;
+function respondToTrap(activate, index = trapChoice?.selectedIndex) {
+  const response = client.view?.attackResponse || client.view?.summonResponse;
   if (!response || actionPending) return;
   const candidate = response.candidates.find((entry) => entry.index === index);
   if (activate && !candidate) return;
-  return sendAction({ type: activate ? "RESPOND_TRAP" : "PASS_ATTACK_RESPONSE", declarationEventId: response.declarationEventId, ...(activate ? { cardId: candidate.cardId } : {}) });
+  const summon = response.eventName === "summon";
+  return sendAction({
+    type: activate
+      ? (summon ? "RESPOND_SUMMON_TRAP" : "RESPOND_TRAP")
+      : (summon ? "PASS_SUMMON_RESPONSE" : "PASS_ATTACK_RESPONSE"),
+    ...(summon ? { triggerEventId: response.triggerEventId } : { declarationEventId: response.declarationEventId }),
+    ...(activate ? { cardId: candidate.cardId } : {})
+  });
 }
 
 function clearResponseCountdown() {
@@ -1166,7 +1172,12 @@ function renderResponseCountdown(view) {
 
 function renderResponse(view) {
   renderResponseBattle(view);
-  const responseSoundId = view.attackResponse?.declarationEventId || null;
+  const activeResponse = view.attackResponse || view.summonResponse;
+  const summonResponse = activeResponse?.eventName === "summon";
+  elements.onlineResponse.dataset.responseAvailable = String(Boolean(activeResponse));
+  elements.onlineResponse.dataset.responseCandidates = String(activeResponse?.candidates?.length || 0);
+  elements.onlineResponse.dataset.responsePrompt = activeResponse?.eventName || view.machine.responseWindow?.prompt || "none";
+  const responseSoundId = activeResponse?.declarationEventId || activeResponse?.triggerEventId || null;
   if (responseSoundId && responseSoundId !== lastResponseSoundId) {
     lastResponseSoundId = responseSoundId;
     playSound("trap");
@@ -1174,12 +1185,17 @@ function renderResponse(view) {
   if (trapChoice) {
     const panel = renderTrapResponsePanel({ document, ...responseRendererOptions(view), elements: {
       chainText: elements.responseText, chainStatus: elements.responseStatus, chainYes: elements.responseActivate, chainChoices: elements.responseChoices
-    }, onSelect: selectResponse, onActivate: (index) => respondToAttack(true, index) });
+    }, onSelect: selectResponse, onActivate: (index) => respondToTrap(true, index) });
     elements.onlineResponse.dataset.responseMode = panel.singleChoice ? "single" : "multiple";
     elements.onlineResponse.classList.toggle("single-response", panel.singleChoice);
     elements.responseChoices.hidden = panel.choices.length === 0;
-    elements.responseTitle.textContent = panel.singleChoice ? "可发动一张陷阱" : "选择本次攻击的响应";
-    elements.responseLead.textContent = panel.singleChoice ? "唯一可用陷阱已自动选中，直接决定发动或放弃。" : "选择一张陷阱响应本次攻击，双击候选可直接发动。";
+    elements.responseKicker.textContent = summonResponse ? "SUMMON RESPONSE" : "ATTACK RESPONSE";
+    elements.responseTitle.textContent = panel.singleChoice
+      ? (summonResponse ? "召唤完成 · 可发动一张陷阱" : "可发动一张陷阱")
+      : (summonResponse ? "选择本次召唤的响应" : "选择本次攻击的响应");
+    elements.responseLead.textContent = panel.singleChoice
+      ? "唯一可用陷阱已自动选中，直接决定发动或放弃。"
+      : `选择一张陷阱响应本次${summonResponse ? "召唤" : "攻击"}，双击候选可直接发动。`;
     elements.responseText.hidden = panel.singleChoice;
     elements.responseActivate.disabled ||= actionPending;
     elements.responsePass.disabled = actionPending;
@@ -1201,9 +1217,12 @@ function renderResponse(view) {
   }
   const ownResponse = view.machine.responseWindow.playerId === view.viewerSeatId;
   document.body.dataset.onlineResponse = ownResponse ? "acting" : "waiting";
-  const text = ownResponse ? "对手发起攻击，请选择陷阱或放弃响应。" : "等待对手选择是否发动陷阱，攻击尚未结算。";
+  const responseLabel = view.machine.responseWindow.prompt === "summon" ? "召唤" : "攻击";
+  const text = ownResponse
+    ? `对手完成${responseLabel}，请选择陷阱或放弃响应。`
+    : `等待对手选择是否发动陷阱，${responseLabel}响应尚未结算。`;
   document.body.dataset.duelFocus = ownResponse ? "response" : "idle";
-  elements.commandTitle.textContent = ownResponse ? "轮到你响应攻击" : "等待对手响应";
+  elements.commandTitle.textContent = ownResponse ? `轮到你响应${responseLabel}` : "等待对手响应";
   elements.commandHint.textContent = text;
   elements.commandSignal.textContent = "响应中";
   elements.duelHint.textContent = text;
@@ -1501,8 +1520,8 @@ elements.copyRoomCode.addEventListener("click", async () => {
   catch { elements.copyRoomCode.title = `房间码 ${client.view.roomCode}，可手动复制`; }
 });
 elements.choiceConfirmBtn.addEventListener("click", () => sendAction(onlineSelectionModel(client.view, selection)?.action));
-elements.responseActivate.addEventListener("click", () => respondToAttack(true));
-elements.responsePass.addEventListener("click", () => respondToAttack(false));
+elements.responseActivate.addEventListener("click", () => respondToTrap(true));
+elements.responsePass.addEventListener("click", () => respondToTrap(false));
 elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());
 elements.resultReview.addEventListener("click", reviewFinalBoard);
 elements.resultLobby.addEventListener("click", () => { void returnToOnlineLobby(); });

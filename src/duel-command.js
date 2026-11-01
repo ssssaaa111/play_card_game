@@ -28,6 +28,8 @@ export const OnlineCommandType = Object.freeze({
   declareAttack: "DECLARE_ATTACK",
   respondTrap: "RESPOND_TRAP",
   passAttackResponse: "PASS_ATTACK_RESPONSE",
+  respondSummonTrap: "RESPOND_SUMMON_TRAP",
+  passSummonResponse: "PASS_SUMMON_RESPONSE",
   skipRemainingAttacks: "SKIP_REMAINING_ATTACKS",
   endTurn: "END_TURN"
 });
@@ -210,6 +212,15 @@ export function sanitizeOnlineAction(action, { seatId, rivalId } = {}) {
       }
       sanitized = { type: action.type, playerId, declarationEventId: action.declarationEventId };
       if (action.type === OnlineCommandType.respondTrap) sanitized.cardId = cardId();
+      break;
+    }
+    case OnlineCommandType.respondSummonTrap:
+    case OnlineCommandType.passSummonResponse: {
+      if (!Number.isSafeInteger(action.triggerEventId) || action.triggerEventId <= 0) {
+        throw new DuelProtocolError("triggerEventId must be a positive integer");
+      }
+      sanitized = { type: action.type, playerId, triggerEventId: action.triggerEventId };
+      if (action.type === OnlineCommandType.respondSummonTrap) sanitized.cardId = cardId();
       break;
     }
     case OnlineCommandType.endTurn:
