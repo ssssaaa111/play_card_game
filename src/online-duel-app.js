@@ -8,14 +8,14 @@ import { createDirectActivationTracker } from "./direct-activation.js";
 import { createAudioController, createAudioSettings } from "./audio.js";
 import { createAnimationController } from "./animation.js";
 import { createPhaseStageController, phaseStageCue } from "./phase-stage.js";
-import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js";
+import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js?v=20261102-attack-chain-1";
 import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261102-chain-response-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261102-attack-chain-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",

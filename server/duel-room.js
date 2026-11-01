@@ -11,8 +11,8 @@ import {
   onlineTrapAction,
   onlineChainTrapAction,
   onlineSummonTrapAction,
-  activateOnlineTrap,
   commitOnlineTrap,
+  resolveOnlineAttackTrapChain,
   resolveOnlineTrapChain,
   settleOnlineAttack
 } from "../src/online-response.js";
@@ -298,16 +298,22 @@ export class DuelRoom {
       const state = engine.getState();
       const response = onlineAttackResponse(state, action.playerId);
       if (!response || response.declarationEventId !== action.declarationEventId) throw new GameRuleError("Attack response is no longer available");
-      let canceledBy = null;
       if (action.type === "RESPOND_TRAP") {
         if (!response.candidates.some((candidate) => candidate.cardId === action.cardId)) throw new GameRuleError("Trap is not a legal response");
         const trapAction = onlineTrapAction(state, action.playerId, action.cardId);
-        canceledBy = state.cards[action.cardId].trigger;
-        events.push(...activateOnlineTrap(engine, trapAction));
+        events.push(...commitOnlineTrap(engine, trapAction));
+        const nextPlayerId = ROOM_SEAT_IDS.find((seatId) => seatId !== action.playerId);
+        const preview = new GameEngine(engine.getState());
+        preview.dispatch({ type: "PASS_RESPONSE_PRIORITY", playerId: action.playerId, nextPlayerId });
+        if (onlineChainResponse(preview.getState(), nextPlayerId)?.candidates.length) {
+          events.push(...engine.dispatch({ type: "PASS_RESPONSE_PRIORITY", playerId: action.playerId, nextPlayerId }));
+        } else {
+          events.push(...resolveOnlineAttackTrapChain(engine, action.playerId));
+        }
       } else {
         events.push(...engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: action.playerId, reason: "online-player-pass" }));
+        events.push(...settleOnlineAttack(engine));
       }
-      events.push(...settleOnlineAttack(engine, { canceledBy }));
     } else if (["RESPOND_SUMMON_TRAP", "PASS_SUMMON_RESPONSE"].includes(action.type)) {
       const state = engine.getState();
       const response = onlineSummonResponse(state, action.playerId);
@@ -334,7 +340,11 @@ export class DuelRoom {
         if (!response.candidates.some((candidate) => candidate.cardId === action.cardId)) throw new GameRuleError("Trap is not a legal chain response");
         events.push(...commitOnlineTrap(engine, onlineChainTrapAction(state, action.playerId, action.cardId)));
       }
-      events.push(...resolveOnlineTrapChain(engine, action.playerId));
+      events.push(...(
+        state.machine?.responseWindow?.prompt === "attack"
+          ? resolveOnlineAttackTrapChain(engine, action.playerId)
+          : resolveOnlineTrapChain(engine, action.playerId)
+      ));
     } else {
       events.push(...engine.dispatch(action));
     }
@@ -460,7 +470,8 @@ export class DuelRoom {
     }
     const engine = new GameEngine(state);
     if (chainResponse) {
-      resolveOnlineTrapChain(engine, responsePlayerId);
+      if (state.machine?.responseWindow?.prompt === "attack") resolveOnlineAttackTrapChain(engine, responsePlayerId);
+      else resolveOnlineTrapChain(engine, responsePlayerId);
     } else {
       engine.dispatch({ type: "CLOSE_RESPONSE_WINDOW", playerId: responsePlayerId, reason: "online-response-timeout" });
       if (attackResponse) settleOnlineAttack(engine);

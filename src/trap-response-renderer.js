@@ -1,5 +1,5 @@
 import { applyCardArt } from "./card-art.js";
-import { buildChainStackEntries, chainResolutionOrderText } from "./chain-view.js";
+import { buildChainStackEntries, chainResolutionOrderText } from "./chain-view.js?v=20261102-attack-chain-1";
 import { canActivateTrapResponse } from "./response-state.js";
 import { buildTrapChoiceDisplay } from "./trap-choice-display.js";
 

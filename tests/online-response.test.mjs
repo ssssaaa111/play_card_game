@@ -8,10 +8,11 @@ import { createDuelSessionConfig, ControllerKind, DuelMode } from "../src/duel-s
 import { sanitizeOnlineAction } from "../src/duel-command.js";
 import { onlineTrapResponseChoice } from "../src/online-duel-ui.js";
 
-function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 4000, deckSize = 5, now, responseTimeoutMs } = {}) {
+function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 4000, deckSize = 5, now, responseTimeoutMs, attackerCounter = false } = {}) {
   const card = (id, uid) => ({ ...cardById(id), uid, mode: "attack", used: false, tempAtk: 0, tempDef: 0 });
   const p1 = createDuelist("p1"), p2 = createDuelist("p2");
   p1.field[0] = card("solar-knight", "attacker");
+  if (attackerCounter) p1.traps[0] = card("chain-nullifier", "attacker-chain-trap");
   traps.forEach((id, index) => { p2.traps[index] = card(id, `trap:${index}`); });
   targets.forEach((id, index) => { p2.field[index] = card(id, `target:${index}`); });
   p1.lp = lp;
@@ -28,7 +29,12 @@ function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 
   const submit = (connection, action) => room.submit(connection, { revision: room.revision, commandId: `response:${sequence++}`, action });
   const declare = () => submit("one", { type: "DECLARE_ATTACK", attackerCardId: "attacker", ...(targets.length ? { targetCardId: "target:0" } : {}) });
   const respond = (type = "RESPOND_TRAP", cardId = "trap:0") => submit("two", { type, cardId, declarationEventId: room.viewFor("p2").attackResponse.declarationEventId });
-  return { room, submit, declare, respond, defender };
+  const counterResponse = (type = "RESPOND_CHAIN_TRAP") => submit("one", {
+    type,
+    triggerEventId: room.viewFor("p1").chainResponse.triggerEventId,
+    ...(type === "RESPOND_CHAIN_TRAP" ? { cardId: "attacker-chain-trap" } : {})
+  });
+  return { room, submit, declare, respond, counterResponse, defender };
 }
 
 function summonBattle({ now, responseTimeoutMs, responderLp = 4000, counter = false } = {}) {
@@ -108,6 +114,47 @@ test("passing resolves damage once, leaves traps hidden, and allows normal play 
   assert.ok(after.legalActions.can.endTurn);
   assert.equal(room.submit("two", envelope).duplicate, true);
   assert.deepEqual(room.viewFor("p1"), after);
+});
+
+test("the attacker can chain a nullifier and restore the original battle", () => {
+  let currentTime = 10_000;
+  const { room, declare, respond, counterResponse } = battle({
+    traps: ["mirror-snare"], attackerCounter: true, now: () => currentTime, responseTimeoutMs: 15_000
+  });
+  declare();
+  currentTime = 12_000;
+  respond();
+  const chainView = room.viewFor("p1");
+  assert.equal(chainView.chainResponse.sourcePrompt, "attack");
+  assert.equal(chainView.chainResponse.candidates[0].cardId, "attacker-chain-trap");
+  assert.equal(chainView.machine.chain[0].card.templateId, "mirror-snare");
+  assert.equal(chainView.responseTimer.deadlineAt, 27_000);
+  counterResponse();
+  const after = room.viewFor("p1");
+  assert.equal(after.players.p1.monsterZone[0].id, "attacker");
+  assert.equal(after.players.p1.monsterZone[0].used, true);
+  assert.equal(after.players.p2.lp, 2300);
+  assert.equal(after.players.p1.grave[0].templateId, "chain-nullifier");
+  assert.equal(after.players.p2.grave[0].templateId, "mirror-snare");
+  assert.ok(after.recentEvents.some((event) => event.type === "EFFECT_SKIPPED" && event.cardId === "trap:0"));
+  assert.equal(after.machine.pendingAttack, null);
+});
+
+test("passing or timing out on an attack chain lets the defense trap resolve", () => {
+  const passed = battle({ traps: ["mirror-snare"], attackerCounter: true });
+  passed.declare(); passed.respond(); passed.counterResponse("PASS_CHAIN_RESPONSE");
+  assert.equal(passed.room.viewFor("p1").players.p1.monsterZone[0], null);
+  assert.equal(passed.room.viewFor("p2").players.p2.lp, 4000);
+
+  let currentTime = 1_000;
+  const timed = battle({ traps: ["mirror-snare"], attackerCounter: true, now: () => currentTime, responseTimeoutMs: 2_000 });
+  timed.declare(); timed.respond();
+  currentTime = 2_999;
+  assert.equal(timed.room.expireAttackResponse(), false);
+  currentTime = 3_000;
+  assert.equal(timed.room.expireAttackResponse(), true);
+  assert.equal(timed.room.viewFor("p1").players.p1.monsterZone[0], null);
+  assert.equal(timed.room.viewFor("p2").players.p2.lp, 4000);
 });
 
 test("an unanswered attack auto-resolves at the authoritative room deadline", () => {

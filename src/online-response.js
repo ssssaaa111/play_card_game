@@ -50,7 +50,7 @@ export function onlineChainTrapAction(state, playerId, cardId) {
   const responseWindow = state.machine?.responseWindow;
   const chain = state.machine?.chain || [];
   const targetLink = chain.at(-1);
-  if (state.gameOver || responseWindow?.playerId !== playerId || responseWindow?.prompt !== "summon" ||
+  if (state.gameOver || responseWindow?.playerId !== playerId || !["attack", "summon"].includes(responseWindow?.prompt) ||
       chain.length !== 1 || !targetLink?.committed || targetLink.playerId === playerId || !targetLink.cardId) {
     throw new GameRuleError("No chain response belongs to this player");
   }
@@ -136,7 +136,7 @@ export function onlineChainResponse(state, playerId) {
   const responseWindow = state.machine?.responseWindow;
   const chain = state.machine?.chain || [];
   const targetLink = chain.at(-1);
-  if (state.gameOver || responseWindow?.playerId !== playerId || responseWindow?.prompt !== "summon" ||
+  if (state.gameOver || responseWindow?.playerId !== playerId || !["attack", "summon"].includes(responseWindow?.prompt) ||
       chain.length !== 1 || !targetLink?.committed || targetLink.playerId === playerId || !responseWindow.triggerEventId) return null;
   const slots = state.players[playerId].zoneSlots?.spellTrapZone || state.players[playerId].spellTrapZone;
   const candidates = [];
@@ -155,9 +155,27 @@ export function onlineChainResponse(state, playerId) {
     eventName: "chain",
     targetCardId: targetLink.cardId,
     targetPlayerId: targetLink.playerId,
+    sourcePrompt: responseWindow.prompt,
     chainLength: chain.length,
     candidates
   };
+}
+
+export function resolveOnlineAttackTrapChain(engine, playerId) {
+  const state = engine.getState();
+  const firstLink = state.machine?.chain?.[0];
+  if (!state.machine?.pendingAttack || state.machine?.responseWindow?.prompt !== "attack" || !firstLink?.cardId) {
+    throw new GameRuleError("No attack trap chain is ready to resolve");
+  }
+  const canceledBy = state.cards[firstLink.cardId]?.trigger || null;
+  const events = resolveOnlineTrapChain(engine, playerId);
+  const skipped = events.some((event) =>
+    event.type === "CHAIN_LINK_RESOLVED" && event.linkId === firstLink.linkId && event.skipped
+  );
+  return [
+    ...events,
+    ...settleOnlineAttack(engine, { canceledBy: skipped ? null : canceledBy })
+  ];
 }
 
 export function settleOnlineAttack(engine, { canceledBy = null } = {}) {

@@ -15,10 +15,12 @@ function onlineDeck(preset) {
     cards.push(...buildDeck(preset).filter(onlineCardSupported));
   }
   const deck = cards.slice(0, 40);
-  if (!deck.some((card) => card.trigger === "chainNegate")) {
-    const counter = supported.find((card) => card.trigger === "chainNegate");
-    if (counter) deck[deck.length - 1] = counter;
-  }
+  // Every supported response class must remain reachable after the randomized
+  // preset is truncated to the online 40-card limit.
+  ["attack", "direct", "summon", "chain"]
+    .map((event) => supported.find((card) => card.type === "trap" && trapDefinition(card.trigger)?.event === event))
+    .filter(Boolean)
+    .forEach((card, index) => { deck[deck.length - 1 - index] = card; });
   return deck;
 }
 function prepareDuelist(seatId, deckPreset, openingHand = null) {
