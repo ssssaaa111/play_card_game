@@ -3,12 +3,30 @@ import test from "node:test";
 
 import {
   ONLINE_AUTH_COOKIE,
+  OnlineAuthAttemptLimiter,
   OnlineAuthError,
   OnlineAuthStore,
   authCookie,
   clearAuthCookie,
   parseCookieHeader
 } from "../server/online-auth.js";
+
+test("auth attempt limiter blocks repeated attempts and resets after its window", () => {
+  let now = 1_000;
+  const limiter = new OnlineAuthAttemptLimiter({ limit: 3, windowMs: 10_000, now: () => now });
+  assert.equal(limiter.attempt("login:one"), 2);
+  assert.equal(limiter.attempt("login:one"), 1);
+  assert.equal(limiter.attempt("login:one"), 0);
+  assert.throws(
+    () => limiter.attempt("login:one"),
+    (error) => error instanceof OnlineAuthError && error.code === "RATE_LIMITED" && error.status === 429 && error.retryAfterSeconds === 10
+  );
+  assert.equal(limiter.attempt("login:two"), 2, "separate account and address keys keep independent budgets");
+  now += 10_001;
+  assert.equal(limiter.attempt("login:one"), 2);
+  assert.equal(limiter.reset("login:one"), true);
+  assert.equal(limiter.attempt("login:one"), 2);
+});
 
 test("online accounts register, log in, and restore an HttpOnly cookie session", () => {
   let now = 1_000;

@@ -45,3 +45,20 @@ test("auth client surfaces server account errors", async () => {
     (error) => error.code === "INVALID_CREDENTIALS" && error.message === "账号或密码不正确"
   );
 });
+
+test("auth client exposes retry timing for rate-limited login feedback", async () => {
+  const client = new OnlineAuthClient({
+    baseUrl: "http://127.0.0.1:5180",
+    fetchImpl: async () => new Response(JSON.stringify({ error: {
+      code: "RATE_LIMITED", message: "尝试次数过多，请稍后重试", retryAfterSeconds: 42
+    } }), {
+      status: 429,
+      headers: { "Content-Type": "application/json", "Retry-After": "42" }
+    })
+  });
+
+  await assert.rejects(
+    client.login({ handle: "star_one", password: "wrong-1" }),
+    (error) => error.code === "RATE_LIMITED" && error.retryAfterSeconds === 42
+  );
+});

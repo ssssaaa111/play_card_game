@@ -8,11 +8,40 @@ export const ONLINE_AUTH_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const HANDLE_PATTERN = /^[a-z0-9][a-z0-9_-]{2,23}$/;
 
 export class OnlineAuthError extends Error {
-  constructor(message, code = "AUTH_ERROR", status = 400) {
+  constructor(message, code = "AUTH_ERROR", status = 400, retryAfterSeconds = null) {
     super(message);
     this.name = "OnlineAuthError";
     this.code = code;
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds == null ? null : Math.max(1, Math.ceil(Number(retryAfterSeconds) || 1));
+  }
+}
+
+export class OnlineAuthAttemptLimiter {
+  constructor({ limit = 8, windowMs = 10 * 60 * 1000, now = () => Date.now() } = {}) {
+    this.limit = Math.max(1, Number(limit) || 8);
+    this.windowMs = Math.max(1_000, Number(windowMs) || 10 * 60 * 1000);
+    this.now = now;
+    this.attempts = new Map();
+  }
+
+  attempt(key) {
+    const normalizedKey = String(key || "unknown");
+    const now = this.now();
+    const cutoff = now - this.windowMs;
+    const recent = (this.attempts.get(normalizedKey) || []).filter((timestamp) => timestamp > cutoff);
+    if (recent.length >= this.limit) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((recent[0] + this.windowMs - now) / 1000));
+      this.attempts.set(normalizedKey, recent);
+      throw new OnlineAuthError(`尝试次数过多，请在 ${retryAfterSeconds} 秒后重试`, "RATE_LIMITED", 429, retryAfterSeconds);
+    }
+    recent.push(now);
+    this.attempts.set(normalizedKey, recent);
+    return this.limit - recent.length;
+  }
+
+  reset(key) {
+    return this.attempts.delete(String(key || "unknown"));
   }
 }
 

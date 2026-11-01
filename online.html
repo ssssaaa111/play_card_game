@@ -9,14 +9,14 @@
   <link rel="stylesheet" href="target-selection.css">
   <link rel="stylesheet" href="ui-polish.css">
   <link rel="stylesheet" href="duel-focus.css">
-  <link rel="stylesheet" href="online-duel.css">
+  <link rel="stylesheet" href="online-duel.css?v=20261030-turn-clock-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
     <header class="topbar">
       <div class="brand"><div class="brand-mark">S</div><div><h1>星魂决斗</h1><div class="subtitle">真人对战 <button id="copyRoomCode" class="online-room-code" type="button" title="复制邀请链接" hidden></button></div></div></div>
       <div class="phase">
-        <strong id="phaseLabel">等待开局</strong><span id="turnLabel">创建或加入房间</span>
+        <strong id="phaseLabel">等待开局</strong><span id="turnLabel">创建或加入房间</span><span class="online-turn-clock" id="turnClock" role="timer" aria-label="回合剩余时间" hidden>1:30</span>
         <div class="phase-rail" aria-label="回合阶段">
           <span class="phase-step" data-phase-step="draw"><i>1</i><em>抽卡</em></span>
           <span class="phase-step" data-phase-step="main"><i>2</i><em>主要</em></span>
@@ -159,6 +159,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261030-turn-clock-1"></script>
 </body>
 </html>

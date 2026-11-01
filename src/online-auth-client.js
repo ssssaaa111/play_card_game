@@ -58,6 +58,7 @@ export class OnlineAuthClient {
     if (!response.ok) {
       const error = new Error(data.error?.message || "登录请求失败");
       error.code = data.error?.code || "AUTH_REQUEST_FAILED";
+      error.retryAfterSeconds = Number(data.error?.retryAfterSeconds) || Number(response.headers.get("retry-after")) || null;
       throw error;
     }
     return data;

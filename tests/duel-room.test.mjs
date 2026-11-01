@@ -78,6 +78,60 @@ test("ending a turn automatically starts and draws for the opponent", () => {
   assert.equal(after.players.p2.handCount, handBefore + 1);
 });
 
+test("the authoritative turn clock survives actions and auto-ends exactly at its deadline", () => {
+  let now = 10_000;
+  const { room } = startedRoom({ now: () => now, turnTimeoutMs: 5_000 });
+  assert.deepEqual(room.viewFor("p1").turnTimer, {
+    playerId: "p1",
+    deadlineAt: 15_000,
+    remainingMs: null,
+    durationMs: 5_000,
+    paused: false
+  });
+
+  now = 12_000;
+  const view = room.viewFor("p1");
+  room.submit("connection-1", {
+    revision: view.revision,
+    commandId: "clock-action",
+    action: view.legalActions.actions.summon[0]
+  });
+  assert.equal(room.viewFor("p1").turnTimer.deadlineAt, 15_000, "ordinary actions must not reset the whole-turn clock");
+  now = 14_999;
+  assert.equal(room.expireTurnTimeout(), false);
+  now = 15_000;
+  assert.equal(room.expireTurnTimeout(), true);
+
+  const after = room.viewFor("p1");
+  assert.equal(after.turn.playerId, "p2");
+  assert.equal(after.turnTimer.playerId, "p2");
+  assert.equal(after.turnTimer.deadlineAt, 20_000);
+  assert.ok(after.recentEvents.some((event) => event.type === "TURN_ENDED" && event.reason === "online-turn-timeout" && event.endedBy === "timeout"));
+});
+
+test("disconnect pauses the whole-turn clock and reconnect resumes only its remainder", () => {
+  let now = 20_000;
+  const { room, p2 } = startedRoom({ now: () => now, turnTimeoutMs: 10_000 });
+  now = 24_000;
+  room.disconnect("connection-2");
+  assert.deepEqual(room.viewFor("p1").turnTimer, {
+    playerId: "p1",
+    deadlineAt: null,
+    remainingMs: 6_000,
+    durationMs: 10_000,
+    paused: true
+  });
+  now = 50_000;
+  assert.equal(room.expireTurnTimeout(), false);
+  room.join({ name: "ignored", connectionId: "connection-2b", reconnectToken: p2.reconnectToken });
+  assert.equal(room.viewFor("p1").turnTimer.deadlineAt, 56_000);
+  now = 55_999;
+  assert.equal(room.expireTurnTimeout(), false);
+  now = 56_000;
+  assert.equal(room.expireTurnTimeout(), true);
+  assert.equal(room.viewFor("p1").turn.playerId, "p2");
+});
+
 test("declaring an attack auto-resolves when no legal trap is set", () => {
   const { room } = startedRoom();
   const opening = room.viewFor("p1");
