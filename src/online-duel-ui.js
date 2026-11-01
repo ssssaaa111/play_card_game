@@ -3,18 +3,25 @@ import { createTrapResponse, selectTrapResponse } from "./response-state.js";
 import { describeBattleOutcome } from "./battle.js";
 
 export function onlineTrapResponseChoice(view, previous = null) {
-  const response = view?.attackResponse;
+  const response = view?.attackResponse || view?.summonResponse || view?.chainResponse;
   if (!response || !response.candidates.length || view.gameOver) return null;
   const state = onlineBoardState(view);
-  const pending = view.machine.pendingAttack;
+  const pending = view.machine?.pendingAttack;
+  const responseId = response.declarationEventId || response.triggerEventId;
+  const context = response.eventName === "summon"
+    ? { summoned: state.ai.field.find((card) => card?.uid === response.summonedCardId) || null }
+    : response.eventName === "chain"
+      ? { targetEffectId: response.targetCardId }
+      : {
+      attackerIndex: state.ai.field.findIndex((card) => card?.uid === pending?.attackerCardId),
+      targetIndex: state.player.field.findIndex((card) => card?.uid === pending?.targetCardId)
+    };
   const choice = {
     ...createTrapResponse({ eventName: response.eventName, candidates: response.candidates, details: {
-      owner: state.player, rival: state.ai, context: {
-        attackerIndex: state.ai.field.findIndex((card) => card?.uid === pending.attackerCardId),
-        targetIndex: state.player.field.findIndex((card) => card?.uid === pending.targetCardId)
-      }
+      owner: state.player, rival: state.ai, context
     } }),
-    declarationEventId: response.declarationEventId,
+    declarationEventId: responseId,
+    responseKind: response.eventName,
     roomCode: view.roomCode
   };
   return previous?.roomCode === choice.roomCode && previous?.declarationEventId === choice.declarationEventId
@@ -24,7 +31,8 @@ export function onlineTrapResponseChoice(view, previous = null) {
 export function onlineResponseTimerView(view, now = Date.now()) {
   const timer = view?.responseTimer;
   const responseWindow = view?.machine?.responseWindow;
-  if (!timer || !responseWindow || timer.declarationEventId !== view.machine?.pendingAttack?.declarationEventId) return null;
+  const responseId = view?.attackResponse?.declarationEventId || view?.summonResponse?.triggerEventId || view?.chainResponse?.triggerEventId || view?.machine?.pendingAttack?.declarationEventId || responseWindow?.triggerEventId;
+  if (!timer || !responseWindow || timer.declarationEventId !== responseId) return null;
   const paused = Boolean(timer.paused);
   const remainingMs = paused
     ? Math.max(0, Number(timer.remainingMs) || 0)

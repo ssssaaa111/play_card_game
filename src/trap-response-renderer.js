@@ -1,5 +1,5 @@
 import { applyCardArt } from "./card-art.js";
-import { buildChainStackEntries, chainResolutionOrderText } from "./chain-view.js";
+import { buildChainStackEntries, chainResolutionOrderText } from "./chain-view.js?v=20261102-attack-chain-1";
 import { canActivateTrapResponse } from "./response-state.js";
 import { buildTrapChoiceDisplay } from "./trap-choice-display.js";
 
@@ -25,7 +25,8 @@ export function buildTrapResponseView({
   traps = [],
   chain = [],
   findCard = () => null,
-  activationText = () => ""
+  activationText = () => "",
+  ownerLabels = {}
 } = {}) {
   if (!choice) {
     return {
@@ -57,7 +58,8 @@ export function buildTrapResponseView({
     chain,
     findCard,
     pendingCard: choice.eventName === "chain" ? selectedCard : null,
-    pendingOwner: "player"
+    pendingOwner: "player",
+    ownerLabels
   });
   const selectedChainIndex = selectedCard
     ? stackEntries.find((entry) => entry.pending)?.chainIndex || chain.length + 1
@@ -240,6 +242,7 @@ export function renderTrapResponsePanel({
   chain = [],
   findCard = () => null,
   activationText = () => "",
+  ownerLabels = {},
   onSelect = () => {},
   onActivate = () => {},
   onCardClick = () => {}
@@ -249,7 +252,8 @@ export function renderTrapResponsePanel({
     traps,
     chain,
     findCard,
-    activationText
+    activationText,
+    ownerLabels
   });
   if (!view.visible) {
     clearTrapResponsePanel(elements);

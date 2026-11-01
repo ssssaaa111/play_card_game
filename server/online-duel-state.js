@@ -4,22 +4,40 @@ import { ControllerKind, DuelMode, createDuelSessionConfig } from "../src/duel-s
 import { PHASES, TIMINGS } from "../src/turn-state.js";
 import { trapDefinition } from "../src/traps.js";
 
+function onlineCardSupported(card) {
+  return card.type !== "trap" || ["attack", "direct", "summon", "chain"].includes(trapDefinition(card.trigger)?.event);
+}
+
 function onlineDeck(preset) {
   const cards = [];
+  const supported = buildDeck(preset).filter(onlineCardSupported);
   while (cards.length < 40) {
-    cards.push(...buildDeck(preset).filter((card) => card.type !== "trap" || ["attack", "direct"].includes(trapDefinition(card.trigger)?.event)));
+    cards.push(...buildDeck(preset).filter(onlineCardSupported));
   }
-  return cards.slice(0, 40);
+  const deck = cards.slice(0, 40);
+  // Every supported response class must remain reachable after the randomized
+  // preset is truncated to the online 40-card limit.
+  ["attack", "direct", "summon", "chain"]
+    .map((event) => supported.find((card) => card.type === "trap" && trapDefinition(card.trigger)?.event === event))
+    .filter(Boolean)
+    .forEach((card, index) => { deck[deck.length - 1 - index] = card; });
+  return deck;
 }
 function prepareDuelist(seatId, deckPreset, openingHand = null) {
   const duelist = createDuelist(seatId);
   duelist.deck = onlineDeck(deckPreset);
   // Server-only deterministic openings for repeatable browser QA, never a client option.
   duelist.hand = openingHand ? openingHand.map((id) => {
-    const index = duelist.deck.findIndex((card) => card.id === id);
-    if (index < 0) throw new Error(`Opening card ${id} is not in the online deck`);
+    let index = duelist.deck.findIndex((card) => card.id === id);
+    if (index < 0) {
+      const replacement = buildDeck(deckPreset).find((card) => card.id === id && onlineCardSupported(card));
+      if (!replacement) throw new Error(`Opening card ${id} is not supported by the online deck`);
+      duelist.deck.push(replacement);
+      index = duelist.deck.length - 1;
+    }
     return duelist.deck.splice(index, 1)[0];
   }) : duelist.deck.splice(0, 5);
+  duelist.deck = duelist.deck.slice(0, 35);
   return duelist;
 }
 

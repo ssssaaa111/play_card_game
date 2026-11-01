@@ -46,15 +46,27 @@ const disconnectGraceMs = Number.isFinite(configuredDisconnectGraceMs) ? Math.ma
 const configuredTurnTimeoutMs = Number.parseInt(process.env.DUEL_TURN_TIMEOUT_MS || "90000", 10);
 const turnTimeoutMs = Number.isFinite(configuredTurnTimeoutMs) ? Math.max(1_000, configuredTurnTimeoutMs) : 90_000;
 const responseDemo = process.argv.includes("--scenario=trap-response");
-if (responseDemo && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const summonResponseDemo = process.argv.includes("--scenario=summon-response");
+const chainResponseDemo = process.argv.includes("--scenario=chain-response");
+const attackChainResponseDemo = process.argv.includes("--scenario=attack-chain-response");
+if ((responseDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const demoOpeningHands = attackChainResponseDemo ? {
+  p1: ["chain-nullifier", "solar-knight", "iron-guardian", "void-hound", "gale-mage"],
+  p2: ["mirror-snare", "iron-guardian", "solar-knight", "void-hound", "gale-mage"]
+} : responseDemo ? {
+  p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"],
+  p2: ["mirror-snare", "weakening-web", "storm-shift", "guard-sigil", "iron-guardian"]
+} : summonResponseDemo || chainResponseDemo ? {
+  p1: ["summon-flare", "solar-knight", "iron-guardian", "void-hound", "gale-mage"],
+  p2: chainResponseDemo
+    ? ["chain-nullifier", "ember-drake", "iron-guardian", "solar-knight", "void-hound"]
+    : ["ember-drake", "iron-guardian", "solar-knight", "void-hound", "gale-mage"]
+} : null;
 const roomStore = new DuelRoomStore({ createRoom: (options) => new DuelRoom({
   ...options,
   disconnectGraceMs,
   turnTimeoutMs,
-  ...(responseDemo ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: {
-    p1: ["solar-knight", "twin-summon", "gale-mage", "iron-guardian", "void-hound"],
-    p2: ["mirror-snare", "weakening-web", "storm-shift", "guard-sigil", "iron-guardian"]
-  } }) } : {})
+  ...(demoOpeningHands ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: demoOpeningHands }) } : {})
 }) });
 const connections = new Map();
 const responseTimers = new Map();
