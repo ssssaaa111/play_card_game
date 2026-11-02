@@ -49,8 +49,12 @@ const responseDemo = process.argv.includes("--scenario=trap-response");
 const summonResponseDemo = process.argv.includes("--scenario=summon-response");
 const chainResponseDemo = process.argv.includes("--scenario=chain-response");
 const attackChainResponseDemo = process.argv.includes("--scenario=attack-chain-response");
-if ((responseDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
-const demoOpeningHands = attackChainResponseDemo ? {
+const multiChainResponseDemo = process.argv.includes("--scenario=multi-chain-response");
+if ((responseDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const demoOpeningHands = multiChainResponseDemo ? {
+  p1: ["chain-nullifier", "chain-nullifier", "solar-knight", "iron-guardian", "void-hound"],
+  p2: ["mirror-snare", "chain-nullifier", "iron-guardian", "solar-knight", "void-hound"]
+} : attackChainResponseDemo ? {
   p1: ["chain-nullifier", "solar-knight", "iron-guardian", "void-hound", "gale-mage"],
   p2: ["mirror-snare", "iron-guardian", "solar-knight", "void-hound", "gale-mage"]
 } : responseDemo ? {

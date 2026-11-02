@@ -51,7 +51,7 @@ export function onlineChainTrapAction(state, playerId, cardId) {
   const chain = state.machine?.chain || [];
   const targetLink = chain.at(-1);
   if (state.gameOver || responseWindow?.playerId !== playerId || !["attack", "summon"].includes(responseWindow?.prompt) ||
-      chain.length !== 1 || !targetLink?.committed || targetLink.playerId === playerId || !targetLink.cardId) {
+      chain.length < 1 || !targetLink?.committed || targetLink.playerId === playerId || !targetLink.cardId) {
     throw new GameRuleError("No chain response belongs to this player");
   }
   const owner = state.players[playerId];
@@ -137,7 +137,7 @@ export function onlineChainResponse(state, playerId) {
   const chain = state.machine?.chain || [];
   const targetLink = chain.at(-1);
   if (state.gameOver || responseWindow?.playerId !== playerId || !["attack", "summon"].includes(responseWindow?.prompt) ||
-      chain.length !== 1 || !targetLink?.committed || targetLink.playerId === playerId || !responseWindow.triggerEventId) return null;
+      chain.length < 1 || !targetLink?.committed || targetLink.playerId === playerId || !responseWindow.triggerEventId) return null;
   const slots = state.players[playerId].zoneSlots?.spellTrapZone || state.players[playerId].spellTrapZone;
   const candidates = [];
   slots.forEach((cardId, index) => {

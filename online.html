@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="target-selection.css">
   <link rel="stylesheet" href="ui-polish.css">
   <link rel="stylesheet" href="duel-focus.css">
-  <link rel="stylesheet" href="online-duel.css?v=20261102-attack-chain-1">
+  <link rel="stylesheet" href="online-duel.css?v=20261102-multi-chain-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
@@ -120,19 +120,21 @@
   <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><div class="online-inspector-heading"><button class="btn online-inspector-back" id="inspectorBack" type="button" hidden>← 返回墓地</button><span id="inspectorKicker">CARD ARCHIVE</span><h2 id="inspectorTitle">卡牌详情</h2></div><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
   <dialog id="onlineResponse" class="online-response" aria-labelledby="responseTitle" aria-describedby="responseLead responseBattleSummary responseText">
     <section class="online-response-panel">
-      <header><span id="responseKicker">ATTACK RESPONSE</span><h2 id="responseTitle">对手发起攻击 · 你的响应</h2><p id="responseLead">攻击已锁定，选择发动陷阱或放弃响应。</p></header>
-      <div id="responseBattle" class="online-response-battle" hidden>
-        <article class="online-response-combatant attacker"><span>攻击方</span><strong id="responseAttackerName">攻击怪兽</strong><b id="responseAttackerStat">ATK 0</b></article>
-        <div class="online-response-route"><span aria-hidden="true">→</span><b id="responseBattleBadge">攻击</b></div>
-        <article class="online-response-combatant target"><span>目标</span><strong id="responseTargetName">防守目标</strong><b id="responseTargetStat">DEF 0</b></article>
+      <div class="online-response-scroll">
+        <header><span id="responseKicker">ATTACK RESPONSE</span><h2 id="responseTitle">对手发起攻击 · 你的响应</h2><p id="responseLead">攻击已锁定，选择发动陷阱或放弃响应。</p></header>
+        <div id="responseBattle" class="online-response-battle" hidden>
+          <article class="online-response-combatant attacker"><span>攻击方</span><strong id="responseAttackerName">攻击怪兽</strong><b id="responseAttackerStat">ATK 0</b></article>
+          <div class="online-response-route"><span aria-hidden="true">→</span><b id="responseBattleBadge">攻击</b></div>
+          <article class="online-response-combatant target"><span>目标</span><strong id="responseTargetName">防守目标</strong><b id="responseTargetStat">DEF 0</b></article>
+        </div>
+        <p id="responseBattleSummary" class="online-response-summary" hidden></p>
+        <p id="responseCountdown" class="online-response-countdown" role="timer" aria-live="off"></p>
+        <p id="responseText" class="online-response-rule"></p>
+        <div id="responseChain" class="chain-stack" hidden></div>
+        <div id="responseChoices" class="chain-choices"></div>
+        <p id="responseStatus" role="status" aria-live="polite"></p>
+        <p id="responseError" class="error-copy" role="alert"></p>
       </div>
-      <p id="responseBattleSummary" class="online-response-summary" hidden></p>
-      <p id="responseCountdown" class="online-response-countdown" role="timer" aria-live="off"></p>
-      <p id="responseText" class="online-response-rule"></p>
-      <div id="responseChain" class="chain-stack" hidden></div>
-      <div id="responseChoices" class="chain-choices"></div>
-      <p id="responseStatus" role="status" aria-live="polite"></p>
-      <p id="responseError" class="error-copy" role="alert"></p>
       <footer><button id="responseActivate" class="btn primary" type="button">发动陷阱</button><button id="responsePass" class="btn" type="button">放弃响应，继续结算</button></footer>
     </section>
   </dialog>
@@ -160,6 +162,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js?v=20261102-attack-chain-1"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261102-multi-chain-1"></script>
 </body>
 </html>
