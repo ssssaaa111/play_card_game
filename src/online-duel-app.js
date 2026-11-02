@@ -15,7 +15,7 @@ import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType 
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261102-multi-chain-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261103-chain-resolution-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -30,7 +30,7 @@ const elements = Object.fromEntries([
   "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChain", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
   "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
-  "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "phaseStage"
+  "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "chainResolutionStage", "phaseStage"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY_PREFIX = "star-card-duel:online-session:v2";
@@ -57,6 +57,8 @@ let connectionCountdownInterval = null;
 let pendingActionCue = null;
 let lastFieldPositions = new Map();
 let cueCleanupTimer = null;
+let chainResolutionTimer = null;
+let chainResolutionActive = false;
 let lastResultKey = null;
 let resultRevealTimer = null;
 let inspectorCollection = null;
@@ -170,7 +172,7 @@ function renderConnectionState(view = client.view) {
   const paused = Boolean(panel);
   document.body.dataset.onlinePaused = String(paused);
   elements.connectionOverlay.hidden = !paused;
-  elements.handPanel.inert = paused;
+  elements.handPanel.inert = paused || chainResolutionActive;
   elements.duelPanel.dataset.connectionPaused = String(paused);
   elements.forfeitButton.disabled = panel?.kind === "self" || actionPending || forfeitPending;
   syncConnectionCountdown(panel);
@@ -433,6 +435,7 @@ function syncActionReceipt(view) {
     clearActionReceipt();
     pendingActionCue = null;
     lastFieldPositions = new Map();
+    clearChainResolutionStage();
     phaseStageController.reset();
     return;
   }
@@ -497,6 +500,97 @@ function pulseActionAnchor(anchor, kind) {
   window.setTimeout(() => anchor.classList.remove("online-action-focus", "summon", "spell", "trap", "effect", "set", "mode"), 1100);
 }
 
+function clearChainResolutionStage({ rerender = false } = {}) {
+  if (chainResolutionTimer) window.clearTimeout(chainResolutionTimer);
+  chainResolutionTimer = null;
+  chainResolutionActive = false;
+  document.body.dataset.onlineChainPlayback = "false";
+  elements.chainResolutionStage.hidden = true;
+  elements.chainResolutionStage.replaceChildren();
+  elements.duelPanel.inert = false;
+  elements.handPanel.inert = connectionPaused();
+  if (rerender && client.view) render(client.view);
+}
+
+function playChainResolutionStage(view, cue) {
+  clearChainResolutionStage();
+  if (elements.onlineResponse.open) elements.onlineResponse.close();
+  clearResponseCountdown();
+  document.body.dataset.onlineResponse = "none";
+  const stage = elements.chainResolutionStage;
+  const frame = document.createElement("div");
+  frame.className = "online-chain-resolution-frame";
+  const header = document.createElement("header");
+  const kicker = document.createElement("span");
+  kicker.textContent = "CHAIN RESOLUTION";
+  const title = document.createElement("h2");
+  title.textContent = cue.label;
+  const order = document.createElement("p");
+  order.textContent = `结算顺序：${cue.resolutionOrder}`;
+  header.append(kicker, title, order);
+
+  const track = document.createElement("div");
+  track.className = "online-chain-resolution-track";
+  track.setAttribute("role", "list");
+  cue.links.forEach((link, index) => {
+    const entry = document.createElement("article");
+    entry.className = `online-chain-resolution-link ${link.status}`;
+    entry.style.setProperty("--resolve-step", String(index));
+    entry.dataset.chainIndex = String(link.chainIndex);
+    entry.dataset.status = link.status;
+    entry.setAttribute("role", "listitem");
+    const marker = document.createElement("b");
+    marker.textContent = `CL${link.chainIndex}`;
+    const card = onlineCard(view, link.cardId);
+    const visual = document.createElement("div");
+    visual.className = "online-chain-resolution-card";
+    if (card) {
+      const display = onlineDisplayCard(card);
+      const face = createCardElement(document, display, { asset: assetForCard(display), showStateRail: false });
+      face.classList.add("online-chain-resolution-card-face");
+      visual.appendChild(face);
+    } else {
+      visual.textContent = link.name.slice(0, 1);
+    }
+    const copy = document.createElement("div");
+    const owner = document.createElement("span");
+    owner.textContent = link.ownerLabel;
+    const name = document.createElement("strong");
+    name.textContent = link.name;
+    const status = document.createElement("em");
+    status.textContent = link.status === "negated" && link.negatedByChainIndex
+      ? `被 CL${link.negatedByChainIndex} 无效`
+      : link.statusLabel;
+    copy.append(owner, name, status);
+    entry.append(marker, visual, copy);
+    track.appendChild(entry);
+  });
+
+  const result = document.createElement("footer");
+  result.className = "online-chain-resolution-result";
+  result.style.setProperty("--chain-result-delay", `${360 + cue.linkCount * 480}ms`);
+  const resultKicker = document.createElement("span");
+  resultKicker.textContent = "RESOLUTION COMPLETE";
+  const resultSummary = document.createElement("strong");
+  resultSummary.textContent = cue.summary;
+  result.append(resultKicker, resultSummary);
+  if (cue.outcome) {
+    const outcome = document.createElement("p");
+    outcome.textContent = cue.outcome;
+    result.appendChild(outcome);
+  }
+  frame.append(header, track, result);
+  stage.appendChild(frame);
+  stage.setAttribute("aria-label", `${cue.label}。${cue.summary}${cue.outcome ? `。${cue.outcome}` : ""}`);
+  stage.hidden = false;
+  document.body.dataset.onlineChainPlayback = "true";
+  chainResolutionActive = true;
+  elements.duelPanel.inert = true;
+  elements.handPanel.inert = true;
+  const duration = Math.min(7_200, 1_750 + cue.linkCount * 520);
+  chainResolutionTimer = window.setTimeout(() => clearChainResolutionStage({ rerender: true }), duration);
+}
+
 function captureFieldPositions(view) {
   const positions = new Map();
   for (const seatId of [view.viewerSeatId, view.opponentSeatId]) {
@@ -511,6 +605,12 @@ function playPendingActionCue(view) {
   const cue = pendingActionCue;
   pendingActionCue = null;
   if (!cue || !elements.effectLayer) {
+    captureFieldPositions(view);
+    return;
+  }
+
+  if (cue.kind === "chain") {
+    playChainResolutionStage(view, cue);
     captureFieldPositions(view);
     return;
   }
@@ -746,7 +846,7 @@ function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
 }
 
 async function sendAction(action) {
-  if (actionPending || !action || connectionPaused()) return;
+  if (actionPending || chainResolutionActive || !action || connectionPaused()) return;
   clearEndTurnConfirmation();
   clearActionReceipt();
   selection = null;

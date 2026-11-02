@@ -7,11 +7,11 @@ const PUBLIC_EVENT_FIELDS = new Set([
   "phase", "fromPhase", "nextPhase", "timing", "amount", "requested", "count",
   "mode", "from", "to", "index", "reason", "endedBy", "summonType", "ability", "uses",
   "comboId", "window", "windowType", "prompt", "damage", "destroyed",
-  "attackerAtk", "targetValue", "targetMode", "direct", "result"
+  "attackerAtk", "targetValue", "targetMode", "direct", "result", "linkId", "skipped"
 ]);
 
 const CARD_EVENT_FIELDS = new Set([
-  "cardId", "sourceCardId", "targetCardId", "attackerCardId", "declarationEventId"
+  "cardId", "sourceCardId", "targetCardId", "targetEffectId", "attackerCardId", "declarationEventId"
 ]);
 
 const PUBLIC_BATTLE_OUTCOME_FIELDS = new Set([

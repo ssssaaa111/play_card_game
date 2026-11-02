@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="target-selection.css">
   <link rel="stylesheet" href="ui-polish.css">
   <link rel="stylesheet" href="duel-focus.css">
-  <link rel="stylesheet" href="online-duel.css?v=20261102-multi-chain-1">
+  <link rel="stylesheet" href="online-duel.css?v=20261103-chain-resolution-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
@@ -109,6 +109,7 @@
     </section>
   </div>
   <div class="effect-layer online-effect-layer" id="effectLayer" aria-hidden="true"></div>
+  <section class="online-chain-resolution-stage" id="chainResolutionStage" hidden aria-live="polite" aria-atomic="true"></section>
   <div class="phase-stage" id="phaseStage" data-active="false" hidden aria-live="polite" aria-atomic="true">
     <div class="phase-stage-frame">
       <span class="phase-stage-code" data-phase-stage-code>MAIN PHASE</span>
@@ -162,6 +163,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js?v=20261102-multi-chain-1"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261103-chain-resolution-1"></script>
 </body>
 </html>

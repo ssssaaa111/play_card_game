@@ -84,3 +84,25 @@ test("battle result events expose only the public outcome summary", () => {
     wear: 0
   });
 });
+
+test("chain resolution events expose public ordering without leaking prepared actions", () => {
+  const state = createOnlineDuelState();
+  const visibleCardId = state.players.p1.hand[0];
+  state.events.push({
+    id: 1001,
+    type: "CHAIN_LINK_RESOLVED",
+    playerId: "p1",
+    linkId: 3,
+    cardId: visibleCardId,
+    targetEffectId: visibleCardId,
+    skipped: true,
+    action: { type: "ACTIVATE_CARD", secret: "must-not-leak" }
+  });
+
+  const event = buildDuelView(state, "p1").recentEvents.find((entry) => entry.id === 1001);
+  assert.equal(event.linkId, 3);
+  assert.equal(event.skipped, true);
+  assert.equal(event.cardId, visibleCardId);
+  assert.equal(event.targetEffectId, visibleCardId);
+  assert.equal("action" in event, false);
+});

@@ -442,6 +442,93 @@ body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).targe
 
 body[data-online-status="playing"] > .online-effect-layer { z-index: 140; }
 .online-effect-layer[data-online-cue] { overflow: visible; }
+body[data-online-chain-playback="true"] { overflow: hidden; }
+.online-chain-resolution-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  display: grid;
+  place-items: center;
+  padding: clamp(14px, 3vw, 32px);
+  overflow: hidden;
+  color: #f8fbff;
+  pointer-events: auto;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(133,73,184,.28), transparent 44%),
+    linear-gradient(180deg, rgba(5,7,15,.78), rgba(4,6,12,.94));
+  backdrop-filter: blur(7px) saturate(.8);
+  animation: online-chain-stage-in .24s ease-out both;
+}
+.online-chain-resolution-stage[hidden] { display: none; }
+.online-chain-resolution-frame {
+  width: min(940px, 96vw);
+  max-height: 94vh;
+  padding: clamp(18px, 3vw, 30px);
+  overflow: auto;
+  border: 1px solid rgba(255,126,190,.48);
+  border-radius: 20px;
+  background: linear-gradient(150deg, rgba(27,18,42,.96), rgba(9,14,24,.98));
+  box-shadow: 0 28px 100px #000d, 0 0 70px rgba(255,72,147,.15), inset 0 1px rgba(255,255,255,.06);
+}
+.online-chain-resolution-frame > header { display: grid; justify-items: center; text-align: center; }
+.online-chain-resolution-frame > header > span,
+.online-chain-resolution-result > span { color: #ff9ac5; font-size: 10px; font-weight: 900; letter-spacing: .22em; }
+.online-chain-resolution-frame h2 { margin: 6px 0 4px; color: #fff0f7; font-size: clamp(25px, 5vw, 42px); line-height: 1; text-shadow: 0 0 28px rgba(255,72,147,.4); }
+.online-chain-resolution-frame header p { margin: 5px 0 18px; color: #cbbbd4; font-size: 12px; }
+.online-chain-resolution-track { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; }
+.online-chain-resolution-link {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 62px minmax(0,1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  opacity: .18;
+  background: rgba(4,8,15,.72);
+  transform: translateY(18px) scale(.94);
+  animation: online-chain-link-resolve .58s cubic-bezier(.18,.88,.22,1.15) calc(180ms + var(--resolve-step) * 480ms) both;
+}
+.online-chain-resolution-link > b { align-self: stretch; display: grid; place-items: center; min-width: 43px; border-radius: 9px; color: #ffe4a7; background: rgba(246,189,96,.12); font-size: 12px; }
+.online-chain-resolution-link > div:last-child { display: grid; min-width: 0; gap: 3px; }
+.online-chain-resolution-link > div:last-child > span { color: #b7a9c4; font-size: 9px; font-weight: 900; letter-spacing: .12em; }
+.online-chain-resolution-link > div:last-child > strong { overflow: hidden; color: #f9f4ff; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.online-chain-resolution-link > div:last-child > em { color: #83f1cd; font-size: 10px; font-style: normal; font-weight: 900; }
+.online-chain-resolution-card { width: 62px; height: 82px; overflow: hidden; border-radius: 7px; background: linear-gradient(145deg,#28183e,#111a27); box-shadow: 0 7px 18px #0008; }
+.online-chain-resolution-card-face.card { width: 62px; height: 82px; min-height: 0; padding: 4px; border-radius: 7px; pointer-events: none; }
+.online-chain-resolution-card-face :is(.card-text,.stats,.card-state-rail,.element-badge) { display: none; }
+.online-chain-resolution-card-face .card-head { min-height: 12px; }
+.online-chain-resolution-card-face .card-name { font-size: 7px; }
+.online-chain-resolution-card-face .badge { font-size: 6px; padding: 1px 3px; }
+.online-chain-resolution-card-face .art { min-height: 53px; }
+.online-chain-resolution-link.resolved { --chain-step-color: 131,241,205; border-color: rgba(131,241,205,.44); }
+.online-chain-resolution-link.negated { --chain-step-color: 255,103,137; border-color: rgba(255,103,137,.5); background: linear-gradient(135deg, rgba(91,18,44,.52), rgba(8,12,20,.78)); }
+.online-chain-resolution-link.negated::after { content: "无效"; position: absolute; right: 8px; top: 8px; padding: 3px 6px; border: 2px solid rgba(255,119,148,.88); border-radius: 5px; color: #ff9bb2; font-size: 10px; font-weight: 1000; letter-spacing: .14em; transform: rotate(-8deg); text-shadow: 0 0 12px rgba(255,59,108,.8); }
+.online-chain-resolution-link.negated > div:last-child > em { color: #ff91aa; }
+.online-chain-resolution-link.negated .online-chain-resolution-card { filter: grayscale(.82) brightness(.63); }
+.online-chain-resolution-result { display: grid; justify-items: center; gap: 6px; margin-top: 18px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,.1); text-align: center; opacity: 0; animation: online-chain-result-in .45s ease-out var(--chain-result-delay) both; }
+.online-chain-resolution-result > strong { color: #fff0b8; font-size: clamp(16px, 3vw, 22px); }
+.online-chain-resolution-result > p { margin: 0; color: #dbe8f6; font-size: 13px; }
+@keyframes online-chain-stage-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes online-chain-link-resolve {
+  0% { opacity: .18; transform: translateY(18px) scale(.94); filter: brightness(.75); }
+  48% { opacity: 1; transform: translateY(-7px) scale(1.045); filter: brightness(1.65); box-shadow: 0 0 0 3px rgba(var(--chain-step-color,255,116,176),.2), 0 0 34px rgba(var(--chain-step-color,255,116,176),.36); }
+  100% { opacity: 1; transform: none; filter: none; box-shadow: 0 10px 26px #0007; }
+}
+@keyframes online-chain-result-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (max-width: 620px) {
+  .online-chain-resolution-frame { max-height: 96vh; padding: 15px; }
+  .online-chain-resolution-track { grid-template-columns: 1fr 1fr; }
+  .online-chain-resolution-link { grid-template-columns: auto 46px minmax(0,1fr); padding: 8px; }
+  .online-chain-resolution-card { width: 46px; height: 64px; }
+  .online-chain-resolution-card-face.card { width: 46px; height: 64px; }
+  .online-chain-resolution-card-face .art { min-height: 39px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .online-chain-resolution-stage, .online-chain-resolution-link, .online-chain-resolution-result { animation-duration: .01ms; animation-delay: 0ms; }
+}
 #app .duel-table :is(.slot, .trap-slot, .card).online-action-focus {
   position: relative;
   z-index: 12;
