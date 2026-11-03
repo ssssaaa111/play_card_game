@@ -106,3 +106,21 @@ test("chain resolution events expose public ordering without leaking prepared ac
   assert.equal(event.targetEffectId, visibleCardId);
   assert.equal("action" in event, false);
 });
+
+test("the latest completed chain remains replayable after it leaves the rolling event window", () => {
+  const state = createOnlineDuelState();
+  const visibleCardId = state.players.p1.hand[0];
+  state.events.push(
+    { id: 2001, type: "CHAIN_LINK_RESOLVED", playerId: "p1", linkId: 1, cardId: visibleCardId, action: { secret: "hidden" } },
+    { id: 2002, type: "CHAIN_RESOLVED", playerId: "p1" }
+  );
+  for (let index = 0; index < 45; index += 1) {
+    state.events.push({ id: 2100 + index, type: "PHASE_CHANGED", playerId: index % 2 ? "p1" : "p2", to: "main" });
+  }
+
+  const view = buildDuelView(state, "p1");
+  assert.equal(view.recentEvents.some((event) => event.type === "CHAIN_RESOLVED"), false);
+  assert.deepEqual(view.lastChainEvents.map((event) => event.type), ["CHAIN_LINK_RESOLVED", "CHAIN_RESOLVED"]);
+  assert.equal(view.lastChainEvents[0].cardId, visibleCardId);
+  assert.equal("action" in view.lastChainEvents[0], false);
+});

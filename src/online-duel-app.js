@@ -15,7 +15,7 @@ import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType 
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261103-chain-resolution-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261103-reconnect-brief-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -30,7 +30,8 @@ const elements = Object.fromEntries([
   "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChain", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
   "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
-  "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "effectLayer", "chainResolutionStage", "phaseStage"
+  "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "lastChainButton", "effectLayer", "chainResolutionStage", "phaseStage",
+  "recoveryBrief", "recoveryKicker", "recoveryTitle", "recoveryClose", "recoverySelfName", "recoverySelfLp", "recoveryTurn", "recoveryPhase", "recoveryRivalName", "recoveryRivalLp", "recoveryStatus", "recoveryEvents", "recoveryLog", "recoveryReplay", "recoveryContinue"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY_PREFIX = "star-card-duel:online-session:v2";
@@ -68,6 +69,7 @@ let transportState = "connecting";
 let reconnectAttempt = 0;
 let reconnectTimer = null;
 let reconnectInFlight = false;
+let recoveryResumePending = false;
 let recoveryFailed = false;
 let intentionalDisconnect = false;
 let forfeitPending = false;
@@ -215,6 +217,7 @@ async function attemptReconnect({ immediate = false } = {}) {
   renderConnectionState();
   try {
     await client.connect();
+    recoveryResumePending = true;
     const result = await client.resumeRoom(session);
     saveSession();
     reconnectAttempt = 0;
@@ -223,6 +226,7 @@ async function attemptReconnect({ immediate = false } = {}) {
     render(result.view);
     return true;
   } catch (error) {
+    recoveryResumePending = false;
     const terminal = ["ROOM_NOT_FOUND", "UNKNOWN_SEAT", "INVALID_MESSAGE"].includes(error.code);
     recoveryFailed = terminal || reconnectAttempt >= 8;
     setConnection(recoveryFailed ? "error" : "reconnecting", recoveryFailed ? "无法恢复原房间" : "连接中断 · 正在重试");
@@ -310,11 +314,13 @@ async function connectOnlineService() {
     return;
   }
   try {
+    recoveryResumePending = true;
     const result = await client.resumeRoom(session);
     saveSession();
     setConnection("connected", `房间已恢复 · ${seatName(result.view, result.seatId)}`);
     render(result.view);
   } catch (error) {
+    recoveryResumePending = false;
     if (["ROOM_NOT_FOUND", "UNKNOWN_SEAT", "INVALID_MESSAGE", "ACCOUNT_MISMATCH"].includes(error.code)) {
       clearStoredSession();
       elements.lobbyPanel.hidden = false;
@@ -440,6 +446,7 @@ function syncActionReceipt(view) {
     return;
   }
   const freshEvents = events.filter((event) => Number(event.id) > Number(lastObservedEventId || 0));
+  if (freshEvents.length) hideRecoveryBrief();
   const cue = onlineActionCue(view, freshEvents);
   const turnEvent = [...freshEvents].reverse().find((event) => event.type === "TURN_STARTED");
   const phaseEvent = !cue ? [...freshEvents].reverse().find((event) => event.type === "PHASE_CHANGED") : null;
@@ -589,6 +596,81 @@ function playChainResolutionStage(view, cue) {
   elements.handPanel.inert = true;
   const duration = Math.min(7_200, 1_750 + cue.linkCount * 520);
   chainResolutionTimer = window.setTimeout(() => clearChainResolutionStage({ rerender: true }), duration);
+}
+
+function latestChainCue(view = client.view) {
+  return onlineChainResolutionCue(view, view?.lastChainEvents?.length ? view.lastChainEvents : view?.recentEvents || []);
+}
+
+function hideRecoveryBrief({ focus = false } = {}) {
+  if (elements.recoveryBrief.hidden) return;
+  elements.recoveryBrief.hidden = true;
+  document.body.dataset.onlineRecovery = "false";
+  if (focus && !elements.endTurnButton.hidden && !elements.endTurnButton.disabled) {
+    elements.endTurnButton.focus({ preventScroll: true });
+  }
+}
+
+function rebaseRecoveredView(view) {
+  const newestId = (view?.recentEvents || []).reduce((max, event) => Math.max(max, Number(event.id) || 0), 0);
+  observedReceiptRoomCode = view?.roomCode || null;
+  lastObservedEventId = newestId;
+  pendingActionCue = null;
+  selection = null;
+  clearActionReceipt();
+  clearChainResolutionStage();
+  phaseStageController.reset();
+  lastFieldPositions = new Map();
+}
+
+function showRecoveryBrief(view) {
+  const brief = onlineReconnectBrief(view);
+  if (!brief) {
+    hideRecoveryBrief();
+    return;
+  }
+  elements.recoveryKicker.textContent = `${brief.kicker} · DUEL ${brief.duelNumber}`;
+  elements.recoveryTitle.textContent = brief.title;
+  elements.recoverySelfName.textContent = brief.selfName;
+  elements.recoverySelfLp.textContent = `${brief.selfLp} LP`;
+  elements.recoveryTurn.textContent = brief.turnLabel;
+  elements.recoveryPhase.textContent = brief.phaseLabel;
+  elements.recoveryRivalName.textContent = brief.rivalName;
+  elements.recoveryRivalLp.textContent = `${brief.rivalLp} LP`;
+  elements.recoveryStatus.textContent = brief.status;
+  elements.recoveryStatus.dataset.responsePending = String(brief.responsePending);
+  elements.recoveryEvents.replaceChildren();
+  if (!brief.entries.length) {
+    const empty = document.createElement("li");
+    empty.className = "online-recovery-empty";
+    empty.textContent = "当前还没有需要补看的关键行动";
+    elements.recoveryEvents.appendChild(empty);
+  } else {
+    for (const entry of brief.entries) {
+      const item = document.createElement("li");
+      item.dataset.category = entry.category;
+      item.dataset.tone = entry.tone;
+      const label = document.createElement("span");
+      label.textContent = entry.label;
+      const text = document.createElement("strong");
+      text.textContent = entry.text;
+      item.append(label, text);
+      elements.recoveryEvents.appendChild(item);
+    }
+  }
+  elements.recoveryReplay.hidden = !brief.chain;
+  elements.recoveryReplay.textContent = brief.chain ? `回放 ${brief.chain.label.replace("连锁结算 · ", "最近连锁 · ")}` : "回放最近连锁";
+  elements.recoveryReplay.title = brief.chain?.summary || "";
+  elements.recoveryBrief.hidden = false;
+  document.body.dataset.onlineRecovery = "true";
+}
+
+function replayLatestChain() {
+  const cue = latestChainCue();
+  if (!cue || chainResolutionActive) return;
+  hideRecoveryBrief();
+  setEventLogOpen(false);
+  playChainResolutionStage(client.view, cue);
 }
 
 function captureFieldPositions(view) {
@@ -847,6 +929,7 @@ function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
 
 async function sendAction(action) {
   if (actionPending || chainResolutionActive || !action || connectionPaused()) return;
+  hideRecoveryBrief();
   clearEndTurnConfirmation();
   clearActionReceipt();
   selection = null;
@@ -1513,6 +1596,9 @@ function renderRoom(view) {
 
 function renderEvents(view) {
   const timeline = onlineEventTimeline(view);
+  const chainCue = latestChainCue(view);
+  elements.lastChainButton.hidden = !chainCue;
+  elements.lastChainButton.title = chainCue ? `${chainCue.label}：${chainCue.summary}` : "当前没有可回放的连锁";
   const latestId = timeline.reduce((max, entry) => Math.max(max, entry.id), 0);
   if (eventLogRoomCode !== view.roomCode || latestId < eventReadThroughId) {
     eventLogRoomCode = view.roomCode;
@@ -1573,13 +1659,22 @@ function renderEvents(view) {
 
 function render(view) {
   if (!view) return;
+  const restoring = recoveryResumePending;
+  if (restoring) {
+    recoveryResumePending = false;
+    rebaseRecoveredView(view);
+  }
   syncRoomUrl(view.roomCode);
   renderRoom(view);
   syncActionReceipt(view);
   renderTurnCountdown(view);
   elements.duelPanel.hidden = view.status === "waiting";
   elements.handPanel.hidden = view.status === "waiting";
-  if (view.status === "waiting") return;
+  if (view.status === "waiting") {
+    hideRecoveryBrief();
+    elements.lastChainButton.hidden = true;
+    return;
+  }
   if (view.machine.responseWindow) selection = null;
   const model = onlineSelectionModel(view, selection);
   if (!model) selection = null;
@@ -1611,6 +1706,7 @@ function render(view) {
   renderEvents(view);
   renderConnectionState(view);
   playPendingActionCue(view);
+  if (restoring) showRecoveryBrief(view);
 }
 
 client.on("view", render);
@@ -1703,6 +1799,14 @@ elements.soundBtn?.addEventListener("click", () => {
   const enabled = toggleAudioSound({ previewSound: "click" });
   elements.soundBtn.title = enabled ? "关闭联机决斗音效" : "开启联机决斗音效";
 });
+elements.lastChainButton.addEventListener("click", replayLatestChain);
+elements.recoveryClose.addEventListener("click", () => hideRecoveryBrief({ focus: true }));
+elements.recoveryContinue.addEventListener("click", () => hideRecoveryBrief({ focus: true }));
+elements.recoveryReplay.addEventListener("click", replayLatestChain);
+elements.recoveryLog.addEventListener("click", () => {
+  hideRecoveryBrief();
+  setEventLogOpen(true);
+});
 document.addEventListener("pointerdown", unlockAudio, { capture: true, once: true });
 elements.logToggle.addEventListener("click", () => setEventLogOpen(elements.eventLog.hidden));
 elements.eventLogClose.addEventListener("click", () => {
@@ -1736,7 +1840,11 @@ elements.inspectorContent.addEventListener("click", (event) => {
   const card = onlineCard(client.view, button.dataset.cardId);
   if (card) showCards([card], card.name, { preserveCollection: true });
 });
-document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !elements.cardInspector.open) cancelSelection(); });
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || elements.cardInspector.open) return;
+  if (!elements.recoveryBrief.hidden) hideRecoveryBrief({ focus: true });
+  else cancelSelection();
+});
 elements.roomCodeInput.value = new URLSearchParams(window.location.search).get("room") || "";
 renderSoundButton();
 setAuthMode("login");

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineChainResolutionCue, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
@@ -593,6 +593,67 @@ test("multi-link chain cues replay every link in resolution order and explain ne
     { chainIndex: 1, actor: "ai", status: "negated", negatedByChainIndex: 2 }
   ]);
   assert.deepEqual(onlineActionCue(view, events), cue, "the chain replay must take priority over a generic trap cue");
+});
+
+test("latest chain replay isolates the newest completed chain from older public history", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.grave = [
+    { id: "old:2", type: "trap", name: "旧反制" },
+    { id: "new:2", type: "trap", name: "断链裁决" }
+  ];
+  view.players.p2.grave = [
+    { id: "old:1", type: "trap", name: "旧陷阱" },
+    { id: "new:1", type: "trap", name: "镜光反制" }
+  ];
+  const cue = onlineChainResolutionCue(view, [
+    { id: 10, type: "CHAIN_LINK_RESOLVED", playerId: "p1", linkId: 2, cardId: "old:2" },
+    { id: 11, type: "CHAIN_LINK_RESOLVED", playerId: "p2", linkId: 1, cardId: "old:1" },
+    { id: 12, type: "CHAIN_RESOLVED", playerId: "p1" },
+    { id: 20, type: "CHAIN_LINK_RESOLVED", playerId: "p1", linkId: 2, cardId: "new:2" },
+    { id: 21, type: "EFFECT_SKIPPED", playerId: "p2", cardId: "new:1", sourceCardId: "new:2", reason: "negated" },
+    { id: 22, type: "CHAIN_LINK_RESOLVED", playerId: "p2", linkId: 1, cardId: "new:1", skipped: true },
+    { id: 23, type: "CHAIN_RESOLVED", playerId: "p1" }
+  ]);
+  assert.equal(cue.linkCount, 2);
+  assert.equal(cue.resolutionOrder, "CL2 → CL1");
+  assert.equal(cue.summary, "CL2 生效 · CL1 被无效");
+  assert.deepEqual(cue.links.map((link) => link.name), ["断链裁决", "镜光反制"]);
+});
+
+test("reconnect brief restores LP, priority, response status, recent actions, and replay availability", () => {
+  const view = snapshot();
+  view.roomCode = "ABC123";
+  view.duelNumber = 2;
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p1.lp = 2800;
+  view.players.p2.lp = 1700;
+  view.turn = { playerId: "p1", phase: "battle" };
+  view.machine = { responseWindow: { playerId: "p1", eventName: "chain" } };
+  view.players.p1.grave = [{ id: "nullifier:1", type: "trap", name: "断链裁决" }];
+  view.players.p2.grave = [{ id: "mirror:1", type: "trap", name: "镜光反制" }];
+  view.recentEvents = [
+    { id: 70, type: "CHAIN_LINK_RESOLVED", playerId: "p1", linkId: 2, cardId: "nullifier:1" },
+    { id: 71, type: "EFFECT_SKIPPED", playerId: "p2", cardId: "mirror:1", sourceCardId: "nullifier:1", reason: "negated" },
+    { id: 72, type: "CHAIN_LINK_RESOLVED", playerId: "p2", linkId: 1, cardId: "mirror:1", skipped: true },
+    { id: 73, type: "CHAIN_RESOLVED", playerId: "p1" }
+  ];
+
+  const brief = onlineReconnectBrief(view);
+  assert.equal(brief.title, "已恢复至当前战况");
+  assert.equal(brief.duelNumber, 2);
+  assert.deepEqual([brief.selfName, brief.selfLp, brief.rivalName, brief.rivalLp], ["星野", 2800, "月见", 1700]);
+  assert.equal(brief.turnLabel, "你的回合");
+  assert.equal(brief.phaseLabel, "战斗阶段");
+  assert.equal(brief.status, "响应窗口仍在等待你的选择");
+  assert.equal(brief.entries[0].text, "CL2 生效 · CL1 被无效");
+  assert.deepEqual(brief.chain, { id: 73, label: "连锁结算 · 2 段", summary: "CL2 生效 · CL1 被无效" });
+
+  view.lastChainEvents = view.recentEvents;
+  view.recentEvents = [{ id: 90, type: "TURN_STARTED", playerId: "p1" }];
+  assert.deepEqual(onlineReconnectBrief(view).chain, {
+    id: 73, label: "连锁结算 · 2 段", summary: "CL2 生效 · CL1 被无效"
+  });
 });
 
 test("completed chains produce a readable receipt and timeline entry", () => {
