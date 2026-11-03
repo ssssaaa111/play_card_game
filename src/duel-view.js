@@ -7,11 +7,11 @@ const PUBLIC_EVENT_FIELDS = new Set([
   "phase", "fromPhase", "nextPhase", "timing", "amount", "requested", "count",
   "mode", "from", "to", "index", "reason", "endedBy", "summonType", "ability", "uses",
   "comboId", "window", "windowType", "prompt", "damage", "destroyed",
-  "attackerAtk", "targetValue", "targetMode", "direct", "result"
+  "attackerAtk", "targetValue", "targetMode", "direct", "result", "linkId", "skipped"
 ]);
 
 const CARD_EVENT_FIELDS = new Set([
-  "cardId", "sourceCardId", "targetCardId", "attackerCardId", "declarationEventId"
+  "cardId", "sourceCardId", "targetCardId", "targetEffectId", "attackerCardId", "declarationEventId"
 ]);
 
 const PUBLIC_BATTLE_OUTCOME_FIELDS = new Set([
@@ -106,6 +106,21 @@ function publicEvent(event, visibleIds) {
     }
   }
   return result;
+}
+
+function latestCompletedChainEvents(events = []) {
+  const completedIndex = events.findLastIndex((event) => event?.type === "CHAIN_RESOLVED");
+  if (completedIndex < 0) return [];
+  const previousCompletedIndex = events.slice(0, completedIndex).findLastIndex((event) => event?.type === "CHAIN_RESOLVED");
+  const chainTypes = new Set(["CHAIN_LINK_RESOLVED", "EFFECT_SKIPPED", "CHAIN_RESOLVED"]);
+  const chain = events
+    .slice(previousCompletedIndex + 1, completedIndex + 1)
+    .filter((event) => chainTypes.has(event?.type));
+  const aftermathTypes = new Set(["DAMAGE_DEALT", "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED"]);
+  const aftermath = events
+    .slice(completedIndex + 1, completedIndex + 7)
+    .filter((event) => aftermathTypes.has(event?.type));
+  return [...chain, ...aftermath];
 }
 
 function projectedPlayer(state, seatId, viewerSeatId) {
@@ -250,6 +265,9 @@ export function buildDuelView(state, viewerSeatId, {
     legalActions,
     recentEvents: (state.events || [])
       .slice(-40)
+      .map((event) => publicEvent(event, visibleIds))
+      .filter(Boolean),
+    lastChainEvents: latestCompletedChainEvents(state.events || [])
       .map((event) => publicEvent(event, visibleIds))
       .filter(Boolean)
   };

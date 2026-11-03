@@ -83,12 +83,12 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   const css = readProjectFile("online-duel.css");
   const app = readProjectFile("src/online-duel-app.js");
 
-  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=20261102-attack-chain-1"/);
-  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=20261102-attack-chain-1"><\/script>/);
+  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=20261103-reconnect-brief-1"/);
+  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=20261103-reconnect-brief-1"><\/script>/);
   assert.match(app, /hand-renderer\.js\?v=20261030-interaction-v2-2/);
   assert.match(app, /field-renderer\.js\?v=20261030-interaction-v2-2/);
-  assert.match(app, /online-duel-ui\.js\?v=20261102-attack-chain-1/);
-  assert.match(app, /trap-response-renderer\.js\?v=20261102-attack-chain-1/);
+  assert.match(app, /online-duel-ui\.js\?v=20261103-reconnect-brief-1/);
+  assert.match(app, /trap-response-renderer\.js\?v=20261102-multi-chain-1/);
   assert.doesNotMatch(app, /from "\.\/online-duel-ui\.js"/);
   assert.match(html, /id="lobbyPanel"/);
   assert.match(html, /id="authPanel"/);
@@ -102,6 +102,21 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="eventLog"/);
   assert.match(html, /id="duelHint"[^>]*aria-live="polite"/);
   assert.match(html, /id="turnClock"[^>]*role="timer"/);
+  assert.match(html, /class="online-response-scroll"/);
+  assert.match(html, /id="chainResolutionStage"[^>]*aria-live="polite"/);
+  assert.match(html, /id="lastChainButton"[^>]*hidden/);
+  assert.match(html, /id="recoveryBrief"[^>]*hidden[^>]*aria-labelledby="recoveryTitle"/);
+  assert.match(html, /id="recoveryEvents"/);
+  assert.match(css, /\.online-response-panel\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto/);
+  assert.match(css, /\.online-response-scroll\s*\{[^}]*overflow:\s*auto/);
+  assert.match(css, /\.online-response footer\s*\{[^}]*z-index:\s*2/);
+  assert.match(css, /\.online-chain-resolution-stage\s*\{/);
+  assert.match(css, /\.online-recovery-brief\s*\{/);
+  assert.match(app, /playChainResolutionStage\(view, cue\)/);
+  assert.match(app, /onlineReconnectBrief\(view\)/);
+  assert.match(app, /rebaseRecoveredView\(view\)/);
+  assert.match(app, /elements\.lastChainButton\.addEventListener\("click", replayLatestChain\)/);
+  assert.match(app, /if \(elements\.onlineResponse\.open\) elements\.onlineResponse\.close\(\)/);
   assert.match(html, /id="viewerIdentity"[^>]*hidden/);
   assert.match(html, /id="resultRematch"/);
   assert.match(html, /id="resultRematchStatus"[^>]*aria-live="polite"/);
@@ -788,7 +803,7 @@ test("browser smoke runner covers key click regressions", () => {
   assert.match(app, /fusionPreviewDetail: document\.querySelector\("#fusionPreviewDetail"\)/);
   assert.match(app, /chainStack: document\.querySelector\("#chainStack"\)/);
   assert.match(app, /from '\.\/trap-response-renderer\.js'/);
-  assert.match(trapResponseRenderer, /from "\.\/chain-view\.js\?v=20261102-attack-chain-1"/);
+  assert.match(trapResponseRenderer, /from "\.\/chain-view\.js\?v=20261102-multi-chain-1"/);
   assert.match(app, /from '\.\/setup-renderer\.js'/);
   assert.match(app, /renderSetupPanel\(document, els, \{/);
   assert.match(setupRenderer, /export function renderScenarioBrief/);

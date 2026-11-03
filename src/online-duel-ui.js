@@ -273,7 +273,8 @@ export function onlineRematchView(view) {
 
 const ACTION_RECEIPT_TYPES = new Set([
   "MONSTER_SUMMONED", "CARD_ACTIVATED", "ATTACK_DECLARED", "MONSTER_MODE_CHANGED",
-  "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN", "TURN_ENDED"
+  "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED", "TRAP_SET", "CARDS_DRAWN", "TURN_ENDED",
+  "CHAIN_RESOLVED"
 ]);
 
 function battleResultReceipt(view, event, events = []) {
@@ -358,6 +359,18 @@ export function onlineActionReceipt(view, event, { events = [] } = {}) {
   if (["BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED"].includes(event.type)) {
     return battleResultReceipt(view, event, events);
   }
+  if (event.type === "CHAIN_RESOLVED") {
+    const cue = onlineChainResolutionCue(view, events.filter((entry) => Number(entry.id) <= Number(event.id)));
+    if (!cue) return null;
+    return {
+      id: Number(event.id) || 0,
+      type: event.type,
+      actor: "system",
+      kind: "chain-result",
+      tone: cue.negatedCount ? "chain" : "success",
+      text: cue.summary
+    };
+  }
   const actorName = view?.seats?.find((seat) => seat.seatId === event.playerId)?.name || event.playerId || "系统";
   const cardId = event.cardId || event.attackerCardId || event.sourceCardId;
   const card = cardId ? onlineCard(view, cardId) : null;
@@ -386,7 +399,7 @@ const ONLINE_TIMELINE_TYPES = new Set([
   "MONSTER_SUMMONED", "CARD_ACTIVATED", "TRAP_SET", "MONSTER_MODE_CHANGED",
   "ATTACK_DECLARED", "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED",
   "DAMAGE_DEALT", "LP_HEALED", "CARD_DESTROYED", "EFFECT_SKIPPED",
-  "TURN_STARTED", "TURN_ENDED", "PHASE_CHANGED", "CARDS_DRAWN", "GAME_OVER_DECLARED"
+  "TURN_STARTED", "TURN_ENDED", "PHASE_CHANGED", "CARDS_DRAWN", "GAME_OVER_DECLARED", "CHAIN_RESOLVED"
 ]);
 
 const ONLINE_TIMELINE_META = {
@@ -395,7 +408,8 @@ const ONLINE_TIMELINE_META = {
   BATTLE_RESOLVED: ["结算", "battle"], ATTACK_CANCELED: ["阻断", "battle"], ATTACK_TARGET_CHANGED: ["转移", "battle"],
   DAMAGE_DEALT: ["伤害", "damage"], LP_HEALED: ["恢复", "heal"], CARD_DESTROYED: ["破坏", "damage"],
   EFFECT_SKIPPED: ["未生效", "system"], TURN_STARTED: ["回合", "turn"], TURN_ENDED: ["结束", "turn"],
-  PHASE_CHANGED: ["阶段", "turn"], CARDS_DRAWN: ["抽卡", "turn"], GAME_OVER_DECLARED: ["终局", "result"]
+  PHASE_CHANGED: ["阶段", "turn"], CARDS_DRAWN: ["抽卡", "turn"], GAME_OVER_DECLARED: ["终局", "result"],
+  CHAIN_RESOLVED: ["连锁", "chain"]
 };
 
 function onlineTimelineFallback(view, event) {
@@ -486,9 +500,106 @@ export function onlineEventSound(view, event) {
   return "";
 }
 
+export function onlineChainResolutionCue(view, events = []) {
+  const fresh = (events || []).filter(Boolean).sort((left, right) => Number(left.id) - Number(right.id));
+  const completedIndex = fresh.findLastIndex((event) => event.type === "CHAIN_RESOLVED");
+  const completed = fresh[completedIndex];
+  if (!completed) return null;
+  const previousCompletedIndex = fresh.slice(0, completedIndex).findLastIndex((event) => event.type === "CHAIN_RESOLVED");
+  const chainEvents = fresh.slice(previousCompletedIndex + 1, completedIndex + 1);
+  const resolvedEvents = chainEvents.filter((event) =>
+    event.type === "CHAIN_LINK_RESOLVED" && Number(event.id) <= Number(completed.id)
+  );
+  if (!resolvedEvents.length) return null;
+  const skippedEvents = chainEvents.filter((event) =>
+    event.type === "EFFECT_SKIPPED" && event.reason === "negated" && Number(event.id) <= Number(completed.id)
+  );
+  const linkCount = resolvedEvents.length;
+  const links = resolvedEvents.map((event, index) => {
+    const card = onlineCard(view, event.cardId);
+    const skipped = Boolean(event.skipped || skippedEvents.some((entry) => entry.cardId === event.cardId));
+    const sourceCardId = skippedEvents.find((entry) => entry.cardId === event.cardId)?.sourceCardId || null;
+    return {
+      chainIndex: Number(event.linkId) || linkCount - index,
+      cardId: event.cardId || null,
+      name: card?.name || "公开效果",
+      actor: event.playerId === view?.viewerSeatId ? "player" : "ai",
+      ownerLabel: event.playerId === view?.viewerSeatId ? "你" : "对手",
+      status: skipped ? "negated" : "resolved",
+      statusLabel: skipped ? "被无效" : "已生效",
+      sourceCardId
+    };
+  });
+  links.forEach((link) => {
+    link.negatedByChainIndex = link.sourceCardId
+      ? links.find((candidate) => candidate.cardId === link.sourceCardId)?.chainIndex || null
+      : null;
+    delete link.sourceCardId;
+  });
+  const resolved = links.filter((link) => link.status === "resolved");
+  const negated = links.filter((link) => link.status === "negated");
+  const resolvedLabel = resolved.map((link) => `CL${link.chainIndex}`).join("、") || "无";
+  const negatedLabel = negated.map((link) => `CL${link.chainIndex}`).join("、");
+  const battleEvent = fresh.slice(completedIndex + 1).find((event) =>
+    ["BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED"].includes(event.type)
+    && Number(event.id) > Number(completed.id)
+  );
+  const battleReceipt = battleEvent ? battleResultReceipt(view, battleEvent, fresh) : null;
+  return {
+    id: Number(completed.id) || 0,
+    kind: "chain",
+    actor: "system",
+    label: `连锁结算 · ${linkCount} 段`,
+    linkCount,
+    negatedCount: negated.length,
+    resolutionOrder: links.map((link) => `CL${link.chainIndex}`).join(" → "),
+    summary: `${resolvedLabel} 生效${negatedLabel ? ` · ${negatedLabel} 被无效` : ""}`,
+    outcome: battleReceipt?.text || "",
+    links
+  };
+}
+
+export function onlineReconnectBrief(view, { limit = 4 } = {}) {
+  if (!view || view.status !== "playing" || view.gameOver) return null;
+  const self = view.players?.[view.viewerSeatId];
+  const rival = view.players?.[view.opponentSeatId];
+  const selfName = view.seats?.find((seat) => seat.seatId === view.viewerSeatId)?.name || "你";
+  const rivalName = view.seats?.find((seat) => seat.seatId === view.opponentSeatId)?.name || "对手";
+  const ownTurn = view.turn?.playerId === view.viewerSeatId;
+  const phase = { draw: "抽卡阶段", main: "主要阶段", battle: "战斗阶段", end: "结束阶段" }[view.turn?.phase] || "当前阶段";
+  const responseWindow = view.machine?.responseWindow;
+  const responsePending = Boolean(responseWindow);
+  const responseOwn = responseWindow?.playerId === view.viewerSeatId;
+  const keyEvents = onlineEventTimeline(view, { limit: 24 });
+  const preferred = keyEvents.filter((entry) => !["turn"].includes(entry.category));
+  const entries = (preferred.length ? preferred : keyEvents).slice(0, Math.max(1, Number(limit) || 4));
+  const chain = onlineChainResolutionCue(view, view.lastChainEvents?.length ? view.lastChainEvents : view.recentEvents || []);
+  const status = responsePending
+    ? responseOwn ? "响应窗口仍在等待你的选择" : "当前正在等待对手响应"
+    : ownTurn ? "操作权在你手中，可以继续行动" : `等待${rivalName}继续行动`;
+  return {
+    title: "已恢复至当前战况",
+    kicker: "DUEL RESTORED",
+    roomCode: view.roomCode || "",
+    duelNumber: Math.max(1, Number(view.duelNumber) || 1),
+    selfName,
+    selfLp: Math.max(0, Number(self?.lp) || 0),
+    rivalName,
+    rivalLp: Math.max(0, Number(rival?.lp) || 0),
+    turnLabel: ownTurn ? "你的回合" : `${rivalName}的回合`,
+    phaseLabel: phase,
+    status,
+    responsePending,
+    entries,
+    chain: chain ? { id: chain.id, label: chain.label, summary: chain.summary } : null
+  };
+}
+
 export function onlineActionCue(view, events = []) {
   const fresh = (events || []).filter(Boolean);
   if (!fresh.length) return null;
+  const chainCue = onlineChainResolutionCue(view, fresh);
+  if (chainCue) return chainCue;
   const latest = (type) => [...fresh].reverse().find((event) => event.type === type);
   const ownerFor = (seatId) => seatId === view?.viewerSeatId ? "player" : "ai";
   const rivalSeatFor = (event) => event.rivalId || (event.playerId === view?.viewerSeatId ? view?.opponentSeatId : view?.viewerSeatId);

@@ -8,12 +8,20 @@ import { createDuelSessionConfig, ControllerKind, DuelMode } from "../src/duel-s
 import { sanitizeOnlineAction } from "../src/duel-command.js";
 import { onlineTrapResponseChoice } from "../src/online-duel-ui.js";
 
-function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 4000, deckSize = 5, now, responseTimeoutMs, attackerCounter = false } = {}) {
+function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 4000, deckSize = 5, now, responseTimeoutMs, attackerCounter = false, attackerCounters = null, defenderCounters = 0 } = {}) {
   const card = (id, uid) => ({ ...cardById(id), uid, mode: "attack", used: false, tempAtk: 0, tempDef: 0 });
   const p1 = createDuelist("p1"), p2 = createDuelist("p2");
   p1.field[0] = card("solar-knight", "attacker");
-  if (attackerCounter) p1.traps[0] = card("chain-nullifier", "attacker-chain-trap");
+  const attackerCounterCount = attackerCounters ?? (attackerCounter ? 1 : 0);
+  Array.from({ length: attackerCounterCount }, (_, index) => {
+    const uid = index === 0 ? "attacker-chain-trap" : `attacker-chain-trap:${index}`;
+    p1.traps[index] = card("chain-nullifier", uid);
+  });
   traps.forEach((id, index) => { p2.traps[index] = card(id, `trap:${index}`); });
+  Array.from({ length: defenderCounters }, (_, index) => {
+    const uid = index === 0 ? "defender-chain-trap" : `defender-chain-trap:${index}`;
+    p2.traps[traps.length + index] = card("chain-nullifier", uid);
+  });
   targets.forEach((id, index) => { p2.field[index] = card(id, `target:${index}`); });
   p1.lp = lp;
   for (const [id, player] of [["p1", p1], ["p2", p2]]) player.deck = Array.from({ length: deckSize }, (_, index) => card("iron-guardian", `${id}:deck:${index}`));
@@ -29,12 +37,17 @@ function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 
   const submit = (connection, action) => room.submit(connection, { revision: room.revision, commandId: `response:${sequence++}`, action });
   const declare = () => submit("one", { type: "DECLARE_ATTACK", attackerCardId: "attacker", ...(targets.length ? { targetCardId: "target:0" } : {}) });
   const respond = (type = "RESPOND_TRAP", cardId = "trap:0") => submit("two", { type, cardId, declarationEventId: room.viewFor("p2").attackResponse.declarationEventId });
-  const counterResponse = (type = "RESPOND_CHAIN_TRAP") => submit("one", {
+  const counterResponse = (type = "RESPOND_CHAIN_TRAP", cardId = "attacker-chain-trap") => submit("one", {
     type,
     triggerEventId: room.viewFor("p1").chainResponse.triggerEventId,
-    ...(type === "RESPOND_CHAIN_TRAP" ? { cardId: "attacker-chain-trap" } : {})
+    ...(type === "RESPOND_CHAIN_TRAP" ? { cardId } : {})
   });
-  return { room, submit, declare, respond, counterResponse, defender };
+  const defenderCounterResponse = (type = "RESPOND_CHAIN_TRAP", cardId = "defender-chain-trap") => submit("two", {
+    type,
+    triggerEventId: room.viewFor("p2").chainResponse.triggerEventId,
+    ...(type === "RESPOND_CHAIN_TRAP" ? { cardId } : {})
+  });
+  return { room, submit, declare, respond, counterResponse, defenderCounterResponse, defender };
 }
 
 function summonBattle({ now, responseTimeoutMs, responderLp = 4000, counter = false } = {}) {
@@ -155,6 +168,47 @@ test("passing or timing out on an attack chain lets the defense trap resolve", (
   assert.equal(timed.room.expireAttackResponse(), true);
   assert.equal(timed.room.viewFor("p1").players.p1.monsterZone[0], null);
   assert.equal(timed.room.viewFor("p2").players.p2.lp, 4000);
+});
+
+test("response priority alternates through CL4 before resolving the full chain", () => {
+  let currentTime = 1_000;
+  const { room, declare, respond, counterResponse, defenderCounterResponse } = battle({
+    traps: ["mirror-snare"], attackerCounters: 2, defenderCounters: 1,
+    now: () => currentTime, responseTimeoutMs: 5_000
+  });
+  declare();
+  currentTime = 2_000;
+  respond();
+  assert.equal(room.viewFor("p1").machine.chainLength, 1);
+  assert.equal(room.viewFor("p1").responseTimer.deadlineAt, 7_000);
+
+  currentTime = 3_000;
+  counterResponse();
+  assert.equal(room.viewFor("p2").machine.chainLength, 2);
+  assert.equal(room.viewFor("p2").chainResponse.candidates[0].cardId, "defender-chain-trap");
+  assert.equal(room.viewFor("p2").responseTimer.deadlineAt, 8_000);
+
+  currentTime = 4_000;
+  defenderCounterResponse();
+  assert.equal(room.viewFor("p1").machine.chainLength, 3);
+  assert.equal(room.viewFor("p1").chainResponse.candidates[0].cardId, "attacker-chain-trap:1");
+  assert.equal(room.viewFor("p1").responseTimer.deadlineAt, 9_000);
+
+  counterResponse("RESPOND_CHAIN_TRAP", "attacker-chain-trap:1");
+  const after = room.viewFor("p1");
+  assert.equal(after.machine.chainLength, 0);
+  assert.equal(after.players.p1.monsterZone[0].id, "attacker");
+  assert.equal(after.players.p2.lp, 2300);
+  assert.equal(after.players.p1.grave.length, 2);
+  assert.equal(after.players.p2.grave.length, 2);
+  assert.deepEqual(
+    after.recentEvents.filter((event) => event.type === "CHAIN_LINK_RESOLVED").map((event) => event.cardId),
+    ["attacker-chain-trap:1", "defender-chain-trap", "attacker-chain-trap", "trap:0"]
+  );
+  assert.deepEqual(
+    after.recentEvents.filter((event) => event.type === "EFFECT_SKIPPED").map((event) => event.cardId),
+    ["defender-chain-trap", "trap:0"]
+  );
 });
 
 test("an unanswered attack auto-resolves at the authoritative room deadline", () => {

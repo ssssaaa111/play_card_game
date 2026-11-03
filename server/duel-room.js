@@ -339,12 +339,25 @@ export class DuelRoom {
       if (action.type === "RESPOND_CHAIN_TRAP") {
         if (!response.candidates.some((candidate) => candidate.cardId === action.cardId)) throw new GameRuleError("Trap is not a legal chain response");
         events.push(...commitOnlineTrap(engine, onlineChainTrapAction(state, action.playerId, action.cardId)));
+        const nextPlayerId = ROOM_SEAT_IDS.find((seatId) => seatId !== action.playerId);
+        const preview = new GameEngine(engine.getState());
+        preview.dispatch({ type: "PASS_RESPONSE_PRIORITY", playerId: action.playerId, nextPlayerId });
+        if (onlineChainResponse(preview.getState(), nextPlayerId)?.candidates.length) {
+          events.push(...engine.dispatch({ type: "PASS_RESPONSE_PRIORITY", playerId: action.playerId, nextPlayerId }));
+        } else {
+          events.push(...(
+            state.machine?.responseWindow?.prompt === "attack"
+              ? resolveOnlineAttackTrapChain(engine, action.playerId)
+              : resolveOnlineTrapChain(engine, action.playerId)
+          ));
+        }
+      } else {
+        events.push(...(
+          state.machine?.responseWindow?.prompt === "attack"
+            ? resolveOnlineAttackTrapChain(engine, action.playerId)
+            : resolveOnlineTrapChain(engine, action.playerId)
+        ));
       }
-      events.push(...(
-        state.machine?.responseWindow?.prompt === "attack"
-          ? resolveOnlineAttackTrapChain(engine, action.playerId)
-          : resolveOnlineTrapChain(engine, action.playerId)
-      ));
     } else {
       events.push(...engine.dispatch(action));
     }
