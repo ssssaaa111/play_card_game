@@ -1,7 +1,8 @@
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+const LOOPBACK_HOSTS = new Set(["localhost", "::1", "[::1]"]);
 
 export function isLoopbackHost(hostname = "") {
-  return LOOPBACK_HOSTS.has(String(hostname || "").toLowerCase());
+  const normalized = String(hostname || "").toLowerCase();
+  return LOOPBACK_HOSTS.has(normalized) || /^127(?:\.\d{1,3}){3}$/.test(normalized);
 }
 
 export function onlineOriginAllowed(origin = "", { allowedOrigins = [], allowLoopback = false } = {}) {

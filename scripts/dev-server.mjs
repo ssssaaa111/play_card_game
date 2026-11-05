@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 import { resolveStaticRequest } from "./static-path.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const host = "127.0.0.1";
+const hostArgument = process.argv.find((argument) => argument.startsWith("--host="));
+const requestedHost = hostArgument?.slice("--host=".length) || "127.0.0.1";
+const host = /^(?:localhost|127(?:\.\d{1,3}){3}|::1)$/.test(requestedHost) ? requestedHost : "127.0.0.1";
 const portArgument = process.argv.find((argument) => argument.startsWith("--port="));
 const requestedPort = Number.parseInt(portArgument?.slice("--port=".length) || "5177", 10);
 const port = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort <= 65535

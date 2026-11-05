@@ -17,7 +17,7 @@ import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261103-reconnect-brief-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261106-action-stage-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -25,15 +25,15 @@ const elements = Object.fromEntries([
   "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "roomDeckSelect", "roomDeckRefresh", "roomDeckStatus", "roomDeckError", "spectatorConsent", "spectatorStatus", "watchRoomLink", "watchEntry", "onlineSpectatorCount", "duelPanel", "aiPanel", "playerPanel",
   "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
   "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "duelHint", "duelError", "versusStage", "versusPhase",
-  "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
+  "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveLabel", "rivalGraveCount", "playerGraveLabel", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
   "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChain", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
-  "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfName", "resultSelfLp", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
+  "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfLabel", "resultSelfName", "resultSelfLp", "resultRivalLabel", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
   "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
-  "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "lastChainButton", "effectLayer", "chainResolutionStage", "phaseStage",
-  "recoveryBrief", "recoveryKicker", "recoveryTitle", "recoveryClose", "recoverySelfName", "recoverySelfLp", "recoveryTurn", "recoveryPhase", "recoveryRivalName", "recoveryRivalLp", "recoveryStatus", "recoveryEvents", "recoveryLog", "recoveryReplay", "recoveryContinue"
+  "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "lastChainButton", "effectLayer", "actionStage", "chainResolutionStage", "phaseStage",
+  "recoveryBrief", "recoveryKicker", "recoveryTitle", "recoveryClose", "recoverySelfLabel", "recoverySelfName", "recoverySelfLp", "recoveryTurn", "recoveryPhase", "recoveryRivalLabel", "recoveryRivalName", "recoveryRivalLp", "recoveryStatus", "recoveryEvents", "recoveryLog", "recoveryReplay", "recoveryContinue"
 ].map((id) => [id, document.getElementById(id)]));
 
 const STORAGE_KEY_PREFIX = "star-card-duel:online-session:v2";
@@ -60,6 +60,9 @@ let connectionCountdownInterval = null;
 let pendingActionCue = null;
 let lastFieldPositions = new Map();
 let cueCleanupTimer = null;
+let actionStageTimer = null;
+let actionStageCurrentKey = null;
+let actionStageQueue = [];
 let chainResolutionTimer = null;
 let chainResolutionActive = false;
 let lastResultKey = null;
@@ -67,6 +70,7 @@ let resultRevealTimer = null;
 let inspectorCollection = null;
 let eventLogRoomCode = null;
 let eventReadThroughId = 0;
+let eventLogReturnFocus = null;
 let transportState = "connecting";
 let reconnectAttempt = 0;
 let reconnectTimer = null;
@@ -451,6 +455,7 @@ function syncActionReceipt(view) {
     clearActionReceipt();
     pendingActionCue = null;
     lastFieldPositions = new Map();
+    clearActionStage();
     clearChainResolutionStage();
     phaseStageController.reset();
     return;
@@ -517,6 +522,102 @@ function pulseActionAnchor(anchor, kind) {
   window.setTimeout(() => anchor.classList.remove("online-action-focus", "summon", "spell", "trap", "effect", "set", "mode"), 1100);
 }
 
+function clearActionStage({ clearQueue = true } = {}) {
+  if (actionStageTimer) window.clearTimeout(actionStageTimer);
+  actionStageTimer = null;
+  actionStageCurrentKey = null;
+  if (clearQueue) actionStageQueue = [];
+  if (!elements.actionStage) return;
+  elements.actionStage.hidden = true;
+  elements.actionStage.replaceChildren();
+  delete elements.actionStage.dataset.kind;
+  delete elements.actionStage.dataset.actor;
+  elements.actionStage.dataset.queueDepth = String(actionStageQueue.length);
+  document.body.dataset.onlineActionStage = "false";
+}
+
+function actionStageVisual(view, item, role) {
+  const visual = document.createElement("div");
+  visual.className = `online-action-stage-visual ${role}`;
+  const card = item?.cardId ? onlineCard(view, item.cardId) : null;
+  if (card && item.public) {
+    const display = onlineDisplayCard(card);
+    const face = createCardElement(document, display, { asset: assetForCard(display), showStateRail: false });
+    face.classList.add("online-action-stage-card");
+    visual.appendChild(face);
+  } else {
+    const sigil = document.createElement("span");
+    sigil.className = "online-action-stage-sigil";
+    sigil.textContent = role === "source" ? "✦" : "◎";
+    sigil.setAttribute("aria-hidden", "true");
+    visual.appendChild(sigil);
+  }
+  const copy = document.createElement("div");
+  const label = document.createElement("small");
+  label.textContent = role === "source" ? "来源" : "目标";
+  const name = document.createElement("strong");
+  name.textContent = item?.name || (role === "source" ? "公开行动" : "效果结算");
+  const meta = document.createElement("span");
+  meta.textContent = item?.meta || "";
+  copy.append(label, name, meta);
+  visual.appendChild(copy);
+  return visual;
+}
+
+function finishActionStage() {
+  clearActionStage({ clearQueue: false });
+  const next = actionStageQueue.shift();
+  if (next) showActionStage(next.view, next.cue, next.model);
+}
+
+function showActionStage(view, cue, model) {
+  if (!model || !elements.actionStage) return;
+  const frame = document.createElement("article");
+  frame.className = "online-action-stage-frame";
+  const header = document.createElement("header");
+  const kicker = document.createElement("span");
+  kicker.textContent = model.kicker;
+  const title = document.createElement("h2");
+  title.textContent = model.title;
+  header.append(kicker, title);
+  const route = document.createElement("div");
+  route.className = "online-action-stage-route";
+  const arrow = document.createElement("div");
+  arrow.className = "online-action-stage-arrow";
+  const arrowLine = document.createElement("i");
+  const arrowHead = document.createElement("b");
+  arrowHead.textContent = "›";
+  arrowHead.setAttribute("aria-hidden", "true");
+  arrow.append(arrowLine, arrowHead);
+  route.append(actionStageVisual(view, model.source, "source"), arrow, actionStageVisual(view, model.target, "target"));
+  const result = document.createElement("p");
+  result.className = "online-action-stage-result";
+  result.textContent = model.result;
+  frame.append(header, route, result);
+  elements.actionStage.dataset.kind = model.tone;
+  elements.actionStage.dataset.actor = cue.actor;
+  elements.actionStage.dataset.queueDepth = String(actionStageQueue.length);
+  elements.actionStage.appendChild(frame);
+  elements.actionStage.hidden = false;
+  document.body.dataset.onlineActionStage = "true";
+  actionStageCurrentKey = `${model.id}:${model.kind}`;
+  actionStageTimer = window.setTimeout(finishActionStage, model.duration);
+}
+
+function playActionStage(view, cue) {
+  const model = onlineActionPresentation(view, cue);
+  if (!model || !elements.actionStage) return;
+  const key = `${model.id}:${model.kind}`;
+  if (actionStageCurrentKey === key || actionStageQueue.some((entry) => entry.key === key)) return;
+  if (actionStageTimer || !elements.actionStage.hidden) {
+    if (actionStageQueue.length >= 4) actionStageQueue.shift();
+    actionStageQueue.push({ key, view, cue, model });
+    elements.actionStage.dataset.queueDepth = String(actionStageQueue.length);
+    return;
+  }
+  showActionStage(view, cue, model);
+}
+
 function clearChainResolutionStage({ rerender = false } = {}) {
   if (chainResolutionTimer) window.clearTimeout(chainResolutionTimer);
   chainResolutionTimer = null;
@@ -530,6 +631,7 @@ function clearChainResolutionStage({ rerender = false } = {}) {
 }
 
 function playChainResolutionStage(view, cue) {
+  clearActionStage();
   clearChainResolutionStage();
   if (elements.onlineResponse.open) elements.onlineResponse.close();
   clearResponseCountdown();
@@ -628,6 +730,7 @@ function rebaseRecoveredView(view) {
   pendingActionCue = null;
   selection = null;
   clearActionReceipt();
+  clearActionStage();
   clearChainResolutionStage();
   phaseStageController.reset();
   lastFieldPositions = new Map();
@@ -641,10 +744,12 @@ function showRecoveryBrief(view) {
   }
   elements.recoveryKicker.textContent = `${brief.kicker} · DUEL ${brief.duelNumber}`;
   elements.recoveryTitle.textContent = brief.title;
+  elements.recoverySelfLabel.textContent = "你";
   elements.recoverySelfName.textContent = brief.selfName;
   elements.recoverySelfLp.textContent = `${brief.selfLp} LP`;
   elements.recoveryTurn.textContent = brief.turnLabel;
   elements.recoveryPhase.textContent = brief.phaseLabel;
+  elements.recoveryRivalLabel.textContent = "对手";
   elements.recoveryRivalName.textContent = brief.rivalName;
   elements.recoveryRivalLp.textContent = `${brief.rivalLp} LP`;
   elements.recoveryStatus.textContent = brief.status;
@@ -671,6 +776,7 @@ function showRecoveryBrief(view) {
   elements.recoveryReplay.hidden = !brief.chain;
   elements.recoveryReplay.textContent = brief.chain ? `回放 ${brief.chain.label.replace("连锁结算 · ", "最近连锁 · ")}` : "回放最近连锁";
   elements.recoveryReplay.title = brief.chain?.summary || "";
+  elements.recoveryContinue.textContent = "继续决斗";
   elements.recoveryBrief.hidden = false;
   document.body.dataset.onlineRecovery = "true";
 }
@@ -707,12 +813,15 @@ function playPendingActionCue(view) {
     return;
   }
 
+  playActionStage(view, cue);
+
   const currentSourceIndex = cardFieldIndex(view, cue.cardId, cue.actor);
   const sourceIndex = currentSourceIndex >= 0 ? currentSourceIndex : cue.sourceIndex;
-  const currentTargetIndex = cardFieldIndex(view, cue.targetCardId, cue.rival);
+  const targetOwner = cue.targetOwner || cue.rival;
+  const currentTargetIndex = cardFieldIndex(view, cue.targetCardId, targetOwner);
   const targetIndex = currentTargetIndex >= 0 ? currentTargetIndex : cue.targetIndex;
   const source = sourceIndex >= 0 ? animationController.fieldElement(cue.actor, sourceIndex) : animationController.panelElement(cue.actor);
-  const target = targetIndex >= 0 ? animationController.fieldElement(cue.rival, targetIndex) : animationController.panelElement(cue.rival);
+  const target = targetIndex >= 0 ? animationController.fieldElement(targetOwner, targetIndex) : animationController.panelElement(targetOwner);
   elements.effectLayer.dataset.onlineCue = cue.kind;
   elements.effectLayer.dataset.onlineActor = cue.actor;
   if (cueCleanupTimer) clearTimeout(cueCleanupTimer);
@@ -748,6 +857,7 @@ function playPendingActionCue(view) {
     const card = onlineCard(view, cue.cardId);
     pulseActionAnchor(cardAnchor(view, cue.cardId, cue.actor), cue.kind);
     animationController.playEpicAction(cue.label, cue.kind === "trap" ? "guard" : "draw", 1000);
+    if (cue.targetCardId) animationController.playArrow(source, target, cue.kind === "trap" ? "trap" : "spell", cue.label);
     if (card) animationController.playCenterCardEffect(card, cue.actor === "player" ? "我方效果发动" : "对手效果发动");
   } else if (cue.kind === "set") {
     const anchor = cue.slotIndex != null ? animationController.trapElement(cue.actor, cue.slotIndex) : animationController.panelElement(cue.actor);
@@ -767,6 +877,7 @@ function playPendingActionCue(view) {
     animationController.playEpicAction(cue.label, "attack", 900);
     animationController.playImpactExplosion(target);
     animationController.shakeScreen();
+    if (cue.damage) animationController.playLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
   }
   captureFieldPositions(view);
 }
@@ -780,6 +891,9 @@ function battleImpactForSeat(seatId) {
 }
 
 function setEventLogOpen(open) {
+  if (open && elements.eventLog.hidden) {
+    eventLogReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
   elements.eventLog.hidden = !open;
   elements.logToggle.setAttribute("aria-expanded", String(open));
   if (open) {
@@ -1463,8 +1577,10 @@ function renderGameResult(view) {
   elements.resultKicker.textContent = result.kicker;
   elements.resultTitle.textContent = result.title;
   elements.resultSummary.textContent = result.summary;
+  elements.resultSelfLabel.textContent = "你";
   elements.resultSelfName.textContent = result.selfName;
   elements.resultSelfLp.textContent = `${result.selfLp} LP`;
+  elements.resultRivalLabel.textContent = "对手";
   elements.resultRivalName.textContent = result.rivalName;
   elements.resultRivalLp.textContent = `${result.rivalLp} LP`;
   const series = onlineSeriesView(view);
@@ -1472,6 +1588,7 @@ function renderGameResult(view) {
   elements.resultSeriesScore.textContent = series?.score || "0 : 0";
   elements.resultSeriesDetail.textContent = series?.detail || "已完成 0 局";
   const rematch = onlineRematchView(view);
+  elements.resultRematch.hidden = false;
   elements.resultRematch.disabled = rematchPending || rematch?.disabled || transportState !== "connected";
   elements.resultRematch.textContent = rematchPending ? "正在确认…" : rematch?.label || "再来一局";
   elements.resultRematchStatus.textContent = rematchError || rematch?.status || "双方确认后可在当前房间再来一局。";
@@ -1710,6 +1827,9 @@ function renderEvents(view) {
     article.dataset.actor = entry.actor;
     article.dataset.tone = entry.tone;
     article.dataset.unread = String(entry.id > eventReadThroughId);
+    article.dataset.eventId = String(entry.id);
+    article.dataset.latest = String(index === 0);
+    if (index === 0) article.tabIndex = -1;
     article.setAttribute("aria-posinset", String(timeline.length - index));
     article.setAttribute("aria-setsize", String(timeline.length));
     const marker = document.createElement("span");
@@ -1929,8 +2049,15 @@ elements.recoveryLog.addEventListener("click", () => {
 document.addEventListener("pointerdown", unlockAudio, { capture: true, once: true });
 elements.logToggle.addEventListener("click", () => setEventLogOpen(elements.eventLog.hidden));
 elements.eventLogClose.addEventListener("click", () => {
+  const returnFocus = eventLogReturnFocus;
+  eventLogReturnFocus = null;
   setEventLogOpen(false);
-  elements.logToggle.focus({ preventScroll: true });
+  const focusTarget = returnFocus instanceof HTMLElement
+    && returnFocus.matches("button,[href],input,select,textarea,[tabindex]")
+    && !returnFocus.closest("[hidden]")
+    ? returnFocus
+    : elements.logToggle;
+  focusTarget.focus({ preventScroll: true });
 });
 elements.eventLogList.addEventListener("click", (event) => {
   const button = event.target.closest?.("button[data-card-id]");

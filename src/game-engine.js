@@ -1026,8 +1026,10 @@ export class GameEngine {
     validateEffectTarget(definition, state, preparedAction, card);
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
+      rivalId,
       cardId: action.cardId,
       cardType: card.type,
+      targetCardId: action.targetCardId || null,
       phase: state.turn.phase
     });
     if (definition?.duration === EffectDuration.continuous) {
@@ -1066,8 +1068,10 @@ export class GameEngine {
 
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
+      rivalId: action.rivalId,
       cardId: action.cardId,
       cardType: card.type,
+      targetCardId: action.targetCardId || null,
       phase: state.turn.phase
     });
     ctx.moveCard(action.cardId, { playerId: action.playerId, zone: "hand" }, { playerId: action.playerId, zone: "grave" });
@@ -1195,8 +1199,10 @@ export class GameEngine {
     validateEffectTarget(this.#effects[effectId], state, preparedAction, card);
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
+      rivalId,
       cardId: action.cardId,
       cardType: card.type,
+      targetCardId: action.targetCardId || null,
       phase: state.turn.phase
     });
     if (chainLink) {
@@ -1256,8 +1262,10 @@ export class GameEngine {
     }
     emit("CARD_ACTIVATED", {
       playerId: action.playerId,
+      rivalId,
       cardId: action.cardId,
       cardType: card.type,
+      targetCardId: action.targetCardId || null,
       phase: state.turn.phase
     });
     tributeCardIds.forEach((tributeCardId) => {

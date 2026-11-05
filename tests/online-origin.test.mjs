@@ -17,5 +17,6 @@ test("loopback origins are accepted only for a loopback duel server", () => {
   assert.equal(isLoopbackHost("duel.example.com"), false);
   assert.equal(onlineOriginAllowed("http://127.0.0.1:5177", { allowLoopback: true }), true);
   assert.equal(onlineOriginAllowed("http://localhost:5177", { allowLoopback: true }), true);
+  assert.equal(onlineOriginAllowed("http://127.0.0.2:5197", { allowLoopback: true }), true);
   assert.equal(onlineOriginAllowed("http://127.0.0.1:5177", { allowLoopback: false }), false);
 });

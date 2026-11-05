@@ -2,6 +2,10 @@ import { makeBattlePreview, makeAttackIntentPreview } from "./rules.js";
 import { createTrapResponse, selectTrapResponse } from "./response-state.js";
 import { describeBattleOutcome } from "./battle.js";
 
+function spectatorView(view) {
+  return view?.viewerRole === "spectator";
+}
+
 export function onlineTrapResponseChoice(view, previous = null) {
   const response = view?.attackResponse || view?.summonResponse || view?.chainResponse;
   if (!response || !response.candidates.length || view.gameOver) return null;
@@ -38,7 +42,8 @@ export function onlineResponseTimerView(view, now = Date.now()) {
     ? Math.max(0, Number(timer.remainingMs) || 0)
     : Math.max(0, Number(timer.deadlineAt) - Number(now));
   const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
-  const ownResponse = responseWindow.playerId === view.viewerSeatId;
+  const ownResponse = !spectatorView(view) && responseWindow.playerId === view.viewerSeatId;
+  const responderName = view.seats?.find((seat) => seat.seatId === responseWindow.playerId)?.name || "当前玩家";
   return {
     declarationEventId: timer.declarationEventId,
     paused,
@@ -46,7 +51,9 @@ export function onlineResponseTimerView(view, now = Date.now()) {
     ownResponse,
     label: paused
       ? "对局已暂停，响应倒计时冻结"
-      : ownResponse
+      : spectatorView(view)
+        ? `等待${responderName}响应 · ${seconds} 秒后自动结算`
+        : ownResponse
         ? `剩余 ${seconds} 秒 · 到时自动放弃响应`
         : `等待对手响应 · ${seconds} 秒后自动结算`
   };
@@ -62,15 +69,17 @@ export function onlineTurnTimerView(view, now = Date.now()) {
   const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
   const minutes = Math.floor(seconds / 60);
   const clock = `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
-  const ownTurn = timer.playerId === view.viewerSeatId;
+  const ownTurn = !spectatorView(view) && timer.playerId === view.viewerSeatId;
+  const activeName = view.seats?.find((seat) => seat.seatId === timer.playerId)?.name || "当前玩家";
   return {
     playerId: timer.playerId,
     paused,
     seconds,
     clock,
     ownTurn,
+    spectator: spectatorView(view),
     danger: !paused && seconds <= 15,
-    label: paused ? `${clock} · 回合计时已暂停` : `${clock} · ${ownTurn ? "你的回合" : "对手回合"}`
+    label: paused ? `${clock} · 回合计时已暂停` : `${clock} · ${spectatorView(view) ? `${activeName}的回合` : ownTurn ? "你的回合" : "对手回合"}`
   };
 }
 
@@ -105,6 +114,15 @@ export function onlineCardDetailView(card) {
 }
 
 export function onlineIdentityView(view) {
+  if (spectatorView(view)) {
+    return {
+      name: "公共观战",
+      seatId: "spectator",
+      seatNumber: "LIVE",
+      seatRole: "只读席位",
+      opponentName: ""
+    };
+  }
   const seat = view?.seats?.find((entry) => entry.seatId === view.viewerSeatId);
   if (!seat) return null;
   const firstSeat = view.viewerSeatId === "p1";
@@ -155,7 +173,9 @@ export function onlineConnectionView(view, {
       showActions: true
     };
   }
-  const rival = view.seats?.find((seat) => seat.seatId === view.opponentSeatId);
+  const rival = spectatorView(view)
+    ? view.seats?.find((seat) => seat.connected === false)
+    : view.seats?.find((seat) => seat.seatId === view.opponentSeatId);
   if (!rival || rival.connected !== false) return null;
   const deadlineAt = Number(rival.reconnectDeadlineAt) || null;
   const seconds = deadlineAt == null ? null : Math.max(0, Math.ceil((deadlineAt - Number(now)) / 1000));
@@ -164,8 +184,10 @@ export function onlineConnectionView(view, {
     kicker: seconds == null ? "DUEL PAUSED" : `OPPONENT OFFLINE · ${seconds}S`,
     title: `等待${rival.name || "对手"}重连`,
     summary: seconds == null
-      ? "对手的席位和当前牌局都已保留；重连完成前，双方不能继续出牌。"
-      : "服务器正在为对手保留席位；倒计时结束仍未恢复连接，你将赢得本局。",
+      ? `${spectatorView(view) ? "该玩家" : "对手"}的席位和当前牌局都已保留；重连完成前，对局暂停。`
+      : spectatorView(view)
+        ? "服务器正在为断线玩家保留席位；观战画面会在裁定后自动同步。"
+        : "服务器正在为对手保留席位；倒计时结束仍未恢复连接，你将赢得本局。",
     status: seconds == null ? "你可以查看场面、墓地和战斗记录" : `重连保护剩余 ${seconds} 秒`,
     showActions: false,
     deadlineAt,
@@ -223,7 +245,10 @@ export function onlineGameResultView(view) {
   const reason = gameOver.reason || "lp-zero";
   const winnerName = view.seats?.find((seat) => seat.seatId === winnerId)?.name || "胜者";
   const loserName = view.seats?.find((seat) => gameOver.loserIds?.includes(seat.seatId))?.name || "败方";
-  const summary = draw
+  const watching = spectatorView(view);
+  const summary = watching
+    ? draw ? "双方同时结束本局，本场决斗以平局收场。" : `${winnerName}赢得了本局决斗。`
+    : draw
     ? reason === "disconnect-timeout"
       ? "双方均未在时限内恢复连接，本局记为平局。"
       : "双方同时失去全部生命值，本局以平局结束。"
@@ -236,9 +261,9 @@ export function onlineGameResultView(view) {
       : won ? "你完成了本局的胜利条件。" : `${winnerName}完成了本局的胜利条件。`;
   return {
     key: `${view.roomCode || "room"}:${gameOver.triggerEventId || gameOver.reason || "finished"}`,
-    tone: draw ? "draw" : won ? "victory" : "defeat",
-    kicker: draw ? "DUEL DRAW" : won ? "DUEL VICTORY" : "DUEL DEFEAT",
-    title: draw ? "平局" : won ? "决斗胜利" : "决斗败北",
+    tone: draw ? "draw" : watching ? "complete" : won ? "victory" : "defeat",
+    kicker: draw ? "DUEL DRAW" : watching ? "DUEL COMPLETE" : won ? "DUEL VICTORY" : "DUEL DEFEAT",
+    title: draw ? "平局" : watching ? `${winnerName}获胜` : won ? "决斗胜利" : "决斗败北",
     summary,
     selfName: selfSeat?.name || "你",
     selfLp: Math.max(0, Number(self?.lp || 0)),
@@ -248,7 +273,7 @@ export function onlineGameResultView(view) {
 }
 
 export function onlineRematchView(view) {
-  if (!view?.gameOver) return null;
+  if (!view?.gameOver || spectatorView(view)) return null;
   const selfSeat = view.seats?.find((seat) => seat.seatId === view.viewerSeatId);
   const rivalSeat = view.seats?.find((seat) => seat.seatId === view.opponentSeatId);
   const selfReady = Boolean(selfSeat?.ready);
@@ -464,6 +489,7 @@ export function onlineEventTimeline(view, { limit = 24 } = {}) {
     return {
       id: Number(event.id) || 0,
       type: event.type,
+      playerId: event.playerId || null,
       label,
       category,
       actor,
@@ -472,6 +498,18 @@ export function onlineEventTimeline(view, { limit = 24 } = {}) {
       cardIds
     };
   });
+}
+
+export function onlineSpectatorActionSummary(view) {
+  const [latest] = onlineEventTimeline(view, { limit: 1 });
+  if (!latest) return null;
+  return {
+    id: latest.id,
+    label: latest.label,
+    category: latest.category,
+    tone: latest.tone,
+    text: latest.text
+  };
 }
 
 export function onlineEventSound(view, event) {
@@ -519,12 +557,14 @@ export function onlineChainResolutionCue(view, events = []) {
     const card = onlineCard(view, event.cardId);
     const skipped = Boolean(event.skipped || skippedEvents.some((entry) => entry.cardId === event.cardId));
     const sourceCardId = skippedEvents.find((entry) => entry.cardId === event.cardId)?.sourceCardId || null;
+    const spectator = spectatorView(view);
+    const seat = view?.seats?.find((entry) => entry.seatId === event.playerId);
     return {
       chainIndex: Number(event.linkId) || linkCount - index,
       cardId: event.cardId || null,
       name: card?.name || "公开效果",
       actor: event.playerId === view?.viewerSeatId ? "player" : "ai",
-      ownerLabel: event.playerId === view?.viewerSeatId ? "你" : "对手",
+      ownerLabel: spectator ? `${seat?.name || "玩家"} · ${event.playerId === "p1" ? "1P" : "2P"}` : event.playerId === view?.viewerSeatId ? "你" : "对手",
       status: skipped ? "negated" : "resolved",
       statusLabel: skipped ? "被无效" : "已生效",
       sourceCardId
@@ -563,30 +603,33 @@ export function onlineReconnectBrief(view, { limit = 4 } = {}) {
   if (!view || view.status !== "playing" || view.gameOver) return null;
   const self = view.players?.[view.viewerSeatId];
   const rival = view.players?.[view.opponentSeatId];
+  const watching = spectatorView(view);
   const selfName = view.seats?.find((seat) => seat.seatId === view.viewerSeatId)?.name || "你";
   const rivalName = view.seats?.find((seat) => seat.seatId === view.opponentSeatId)?.name || "对手";
   const ownTurn = view.turn?.playerId === view.viewerSeatId;
   const phase = { draw: "抽卡阶段", main: "主要阶段", battle: "战斗阶段", end: "结束阶段" }[view.turn?.phase] || "当前阶段";
   const responseWindow = view.machine?.responseWindow;
   const responsePending = Boolean(responseWindow);
-  const responseOwn = responseWindow?.playerId === view.viewerSeatId;
+  const responseOwn = !watching && responseWindow?.playerId === view.viewerSeatId;
+  const responderName = view.seats?.find((seat) => seat.seatId === responseWindow?.playerId)?.name || "当前玩家";
   const keyEvents = onlineEventTimeline(view, { limit: 24 });
   const preferred = keyEvents.filter((entry) => !["turn"].includes(entry.category));
   const entries = (preferred.length ? preferred : keyEvents).slice(0, Math.max(1, Number(limit) || 4));
   const chain = onlineChainResolutionCue(view, view.lastChainEvents?.length ? view.lastChainEvents : view.recentEvents || []);
   const status = responsePending
-    ? responseOwn ? "响应窗口仍在等待你的选择" : "当前正在等待对手响应"
-    : ownTurn ? "操作权在你手中，可以继续行动" : `等待${rivalName}继续行动`;
+    ? watching ? `当前正在等待${responderName}响应` : responseOwn ? "响应窗口仍在等待你的选择" : "当前正在等待对手响应"
+    : watching ? `${view.seats?.find((seat) => seat.seatId === view.turn?.playerId)?.name || "当前玩家"}正在行动`
+      : ownTurn ? "操作权在你手中，可以继续行动" : `等待${rivalName}继续行动`;
   return {
-    title: "已恢复至当前战况",
-    kicker: "DUEL RESTORED",
+    title: watching ? "已恢复至观战现场" : "已恢复至当前战况",
+    kicker: watching ? "SPECTATOR RESTORED" : "DUEL RESTORED",
     roomCode: view.roomCode || "",
     duelNumber: Math.max(1, Number(view.duelNumber) || 1),
     selfName,
     selfLp: Math.max(0, Number(self?.lp) || 0),
     rivalName,
     rivalLp: Math.max(0, Number(rival?.lp) || 0),
-    turnLabel: ownTurn ? "你的回合" : `${rivalName}的回合`,
+    turnLabel: watching ? `${view.seats?.find((seat) => seat.seatId === view.turn?.playerId)?.name || "当前玩家"}的回合` : ownTurn ? "你的回合" : `${rivalName}的回合`,
     phaseLabel: phase,
     status,
     responsePending,
@@ -602,6 +645,16 @@ export function onlineActionCue(view, events = []) {
   if (chainCue) return chainCue;
   const latest = (type) => [...fresh].reverse().find((event) => event.type === type);
   const ownerFor = (seatId) => seatId === view?.viewerSeatId ? "player" : "ai";
+  const ownerForCard = (cardId) => {
+    if (!cardId) return null;
+    for (const seatId of [view?.viewerSeatId, view?.opponentSeatId]) {
+      const player = view?.players?.[seatId];
+      const present = ["hand", "monsterZone", "spellTrapZone", "grave", "banished"]
+        .some((zone) => (player?.[zone] || []).some((card) => card?.id === cardId));
+      if (present) return ownerFor(seatId);
+    }
+    return null;
+  };
   const rivalSeatFor = (event) => event.rivalId || (event.playerId === view?.viewerSeatId ? view?.opponentSeatId : view?.viewerSeatId);
   const attack = latest("ATTACK_DECLARED");
   if (attack) {
@@ -649,7 +702,10 @@ export function onlineActionCue(view, events = []) {
       id: Number(activated.id) || 0,
       kind: card?.type === "trap" ? "trap" : card?.type === "spell" ? "spell" : "effect",
       actor: ownerFor(activated.playerId),
+      rival: ownerFor(activated.rivalId || rivalSeatFor(activated)),
       cardId: activated.cardId,
+      targetCardId: activated.targetCardId || null,
+      targetOwner: ownerForCard(activated.targetCardId),
       label: card?.type === "trap" ? "陷阱发动" : card?.type === "spell" ? "魔法发动" : "卡牌发动"
     };
   }
@@ -692,6 +748,11 @@ export function onlineActionCue(view, events = []) {
 
   const result = latest("ATTACK_CANCELED") || latest("ATTACK_TARGET_CHANGED") || latest("BATTLE_RESOLVED");
   if (!result) return null;
+  const damageEvent = [...fresh].reverse().find((event) =>
+    event.type === "DAMAGE_DEALT"
+    && Number(event.id || 0) <= Number(result.id || 0)
+    && (!result.outcome?.damagePlayerId || event.playerId === result.outcome.damagePlayerId)
+  );
   return {
     id: Number(result.id) || 0,
     kind: result.type === "ATTACK_CANCELED" ? "guard" : "impact",
@@ -699,9 +760,104 @@ export function onlineActionCue(view, events = []) {
     rival: ownerFor(rivalSeatFor(result)),
     cardId: result.attackerCardId,
     targetCardId: result.targetCardId || null,
+    targetOwner: ownerForCard(result.targetCardId) || ownerFor(rivalSeatFor(result)),
+    direct: Boolean(result.direct),
     label: result.type === "ATTACK_CANCELED" ? "攻击被阻断" : result.type === "ATTACK_TARGET_CHANGED" ? "攻击目标改变" : "战斗结算",
     resultType: result.type,
-    outcome: result.outcome || null
+    outcome: result.outcome || null,
+    damage: Math.max(0, Number(damageEvent?.amount ?? result.outcome?.finalDamage) || 0),
+    damagePlayerId: damageEvent?.playerId || result.outcome?.damagePlayerId || null
+  };
+}
+
+function actionSeatId(view, owner) {
+  return owner === "player" ? view?.viewerSeatId : view?.opponentSeatId;
+}
+
+function actionSeatName(view, owner) {
+  const seatId = actionSeatId(view, owner);
+  return view?.seats?.find((seat) => seat.seatId === seatId)?.name || (owner === "player" ? "我方" : "对手");
+}
+
+function actionCardMeta(card) {
+  if (!card) return "身份未公开";
+  if (card.type === "monster") {
+    const mode = card.mode === "defense" ? "守备" : "攻击";
+    return `${mode} · ATK ${Math.max(0, Number(card.atk || 0) + Number(card.tempAtk || 0))} / DEF ${Math.max(0, Number(card.def || 0) + Number(card.tempDef || 0))}`;
+  }
+  return card.type === "trap" ? "陷阱卡" : card.type === "spell" ? "魔法卡" : "公开卡牌";
+}
+
+function actionBattleResult(cue) {
+  if (cue.resultType === "ATTACK_CANCELED") return "攻击已被阻断";
+  if (cue.resultType === "ATTACK_TARGET_CHANGED") return "攻击目标已改变";
+  const damage = Math.max(0, Number(cue.damage) || 0);
+  switch (cue.outcome?.kind) {
+    case "direct": return damage ? `直接命中 · ${damage} 点伤害` : "直接攻击已结算";
+    case "pierceDefense": return damage ? `贯穿守备 · ${damage} 点伤害` : "守备目标被击破";
+    case "breakDefense": return "守备目标被击破 · 无战斗伤害";
+    case "attackWin": return damage ? `击破目标 · ${damage} 点伤害` : "目标已被击破";
+    case "countered": return damage ? `攻击方被反击 · ${damage} 点伤害` : "攻击方被反击";
+    case "guardCounter": return damage ? `守备反击 · ${damage} 点伤害` : "守备方成功反击";
+    case "guardHold": return "守备成功 · 双方保留";
+    case "clash": return "同归于尽 · 双方破坏";
+    default: return cue.resultType ? "战斗结算完成" : "攻击目标已锁定";
+  }
+}
+
+// Convert one public event cue into a compact, non-blocking presentation model.
+// `onlineCard` only resolves public cards, so this model can never reveal a
+// concealed hand or set-card identity to players or spectators.
+export function onlineActionPresentation(view, cue) {
+  if (!view || !cue || cue.kind === "chain") return null;
+  const watching = spectatorView(view);
+  const actorSeatId = actionSeatId(view, cue.actor);
+  const actorName = actionSeatName(view, cue.actor);
+  const actorLabel = watching
+    ? `${actorSeatId === "p2" ? "2P" : "1P"} · ${actorName}`
+    : cue.actor === "player" ? "你的行动" : `${actorName}的行动`;
+  const sourceCard = onlineCard(view, cue.cardId);
+  const targetCard = onlineCard(view, cue.targetCardId);
+  const targetOwner = cue.targetOwner || cue.rival || (cue.actor === "player" ? "ai" : "player");
+  const targetName = actionSeatName(view, targetOwner);
+  const sourceFallback = cue.kind === "set" ? "一张盖伏卡" : cue.kind === "draw" ? "效果抽卡" : "公开效果";
+  const target = targetCard
+    ? { cardId: cue.targetCardId, name: targetCard.name || "目标卡牌", meta: actionCardMeta(targetCard), public: true }
+    : ["attack", "impact"].includes(cue.kind) && cue.direct
+      ? { cardId: null, name: targetName, meta: `LP ${Math.max(0, Number(view?.players?.[actionSeatId(view, targetOwner)]?.lp) || 0)}`, public: true }
+      : cue.kind === "summon"
+        ? { cardId: null, name: "怪兽区", meta: "召唤落点", public: true }
+        : cue.kind === "set"
+          ? { cardId: null, name: `魔陷区${cue.slotIndex == null ? "" : ` ${cue.slotIndex + 1}`}`, meta: "盖伏落点", public: true }
+          : cue.kind === "mode"
+            ? { cardId: null, name: cue.mode === "defense" ? "守备表示" : "攻击表示", meta: "表示形式", public: true }
+            : cue.kind === "draw"
+              ? { cardId: null, name: "手牌", meta: `增加 ${Math.max(0, Number(cue.count) || 0)} 张`, public: true }
+              : { cardId: null, name: "效果结算", meta: "无指定公开目标", public: true };
+  const result = cue.kind === "attack" || cue.kind === "guard" || cue.kind === "impact"
+    ? actionBattleResult(cue)
+    : cue.kind === "summon" ? "已进入怪兽区"
+      : ["spell", "trap", "effect"].includes(cue.kind) ? (targetCard ? "目标已锁定 · 效果正在结算" : "效果正在结算")
+        : cue.kind === "set" ? "卡牌身份保持隐藏"
+          : cue.kind === "mode" ? `已切换为${cue.mode === "defense" ? "守备" : "攻击"}表示`
+            : cue.kind === "draw" ? `抽取 ${Math.max(0, Number(cue.count) || 0)} 张卡`
+              : "行动已结算";
+  const tone = cue.kind === "attack" || cue.kind === "impact" ? "attack"
+    : cue.kind === "trap" || cue.kind === "set" ? "trap"
+      : cue.kind === "spell" || cue.kind === "effect" || cue.kind === "draw" ? "spell" : "summon";
+  return {
+    id: Number(cue.id) || 0,
+    kind: cue.kind,
+    tone,
+    kicker: actorLabel,
+    title: cue.label || "公开行动",
+    actorLabel,
+    source: { cardId: cue.cardId || null, name: sourceCard?.name || sourceFallback, meta: actionCardMeta(sourceCard), public: Boolean(sourceCard) },
+    target,
+    result,
+    duration: ["impact", "guard"].includes(cue.kind) || (cue.kind === "attack" && cue.resultType)
+      ? 3200
+      : cue.kind === "attack" ? 2800 : 2600
   };
 }
 
@@ -761,6 +917,7 @@ export function onlineHandActionView(view, cardId) {
 }
 
 export function onlineTurnActionSummary(view) {
+  if (spectatorView(view)) return { handCardIds: [], attackCardIds: [], total: 0, label: "只读观战", detail: "观战席位不能执行对局操作" };
   const self = view?.players?.[view?.viewerSeatId];
   if (!self || view?.gameOver || view?.turn?.playerId !== view?.viewerSeatId || view?.machine?.responseWindow) {
     return { handCardIds: [], attackCardIds: [], total: 0, label: "0 可行动", detail: "当前没有可执行的回合操作" };
@@ -816,6 +973,7 @@ export function onlineTurnControlView(view, { endTurnArmed = false } = {}) {
 }
 
 export function onlineAttackIntent(view, model) {
+  if (spectatorView(view)) return { available: false, requiresBattlePhase: false, attackCount: 0, label: "只读观战" };
   const attacks = model?.actions?.filter((action) => action.type === "DECLARE_ATTACK") || [];
   const ownTurn = view?.turn?.playerId === view?.viewerSeatId;
   const self = view?.players?.[view?.viewerSeatId];
@@ -837,6 +995,7 @@ export function onlineAttackIntent(view, model) {
 }
 
 export function selectOnlineCard(view, cardId, actionType = null) {
+  if (spectatorView(view)) return null;
   const card = onlineCard(view, cardId);
   if (!card) return null;
   const inHand = view.players[view.viewerSeatId].hand.some((entry) => entry.id === cardId);
@@ -882,6 +1041,7 @@ export function onlineSelectionModel(view, selection) {
 }
 
 export function chooseOnlineCard(view, selection, cardId) {
+  if (spectatorView(view)) return selection;
   const model = onlineSelectionModel(view, selection);
   if (model?.targetIds.includes(cardId)) return { ...selection, targetCardId: cardId };
   const self = view.players[view.viewerSeatId];
