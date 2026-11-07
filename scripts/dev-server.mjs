@@ -1,8 +1,9 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { extname, join, normalize, relative, resolve, sep } from "node:path";
+import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveStaticRequest } from "./static-path.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const host = "127.0.0.1";
@@ -36,19 +37,8 @@ function noCacheHeaders(type) {
   };
 }
 
-function requestedPath(url = "/") {
-  const parsed = new URL(url, `http://${host}:${port}`);
-  const rawPath = decodeURIComponent(parsed.pathname);
-  const pathname = rawPath === "/" ? "/index.html" : rawPath;
-  const safePath = normalize(pathname).replace(/^([/\\])+/, "");
-  const fullPath = resolve(join(root, safePath));
-  const rel = relative(root, fullPath);
-  if (rel.startsWith("..") || rel.includes(`..${sep}`)) return null;
-  return fullPath;
-}
-
 const server = createServer(async (req, res) => {
-  const filePath = requestedPath(req.url);
+  const filePath = resolveStaticRequest(root, req.url);
   if (!filePath) {
     res.writeHead(403, noCacheHeaders("text/plain; charset=utf-8"));
     res.end("Forbidden");

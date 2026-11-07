@@ -49,6 +49,12 @@ function publicSeat(seat) {
   };
 }
 
+function snapshotAssert(condition) {
+  if (!condition) throw new DuelRoomError("房间存档格式无效，请保留文件并检查版本。", "INVALID_ROOM_SNAPSHOT");
+}
+const nonnegativeInteger = (value) => Number.isSafeInteger(value) && value >= 0;
+const remainingTime = (deadline, remaining, now) => deadline == null ? remaining : Math.max(0, deadline - now);
+
 export class DuelRoom {
   constructor({
     code,
@@ -86,6 +92,104 @@ export class DuelRoom {
 
   seatList() {
     return ROOM_SEAT_IDS.map((seatId) => this.seats.get(seatId)).filter(Boolean);
+  }
+
+  // Server-private: never include this snapshot in a client projection or HTTP response.
+  toSnapshot() {
+    const now = this.now();
+    return clone({
+      version: 1, code: this.code, revision: this.revision, status: this.status,
+      createdAt: this.createdAt, updatedAt: this.updatedAt,
+      duelNumber: this.duelNumber, recordedDuelNumber: this.recordedDuelNumber, series: this.series,
+      settings: { responseTimeoutMs: this.responseTimeoutMs, disconnectGraceMs: this.disconnectGraceMs, turnTimeoutMs: this.turnTimeoutMs },
+      seats: this.seatList().map(({ connectionId, connected, reconnectDeadlineAt, ...seat }) => seat),
+      state: this.engine?.getState() || null,
+      commandReceipts: [...this.commandReceipts],
+      responseTimer: this.responseTimerKey ? {
+        key: this.responseTimerKey, declarationEventId: this.responseDeclarationEventId,
+        remainingMs: remainingTime(this.responseDeadlineAt, this.responseRemainingMs, now)
+      } : null,
+      turnTimer: this.turnTimerPlayerId ? {
+        playerId: this.turnTimerPlayerId,
+        remainingMs: remainingTime(this.turnDeadlineAt, this.turnRemainingMs, now)
+      } : null
+    });
+  }
+
+  restoreSnapshot(input) {
+    const snapshot = clone(input);
+    snapshotAssert(this.seats.size === 0 && !this.engine && snapshot?.version === 1 && snapshot.code === this.code);
+    snapshotAssert(/^[A-Z2-9]{6}$/.test(snapshot.code) && ["waiting", "playing", "finished"].includes(snapshot.status));
+    for (const key of ["revision", "createdAt", "updatedAt", "duelNumber", "recordedDuelNumber"]) snapshotAssert(nonnegativeInteger(snapshot[key]));
+    snapshotAssert(snapshot.createdAt <= snapshot.updatedAt && snapshot.recordedDuelNumber <= snapshot.duelNumber);
+    const series = snapshot.series;
+    snapshotAssert(series && [series.completed, series.draws, series.wins?.p1, series.wins?.p2].every(nonnegativeInteger));
+    snapshotAssert(series.completed === series.draws + series.wins.p1 + series.wins.p2 && series.completed <= snapshot.duelNumber);
+    for (const key of ["responseTimeoutMs", "disconnectGraceMs", "turnTimeoutMs"]) {
+      snapshotAssert(nonnegativeInteger(snapshot.settings?.[key]) && snapshot.settings[key] >= 1_000);
+    }
+    snapshotAssert(Array.isArray(snapshot.seats) && snapshot.seats.length <= 2);
+    const seats = new Map();
+    const accounts = new Set(), tokens = new Set();
+    for (const saved of snapshot.seats) {
+      snapshotAssert(ROOM_SEAT_IDS.includes(saved?.seatId) && !seats.has(saved.seatId));
+      snapshotAssert(typeof saved.accountId === "string" && saved.accountId.length <= 160 && (!saved.accountId || !accounts.has(saved.accountId)));
+      snapshotAssert(typeof saved.reconnectToken === "string" && /^[A-Za-z0-9_-]{32,128}$/.test(saved.reconnectToken) && !tokens.has(saved.reconnectToken));
+      snapshotAssert(typeof saved.ready === "boolean" && nonnegativeInteger(saved.joinedAt) && nonnegativeInteger(saved.lastSeenAt));
+      accounts.add(saved.accountId); tokens.add(saved.reconnectToken);
+      seats.set(saved.seatId, {
+        seatId: saved.seatId, name: normalizeDisplayName(saved.name), accountId: saved.accountId,
+        reconnectToken: saved.reconnectToken, ready: saved.ready, deck: normalizeOnlineDeckChoice(saved.deck),
+        joinedAt: saved.joinedAt, lastSeenAt: saved.lastSeenAt,
+        connectionId: null, connected: false,
+        reconnectDeadlineAt: snapshot.status === "playing" ? this.now() + snapshot.settings.disconnectGraceMs : null
+      });
+    }
+    const engine = snapshot.state ? new GameEngine(snapshot.state) : null;
+    snapshotAssert(snapshot.status === "waiting" ? !engine && snapshot.duelNumber === 0 : Boolean(engine) && snapshot.duelNumber > 0);
+    if (engine) {
+      snapshotAssert(Object.keys(engine.getState().players).sort().join(",") === "p1,p2");
+      snapshotAssert(Boolean(engine.getState().gameOver) === (snapshot.status === "finished"));
+      snapshotAssert(snapshot.status !== "playing" || seats.size === 2);
+      snapshotAssert(snapshot.recordedDuelNumber === (snapshot.status === "finished" ? snapshot.duelNumber : snapshot.duelNumber - 1));
+    }
+    snapshotAssert(Array.isArray(snapshot.commandReceipts) && snapshot.commandReceipts.length <= MAX_REMEMBERED_COMMANDS);
+    const receipts = new Map();
+    for (const entry of snapshot.commandReceipts) {
+      const [key, receipt] = Array.isArray(entry) ? entry : [];
+      snapshotAssert(typeof key === "string" && receipt && ROOM_SEAT_IDS.some((id) => key === `${id}:${receipt.commandId}`) && !receipts.has(key));
+      snapshotAssert(typeof receipt.commandId === "string" && /^[A-Za-z0-9:_-]{1,160}$/.test(receipt.commandId));
+      snapshotAssert(nonnegativeInteger(receipt.revision) && receipt.revision <= snapshot.revision && receipt.duplicate === false);
+      snapshotAssert(Array.isArray(receipt.eventIds) && receipt.eventIds.every(nonnegativeInteger));
+      receipts.set(key, receipt);
+    }
+    for (const timer of [snapshot.responseTimer, snapshot.turnTimer]) {
+      snapshotAssert(timer == null || nonnegativeInteger(timer.remainingMs));
+    }
+    Object.assign(this, {
+      revision: snapshot.revision, status: snapshot.status, createdAt: snapshot.createdAt, updatedAt: snapshot.updatedAt,
+      duelNumber: snapshot.duelNumber, recordedDuelNumber: snapshot.recordedDuelNumber, series,
+      responseTimeoutMs: snapshot.settings.responseTimeoutMs, disconnectGraceMs: snapshot.settings.disconnectGraceMs,
+      turnTimeoutMs: snapshot.settings.turnTimeoutMs, seats, engine, commandReceipts: receipts
+    });
+    this.#syncResponseTimer();
+    snapshotAssert((this.responseTimerKey == null) === (snapshot.responseTimer == null));
+    if (snapshot.responseTimer) {
+      snapshotAssert(this.responseTimerKey === snapshot.responseTimer.key && this.responseDeclarationEventId === snapshot.responseTimer.declarationEventId);
+      snapshotAssert(snapshot.responseTimer.remainingMs <= this.responseTimeoutMs);
+      this.responseDeadlineAt = null;
+      this.responseRemainingMs = snapshot.responseTimer.remainingMs;
+    }
+    this.#syncTurnTimer();
+    snapshotAssert((this.turnTimerPlayerId == null) === (snapshot.turnTimer == null));
+    if (snapshot.turnTimer) {
+      snapshotAssert(this.turnTimerPlayerId === snapshot.turnTimer.playerId && snapshot.turnTimer.remainingMs <= this.turnTimeoutMs);
+      this.turnDeadlineAt = null;
+      this.turnRemainingMs = snapshot.turnTimer.remainingMs;
+    }
+    // Reconnection changes the projection; old pending choices must not reuse the saved revision.
+    this.#touch();
+    return this;
   }
 
   seatForConnection(connectionId) {

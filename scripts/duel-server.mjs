@@ -13,7 +13,7 @@ import {
   parseClientMessage
 } from "../src/duel-command.js";
 import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
-import { DuelRoomStore } from "../server/duel-room-store.js";
+import { DuelRoomStore, RoomPersistenceError } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { OnlineDeckError } from "../src/online-decks.js";
 import {
@@ -67,7 +67,8 @@ const demoOpeningHands = multiChainResponseDemo ? {
     ? ["chain-nullifier", "ember-drake", "iron-guardian", "solar-knight", "void-hound"]
     : ["ember-drake", "iron-guardian", "solar-knight", "void-hound", "gale-mage"]
 } : null;
-const roomStore = new DuelRoomStore({ createRoom: (options) => new DuelRoom({
+const roomStorePath = process.env.DUEL_ROOM_STORE || fileURLToPath(new URL(`../.data/online-rooms-${port}.json`, import.meta.url));
+const roomStore = new DuelRoomStore({ filePath: roomStorePath, createRoom: (options) => new DuelRoom({
   ...options,
   disconnectGraceMs,
   turnTimeoutMs,
@@ -174,7 +175,10 @@ function activeRoomFor(socket) {
   return roomStore.require(connection.roomCode);
 }
 
-function broadcastRoom(room) {
+function broadcastRoom(room, reply = null) {
+  // A successful acknowledgement must never precede the durable room update.
+  roomStore.save();
+  if (reply) ack(reply.socket, reply.requestId, reply.data);
   scheduleResponseTimeout(room);
   scheduleDisconnectTimeout(room);
   scheduleTurnTimeout(room);
@@ -250,8 +254,7 @@ async function handleMessage(socket, rawMessage) {
       const room = roomStore.create();
       const result = room.join({ name, accountId: account.id, connectionId: connection.id });
       bindConnection(socket, room, result);
-      ack(socket, requestId, result);
-      broadcastRoom(room);
+      broadcastRoom(room, { socket, requestId, data: result });
       return;
     }
 
@@ -267,22 +270,19 @@ async function handleMessage(socket, rawMessage) {
         reconnectToken: message.type === DuelClientMessage.resumeRoom ? message.payload.reconnectToken : ""
       });
       bindConnection(socket, room, result);
-      ack(socket, requestId, result);
-      broadcastRoom(room);
+      broadcastRoom(room, { socket, requestId, data: result });
       return;
     }
 
     const room = activeRoomFor(socket);
     if (message.type === DuelClientMessage.setDeck) {
       const view = room.setDeck(connection.id, message.payload.deck);
-      ack(socket, requestId, { revision: room.revision, status: room.status, view });
-      broadcastRoom(room);
+      broadcastRoom(room, { socket, requestId, data: { revision: room.revision, status: room.status, view } });
       return;
     }
     if (message.type === DuelClientMessage.setReady) {
       const view = room.setReady(connection.id, message.payload.ready !== false);
-      ack(socket, requestId, { revision: room.revision, status: room.status, view });
-      broadcastRoom(room);
+      broadcastRoom(room, { socket, requestId, data: { revision: room.revision, status: room.status, view } });
       return;
     }
     if (message.type === DuelClientMessage.syncRoom) {
@@ -291,28 +291,24 @@ async function handleMessage(socket, rawMessage) {
     }
     if (message.type === DuelClientMessage.requestRematch) {
       const view = room.requestRematch(connection.id);
-      ack(socket, requestId, { revision: room.revision, status: room.status, view });
-      broadcastRoom(room);
+      broadcastRoom(room, { socket, requestId, data: { revision: room.revision, status: room.status, view } });
       return;
     }
     if (message.type === DuelClientMessage.forfeitRoom) {
       const view = room.forfeit(connection.id);
-      ack(socket, requestId, { revision: room.revision, status: room.status, view });
-      broadcastRoom(room);
+      broadcastRoom(room, { socket, requestId, data: { revision: room.revision, status: room.status, view } });
       return;
     }
     if (message.type === DuelClientMessage.command) {
       const receipt = room.submit(connection.id, message.payload);
-      ack(socket, requestId, receipt);
-      broadcastRoom(room);
+      broadcastRoom(room, { socket, requestId, data: receipt });
       return;
     }
     if (message.type === DuelClientMessage.leaveRoom) {
       room.leave(connection.id);
       connection.roomCode = null;
       connection.seatId = null;
-      ack(socket, requestId, { left: true });
-      broadcastRoom(room);
+      broadcastRoom(room, { socket, requestId, data: { left: true } });
       return;
     }
     throw new DuelProtocolError(`Unhandled message type ${message.type}`);
@@ -321,6 +317,7 @@ async function handleMessage(socket, rawMessage) {
       console.error(error);
     }
     reject(socket, requestId, error);
+    if (error instanceof RoomPersistenceError) stopForStorageError(error);
   }
 }
 
@@ -412,15 +409,43 @@ webSocketServer.on("connection", (socket, request) => {
     connections.delete(socket);
     if (!current?.roomCode) return;
     const room = roomStore.get(current.roomCode);
-    if (room?.disconnect(current.id)) broadcastRoom(room);
+    try {
+      if (room?.disconnect(current.id)) broadcastRoom(room);
+    } catch (error) { stopForStorageError(error); }
   });
   socket.on("error", (error) => console.error(`WebSocket error: ${error.message}`));
 });
 
-const cleanupTimer = setInterval(() => roomStore.deleteExpired(), 15 * 60 * 1000);
+function stopForStorageError(error) {
+  console.error(error);
+  // Stop instead of accepting further commands against state which could not be saved.
+  process.exit(1);
+}
+
+const checkpointTimer = setInterval(() => {
+  if (![...roomStore.rooms.values()].some((room) => room.turnTimeoutDelay() != null || room.responseTimeoutDelay() != null)) return;
+  try { roomStore.save(); } catch (error) { stopForStorageError(error); }
+}, 1_000);
+checkpointTimer.unref();
+const cleanupTimer = setInterval(() => {
+  try { if (roomStore.deleteExpired()) roomStore.save(); } catch (error) { stopForStorageError(error); }
+}, 15 * 60 * 1000);
 cleanupTimer.unref();
+
+for (const room of roomStore.rooms.values()) {
+  scheduleDisconnectTimeout(room);
+  scheduleResponseTimeout(room);
+  scheduleTurnTimeout(room);
+}
+// Also checkpoint paused restored timers, so a second restart does not charge downtime.
+roomStore.save();
+for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => {
+  try { roomStore.save(); } catch (error) { console.error(error); process.exit(1); }
+  process.exit(0);
+});
 
 httpServer.listen(port, host, () => {
   console.log(`Card duel online server running at ws://${host}:${port}/duel`);
   console.log(`Health check: http://${host}:${port}/health`);
+  console.log(`Room persistence enabled (${roomStore.rooms.size} restored rooms)`);
 });
