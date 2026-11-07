@@ -3,6 +3,7 @@ export const DuelClientMessage = Object.freeze({
   joinRoom: "room/join",
   resumeRoom: "room/resume",
   setReady: "room/ready",
+  setDeck: "room/deck",
   syncRoom: "room/sync",
   leaveRoom: "room/leave",
   requestRematch: "room/rematch",

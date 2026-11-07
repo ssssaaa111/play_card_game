@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="target-selection.css">
   <link rel="stylesheet" href="ui-polish.css">
   <link rel="stylesheet" href="duel-focus.css">
-  <link rel="stylesheet" href="online-duel.css?v=20261103-reconnect-brief-1">
+  <link rel="stylesheet" href="online-duel.css?v=20261107-online-decks-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
@@ -62,7 +62,14 @@
       <p class="error-copy" id="lobbyError" role="alert"></p>
     </section>
     <section class="room-card" id="roomPanel" hidden>
-      <h2>等待好友准备</h2><div class="seat-grid" id="seatGrid"></div><p id="roomHint"></p><button id="readyButton" class="btn primary" type="button">准备</button>
+      <h2>等待好友准备</h2><div class="seat-grid" id="seatGrid"></div>
+      <section class="online-deck-picker" aria-label="本局卡组">
+        <label for="roomDeckSelect">我的出战卡组</label>
+        <div class="online-deck-controls"><select id="roomDeckSelect" aria-describedby="roomDeckStatus"></select><button id="roomDeckRefresh" class="btn" type="button">刷新本地卡组</button></div>
+        <p id="roomDeckStatus" role="status" aria-live="polite"></p>
+        <p class="online-deck-help">自定义卡组需 40–60 张，同名最多 3 张。<a href="/" target="_blank" rel="noopener">前往单人模式编辑</a>，保存后返回刷新列表。准备后锁定；同房再战沿用当前卡组。</p>
+      </section>
+      <p id="roomHint"></p><p id="roomDeckError" class="error-copy" role="alert"></p><button id="readyButton" class="btn primary" type="button">准备</button>
     </section>
 
     <main class="arena duel-table" id="duelPanel" hidden>
@@ -181,6 +188,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js?v=20261103-reconnect-brief-1"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261107-online-decks-1"></script>
 </body>
 </html>

@@ -15,6 +15,7 @@ import {
 import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
 import { DuelRoomStore } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
+import { OnlineDeckError } from "../src/online-decks.js";
 import {
   ONLINE_AUTH_COOKIE,
   OnlineAuthAttemptLimiter,
@@ -272,6 +273,12 @@ async function handleMessage(socket, rawMessage) {
     }
 
     const room = activeRoomFor(socket);
+    if (message.type === DuelClientMessage.setDeck) {
+      const view = room.setDeck(connection.id, message.payload.deck);
+      ack(socket, requestId, { revision: room.revision, status: room.status, view });
+      broadcastRoom(room);
+      return;
+    }
     if (message.type === DuelClientMessage.setReady) {
       const view = room.setReady(connection.id, message.payload.ready !== false);
       ack(socket, requestId, { revision: room.revision, status: room.status, view });
@@ -310,7 +317,7 @@ async function handleMessage(socket, rawMessage) {
     }
     throw new DuelProtocolError(`Unhandled message type ${message.type}`);
   } catch (error) {
-    if (!(error instanceof DuelProtocolError) && !(error instanceof DuelRoomError)) {
+    if (!(error instanceof DuelProtocolError) && !(error instanceof DuelRoomError) && !(error instanceof OnlineDeckError)) {
       console.error(error);
     }
     reject(socket, requestId, error);
