@@ -91,6 +91,7 @@ function renderLibraryGroup(document, root, group, handlers) {
 
 function renderPresetOptions(document, select, presetOptions = []) {
   if (!select) return;
+  const selectedPreset = select.value;
   const fragment = document.createDocumentFragment();
   presetOptions.forEach((entry) => {
     const option = document.createElement("option");
@@ -100,6 +101,9 @@ function renderPresetOptions(document, select, presetOptions = []) {
   });
   clearChildren(select);
   select.appendChild(fragment);
+  if (presetOptions.some((entry) => entry.id === selectedPreset)) {
+    select.value = selectedPreset;
+  }
 }
 
 export function renderDeckEditor(document, elements, view, handlers, { presetOptions = [] } = {}) {

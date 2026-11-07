@@ -4,7 +4,7 @@ import { cloneCardById } from './deck.js';
 import { projectMachineStateFromEvents } from './game-engine.js';
 import { selectionStateSnapshot } from './selection-state.js';
 import { campaignDefinitions } from './campaign.js';
-import { deckPresets } from './data.js';
+import { deckPresets, library } from './data.js';
 import { evaluateScenarioObjectives } from './scenario-triggers.js';
 
 function cardIds(list = []) {
@@ -9291,6 +9291,25 @@ async function runCustomDeckEditorSmoke(ctx) {
     () => ctx.els.deckEditorModal?.classList.contains("show"),
     `${smokeName}: deck editor opens`
   );
+  for (const monster of library.filter((card) => card.type === "monster")) {
+    const summary = ctx.els.deckEditorLibrary.querySelector(`[data-card-id="${monster.id}"] small`);
+    if (summary?.textContent !== `ATK ${monster.atk} / DEF ${monster.def}`) {
+      throw new Error(`${smokeName}: incorrect base stats for ${monster.id}`);
+    }
+  }
+  const toolbar = ctx.els.deckEditorModal.querySelector(".deck-editor-toolbar").getBoundingClientRect();
+  for (const control of [ctx.els.deckEditorPresetSelect, ctx.els.deckEditorImportPreset, ctx.els.deckEditorName]) {
+    const bounds = control.getBoundingClientRect();
+    if (bounds.left < toolbar.left || bounds.right > toolbar.right) {
+      throw new Error(`${smokeName}: ${control.id} must fit inside the toolbar`);
+    }
+  }
+  ctx.els.deckEditorPresetSelect.value = "aggressive";
+  ctx.els.deckEditorName.value = "准备导入速攻卡组";
+  ctx.els.deckEditorName.dispatchEvent(new Event("input", { bubbles: true }));
+  if (ctx.els.deckEditorPresetSelect.value !== "aggressive") {
+    throw new Error(`${smokeName}: editing the deck name must preserve the import preset`);
+  }
   ctx.els.deckEditorPresetSelect.value = "balanced";
   clickSmokeElement(ctx.els.deckEditorImportPreset, `${smokeName}: import balanced preset`);
   const presetSize = deckPresets.balanced.ids.length;

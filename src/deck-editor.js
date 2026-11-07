@@ -15,7 +15,7 @@ const GROUP_DEFINITIONS = [
 
 function cardMetaLine(card) {
   if (card.type === "monster") {
-    return `ATK ${card.attack} / DEF ${card.defense}`;
+    return `ATK ${card.atk} / DEF ${card.def}`;
   }
   return card.summary || card.rule || card.text || "";
 }

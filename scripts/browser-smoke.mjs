@@ -11,6 +11,7 @@ const SMOKE_VIRTUAL_BUDGETS = {
   "trio-gauntlet-demo": 240000
 };
 const SMOKE_VIEWPORTS = {
+  "custom-deck-editor-basic": { width: 390, height: 844 },
   "duel-layout-density-basic": { width: 1280, height: 720 },
   "trio-phase-transition-basic": { width: 1700, height: 1000 },
   "responsive-workbench-wide-basic": { width: 1700, height: 1000 },
@@ -29,6 +30,7 @@ const SMOKE_VIEWPORTS = {
   "fusion-occlusion-mobile": { width: 390, height: 844 }
 };
 const DEFAULT_SMOKES = [
+  "custom-deck-editor-basic",
   "game-over-event",
   "mode-auto-end",
   "battle-trap",
