@@ -9291,8 +9291,7 @@ async function runAiCardRevealQueueSmoke(ctx) {
   setSmokeStatus("passed", "ai-card-reveal-queue");
 }
 
-async function runCustomDeckEditorSmoke(ctx) {
-  const smokeName = "custom-deck-editor-basic";
+async function runCustomDeckEditorSmoke(ctx, smokeName = "custom-deck-editor-basic") {
   setSmokeStatus("running", smokeName);
   selectScenario(ctx.els, "normal");
   await waitForSmoke(
@@ -9308,6 +9307,13 @@ async function runCustomDeckEditorSmoke(ctx) {
     () => ctx.els.deckEditorModal?.classList.contains("show"),
     `${smokeName}: deck editor opens`
   );
+  const closeStyle = getComputedStyle(ctx.els.deckEditorClose);
+  const closeBounds = ctx.els.deckEditorClose.getBoundingClientRect();
+  if (closeStyle.display === "none" || closeStyle.visibility === "hidden" || closeBounds.width < 44 || closeBounds.height < 44) throw new Error(`${smokeName}: editor close button must stay visible and touchable`);
+  const libraryBounds = ctx.els.deckEditorLibrary.getBoundingClientRect();
+  const paneBounds = ctx.els.deckEditorLibrary.closest(".deck-editor-pane").getBoundingClientRect();
+  const bodyBounds = ctx.els.deckEditorModal.querySelector(".deck-editor-body").getBoundingClientRect();
+  if (libraryBounds.bottom > paneBounds.bottom + 1 || (innerWidth > 900 && paneBounds.height > bodyBounds.height + 1) || ctx.els.deckEditorLibrary.scrollHeight <= ctx.els.deckEditorLibrary.clientHeight) throw new Error(`${smokeName}: full library must scroll within its pane instead of being clipped`);
   for (const monster of library.filter((card) => card.type === "monster")) {
     const summary = ctx.els.deckEditorLibrary.querySelector(`[data-card-id="${monster.id}"] small`);
     if (summary?.textContent !== `ATK ${monster.atk} / DEF ${monster.def}`) {
@@ -9334,6 +9340,45 @@ async function runCustomDeckEditorSmoke(ctx) {
     () => (ctx.els.deckEditorSize?.textContent || "").includes(`${presetSize} 张`),
     `${smokeName}: draft imports preset size`
   );
+  const lastLibraryCard = Array.from(ctx.els.deckEditorLibrary.querySelectorAll(".deck-editor-library-card")).at(-1);
+  const lastCardId = lastLibraryCard.dataset.cardId;
+  lastLibraryCard.scrollIntoView({ block: "nearest" });
+  const libraryScroll = ctx.els.deckEditorLibrary.scrollTop;
+  if (libraryScroll <= 0) throw new Error(`${smokeName}: the end of the full library must be reachable`);
+  clickSmokeElement(lastLibraryCard.querySelector("button"), `${smokeName}: add at end of library`);
+  if (Math.abs(ctx.els.deckEditorLibrary.scrollTop - libraryScroll) > 1) throw new Error(`${smokeName}: adding must retain library scroll position`);
+  clickSmokeElement(ctx.els.deckEditorDraftList.querySelector(`[data-card-id="${lastCardId}"] button`), `${smokeName}: remove added end card`);
+  if (Math.abs(ctx.els.deckEditorLibrary.scrollTop - libraryScroll) > 1) throw new Error(`${smokeName}: removing must retain library scroll position`);
+  const searchLibrary = (query, type) => {
+    ctx.els.deckEditorSearch.focus();
+    ctx.els.deckEditorSearch.value = query;
+    ctx.els.deckEditorSearch.dispatchEvent(new Event("input", { bubbles: true }));
+    ctx.els.deckEditorType.value = type;
+    ctx.els.deckEditorType.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  searchLibrary("日冕", "monster");
+  let filtered = ctx.els.deckEditorLibrary.querySelectorAll(".deck-editor-library-card");
+  if (filtered.length !== 1 || filtered[0].dataset.cardId !== "solar-knight") throw new Error(`${smokeName}: name and type must filter together`);
+  if (document.activeElement !== ctx.els.deckEditorSearch) throw new Error(`${smokeName}: typing must retain search focus`);
+  const filterBounds = ctx.els.deckEditorModal.querySelector(".deck-editor-filters").getBoundingClientRect();
+  for (const control of [ctx.els.deckEditorSearch, ctx.els.deckEditorType, ctx.els.deckEditorClearFilters]) {
+    const bounds = control.getBoundingClientRect();
+    if (bounds.left < filterBounds.left - 1 || bounds.right > filterBounds.right + 1) throw new Error(`${smokeName}: filter controls must fit in the library`);
+  }
+  clickSmokeElement(filtered[0].querySelector("button"), `${smokeName}: add from search`);
+  const maxed = ctx.els.deckEditorLibrary.querySelector('[data-card-id="solar-knight"] button');
+  if (!maxed.disabled || !maxed.textContent.includes("3/3") || ctx.els.deckEditorSearch.value !== "日冕" || ctx.els.deckEditorType.value !== "monster") throw new Error(`${smokeName}: adding must preserve filters and copy limits`);
+  clickSmokeElement(ctx.els.deckEditorDraftList.querySelector('[data-card-id="solar-knight"] button'), `${smokeName}: restore original knight count`);
+  searchLibrary("没有这样的卡牌", "monster");
+  if (!ctx.els.deckEditorLibrary.querySelector(".deck-editor-library-empty") || ctx.els.deckEditorLibrary.querySelector("button") || ctx.els.deckEditorSave.disabled || !ctx.els.deckEditorSize.textContent.includes(`${presetSize} 张`)) throw new Error(`${smokeName}: no results must not alter the draft`);
+  clickSmokeElement(ctx.els.deckEditorClearFilters, `${smokeName}: clear search and type`);
+  if (ctx.els.deckEditorSearch.value !== "" || ctx.els.deckEditorType.value !== "all" || document.activeElement !== ctx.els.deckEditorSearch) throw new Error(`${smokeName}: clearing must reset both filters and focus search`);
+  if (ctx.els.deckEditorLibrary.querySelectorAll(".deck-editor-library-card").length !== library.length) throw new Error(`${smokeName}: clear must restore the full library`);
+  searchLibrary("抽牌", "spell");
+  if (!ctx.els.deckEditorLibrary.querySelector('[data-card-id="seer-call"]') || ctx.els.deckEditorLibrary.querySelector('[data-group="traps"]')) throw new Error(`${smokeName}: effect search must respect type`);
+  clickSmokeElement(ctx.els.deckEditorImportPreset, `${smokeName}: import while filtering`);
+  if (ctx.els.deckEditorSearch.value !== "抽牌" || ctx.els.deckEditorType.value !== "spell") throw new Error(`${smokeName}: import must preserve filters`);
+  clickSmokeElement(ctx.els.deckEditorClearFilters, `${smokeName}: clear before normal edit`);
   const removeTarget = ctx.els.deckEditorDraftList?.querySelector('[data-card-id="ember-drake"] .deck-editor-remove');
   if (!removeTarget) {
     throw new Error(`${smokeName}: ember-drake should be removable from the draft`);
@@ -11081,6 +11126,7 @@ export function scheduleBrowserSmoke({ smoke = "", state, els, currentPlayerActi
     "ai-card-reveal-confirm": runAiCardRevealConfirmSmoke,
     "ai-card-reveal-queue": runAiCardRevealQueueSmoke,
     "custom-deck-editor-basic": runCustomDeckEditorSmoke,
+    "custom-deck-editor-desktop": (ctx) => runCustomDeckEditorSmoke(ctx, "custom-deck-editor-desktop"),
     "pre-duel-deck-preview": runPreDuelDeckPreviewSmoke,
     "campaign-hub-basic": runCampaignHubBasicSmoke,
     "campaign-objective-tracker-basic": runCampaignObjectiveTrackerBasicSmoke,

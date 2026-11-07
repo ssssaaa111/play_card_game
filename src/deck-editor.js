@@ -1,5 +1,6 @@
 import { library } from "./data.js";
 import { MAX_COPIES_PER_CARD, validateCustomDeck } from "./custom-decks.js";
+import { cardHandSummary } from "./cards.js";
 
 const libraryIndex = new Map(library.map((card) => [card.id, card]));
 
@@ -20,13 +21,21 @@ function cardMetaLine(card) {
   return card.summary || card.rule || card.text || "";
 }
 
-export function buildDeckLibraryGroups(counts = {}) {
+const searchText = new Map(library.map((card) => [card.id,
+  [card.name, card.id, cardMetaLine(card), cardHandSummary(card), card.text, card.rule, card.summary]
+    .filter(Boolean).join(" ").normalize("NFKC").toLowerCase()
+]));
+
+export function buildDeckLibraryGroups(counts = {}, { query = "", type = "all" } = {}) {
+  const terms = String(query ?? "").normalize("NFKC").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const selectedType = GROUP_DEFINITIONS.some((group) => group.type === type) ? type : "all";
   return GROUP_DEFINITIONS.map(({ type, key, label }) => ({
     key,
     label,
     type,
     cards: library
-      .filter((card) => card.type === type)
+      .filter((card) => card.type === type && (selectedType === "all" || card.type === selectedType))
+      .filter((card) => terms.every((term) => searchText.get(card.id).includes(term)))
       .map((card) => {
         const count = counts[card.id] || 0;
         return {
@@ -70,10 +79,16 @@ export function buildDeckEditorView({
   customDecks = [],
   draftIds = [],
   selectedId = null,
-  draftName = ""
+  draftName = "",
+  libraryQuery = "",
+  libraryType = "all"
 } = {}) {
   const validation = validateCustomDeck(draftIds);
   const selectedDeck = customDecks.find((deck) => deck.id === selectedId) || null;
+  const query = typeof libraryQuery === "string" ? libraryQuery : "";
+  const type = GROUP_DEFINITIONS.some((group) => group.type === libraryType) ? libraryType : "all";
+  const libraryGroups = buildDeckLibraryGroups(validation.counts, { query, type }).filter((group) => group.cards.length);
+  const libraryMatchCount = libraryGroups.reduce((total, group) => total + group.cards.length, 0);
   return {
     selectedId,
     selectedDeck,
@@ -90,6 +105,11 @@ export function buildDeckEditorView({
       size: deck.ids.length,
       selected: deck.id === selectedId
     })),
-    libraryGroups: buildDeckLibraryGroups(validation.counts)
+    libraryQuery: query,
+    libraryType: type,
+    libraryGroups,
+    libraryMatchCount,
+    libraryStatus: `显示 ${libraryMatchCount} / ${library.length} 种卡牌`,
+    libraryFiltered: Boolean(query.trim() || type !== "all")
   };
 }
