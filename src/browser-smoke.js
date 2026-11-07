@@ -11,6 +11,23 @@ function cardIds(list = []) {
   return list.map((card) => card?.id || null);
 }
 
+export function assertSmokeOpeningDeck(duelist, expectedIds, drawCount = 6) {
+  const deckIds = cardIds(duelist.deck);
+  const handIds = cardIds(duelist.hand);
+  if (handIds.length !== drawCount) {
+    throw new Error(`opening hand should contain ${drawCount} cards, got ${handIds.length}`);
+  }
+  const expectedRemaining = expectedIds.length - drawCount;
+  if (deckIds.length !== expectedRemaining) {
+    throw new Error(`opening deck should keep ${expectedRemaining} cards, got ${deckIds.length}`);
+  }
+  const actual = [...deckIds, ...handIds].sort();
+  const expected = [...expectedIds].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`opening deck and hand should match the saved custom deck: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+
 function campaignProgressWithClearedChapters(chapterIds = []) {
   const chapters = Object.fromEntries(chapterIds.map((chapterId) => [chapterId, {
     stars: 1,
@@ -9355,14 +9372,10 @@ async function runCustomDeckEditorSmoke(ctx) {
     `${smokeName}: duel reaches player main phase`,
     9000
   );
-  const deckIds = cardIds(ctx.state.player.deck);
-  const expectedRemaining = presetSize - 6;
-  if (deckIds.length !== expectedRemaining) {
-    throw new Error(`${smokeName}: player deck should keep ${expectedRemaining} cards after the opening and turn draws, got ${deckIds.length}`);
-  }
-  if (!deckIds.includes("solar-vanguard")) {
-    throw new Error(`${smokeName}: custom deck should include solar-vanguard`);
-  }
+  const expectedIds = [...deckPresets.balanced.ids];
+  expectedIds.splice(expectedIds.indexOf("ember-drake"), 1);
+  expectedIds.push("solar-vanguard");
+  assertSmokeOpeningDeck(ctx.state.player, expectedIds);
   setSmokeStatus("passed", smokeName);
 }
 

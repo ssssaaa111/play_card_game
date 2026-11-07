@@ -1,7 +1,56 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createTestSnapshot } from "../src/browser-smoke.js";
+import { assertSmokeOpeningDeck, createTestSnapshot } from "../src/browser-smoke.js";
+import { deckPresets } from "../src/data.js";
+import { buildDeckFromDefinition } from "../src/deck.js";
+
+function editedDeckIds() {
+  const ids = [...deckPresets.balanced.ids];
+  ids.splice(ids.indexOf("ember-drake"), 1);
+  ids.push("solar-vanguard");
+  return ids;
+}
+
+test("custom deck smoke accepts the added card being randomly drawn into the opening hand", (t) => {
+  let seed = 1;
+  t.mock.method(Math, "random", () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  });
+  const expectedIds = Object.freeze(editedDeckIds());
+  const deck = buildDeckFromDefinition({ ids: expectedIds });
+  const hand = Object.freeze(deck.splice(0, 6));
+  Object.freeze(deck);
+  assert.ok(hand.some((card) => card.id === "solar-vanguard"));
+  assert.ok(!deck.some((card) => card.id === "solar-vanguard"));
+  assert.doesNotThrow(() => assertSmokeOpeningDeck({ deck, hand }, expectedIds));
+});
+
+test("custom deck smoke accepts the added card remaining in the shuffled deck", () => {
+  const expectedIds = editedDeckIds();
+  const cards = expectedIds.map((id) => ({ id }));
+  const hand = cards.splice(0, 6);
+  assert.ok(cards.some((card) => card.id === "solar-vanguard"));
+  assert.doesNotThrow(() => assertSmokeOpeningDeck({ deck: cards, hand }, expectedIds));
+});
+
+test("custom deck smoke rejects a fallback preset or incorrect duplicate count", () => {
+  const expectedIds = editedDeckIds();
+  for (const ids of [deckPresets.balanced.ids, expectedIds.map((id) => id === "night-oracle" ? "ember-drake" : id)]) {
+    const cards = ids.map((id) => ({ id }));
+    const hand = cards.splice(0, 6);
+    assert.throws(() => assertSmokeOpeningDeck({ deck: cards, hand }, expectedIds), /match the saved custom deck/);
+  }
+});
+
+test("custom deck smoke rejects missing cards and an incomplete opening draw", () => {
+  const expectedIds = editedDeckIds();
+  const cards = expectedIds.map((id) => ({ id }));
+  const hand = cards.splice(0, 6);
+  assert.throws(() => assertSmokeOpeningDeck({ deck: cards.slice(1), hand }, expectedIds), /opening deck should keep/);
+  assert.throws(() => assertSmokeOpeningDeck({ deck: cards, hand: hand.slice(1) }, expectedIds), /opening hand should contain 6/);
+});
 
 test("builds read-only browser smoke snapshots from live state", () => {
   const state = {
