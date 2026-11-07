@@ -4,6 +4,7 @@ import { GameEngine, GameRuleError } from "../src/game-engine.js";
 import { DuelProtocolError, normalizeCommandEnvelope, normalizeDisplayName, sanitizeOnlineAction } from "../src/duel-command.js";
 import { buildDuelView } from "../src/duel-view.js";
 import { createOnlineDuelState } from "./online-duel-state.js";
+import { normalizeOnlineDeckChoice } from "../src/online-decks.js";
 import {
   onlineAttackResponse,
   onlineChainResponse,
@@ -129,6 +130,7 @@ export class DuelRoom {
       connectionId,
       reconnectToken: token(),
       ready: false,
+      deck: null,
       connected: true,
       reconnectDeadlineAt: null,
       joinedAt: this.now(),
@@ -137,6 +139,18 @@ export class DuelRoom {
     this.seats.set(seatId, seat);
     this.#touch();
     return this.#joinResult(seat, false);
+  }
+
+  setDeck(connectionId, choice) {
+    const seat = this.#requireConnectionSeat(connectionId);
+    if (this.status !== "waiting" || seat.ready) {
+      throw new DuelRoomError("卡组已锁定，请先取消准备；对局开始后不能更换卡组。", "DECK_LOCKED");
+    }
+    const deck = normalizeOnlineDeckChoice(choice);
+    seat.deck = deck;
+    seat.lastSeenAt = this.now();
+    this.#touch();
+    return this.viewFor(seat.seatId);
   }
 
   setReady(connectionId, ready = true) {
@@ -262,6 +276,12 @@ export class DuelRoom {
     const seat = this.seats.get(seatId);
     if (!seat) throw new DuelRoomError(`Unknown room seat ${seatId}`, "UNKNOWN_SEAT");
     const seats = this.seatList().map(publicSeat);
+    const deckSelection = {
+      choice: clone(seat.deck),
+      name: seat.deck?.name || "联机基础卡组",
+      count: seat.deck?.ids.length || 40,
+      locked: this.status !== "waiting" || seat.ready
+    };
     if (!this.engine) {
       return {
         protocolVersion: 1,
@@ -273,7 +293,8 @@ export class DuelRoom {
         series: clone(this.series),
         viewerSeatId: seatId,
         opponentSeatId: ROOM_SEAT_IDS.find((candidate) => candidate !== seatId),
-        seats
+        seats,
+        deckSelection
       };
     }
     const view = buildDuelView(this.engine.getState(), seatId, {
@@ -287,6 +308,7 @@ export class DuelRoom {
     });
     view.responseTimer = this.responseTimeoutView();
     view.turnTimer = this.turnTimeoutView();
+    view.deckSelection = deckSelection;
     return view;
   }
 
@@ -525,7 +547,8 @@ export class DuelRoom {
   #start() {
     const firstPlayerId = this.#nextFirstPlayerId();
     const seatIds = [firstPlayerId, ...ROOM_SEAT_IDS.filter((seatId) => seatId !== firstPlayerId)];
-    const initialState = this.createState({ seatIds });
+    const deckChoices = Object.fromEntries(this.seatList().map((seat) => [seat.seatId, clone(seat.deck)]));
+    const initialState = this.createState({ seatIds, deckChoices });
     this.engine = new GameEngine(initialState);
     this.duelNumber += 1;
     this.status = "playing";

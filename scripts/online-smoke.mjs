@@ -4,9 +4,11 @@ import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
 
 import { DuelClientMessage, DuelServerMessage } from "../src/duel-command.js";
+import { deckPresets } from "../src/data.js";
 
 const serverUrl = process.env.DUEL_SERVER_URL || "ws://127.0.0.1:5178/duel";
 const responseScenario = process.argv.includes("--scenario=trap-response");
+const customDeckScenario = process.argv.includes("--custom-decks");
 const disconnectTimeoutScenario = process.argv.includes("--disconnect-timeout");
 const authBaseUrl = (() => {
   const url = new URL(serverUrl);
@@ -113,12 +115,31 @@ try {
   assert.equal(created.seatId, "p1");
   assert.equal(joined.seatId, "p2");
 
+  if (customDeckScenario) {
+    await first.request(DuelClientMessage.setDeck, { deck: { kind: "custom", name: "private-smoke-deck", ids: deckPresets.balanced.ids } });
+    const deckReceipt = await second.request(DuelClientMessage.setDeck, { deck: { kind: "preset", id: "control" } });
+    await Promise.all([first.waitForView((view) => view.revision >= deckReceipt.revision), second.waitForView((view) => view.revision >= deckReceipt.revision)]);
+    const before = second.view.revision;
+    await assert.rejects(second.request(DuelClientMessage.setDeck, { deck: { kind: "custom", ids: ["missing"] } }), { code: "INVALID_DECK" });
+    assert.equal(second.view.revision, before);
+    assert.ok(!JSON.stringify(second.view).includes("private-smoke-deck"));
+  }
+
   await first.request(DuelClientMessage.setReady, { ready: true });
+  if (customDeckScenario) {
+    await first.waitForView((view) => view.deckSelection.locked);
+    await assert.rejects(first.request(DuelClientMessage.setDeck, { deck: null }), { code: "DECK_LOCKED" });
+    assert.equal(first.view.deckSelection.locked, true);
+  }
   await second.request(DuelClientMessage.setReady, { ready: true });
   const firstStart = await first.waitForView((view) => view.status === "playing");
   const secondStart = await second.waitForView((view) => view.status === "playing");
   assert.ok(firstStart.players.p1.hand.every((card) => !card.hidden));
   assert.ok(secondStart.players.p1.hand.every((card) => card.hidden));
+  if (customDeckScenario) {
+    assert.equal(firstStart.players.p1.deckCount, 51);
+    assert.equal(secondStart.players.p2.deckCount, 45);
+  }
 
   const summon = firstStart.legalActions.actions.summon[0];
   if (responseScenario) assert.ok(summon, "the fixed scenario must provide a summon action");
@@ -145,11 +166,13 @@ try {
     return receipt;
   };
   let pendingAttack = null;
-  const secondSummon = secondTurn.legalActions.actions.summon[0];
-  assert.ok(secondSummon, "2P must receive a summon action on their own turn");
-  await command(second, { ...secondSummon, index: 4 });
-  assert.equal(second.view.players.p2.monsterZone[4]?.id, secondSummon.cardId);
-  assert.equal(first.view.players.p2.monsterZone[4]?.id, secondSummon.cardId);
+  if (!customDeckScenario) {
+    const secondSummon = secondTurn.legalActions.actions.summon[0];
+    assert.ok(secondSummon, "2P must receive a summon action on their own turn");
+    await command(second, { ...secondSummon, index: 4 });
+    assert.equal(second.view.players.p2.monsterZone[4]?.id, secondSummon.cardId);
+    assert.equal(first.view.players.p2.monsterZone[4]?.id, secondSummon.cardId);
+  }
   if (responseScenario) {
     const mirror = secondTurn.players.p2.hand.find((card) => card.templateId === "mirror-snare");
     assert.ok(mirror, "fixed scenario must include mirror-snare");
@@ -179,6 +202,7 @@ try {
     });
     assert.equal(resumeResult.seatId, "p2");
     assert.equal(resumeResult.resumed, true);
+    if (customDeckScenario) assert.equal(resumeResult.view.deckSelection.count, 50);
     await resumed.waitForView((view) => view.viewerSeatId === "p2" && view.status === "playing");
 
     if (responseScenario) {
@@ -210,8 +234,14 @@ try {
     assert.equal(secondRematch.turn.playerId, "p2");
     assert.equal(firstRematch.roomCode, created.roomCode);
     assert.deepEqual(firstRematch.series, firstFinished.series);
+    if (customDeckScenario) {
+      assert.equal(firstRematch.players.p1.deckCount, 51);
+      assert.equal(secondRematch.players.p2.deckCount, 45);
+      assert.equal(firstRematch.deckSelection.name, "private-smoke-deck");
+      assert.ok(!JSON.stringify(secondRematch).includes("private-smoke-deck"));
+    }
 
-    console.log(`online-duel-smoke passed (${created.roomCode}${responseScenario ? ", trap-response + resume" : ""}, rematch)`);
+    console.log(`online-duel-smoke passed (${created.roomCode}${responseScenario ? ", trap-response + resume" : ""}${customDeckScenario ? ", custom-decks + validation + privacy" : ""}, rematch)`);
   }
 } finally {
   first.close();

@@ -51,6 +51,20 @@ body[data-online-status="waiting"] #app { grid-template-rows: auto minmax(0, 1fr
 .seat-card { display: flex; justify-content: space-between; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
 .seat-card > span { color: var(--muted); font-size: 12px; }
 .seat-card[data-ready="true"] { border-color: var(--green); }
+.room-card { max-height: calc(100dvh - 150px); overflow-y: auto; margin-top: clamp(12px, 3vh, 32px); min-width: 0; }
+.online-deck-picker { display: grid; gap: 9px; min-width: 0; padding: 14px; border: 1px solid rgba(84,210,210,.3); border-radius: 8px; background: rgba(84,210,210,.035); }
+.online-deck-picker > label { color: var(--gold); font-size: 13px; font-weight: 800; }
+.online-deck-controls { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; min-width: 0; }
+.online-deck-controls select { min-width: 0; width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: #171b26; color: var(--ink); font: inherit; font-size: 12px; }
+.online-deck-controls select:focus-visible { outline: 2px solid var(--cyan); }
+.online-deck-controls select:disabled { opacity: .65; }
+.online-deck-controls .btn, #roomPanel > #readyButton { min-height: 44px; }
+.room-card #roomDeckStatus { margin: 0; font-size: 12px; color: var(--cyan); overflow-wrap: anywhere; }
+.room-card #roomDeckStatus[data-invalid="true"] { color: var(--red); }
+.room-card .online-deck-help { margin: 0; font-size: 11px; line-height: 1.7; }
+.online-deck-help a { color: var(--cyan); }
+#roomDeckError:empty { display: none; }
+@media (max-width: 520px) { .online-deck-controls { grid-template-columns: minmax(0,1fr); } }
 .online-notice { position: absolute; z-index: 30; left: 50%; top: 46%; max-width: 80%; transform: translateX(-50%); color: #ffe1e7; background: #581e30; border-radius: 6px; font-size: 12px; }
 .online-notice:not(:empty) { padding: 10px 16px; }
 .online-connection-overlay { position: absolute; z-index: 18; inset: 0; display: grid; place-items: center; padding: 18px; pointer-events: auto; background: radial-gradient(circle at 50% 50%, rgba(8,15,24,.36), rgba(2,5,9,.7)); backdrop-filter: saturate(.72) blur(1.5px); }

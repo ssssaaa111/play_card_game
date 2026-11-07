@@ -13,14 +13,16 @@ import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
-import { OnlineDuelClient } from "./online-duel-client.js";
+import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-online-decks-1";
+import { readCustomDecks } from "./custom-decks.js";
+import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
 import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261103-reconnect-brief-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
-  "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "duelPanel", "aiPanel", "playerPanel",
+  "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "roomDeckSelect", "roomDeckRefresh", "roomDeckStatus", "roomDeckError", "duelPanel", "aiPanel", "playerPanel",
   "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
   "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "duelHint", "duelError", "versusStage", "versusPhase",
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
@@ -77,6 +79,11 @@ let rematchPending = false;
 let rematchError = "";
 let endTurnConfirmation = null;
 let endTurnConfirmationTimer = null;
+let roomDeckRoomCode = null;
+let roomDeckDraft = null;
+let roomDeckDirty = false;
+let roomDeckPending = false;
+let roomDeckChoices = [];
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
 const audioController = createAudioController({
@@ -240,6 +247,7 @@ async function attemptReconnect({ immediate = false } = {}) {
 }
 function setError(message = "") {
   (client.view?.status === "playing" ? elements.duelError : elements.lobbyError).textContent = message;
+  elements.roomDeckError.textContent = message;
   elements.responseError.textContent = message;
 }
 function roomStorageKey() {
@@ -1563,6 +1571,70 @@ async function confirmForfeit() {
   }
 }
 
+function sameDeckChoice(left, right) {
+  if (!left || !right) return left == null && right == null;
+  return left.kind === right.kind && (left.kind === "preset" ? left.id === right.id :
+    left.name === right.name && JSON.stringify(left.ids) === JSON.stringify(right.ids));
+}
+
+function renderRoomDeck(view, self) {
+  if (roomDeckRoomCode !== view.roomCode) {
+    roomDeckRoomCode = view.roomCode;
+    roomDeckDirty = false;
+    elements.roomDeckError.textContent = "";
+  }
+  if (!roomDeckDirty || self?.ready || view.status !== "waiting") roomDeckDraft = view.deckSelection?.choice || null;
+  roomDeckChoices = onlineDeckOptions(readCustomDecks());
+  if (!roomDeckChoices.some((option) => sameDeckChoice(option.choice, roomDeckDraft))) {
+    const saved = sameDeckChoice(roomDeckDraft, view.deckSelection?.choice);
+    roomDeckChoices.push({ value: "current", label: `${roomDeckDraft.name}（${roomDeckDraft.ids.length} 张，${saved ? "已提交" : "待提交"}）`, choice: roomDeckDraft });
+  }
+  elements.roomDeckSelect.replaceChildren(...roomDeckChoices.map((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.value;
+    option.textContent = entry.label;
+    return option;
+  }));
+  elements.roomDeckSelect.value = roomDeckChoices.find((option) => sameDeckChoice(option.choice, roomDeckDraft)).value;
+  const locked = Boolean(self?.ready || view.status !== "waiting");
+  let invalid = false;
+  try {
+    const deck = normalizeOnlineDeckChoice(roomDeckDraft);
+    elements.roomDeckStatus.textContent = `${deck?.name || "联机基础卡组"} · ${deck?.ids.length || 40} 张 · ${locked ? "已锁定" : "校验通过，准备后提交服务端"}`;
+  } catch (error) {
+    invalid = true;
+    elements.roomDeckStatus.textContent = error.message;
+  }
+  elements.roomDeckStatus.dataset.invalid = String(invalid);
+  elements.roomDeckSelect.disabled = locked || roomDeckPending;
+  elements.roomDeckRefresh.disabled = locked || roomDeckPending;
+  elements.readyButton.disabled = roomDeckPending || (!self?.ready && invalid);
+  elements.readyButton.textContent = roomDeckPending ? "正在提交…" : self?.ready ? "取消准备" : "准备";
+}
+
+async function toggleRoomReady() {
+  if (roomDeckPending || client.view?.status !== "waiting") return;
+  const self = client.view.seats.find((seat) => seat.seatId === client.view.viewerSeatId);
+  roomDeckPending = true;
+  setError();
+  renderRoom(client.view);
+  try {
+    if (self?.ready) {
+      await client.setReady(false);
+    } else {
+      normalizeOnlineDeckChoice(roomDeckDraft);
+      await client.setDeck(roomDeckDraft);
+      await client.setReady(true);
+    }
+    roomDeckDirty = false;
+  } catch (error) {
+    elements.roomDeckError.textContent = error.message;
+  } finally {
+    roomDeckPending = false;
+    if (client.view) renderRoom(client.view);
+  }
+}
+
 function renderRoom(view) {
   const playing = view.status !== "waiting";
   elements.logoutButton.disabled = view.status === "playing" && !view.gameOver;
@@ -1589,8 +1661,7 @@ function renderRoom(view) {
   document.body.dataset.onlineViewerSeat = identity?.seatId || "none";
   elements.seatGrid.innerHTML = view.seats.map((seat) => `<div class="seat-card" data-ready="${seat.ready}"><strong>${escapeHtml(seat.name)}${seat.seatId === view.viewerSeatId ? "（你）" : ""}</strong><span>${seat.connected ? "在线" : "已断线"} · ${seat.ready ? "已准备" : "未准备"}</span></div>`).join("");
   const self = view.seats.find((seat) => seat.seatId === view.viewerSeatId);
-  elements.readyButton.disabled = Boolean(self?.ready);
-  elements.readyButton.textContent = self?.ready ? "已准备" : "准备";
+  renderRoomDeck(view, self);
   elements.roomHint.textContent = view.seats.length < 2 ? "等待第二名玩家加入，点击上方房间码复制邀请链接。" : "双方准备后自动开局。";
 }
 
@@ -1733,7 +1804,21 @@ for (const [id, join] of [["createRoom", false], ["joinRoom", true]]) elements[i
     saveSession(); setConnection("connected", `身份已保存 · ${seatName(result.view, result.seatId)}`); render(result.view);
   } catch (error) { setError(error.message); }
 });
-elements.readyButton.addEventListener("click", async () => { try { await client.setReady(true); } catch (error) { setError(error.message); } });
+elements.readyButton.addEventListener("click", () => { void toggleRoomReady(); });
+elements.roomDeckSelect.addEventListener("change", () => {
+  roomDeckDraft = roomDeckChoices.find((entry) => entry.value === elements.roomDeckSelect.value)?.choice || null;
+  roomDeckDirty = true;
+  elements.roomDeckError.textContent = "";
+  renderRoom(client.view);
+});
+elements.roomDeckRefresh.addEventListener("click", () => {
+  if (!client.view || roomDeckPending) return;
+  const selected = onlineDeckOptions(readCustomDecks()).find((entry) => entry.value === elements.roomDeckSelect.value);
+  roomDeckDraft = selected ? selected.choice : client.view.deckSelection?.choice || null;
+  roomDeckDirty = Boolean(selected);
+  elements.roomDeckError.textContent = "";
+  renderRoom(client.view);
+});
 elements.copyRoomCode.addEventListener("click", async () => {
   const url = new URL(window.location.href); url.searchParams.set("room", client.view.roomCode);
   try { await navigator.clipboard.writeText(url.toString()); elements.copyRoomCode.title = "邀请链接已复制"; }

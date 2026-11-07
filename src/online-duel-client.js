@@ -1,4 +1,4 @@
-import { DuelClientMessage, DuelServerMessage, createClientMessage } from "./duel-command.js";
+import { DuelClientMessage, DuelServerMessage, createClientMessage } from "./duel-command.js?v=20261107-online-decks-1";
 
 function defaultServerUrl() {
   if (typeof window === "undefined") return "ws://127.0.0.1:5178/duel";
@@ -92,6 +92,10 @@ export class OnlineDuelClient {
 
   setReady(ready = true) {
     return this.request(DuelClientMessage.setReady, { ready });
+  }
+
+  setDeck(deck) {
+    return this.request(DuelClientMessage.setDeck, { deck });
   }
 
   leaveRoom() {
