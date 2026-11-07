@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>星魂决斗 - 卡牌对战原型</title>
-  <link rel="stylesheet" href="styles.css?v=20261107-deck-editor-fit-1" />
+  <link rel="stylesheet" href="styles.css?v=20261107-deck-search-1" />
   <link rel="stylesheet" href="duel-table.css?v=20260901-field-clearance-1" />
   <link rel="stylesheet" href="target-selection.css" />
   <link rel="stylesheet" href="ai-action.css?v=20261014-ai-action-flow-1" />
@@ -525,7 +525,19 @@
           <ul class="deck-editor-draft-list" id="deckEditorDraftList"></ul>
         </section>
         <section class="deck-editor-pane deck-editor-library" aria-label="卡牌库">
-          <h3>卡牌库</h3>
+          <div class="deck-editor-library-heading">
+            <h3>卡牌库</h3>
+            <div class="deck-editor-filters" role="search" aria-label="查找卡牌">
+              <label class="deck-editor-search-label" for="deckEditorSearch">搜索卡名或效果
+                <input id="deckEditorSearch" type="search" maxlength="100" placeholder="例如：日冕、抽牌" autocomplete="off" aria-controls="deckEditorLibrary" aria-describedby="deckEditorLibraryStatus">
+              </label>
+              <label for="deckEditorType">卡牌类型
+                <select id="deckEditorType" aria-controls="deckEditorLibrary"><option value="all">全部类型</option><option value="monster">怪兽</option><option value="spell">魔法</option><option value="trap">陷阱</option></select>
+              </label>
+              <button class="btn ghost" id="deckEditorClearFilters" type="button" disabled>清除筛选</button>
+            </div>
+            <p id="deckEditorLibraryStatus" class="deck-editor-library-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          </div>
           <div class="deck-editor-library-groups" id="deckEditorLibrary"></div>
         </section>
       </div>
@@ -625,6 +637,6 @@
   </div>
 
   <script type="module" src="src/duel-table.js?v=20260901-field-clearance-1"></script>
-  <script type="module" src="src/app.js?v=20261014-ai-action-flow-1"></script>
+  <script type="module" src="src/app.js?v=20261107-deck-search-1"></script>
 </body>
 </html>

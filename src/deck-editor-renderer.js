@@ -131,13 +131,36 @@ export function renderDeckEditor(document, elements, view, handlers, { presetOpt
     elements.deckEditorDelete.disabled = !view.canDelete;
   }
 
-  clearChildren(elements.deckEditorLibrary);
+  if (elements.deckEditorSearch && elements.deckEditorSearch.value !== view.libraryQuery) {
+    elements.deckEditorSearch.value = view.libraryQuery;
+  }
+  if (elements.deckEditorType) elements.deckEditorType.value = view.libraryType;
+  if (elements.deckEditorClearFilters) elements.deckEditorClearFilters.disabled = !view.libraryFiltered;
+  if (elements.deckEditorLibraryStatus) elements.deckEditorLibraryStatus.textContent = view.libraryStatus;
+
+  const root = elements.deckEditorLibrary;
+  const filterKey = JSON.stringify([view.libraryQuery, view.libraryType]);
+  const scrollTop = root?.dataset.filterKey === filterKey ? root.scrollTop : 0;
+  clearChildren(root);
   view.libraryGroups.forEach((group) => {
-    renderLibraryGroup(document, elements.deckEditorLibrary, group, handlers);
+    renderLibraryGroup(document, root, group, handlers);
   });
+  if (root && view.libraryMatchCount === 0) {
+    const empty = document.createElement("p");
+    empty.className = "deck-editor-library-empty";
+    empty.textContent = "没有匹配的卡牌，试试其他关键词或清除筛选。";
+    root.appendChild(empty);
+  }
+  if (root) { root.dataset.filterKey = filterKey; root.scrollTop = scrollTop; }
 }
 
 export function bindDeckEditorEvents(elements, handlers = {}) {
+  elements.deckEditorSearch?.addEventListener("input", (event) => handlers.onLibraryQueryChange?.(event.target.value));
+  elements.deckEditorType?.addEventListener("change", (event) => handlers.onLibraryTypeChange?.(event.target.value));
+  elements.deckEditorClearFilters?.addEventListener("click", () => {
+    handlers.onClearLibraryFilters?.();
+    elements.deckEditorSearch?.focus();
+  });
   elements.deckEditorClose?.addEventListener("click", () => handlers.onClose?.());
   elements.deckEditorNew?.addEventListener("click", () => handlers.onNewDeck?.());
   elements.deckEditorImportPreset?.addEventListener("click", () => {

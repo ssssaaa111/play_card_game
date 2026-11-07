@@ -88,8 +88,8 @@ import {
   removeCustomDeck,
   upsertCustomDeck
 } from './custom-decks.js';
-import { buildDeckEditorView } from './deck-editor.js';
-import { bindDeckEditorEvents, renderDeckEditor } from './deck-editor-renderer.js';
+import { buildDeckEditorView } from './deck-editor.js?v=20261107-deck-search-1';
+import { bindDeckEditorEvents, renderDeckEditor } from './deck-editor-renderer.js?v=20261107-deck-search-1';
 import { aceLine, duelistLabel, duelistName, lineFor } from './duelist-lines.js';
 import {
   afterAttackBackrowDestroyedText,
@@ -475,6 +475,10 @@ const els = {
   deckEditorValidation: document.querySelector("#deckEditorValidation"),
   deckEditorDraftList: document.querySelector("#deckEditorDraftList"),
   deckEditorLibrary: document.querySelector("#deckEditorLibrary"),
+  deckEditorSearch: document.querySelector("#deckEditorSearch"),
+  deckEditorType: document.querySelector("#deckEditorType"),
+  deckEditorClearFilters: document.querySelector("#deckEditorClearFilters"),
+  deckEditorLibraryStatus: document.querySelector("#deckEditorLibraryStatus"),
   deckEditorSave: document.querySelector("#deckEditorSave"),
   deckEditorDelete: document.querySelector("#deckEditorDelete"),
   aiSelect: document.querySelector("#aiSelect"),
@@ -726,7 +730,9 @@ const deckEditorState = {
   open: false,
   selectedId: null,
   draftName: "",
-  draftIds: []
+  draftIds: [],
+  libraryQuery: "",
+  libraryType: "all"
 };
 
 function currentCustomDecks() {
@@ -767,7 +773,9 @@ function renderDeckEditorPanel() {
     customDecks: currentCustomDecks(),
     draftIds: deckEditorState.draftIds,
     selectedId: deckEditorState.selectedId,
-    draftName: deckEditorState.draftName
+    draftName: deckEditorState.draftName,
+    libraryQuery: deckEditorState.libraryQuery,
+    libraryType: deckEditorState.libraryType
   });
   renderDeckEditor(document, els, view, deckEditorHandlers, {
     presetOptions: deckEditorPresetOptions()
@@ -775,6 +783,19 @@ function renderDeckEditorPanel() {
 }
 
 const deckEditorHandlers = {
+  onLibraryQueryChange: (query) => {
+    deckEditorState.libraryQuery = query;
+    renderDeckEditorPanel();
+  },
+  onLibraryTypeChange: (type) => {
+    deckEditorState.libraryType = type;
+    renderDeckEditorPanel();
+  },
+  onClearLibraryFilters: () => {
+    deckEditorState.libraryQuery = "";
+    deckEditorState.libraryType = "all";
+    renderDeckEditorPanel();
+  },
   onSelectDeck: (id) => {
     const deck = currentCustomDecks().find((entry) => entry.id === id);
     if (!deck) return;

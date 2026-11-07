@@ -7160,6 +7160,15 @@ button.chain-stack-card:focus-visible {
   min-width: 0;
 }
 
+.deck-editor-head .drawer-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+}
+
 .deck-editor-toolbar {
   display: grid;
   gap: 10px;
@@ -7242,6 +7251,7 @@ button.chain-stack-card:focus-visible {
 .deck-editor-body {
   display: grid;
   grid-template-columns: 240px 300px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   max-height: min(58dvh, 560px);
   overflow: hidden;
@@ -7326,6 +7336,19 @@ button.chain-stack-card:focus-visible {
 .deck-editor-library-groups {
   overflow: auto;
 }
+
+.deck-editor-library-heading { display: grid; gap: 8px; min-width: 0; }
+.deck-editor-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; min-width: 0; }
+.deck-editor-filters label { display: grid; gap: 5px; min-width: 0; color: var(--muted); font-size: 11px; }
+.deck-editor-filters .deck-editor-search-label { grid-column: 1 / -1; }
+.deck-editor-filters input, .deck-editor-filters select {
+  width: 100%; min-width: 0; min-height: 44px; padding: 7px 8px; border: 1px solid rgba(255, 255, 255, .2);
+  background: #171b26; color: var(--ink); font: inherit; font-size: 12px;
+}
+.deck-editor-filters input:focus-visible, .deck-editor-filters select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.deck-editor-filters .btn { align-self: end; min-height: 44px; padding: 7px 9px; }
+.deck-editor-library-status { margin: 0; color: #8ee7e7; font-size: 11px; line-height: 1.5; }
+.deck-editor-library-empty { margin: 0; padding: 14px 6px; color: var(--muted); font-size: 12px; line-height: 1.7; }
 
 .deck-editor-library-group + .deck-editor-library-group {
   margin-top: 12px;
@@ -7420,6 +7443,7 @@ button.chain-stack-card:focus-visible {
 
   .deck-editor-body {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     max-height: none;
     overflow: visible;
   }
