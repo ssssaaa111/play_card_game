@@ -7204,6 +7204,7 @@ button.chain-stack-card:focus-visible {
 
 .deck-editor-name-field {
   flex: 1 1 260px;
+  min-width: 0;
 }
 
 .deck-editor-name-field input {
@@ -7390,6 +7391,33 @@ button.chain-stack-card:focus-visible {
 }
 
 @media (max-width: 900px) {
+  .deck-editor-toolbar,
+  .deck-editor-deck-controls,
+  .deck-editor-name-row,
+  .deck-editor-status {
+    min-width: 0;
+  }
+
+  .deck-editor-preset-import {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .deck-editor-preset-import > span {
+    grid-column: 1 / -1;
+  }
+
+  .deck-editor-preset-import select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .deck-editor-name-field {
+    flex-basis: 100%;
+  }
+
   .deck-editor-body {
     grid-template-columns: 1fr;
     max-height: none;

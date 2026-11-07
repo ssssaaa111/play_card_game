@@ -18,6 +18,16 @@ test("library groups split cards by type in stable order", () => {
   assert.ok(groups.every((group) => group.cards.every((card) => card.count === 0 && !card.maxed)));
 });
 
+test("monster library summaries show the card definition's base attack and defense", () => {
+  const monsters = buildDeckLibraryGroups()[0].cards;
+  const definitions = library.filter((card) => card.type === "monster");
+  assert.deepEqual(
+    monsters.map((card) => card.meta),
+    definitions.map((card) => `ATK ${card.atk} / DEF ${card.def}`)
+  );
+  assert.equal(monsters.find((card) => card.id === "solar-vanguard").meta, "ATK 2300 / DEF 1700");
+});
+
 test("draft entries merge duplicates in first occurrence order", () => {
   const entries = buildDraftEntries(["ember-drake", "seer-call", "ember-drake"]);
   assert.deepEqual(entries.map((entry) => entry.id), ["ember-drake", "seer-call"]);

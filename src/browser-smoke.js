@@ -4,11 +4,28 @@ import { cloneCardById } from './deck.js';
 import { projectMachineStateFromEvents } from './game-engine.js';
 import { selectionStateSnapshot } from './selection-state.js';
 import { campaignDefinitions } from './campaign.js';
-import { deckPresets } from './data.js';
+import { deckPresets, library } from './data.js';
 import { evaluateScenarioObjectives } from './scenario-triggers.js';
 
 function cardIds(list = []) {
   return list.map((card) => card?.id || null);
+}
+
+export function assertSmokeOpeningDeck(duelist, expectedIds, drawCount = 6) {
+  const deckIds = cardIds(duelist.deck);
+  const handIds = cardIds(duelist.hand);
+  if (handIds.length !== drawCount) {
+    throw new Error(`opening hand should contain ${drawCount} cards, got ${handIds.length}`);
+  }
+  const expectedRemaining = expectedIds.length - drawCount;
+  if (deckIds.length !== expectedRemaining) {
+    throw new Error(`opening deck should keep ${expectedRemaining} cards, got ${deckIds.length}`);
+  }
+  const actual = [...deckIds, ...handIds].sort();
+  const expected = [...expectedIds].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`opening deck and hand should match the saved custom deck: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
 }
 
 function campaignProgressWithClearedChapters(chapterIds = []) {
@@ -9291,6 +9308,25 @@ async function runCustomDeckEditorSmoke(ctx) {
     () => ctx.els.deckEditorModal?.classList.contains("show"),
     `${smokeName}: deck editor opens`
   );
+  for (const monster of library.filter((card) => card.type === "monster")) {
+    const summary = ctx.els.deckEditorLibrary.querySelector(`[data-card-id="${monster.id}"] small`);
+    if (summary?.textContent !== `ATK ${monster.atk} / DEF ${monster.def}`) {
+      throw new Error(`${smokeName}: incorrect base stats for ${monster.id}`);
+    }
+  }
+  const toolbar = ctx.els.deckEditorModal.querySelector(".deck-editor-toolbar").getBoundingClientRect();
+  for (const control of [ctx.els.deckEditorPresetSelect, ctx.els.deckEditorImportPreset, ctx.els.deckEditorName]) {
+    const bounds = control.getBoundingClientRect();
+    if (bounds.left < toolbar.left || bounds.right > toolbar.right) {
+      throw new Error(`${smokeName}: ${control.id} must fit inside the toolbar`);
+    }
+  }
+  ctx.els.deckEditorPresetSelect.value = "aggressive";
+  ctx.els.deckEditorName.value = "准备导入速攻卡组";
+  ctx.els.deckEditorName.dispatchEvent(new Event("input", { bubbles: true }));
+  if (ctx.els.deckEditorPresetSelect.value !== "aggressive") {
+    throw new Error(`${smokeName}: editing the deck name must preserve the import preset`);
+  }
   ctx.els.deckEditorPresetSelect.value = "balanced";
   clickSmokeElement(ctx.els.deckEditorImportPreset, `${smokeName}: import balanced preset`);
   const presetSize = deckPresets.balanced.ids.length;
@@ -9336,14 +9372,10 @@ async function runCustomDeckEditorSmoke(ctx) {
     `${smokeName}: duel reaches player main phase`,
     9000
   );
-  const deckIds = cardIds(ctx.state.player.deck);
-  const expectedRemaining = presetSize - 6;
-  if (deckIds.length !== expectedRemaining) {
-    throw new Error(`${smokeName}: player deck should keep ${expectedRemaining} cards after the opening and turn draws, got ${deckIds.length}`);
-  }
-  if (!deckIds.includes("solar-vanguard")) {
-    throw new Error(`${smokeName}: custom deck should include solar-vanguard`);
-  }
+  const expectedIds = [...deckPresets.balanced.ids];
+  expectedIds.splice(expectedIds.indexOf("ember-drake"), 1);
+  expectedIds.push("solar-vanguard");
+  assertSmokeOpeningDeck(ctx.state.player, expectedIds);
   setSmokeStatus("passed", smokeName);
 }
 
