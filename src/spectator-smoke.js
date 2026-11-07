@@ -9,7 +9,7 @@ export async function runSpectatorLayoutSmoke(render, elements, name) {
   const players = Object.fromEntries(["p1", "p2"].map((id) => [id, {
     lp: id === "p1" ? 3600 : 4000, deckCount: 35, handCount: 5,
     hand: [{ id: "private-layout-hand", name: "SHOULD_NOT_APPEAR" }],
-    monsterZone: ["solar-knight", "iron-guardian", "starfall-colossus", "ember-drake", "genesis-star-dragon"].map((template, index) => ({
+    monsterZone: ["solar-knight", "iron-guardian", "starfall-colossus", "ember-drake", "void-hound"].map((template, index) => ({
       ...card(template, `${id}:public:${index}`, index % 2 ? "defense" : "attack"), ...(index === 4 ? { atk: 99999, def: 99999 } : {})
     })),
     spellTrapZone: [{ hidden: true, id: "private-layout-trap", name: "SHOULD_NOT_APPEAR" }, null, null, null, null],
@@ -26,6 +26,8 @@ export async function runSpectatorLayoutSmoke(render, elements, name) {
     assert(document.documentElement.scrollWidth <= innerWidth + 1, "spectator page must not overflow horizontally");
     assert(!document.body.textContent.includes("SHOULD_NOT_APPEAR"), "hands and covered card metadata must not render");
     assert(!document.querySelector('[data-card-id="private-layout-trap"]'), "covered cards must not carry private instance ids");
+    assert(document.querySelectorAll(".watch-stats").length === 10, "fixture must render ten real monsters with ATK/DEF");
+    assert([...document.querySelectorAll(".watch-stats")].filter((stats) => stats.textContent.includes("99999")).length === 2, "both players must render the long stat fixture");
     for (const button of document.querySelectorAll(".watch-card")) {
       const rect = button.getBoundingClientRect(), slot = button.closest(".watch-slot").getBoundingClientRect();
       assert(rect.left >= slot.left - 1 && rect.right <= slot.right + 1, "public cards must stay inside their slots");
