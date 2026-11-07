@@ -77,4 +77,4 @@ jobs:
           done
           npm run smoke:online -- --scenario=trap-response
           npm run smoke:online -- --custom-decks
-          npm run smoke:online-restart
+          npm run smoke:online-restart -- --spectator

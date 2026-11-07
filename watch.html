@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>星魂决斗 · 只读观战</title><link rel="stylesheet" href="watch.css?v=20261107-spectator-1"></head>
+<body>
+  <main>
+    <header class="watch-header"><div><span class="kicker">SPECTATOR · READ ONLY</span><h1>星魂决斗 · 只读观战</h1><p>仅公开场面 · 不展示双方手牌、牌序和未发动的盖牌 · 无音效</p></div><a id="duelLink" href="online.html">对战大厅</a></header>
+    <section class="watch-panel" id="watchAuth" hidden>
+      <h2>登录后观战</h2><form id="watchLogin"><label>账号<input id="watchHandle" name="username" autocomplete="username" required maxlength="24"></label><label>密码<input id="watchPassword" name="password" type="password" autocomplete="current-password" minlength="6" maxlength="72" required></label><button type="submit" id="watchLoginSubmit">登录</button></form><p>没有账号？可先到对战大厅注册，再回到此页。</p>
+    </section>
+    <section class="watch-panel" id="watchJoinPanel" hidden>
+      <p id="watchAccount"></p><form id="watchJoin"><label>房间码<input id="watchCode" maxlength="6" autocomplete="off" required></label><button id="watchJoinSubmit" type="submit">进入观战</button><button id="watchLeave" type="button" disabled>退出观战</button></form>
+      <p id="watchConnection" role="status">请填写房间码。只有双方在准备前同意的房间才能观看。</p>
+    </section>
+    <p id="watchError" role="alert"></p>
+    <section id="watchBoard" hidden aria-label="公开观战画面">
+      <div class="watch-phase"><strong id="watchPhase" role="status"></strong><span id="watchSeries"></span></div>
+      <p class="watch-stale" id="watchStale" hidden>连接已中断，下方是最后收到的公开画面，正在尝试重连。没有任何对局操作权限。</p>
+      <div id="watchPlayers"></div>
+      <section class="watch-panel"><h2>当前公开连锁</h2><p id="watchChain">暂无未结算连锁</p></section>
+      <section class="watch-panel"><h2>近期公开记录</h2><p>同步最近 40 条事件中的公开行动；不会自动弹窗。</p><ol id="watchEvents"></ol></section>
+    </section>
+    <dialog id="watchDetail"><div><h2 id="watchDetailName"></h2><p id="watchDetailStats"></p><p id="watchDetailText"></p><button id="watchDetailClose" type="button">关闭详情</button></div></dialog>
+  </main>
+  <script type="module" src="src/online-spectator-app.js?v=20261107-spectator-1"></script>
+</body></html>

@@ -1,4 +1,4 @@
-import { DuelClientMessage, DuelServerMessage, createClientMessage } from "./duel-command.js?v=20261107-online-decks-1";
+import { DuelClientMessage, DuelServerMessage, createClientMessage } from "./duel-command.js?v=20261107-spectator-1";
 
 function defaultServerUrl() {
   if (typeof window === "undefined") return "ws://127.0.0.1:5178/duel";
@@ -98,6 +98,16 @@ export class OnlineDuelClient {
     return this.request(DuelClientMessage.setDeck, { deck });
   }
 
+  setSpectatorConsent(allowed) {
+    return this.request(DuelClientMessage.setSpectatorConsent, { allowed });
+  }
+
+  async watchRoom(roomCode) {
+    const result = await this.request(DuelClientMessage.watchRoom, { roomCode });
+    this.session = { roomCode: result.roomCode, role: "spectator" };
+    return result;
+  }
+
   leaveRoom() {
     return this.request(DuelClientMessage.leaveRoom, {});
   }
@@ -115,6 +125,7 @@ export class OnlineDuelClient {
   }
 
   sendAction(action) {
+    if (this.view?.viewerRole === "spectator") throw new Error("观战连接不能操作对局");
     if (!this.view) throw new Error("No synchronized duel view");
     return this.request(DuelClientMessage.command, {
       revision: this.view.revision,
@@ -158,6 +169,12 @@ export class OnlineDuelClient {
     }
     if (message.type === DuelServerMessage.roomState) {
       this.#acceptView(message.data);
+      return;
+    }
+    if (message.type === DuelServerMessage.watchEnded) {
+      this.view = null;
+      this.session = null;
+      this.#emit("watch-ended", message.data);
       return;
     }
     const pending = message.requestId ? this.pending.get(message.requestId) : null;

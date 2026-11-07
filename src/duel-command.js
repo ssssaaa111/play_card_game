@@ -4,6 +4,8 @@ export const DuelClientMessage = Object.freeze({
   resumeRoom: "room/resume",
   setReady: "room/ready",
   setDeck: "room/deck",
+  setSpectatorConsent: "room/spectator-consent",
+  watchRoom: "room/watch",
   syncRoom: "room/sync",
   leaveRoom: "room/leave",
   requestRematch: "room/rematch",
@@ -17,6 +19,7 @@ export const DuelServerMessage = Object.freeze({
   ack: "request/ack",
   error: "request/error",
   roomState: "room/state",
+  watchEnded: "room/watch-ended",
   pong: "transport/pong"
 });
 

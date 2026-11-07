@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { GameEngine, GameRuleError } from "../src/game-engine.js";
 import { DuelProtocolError, normalizeCommandEnvelope, normalizeDisplayName, sanitizeOnlineAction } from "../src/duel-command.js";
-import { buildDuelView } from "../src/duel-view.js";
+import { buildDuelView, buildSpectatorView } from "../src/duel-view.js";
 import { createOnlineDuelState } from "./online-duel-state.js";
 import { normalizeOnlineDeckChoice } from "../src/online-decks.js";
 import {
@@ -45,6 +45,7 @@ function publicSeat(seat) {
     name: seat.name,
     ready: seat.ready,
     connected: seat.connected,
+    spectatorConsent: Boolean(seat.spectatorConsent),
     reconnectDeadlineAt: seat.connected ? null : seat.reconnectDeadlineAt || null
   };
 }
@@ -87,6 +88,7 @@ export class DuelRoom {
     this.turnDeadlineAt = null;
     this.turnRemainingMs = null;
     this.seats = new Map();
+    this.spectators = new Set();
     this.commandReceipts = new Map();
   }
 
@@ -136,10 +138,12 @@ export class DuelRoom {
       snapshotAssert(typeof saved.accountId === "string" && saved.accountId.length <= 160 && (!saved.accountId || !accounts.has(saved.accountId)));
       snapshotAssert(typeof saved.reconnectToken === "string" && /^[A-Za-z0-9_-]{32,128}$/.test(saved.reconnectToken) && !tokens.has(saved.reconnectToken));
       snapshotAssert(typeof saved.ready === "boolean" && nonnegativeInteger(saved.joinedAt) && nonnegativeInteger(saved.lastSeenAt));
+      snapshotAssert(saved.spectatorConsent == null || typeof saved.spectatorConsent === "boolean");
       accounts.add(saved.accountId); tokens.add(saved.reconnectToken);
       seats.set(saved.seatId, {
         seatId: saved.seatId, name: normalizeDisplayName(saved.name), accountId: saved.accountId,
         reconnectToken: saved.reconnectToken, ready: saved.ready, deck: normalizeOnlineDeckChoice(saved.deck),
+        spectatorConsent: Boolean(saved.spectatorConsent),
         joinedAt: saved.joinedAt, lastSeenAt: saved.lastSeenAt,
         connectionId: null, connected: false,
         reconnectDeadlineAt: snapshot.status === "playing" ? this.now() + snapshot.settings.disconnectGraceMs : null
@@ -234,6 +238,7 @@ export class DuelRoom {
       connectionId,
       reconnectToken: token(),
       ready: false,
+      spectatorConsent: false,
       deck: null,
       connected: true,
       reconnectDeadlineAt: null,
@@ -255,6 +260,46 @@ export class DuelRoom {
     seat.lastSeenAt = this.now();
     this.#touch();
     return this.viewFor(seat.seatId);
+  }
+
+  spectatingAllowed() {
+    return this.seats.size === 2 && this.seatList().every((seat) => seat.spectatorConsent);
+  }
+
+  setSpectatorConsent(connectionId, allowed) {
+    const seat = this.#requireConnectionSeat(connectionId);
+    if (this.status !== "waiting" || seat.ready) throw new DuelRoomError("请在准备前设置观战权限；开局后不能更改。", "CONSENT_LOCKED");
+    if (typeof allowed !== "boolean") throw new DuelRoomError("观战权限格式无效。", "INVALID_CONSENT");
+    seat.spectatorConsent = allowed;
+    if (!this.spectatingAllowed()) this.spectators.clear();
+    this.#touch();
+    return this.viewFor(seat.seatId);
+  }
+
+  watch(connectionId) {
+    if (!connectionId || this.seatForConnection(connectionId)) throw new DuelRoomError("当前连接不能作为观众加入。", "ALREADY_JOINED");
+    if (!this.spectatingAllowed()) throw new DuelRoomError("双方尚未同意公开信息观战。", "SPECTATING_CLOSED");
+    if (!this.spectators.has(connectionId) && this.spectators.size >= 20) throw new DuelRoomError("本房间观战人数已满（20 人）。", "SPECTATORS_FULL");
+    this.spectators.add(connectionId);
+    return { roomCode: this.code, role: "spectator", view: this.spectatorView() };
+  }
+
+  leaveSpectator(connectionId) {
+    return this.spectators.delete(connectionId);
+  }
+
+  spectatorView() {
+    if (!this.spectatingAllowed()) throw new DuelRoomError("本房间已关闭观战。", "SPECTATING_CLOSED");
+    const options = { roomCode: this.code, revision: this.revision, status: this.status, duelNumber: this.duelNumber,
+      series: this.series, seats: this.seatList().map(publicSeat) };
+    const view = this.engine ? buildSpectatorView(this.engine.getState(), options) : {
+      protocolVersion: 1, viewerRole: "spectator", viewerSeatId: null,
+      ...options, series: { completed: this.series.completed, draws: this.series.draws, wins: { p1: this.series.wins.p1, p2: this.series.wins.p2 } }
+    };
+    view.spectators = { enabled: true, count: this.spectators.size };
+    view.responseTimer = this.responseTimeoutView();
+    view.turnTimer = this.turnTimeoutView();
+    return view;
   }
 
   setReady(connectionId, ready = true) {
@@ -282,6 +327,7 @@ export class DuelRoom {
   }
 
   disconnect(connectionId) {
+    if (this.leaveSpectator(connectionId)) return true;
     const seat = this.seatForConnection(connectionId);
     if (!seat) return false;
     this.#pauseResponseTimer();
@@ -295,12 +341,14 @@ export class DuelRoom {
   }
 
   leave(connectionId) {
+    if (this.leaveSpectator(connectionId)) return true;
     const seat = this.seatForConnection(connectionId);
     if (!seat) return false;
     if (this.status === "playing") {
       return this.disconnect(connectionId);
     }
     this.seats.delete(seat.seatId);
+    this.spectators.clear();
     this.#touch();
     return true;
   }
@@ -398,7 +446,8 @@ export class DuelRoom {
         viewerSeatId: seatId,
         opponentSeatId: ROOM_SEAT_IDS.find((candidate) => candidate !== seatId),
         seats,
-        deckSelection
+        deckSelection,
+        spectators: { enabled: this.spectatingAllowed(), count: this.spectators.size }
       };
     }
     const view = buildDuelView(this.engine.getState(), seatId, {
@@ -413,6 +462,7 @@ export class DuelRoom {
     view.responseTimer = this.responseTimeoutView();
     view.turnTimer = this.turnTimeoutView();
     view.deckSelection = deckSelection;
+    view.spectators = { enabled: this.spectatingAllowed(), count: this.spectators.size };
     return view;
   }
 

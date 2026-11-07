@@ -11,6 +11,10 @@ const SMOKE_VIRTUAL_BUDGETS = {
   "trio-gauntlet-demo": 240000
 };
 const SMOKE_VIEWPORTS = {
+  "spectator-layout-desktop": { width: 1920, height: 1080 },
+  "spectator-layout-mobile": { width: 390, height: 844 },
+  "spectator-layout-narrow": { width: 320, height: 720 },
+  "spectator-layout-landscape": { width: 866, height: 488 },
   "custom-deck-editor-basic": { width: 390, height: 844 },
   "custom-deck-editor-desktop": { width: 1920, height: 1080 },
   "duel-layout-density-basic": { width: 1280, height: 720 },
@@ -31,6 +35,10 @@ const SMOKE_VIEWPORTS = {
   "fusion-occlusion-mobile": { width: 390, height: 844 }
 };
 const DEFAULT_SMOKES = [
+  "spectator-layout-desktop",
+  "spectator-layout-mobile",
+  "spectator-layout-narrow",
+  "spectator-layout-landscape",
   "custom-deck-editor-basic",
   "custom-deck-editor-desktop",
   "game-over-event",
@@ -206,7 +214,8 @@ async function createBrowserProfileDir() {
 
 async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin, seed = "" }) {
   const profileDir = await createBrowserProfileDir();
-  const url = `${baseUrl}/?test=1&smoke=${encodeURIComponent(smoke)}${seed ? `&seed=${encodeURIComponent(seed)}` : ""}&t=${Date.now()}`;
+  const page = smoke.startsWith("spectator-layout-") ? "/watch.html" : "/";
+  const url = `${baseUrl}${page}?test=1&smoke=${encodeURIComponent(smoke)}${seed ? `&seed=${encodeURIComponent(seed)}` : ""}&t=${Date.now()}`;
   let smokeError = null;
   try {
     const result = await runBrowser({
