@@ -13,7 +13,7 @@ import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
-import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-online-decks-1";
+import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1";
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
@@ -22,7 +22,7 @@ import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView,
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
   "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
-  "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "roomDeckSelect", "roomDeckRefresh", "roomDeckStatus", "roomDeckError", "duelPanel", "aiPanel", "playerPanel",
+  "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "roomDeckSelect", "roomDeckRefresh", "roomDeckStatus", "roomDeckError", "spectatorConsent", "spectatorStatus", "watchRoomLink", "watchEntry", "onlineSpectatorCount", "duelPanel", "aiPanel", "playerPanel",
   "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
   "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "duelHint", "duelError", "versusStage", "versusPhase",
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveCount", "playerGraveCount", "rivalGrave", "playerGrave",
@@ -83,6 +83,7 @@ let roomDeckRoomCode = null;
 let roomDeckDraft = null;
 let roomDeckDirty = false;
 let roomDeckPending = false;
+let spectatorConsentPending = false;
 let roomDeckChoices = [];
 const directActivationTracker = createDirectActivationTracker();
 const audioSettings = loadAudioSettings();
@@ -290,6 +291,7 @@ function renderAccountState() {
     elements.handPanel.hidden = true;
     elements.viewerIdentity.hidden = true;
     elements.copyRoomCode.hidden = true;
+    elements.onlineSpectatorCount.hidden = true;
     setConnection("error", "请先登录");
     return;
   }
@@ -1608,12 +1610,12 @@ function renderRoomDeck(view, self) {
   elements.roomDeckStatus.dataset.invalid = String(invalid);
   elements.roomDeckSelect.disabled = locked || roomDeckPending;
   elements.roomDeckRefresh.disabled = locked || roomDeckPending;
-  elements.readyButton.disabled = roomDeckPending || (!self?.ready && invalid);
+  elements.readyButton.disabled = roomDeckPending || spectatorConsentPending || (!self?.ready && invalid);
   elements.readyButton.textContent = roomDeckPending ? "正在提交…" : self?.ready ? "取消准备" : "准备";
 }
 
 async function toggleRoomReady() {
-  if (roomDeckPending || client.view?.status !== "waiting") return;
+  if (roomDeckPending || spectatorConsentPending || client.view?.status !== "waiting") return;
   const self = client.view.seats.find((seat) => seat.seatId === client.view.viewerSeatId);
   roomDeckPending = true;
   setError();
@@ -1644,6 +1646,8 @@ function renderRoom(view) {
   elements.roomPanel.hidden = playing;
   elements.copyRoomCode.hidden = false;
   elements.copyRoomCode.textContent = view.roomCode;
+  elements.onlineSpectatorCount.hidden = !view.spectators?.enabled;
+  elements.onlineSpectatorCount.textContent = ` · 观众 ${view.spectators?.count || 0}`;
   elements.forfeitButton.hidden = view.status !== "playing" || Boolean(view.gameOver);
   elements.forfeitButton.disabled = actionPending || forfeitPending || connectionPanel(view)?.kind === "self";
   elements.resultReopenButton.hidden = !view.gameOver;
@@ -1662,6 +1666,16 @@ function renderRoom(view) {
   elements.seatGrid.innerHTML = view.seats.map((seat) => `<div class="seat-card" data-ready="${seat.ready}"><strong>${escapeHtml(seat.name)}${seat.seatId === view.viewerSeatId ? "（你）" : ""}</strong><span>${seat.connected ? "在线" : "已断线"} · ${seat.ready ? "已准备" : "未准备"}</span></div>`).join("");
   const self = view.seats.find((seat) => seat.seatId === view.viewerSeatId);
   renderRoomDeck(view, self);
+  elements.spectatorConsent.checked = Boolean(self?.spectatorConsent);
+  elements.spectatorConsent.disabled = spectatorConsentPending || roomDeckPending || Boolean(self?.ready) || playing;
+  elements.spectatorStatus.textContent = view.spectators?.enabled
+    ? `双方均已同意 · ${view.spectators.count} 位观众`
+    : "默认关闭，需要双方同意后开放";
+  elements.watchRoomLink.hidden = !view.spectators?.enabled;
+  const watchUrl = new URL("watch.html", window.location.href);
+  watchUrl.search = window.location.search;
+  watchUrl.searchParams.set("room", view.roomCode);
+  elements.watchRoomLink.href = watchUrl.href;
   elements.roomHint.textContent = view.seats.length < 2 ? "等待第二名玩家加入，点击上方房间码复制邀请链接。" : "双方准备后自动开局。";
 }
 
@@ -1805,6 +1819,26 @@ for (const [id, join] of [["createRoom", false], ["joinRoom", true]]) elements[i
   } catch (error) { setError(error.message); }
 });
 elements.readyButton.addEventListener("click", () => { void toggleRoomReady(); });
+elements.spectatorConsent.addEventListener("change", async () => {
+  if (spectatorConsentPending || roomDeckPending || client.view?.status !== "waiting") return;
+  spectatorConsentPending = true;
+  const allowed = elements.spectatorConsent.checked;
+  elements.spectatorConsent.disabled = true;
+  elements.readyButton.disabled = true;
+  setError();
+  try { await client.setSpectatorConsent(allowed); }
+  catch (error) { setError(error.message); }
+  finally { spectatorConsentPending = false; if (client.view) renderRoom(client.view); }
+});
+const watchEntryUrl = new URL("watch.html", window.location.href);
+watchEntryUrl.search = window.location.search;
+elements.watchEntry.href = watchEntryUrl.href;
+elements.watchEntry.addEventListener("click", () => {
+  const code = elements.roomCodeInput.value.trim().toUpperCase();
+  if (/^[A-Z2-9]{6}$/.test(code)) watchEntryUrl.searchParams.set("room", code);
+  else watchEntryUrl.searchParams.delete("room");
+  elements.watchEntry.href = watchEntryUrl.href;
+});
 elements.roomDeckSelect.addEventListener("change", () => {
   roomDeckDraft = roomDeckChoices.find((entry) => entry.value === elements.roomDeckSelect.value)?.choice || null;
   roomDeckDirty = true;

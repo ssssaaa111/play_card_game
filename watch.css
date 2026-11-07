@@ -1,0 +1,67 @@
+:root { color-scheme: dark; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #e8eef8; background: #080d15; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; font-size: 14px; line-height: 1.6; }
+main { max-width: 1100px; margin: auto; padding: 20px; }
+h1 { font-size: clamp(20px, 3vw, 28px); margin: 4px 0; }
+h2 { margin: 0 0 10px; font-size: 17px; }
+p { margin: 8px 0; }
+a { color: #7de3dd; }
+button, input { min-height: 44px; border: 1px solid #354451; border-radius: 6px; padding: 8px 12px; color: inherit; background: #1a2431; font: inherit; }
+button { cursor: pointer; }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid #7de3dd; outline-offset: 2px; }
+label { display: grid; gap: 4px; }
+input { min-width: 0; width: 100%; }
+.kicker { color: #7de3dd; font-size: 11px; letter-spacing: .08em; }
+.watch-header { display: flex; align-items: start; justify-content: space-between; gap: 15px; }
+.watch-header p, .watch-panel > p { color: #acbdcc; font-size: 12px; }
+.watch-header a { flex: 0 0 auto; padding: 9px 0; }
+.watch-panel, .watch-player { background: #101824; border: 1px solid #2c3b4a; border-radius: 10px; padding: 16px; margin: 14px 0; min-width: 0; }
+form { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; }
+form label { flex: 1 1 160px; max-width: 290px; }
+#watchError { color: #ffb1ba; overflow-wrap: anywhere; }
+.watch-phase { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: #ffe0a0; border-block: 1px solid #4e4834; padding: 12px 0; }
+.watch-phase span { font-size: 12px; color: #b3c5ce; }
+.watch-stale { border: 1px solid #dc9c5c; padding: 12px; color: #ffe0a0; }
+.watch-player-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; align-items: center; }
+.watch-player[data-turn="true"] { border-color: #9d8750; }
+.watch-player-head h2 { margin: 0; overflow-wrap: anywhere; }
+.watch-lp { font-weight: 800; color: #8fe8b5; font-size: 19px; white-space: nowrap; }
+.watch-player-info { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: #b3c5ce; margin: 6px 0 12px; }
+.watch-zone { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; margin: 8px 0; }
+.watch-slot { min-width: 0; min-height: 176px; display: flex; align-items: end; justify-content: center; border: 1px dashed #293c4c; border-radius: 6px; padding: 5px; }
+.watch-supports .watch-slot { min-height: 75px; }
+.watch-card { width: 100%; max-width: 150px; min-width: 0; padding: 6px; display: grid; grid-template-columns: minmax(0,1fr); justify-items: center; gap: 4px; text-align: center; }
+.watch-card strong { max-width: 100%; font-size: 12px; overflow-wrap: anywhere; line-height: 1.4; }
+.watch-art { width: 76px; max-width: 100%; aspect-ratio: 3 / 4; display: grid; place-items: center; background: #203247; border: 1px solid #6c6652; overflow: hidden; }
+.watch-art[data-mode="defense"] { width: 102px; aspect-ratio: 4 / 3; }
+.watch-art img { width: 100%; height: 100%; object-fit: cover; }
+.watch-stats { width: 100%; min-width: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 8px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.watch-stats span { overflow-wrap: anywhere; }
+.watch-mode, .watch-empty { font-size: 11px; color: #acbdcc; }
+.watch-covered { align-self: stretch; width: 100%; display: grid; place-items: center; border: 1px solid #62637c; background: repeating-linear-gradient(45deg,#182034,#182034 7px,#222d44 7px,#222d44 14px); color: #cbd9e4; font-size: 12px; }
+.watch-player details { margin-top: 8px; font-size: 12px; }
+summary { min-height: 40px; padding: 6px 0; cursor: pointer; }
+.watch-public-pile { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.watch-public-pile button { font-size: 12px; }
+#watchEvents { padding-left: 24px; max-height: 330px; overflow-y: auto; font-size: 13px; }
+#watchEvents li { padding: 4px; overflow-wrap: anywhere; }
+dialog { width: min(480px, calc(100% - 24px)); max-height: calc(100dvh - 32px); border: 1px solid #5d7f8d; border-radius: 10px; padding: 20px; color: inherit; background: #121e2b; overflow-y: auto; }
+dialog::backdrop { background: #000b; }
+#watchDetailText { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  main { padding: 10px; }
+  .watch-header { flex-wrap: wrap; gap: 0; }
+  .watch-panel, .watch-player { padding: 10px; }
+  .watch-zone { gap: 4px; }
+  .watch-slot { padding: 3px; min-height: 158px; }
+  .watch-supports .watch-slot { min-height: 62px; }
+  .watch-card { padding: 2px; }
+  .watch-card strong { font-size: 11px; }
+  .watch-stats { display: grid; gap: 1px; font-size: 10px; }
+  .watch-covered { font-size: 11px; }
+  #watchJoin label { flex-basis: 100%; max-width: none; }
+}
+@media (max-width: 360px) { main { padding: 6px; } .watch-player { padding: 6px; } }
+@media (min-width: 950px) { #watchPlayers { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; } }

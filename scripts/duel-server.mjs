@@ -166,6 +166,7 @@ function bindConnection(socket, room, joinResult) {
   const connection = connections.get(socket);
   connection.roomCode = room.code;
   connection.seatId = joinResult.seatId;
+  connection.role = "player";
   return connection;
 }
 
@@ -183,7 +184,18 @@ function broadcastRoom(room, reply = null) {
   scheduleDisconnectTimeout(room);
   scheduleTurnTimeout(room);
   for (const [socket, connection] of connections) {
-    if (connection.roomCode !== room.code || !connection.seatId) continue;
+    if (connection.roomCode !== room.code) continue;
+    if (connection.role === "spectator") {
+      if (room.spectators.has(connection.id) && room.spectatingAllowed()) {
+        send(socket, { type: DuelServerMessage.roomState, data: room.spectatorView() });
+      } else {
+        connection.roomCode = null;
+        connection.role = null;
+        send(socket, { type: DuelServerMessage.watchEnded, data: { reason: "本房间已关闭观战，画面已清除。" } });
+      }
+      continue;
+    }
+    if (!connection.seatId) continue;
     const activeSeat = room.seatForConnection(connection.id);
     if (!activeSeat || activeSeat.seatId !== connection.seatId) continue;
     send(socket, { type: DuelServerMessage.roomState, data: room.viewFor(connection.seatId) });
@@ -258,6 +270,18 @@ async function handleMessage(socket, rawMessage) {
       return;
     }
 
+    if (message.type === DuelClientMessage.watchRoom) {
+      if (connection.roomCode) throw new DuelRoomError("当前连接已经进入房间。", "ALREADY_JOINED");
+      requireConnectionAccount(connection);
+      const room = roomStore.require(normalizeRoomCode(message.payload.roomCode));
+      const result = room.watch(connection.id);
+      connection.roomCode = room.code;
+      connection.seatId = null;
+      connection.role = "spectator";
+      broadcastRoom(room, { socket, requestId, data: result });
+      return;
+    }
+
     if (message.type === DuelClientMessage.joinRoom || message.type === DuelClientMessage.resumeRoom) {
       if (connection.roomCode) throw new DuelRoomError("Connection already belongs to a room", "ALREADY_JOINED");
       const account = requireConnectionAccount(connection);
@@ -275,6 +299,14 @@ async function handleMessage(socket, rawMessage) {
     }
 
     const room = activeRoomFor(socket);
+    if (connection.role === "spectator" && ![DuelClientMessage.syncRoom, DuelClientMessage.leaveRoom].includes(message.type)) {
+      throw new DuelRoomError("观战连接只读，不能操作对局或更改房间。", "SPECTATOR_READ_ONLY");
+    }
+    if (message.type === DuelClientMessage.setSpectatorConsent) {
+      const view = room.setSpectatorConsent(connection.id, message.payload.allowed);
+      broadcastRoom(room, { socket, requestId, data: { view, revision: room.revision } });
+      return;
+    }
     if (message.type === DuelClientMessage.setDeck) {
       const view = room.setDeck(connection.id, message.payload.deck);
       broadcastRoom(room, { socket, requestId, data: { revision: room.revision, status: room.status, view } });
@@ -286,7 +318,7 @@ async function handleMessage(socket, rawMessage) {
       return;
     }
     if (message.type === DuelClientMessage.syncRoom) {
-      ack(socket, requestId, { view: room.viewFor(connection.seatId) });
+      ack(socket, requestId, { view: connection.role === "spectator" ? room.spectatorView() : room.viewFor(connection.seatId) });
       return;
     }
     if (message.type === DuelClientMessage.requestRematch) {
@@ -308,6 +340,7 @@ async function handleMessage(socket, rawMessage) {
       room.leave(connection.id);
       connection.roomCode = null;
       connection.seatId = null;
+      connection.role = null;
       broadcastRoom(room, { socket, requestId, data: { left: true } });
       return;
     }
@@ -428,7 +461,16 @@ const checkpointTimer = setInterval(() => {
 }, 1_000);
 checkpointTimer.unref();
 const cleanupTimer = setInterval(() => {
-  try { if (roomStore.deleteExpired()) roomStore.save(); } catch (error) { stopForStorageError(error); }
+  try {
+    if (!roomStore.deleteExpired()) return;
+    roomStore.save();
+    for (const [socket, connection] of connections) {
+      if (connection.role === "spectator" && !roomStore.get(connection.roomCode)) {
+        connection.roomCode = null; connection.role = null;
+        send(socket, { type: DuelServerMessage.watchEnded, data: { reason: "房间已过期，观战画面已清除。" } });
+      }
+    }
+  } catch (error) { stopForStorageError(error); }
 }, 15 * 60 * 1000);
 cleanupTimer.unref();
 

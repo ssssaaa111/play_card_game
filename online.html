@@ -9,12 +9,12 @@
   <link rel="stylesheet" href="target-selection.css">
   <link rel="stylesheet" href="ui-polish.css">
   <link rel="stylesheet" href="duel-focus.css">
-  <link rel="stylesheet" href="online-duel.css?v=20261107-online-decks-1">
+  <link rel="stylesheet" href="online-duel.css?v=20261107-spectator-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">S</div><div><h1>星魂决斗</h1><div class="subtitle">真人对战 <button id="copyRoomCode" class="online-room-code" type="button" title="复制邀请链接" hidden></button></div></div></div>
+      <div class="brand"><div class="brand-mark">S</div><div><h1>星魂决斗</h1><div class="subtitle">真人对战 <button id="copyRoomCode" class="online-room-code" type="button" title="复制邀请链接" hidden></button><span id="onlineSpectatorCount" class="online-watch-count" hidden></span></div></div></div>
       <div class="phase">
         <strong id="phaseLabel">等待开局</strong><span id="turnLabel">创建或加入房间</span><span class="online-turn-clock" id="turnClock" role="timer" aria-label="回合剩余时间" hidden>1:30</span>
         <div class="phase-rail" aria-label="回合阶段">
@@ -59,10 +59,17 @@
       <h2>邀请好友来一局</h2><p>创建房间，把房间码或邀请链接发给好友。双方准备后开局。</p><p class="online-session-note">登录状态会跨刷新保留；未结束的房间也会按账号自动恢复。</p>
       <label for="playerName">对战昵称</label><input id="playerName" maxlength="24" autocomplete="nickname" value="决斗者" readonly>
       <div class="lobby-actions"><button class="btn primary" id="createRoom" type="button">创建房间</button><input id="roomCodeInput" maxlength="6" placeholder="房间码" autocomplete="off" aria-label="房间码"><button class="btn" id="joinRoom" type="button">加入房间</button></div>
+      <p><a id="watchEntry" href="watch.html">进入只读观战</a> · 需要双方玩家在准备前同意。</p>
       <p class="error-copy" id="lobbyError" role="alert"></p>
     </section>
     <section class="room-card" id="roomPanel" hidden>
       <h2>等待好友准备</h2><div class="seat-grid" id="seatGrid"></div>
+      <section class="online-watch-consent" aria-label="观战权限">
+        <label><input id="spectatorConsent" type="checkbox">我同意本房间公开信息观战</label>
+        <p id="spectatorStatus" role="status"></p>
+        <p>双方同意后才开放；不展示手牌、牌序和未发动的盖牌。准备后锁定。</p>
+        <a id="watchRoomLink" target="_blank" rel="noopener" hidden>打开观战页</a>
+      </section>
       <section class="online-deck-picker" aria-label="本局卡组">
         <label for="roomDeckSelect">我的出战卡组</label>
         <div class="online-deck-controls"><select id="roomDeckSelect" aria-describedby="roomDeckStatus"></select><button id="roomDeckRefresh" class="btn" type="button">刷新本地卡组</button></div>
@@ -188,6 +195,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js?v=20261107-online-decks-1"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261107-spectator-1"></script>
 </body>
 </html>

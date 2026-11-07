@@ -18,6 +18,7 @@ const port = probe.address().port; await new Promise((resolve) => probe.close(re
 const base = `http://127.0.0.1:${port}`;
 let server = null, serverOutput = "";
 const clients = [];
+const spectatorScenario = process.argv.includes("--spectator");
 
 async function startServer() {
   serverOutput = "";
@@ -47,7 +48,8 @@ class Client {
     this.socket = new WebSocket(`ws://127.0.0.1:${port}/duel`, { headers: { Cookie: this.cookie } });
     this.socket.on("message", (raw) => {
       const message = JSON.parse(String(raw));
-      if (message.type === "room/state") this.view = message.data;
+      if (message.type === "room/state") { this.view = message.data; this.watchEnded = false; }
+      if (message.type === "room/watch-ended") { this.view = null; this.watchEnded = true; }
       const request = this.pending.get(message.requestId);
       if (!request) return;
       this.pending.delete(message.requestId); clearTimeout(request.timer);
@@ -79,6 +81,29 @@ try {
   const cookie1 = await register("重启一"), cookie2 = await register("重启二");
   let first = await new Client(cookie1).connect(), second = await new Client(cookie2).connect();
   const p1 = await first.request("room/create"), p2 = await second.request("room/join", { roomCode: p1.roomCode });
+  let observer = null;
+  if (spectatorScenario) {
+    observer = await new Client(cookie1).connect();
+    await assert.rejects(observer.request("room/watch", { roomCode: p1.roomCode }), { code: "SPECTATING_CLOSED" });
+    await first.request("room/spectator-consent", { allowed: true });
+    await assert.rejects(observer.request("room/watch", { roomCode: p1.roomCode }), { code: "SPECTATING_CLOSED" });
+    await second.request("room/spectator-consent", { allowed: true });
+    await observer.request("room/watch", { roomCode: p1.roomCode }); await observer.sync();
+    const anonymous = await new Client("").connect();
+    await assert.rejects(anonymous.request("room/watch", { roomCode: p1.roomCode }), { code: "AUTH_REQUIRED" }); anonymous.socket.close();
+    await first.sync(); const revision = first.view.revision;
+    for (const [type, payload] of [
+      ["room/ready", { ready: true }], ["room/deck", { deck: null }], ["room/spectator-consent", { allowed: false }],
+      ["room/rematch", {}], ["duel/forfeit", {}], ["duel/command", { revision, commandId: "forged", action: { type: "END_TURN", playerId: "p1" }, reconnectToken: p1.reconnectToken }]
+    ]) await assert.rejects(observer.request(type, payload), { code: "SPECTATOR_READ_ONLY" });
+    await first.sync(); assert.equal(first.view.revision, revision);
+    await first.request("room/spectator-consent", { allowed: false });
+    const deadline = Date.now() + 8_000;
+    while (!observer.watchEnded && Date.now() < deadline) await delay(25);
+    assert.equal(observer.watchEnded, true); assert.equal(observer.view, null);
+    await first.request("room/spectator-consent", { allowed: true });
+    await observer.request("room/watch", { roomCode: p1.roomCode });
+  }
   await first.request("room/deck", { deck: { kind: "custom", name: "restart-private", ids: deckPresets.balanced.ids } });
   await second.request("room/deck", { deck: { kind: "preset", id: "control" } });
   await first.request("room/ready", { ready: true });
@@ -86,6 +111,12 @@ try {
     first = await new Client(cookie1).connect(); second = await new Client(cookie2).connect();
     await first.request("room/resume", p1); await second.request("room/resume", p2);
     await first.sync(); await second.sync();
+    if (spectatorScenario) {
+      observer = await new Client(cookie1).connect();
+      await observer.request("room/watch", { roomCode: p1.roomCode }); await observer.sync();
+      assert.equal(observer.view.viewerRole, "spectator");
+      assert.equal(observer.view.spectators.count, 1);
+    }
   };
   await crashServer(); await startServer();
   const impostor = await new Client(cookie2).connect();
@@ -95,6 +126,13 @@ try {
   assert.equal(first.view.deckSelection.name, "restart-private");
   assert.ok(!JSON.stringify(second.view).includes("restart-private"));
   await second.request("room/ready", { ready: true }); await first.sync();
+  if (spectatorScenario) {
+    await second.sync(); await observer.sync();
+    const serialized = JSON.stringify(observer.view);
+    for (const card of [...first.view.players.p1.hand, ...second.view.players.p2.hand]) assert.ok(!serialized.includes(card.id));
+    assert.ok(!serialized.includes("restart-private"));
+    for (const key of ["legalActions", "deckSelection", "attackResponse", "chainResponse"]) assert.equal(key in observer.view, false);
+  }
   assert.equal(first.view.players.p1.deckCount, 51);
   const knight = first.view.players.p1.hand.find((card) => card.templateId === "solar-knight");
   const counter = first.view.players.p1.hand.find((card) => card.templateId === "chain-nullifier");
@@ -103,16 +141,22 @@ try {
   await first.command({ type: "END_TURN" }); await second.sync();
   const mirror = second.view.players.p2.hand.find((card) => card.templateId === "mirror-snare");
   await second.command({ type: "SET_TRAP", cardId: mirror.id, index: 0 }); await second.sync();
+  if (spectatorScenario) { await observer.sync(); assert.ok(!JSON.stringify(observer.view).includes(mirror.id)); }
   await second.command({ type: "END_TURN" }); await first.sync();
   await first.command({ type: "CHANGE_PHASE", phase: "battle" }); await first.sync();
   await first.command({ type: "DECLARE_ATTACK", attackerCardId: knight.id }); await second.sync();
   await second.command({ type: "RESPOND_TRAP", cardId: mirror.id, declarationEventId: second.view.attackResponse.declarationEventId });
   await first.sync(); const chainId = first.view.chainResponse.triggerEventId;
+  if (spectatorScenario) {
+    await observer.sync(); assert.equal(observer.view.machine.chain[0].card.name, "镜光反制");
+    assert.ok(!JSON.stringify(observer.view).includes(counter.id));
+  }
   const handIds = first.view.players.p1.hand.map((card) => card.id);
   await crashServer(); await startServer(); await resume();
   assert.equal(first.view.chainResponse.triggerEventId, chainId);
   assert.deepEqual(first.view.players.p1.hand.map((card) => card.id), handIds);
   assert.equal(first.view.players.p2.lp, 4000);
+  if (spectatorScenario) assert.equal(observer.view.machine.chain[0].card.name, "镜光反制");
   assert.equal(second.view.chainResponse, null);
   const envelope = { revision: first.view.revision, commandId: "restart-settlement", action: { type: "RESPOND_CHAIN_TRAP", cardId: counter.id, triggerEventId: chainId } };
   await first.request("duel/command", envelope); await first.sync();
@@ -130,8 +174,16 @@ try {
   assert.equal(first.view.turn.playerId, "p2");
   assert.equal(first.view.players.p1.deckCount, 51);
   assert.equal(second.view.players.p2.deckCount, 45);
+  if (spectatorScenario) {
+    await observer.sync(); assert.equal(observer.view.turn.playerId, "p2"); assert.equal(observer.view.series.completed, 1);
+    const beforeLeave = first.view.revision;
+    await observer.request("room/leave"); await first.sync();
+    assert.equal(first.view.revision, beforeLeave);
+    assert.equal(first.view.turnTimer.paused, false);
+    assert.ok(first.view.seats.every((seat) => seat.connected));
+  }
   assert.equal((await fetch(`${base}/online-rooms-${port}.json`)).status, 404);
-  console.log("online-restart-smoke passed (4 hard restarts: waiting deck, active chain, duplicate receipt, rematch + identity + privacy)");
+  console.log(`online-restart-smoke passed (4 hard restarts: waiting deck, active chain, duplicate receipt, rematch + identity + privacy${spectatorScenario ? ", spectator consent + read-only + hidden data + revoke + restore" : ""})`);
 } finally {
   for (const client of clients) client.socket?.terminate();
   await crashServer();

@@ -123,7 +123,7 @@ function latestCompletedChainEvents(events = []) {
   return [...chain, ...aftermath];
 }
 
-function projectedPlayer(state, seatId, viewerSeatId) {
+function projectedPlayer(state, seatId, viewerSeatId, revealedTraps = new Set()) {
   const player = state.players[seatId];
   const own = seatId === viewerSeatId;
   return {
@@ -136,7 +136,7 @@ function projectedPlayer(state, seatId, viewerSeatId) {
       : player.hand.map((_cardId, index) => hiddenCard(`hidden:hand:${index}`)),
     monsterZone: fixedZoneCards(state, player, "monsterZone"),
     spellTrapZone: fixedZoneCards(state, player, "spellTrapZone", {
-      hidden: own ? false : (card) => card?.type === "trap",
+      hidden: own ? false : (card) => card?.type === "trap" && !revealedTraps.has(card.id),
       hiddenPrefix: "hidden:spell-trap"
     }),
     grave: zoneCards(state, player.grave),
@@ -246,6 +246,7 @@ export function buildDuelView(state, viewerSeatId, {
       name: seat.name,
       ready: Boolean(seat.ready),
       connected: Boolean(seat.connected),
+      spectatorConsent: Boolean(seat.spectatorConsent),
       reconnectDeadlineAt: seat.connected ? null : Number(seat.reconnectDeadlineAt) || null
     })),
     turn: {
@@ -270,5 +271,41 @@ export function buildDuelView(state, viewerSeatId, {
     lastChainEvents: latestCompletedChainEvents(state.events || [])
       .map((event) => publicEvent(event, visibleIds))
       .filter(Boolean)
+  };
+}
+
+export function buildSpectatorView(state, {
+  roomCode = "", revision = 0, status = "playing", duelNumber = 1, series = null, seats = []
+} = {}) {
+  const seatIds = seatIdsForState(state);
+  const visibleIds = new Set();
+  const revealedTraps = new Set((state.machine?.chain || []).filter((link) => link.committed).map((link) => link.cardId));
+  revealedTraps.forEach((id) => visibleIds.add(id));
+  for (const player of Object.values(state.players)) {
+    for (const zone of ["monsterZone", "grave", "banished"]) {
+      (player[zone] || []).forEach((id) => visibleIds.add(id));
+    }
+    (player.spellTrapZone || []).forEach((id) => {
+      if (state.cards[id]?.type !== "trap") visibleIds.add(id);
+    });
+  }
+  const machine = publicMachineState(state.machine, state);
+  machine.chain = machine.chain.map((link) => link.committed && visibleIds.has(link.cardId)
+    ? { ...link, targetEffectId: visibleIds.has(link.targetEffectId) ? link.targetEffectId : null }
+    : { linkId: link.linkId, playerId: link.playerId, committed: link.committed });
+  return {
+    protocolVersion: 1, viewerRole: "spectator", viewerSeatId: null,
+    roomCode, revision, status, duelNumber,
+    series: { completed: series?.completed || 0, draws: series?.draws || 0, wins: { p1: series?.wins?.p1 || 0, p2: series?.wins?.p2 || 0 } },
+    seats: seats.map(({ seatId, name, ready, connected, spectatorConsent, reconnectDeadlineAt }) => ({
+      seatId, name, ready: Boolean(ready), connected: Boolean(connected), spectatorConsent: Boolean(spectatorConsent),
+      reconnectDeadlineAt: connected ? null : reconnectDeadlineAt || null
+    })),
+    turn: { playerId: state.turn.playerId, phase: state.turn.phase, timing: state.machine?.timing || state.turn.phase },
+    machine,
+    players: Object.fromEntries(seatIds.map((seatId) => [seatId, projectedPlayer(state, seatId, null, revealedTraps)])),
+    gameOver: state.gameOver ? { winnerId: state.gameOver.winnerId || null, loserIds: [...(state.gameOver.loserIds || [])], reason: state.gameOver.reason || "" } : null,
+    recentEvents: (state.events || []).slice(-40).map((event) => publicEvent(event, visibleIds)).filter(Boolean),
+    lastChainEvents: latestCompletedChainEvents(state.events || []).map((event) => publicEvent(event, visibleIds)).filter(Boolean)
   };
 }
