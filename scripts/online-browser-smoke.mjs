@@ -77,9 +77,19 @@ class CdpConnection {
     this.timeoutMs = timeoutMs;
     this.sequence = 0;
     this.pending = new Map();
+    this.crashed = false;
     socket.on("message", (raw) => {
       if (process.env.ONLINE_BROWSER_DEBUG === "1") console.error(`CDP ${raw.toString("utf8").slice(0, 1000)}`);
       const message = JSON.parse(raw.toString("utf8"));
+      if (message.method === "Inspector.targetCrashed") {
+        this.crashed = true;
+        for (const pending of this.pending.values()) {
+          clearTimeout(pending.timer);
+          pending.reject(new Error(`Browser target crashed while waiting for ${pending.method}`));
+        }
+        this.pending.clear();
+        return;
+      }
       if (!message.id || !this.pending.has(message.id)) return;
       const pending = this.pending.get(message.id);
       this.pending.delete(message.id);
@@ -112,6 +122,7 @@ class CdpConnection {
   }
 
   send(method, params = {}, sessionId = undefined) {
+    if (this.crashed) return Promise.reject(new Error(`Browser target crashed before ${method}`));
     const id = ++this.sequence;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -350,13 +361,10 @@ async function startBrowser(browserBin, profileDir, timeoutMs) {
     "--headless=new",
     "--disable-gpu",
     "--disable-gpu-sandbox",
-    "--disable-background-networking",
-    "--disable-dev-shm-usage",
-    "--disable-features=Vulkan,UseSkiaRenderer,SkiaGraphite,WebGPU",
-    "--use-angle=swiftshader",
     "--mute-audio",
     "--no-first-run",
     "--no-default-browser-check",
+    "--run-all-compositor-stages-before-draw",
     "--remote-debugging-address=127.0.0.1",
     "--remote-debugging-port=0",
     "--window-size=1440,900",
