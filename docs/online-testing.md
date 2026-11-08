@@ -83,9 +83,9 @@
 
 观战页面实测需保留两个玩家页面和一个 `watch.html` 页面，通过实际操作完成双方同意、准备、盖牌、召唤、表示切换、攻击反制、观众刷新/退出/重连、停服恢复、认输与同房再战；全程静音。手机宽度 320/390 和横屏都要通过浏览器明确设置视口后检查，不能仅依赖无头 Chrome 的窗口参数（某些 Windows 版本最小内容宽度仍为 500）。`spectator-layout-*` 四项冒烟只验证明确标记的本地公开布局样例，覆盖满场卡槽、横置守备、长数字及详情关闭，不代替真实账号、权限和网络同步验收。
 
-`npm run smoke:online-browser` 使用两个独立 Chromium 进程和两套隔离 Cookie，真实点击固定陷阱场景。它会验证“双重召唤”演出不会被随后的召唤覆盖、日冕骑士双击攻击、弱化力场响应、双方最终 2800 LP、战报中的 1200 伤害，并在 `.tmp/online-browser-smoke/` 保存命中伤害演出瞬间的 PNG 与完整演出序列 JSON。运行前分别启动前端 `127.0.0.1:5221` 和带 `--scenario=trap-response` 的对战服务 `127.0.0.1:5223`；端口不同时可传 `--frontend-url` 与 `--duel-server-url`。
+`npm run smoke:online-browser` 使用三个独立 Chromium 进程和三套隔离 Cookie，真实点击固定陷阱场景。1P / 2P 先显式同意公开观战，第三个已登录账号再从 `watch.html` 输入房间码加入；脚本会验证观众不占席位、顶部人数为 1、双方手牌保持隐藏且最终 LP 同步。随后继续验证“双重召唤”演出不会被召唤覆盖、日冕骑士双击攻击、弱化力场响应、双方最终 2800 LP、战报中的 1200 伤害，并在 `.tmp/online-browser-smoke/` 保存命中伤害演出瞬间的 PNG、完整演出序列与观战摘要 JSON。运行前分别启动前端 `127.0.0.1:5221` 和带 `--scenario=trap-response` 的对战服务 `127.0.0.1:5223`；端口不同时可传 `--frontend-url` 与 `--duel-server-url`。
 
-GitHub Actions 的 `online-browser-smoke` job 会自行启动前端与固定场景对战服务并运行同一条回归。每次运行都会上传 `.tmp/online-browser-smoke/`、前端日志和对战服务日志；即使测试失败，脚本也会写入 `online-browser-failure.json` 与 1P / 2P 现场截图，可从 workflow artifact 查看当时的回合、阶段、弹窗、手牌摘要和演出历史。
+GitHub Actions 的 `online-browser-smoke` job 会自行启动前端与固定场景对战服务并运行同一条回归。每次运行都会上传 `.tmp/online-browser-smoke/`、前端日志和对战服务日志；即使测试失败，脚本也会写入 `online-browser-failure.json` 与 1P / 2P / 观众三方现场截图，可从 workflow artifact 查看当时的回合、阶段、弹窗、手牌摘要、观战公开信息和演出历史。
 
 账号安全冒烟：以较小的 `DUEL_AUTH_ATTEMPT_LIMIT` 启动独立服务后运行 `npm run smoke:online-security`。它会验证未授权 HTTP 来源和 WebSocket 来源均返回 403、连续错误密码返回 429 与 `Retry-After`，同时确认允许来源仍能携带有效 Cookie 建立对局连接。
 
