@@ -183,20 +183,24 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /actionReceipt\?\.text/);
 });
 
-test("online browser smoke captures queued public actions and delayed trap damage", () => {
+test("online browser smoke covers consent spectator, queued public actions, and delayed trap damage", () => {
   const packageJson = JSON.parse(readProjectFile("package.json"));
   const smoke = readProjectFile("scripts/online-browser-smoke.mjs");
   const workflow = readProjectFile(".github/workflows/ci.yml");
   assert.equal(packageJson.scripts["smoke:online-browser"], "node scripts/online-browser-smoke.mjs");
   assert.match(smoke, /card-duel-online-browser-p1/);
   assert.match(smoke, /card-duel-online-browser-p2/);
+  assert.match(smoke, /card-duel-online-browser-spectator/);
+  assert.match(smoke, /#spectatorConsent/);
+  assert.match(smoke, /#watchJoinSubmit/);
+  assert.match(smoke, /#onlineSpectatorCount/);
   assert.match(smoke, /window\.__onlineStageHistory/);
   assert.match(smoke, /visible 1200-damage presentation/);
   assert.match(smoke, /Page\.captureScreenshot/);
   assert.match(smoke, /Inspector\.targetCrashed/);
   assert.doesNotMatch(smoke, /--use-angle=swiftshader/);
   assert.doesNotMatch(smoke, /--disable-features=Vulkan/);
-  assert.match(smoke, /\[\["p1", firstPage\], \["p2", secondPage\]\]/);
+  assert.match(smoke, /\["spectator", spectatorPage\]/);
   assert.match(smoke, /online-browser-failure-\$\{label\}\.png/);
   assert.match(smoke, /online-browser-failure\.json/);
   assert.match(smoke, /online-browser-smoke passed/);

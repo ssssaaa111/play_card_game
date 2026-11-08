@@ -331,7 +331,7 @@ async function failurePageState(cdp, page) {
   }
 }
 
-async function saveFailureArtifacts({ artifactDir, error, roomCode, firstPage, secondPage, cdp }) {
+async function saveFailureArtifacts({ artifactDir, error, roomCode, pages, cdp }) {
   await mkdir(artifactDir, { recursive: true });
   const report = {
     failedAt: new Date().toISOString(),
@@ -339,7 +339,7 @@ async function saveFailureArtifacts({ artifactDir, error, roomCode, firstPage, s
     error: { name: error?.name || "Error", message: error?.message || String(error), stack: error?.stack || "" },
     pages: {}
   };
-  for (const [label, page] of [["p1", firstPage], ["p2", secondPage]]) {
+  for (const [label, page] of pages) {
     report.pages[label] = await failurePageState(cdp, page);
     if (!page?.cdp) continue;
     try {
@@ -402,10 +402,13 @@ const secondDuelServer = new URL(duelServer);
 const browserBin = resolveBrowserBin();
 const firstProfileDir = await mkdtemp(path.join(tmpdir(), "card-duel-online-browser-p1-"));
 const secondProfileDir = await mkdtemp(path.join(tmpdir(), "card-duel-online-browser-p2-"));
+const spectatorProfileDir = await mkdtemp(path.join(tmpdir(), "card-duel-online-browser-spectator-"));
 let firstBrowser = null;
 let secondBrowser = null;
+let spectatorBrowser = null;
 let firstPage = null;
 let secondPage = null;
+let spectatorPage = null;
 let roomCode = "";
 const cdp = null; // Page helpers use each page's isolated DevTools connection.
 
@@ -417,12 +420,14 @@ try {
   assert.equal(frontendHealth.status, 200, "Online page is not reachable");
   assert.equal(duelHealth.status, 200, "Duel server is not reachable");
 
-  const [firstAccount, secondAccount] = await Promise.all([
+  const [firstAccount, secondAccount, spectatorAccount] = await Promise.all([
     ensureAccount(duelServer.origin, "browser_stage_p1", "星野演出测试"),
-    ensureAccount(secondDuelServer.origin, "browser_stage_p2", "月见演出测试")
+    ensureAccount(secondDuelServer.origin, "browser_stage_p2", "月见演出测试"),
+    ensureAccount(duelServer.origin, "browser_stage_watch", "公开观战测试")
   ]);
   firstBrowser = await startBrowser(browserBin, firstProfileDir, options.timeoutMs);
   secondBrowser = await startBrowser(browserBin, secondProfileDir, options.timeoutMs);
+  spectatorBrowser = await startBrowser(browserBin, spectatorProfileDir, options.timeoutMs);
   const socketUrl = new URL(duelServer);
   socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
   socketUrl.pathname = "/duel";
@@ -435,11 +440,16 @@ try {
   const secondUrl = new URL("/online.html", secondFrontend);
   secondUrl.searchParams.set("duelServer", secondSocketUrl.toString());
   secondUrl.searchParams.set("qa", "browser-action-stage-p2");
+  const spectatorUrl = new URL("/watch.html", frontend);
+  spectatorUrl.searchParams.set("duelServer", socketUrl.toString());
+  spectatorUrl.searchParams.set("qa", "browser-action-stage-spectator");
   firstPage = await createPage(firstBrowser, duelServer.origin, firstAccount.cookie, firstUrl.toString(), options.timeoutMs);
   secondPage = await createPage(secondBrowser, secondDuelServer.origin, secondAccount.cookie, secondUrl.toString(), options.timeoutMs);
+  spectatorPage = await createPage(spectatorBrowser, duelServer.origin, spectatorAccount.cookie, spectatorUrl.toString(), options.timeoutMs);
   await Promise.all([
     waitForPage(cdp, firstPage, visibleExpression("#createRoom"), "1P lobby", options.timeoutMs),
-    waitForPage(cdp, secondPage, visibleExpression("#joinRoom"), "2P lobby", options.timeoutMs)
+    waitForPage(cdp, secondPage, visibleExpression("#joinRoom"), "2P lobby", options.timeoutMs),
+    waitForPage(cdp, spectatorPage, visibleExpression("#watchJoinPanel"), "spectator lobby", options.timeoutMs)
   ]);
   await Promise.all([installStageObserver(cdp, firstPage), installStageObserver(cdp, secondPage)]);
 
@@ -451,11 +461,28 @@ try {
     waitForPage(cdp, firstPage, visibleExpression("#readyButton"), "1P ready button", options.timeoutMs),
     waitForPage(cdp, secondPage, visibleExpression("#readyButton"), "2P ready button", options.timeoutMs)
   ]);
+  await click(cdp, firstPage, "#spectatorConsent");
+  await click(cdp, secondPage, "#spectatorConsent");
+  await Promise.all([
+    waitForPage(cdp, firstPage, textMatchExpression("#spectatorStatus", "双方均已同意"), "1P spectator consent", options.timeoutMs),
+    waitForPage(cdp, secondPage, textMatchExpression("#spectatorStatus", "双方均已同意"), "2P spectator consent", options.timeoutMs)
+  ]);
+  await fill(cdp, spectatorPage, "#watchCode", roomCode);
+  await click(cdp, spectatorPage, "#watchJoinSubmit");
+  await Promise.all([
+    waitForPage(cdp, spectatorPage, visibleExpression("#watchBoard"), "public spectator board", options.timeoutMs),
+    waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 1"), "spectator count", options.timeoutMs)
+  ]);
   await click(cdp, firstPage, "#readyButton");
   await click(cdp, secondPage, "#readyButton");
   await Promise.all([
     waitForPage(cdp, firstPage, textMatchExpression("#hand .card", "双重召唤"), "1P fixed opening", options.timeoutMs),
-    waitForPage(cdp, secondPage, textMatchExpression("#hand .card", "弱化力场"), "2P fixed opening", options.timeoutMs)
+    waitForPage(cdp, secondPage, textMatchExpression("#hand .card", "弱化力场"), "2P fixed opening", options.timeoutMs),
+    waitForPage(cdp, spectatorPage, `(() => {
+      const board = document.querySelector("#watchPlayers");
+      return document.querySelectorAll("#watchPlayers .watch-player").length === 2
+        && (board?.textContent || "").includes("手牌 5 张（隐藏）");
+    })()`, "spectator hidden-hand board", options.timeoutMs)
   ]);
 
   await doubleClickText(cdp, firstPage, "#hand .card", "双重召唤");
@@ -503,16 +530,25 @@ try {
   await Promise.all([
     waitForPage(cdp, firstPage, `document.querySelector("#aiPanel")?.textContent?.includes("2800 / 4000")`, "1P final rival LP", options.timeoutMs),
     waitForPage(cdp, secondPage, `document.querySelector("#playerPanel")?.textContent?.includes("2800 / 4000")`, "2P final LP", options.timeoutMs),
-    waitForPage(cdp, firstPage, `document.querySelector("#eventLogList")?.textContent?.includes("1200 伤害")`, "exact battle receipt", options.timeoutMs)
+    waitForPage(cdp, firstPage, `document.querySelector("#eventLogList")?.textContent?.includes("1200 伤害")`, "exact battle receipt", options.timeoutMs),
+    waitForPage(cdp, spectatorPage, `document.querySelector("#watchPlayers")?.textContent?.includes("2800 LP")`, "spectator final LP", options.timeoutMs)
   ]);
-  const [firstStages, secondStages] = await Promise.all([stageHistory(cdp, firstPage), stageHistory(cdp, secondPage)]);
+  const [firstStages, secondStages, spectatorSummary] = await Promise.all([
+    stageHistory(cdp, firstPage),
+    stageHistory(cdp, secondPage),
+    evaluate(cdp, spectatorPage, `(() => ({
+      phase: document.querySelector("#watchPhase")?.textContent?.trim() || "",
+      series: document.querySelector("#watchSeries")?.textContent?.trim() || "",
+      players: document.querySelector("#watchPlayers")?.textContent?.replace(/\\s+/g, " ").trim() || ""
+    }))()`)
+  ]);
   assert.ok(firstStages.some((entry) => entry.text.includes("双重召唤")), "Spell action stage was not recorded");
   assert.ok(firstStages.some((entry) => entry.text.includes("怪兽召唤")), "Queued summon stage was not recorded");
   assert.ok(firstStages.some((entry) => entry.depth >= 1), "Second action replaced the active public action instead of queuing");
   assert.ok([...firstStages, ...secondStages].some((entry) => entry.text.includes("1200")), "Delayed damage was not captured by a public presentation stage");
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, firstStages, secondStages }, null, 2)}\n`, "utf8");
-  console.log(`online-browser-smoke passed (${roomCode}, queued action stage, trap response, 1200 damage)`);
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, firstStages, secondStages, spectatorSummary }, null, 2)}\n`, "utf8");
+  console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, trap response, 1200 damage)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);
 } catch (error) {
@@ -521,8 +557,7 @@ try {
       artifactDir: options.artifactDir,
       error,
       roomCode,
-      firstPage,
-      secondPage,
+      pages: [["p1", firstPage], ["p2", secondPage], ["spectator", spectatorPage]],
       cdp
     });
     console.error(`online-browser-smoke failure report: ${reportPath}`);
@@ -533,10 +568,13 @@ try {
 } finally {
   firstPage?.cdp.close();
   secondPage?.cdp.close();
+  spectatorPage?.cdp.close();
   if (firstBrowser?.child && firstBrowser.child.exitCode == null) firstBrowser.child.kill();
   if (secondBrowser?.child && secondBrowser.child.exitCode == null) secondBrowser.child.kill();
+  if (spectatorBrowser?.child && spectatorBrowser.child.exitCode == null) spectatorBrowser.child.kill();
   await Promise.all([
     removeBrowserProfileDir(firstProfileDir).catch(() => {}),
-    removeBrowserProfileDir(secondProfileDir).catch(() => {})
+    removeBrowserProfileDir(secondProfileDir).catch(() => {}),
+    removeBrowserProfileDir(spectatorProfileDir).catch(() => {})
   ]);
 }
