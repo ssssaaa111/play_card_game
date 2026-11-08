@@ -193,6 +193,9 @@ test("online browser smoke captures queued public actions and delayed trap damag
   assert.match(smoke, /window\.__onlineStageHistory/);
   assert.match(smoke, /visible 1200-damage presentation/);
   assert.match(smoke, /Page\.captureScreenshot/);
+  assert.match(smoke, /\[\["p1", firstPage\], \["p2", secondPage\]\]/);
+  assert.match(smoke, /online-browser-failure-\$\{label\}\.png/);
+  assert.match(smoke, /online-browser-failure\.json/);
   assert.match(smoke, /online-browser-smoke passed/);
   assert.match(workflow, /^  online-browser-smoke:/m);
   assert.match(workflow, /npm run smoke:online-browser --/);

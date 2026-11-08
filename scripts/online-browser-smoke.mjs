@@ -290,6 +290,61 @@ async function stageHistory(cdp, page) {
   return evaluate(cdp, page, `(window.__onlineStageHistory || []).map(({ key, ...entry }) => entry)`);
 }
 
+async function failurePageState(cdp, page) {
+  if (!page?.cdp) return null;
+  try {
+    return await evaluate(cdp, page, `(() => {
+      const text = (selector) => (document.querySelector(selector)?.innerText || document.querySelector(selector)?.textContent || "").replace(/\\s+/g, " ").trim();
+      const visible = (element) => Boolean(element && !element.hidden && element.getClientRects().length);
+      return {
+        url: location.href,
+        title: document.title,
+        bodyState: { ...document.body.dataset },
+        turn: text("#turnLabel"),
+        phase: text("#phaseLabel"),
+        player: text("#playerPanel"),
+        rival: text("#aiPanel"),
+        connection: text("#connectionText"),
+        command: text("#handCommand"),
+        actionStage: text("#actionStage"),
+        chainStage: text("#chainResolutionStage"),
+        response: text("#onlineResponse"),
+        visibleDialogs: [...document.querySelectorAll("dialog[open]")].filter(visible).map((dialog) => ({ id: dialog.id, text: (dialog.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 1200) })),
+        alerts: [...document.querySelectorAll('[role="alert"]')].filter(visible).map((alert) => (alert.innerText || alert.textContent || "").replace(/\\s+/g, " ").trim()).filter(Boolean),
+        hand: [...document.querySelectorAll("#hand .card")].map((card) => (card.getAttribute("aria-label") || card.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 240)),
+        stages: (window.__onlineStageHistory || []).map(({ key, ...entry }) => entry)
+      };
+    })()`);
+  } catch (error) {
+    return { captureError: error.message };
+  }
+}
+
+async function saveFailureArtifacts({ artifactDir, error, roomCode, firstPage, secondPage, cdp }) {
+  await mkdir(artifactDir, { recursive: true });
+  const report = {
+    failedAt: new Date().toISOString(),
+    roomCode: roomCode || null,
+    error: { name: error?.name || "Error", message: error?.message || String(error), stack: error?.stack || "" },
+    pages: {}
+  };
+  for (const [label, page] of [["p1", firstPage], ["p2", secondPage]]) {
+    report.pages[label] = await failurePageState(cdp, page);
+    if (!page?.cdp) continue;
+    try {
+      const screenshot = await page.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+      const screenshotPath = path.join(artifactDir, `online-browser-failure-${label}.png`);
+      await writeFile(screenshotPath, Buffer.from(screenshot.data, "base64"));
+      report.pages[label] = { ...report.pages[label], screenshotPath };
+    } catch (captureError) {
+      report.pages[label] = { ...report.pages[label], screenshotError: captureError.message };
+    }
+  }
+  const reportPath = path.join(artifactDir, "online-browser-failure.json");
+  await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  return reportPath;
+}
+
 async function startBrowser(browserBin, profileDir, timeoutMs) {
   const child = spawn(browserBin, [
     "--headless=new",
@@ -343,6 +398,7 @@ let firstBrowser = null;
 let secondBrowser = null;
 let firstPage = null;
 let secondPage = null;
+let roomCode = "";
 const cdp = null; // Page helpers use each page's isolated DevTools connection.
 
 try {
@@ -380,7 +436,7 @@ try {
   await Promise.all([installStageObserver(cdp, firstPage), installStageObserver(cdp, secondPage)]);
 
   await click(cdp, firstPage, "#createRoom");
-  const roomCode = await waitForPage(cdp, firstPage, `(() => document.querySelector("#copyRoomCode")?.textContent?.trim() || "")()`, "room code", options.timeoutMs);
+  roomCode = await waitForPage(cdp, firstPage, `(() => document.querySelector("#copyRoomCode")?.textContent?.trim() || "")()`, "room code", options.timeoutMs);
   await fill(cdp, secondPage, "#roomCodeInput", roomCode);
   await click(cdp, secondPage, "#joinRoom");
   await Promise.all([
@@ -451,6 +507,21 @@ try {
   console.log(`online-browser-smoke passed (${roomCode}, queued action stage, trap response, 1200 damage)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);
+} catch (error) {
+  try {
+    const reportPath = await saveFailureArtifacts({
+      artifactDir: options.artifactDir,
+      error,
+      roomCode,
+      firstPage,
+      secondPage,
+      cdp
+    });
+    console.error(`online-browser-smoke failure report: ${reportPath}`);
+  } catch (artifactError) {
+    console.error(`Unable to save online browser failure artifacts: ${artifactError.message}`);
+  }
+  throw error;
 } finally {
   firstPage?.cdp.close();
   secondPage?.cdp.close();

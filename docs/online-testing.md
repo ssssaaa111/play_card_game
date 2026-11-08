@@ -85,7 +85,7 @@
 
 `npm run smoke:online-browser` 使用两个独立 Chromium 进程和两套隔离 Cookie，真实点击固定陷阱场景。它会验证“双重召唤”演出不会被随后的召唤覆盖、日冕骑士双击攻击、弱化力场响应、双方最终 2800 LP、战报中的 1200 伤害，并在 `.tmp/online-browser-smoke/` 保存命中伤害演出瞬间的 PNG 与完整演出序列 JSON。运行前分别启动前端 `127.0.0.1:5221` 和带 `--scenario=trap-response` 的对战服务 `127.0.0.1:5223`；端口不同时可传 `--frontend-url` 与 `--duel-server-url`。
 
-GitHub Actions 的 `online-browser-smoke` job 会自行启动前端与固定场景对战服务并运行同一条回归。每次运行都会上传 `.tmp/online-browser-smoke/`、前端日志和对战服务日志；即使测试失败，仍可从 workflow artifact 查看当时的页面与阶段序列。
+GitHub Actions 的 `online-browser-smoke` job 会自行启动前端与固定场景对战服务并运行同一条回归。每次运行都会上传 `.tmp/online-browser-smoke/`、前端日志和对战服务日志；即使测试失败，脚本也会写入 `online-browser-failure.json` 与 1P / 2P 现场截图，可从 workflow artifact 查看当时的回合、阶段、弹窗、手牌摘要和演出历史。
 
 账号安全冒烟：以较小的 `DUEL_AUTH_ATTEMPT_LIMIT` 启动独立服务后运行 `npm run smoke:online-security`。它会验证未授权 HTTP 来源和 WebSocket 来源均返回 403、连续错误密码返回 429 与 `Retry-After`，同时确认允许来源仍能携带有效 Cookie 建立对局连接。
 
