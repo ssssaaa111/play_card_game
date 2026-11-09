@@ -555,6 +555,21 @@ try {
   await waitForPage(cdp, firstPage, `(window.__onlineStageHistory || []).some((entry) => entry.kind === "action" && entry.depth >= 1)`, "queued public action", options.timeoutMs);
   await waitForPage(cdp, firstPage, textMatchExpression("#actionStage", "怪兽召唤"), "queued summon stage", options.timeoutMs);
   await waitForPage(cdp, firstPage, visibleExpression("#playerField .slot[data-card-uid]"), "summoned attacker", options.timeoutMs);
+  await waitForPage(cdp, firstPage, `(() => {
+    const slot = document.querySelector('#playerField .slot[data-attack-state="ready"]');
+    if (!slot) return false;
+    return parseFloat(getComputedStyle(slot, "::before").height) < 32;
+  })()`, "compact attack hint without covering card art", options.timeoutMs);
+
+  await doubleClickText(cdp, firstPage, "#hand .card.action-ready", "疾风术士");
+  await waitForPage(cdp, firstPage, textMatchExpression('#hand .card[data-action-label="次数用完"]', "铁壁守卫"), "authoritative summon exhaustion reason", options.timeoutMs);
+  await click(cdp, firstPage, '#hand .card[data-action-label="次数用完"]');
+  await waitForPage(cdp, firstPage, textMatchExpression("#duelHint", "本回合召唤次数已用完"), "clicked unavailable-card explanation", options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#cardInspector").open`), false, "Unavailable-card click opened details instead of explaining the rule");
+  await waitForPage(cdp, firstPage, `document.querySelector("#actionStage").hidden`, "clear unavailable-card explanation", options.timeoutMs);
+  const feedbackScreenshot = await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+  const handFeedbackPath = path.join(options.artifactDir, `online-hand-feedback-${roomCode}.png`);
+  await writeFile(handFeedbackPath, Buffer.from(feedbackScreenshot.data, "base64"));
 
   await endTurn(cdp, firstPage, options.timeoutMs);
   await waitForPage(cdp, secondPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "2P turn", options.timeoutMs);
@@ -666,7 +681,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);

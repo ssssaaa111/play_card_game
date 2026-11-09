@@ -17,7 +17,7 @@ import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261106-action-stage-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261109-hand-feedback-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -1012,6 +1012,19 @@ function chooseCard(id) {
 
 function chooseHandCard(id, { directActivate = false } = {}) {
   if (actionPending || client.view?.machine?.responseWindow) return;
+  const feedback = onlineHandActionView(client.view, id);
+  if (!feedback.ok) {
+    const card = onlineCard(client.view, id);
+    if (!card) return;
+    clearEndTurnConfirmation();
+    clearActionReceipt();
+    elements.duelHint.textContent = `${card.name}：${feedback.reason}`;
+    elements.duelHint.dataset.kind = "unavailable";
+    elements.hand.querySelectorAll(".online-card-explained").forEach((element) => element.classList.remove("online-card-explained"));
+    const cardElement = [...elements.hand.querySelectorAll(".card")].find((element) => element.dataset.cardUid === id);
+    cardElement?.classList.add("online-card-explained");
+    return;
+  }
   const alreadySelected = selection?.cardId === id;
   if (!alreadySelected) chooseCard(id);
   if (!directActivate) {

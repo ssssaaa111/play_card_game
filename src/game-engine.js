@@ -2304,13 +2304,14 @@ export function getLegalActions(initialState, playerId = initialState?.turn?.pla
   const consider = (bucket, action) => {
     const result = explainActionLegality(state, action, options);
     if (result.ok) actions[bucket].push(clone(action));
+    else options.onRejectedAction?.(clone(action), result.reason);
   };
 
   player.hand.forEach((cardId) => {
     const card = requireCard(state, cardId);
     if (card.type === "monster") {
       const tributeCardIds = defaultTributeCardIdsForAction(state, playerId, card);
-      const summonIndex = Math.min(player.monsterZone.length, MONSTER_ZONE_SIZE - 1);
+      const summonIndex = legalDestinationIndex(player, "monsterZone", tributeCardIds);
       consider("summon", {
         type: "SUMMON_MONSTER",
         playerId,
@@ -2325,7 +2326,7 @@ export function getLegalActions(initialState, playerId = initialState?.turn?.pla
         type: "SET_TRAP",
         playerId,
         cardId,
-        index: player.spellTrapZone.length
+        index: legalDestinationIndex(player, "spellTrapZone")
       });
     }
     if (card.type === "spell") {
@@ -2369,6 +2370,13 @@ export function getLegalActions(initialState, playerId = initialState?.turn?.pla
   return summarizeLegalActions(state, playerId, rivalId, actions);
 }
 
+function legalDestinationIndex(player, zone, leavingCardIds = []) {
+  const leaving = new Set(leavingCardIds);
+  const index = fixedZoneSlots(player, zone).findIndex((cardId) => !cardId || leaving.has(cardId));
+  // A full zone still goes through normal validation and yields a rule rejection.
+  return Math.max(0, index);
+}
+
 function activationCandidates(state, effects, playerId, rivalId, card) {
   const definition = effects[card.effect];
   const base = {
@@ -2382,7 +2390,7 @@ function activationCandidates(state, effects, playerId, rivalId, card) {
       .map((fusion) => fusionActivationCandidate(state, playerId, rivalId, card, fusion));
   }
   if (definition?.duration === EffectDuration.continuous) {
-    base.index = requirePlayer(state, playerId).spellTrapZone.length;
+    base.index = legalDestinationIndex(requirePlayer(state, playerId), "spellTrapZone");
   }
 
   if (!definition?.target) return [base];

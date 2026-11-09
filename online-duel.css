@@ -421,6 +421,11 @@ body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #pl
   z-index: 7;
   top: 5px;
   right: 5px;
+  bottom: auto;
+  left: auto;
+  width: max-content;
+  max-width: calc(100% - 10px);
+  height: auto;
   padding: 3px 6px;
   border: 1px solid rgba(255,184,155,.58);
   border-radius: 999px;

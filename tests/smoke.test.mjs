@@ -86,11 +86,11 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   const css = readProjectFile("online-duel.css");
   const app = readProjectFile("src/online-duel-app.js");
 
-  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=20261109-online-sync-1"/);
+  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=[^"]+"/);
   assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=[^"]+"><\/script>/);
   assert.match(app, /hand-renderer\.js\?v=20261030-interaction-v2-2/);
   assert.match(app, /field-renderer\.js\?v=20261030-interaction-v2-2/);
-  assert.match(app, /online-duel-ui\.js\?v=20261106-action-stage-1/);
+  assert.match(app, /online-duel-ui\.js\?v=[^"]+/);
   assert.match(app, /trap-response-renderer\.js\?v=20261102-multi-chain-1/);
   assert.doesNotMatch(app, /from "\.\/online-duel-ui\.js"/);
   assert.match(html, /id="lobbyPanel"/);

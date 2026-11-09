@@ -905,6 +905,8 @@ export function onlineHandActionView(view, cardId) {
     };
   }
 
+  const blocker = view?.legalActions?.unavailableHandActions?.[cardId];
+  if (blocker) return { ok: false, ruleOk: false, label: blocker.label, reason: blocker.reason, target: { count: 0, scope: "" }, actionTypes: [] };
   const phase = view?.turn?.phase;
   const reason = phase !== "main"
     ? `${card.type === "monster" ? "召唤" : card.type === "trap" ? "盖放" : "魔法发动"}需要在主要阶段进行。`

@@ -1,6 +1,7 @@
 import { getLegalActions } from "./game-engine.js";
 import { otherSeatId, seatIdsForState } from "./duel-session.js";
 import { onlineAttackResponse, onlineChainResponse, onlineSummonResponse } from "./online-response.js";
+import { onlineHandBlocker } from "./online-hand-feedback.js";
 
 const PUBLIC_EVENT_FIELDS = new Set([
   "id", "type", "playerId", "rivalId", "winnerId", "loserId", "loserIds",
@@ -227,9 +228,18 @@ export function buildDuelView(state, viewerSeatId, {
   const opponentSeatId = otherSeatId(state, viewerSeatId);
   const visibleIds = visibleCardIds(state, viewerSeatId);
   const canRequestLegalActions = status === "playing" && !state.gameOver;
+  const rejectedHandActions = new Map();
   const legalActions = canRequestLegalActions
-    ? getLegalActions(state, viewerSeatId)
+    ? getLegalActions(state, viewerSeatId, { onRejectedAction: (action, reason) => {
+      if (state.players[viewerSeatId].hand.includes(action.cardId) && !rejectedHandActions.has(action.cardId)) {
+        rejectedHandActions.set(action.cardId, reason);
+      }
+    } })
     : emptyLegalActions(state, viewerSeatId);
+  const playableCards = new Set(Object.values(legalActions.actions).flat().map((action) => action.cardId));
+  legalActions.unavailableHandActions = Object.fromEntries([...rejectedHandActions]
+    .filter(([cardId]) => !playableCards.has(cardId))
+    .map(([cardId, reason]) => [cardId, onlineHandBlocker(state, viewerSeatId, state.cards[cardId], reason)]));
 
   return {
     protocolVersion: 1,
