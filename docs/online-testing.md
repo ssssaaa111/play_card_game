@@ -85,7 +85,9 @@
 
 `npm run smoke:online-browser` 使用三个独立 Chromium 进程和三套隔离 Cookie，真实点击固定陷阱场景。1P / 2P 先显式同意公开观战，第三个已登录账号再从 `watch.html` 输入房间码加入；脚本会验证观众不占席位、顶部人数为 1、双方手牌保持隐藏且最终 LP 同步。随后继续验证“双重召唤”演出不会被召唤覆盖、日冕骑士双击攻击、弱化力场响应、双方最终 2800 LP、战报中的 1200 伤害，并在 `.tmp/online-browser-smoke/` 保存命中伤害演出瞬间的 PNG、完整演出序列与观战摘要 JSON。运行前分别启动前端 `127.0.0.1:5221` 和带 `--scenario=trap-response` 的对战服务 `127.0.0.1:5223`；端口不同时可传 `--frontend-url` 与 `--duel-server-url`。
 
-GitHub Actions 的 `online-browser-smoke` job 会自行启动前端与固定场景对战服务并运行同一条回归。每次运行都会上传 `.tmp/online-browser-smoke/`、前端日志和对战服务日志；即使测试失败，脚本也会写入 `online-browser-failure.json` 与 1P / 2P / 观众三方现场截图，可从 workflow artifact 查看当时的回合、阶段、弹窗、手牌摘要、观战公开信息和演出历史。
+同一条浏览器回归也覆盖长流程：2P 在陷阱响应中刷新，Cookie 与原席位恢复、LP 保持 4000、历史演出不重放，继续发动后只结算一次 1200 伤害；观众刷新后恢复同房和公开场面且人数仍为 1；取消认输不结束对局，确认认输后三方结果同步；2P 接受再战再刷新，确认状态保留，1P 确认后第 2 局由 2P 先手，双击召唤铁壁守卫并同步到另两页；观众退出后人数归零且场面清空。按钮单击使用真实鼠标事件并检查命中目标，不穿透遮挡层。报告中的 `lifecycle` 只在所有对应断言通过后写入。
+
+GitHub Actions 的 `online-browser-smoke` job 会自行启动前端与固定场景对战服务，并使用临时目录中的独立账号和房间存档运行同一条回归。每次运行都会上传 `.tmp/online-browser-smoke/`、前端日志和对战服务日志；即使测试失败，脚本也会写入 `online-browser-failure.json` 与 1P / 2P / 观众三方现场截图，可从 workflow artifact 查看当时的回合、阶段、弹窗、手牌摘要、恢复摘要、再战结果、观战公开信息和演出历史。
 
 账号安全冒烟：以较小的 `DUEL_AUTH_ATTEMPT_LIMIT` 启动独立服务后运行 `npm run smoke:online-security`。它会验证未授权 HTTP 来源和 WebSocket 来源均返回 403、连续错误密码返回 429 与 `Retry-After`，同时确认允许来源仍能携带有效 Cookie 建立对局连接。
 

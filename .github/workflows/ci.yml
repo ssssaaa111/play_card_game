@@ -91,10 +91,11 @@ jobs:
           package-manager-cache: false
       - name: Install dependencies
         run: npm ci
-      - name: Run two-browser online duel regression
+      - name: Run three-browser online duel lifecycle regression
         shell: bash
         env:
           DUEL_AUTH_STORE: ${{ runner.temp }}/card-duel-online-browser-auth.json
+          DUEL_ROOM_STORE: ${{ runner.temp }}/card-duel-online-browser-rooms.json
           DUEL_TURN_TIMEOUT_MS: 300000
           DUEL_AUTH_ATTEMPT_LIMIT: 50
         run: |

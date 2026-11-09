@@ -204,12 +204,27 @@ function visibleExpression(selector) {
 }
 
 function textMatchExpression(selector, text) {
-  return `(() => [...document.querySelectorAll(${JSON.stringify(selector)})].some((element) => !element.hidden && element.getClientRects().length && (element.getAttribute("aria-label") || element.textContent || "").includes(${JSON.stringify(text)})))()`;
+  return `(() => [...document.querySelectorAll(${JSON.stringify(selector)})].some((element) => !element.hidden && element.getClientRects().length && ((element.getAttribute("aria-label") || "") + " " + (element.textContent || "")).includes(${JSON.stringify(text)})))()`;
 }
 
 async function click(cdp, page, selector) {
-  const result = await evaluate(cdp, page, `(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element || element.disabled) return false; element.click(); return true; })()`);
-  assert.equal(result, true, `Unable to click ${selector}`);
+  const point = await waitForPage(cdp, page, `(() => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    if (!element || element.disabled || element.hidden || !element.getClientRects().length) return null;
+    element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    return element.contains(document.elementFromPoint(x, y)) ? { x, y } : null;
+  })()`, `clickable ${selector}`, page.cdp.timeoutMs);
+  await page.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
+  await page.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, button: "left", clickCount: 1 });
+  await page.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, button: "left", clickCount: 1 });
+}
+
+async function reloadPage(cdp, page, timeoutMs) {
+  await evaluate(cdp, page, `window.__onlineSmokeBeforeReload = true`);
+  await page.cdp.send("Page.reload");
+  await waitForPage(cdp, page, `!window.__onlineSmokeBeforeReload && document.readyState === "complete"`, "fresh document after reload", timeoutMs);
 }
 
 async function dispatchDoubleClick(page, point, label) {
@@ -320,6 +335,9 @@ async function failurePageState(cdp, page) {
         actionStage: text("#actionStage"),
         chainStage: text("#chainResolutionStage"),
         response: text("#onlineResponse"),
+        recovery: text("#recoveryBrief"),
+        result: text("#onlineResult"),
+        spectator: { connection: text("#watchConnection"), phase: text("#watchPhase"), series: text("#watchSeries"), players: text("#watchPlayers") },
         visibleDialogs: [...document.querySelectorAll("dialog[open]")].filter(visible).map((dialog) => ({ id: dialog.id, text: (dialog.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 1200) })),
         alerts: [...document.querySelectorAll('[role="alert"]')].filter(visible).map((alert) => (alert.innerText || alert.textContent || "").replace(/\\s+/g, " ").trim()).filter(Boolean),
         hand: [...document.querySelectorAll("#hand .card")].map((card) => (card.getAttribute("aria-label") || card.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 240)),
@@ -504,6 +522,14 @@ try {
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, `(() => Boolean(document.querySelector(".online-response-attacker")) || (document.querySelector("#actionStage")?.innerText || "").includes("直接攻击"))()`, "declared attack presentation", options.timeoutMs);
   await waitForPage(cdp, secondPage, `(() => { const button = document.querySelector("#responseActivate"); return Boolean(button && !button.disabled && button.getClientRects().length); })()`, "trap activation", options.timeoutMs);
+
+  // Refresh must preserve the authenticated seat and pending response, without replaying history or applying damage.
+  await reloadPage(cdp, secondPage, options.timeoutMs);
+  await waitForPage(cdp, secondPage, visibleExpression("#onlineResponse[open] #responseActivate"), "restored trap response after refresh", options.timeoutMs);
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector("#accountName")?.textContent?.trim()`), "@browser_stage_p2");
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector("#recoverySelfLp")?.textContent?.trim()`), "4000 LP");
+  assert.equal(await evaluate(cdp, secondPage, visibleExpression("#actionStage")), false, "Refresh replayed an old public action");
+  await installStageObserver(cdp, secondPage);
   await click(cdp, secondPage, "#responseActivate");
 
   try {
@@ -546,9 +572,55 @@ try {
   assert.ok(firstStages.some((entry) => entry.text.includes("怪兽召唤")), "Queued summon stage was not recorded");
   assert.ok(firstStages.some((entry) => entry.depth >= 1), "Second action replaced the active public action instead of queuing");
   assert.ok([...firstStages, ...secondStages].some((entry) => entry.text.includes("1200")), "Delayed damage was not captured by a public presentation stage");
+
+  // Spectator refresh rejoins the same public room, without occupying a player seat or duplicating its count.
+  await reloadPage(cdp, spectatorPage, options.timeoutMs);
+  await Promise.all([
+    waitForPage(cdp, spectatorPage, textMatchExpression("#watchPlayers", "2800 LP"), "spectator refreshed public state", options.timeoutMs),
+    waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 1"), "spectator count after refresh", options.timeoutMs)
+  ]);
+  assert.equal(await evaluate(cdp, spectatorPage, `new URL(location.href).searchParams.get("room")`), roomCode);
+  assert.equal(await evaluate(cdp, spectatorPage, `document.querySelectorAll("#watchPlayers .watch-player").length`), 2);
+
+  await click(cdp, firstPage, "#forfeitButton");
+  await click(cdp, firstPage, "#forfeitCancel");
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#onlineForfeit").open`), false);
+  assert.equal(await evaluate(cdp, firstPage, `document.body.dataset.onlineResult`), "none", "Canceling surrender ended the duel");
+  await click(cdp, firstPage, "#forfeitButton");
+  await click(cdp, firstPage, "#forfeitConfirm");
+  await Promise.all([
+    waitForPage(cdp, firstPage, visibleExpression("#onlineResult[open]"), "1P result", options.timeoutMs),
+    waitForPage(cdp, secondPage, visibleExpression("#onlineResult[open]"), "2P result", options.timeoutMs),
+    waitForPage(cdp, spectatorPage, textMatchExpression("#watchPhase", "月见演出测试获胜"), "spectator result", options.timeoutMs)
+  ]);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#resultSeriesScore")?.textContent?.trim()`), "0 : 1");
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector("#resultSeriesScore")?.textContent?.trim()`), "1 : 0");
+  await click(cdp, secondPage, "#resultRematch");
+  await waitForPage(cdp, firstPage, textMatchExpression("#resultRematch", "接受再战"), "rival rematch invitation", options.timeoutMs);
+  await reloadPage(cdp, secondPage, options.timeoutMs);
+  await waitForPage(cdp, secondPage, visibleExpression("#onlineResult[open]"), "result restored after refresh", options.timeoutMs);
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector("#resultRematch")?.disabled`), true, "Refresh lost an accepted rematch");
+  assert.match(await evaluate(cdp, secondPage, `document.querySelector("#resultRematchStatus")?.textContent || ""`), /你已接受再战/);
+  await click(cdp, firstPage, "#resultRematch");
+  await Promise.all([
+    waitForPage(cdp, secondPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合" && document.querySelector("#viewerSeatLabel")?.textContent?.includes("第 2 局")`, "2P rematch first turn", options.timeoutMs),
+    waitForPage(cdp, firstPage, `document.querySelector("#onlineResult")?.open === false && document.querySelector("#viewerSeatLabel")?.textContent?.includes("第 2 局")`, "1P rematch board", options.timeoutMs),
+    waitForPage(cdp, spectatorPage, textMatchExpression("#watchSeries", "第 2 局"), "spectator rematch", options.timeoutMs)
+  ]);
+  await waitForPage(cdp, secondPage, textMatchExpression("#hand .card.action-ready", "铁壁守卫"), "2P rematch summon highlight", options.timeoutMs);
+  await doubleClickText(cdp, secondPage, "#hand .card.action-ready", "铁壁守卫");
+  await Promise.all([
+    waitForPage(cdp, secondPage, textMatchExpression("#playerField", "铁壁守卫"), "2P double-click summon", options.timeoutMs),
+    waitForPage(cdp, firstPage, textMatchExpression("#aiField", "铁壁守卫"), "1P sees 2P summon", options.timeoutMs),
+    waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers [data-seat="p2"]', "铁壁守卫"), "spectator sees 2P summon", options.timeoutMs)
+  ]);
+  await click(cdp, spectatorPage, "#watchLeave");
+  await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
+  assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, firstStages, secondStages, spectatorSummary }, null, 2)}\n`, "utf8");
-  console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, trap response, 1200 damage)`);
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);
 } catch (error) {
