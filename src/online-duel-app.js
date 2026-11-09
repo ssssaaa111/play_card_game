@@ -21,7 +21,7 @@ import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView,
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
-  "app", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
+  "app", "onlineTools", "onlineToolsToggle", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
   "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "roomDeckSelect", "roomDeckRefresh", "roomDeckStatus", "roomDeckError", "spectatorConsent", "spectatorStatus", "watchRoomLink", "watchEntry", "onlineSpectatorCount", "duelPanel", "aiPanel", "playerPanel",
   "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
   "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "duelHint", "duelError", "versusStage", "versusPhase",
@@ -1329,7 +1329,11 @@ function renderCommands(view, model) {
   elements.commandSignal.textContent = view.gameOver ? "结束" : actionPending ? "结算中" : model ? "操作中" : canAct ? "待命" : "等待";
   elements.commandTitle.textContent = view.gameOver ? "决斗结束" : canAct ? "选择一张手牌或场上怪兽" : "对手正在行动";
   elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "单击选择，双击快捷执行；需要目标时，合法候选会高亮。" : "可以查看公开卡牌和墓地。";
-  elements.duelHint.textContent = model ? prompt : endTurnWarning || actionReceipt?.text || elements.commandTitle.textContent;
+  const fieldPrompt = model?.stage === "placement" ? `选择${model.card.type === "trap" ? "盖放" : "召唤"}位置 · 已选第 ${model.index + 1} 格`
+    : model?.stage === "material" ? `选择祭品 · ${model.tributeCardIds.length}/${model.tributeCount}`
+      : targeting ? model.targetCardId ? `已选目标 · ${cardName(view, model.targetCardId)}` : `选择${isAttack ? "攻击" : "效果"}目标 · ${model.targetIds.length} 个可选`
+        : prompt;
+  elements.duelHint.textContent = model ? fieldPrompt : endTurnWarning || actionReceipt?.text || elements.commandTitle.textContent;
   elements.duelHint.dataset.kind = model ? "action" : endTurnWarning ? "turn-warning" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
   elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor : "none";
   elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type : "none";
@@ -2038,6 +2042,13 @@ elements.soundBtn?.addEventListener("click", () => {
   const enabled = toggleAudioSound({ previewSound: "click" });
   elements.soundBtn.title = enabled ? "关闭联机决斗音效" : "开启联机决斗音效";
 });
+
+elements.onlineTools.addEventListener("click", (event) => {
+  if (event.target.closest("button:not(:disabled), a")) elements.onlineTools.open = false;
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!elements.onlineTools.contains(event.target)) elements.onlineTools.open = false;
+});
 elements.lastChainButton.addEventListener("click", replayLatestChain);
 elements.recoveryClose.addEventListener("click", () => hideRecoveryBrief({ focus: true }));
 elements.recoveryContinue.addEventListener("click", () => hideRecoveryBrief({ focus: true }));
@@ -2088,6 +2099,11 @@ elements.inspectorContent.addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape" || elements.cardInspector.open) return;
+  if (elements.onlineTools.open) {
+    elements.onlineTools.open = false;
+    elements.onlineToolsToggle.focus({ preventScroll: true });
+    return;
+  }
   if (!elements.recoveryBrief.hidden) hideRecoveryBrief({ focus: true });
   else cancelSelection();
 });

@@ -238,13 +238,16 @@ async function dispatchDoubleClick(page, point, label) {
 }
 
 async function doubleClickText(cdp, page, selector, text) {
-  const point = await evaluate(cdp, page, `(() => {
+  const point = await waitForPage(cdp, page, `(async () => {
     const element = [...document.querySelectorAll(${JSON.stringify(selector)})]
       .find((entry) => !entry.hidden && entry.getClientRects().length && (entry.getAttribute("aria-label") || entry.textContent || "").includes(${JSON.stringify(text)}));
     if (!element) return null;
+    element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+    await new Promise(requestAnimationFrame);
     const rect = element.getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  })()`);
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    return element.contains(document.elementFromPoint(x, y)) ? { x, y } : null;
+  })()`, `double-clickable ${text}`, page.cdp.timeoutMs);
   await dispatchDoubleClick(page, point, text);
 }
 
@@ -503,6 +506,48 @@ try {
     })()`, "spectator hidden-hand board", options.timeoutMs)
   ]);
 
+  // Exercise the real responsive header and selection states before the duel sequence.
+  await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  const mobileLayout = await waitForPage(cdp, firstPage, `(() => {
+    const header = document.querySelector(".topbar").getBoundingClientRect();
+    return header.height <= 120 && document.documentElement.scrollWidth <= innerWidth
+      ? { width: innerWidth, headerHeight: header.height, fieldHeight: document.querySelector("#duelPanel").getBoundingClientRect().height } : null;
+  })()`, "compact mobile header without overflow", options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, visibleExpression("#viewerSeatLabel")), true, "Mobile layout hid the player's seat identity");
+  await click(cdp, firstPage, "#onlineToolsToggle");
+  await waitForPage(cdp, firstPage, visibleExpression("#soundBtn"), "mobile utility menu", options.timeoutMs);
+  await click(cdp, firstPage, "#phaseLabel");
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#onlineTools").open`), false, "Utility menu did not dismiss on outside click");
+  await click(cdp, firstPage, "#hand .card.action-ready");
+  await waitForPage(cdp, firstPage, visibleExpression("#choiceConfirmBtn"), "mobile summon command", options.timeoutMs);
+  await click(cdp, firstPage, "#playerField .placement-candidate:nth-child(5)");
+  const selectionAppearance = await evaluate(cdp, firstPage, `(() => {
+    const selected = document.querySelector("#playerField .online-placement-selected");
+    const candidate = document.querySelector("#playerField .placement-candidate:not(.online-placement-selected)");
+    return { selectedIndex: selected?.dataset.index, selectedColor: getComputedStyle(selected).borderColor,
+      candidateColor: getComputedStyle(candidate).borderColor, label: getComputedStyle(selected, "::after").content };
+  })()`);
+  assert.equal(selectionAppearance.selectedIndex, "4", "Clicking the last mobile slot did not change the destination");
+  assert.notEqual(selectionAppearance.selectedColor, selectionAppearance.candidateColor, "Selected slot is indistinguishable from other candidates");
+  assert.match(selectionAppearance.label, /已选/);
+  await mkdir(options.artifactDir, { recursive: true });
+  const mobileScreenshot = await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+  await writeFile(path.join(options.artifactDir, `online-workspace-mobile-${roomCode}.png`), Buffer.from(mobileScreenshot.data, "base64"));
+  await click(cdp, firstPage, "#choiceCancelBtn");
+  await click(cdp, firstPage, "#logToggle");
+  await waitForPage(cdp, firstPage, visibleExpression("#eventLog"), "mobile battle log", options.timeoutMs);
+  await click(cdp, firstPage, "#eventLogClose");
+  await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 844, height: 390, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, `document.querySelector(".topbar").getBoundingClientRect().height <= 60 && document.documentElement.scrollWidth <= innerWidth`, "compact landscape header without overflow", options.timeoutMs);
+  await firstPage.cdp.send("Emulation.clearDeviceMetricsOverride");
+  await waitForPage(cdp, firstPage, `innerWidth > 1040 && document.querySelector(".topbar").getBoundingClientRect().height < 100`, "desktop layout restored", options.timeoutMs);
+  await click(cdp, firstPage, "#hand .card.action-ready");
+  await waitForPage(cdp, firstPage, visibleExpression("#choiceConfirmBtn"), "desktop summon command", options.timeoutMs);
+  const workspaceScreenshot = await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+  const workspaceScreenshotPath = path.join(options.artifactDir, `online-workspace-desktop-${roomCode}.png`);
+  await writeFile(workspaceScreenshotPath, Buffer.from(workspaceScreenshot.data, "base64"));
+  await click(cdp, firstPage, "#choiceCancelBtn");
+
   await doubleClickText(cdp, firstPage, "#hand .card", "双重召唤");
   await waitForPage(cdp, firstPage, textMatchExpression("#actionStage", "双重召唤"), "spell action stage", options.timeoutMs);
   await waitForPage(cdp, firstPage, textMatchExpression("#hand .card.action-ready", "日冕骑士"), "solar knight action", options.timeoutMs);
@@ -582,10 +627,12 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, `new URL(location.href).searchParams.get("room")`), roomCode);
   assert.equal(await evaluate(cdp, spectatorPage, `document.querySelectorAll("#watchPlayers .watch-player").length`), 2);
 
+  await click(cdp, firstPage, "#onlineToolsToggle");
   await click(cdp, firstPage, "#forfeitButton");
   await click(cdp, firstPage, "#forfeitCancel");
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#onlineForfeit").open`), false);
   assert.equal(await evaluate(cdp, firstPage, `document.body.dataset.onlineResult`), "none", "Canceling surrender ended the duel");
+  await click(cdp, firstPage, "#onlineToolsToggle");
   await click(cdp, firstPage, "#forfeitButton");
   await click(cdp, firstPage, "#forfeitConfirm");
   await Promise.all([
@@ -619,7 +666,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);
