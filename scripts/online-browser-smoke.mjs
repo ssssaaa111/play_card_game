@@ -571,6 +571,63 @@ try {
   const handFeedbackPath = path.join(options.artifactDir, `online-hand-feedback-${roomCode}.png`);
   await writeFile(handFeedbackPath, Buffer.from(feedbackScreenshot.data, "base64"));
 
+  // Verify real cards after summoning, including defense and narrow-screen stat legibility.
+  const fieldCardLayout = {};
+  const readFieldCards = () => evaluate(cdp, firstPage, `(() => ({
+    width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
+    cards: [...document.querySelectorAll("#playerField .field-monster-card")].map(card => {
+      const rect = card.getBoundingClientRect();
+      const art = card.querySelector(".art").getBoundingClientRect();
+      return { name: card.querySelector(".card-name").textContent, defense: card.classList.contains("defense"),
+        width: rect.width, height: rect.height, slotWidth: card.closest(".slot").getBoundingClientRect().width,
+        artHeight: art.height, nameSize: parseFloat(getComputedStyle(card.querySelector(".card-name")).fontSize),
+        faceTransform: getComputedStyle(card.querySelector(".field-card-face")).transform,
+        statsTransform: getComputedStyle(card.querySelector(".stats")).transform,
+        stats: [...card.querySelectorAll(".stat")].map(stat => {
+          const box = stat.getBoundingClientRect();
+          return { text: stat.textContent, width: stat.clientWidth, contentWidth: stat.scrollWidth,
+            inside: box.left >= rect.left - 1 && box.right <= rect.right + 1 && box.top >= rect.top - 1 && box.bottom <= rect.bottom + 1 };
+        }) };
+    })
+  }))()`);
+  const assertFieldCards = (layout) => {
+    assert.ok(layout.scrollWidth <= layout.width, `Field overflow at ${layout.width}px`);
+    assert.equal(layout.cards.length, 2);
+    for (const card of layout.cards) {
+      assert.ok(card.artHeight >= 16, `${card.name} art collapsed at ${layout.width}px`);
+      assert.equal(card.faceTransform, "none", `${card.name} text rotated with defense art`);
+      assert.equal(card.statsTransform, "none");
+      assert.equal(card.stats.length, 2);
+      for (const stat of card.stats) {
+        assert.ok(stat.inside && stat.width > 0 && stat.contentWidth <= stat.width + 1, `${stat.text} clipped at ${layout.width}px`);
+      }
+      if (layout.width > 1040) {
+        assert.ok(card.width >= card.slotWidth * .8, `${card.name} shrank inside its desktop slot`);
+        assert.ok(card.nameSize >= 11, `${card.name} desktop name is too small`);
+      }
+    }
+  };
+  await click(cdp, firstPage, '#playerField .slot[data-card-uid]');
+  await click(cdp, firstPage, '#fieldModeBtn');
+  await waitForPage(cdp, firstPage, visibleExpression('#playerField .field-monster-card.defense'), "upright defense card", options.timeoutMs);
+  await waitForPage(cdp, firstPage, `document.querySelector("#actionStage").hidden`, "defense presentation completed", options.timeoutMs);
+  fieldCardLayout.desktop = await readFieldCards();
+  assertFieldCards(fieldCardLayout.desktop);
+  assert.equal(fieldCardLayout.desktop.cards[0].defense, true);
+  const fieldScreenshotPath = path.join(options.artifactDir, `online-field-cards-${roomCode}.png`);
+  await writeFile(fieldScreenshotPath, Buffer.from((await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true })).data, "base64"));
+  for (const [width, height] of [[390, 844], [320, 720], [844, 390]]) {
+    await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
+    await waitForPage(cdp, firstPage, `innerWidth === ${width}`, "field-card responsive viewport", options.timeoutMs);
+    fieldCardLayout[width] = await readFieldCards();
+    assertFieldCards(fieldCardLayout[width]);
+    if (width === 390) {
+      await writeFile(path.join(options.artifactDir, `online-field-cards-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true })).data, "base64"));
+    }
+  }
+  await firstPage.cdp.send("Emulation.clearDeviceMetricsOverride");
+  await waitForPage(cdp, firstPage, `innerWidth > 1040`, "field-card desktop viewport restored", options.timeoutMs);
+
   await endTurn(cdp, firstPage, options.timeoutMs);
   await waitForPage(cdp, secondPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "2P turn", options.timeoutMs);
   await doubleClickText(cdp, secondPage, "#hand .card.action-ready", "弱化力场");
@@ -578,6 +635,9 @@ try {
   await endTurn(cdp, secondPage, options.timeoutMs);
   await waitForPage(cdp, firstPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "1P attack turn", options.timeoutMs);
 
+  await click(cdp, firstPage, '#playerField .slot:has(.field-monster-card.defense)');
+  await click(cdp, firstPage, '#fieldModeBtn');
+  await waitForPage(cdp, firstPage, `!document.querySelector('#playerField .field-monster-card.defense')`, "defense card returned to attack", options.timeoutMs);
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-attack-state="ready"]'), "attack-ready field highlight", options.timeoutMs);
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, `(() => Boolean(document.querySelector(".online-response-attacker")) || (document.querySelector("#actionStage")?.innerText || "").includes("直接攻击"))()`, "declared attack presentation", options.timeoutMs);
@@ -681,7 +741,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);
