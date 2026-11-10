@@ -4,7 +4,7 @@ import { DuelRoom } from "../server/duel-room.js";
 import { createDuelist, cardById } from "../src/deck.js";
 import { buildEngineStateFromUiState } from "../src/engine-adapter.js";
 import { createDuelSessionConfig, ControllerKind, DuelMode } from "../src/duel-session.js";
-import { chooseOnlineCard, selectOnlineCard, onlineSelectionModel, onlineBattlePreview } from "../src/online-duel-ui.js";
+import { chooseOnlineCard, selectOnlineCard, onlineSelectionModel, onlineBattlePreview, onlineAttackDecisionView } from "../src/online-duel-ui.js";
 
 // Stable cards and IDs: this regression needs neither a server nor a browser.
 function fixedState() {
@@ -53,14 +53,31 @@ test("fixed online duel: cancel, place, buff, defend, choose targets, battle, du
   const attack = selectOnlineCard(battle, "knight", "DECLARE_ATTACK");
   assert.equal(onlineSelectionModel(battle, attack).action, null, "two targets require an explicit choice");
   assert.equal(onlineBattlePreview(battle, onlineSelectionModel(battle, attack)).mode, "intent");
+  const picking = onlineAttackDecisionView(battle, onlineSelectionModel(battle, attack));
+  assert.equal(picking.source.stat, "ATK 1900", "the route includes the active buff");
+  assert.equal(picking.source.slot, "我方第 4 格");
+  assert.equal(picking.target.name, "选择目标");
+  assert.equal(picking.lp, "", "no predicted damage before choosing among multiple targets");
+  assert.deepEqual(picking.candidates.find(card => card.id === "guardian"), { id: "guardian", name: "铁壁守卫", slot: "第 5 格", stat: "DEF 2100" });
   const guard = chooseOnlineCard(battle, attack, "guardian");
   const guardPreview = onlineBattlePreview(battle, onlineSelectionModel(battle, guard));
   assert.equal(guardPreview.badge, "守备反击");
   assert.deepEqual(guardPreview.rows.find((row) => row.label === "我方 LP"), { label: "我方 LP", value: "4000 → 3800" });
+  const guardDecision = onlineAttackDecisionView(battle, onlineSelectionModel(battle, guard));
+  assert.equal(guardDecision.tone, "danger");
+  assert.equal(guardDecision.summary, "预计我方损失 200 LP");
+  assert.equal(guardDecision.lp, "我方 LP 4000 → 3800");
+  assert.equal(guardDecision.target.stat, "DEF 2100");
+  assert.equal(guardDecision.result, "双方保留");
   const final = chooseOnlineCard(battle, guard, "mage");
   const model = onlineSelectionModel(battle, final);
   const preview = onlineBattlePreview(battle, model);
   assert.equal(preview.compare.diff, 700);
+  const finalDecision = onlineAttackDecisionView(battle, model);
+  assert.equal(finalDecision.target.name, "疾风术士");
+  assert.equal(finalDecision.summary, "预计造成 700 伤害");
+  assert.equal(finalDecision.lp, "对手 LP 4000 → 3300");
+  assert.equal(finalDecision.result, "击破目标");
   const envelope = { revision: battle.revision, commandId: "fixed:attack", action: model.action };
   room.submit("one", envelope);
   const after = room.viewFor("p1");

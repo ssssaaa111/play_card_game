@@ -309,6 +309,7 @@ export function renderMonsterZones({
   spellTargetAt = () => null,
   placementTargetAt = () => null,
   effectMarkersAt = () => [],
+  primaryStateAt = () => null,
   onSlotClick = () => {},
   onSlotDoubleClick = () => {},
   onCardClick = () => {},
@@ -321,6 +322,7 @@ export function renderMonsterZones({
     const targetSelected = targetSelectedAt(index);
     const attackTargetable = attackTargetableAt(index);
     const attackReadiness = attackReadinessAt(index);
+    const primaryState = primaryStateAt(index);
     const materialTarget = materialTargetAt(index);
     const splitTarget = splitTargetAt(index);
     const spellTarget = spellTargetAt(index);
@@ -370,13 +372,19 @@ export function renderMonsterZones({
     if (view.placementKind) slot.dataset.placementKind = view.placementKind;
     if (view.fieldState) slot.dataset.fieldState = view.fieldState;
     if (view.title) slot.title = view.title;
+    if (primaryState) {
+      slot.dataset.monsterState = primaryState.key;
+      if (!view.title) slot.title = primaryState.detail;
+    }
     if (attackReadiness) {
       slot.dataset.attackState = view.attackReady ? "ready" : "unavailable";
       slot.dataset.attackReason = view.attackReason;
     }
     slot.disabled = view.disabled;
     slot.setAttribute("aria-disabled", view.disabled ? "true" : "false");
-    slot.setAttribute("aria-label", view.ariaLabel);
+    const ariaLabel = primaryState && view.fieldStateLabel && view.fieldState !== "selected"
+      ? view.ariaLabel.replace(view.fieldStateLabel, primaryState.label) : view.ariaLabel;
+    slot.setAttribute("aria-label", primaryState && !ariaLabel.includes(primaryState.label) ? `${ariaLabel}，${primaryState.label}` : ariaLabel);
     slot.setAttribute("aria-pressed", String(view.targetSelected));
     slot.addEventListener("click", () => onSlotClick(index));
     slot.addEventListener("dblclick", (event) => {
@@ -397,6 +405,7 @@ export function renderMonsterZones({
         attacksLocked: view.attacksLocked,
         attackReady: view.attackReady,
         effectMarkers: effectMarkersAt(index),
+        primaryState,
         showStateRail: card.type === "monster",
         showTributeRequirement: false
       });

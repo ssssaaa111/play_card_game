@@ -78,3 +78,73 @@ jobs:
           npm run smoke:online -- --scenario=trap-response
           npm run smoke:online -- --custom-decks
           npm run smoke:online-restart -- --spectator
+
+  online-browser-smoke:
+    name: Online duel browser smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci
+      - name: Run three-browser online duel lifecycle regression
+        shell: bash
+        env:
+          DUEL_AUTH_STORE: ${{ runner.temp }}/card-duel-online-browser-auth.json
+          DUEL_ROOM_STORE: ${{ runner.temp }}/card-duel-online-browser-rooms.json
+          DUEL_TURN_TIMEOUT_MS: 300000
+          DUEL_AUTH_ATTEMPT_LIMIT: 50
+        run: |
+          set -euo pipefail
+          browser_bin="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$browser_bin" ]]; then
+            echo "No Chromium-compatible browser is installed on the runner." >&2
+            exit 1
+          fi
+          export BROWSER_BIN="$browser_bin"
+
+          node scripts/dev-server.mjs --port=5177 > online-browser-frontend.out.log 2> online-browser-frontend.err.log &
+          frontend_pid=$!
+          node scripts/duel-server.mjs --port=5178 --scenario=trap-response > online-browser-duel.out.log 2> online-browser-duel.err.log &
+          duel_pid=$!
+          cleanup() {
+            kill "$frontend_pid" "$duel_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          ready=0
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:5177/online.html > /dev/null \
+              && curl --fail --silent http://127.0.0.1:5178/health > /dev/null; then
+              ready=1
+              break
+            fi
+            sleep 0.25
+          done
+          if [[ "$ready" -ne 1 ]]; then
+            echo "Online browser smoke services did not become ready." >&2
+            cat online-browser-frontend.err.log online-browser-duel.err.log >&2 || true
+            exit 1
+          fi
+
+          npm run smoke:online-browser -- \
+            --frontend-url http://127.0.0.1:5177 \
+            --duel-server-url http://127.0.0.1:5178 \
+            --timeout-ms 45000
+      - name: Upload browser smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: online-browser-smoke-${{ github.run_attempt }}
+          path: |
+            .tmp/online-browser-smoke/
+            online-browser-frontend.out.log
+            online-browser-frontend.err.log
+            online-browser-duel.out.log
+            online-browser-duel.err.log
+          if-no-files-found: warn
+          retention-days: 14

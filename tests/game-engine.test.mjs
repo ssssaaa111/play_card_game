@@ -229,6 +229,9 @@ test("target resistance blocks opponent targeting and recalculates strongest leg
   assert.equal(next.cards["dragon-1"].tempDef || 0, 0);
   assert.equal(next.cards["colossus-1"].tempAtk, -400);
   assert.equal(next.cards["colossus-1"].tempDef, -400);
+  assert.ok(events.some((event) => event.type === "CARD_ACTIVATED"
+    && event.rivalId === AI
+    && event.targetCardId === "colossus-1"));
   assert.equal(events.filter((event) => event.type === "STAT_MODIFIED" && event.cardId === "colossus-1").length, 2);
 });
 

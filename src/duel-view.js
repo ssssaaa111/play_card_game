@@ -1,6 +1,8 @@
 import { getLegalActions } from "./game-engine.js";
 import { otherSeatId, seatIdsForState } from "./duel-session.js";
 import { onlineAttackResponse, onlineChainResponse, onlineSummonResponse } from "./online-response.js";
+import { onlineHandBlocker } from "./online-hand-feedback.js";
+import { effectMarkersForCard } from "./effect-markers.js";
 
 const PUBLIC_EVENT_FIELDS = new Set([
   "id", "type", "playerId", "rivalId", "winnerId", "loserId", "loserIds",
@@ -40,6 +42,9 @@ function publicCard(card) {
     mode: card.mode || "attack",
     used: Boolean(card.used),
     changedMode: Boolean(card.changedMode),
+    attackLockReason: card.attackLockReason || null,
+    destructionProtection: Boolean(card.destructionProtection),
+    destructionProtectionUsed: Boolean(card.destructionProtectionUsed),
     tempAtk: Number(card.tempAtk) || 0,
     tempDef: Number(card.tempDef) || 0,
     battleWear: Math.max(0, Number(card.battleWear) || 0),
@@ -65,7 +70,22 @@ function fixedZoneCards(state, player, zoneName, { hidden = false, hiddenPrefix 
     if (!cardId) return null;
     const card = state.cards?.[cardId];
     const concealed = typeof hidden === "function" ? hidden(card) : hidden;
-    return concealed ? hiddenCard(`${hiddenPrefix}:${index}`) : publicCard(card);
+    if (concealed) return hiddenCard(`${hiddenPrefix}:${index}`);
+    const projected = publicCard(card);
+    if (projected?.type === "monster" && zoneName === "monsterZone") {
+      const publiclyVisible = (id) => Object.values(state.players).some((owner) =>
+        ["monsterZone", "grave", "banished"].some((zone) => owner[zone]?.includes(id))
+        || (owner.spellTrapZone?.includes(id) && state.cards[id]?.type === "spell"));
+      projected.effectMarkers = effectMarkersForCard({
+        card, duelist: player, gameEvents: state.events,
+        findCard: (id) => publiclyVisible(id) ? state.cards[id] : null
+      }).map(({ label, tone, detail }) => ({
+        label, tone,
+        detail: ["buff", "debuff", "modifier"].includes(tone)
+          ? `${detail} 数值修正随怪兽离场重置。` : detail
+      }));
+    }
+    return projected;
   });
 }
 
@@ -227,9 +247,18 @@ export function buildDuelView(state, viewerSeatId, {
   const opponentSeatId = otherSeatId(state, viewerSeatId);
   const visibleIds = visibleCardIds(state, viewerSeatId);
   const canRequestLegalActions = status === "playing" && !state.gameOver;
+  const rejectedHandActions = new Map();
   const legalActions = canRequestLegalActions
-    ? getLegalActions(state, viewerSeatId)
+    ? getLegalActions(state, viewerSeatId, { onRejectedAction: (action, reason) => {
+      if (state.players[viewerSeatId].hand.includes(action.cardId) && !rejectedHandActions.has(action.cardId)) {
+        rejectedHandActions.set(action.cardId, reason);
+      }
+    } })
     : emptyLegalActions(state, viewerSeatId);
+  const playableCards = new Set(Object.values(legalActions.actions).flat().map((action) => action.cardId));
+  legalActions.unavailableHandActions = Object.fromEntries([...rejectedHandActions]
+    .filter(([cardId]) => !playableCards.has(cardId))
+    .map(([cardId, reason]) => [cardId, onlineHandBlocker(state, viewerSeatId, state.cards[cardId], reason)]));
 
   return {
     protocolVersion: 1,

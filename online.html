@@ -9,7 +9,8 @@
   <link rel="stylesheet" href="target-selection.css">
   <link rel="stylesheet" href="ui-polish.css">
   <link rel="stylesheet" href="duel-focus.css">
-  <link rel="stylesheet" href="online-duel.css?v=20261107-spectator-1">
+  <link rel="stylesheet" href="online-duel.css?v=20261109-hand-feedback-1">
+  <link rel="stylesheet" href="online-workspace.css?v=20261111-attack-choice-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
@@ -24,23 +25,28 @@
         </div>
       </div>
       <div class="actions" aria-label="回合操作">
-        <button class="btn online-sound-btn" id="soundBtn" type="button" title="关闭联机决斗音效" aria-pressed="true">音效 开</button>
-        <button class="btn online-chain-replay-btn" id="lastChainButton" type="button" title="重新播放最近一次连锁结算" hidden>连锁回放</button>
-        <button class="btn online-forfeit-btn" id="forfeitButton" type="button" hidden>认输</button>
         <button class="btn primary online-result-reopen" id="resultReopenButton" type="button" aria-haspopup="dialog" hidden>对局结果</button>
         <button class="btn primary turn-control" id="battleButton" type="button" disabled>进入战斗</button>
         <button class="btn turn-control" id="endTurnButton" type="button" disabled>结束回合</button>
-        <a class="btn" href="/">单人模式</a>
       </div>
       <div class="online-session-hud">
-        <div class="online-account" id="accountBadge" hidden>
-          <span>当前账号</span><strong id="accountName">决斗者</strong><small id="accountHandle">@duelist</small><button id="logoutButton" type="button">退出</button>
-        </div>
         <div class="online-identity" id="viewerIdentity" hidden>
           <span>本页身份</span><strong id="viewerName">决斗者</strong><small id="viewerSeatLabel">1P · 房主</small>
         </div>
         <div class="connection-pill" id="connectionStatus" data-state="connecting" aria-live="polite">连接中</div>
       </div>
+      <details class="online-tools" id="onlineTools">
+        <summary class="btn" id="onlineToolsToggle" aria-label="更多操作">更多 <span aria-hidden="true">⌄</span></summary>
+        <div class="online-tools-menu">
+          <div class="online-account" id="accountBadge" hidden>
+            <span>当前账号</span><strong id="accountName">决斗者</strong><small id="accountHandle">@duelist</small><button id="logoutButton" type="button">退出</button>
+          </div>
+          <button class="btn online-sound-btn" id="soundBtn" type="button" title="关闭联机决斗音效" aria-pressed="true">音效 开</button>
+          <button class="btn online-chain-replay-btn" id="lastChainButton" type="button" title="重新播放最近一次连锁结算" hidden>连锁回放</button>
+          <a class="btn" href="/">单人模式</a>
+          <button class="btn online-forfeit-btn" id="forfeitButton" type="button" hidden>认输</button>
+        </div>
+      </details>
     </header>
 
     <section class="online-auth-card" id="authPanel">
@@ -96,7 +102,6 @@
           <footer id="connectionActions" hidden><button class="btn primary" id="connectionRetry" type="button">立即重试</button><button class="btn" id="connectionLobby" type="button">返回大厅</button></footer>
         </div>
       </section>
-      <button class="btn online-log-toggle" id="logToggle" type="button" aria-expanded="false" aria-controls="eventLog"><span>战斗记录</span><b id="logUnread" hidden>0</b></button>
       <aside class="online-event-log" id="eventLog" aria-label="战斗记录" hidden>
         <header><div><span>DUEL TIMELINE</span><strong>战斗记录</strong></div><button class="btn" id="eventLogClose" type="button" aria-label="关闭战斗记录">×</button></header>
         <p class="online-event-log-guide">按时间查看本局公开事件，点击卡牌名称可查看详情。</p>
@@ -107,7 +112,7 @@
 
     <section class="hand-panel" id="handPanel" aria-label="玩家手牌" hidden>
       <div class="hand-title"><div class="hand-title-copy"><strong>手牌</strong><span id="handGuide">选择卡牌 · 再选择落点或目标</span></div><button class="hand-readiness hand-ready-jump" id="handReadyJump" type="button" disabled><strong id="handCount">0 张</strong><small id="handReadyCount">0 可操作</small></button></div>
-      <div class="hand-stack"><div class="hand-toolbar" id="handToolbar"><span id="handOrderStatus">拖动可调整手牌顺序</span><button class="btn ghost hand-order-shortcut" id="handSortType" type="button">按类型</button></div><div class="hand" id="hand"></div></div>
+      <div class="hand-stack"><div class="hand-toolbar" id="handToolbar"><span id="handOrderStatus">拖动可调整手牌顺序</span><button class="btn ghost hand-order-shortcut" id="handSortType" type="button">按类型</button><button class="btn online-log-toggle" id="logToggle" type="button" aria-expanded="false" aria-controls="eventLog"><span>战斗记录</span><b id="logUnread" hidden>0</b></button><nav class="hand-navigation" id="handNavigation" aria-label="手牌浏览" hidden><button id="handPrevious" type="button" aria-label="向左浏览手牌" aria-controls="hand">‹</button><span id="handVisibleRange" aria-live="off">0 / 0</span><button id="handNext" type="button" aria-label="向右浏览手牌" aria-controls="hand">›</button></nav></div><div class="hand" id="hand" tabindex="0" role="group" aria-label="手牌列表" aria-description="左右键浏览，Home 和 End 到首尾；单击选牌，双击快捷出牌。"></div></div>
       <aside class="hand-command" id="handCommand" aria-label="战术指令">
         <div class="hand-command-head"><span>TACTICAL COMMAND</span><span class="hand-command-signal" id="commandSignal">待命</span></div>
         <div class="hand-command-idle" id="commandIdle"><strong id="commandTitle">选择一张手牌</strong><span id="commandHint">选择卡牌，再选择落点或目标。</span><div class="hand-command-flow" aria-hidden="true"><span class="is-current"><b>01</b> 选牌</span><span><b>02</b> 定位</span><span><b>03</b> 执行</span></div></div>
@@ -124,6 +129,7 @@
     </section>
   </div>
   <div class="effect-layer online-effect-layer" id="effectLayer" aria-hidden="true"></div>
+  <section class="online-action-stage" id="actionStage" hidden aria-live="polite" aria-atomic="true"></section>
   <section class="online-chain-resolution-stage" id="chainResolutionStage" hidden aria-live="polite" aria-atomic="true"></section>
   <aside class="online-recovery-brief" id="recoveryBrief" hidden aria-labelledby="recoveryTitle" aria-describedby="recoveryStatus">
     <header>
@@ -131,9 +137,9 @@
       <button id="recoveryClose" type="button" aria-label="关闭战况摘要">×</button>
     </header>
     <div class="online-recovery-score" aria-label="当前生命值">
-      <article><span>你</span><strong id="recoverySelfName">玩家</strong><b id="recoverySelfLp">4000 LP</b></article>
+      <article><span id="recoverySelfLabel">你</span><strong id="recoverySelfName">玩家</strong><b id="recoverySelfLp">4000 LP</b></article>
       <div><span id="recoveryTurn">你的回合</span><strong id="recoveryPhase">主要阶段</strong></div>
-      <article><span>对手</span><strong id="recoveryRivalName">对手</strong><b id="recoveryRivalLp">4000 LP</b></article>
+      <article><span id="recoveryRivalLabel">对手</span><strong id="recoveryRivalName">对手</strong><b id="recoveryRivalLp">4000 LP</b></article>
     </div>
     <p id="recoveryStatus" class="online-recovery-status">操作权在你手中，可以继续行动</p>
     <section class="online-recovery-events" aria-labelledby="recoveryEventsTitle">
@@ -177,9 +183,9 @@
       <h2 id="resultTitle">决斗结束</h2>
       <p id="resultSummary">本局决斗已经结束。</p>
       <div class="online-result-score" aria-label="最终生命值">
-        <article><span>你</span><strong id="resultSelfName">玩家</strong><b id="resultSelfLp">4000 LP</b></article>
+        <article><span id="resultSelfLabel">你</span><strong id="resultSelfName">玩家</strong><b id="resultSelfLp">4000 LP</b></article>
         <i>VS</i>
-        <article><span>对手</span><strong id="resultRivalName">对手</strong><b id="resultRivalLp">4000 LP</b></article>
+        <article><span id="resultRivalLabel">对手</span><strong id="resultRivalName">对手</strong><b id="resultRivalLp">4000 LP</b></article>
       </div>
       <div class="online-series-score" id="resultSeries" aria-label="本房间系列战绩"><span>ROOM SERIES</span><strong id="resultSeriesScore">0 : 0</strong><small id="resultSeriesDetail">已完成 0 局</small></div>
       <p id="resultRematchStatus" class="online-rematch-status" role="status" aria-live="polite">双方确认后可在当前房间再来一局。</p>
@@ -195,6 +201,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js?v=20261107-spectator-1"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261111-attack-choice-1"></script>
 </body>
 </html>

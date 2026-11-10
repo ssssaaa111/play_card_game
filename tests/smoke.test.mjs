@@ -86,11 +86,11 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   const css = readProjectFile("online-duel.css");
   const app = readProjectFile("src/online-duel-app.js");
 
-  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=20261107-spectator-1"/);
-  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=20261107-spectator-1"><\/script>/);
+  assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=[^"]+"/);
+  assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=[^"]+"><\/script>/);
   assert.match(app, /hand-renderer\.js\?v=20261030-interaction-v2-2/);
-  assert.match(app, /field-renderer\.js\?v=20261030-interaction-v2-2/);
-  assert.match(app, /online-duel-ui\.js\?v=20261103-reconnect-brief-1/);
+  assert.match(app, /field-renderer\.js\?v=[^"\s]+/);
+  assert.match(app, /online-duel-ui\.js\?v=[^"]+/);
   assert.match(app, /trap-response-renderer\.js\?v=20261102-multi-chain-1/);
   assert.doesNotMatch(app, /from "\.\/online-duel-ui\.js"/);
   assert.match(html, /id="lobbyPanel"/);
@@ -98,6 +98,14 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="authForm"[^>]*autocomplete="on"/);
   assert.match(html, /id="accountBadge"[^>]*hidden/);
   assert.match(html, /id="roomPanel"[^>]*hidden/);
+  assert.match(html, /id="spectatorConsent"[^>]*type="checkbox"/);
+  assert.match(html, /id="watchRoomLink"[^>]*hidden/);
+  assert.match(html, /id="watchEntry"[^>]*href="watch\.html"/);
+  assert.match(html, /id="onlineSpectatorCount"[^>]*hidden/);
+  assert.match(app, /eventLogReturnFocus[\s\S]*eventLogClose\.addEventListener\("click"[\s\S]*focusTarget\.focus/);
+  assert.match(html, /需要双方玩家在准备前同意/);
+  assert.match(html, /id="recoverySelfLabel">你<\/span>/);
+  assert.match(html, /id="resultRivalLabel">对手<\/span>/);
   assert.match(html, /id="duelPanel"[^>]*hidden/);
   assert.match(html, /id="hand"/);
   assert.match(html, /id="handReadyJump"[^>]*disabled/);
@@ -107,6 +115,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /id="turnClock"[^>]*role="timer"/);
   assert.match(html, /class="online-response-scroll"/);
   assert.match(html, /id="chainResolutionStage"[^>]*aria-live="polite"/);
+  assert.match(html, /id="actionStage"[^>]*aria-live="polite"/);
   assert.match(html, /id="lastChainButton"[^>]*hidden/);
   assert.match(html, /id="recoveryBrief"[^>]*hidden[^>]*aria-labelledby="recoveryTitle"/);
   assert.match(html, /id="recoveryEvents"/);
@@ -114,9 +123,18 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(css, /\.online-response-scroll\s*\{[^}]*overflow:\s*auto/);
   assert.match(css, /\.online-response footer\s*\{[^}]*z-index:\s*2/);
   assert.match(css, /\.online-chain-resolution-stage\s*\{/);
+  assert.match(css, /\.online-action-stage\s*\{/);
   assert.match(css, /\.online-recovery-brief\s*\{/);
   assert.match(app, /playChainResolutionStage\(view, cue\)/);
+  assert.match(app, /playActionStage\(view, cue\)/);
+  assert.match(app, /let actionStageQueue = \[\]/);
+  assert.match(app, /function finishActionStage\(\)[\s\S]*actionStageQueue\.shift\(\)/);
+  assert.match(app, /actionStageQueue\.length >= 4/);
   assert.match(app, /onlineReconnectBrief\(view\)/);
+  assert.match(app, /client\.resumeRoom\(session\)/);
+  assert.match(app, /client\.setSpectatorConsent\(allowed\)/);
+  assert.match(app, /new URL\("watch\.html", window\.location\.href\)/);
+  assert.match(app, /onlineSpectatorCount\.textContent = ` · 观众 \$\{view\.spectators\?\.count \|\| 0\}`/);
   assert.match(app, /rebaseRecoveredView\(view\)/);
   assert.match(app, /elements\.lastChainButton\.addEventListener\("click", replayLatestChain\)/);
   assert.match(app, /if \(elements\.onlineResponse\.open\) elements\.onlineResponse\.close\(\)/);
@@ -133,7 +151,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /client\.requestRematch\(\)/);
   assert.match(app, /onlineSeriesView\(view\)/);
   assert.match(app, /elements\.resultReopenButton\.addEventListener\("click", openOnlineResult\)/);
-  assert.match(app, /import \{ renderMonsterZones, renderSupportZones \} from "\.\/field-renderer\.js\?v=20261030-interaction-v2-2"/);
+  assert.match(app, /import \{ renderMonsterZones, renderSupportZones \} from "\.\/field-renderer\.js\?v=[^"\s]+"/);
   assert.match(app, /import \{ monsterAssets \} from "\.\/data\.js"/);
   assert.match(app, /onlineSelectionModel\(client\.view, selection\)\?\.action/);
   assert.match(app, /localStorage\.setItem\(key, JSON\.stringify\(client\.session\)\)/);
@@ -150,7 +168,6 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(html, /点击弹窗外空白处或按 Esc 关闭/);
   assert.match(app, /async function prepareSelectedAttack\(\)/);
   assert.match(app, /fieldAttackBtn\.addEventListener\("click", prepareSelectedAttack\)/);
-  assert.match(app, /进入战斗阶段并发起攻击/);
   assert.match(app, /function locateNextReadyAction\(\)/);
   assert.match(app, /handReadyJump\.addEventListener\("click", locateNextReadyAction\)/);
   assert.match(app, /endTurnButton\.addEventListener\("click", requestEndTurn\)/);
@@ -163,6 +180,33 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /syncActionReceipt\(view\)/);
   assert.match(app, /function renderTurnCountdown\(view\)/);
   assert.match(app, /actionReceipt\?\.text/);
+});
+
+test("online browser smoke covers consent spectator, queued public actions, and delayed trap damage", () => {
+  const packageJson = JSON.parse(readProjectFile("package.json"));
+  const smoke = readProjectFile("scripts/online-browser-smoke.mjs");
+  const workflow = readProjectFile(".github/workflows/ci.yml");
+  assert.equal(packageJson.scripts["smoke:online-browser"], "node scripts/online-browser-smoke.mjs");
+  assert.match(smoke, /card-duel-online-browser-p1/);
+  assert.match(smoke, /card-duel-online-browser-p2/);
+  assert.match(smoke, /card-duel-online-browser-spectator/);
+  assert.match(smoke, /#spectatorConsent/);
+  assert.match(smoke, /#watchJoinSubmit/);
+  assert.match(smoke, /#onlineSpectatorCount/);
+  assert.match(smoke, /window\.__onlineStageHistory/);
+  assert.match(smoke, /visible 1200-damage presentation/);
+  assert.match(smoke, /Page\.captureScreenshot/);
+  assert.match(smoke, /Inspector\.targetCrashed/);
+  assert.doesNotMatch(smoke, /--use-angle=swiftshader/);
+  assert.doesNotMatch(smoke, /--disable-features=Vulkan/);
+  assert.match(smoke, /\["spectator", spectatorPage\]/);
+  assert.match(smoke, /online-browser-failure-\$\{label\}\.png/);
+  assert.match(smoke, /online-browser-failure\.json/);
+  assert.match(smoke, /online-browser-smoke passed/);
+  assert.match(workflow, /^  online-browser-smoke:/m);
+  assert.match(workflow, /npm run smoke:online-browser --/);
+  assert.match(workflow, /actions\/upload-artifact@v7/);
+  assert.match(workflow, /\.tmp\/online-browser-smoke\//);
 });
 
 test("index keeps critical app mount points wired", () => {
@@ -528,7 +572,8 @@ test("serve script defaults to the project port and accepts an isolated worktree
   assert.match(server, /\|\| "5177"/);
   assert.match(server, /requestedPort > 0 && requestedPort <= 65535/);
   assert.match(server, /: 5177/);
-  assert.match(server, /const host = "127\.0\.0\.1"/);
+  assert.match(server, /requestedHost[\s\S]*\|\| "127\.0\.0\.1"/);
+  assert.match(server, /\^\(\?:localhost\|127/);
   assert.match(server, /Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"/);
   assert.match(server, /charset=utf-8/);
   assert.match(browserSmoke, /DEFAULT_BASE_URL = "http:\/\/127\.0\.0\.1:5177"/);

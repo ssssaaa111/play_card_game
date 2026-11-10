@@ -1,0 +1,466 @@
+/* Online-only layout: keep the battlefield and shared solo components independent. */
+body[data-online-status] #app .topbar {
+  grid-template-columns: minmax(120px, 1fr) auto minmax(110px, auto) auto auto;
+  grid-template-areas: "brand phase identity actions tools";
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  height: auto;
+  overflow: visible;
+}
+.topbar > .brand { grid-area: brand; min-width: 0; }
+.topbar > .phase { grid-area: phase; }
+.topbar > .online-session-hud { grid-area: identity; }
+.topbar > .actions { grid-area: actions; }
+.topbar > .online-tools { grid-area: tools; }
+body[data-online-status] .topbar .phase {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas: "phase clock" "turn clock";
+  align-content: center;
+  align-items: center;
+  justify-items: start;
+  gap: 2px 12px;
+  min-width: 140px;
+  min-height: 40px;
+  padding: 6px 12px;
+  text-align: left;
+}
+.topbar #phaseLabel { grid-area: phase; font-size: 13px; line-height: 1.15; }
+.topbar #turnLabel { grid-area: turn; font-size: 10px; line-height: 1.2; }
+body[data-online-status] .topbar .phase-rail { display: none; }
+body[data-online-status] .phase .online-turn-clock {
+  grid-area: clock;
+  justify-self: end;
+  float: none;
+  margin: 0;
+  min-width: 43px;
+  justify-content: center;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+body[data-online-status] .topbar > .actions {
+  display: flex;
+  gap: 7px;
+  width: auto;
+}
+body[data-online-status] .topbar > .actions .btn {
+  min-height: 38px;
+  min-width: 102px;
+  width: auto;
+  padding: 7px 12px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+body[data-online-status] .topbar > .actions .btn:disabled {
+  border-color: rgba(128,148,170,.2);
+  color: #7b8995;
+  background: #111b25;
+  box-shadow: none;
+  opacity: .7;
+}
+.online-tools { position: relative; align-self: center; }
+.online-tools > summary { list-style: none; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 7px 10px; font-size: 11px; cursor: pointer; }
+.online-tools > summary::-webkit-details-marker { display: none; }
+.online-tools[open] > summary { border-color: rgba(84,210,210,.65); color: #b9f4ec; background: #143037; }
+.online-tools-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 90;
+  display: grid;
+  gap: 6px;
+  width: min(248px, calc(100vw - 24px));
+  max-height: calc(100dvh - 88px);
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid rgba(127,182,183,.36);
+  border-radius: 12px;
+  background: #0d151f;
+  box-shadow: 0 18px 44px rgba(0,0,0,.65);
+}
+.online-tools:not([open]) > .online-tools-menu { display: none; }
+body[data-online-status] .online-tools-menu .btn { display: flex; align-items: center; justify-content: flex-start; width: 100%; min-height: 40px; min-width: 0; padding: 8px 12px; text-align: left; font-size: 12px; }
+.online-tools-menu .online-account { grid-template-columns: minmax(0,1fr) auto; min-width: 0; max-width: none; margin-bottom: 3px; padding: 8px 10px; background: rgba(195,149,255,.06); }
+.online-tools-menu .online-account > span { display: block; grid-column: 1 / -1; color: var(--muted); font-size: 10px; }
+.online-tools-menu .online-account > strong { font-size: 12px; }
+.online-tools-menu .online-account > button { min-height: 30px; padding: 5px 8px; font-size: 11px; }
+.online-tools-menu .online-account > button:disabled { opacity: .45; cursor: default; }
+body[data-online-status] .online-session-hud { gap: 6px; }
+body[data-online-status] .online-identity { min-width: 0; max-width: 170px; grid-template-columns: minmax(0,1fr); justify-items: start; gap: 2px; padding: 5px 9px; }
+body[data-online-status] .online-identity > span { display: none; }
+body[data-online-status] .online-identity > strong { max-width: 100%; font-size: 11px; }
+body[data-online-status] .online-identity > small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 9px; }
+
+/* Readiness is quiet; selection and candidates carry the attention. */
+body[data-online-status="playing"][data-duel-turn="player"] #app .hand .card.action-ready:not(.selected) {
+  animation: none;
+  border-color: rgba(246,189,96,.65);
+  box-shadow: inset 0 -2px 0 rgba(246,189,96,.5), 0 8px 18px rgba(0,0,0,.3);
+}
+body[data-online-status] #app .hand .card.selected {
+  border-color: #73e2d5;
+  box-shadow: 0 0 0 2px rgba(115,226,213,.22), 0 10px 22px rgba(0,0,0,.4);
+}
+body[data-online-status] #app .hand .card.online-card-explained { border-color: #ce98a3; box-shadow: 0 0 0 2px rgba(206,152,163,.18); }
+body[data-online-status] #app .duel-table #duelHint[data-kind="unavailable"] { max-width: min(620px, calc(100% - 20px)); color: #ffe3b2; border-color: rgba(230,182,108,.65); background: #261f17; white-space: normal; line-height: 1.4; text-align: center; }
+body[data-online-status] #app .duel-table .field-state-chip:not(.selected) { display: none; }
+body[data-online-status] #app .duel-table :is(.placement-candidate, .targetable, .attack-target) {
+  animation: none;
+}
+
+body[data-online-status] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target) {
+  outline: none;
+  border-color: #e6b66c !important;
+  box-shadow: inset 0 -2px 0 rgba(246,189,96,.7), 0 0 0 1px rgba(246,189,96,.15) !important;
+  transform: none;
+}
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target)::after {
+  content: "可选目标";
+  border: 1px solid rgba(246,189,96,.5);
+  color: #ffe4b0;
+  background: #302419;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).placement-candidate::after { content: "可选落点"; }
+body[data-online-status] #app .duel-table :is(.slot, .trap-slot):is(.online-placement-selected, .target-selected, .tribute-selected) {
+  z-index: 8;
+  opacity: 1 !important;
+  filter: none !important;
+  outline: none;
+  border-color: #73e2d5 !important;
+  background-color: rgba(24,67,65,.58);
+  box-shadow: inset 0 0 0 1px rgba(115,226,213,.5), 0 0 0 2px rgba(115,226,213,.19) !important;
+  transform: none;
+}
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).target-selected::after,
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).online-placement-selected::after {
+  content: "✓ 已选目标";
+  border-color: #73e2d5;
+  color: #092826;
+  background: #85e5d8;
+  font-weight: 900;
+}
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).online-placement-selected::after { content: "✓ 已选落点"; }
+body[data-online-status] .online-target[aria-pressed="true"] { border-color: #73e2d5; color: #c5fff4; background: rgba(40,111,103,.23); }
+/* Keep the log in the hand toolbar, clear of the fifth monster/support slot. */
+body[data-online-status] #app .hand-toolbar .online-log-toggle { position: static; flex: 0 0 auto; min-height: 30px; padding: 5px 9px; font-size: 10px; white-space: nowrap; }
+body[data-online-status][data-duel-targeting]:not([data-duel-targeting="none"]) #app .duel-table #playerField .slot[data-attack-state="ready"]::before { display: none; }
+body[data-online-status]:is([data-duel-focus="target"], [data-duel-focus="attack"], [data-duel-focus="placement"]) #app .duel-table :is(.slot, .trap-slot):has(.card):not(.placement-candidate, .targetable, .attack-target, .target-selected, .field-state-selected):not(:has(.card.selected)) {
+  opacity: .48 !important;
+  filter: saturate(.65) brightness(.8) !important;
+}
+
+/* Browsing stays available during either player's turn without selecting cards. */
+.hand-navigation { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid rgba(141,176,192,.24); border-radius: 6px; background: #0c1721; }
+.hand-navigation > button { display: grid; place-items: center; width: 28px; height: 26px; padding: 0; border: 1px solid rgba(115,226,213,.35); border-radius: 4px; color: #d3fff7; background: #183039; font: inherit; font-size: 21px; cursor: pointer; }
+.hand-navigation > button:disabled { border-color: transparent; color: #63717e; background: #111c26; cursor: default; }
+.hand-navigation > button:focus-visible { outline: 2px solid #73e2d5; outline-offset: 1px; }
+.hand-navigation > span { min-width: 46px; color: #adc2d0; font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
+body[data-online-status] #handToolbar:has(.hand-navigation:not([hidden])) { display: flex; }
+body[data-online-status] #hand:focus-visible { outline: 1px solid rgba(115,226,213,.7); outline-offset: -1px; }
+body[data-online-status] #hand[data-scroll-edges="right"] { mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent); }
+body[data-online-status] #hand[data-scroll-edges="left"] { mask-image: linear-gradient(90deg, transparent, #000 14px); }
+body[data-online-status] #hand[data-scroll-edges="both"] { mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
+
+/* Hand controls have their own footer instead of covering art and rules. */
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 44px;
+  grid-template-areas: "head head" "art art" "summary summary" "stats stats" "action detail";
+  grid-template-rows: 18px minmax(0,1fr) 28px 18px 24px;
+  min-height: 0;
+  gap: 3px;
+  padding: 5px;
+  overflow: hidden;
+}
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost):not(.monster) {
+  grid-template-areas: "head head" "art art" "summary summary" "action detail";
+  grid-template-rows: 18px minmax(0,1fr) 28px 24px;
+}
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-head { grid-area: head; height: 18px; min-height: 0; gap: 4px; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-name { font-size: 12px; line-height: 1.25; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-head .element-badge { display: none; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .badge { padding: 1px 4px; font-size: 9px; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .art { grid-area: art; display: block; min-height: 0; height: auto; overflow: hidden; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-text.hand-summary { grid-area: summary; min-height: 0; height: 28px; padding: 2px 4px; font-size: 10px; line-height: 12px; -webkit-line-clamp: 2; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .stats { grid-area: stats; display: grid; min-height: 0; height: 18px; gap: 3px; padding: 0; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost):not(.monster) .stats { display: none; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .stat { display: flex; align-items: center; justify-content: center; min-height: 0; height: 18px; padding: 1px 3px; font-size: 10px; line-height: 1.1; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .action-reason { display: none; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .action-tag {
+  grid-area: action;
+  position: static;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 2px 5px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  box-shadow: none;
+}
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-detail-entry {
+  grid-area: detail;
+  position: static;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 2px 5px;
+  border-color: rgba(159,183,203,.3);
+  color: #c8dbe9;
+  background: #17222e;
+  font-size: 10px;
+  box-shadow: none;
+}
+body[data-online-status] #hand > .card .card-detail-entry:is(:hover, :focus-visible) { color: #d5fff9; border-color: #73e2d5; outline: 2px solid rgba(115,226,213,.3); outline-offset: -2px; }
+body[data-online-status] #hand > .card:is(:hover, .selected) { transform: none; }
+@media (min-width: 1041px) {
+  body[data-online-status="playing"] #app { grid-template-rows: auto minmax(0,1fr) clamp(224px, 28dvh, 264px); }
+  body[data-online-status] #app .duel-table .field { grid-template-rows: minmax(0,1fr) var(--support-track-size) 28px var(--support-track-size) minmax(0,1fr); }
+}
+@media (max-width: 720px) {
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) {
+    grid-template-areas: "head head" "summary summary" "stats stats" "action detail";
+    grid-template-rows: 18px minmax(0,1fr) 18px 24px;
+  }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost):not(.monster) {
+    grid-template-areas: "head head" "summary summary" "action detail";
+    grid-template-rows: 18px minmax(0,1fr) 24px;
+  }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .art { display: none; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .card-text.hand-summary { height: 100%; }
+}
+@media (max-width: 720px) and (max-height: 780px) {
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) { grid-template-rows: 14px minmax(0,1fr) 14px 24px; padding: 2px; gap: 1px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost):not(.monster) { grid-template-rows: 14px minmax(0,1fr) 24px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .card-head { height: 14px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .card-name { font-size: 10px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .badge { height: 12px; padding-block: 0; font-size: 8px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .card-text.hand-summary { padding: 0 3px; font-size: 9px; line-height: 10px; -webkit-line-clamp: 1; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) :is(.stats, .stat) { height: 14px; font-size: 9px; }
+}
+
+/* Battle cards use the available track width; only their art turns in defense. */
+body[data-online-status] #app .duel-table .slot:has(.field-monster-card) { min-width: 0; min-height: 0; overflow: visible; }
+body[data-online-status] #app .duel-table .field-monster-card { min-width: 0; min-height: 0; }
+body[data-online-status] #app .duel-table .field-monster-card .art { container-type: size; min-width: 0; min-height: 0; }
+body[data-online-status] #app .duel-table .field-monster-card .monster-projection {
+  top: 0;
+  left: 0;
+  bottom: auto;
+  width: 100%;
+  height: 100%;
+  transform: none;
+}
+body[data-online-status] #app .duel-table .field-monster-card .monster-sprite { width: 100%; height: 100%; object-fit: contain; transform: none; }
+body[data-online-status] #app .duel-table .field-monster-card.defense {
+  overflow: hidden;
+  border-color: #86b9e5;
+  background: linear-gradient(150deg, #23354a, #101822 70%);
+  box-shadow: inset 0 0 0 1px rgba(134,185,229,.16);
+}
+body[data-online-status] #app .duel-table .field-monster-card.defense .field-card-face {
+  position: static;
+  display: contents;
+  width: auto;
+  height: auto;
+  inset: auto;
+  aspect-ratio: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  transform: none;
+}
+body[data-online-status] #app .duel-table .field-monster-card.defense > .stats { position: static; inset: auto; width: auto; transform: none; }
+body[data-online-status] #app .duel-table .field-monster-card.defense .monster-projection {
+  top: 50%;
+  left: 50%;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+body[data-online-status] #app .duel-table .field-monster-card .stats { border-radius: 4px; overflow: hidden; font-variant-numeric: tabular-nums; }
+body[data-online-status] #app .duel-table .field-monster-card .stat { min-width: 0; min-height: 0; height: auto; white-space: nowrap; }
+body[data-online-status] #app .duel-table .field-monster-card.defense .stat:last-child { color: #d5ebff; border-color: #689ac5; background: #203e59; font-weight: 900; }
+body[data-online-status] #app .duel-table .field-monster-card.used { filter: saturate(.8) brightness(.9); }
+body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #playerField .slot[data-attack-state="ready"]::before { top: -7px; }
+
+@media (min-width: 1041px) {
+  body[data-online-status] #app .duel-table .field-monster-card {
+    --field-stats-height: 26px;
+    width: 100%;
+    max-width: 280px;
+    height: 100%;
+    max-height: 100%;
+    aspect-ratio: auto;
+    display: grid;
+    grid-template-columns: minmax(0,1fr);
+    grid-template-rows: minmax(0,1fr) var(--field-stats-height);
+    gap: 5px;
+    padding: 5px;
+  }
+  body[data-online-status] #app .duel-table .field-monster-card .field-card-face,
+  body[data-online-status] #app .duel-table .field-monster-card.defense .field-card-face {
+    position: static;
+    display: grid;
+    grid-template-columns: minmax(54px, 36%) minmax(0,1fr);
+    grid-template-rows: auto minmax(0,1fr);
+    gap: 6px;
+    min-height: 0;
+    min-width: 0;
+  }
+  body[data-online-status] #app .duel-table .field-monster-card .art { grid-column: 1; grid-row: 1 / -1; height: 100%; border-radius: 4px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-head { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; height: auto; min-height: 0; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-name { max-width: 100%; font-size: 13px; line-height: 1.3; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-badges { justify-content: flex-start; }
+  body[data-online-status] #app .duel-table .field-monster-card .badge { min-width: 22px; height: 16px; padding: 1px 4px; font-size: 9px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-rail { grid-column: 2; grid-row: 2; align-self: end; align-content: end; height: auto; min-height: 0; overflow: hidden; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-chip { height: 16px; max-width: 100%; font-size: 9px; }
+  body[data-online-status] #app .duel-table .field-monster-card .stats { position: static; height: var(--field-stats-height); min-height: 0; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px; padding: 2px; }
+  body[data-online-status] #app .duel-table .field-monster-card .stat { display: flex; align-items: center; justify-content: center; padding: 1px 3px; font-size: 12px; line-height: 1.2; }
+}
+@media (min-width: 1041px) and (max-height: 820px) {
+  body[data-online-status] #app .duel-table .slot:has(.field-monster-card) { padding: 4px; }
+  body[data-online-status] #app .duel-table .field-monster-card { --field-stats-height: 22px; padding: 4px; gap: 3px; }
+  body[data-online-status] #app .duel-table .field-monster-card .field-card-face,
+  body[data-online-status] #app .duel-table .field-monster-card.defense .field-card-face { grid-template-rows: 18px minmax(0,1fr); gap: 3px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-head { height: 18px; flex-direction: row; align-items: center; gap: 4px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-name { flex: 1 1 auto; min-width: 0; font-size: 12px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-badges { flex: 0 0 auto; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-head .element-badge { display: none; }
+  body[data-online-status] #app .duel-table .field-monster-card .badge { height: 14px; min-width: 20px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-chip { height: 12px; font-size: 8px; }
+  body[data-online-status] #app .duel-table .field-monster-card .stat { font-size: 11px; }
+}
+@media (max-width: 1040px) {
+  body[data-online-status] #app .duel-table .field-monster-card { --field-stats-height: 28px; width: 100%; max-width: none; height: 100%; aspect-ratio: auto; grid-template-columns: minmax(0,1fr); grid-template-rows: 14px minmax(0,1fr) 10px var(--field-stats-height); padding: 2px; gap: 1px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-head { height: 14px; min-height: 0; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-name { font-size: 9px; line-height: 1.2; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-head .card-badges { display: none; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-rail { height: 10px; min-height: 0; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-chip { height: 10px; padding: 0 2px; font-size: 7px; }
+  body[data-online-status] #app .duel-table .field-monster-card .stats { height: var(--field-stats-height); min-height: 0; grid-template-columns: minmax(0,1fr); grid-template-rows: repeat(2,minmax(0,1fr)); gap: 1px; padding: 1px; }
+  body[data-online-status] #app .duel-table .field-monster-card .stat { display: flex; align-items: center; justify-content: center; padding: 0 1px; font-size: 9px; line-height: 1.1; }
+}
+
+@media (max-width: 1040px) {
+  body[data-online-status] #app .topbar {
+    grid-template-columns: minmax(0,1fr) auto auto;
+    grid-template-areas: "brand phase tools" "identity actions actions";
+    gap: 6px 10px;
+    padding: 6px 8px;
+    min-height: 0;
+  }
+  body[data-online-status] .topbar > .actions { grid-column: 1 / -1; justify-content: flex-end; width: 100%; padding-left: 126px; box-sizing: border-box; }
+  body[data-online-status] .topbar > .actions .btn { min-width: 124px; min-height: 36px; font-size: 11px; }
+  body[data-online-status] .online-session-hud { justify-content: flex-start; min-width: 0; width: max-content; max-width: 116px; z-index: 1; }
+  body[data-online-status] .online-identity { max-width: 160px; min-width: 0; padding: 3px 7px; border-left-width: 2px; }
+  body[data-online-status] .online-identity > strong { font-size: 10px; }
+  body[data-online-status] .online-identity > small { font-size: 8px; }
+  body[data-online-status] .topbar .phase { min-height: 38px; min-width: 138px; padding: 4px 8px; }
+  .online-tools-menu { top: calc(100% + 8px); }
+}
+@media (max-width: 720px) {
+  body[data-online-status] .topbar .brand h1 { font-size: 14px; }
+  body[data-online-status] .topbar .brand-mark { width: 28px; height: 28px; font-size: 16px; }
+  body[data-online-status] .topbar .brand .subtitle { font-size: 9px; white-space: nowrap; }
+  body[data-online-status] .topbar .phase { width: auto; min-width: 130px; gap: 2px 7px; }
+  body[data-online-status] .topbar #phaseLabel { font-size: 12px; }
+  body[data-online-status] .topbar #turnLabel { font-size: 9px; }
+  body[data-online-status] .topbar .online-turn-clock { font-size: 11px; }
+  body[data-online-status] .topbar > .actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); width: 100%; padding-left: 106px; }
+  body[data-online-status] .topbar > .actions .btn { width: 100%; min-width: 0; padding-inline: 7px; font-size: 10px; }
+  body[data-online-status] .topbar > .actions:has(#resultReopenButton:not([hidden])) { grid-template-columns: 1fr; }
+  body[data-online-status] .online-identity { max-width: 96px; }
+  .online-tools > summary { min-height: 38px; padding: 6px 8px; font-size: 10px; }
+  .online-tools > summary > span { display: none; }
+  body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target)::after {
+    left: 50%;
+    right: auto;
+    width: max-content;
+    max-width: calc(100% - 8px);
+    padding: 4px 5px;
+    transform: translateX(-50%);
+    font-size: 9px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).placement-candidate::after { content: "可选"; }
+  body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).online-placement-selected::after { content: "✓ 已选"; }
+}
+@media (max-width: 380px) {
+  .hand-navigation > span { font-size: 9px; }
+  body[data-online-status] #app .duel-table .field-monster-card { --field-stats-height: 26px; grid-template-rows: 14px minmax(0,1fr) var(--field-stats-height); }
+  body[data-online-status] #app .duel-table .field-monster-card .stat { font-size: 8px; }
+  body[data-online-status] #app .duel-table .field-monster-card :is(.card-state-rail, .monster-element-chip) { display: none; }
+  body[data-online-status] #app .topbar { gap: 5px 6px; padding-inline: 5px; }
+  body[data-online-status] .topbar .brand-mark { display: none; }
+  body[data-online-status] .topbar .brand h1 { font-size: 13px; }
+  body[data-online-status] .topbar .phase { min-width: 125px; }
+  body[data-online-status] .online-identity { max-width: 88px; }
+  body[data-online-status] .topbar > .actions { padding-left: 96px; }
+  body[data-online-status] .topbar > .actions .btn { font-size: 9px; padding-inline: 4px; }
+}
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
+  body[data-online-status] #app .topbar {
+    grid-template-columns: minmax(92px,1fr) auto minmax(80px,auto) auto auto;
+    grid-template-areas: "brand phase identity actions tools";
+    gap: 6px;
+    height: 52px;
+    min-height: 52px;
+    padding: 4px 6px;
+  }
+  body[data-online-status] .topbar .brand h1 { font-size: 13px; }
+  body[data-online-status] .topbar .brand-mark { display: none; }
+  body[data-online-status] .topbar > .actions { display: flex; grid-column: auto; width: auto; padding-left: 0; }
+  body[data-online-status] .topbar > .actions .btn { min-width: 94px; width: auto; }
+  .online-tools-menu { max-height: calc(100dvh - 68px); }
+  body[data-online-status] #app .duel-table .field-monster-card { --field-stats-height: 18px; grid-template-rows: 12px minmax(0,1fr) var(--field-stats-height); }
+  body[data-online-status] #app .duel-table .field-monster-card :is(.card-state-rail, .monster-element-chip) { display: none; }
+  body[data-online-status] #app .duel-table .field-monster-card .stats { grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: 1fr; }
+  body[data-online-status] #app .duel-table .field-monster-card .stat { font-size: 8px; }
+}
+
+/* Compact cards retain one action-state badge without taking another art row. */
+@media (max-width: 380px), (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-rail { display: flex; position: absolute; left: 4px; right: 4px; bottom: calc(var(--field-stats-height) + 4px); height: 10px; min-height: 0; overflow: hidden; pointer-events: none; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-chip { height: 10px; font-size: 7px; padding: 0 2px; background: #14212f; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-chip:not(:first-child) { display: none; }
+}
+
+/* Attack decisions keep the route and expected LP change together. */
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { grid-template-rows: minmax(0,1fr) auto 40px; max-height: min(350px, calc(100dvh - 180px)); gap: 8px; padding: 10px; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #choiceText { display: none; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #onlineBattlePreview { grid-area: 1 / 1 / 2 / -1; min-height: 0; align-self: stretch; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #fieldTargets { grid-area: 2 / 1 / 3 / -1; max-height: 98px; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #choiceConfirmBtn { grid-area: 3 / 1 / 4 / 2; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #choiceCancelBtn { grid-area: 3 / 2 / 4 / 3; }
+body[data-online-status] #app .duel-table .slot.online-attack-source { opacity: 1 !important; border-color: #73e2d5 !important; box-shadow: inset 0 0 0 1px rgba(115,226,213,.45) !important; }
+body[data-online-status][data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-target::after { content: none; }
+.online-attack-preview { display: grid; align-content: start; gap: 8px; padding: 0 2px; color: #dae8ee; }
+.online-attack-route { display: grid; grid-template-columns: minmax(0,1fr) 20px minmax(0,1fr); align-items: center; gap: 8px; }
+.online-attack-participant { display: grid; min-width: 0; gap: 3px; }
+.online-attack-participant small { color: #8198a9; font-size: 9px; }
+.online-attack-participant strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.online-attack-participant > span { color: #c1d5df; font-size: 10px; }
+.online-attack-participant:last-child { text-align: right; }
+.online-attack-route-arrow { color: #73e2d5; font-size: 22px; }
+.online-attack-outcome { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding-top: 7px; border-top: 1px solid rgba(127,182,183,.2); }
+.online-attack-outcome strong { color: #ffe0a0; font-size: 12px; }
+.online-attack-outcome > span { align-self: center; color: #b5d1d9; font-size: 10px; }
+.online-attack-preview[data-tone="danger"] .online-attack-outcome strong { color: #ff9bb2; }
+.online-attack-details { font-size: 10px; }
+.online-attack-details > summary { width: fit-content; color: #90b6bd; cursor: pointer; }
+.online-attack-details > summary:focus-visible { outline: 2px solid #73e2d5; outline-offset: 3px; }
+.online-attack-caveat { color: #8496a6; font-size: 9px; }
+body[data-online-status] #fieldTargets .online-target { min-height: 40px; margin: 0; padding: 6px 9px; gap: 3px; }
+body[data-online-status] #fieldTargets .online-target strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+body[data-online-status] #fieldTargets .online-target small { font-size: 9px; }
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
+  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { max-height: calc(100dvh - 100px); width: min(480px, calc(100vw - 20px)); gap: 6px; padding: 8px; }
+  .online-attack-preview { gap: 5px; }
+}

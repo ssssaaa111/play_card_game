@@ -1,15 +1,45 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "../src/online-duel-ui.js";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineSpectatorActionSummary, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
-import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
+import { chooseOnlineCard, onlineBattlePreview, onlineAttackDecisionView } from "../src/online-duel-ui.js";
 
 const monster = (id) => ({ id, templateId: "iron-guardian", name: id, type: "monster", atk: 900, def: 2100 });
 function snapshot() {
   const player = () => ({ hand: [], monsterZone: Array(5).fill(null), spellTrapZone: Array(5).fill(null), grave: [], banished: [] });
   return { status: "playing", revision: 3, viewerSeatId: "p1", opponentSeatId: "p2", turn: { playerId: "p1", phase: "main" }, players: { p1: player(), p2: player() }, legalActions: { actions: {} } };
 }
+
+test("compact attack decisions handle 2P direct attacks and unique targets without changing the view", () => {
+  const view = snapshot();
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  view.turn = { playerId: "p2", phase: "battle" };
+  view.players.p1.lp = 1000;
+  view.players.p2.lp = 3000;
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p2.monsterZone[2] = { ...monster("attacker"), tempAtk: 500 };
+  view.legalActions.actions.declareAttack = [{ type: "DECLARE_ATTACK", attackerCardId: "attacker" }];
+  const project = () => onlineAttackDecisionView(view, onlineSelectionModel(view, selectOnlineCard(view, "attacker", "DECLARE_ATTACK")));
+  const before = structuredClone(view);
+  assert.equal(project().source.stat, "ATK 1400");
+  assert.equal(project().source.slot, "我方第 3 格");
+  assert.equal(project().target.name, "星野");
+  assert.equal(project().summary, "预计造成 1400 伤害");
+  assert.equal(project().lp, "对手 LP 1000 → 0");
+  assert.deepEqual(project().candidates, []);
+  assert.deepEqual(view, before);
+  view.players.p1.monsterZone[4] = { ...monster("target"), mode: "defense", def: 1200 };
+  view.legalActions.actions.declareAttack[0].targetCardId = "target";
+  assert.equal(project().target.name, "target", "the sole legal target is selected automatically");
+  assert.equal(project().summary, "预计无 LP 伤害");
+  assert.equal(project().lp, "对手 LP 1000 → 1000");
+  assert.equal(project().result, "击破目标");
+  assert.equal(onlineAttackDecisionView(view, null), null);
+  view.viewerRole = "spectator";
+  assert.equal(project(), null);
+});
 
 test("viewer identity keeps two tabs visually tied to their own reserved seats", () => {
   const view = snapshot();
@@ -21,6 +51,11 @@ test("viewer identity keeps two tabs visually tied to their own reserved seats",
   view.opponentSeatId = "p1";
   assert.deepEqual(onlineIdentityView(view), {
     name: "月见", seatId: "p2", seatNumber: "2P", seatRole: "挑战者", opponentName: "星野"
+  });
+
+  view.viewerRole = "spectator";
+  assert.deepEqual(onlineIdentityView(view), {
+    name: "公共观战", seatId: "spectator", seatNumber: "LIVE", seatRole: "只读席位", opponentName: ""
   });
 });
 
@@ -217,6 +252,7 @@ test("online whole-turn clock stays viewer-relative and exposes pause and danger
     seconds: 82,
     clock: "1:22",
     ownTurn: true,
+    spectator: false,
     danger: false,
     label: "1:22 · 你的回合"
   });
@@ -224,6 +260,11 @@ test("online whole-turn clock stays viewer-relative and exposes pause and danger
   view.viewerSeatId = "p2";
   view.opponentSeatId = "p1";
   assert.equal(onlineTurnTimerView(view, 90_500).label, "0:10 · 对手回合");
+  view.viewerRole = "spectator";
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  assert.equal(onlineTurnTimerView(view, 90_500).label, "0:10 · 星野的回合");
+  assert.equal(onlineTurnTimerView(view, 90_500).spectator, true);
+  view.viewerRole = "player";
   view.turnTimer = { ...view.turnTimer, deadlineAt: null, remainingMs: 8_400, paused: true };
   assert.equal(onlineTurnTimerView(view, 999_000).label, "0:09 · 回合计时已暂停");
   view.status = "finished";
@@ -307,6 +348,22 @@ test("online game results are viewer-relative and include the final life totals"
     rivalName: "星野",
     rivalLp: 900
   });
+
+  view.viewerRole = "spectator";
+  view.viewerSeatId = "p1";
+  view.opponentSeatId = "p2";
+  assert.deepEqual(onlineGameResultView(view), {
+    key: "STAR42:88",
+    tone: "complete",
+    kicker: "DUEL COMPLETE",
+    title: "星野获胜",
+    summary: "星野赢得了本局决斗。",
+    selfName: "星野",
+    selfLp: 900,
+    rivalName: "月见",
+    rivalLp: 0
+  });
+  assert.equal(onlineRematchView(view), null);
 });
 
 test("online surrender results explain who conceded without changing the final life totals", () => {
@@ -412,6 +469,28 @@ test("online timeline never exposes a concealed card reference", () => {
   view.recentEvents = [{ id: 9, type: "TRAP_SET", playerId: "p2", index: 2 }];
   assert.deepEqual(onlineEventTimeline(view)[0].cardIds, []);
   assert.equal(onlineEventTimeline(view)[0].text, "月见盖放了 1 张陷阱");
+});
+
+test("spectator action summary keeps the latest public event visible without leaking hidden cards", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  assert.equal(onlineSpectatorActionSummary(view), null);
+
+  view.recentEvents = [
+    { id: 20, type: "TURN_STARTED", playerId: "p2" },
+    { id: 21, type: "TRAP_SET", playerId: "p2", cardId: "hidden:trap:1", index: 2 }
+  ];
+  assert.deepEqual(onlineSpectatorActionSummary(view), {
+    id: 21,
+    label: "盖放",
+    category: "effect",
+    tone: "effect",
+    text: "月见盖放了 1 张陷阱"
+  });
+  assert.doesNotMatch(onlineSpectatorActionSummary(view).text, /hidden|trap:1/);
+
+  view.recentEvents.push({ id: 22, type: "PHASE_CHANGED", playerId: "p2", to: "battle" });
+  assert.equal(onlineSpectatorActionSummary(view).text, "月见进入战斗阶段");
 });
 
 test("online timeline folds summon setup and battle internals into readable outcomes", () => {
@@ -654,6 +733,17 @@ test("reconnect brief restores LP, priority, response status, recent actions, an
   assert.deepEqual(onlineReconnectBrief(view).chain, {
     id: 73, label: "连锁结算 · 2 段", summary: "CL2 生效 · CL1 被无效"
   });
+
+  view.viewerRole = "spectator";
+  const spectatorBrief = onlineReconnectBrief(view);
+  assert.equal(spectatorBrief.title, "已恢复至观战现场");
+  assert.equal(spectatorBrief.kicker, "SPECTATOR RESTORED");
+  assert.equal(spectatorBrief.turnLabel, "星野的回合");
+  assert.equal(spectatorBrief.status, "当前正在等待星野响应");
+  assert.deepEqual(onlineTurnActionSummary(view), {
+    handCardIds: [], attackCardIds: [], total: 0, label: "只读观战", detail: "观战席位不能执行对局操作"
+  });
+  assert.equal(selectOnlineCard(view, "nullifier:1"), null);
 });
 
 test("completed chains produce a readable receipt and timeline entry", () => {
@@ -698,8 +788,82 @@ test("online action cues identify public spell and trap activations without expo
   view.players.p2.grave.push({ id: "trap:2", type: "trap", name: "反射镜阵" });
   assert.equal(onlineActionCue(view, [{ id: 60, type: "CARD_ACTIVATED", playerId: "p2", cardId: "trap:2" }]).kind, "trap");
   assert.deepEqual(onlineActionCue(view, [{ id: 61, type: "CARD_ACTIVATED", playerId: "p2", cardId: "hidden:1" }]), {
-    id: 61, kind: "effect", actor: "ai", cardId: "hidden:1", label: "卡牌发动"
+    id: 61, kind: "effect", actor: "ai", rival: "player", cardId: "hidden:1", targetCardId: null, targetOwner: null, label: "卡牌发动"
   });
+});
+
+test("public action presentations explain source, target, and result without an acknowledgement step", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p2.grave.push({ id: "spell:2", templateId: "pierce-line", type: "spell", name: "破阵星线" });
+  view.players.p1.monsterZone[0] = { ...monster("guardian:1"), name: "守望铁卫", mode: "defense" };
+  const cue = onlineActionCue(view, [{
+    id: 62, type: "CARD_ACTIVATED", playerId: "p2", rivalId: "p1", cardId: "spell:2", targetCardId: "guardian:1"
+  }]);
+  assert.deepEqual(cue, {
+    id: 62, kind: "spell", actor: "ai", rival: "player", cardId: "spell:2", targetCardId: "guardian:1", targetOwner: "player", label: "魔法发动"
+  });
+  const presentation = onlineActionPresentation(view, cue);
+  assert.equal(presentation.actorLabel, "月见的行动");
+  assert.deepEqual([presentation.source.name, presentation.target.name], ["破阵星线", "守望铁卫"]);
+  assert.equal(presentation.result, "目标已锁定 · 效果正在结算");
+  assert.equal(presentation.duration, 2600);
+  assert.equal("requiresConfirmation" in presentation, false);
+});
+
+test("attack presentations describe the resolved public outcome for players and spectators", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p2.monsterZone[0] = { ...monster("attacker:2"), name: "暮影枪兵", atk: 1700 };
+  view.players.p1.monsterZone[0] = { ...monster("target:1"), name: "守望铁卫", mode: "attack" };
+  const cue = onlineActionCue(view, [
+    { id: 63, type: "ATTACK_DECLARED", playerId: "p2", rivalId: "p1", attackerCardId: "attacker:2", targetCardId: "target:1" },
+    { id: 64, type: "DAMAGE_DEALT", playerId: "p1", amount: 800 },
+    { id: 65, type: "BATTLE_RESOLVED", playerId: "p2", rivalId: "p1", attackerCardId: "attacker:2", targetCardId: "target:1", outcome: { kind: "attackWin" } }
+  ]);
+  assert.equal(onlineActionPresentation(view, cue).result, "击破目标 · 800 点伤害");
+  view.viewerRole = "spectator";
+  assert.equal(onlineActionPresentation(view, cue).actorLabel, "2P · 月见");
+});
+
+test("delayed battle results retain their damage after an attack response window", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p2.monsterZone[0] = { ...monster("attacker:2"), name: "暮影枪兵", atk: 1700 };
+  view.players.p1.grave.push({ ...monster("target:1"), name: "守望铁卫", mode: "attack" });
+  const cue = onlineActionCue(view, [
+    { id: 74, type: "DAMAGE_DEALT", playerId: "p1", amount: 800 },
+    {
+      id: 75,
+      type: "BATTLE_RESOLVED",
+      playerId: "p2",
+      rivalId: "p1",
+      attackerCardId: "attacker:2",
+      targetCardId: "target:1",
+      outcome: { kind: "attackWin", damagePlayerId: "p1" }
+    }
+  ]);
+  assert.equal(cue.kind, "impact");
+  assert.equal(cue.targetOwner, "player");
+  assert.equal(cue.damage, 800);
+  assert.equal(cue.damagePlayerId, "p1");
+  assert.equal(onlineActionPresentation(view, cue).result, "击破目标 · 800 点伤害");
+  assert.equal(onlineActionPresentation(view, cue).duration, 3200);
+
+  cue.direct = true;
+  cue.targetCardId = null;
+  assert.equal(onlineActionPresentation(view, cue).target.name, "星野");
+});
+
+test("action presentations keep concealed activation identities private", () => {
+  const view = snapshot();
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  const presentation = onlineActionPresentation(view, onlineActionCue(view, [
+    { id: 66, type: "CARD_ACTIVATED", playerId: "p2", cardId: "hidden:1" }
+  ]));
+  assert.equal(presentation.source.public, false);
+  assert.equal(presentation.source.name, "公开效果");
+  assert.equal(presentation.source.meta, "身份未公开");
 });
 
 test("online action cues show set positions and mode changes without requiring a public card name", () => {

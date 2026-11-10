@@ -18,6 +18,7 @@ export function cardRenderModel(card, {
   attackReady = false,
   handSummary = false,
   effectMarkers = [],
+  primaryState = null,
   showTributeRequirement = true
 } = {}) {
   const badge = cardBadgeText(card);
@@ -26,7 +27,7 @@ export function cardRenderModel(card, {
   const ruleText = cardRuleText(card);
   const tributeText = showTributeRequirement ? tributeRequirementText(card, { compact: true }) : "";
   const statusText = cardStatusText(card, { attacksLocked, effectMarkers });
-  const stateChips = cardStateChips(card, { attacksLocked, attackReady, effectMarkers });
+  const stateChips = cardStateChips(card, { attacksLocked, attackReady, effectMarkers, primaryState });
   const monsterArt = card.type === "monster"
     ? `<span class="monster-element-chip ${escapeHtml(card.element || "neutral")}">${escapeHtml(elementText || "无属性")}</span><div class="monster-projection ${escapeHtml(card.element || "")} ${card.mode === "defense" ? "defense" : ""}">${asset ? `<img class="monster-sprite" src="${escapeHtml(asset)}" alt="">` : `<div class="monster-head"></div><div class="monster-body"></div><div class="monster-limb left"></div><div class="monster-limb right"></div>`}</div>`
     : `<span class="card-art-symbol">${escapeHtml(card.icon)}</span>`;
