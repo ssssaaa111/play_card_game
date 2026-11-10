@@ -284,6 +284,36 @@ async function endTurn(cdp, page, timeoutMs) {
   if (confirmation === "confirm") await click(cdp, page, "#endTurnButton");
 }
 
+async function checkHandLayout(cdp, page) {
+  const layout = await evaluate(cdp, page, `(() => ({
+    width: innerWidth, selection: document.body.dataset.duelSelection,
+    fieldRows: [...document.querySelectorAll('#duelField > .zone-row, #duelField > .trap-row')].map(row => {
+      const box = row.getBoundingClientRect(), field = document.querySelector('#duelField').getBoundingClientRect();
+      return { id: row.id, height: box.height, inside: box.top >= field.top - 1 && box.bottom <= field.bottom + 1 };
+    }),
+    cards: [...document.querySelectorAll("#hand > .card")].map(card => {
+      const rect = card.getBoundingClientRect();
+      const parts = [...card.children].filter(element => getComputedStyle(element).display !== "none")
+        .map(element => { const box = element.getBoundingClientRect(); return { name: element.className,
+          left: box.left, right: box.right, top: box.top, bottom: box.bottom, height: box.height,
+          inside: box.left >= rect.left - 1 && box.right <= rect.right + 1 && box.top >= rect.top - 1 && box.bottom <= rect.bottom + 1 }; });
+      const overlaps = parts.flatMap((part, index) => parts.slice(index + 1)
+        .filter(other => Math.min(part.right, other.right) - Math.max(part.left, other.left) > 1
+          && Math.min(part.bottom, other.bottom) - Math.max(part.top, other.top) > 1)
+        .map(other => [part.name, other.name]));
+      return { name: card.dataset.cardName, height: rect.height, parts, overlaps };
+    })
+  }))()`);
+  assert.ok(layout.cards.length, "Hand layout has no cards to inspect");
+  for (const row of layout.fieldRows) assert.ok(row.inside, `${row.id} clipped behind the hand panel at ${layout.width}px`);
+  for (const card of layout.cards) {
+    assert.deepEqual(card.overlaps, [], `${card.name} hand content overlaps at ${layout.width}px (${layout.selection})`);
+    for (const part of card.parts) assert.ok(part.inside, `${card.name} ${part.name} escaped its card at ${layout.width}px (${layout.selection})`);
+    assert.ok(card.parts.find(part => part.name === "card-detail-entry")?.height >= 24, `${card.name} detail button became too small`);
+  }
+  return layout;
+}
+
 async function installStageObserver(cdp, page) {
   await evaluate(cdp, page, `(() => {
     window.__onlineStageHistory = [];
@@ -513,6 +543,12 @@ try {
     return header.height <= 120 && document.documentElement.scrollWidth <= innerWidth
       ? { width: innerWidth, headerHeight: header.height, fieldHeight: document.querySelector("#duelPanel").getBoundingClientRect().height } : null;
   })()`, "compact mobile header without overflow", options.timeoutMs);
+  const handLayouts = { mobile: await checkHandLayout(cdp, firstPage) };
+  const openingHandIds = await evaluate(cdp, firstPage, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`);
+  await click(cdp, firstPage, '#hand .card .card-detail-entry');
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), "mobile hand details", options.timeoutMs);
+  await click(cdp, firstPage, '#inspectorClose');
+  assert.deepEqual(await evaluate(cdp, firstPage, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`), openingHandIds, "Viewing details played a hand card");
   assert.equal(await evaluate(cdp, firstPage, visibleExpression("#viewerSeatLabel")), true, "Mobile layout hid the player's seat identity");
   await click(cdp, firstPage, "#onlineToolsToggle");
   await waitForPage(cdp, firstPage, visibleExpression("#soundBtn"), "mobile utility menu", options.timeoutMs);
@@ -520,6 +556,15 @@ try {
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#onlineTools").open`), false, "Utility menu did not dismiss on outside click");
   await click(cdp, firstPage, "#hand .card.action-ready");
   await waitForPage(cdp, firstPage, visibleExpression("#choiceConfirmBtn"), "mobile summon command", options.timeoutMs);
+  handLayouts.mobileSelected = await checkHandLayout(cdp, firstPage);
+  await click(cdp, firstPage, '#hand .card.selected .card-detail-entry');
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), "selected-card details without activation", options.timeoutMs);
+  await click(cdp, firstPage, '#inspectorClose');
+  assert.deepEqual(await evaluate(cdp, firstPage, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`), openingHandIds, "Selected-card detail click activated a card");
+  assert.equal(await evaluate(cdp, firstPage, visibleExpression('#choiceConfirmBtn')), true, "Closing details lost the pending choice");
+  await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 320, height: 720, deviceScaleFactor: 1, mobile: false });
+  handLayouts.narrowSelected = await checkHandLayout(cdp, firstPage);
+  await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await click(cdp, firstPage, "#playerField .placement-candidate:nth-child(5)");
   const selectionAppearance = await evaluate(cdp, firstPage, `(() => {
     const selected = document.querySelector("#playerField .online-placement-selected");
@@ -539,8 +584,10 @@ try {
   await click(cdp, firstPage, "#eventLogClose");
   await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 844, height: 390, deviceScaleFactor: 1, mobile: false });
   await waitForPage(cdp, firstPage, `document.querySelector(".topbar").getBoundingClientRect().height <= 60 && document.documentElement.scrollWidth <= innerWidth`, "compact landscape header without overflow", options.timeoutMs);
+  handLayouts.landscape = await checkHandLayout(cdp, firstPage);
   await firstPage.cdp.send("Emulation.clearDeviceMetricsOverride");
   await waitForPage(cdp, firstPage, `innerWidth > 1040 && document.querySelector(".topbar").getBoundingClientRect().height < 100`, "desktop layout restored", options.timeoutMs);
+  handLayouts.desktop = await checkHandLayout(cdp, firstPage);
   await click(cdp, firstPage, "#hand .card.action-ready");
   await waitForPage(cdp, firstPage, visibleExpression("#choiceConfirmBtn"), "desktop summon command", options.timeoutMs);
   const workspaceScreenshot = await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
@@ -548,6 +595,12 @@ try {
   await writeFile(workspaceScreenshotPath, Buffer.from(workspaceScreenshot.data, "base64"));
   await click(cdp, firstPage, "#choiceCancelBtn");
 
+  await click(cdp, firstPage, '#hand .card[data-card-id="twin-summon"]');
+  await click(cdp, firstPage, '#hand .card.selected .card-detail-entry');
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), "selected spell details without activation", options.timeoutMs);
+  await click(cdp, firstPage, '#inspectorClose');
+  assert.deepEqual(await evaluate(cdp, firstPage, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`), openingHandIds, "Spell detail click activated the spell");
+  await click(cdp, firstPage, '#choiceCancelBtn');
   await doubleClickText(cdp, firstPage, "#hand .card", "双重召唤");
   await waitForPage(cdp, firstPage, textMatchExpression("#actionStage", "双重召唤"), "spell action stage", options.timeoutMs);
   await waitForPage(cdp, firstPage, textMatchExpression("#hand .card.action-ready", "日冕骑士"), "solar knight action", options.timeoutMs);
@@ -581,6 +634,7 @@ try {
       return { name: card.querySelector(".card-name").textContent, defense: card.classList.contains("defense"),
         width: rect.width, height: rect.height, slotWidth: card.closest(".slot").getBoundingClientRect().width,
         artHeight: art.height, nameSize: parseFloat(getComputedStyle(card.querySelector(".card-name")).fontSize),
+        nameHeight: card.querySelector(".card-name").getBoundingClientRect().height,
         faceTransform: getComputedStyle(card.querySelector(".field-card-face")).transform,
         statsTransform: getComputedStyle(card.querySelector(".stats")).transform,
         stats: [...card.querySelectorAll(".stat")].map(stat => {
@@ -604,6 +658,7 @@ try {
       if (layout.width > 1040) {
         assert.ok(card.width >= card.slotWidth * .8, `${card.name} shrank inside its desktop slot`);
         assert.ok(card.nameSize >= 11, `${card.name} desktop name is too small`);
+        assert.ok(card.nameHeight >= 14, `${card.name} desktop name collapsed`);
       }
     }
   };
@@ -621,6 +676,7 @@ try {
     await waitForPage(cdp, firstPage, `innerWidth === ${width}`, "field-card responsive viewport", options.timeoutMs);
     fieldCardLayout[width] = await readFieldCards();
     assertFieldCards(fieldCardLayout[width]);
+    handLayouts[width] = await checkHandLayout(cdp, firstPage);
     if (width === 390) {
       await writeFile(path.join(options.artifactDir, `online-field-cards-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true })).data, "base64"));
     }
@@ -741,7 +797,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);

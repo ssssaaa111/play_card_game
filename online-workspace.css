@@ -151,6 +151,85 @@ body[data-online-status]:is([data-duel-focus="target"], [data-duel-focus="attack
   filter: saturate(.65) brightness(.8) !important;
 }
 
+/* Hand controls have their own footer instead of covering art and rules. */
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 44px;
+  grid-template-areas: "head head" "art art" "summary summary" "stats stats" "action detail";
+  grid-template-rows: 18px minmax(0,1fr) 28px 18px 24px;
+  min-height: 0;
+  gap: 3px;
+  padding: 5px;
+  overflow: hidden;
+}
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost):not(.monster) {
+  grid-template-areas: "head head" "art art" "summary summary" "action detail";
+  grid-template-rows: 18px minmax(0,1fr) 28px 24px;
+}
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-head { grid-area: head; height: 18px; min-height: 0; gap: 4px; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-name { font-size: 12px; line-height: 1.25; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-head .element-badge { display: none; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .badge { padding: 1px 4px; font-size: 9px; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .art { grid-area: art; display: block; min-height: 0; height: auto; overflow: hidden; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-text.hand-summary { grid-area: summary; min-height: 0; height: 28px; padding: 2px 4px; font-size: 10px; line-height: 12px; -webkit-line-clamp: 2; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .stats { grid-area: stats; display: grid; min-height: 0; height: 18px; gap: 3px; padding: 0; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost):not(.monster) .stats { display: none; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .stat { display: flex; align-items: center; justify-content: center; min-height: 0; height: 18px; padding: 1px 3px; font-size: 10px; line-height: 1.1; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .action-reason { display: none; }
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .action-tag {
+  grid-area: action;
+  position: static;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 2px 5px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  box-shadow: none;
+}
+body[data-online-status] :is(#hand > .card, .hand-drag-ghost) .card-detail-entry {
+  grid-area: detail;
+  position: static;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 2px 5px;
+  border-color: rgba(159,183,203,.3);
+  color: #c8dbe9;
+  background: #17222e;
+  font-size: 10px;
+  box-shadow: none;
+}
+body[data-online-status] #hand > .card .card-detail-entry:is(:hover, :focus-visible) { color: #d5fff9; border-color: #73e2d5; outline: 2px solid rgba(115,226,213,.3); outline-offset: -2px; }
+body[data-online-status] #hand > .card:is(:hover, .selected) { transform: none; }
+@media (min-width: 1041px) {
+  body[data-online-status="playing"] #app { grid-template-rows: auto minmax(0,1fr) clamp(224px, 28dvh, 264px); }
+  body[data-online-status] #app .duel-table .field { grid-template-rows: minmax(0,1fr) var(--support-track-size) 28px var(--support-track-size) minmax(0,1fr); }
+}
+@media (max-width: 720px) {
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) {
+    grid-template-areas: "head head" "summary summary" "stats stats" "action detail";
+    grid-template-rows: 18px minmax(0,1fr) 18px 24px;
+  }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost):not(.monster) {
+    grid-template-areas: "head head" "summary summary" "action detail";
+    grid-template-rows: 18px minmax(0,1fr) 24px;
+  }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .art { display: none; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .card-text.hand-summary { height: 100%; }
+}
+@media (max-width: 720px) and (max-height: 780px) {
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) { grid-template-rows: 14px minmax(0,1fr) 14px 24px; padding: 2px; gap: 1px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost):not(.monster) { grid-template-rows: 14px minmax(0,1fr) 24px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .card-head { height: 14px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .card-name { font-size: 10px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .badge { height: 12px; padding-block: 0; font-size: 8px; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .card-text.hand-summary { padding: 0 3px; font-size: 9px; line-height: 10px; -webkit-line-clamp: 1; }
+  body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) :is(.stats, .stat) { height: 14px; font-size: 9px; }
+}
+
 /* Battle cards use the available track width; only their art turns in defense. */
 body[data-online-status] #app .duel-table .slot:has(.field-monster-card) { min-width: 0; min-height: 0; overflow: visible; }
 body[data-online-status] #app .duel-table .field-monster-card { min-width: 0; min-height: 0; }
@@ -230,6 +309,19 @@ body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #pl
   body[data-online-status] #app .duel-table .field-monster-card .card-state-chip { height: 16px; max-width: 100%; font-size: 9px; }
   body[data-online-status] #app .duel-table .field-monster-card .stats { position: static; height: var(--field-stats-height); min-height: 0; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px; padding: 2px; }
   body[data-online-status] #app .duel-table .field-monster-card .stat { display: flex; align-items: center; justify-content: center; padding: 1px 3px; font-size: 12px; line-height: 1.2; }
+}
+@media (min-width: 1041px) and (max-height: 820px) {
+  body[data-online-status] #app .duel-table .slot:has(.field-monster-card) { padding: 4px; }
+  body[data-online-status] #app .duel-table .field-monster-card { --field-stats-height: 22px; padding: 4px; gap: 3px; }
+  body[data-online-status] #app .duel-table .field-monster-card .field-card-face,
+  body[data-online-status] #app .duel-table .field-monster-card.defense .field-card-face { grid-template-rows: 18px minmax(0,1fr); gap: 3px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-head { height: 18px; flex-direction: row; align-items: center; gap: 4px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-name { flex: 1 1 auto; min-width: 0; font-size: 12px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-badges { flex: 0 0 auto; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-head .element-badge { display: none; }
+  body[data-online-status] #app .duel-table .field-monster-card .badge { height: 14px; min-width: 20px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-chip { height: 12px; font-size: 8px; }
+  body[data-online-status] #app .duel-table .field-monster-card .stat { font-size: 11px; }
 }
 @media (max-width: 1040px) {
   body[data-online-status] #app .duel-table .field-monster-card { --field-stats-height: 28px; width: 100%; max-width: none; height: 100%; aspect-ratio: auto; grid-template-columns: minmax(0,1fr); grid-template-rows: 14px minmax(0,1fr) 10px var(--field-stats-height); padding: 2px; gap: 1px; }
