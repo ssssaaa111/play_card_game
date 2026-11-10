@@ -686,6 +686,8 @@ try {
         width: rect.width, height: rect.height, slotWidth: card.closest(".slot").getBoundingClientRect().width,
         artHeight: art.height, nameSize: parseFloat(getComputedStyle(card.querySelector(".card-name")).fontSize),
         nameHeight: card.querySelector(".card-name").getBoundingClientRect().height,
+        status: card.querySelector('.card-state-chip')?.textContent,
+        statusHeight: card.querySelector('.card-state-chip')?.getBoundingClientRect().height || 0,
         faceTransform: getComputedStyle(card.querySelector(".field-card-face")).transform,
         statsTransform: getComputedStyle(card.querySelector(".stats")).transform,
         stats: [...card.querySelectorAll(".stat")].map(stat => {
@@ -700,6 +702,7 @@ try {
     assert.equal(layout.cards.length, 2);
     for (const card of layout.cards) {
       assert.ok(card.artHeight >= 16, `${card.name} art collapsed at ${layout.width}px`);
+      assert.ok(card.statusHeight >= 8, `${card.name} action state disappeared at ${layout.width}px`);
       assert.equal(card.faceTransform, "none", `${card.name} text rotated with defense art`);
       assert.equal(card.statsTransform, "none");
       assert.equal(card.stats.length, 2);
@@ -717,6 +720,10 @@ try {
   await click(cdp, firstPage, '#fieldModeBtn');
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .field-monster-card.defense'), "upright defense card", options.timeoutMs);
   await waitForPage(cdp, firstPage, `document.querySelector("#actionStage").hidden`, "defense presentation completed", options.timeoutMs);
+  await click(cdp, firstPage, '#playerField .slot[data-monster-state="defense"]');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#fieldAttackBtn').disabled`), true);
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#duelHint').textContent`), /守备表示不能攻击/);
+  await click(cdp, firstPage, '#fieldCancelBtn');
   fieldCardLayout.desktop = await readFieldCards();
   assertFieldCards(fieldCardLayout.desktop);
   assert.equal(fieldCardLayout.desktop.cards[0].defense, true);
@@ -737,6 +744,7 @@ try {
 
   await endTurn(cdp, firstPage, options.timeoutMs);
   await waitForPage(cdp, secondPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "2P turn", options.timeoutMs);
+  await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-monster-state="waiting"]'), "rival-turn monster waiting state", options.timeoutMs);
   await doubleClickText(cdp, secondPage, "#hand .card.action-ready", "弱化力场");
   await waitForPage(cdp, secondPage, visibleExpression("#playerTraps .trap-slot:not(.empty)"), "set weakening web", options.timeoutMs);
   await endTurn(cdp, secondPage, options.timeoutMs);
@@ -800,6 +808,18 @@ try {
   assert.ok(firstStages.some((entry) => entry.depth >= 1), "Second action replaced the active public action instead of queuing");
   assert.ok([...firstStages, ...secondStages].some((entry) => entry.text.includes("1200")), "Delayed damage was not captured by a public presentation stage");
 
+  await waitForPage(cdp, firstPage, `document.querySelector('#actionStage').hidden && document.querySelector('#chainResolutionStage').hidden`, "battle presentation finished", options.timeoutMs);
+  await click(cdp, firstPage, '#playerField .slot[data-monster-state="spent"]');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#fieldAttackBtn').disabled`), true);
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#duelHint').textContent`), /本次攻击已使用/);
+  await click(cdp, firstPage, '#fieldDetailBtn');
+  await waitForPage(cdp, firstPage, textMatchExpression('#inspectorContent', '数值修正随怪兽离场重置'), "sourced monster effect lifetime", options.timeoutMs);
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContent').textContent`), /弱化力场/);
+  const monsterEffectsPath = path.join(options.artifactDir, `online-monster-effects-${roomCode}.png`);
+  await writeFile(monsterEffectsPath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await click(cdp, firstPage, '#inspectorClose');
+  await click(cdp, firstPage, '#fieldCancelBtn');
+
   // Spectator refresh rejoins the same public room, without occupying a player seat or duplicating its count.
   await reloadPage(cdp, spectatorPage, options.timeoutMs);
   await Promise.all([
@@ -848,7 +868,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, monsterEffectsPath, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);

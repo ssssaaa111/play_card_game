@@ -2,6 +2,7 @@ import { getLegalActions } from "./game-engine.js";
 import { otherSeatId, seatIdsForState } from "./duel-session.js";
 import { onlineAttackResponse, onlineChainResponse, onlineSummonResponse } from "./online-response.js";
 import { onlineHandBlocker } from "./online-hand-feedback.js";
+import { effectMarkersForCard } from "./effect-markers.js";
 
 const PUBLIC_EVENT_FIELDS = new Set([
   "id", "type", "playerId", "rivalId", "winnerId", "loserId", "loserIds",
@@ -41,6 +42,9 @@ function publicCard(card) {
     mode: card.mode || "attack",
     used: Boolean(card.used),
     changedMode: Boolean(card.changedMode),
+    attackLockReason: card.attackLockReason || null,
+    destructionProtection: Boolean(card.destructionProtection),
+    destructionProtectionUsed: Boolean(card.destructionProtectionUsed),
     tempAtk: Number(card.tempAtk) || 0,
     tempDef: Number(card.tempDef) || 0,
     battleWear: Math.max(0, Number(card.battleWear) || 0),
@@ -66,7 +70,22 @@ function fixedZoneCards(state, player, zoneName, { hidden = false, hiddenPrefix 
     if (!cardId) return null;
     const card = state.cards?.[cardId];
     const concealed = typeof hidden === "function" ? hidden(card) : hidden;
-    return concealed ? hiddenCard(`${hiddenPrefix}:${index}`) : publicCard(card);
+    if (concealed) return hiddenCard(`${hiddenPrefix}:${index}`);
+    const projected = publicCard(card);
+    if (projected?.type === "monster" && zoneName === "monsterZone") {
+      const publiclyVisible = (id) => Object.values(state.players).some((owner) =>
+        ["monsterZone", "grave", "banished"].some((zone) => owner[zone]?.includes(id))
+        || (owner.spellTrapZone?.includes(id) && state.cards[id]?.type === "spell"));
+      projected.effectMarkers = effectMarkersForCard({
+        card, duelist: player, gameEvents: state.events,
+        findCard: (id) => publiclyVisible(id) ? state.cards[id] : null
+      }).map(({ label, tone, detail }) => ({
+        label, tone,
+        detail: ["buff", "debuff", "modifier"].includes(tone)
+          ? `${detail} 数值修正随怪兽离场重置。` : detail
+      }));
+    }
+    return projected;
   });
 }
 

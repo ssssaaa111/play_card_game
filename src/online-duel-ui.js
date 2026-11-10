@@ -105,6 +105,7 @@ export function onlineCardDetailView(card) {
         ["稀有度", card.rarity || "N"],
         ["流派", card.archetype || "通用"]
       ];
+  for (const marker of card.effectMarkers || []) rows.push(["生效效果", marker.detail || marker.label]);
   return {
     name: card.name,
     typeLabel,
@@ -976,17 +977,19 @@ export function onlineTurnControlView(view, { endTurnArmed = false } = {}) {
 
 export function onlineAttackIntent(view, model) {
   if (spectatorView(view)) return { available: false, requiresBattlePhase: false, attackCount: 0, label: "只读观战" };
-  const attacks = model?.actions?.filter((action) => action.type === "DECLARE_ATTACK") || [];
   const ownTurn = view?.turn?.playerId === view?.viewerSeatId;
   const self = view?.players?.[view?.viewerSeatId];
+  const blocked = Boolean(view?.gameOver || view?.machine?.responseWindow || view?.machine?.pendingAttack
+    || view?.machine?.chainLength || view?.seats?.some((seat) => seat.connected === false));
+  const eligible = Boolean(model?.card?.type === "monster"
+    && self?.monsterZone?.some((card) => card?.id === model.card.id)
+    && ownTurn && !blocked && model.card.mode !== "defense" && !model.card.used
+    && !model.card.attackLockReason && !self?.attacksSkipped);
+  const attacks = eligible ? model?.actions?.filter((action) => action.type === "DECLARE_ATTACK") || [] : [];
   const canEnterBattle = Boolean(
-    model?.card?.type === "monster"
-    && ownTurn
+    eligible
     && view?.turn?.phase === "main"
     && view?.legalActions?.can?.endTurn
-    && model.card.mode !== "defense"
-    && !model.card.used
-    && !self?.attacksSkipped
   );
   return {
     available: attacks.length > 0 || canEnterBattle,
@@ -994,6 +997,39 @@ export function onlineAttackIntent(view, model) {
     attackCount: attacks.length,
     label: attacks.length > 0 ? "攻击" : canEnterBattle ? "进入战斗并攻击" : "当前不能攻击"
   };
+}
+
+export function onlineMonsterStatus(view, cardId) {
+  const ownerId = Object.keys(view?.players || {}).find((id) => view.players[id].monsterZone?.some((card) => card?.id === cardId));
+  const player = view?.players?.[ownerId];
+  const card = player?.monsterZone.find((card) => card?.id === cardId);
+  if (!card || card.hidden) return null;
+  const own = ownerId === view.viewerSeatId && !spectatorView(view);
+  const ownTurn = ownerId === view.turn?.playerId;
+  const status = card.attackLockReason || player.attacksSkipped
+    ? { key: "locked", label: "本回合禁攻", tone: "locked", detail: card.attackLockReason === "trioConvergence" ? "三曜共降：本回合不能攻击，下次己方回合解除。" : "本回合的攻击已被效果限制，下次己方回合解除。" }
+    : card.mode === "defense"
+      ? { key: "defense", label: "守备", tone: "defense", detail: "守备表示不能攻击。" }
+      : card.used
+        ? { key: "spent", label: "已攻击", tone: "spent", detail: "本次攻击已使用，下次己方回合恢复。" }
+        : { key: "waiting", label: ownTurn ? "待行动" : "待回合", tone: "idle", detail: "等待己方回合行动。" };
+  if (!own) return { ...status, detail: `${status.detail} ${spectatorView(view) ? "这是场上的公开怪兽" : "这是对手场上的公开怪兽"}，可查看详情。` };
+  if (view.gameOver) return { key: "finished", label: "已结束", tone: "idle", detail: "本局已结束，可以查看卡牌详情。" };
+  if (view.seats?.some((seat) => seat.connected === false)) return { key: "paused", label: "已暂停", tone: "locked", detail: "等待双方恢复连接后继续行动。" };
+  if (view.machine?.responseWindow || view.machine?.pendingAttack || view.machine?.chainLength) {
+    return { key: "resolving", label: "响应中", tone: "locked", detail: "等待当前响应与连锁结算后继续行动。" };
+  }
+  if (!ownTurn) return { ...status, detail: "现在是对手回合，等待我方回合再行动。" };
+  if (status.key === "defense") {
+    const canChange = onlineCardActions(view, cardId).some((action) => action.type === "CHANGE_MONSTER_MODE");
+    return { ...status, detail: `${status.detail}${canChange ? "可先切换为攻击表示。" : card.changedMode ? "本回合已切换过表示。" : "可在主要阶段切换表示。"}` };
+  }
+  if (["locked", "spent"].includes(status.key)) return status;
+  const intent = onlineAttackIntent(view, onlineSelectionModel(view, selectOnlineCard(view, cardId)));
+  if (intent.available) return { key: "ready", label: "可攻击", tone: "ready", detail: intent.requiresBattlePhase ? "可自动进入战斗阶段；单击选择目标，双击快捷攻击。" : "单击选择目标，双击快捷攻击。" };
+  return view.turn?.phase === "battle"
+    ? { key: "no-target", label: "无合法目标", tone: "locked", detail: "当前没有合法的攻击目标。" }
+    : { key: "waiting", label: "待阶段", tone: "idle", detail: "当前不在可发起攻击的行动阶段。" };
 }
 
 export function selectOnlineCard(view, cardId, actionType = null) {

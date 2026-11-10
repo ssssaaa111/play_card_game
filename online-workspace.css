@@ -104,10 +104,11 @@ body[data-online-status] #app .hand .card.selected {
 }
 body[data-online-status] #app .hand .card.online-card-explained { border-color: #ce98a3; box-shadow: 0 0 0 2px rgba(206,152,163,.18); }
 body[data-online-status] #app .duel-table #duelHint[data-kind="unavailable"] { max-width: min(620px, calc(100% - 20px)); color: #ffe3b2; border-color: rgba(230,182,108,.65); background: #261f17; white-space: normal; line-height: 1.4; text-align: center; }
-body[data-online-status] #app .duel-table #playerField .slot[data-attack-state="ready"] .field-state-chip.ready { display: none; }
+body[data-online-status] #app .duel-table .field-state-chip:not(.selected) { display: none; }
 body[data-online-status] #app .duel-table :is(.placement-candidate, .targetable, .attack-target) {
   animation: none;
 }
+
 body[data-online-status] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target) {
   outline: none;
   border-color: #e6b66c !important;
@@ -422,4 +423,11 @@ body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #pl
   body[data-online-status] #app .duel-table .field-monster-card :is(.card-state-rail, .monster-element-chip) { display: none; }
   body[data-online-status] #app .duel-table .field-monster-card .stats { grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: 1fr; }
   body[data-online-status] #app .duel-table .field-monster-card .stat { font-size: 8px; }
+}
+
+/* Compact cards retain one action-state badge without taking another art row. */
+@media (max-width: 380px), (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-rail { display: flex; position: absolute; left: 4px; right: 4px; bottom: calc(var(--field-stats-height) + 4px); height: 10px; min-height: 0; overflow: hidden; pointer-events: none; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-chip { height: 10px; font-size: 7px; padding: 0 2px; background: #14212f; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-chip:not(:first-child) { display: none; }
 }

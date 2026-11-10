@@ -1,6 +1,6 @@
 import { createCardElement } from "./card-renderer.js";
 import { renderHandCards } from "./hand-renderer.js?v=20261030-interaction-v2-2";
-import { renderMonsterZones, renderSupportZones } from "./field-renderer.js?v=20261030-interaction-v2-2";
+import { renderMonsterZones, renderSupportZones } from "./field-renderer.js?v=20261111-monster-status-1";
 import { buildDuelControlsView } from "./control-renderer.js";
 import { renderBattlePreviewElement } from "./battle-preview-renderer.js";
 import { createOnlineActionRunner } from "./online-action-runner.js";
@@ -17,7 +17,7 @@ import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261109-hand-feedback-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261111-monster-status-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -921,9 +921,11 @@ function closeInspector() {
 function appendCardDetail(card) {
   const display = onlineDisplayCard(card);
   const detail = onlineCardDetailView(card);
+  const primaryState = onlineMonsterStatus(client.view, card.id);
+  if (primaryState) detail.rows.unshift(["行动状态", primaryState.detail]);
   const entry = document.createElement("article");
   entry.className = "online-inspector-entry";
-  entry.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: true }));
+  entry.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: true, primaryState, effectMarkers: card.effectMarkers || [] }));
   const copy = document.createElement("section");
   copy.className = "online-inspector-copy";
   const kicker = document.createElement("span");
@@ -1087,7 +1089,7 @@ async function prepareSelectedAttack() {
   const model = onlineSelectionModel(client.view, selection);
   const intent = onlineAttackIntent(client.view, model);
   if (!intent.available) {
-    setError("这只怪兽当前不能攻击。");
+    setError(onlineMonsterStatus(client.view, cardId)?.detail || "这只怪兽当前不能攻击。");
     return;
   }
   if (!intent.requiresBattlePhase) {
@@ -1106,7 +1108,7 @@ async function prepareSelectedAttack() {
       const attackModel = onlineSelectionModel(client.view, attackSelection);
       if (!attackModel?.actions.some((action) => action.type === "DECLARE_ATTACK")) {
         selection = selectOnlineCard(client.view, cardId);
-        setError("已进入战斗阶段，但这只怪兽当前不能攻击。");
+        setError(onlineMonsterStatus(client.view, cardId)?.detail || "已进入战斗阶段，但这只怪兽当前不能攻击。");
       } else {
         selection = attackSelection;
       }
@@ -1188,7 +1190,7 @@ function renderBoard(view, model) {
       const intent = onlineAttackIntent(view, cardModel);
       return {
         ok: !actionPending && intent.available,
-        reason: intent.requiresBattlePhase ? "双击将自动进入战斗阶段并攻击" : intent.available ? "双击发起攻击" : "当前不能攻击"
+        reason: onlineMonsterStatus(view, cardId)?.detail || "当前不能攻击"
       };
     };
     renderMonsterZones({
@@ -1197,6 +1199,8 @@ function renderBoard(view, model) {
       attackTargetableAt: (index) => targeting && attacking && isTarget(duelist.field[index]),
       targetSelectedAt: (index) => targeting && duelist.field[index]?.uid === model.targetCardId,
       attackReadinessAt: (index) => attackReadiness(duelist.field[index]),
+      primaryStateAt: (index) => duelist.field[index] ? onlineMonsterStatus(view, duelist.field[index].uid) : null,
+      effectMarkersAt: (index) => duelist.field[index]?.effectMarkers || [],
       materialTargetAt: (index) => model?.tributeCount ? { ok: owner === "player" && Boolean(duelist.field[index]), reason: "选择召唤祭品" } : null,
       selectedTributeIndexes: duelist.field.flatMap((card, index) => model?.tributeCardIds.includes(card?.uid) ? [index] : []),
       placementTargetAt: (index) => placement("monsterZone", index),
@@ -1335,15 +1339,14 @@ function renderCommands(view, model) {
   const targeting = model?.stage === "target";
   const interaction = onlineInteractionView(model, { inHand, isAttack });
   const selectedField = Boolean(model && !inHand && !selection.actionType);
+  const monsterStatus = selectedField ? onlineMonsterStatus(view, model.card.id) : null;
   const name = model?.card.name || "";
   const confirmLabel = isAttack ? model?.targetIds.length ? "确认攻击" : "直接攻击" : inHand ? model?.card.type === "monster" ? "确认召唤" : model?.card.type === "trap" ? "确认盖放" : "确认发动" : "确认";
   const prompt = model?.stage === "material" ? `${name}：选择祭品 ${model.tributeCardIds.length}/${model.tributeCount}。`
     : model?.stage === "placement" ? `${name}：已选第 ${model.index + 1} 格，可点击其他高亮空位。`
       : targeting ? `${name}：${model.targetCardId ? `已选 ${cardName(view, model.targetCardId)}，确认后${isAttack ? "攻击" : "发动"}。` : "点击场上高亮卡牌选择目标。"}`
         : isAttack ? `${name}：对手场上没有怪兽，可直接攻击。`
-          : selectedField ? attackIntent.requiresBattlePhase
-            ? `${name}：可进入战斗阶段并发起攻击。`
-            : `${name}：选择攻击、切换表示或查看详情。` : `${name}：确认后${confirmLabel.replace("确认", "")}。`;
+          : selectedField ? `${name}：${monsterStatus?.detail || "选择攻击、切换表示或查看详情。"}` : `${name}：确认后${confirmLabel.replace("确认", "")}。`;
   const controls = buildDuelControlsView({
     started: true, gameOver: Boolean(view.gameOver), canAct, canUseTurnControls: canAct,
     phase: view.turn.phase, selectedHandReady: inHand && Boolean(model?.action), selectedHandName: name,
@@ -1355,9 +1358,10 @@ function renderCommands(view, model) {
   });
   elements.fieldActionBar.hidden = !selectedField;
   elements.fieldActionName.textContent = name;
-  elements.fieldActionStatus.textContent = attackIntent.requiresBattlePhase ? "点击攻击将自动进入战斗阶段" : controls.fieldAction.status;
+  elements.fieldActionStatus.textContent = monsterStatus?.detail || controls.fieldAction.status;
   elements.fieldAttackBtn.disabled = !canAct || !attackIntent.available;
   elements.fieldAttackBtn.textContent = `⚔ ${attackIntent.label}`;
+  elements.fieldAttackBtn.title = monsterStatus?.detail || "选择攻击怪兽";
   elements.fieldAttackBtn.dataset.phaseJump = String(attackIntent.requiresBattlePhase);
   elements.fieldModeBtn.disabled = !canAct || !mode;
   elements.fieldModeBtn.textContent = controls.modeText;
@@ -1391,7 +1395,7 @@ function renderCommands(view, model) {
       : targeting ? model.targetCardId ? `已选目标 · ${cardName(view, model.targetCardId)}` : `选择${isAttack ? "攻击" : "效果"}目标 · ${model.targetIds.length} 个可选`
         : prompt;
   elements.duelHint.textContent = model ? fieldPrompt : endTurnWarning || actionReceipt?.text || elements.commandTitle.textContent;
-  elements.duelHint.dataset.kind = model ? "action" : endTurnWarning ? "turn-warning" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
+  elements.duelHint.dataset.kind = selectedField && !attackIntent.available ? "unavailable" : model ? "action" : endTurnWarning ? "turn-warning" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
   elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor : "none";
   elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type : "none";
   elements.duelHint.dataset.tone = !model && actionReceipt ? actionReceipt.tone || "neutral" : "neutral";

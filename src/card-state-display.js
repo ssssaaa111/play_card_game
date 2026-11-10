@@ -20,10 +20,11 @@ export function cardStatusText(card, { attacksLocked = false, effectMarkers = []
   return parts.slice(0, 2).join(" / ");
 }
 
-export function cardStateChips(card, { attacksLocked = false, attackReady = false, effectMarkers = [] } = {}) {
+export function cardStateChips(card, { attacksLocked = false, attackReady = false, effectMarkers = [], primaryState = null } = {}) {
   if (card.type !== "monster") return [];
   const chips = [];
-  if (card.attackLockReason) {
+  if (primaryState) chips.push({ label: primaryState.label, tone: primaryState.tone, detail: primaryState.detail });
+  else if (card.attackLockReason) {
     chips.push({
       label: "本回合禁攻",
       tone: "locked",
@@ -46,11 +47,12 @@ export function cardStateChips(card, { attacksLocked = false, attackReady = fals
     });
   }
 
-  if (card.tempAtk > 0) chips.push({ label: `攻 +${card.tempAtk}`, tone: "buff" });
-  else if (card.tempDef > 0) chips.push({ label: `守 +${card.tempDef}`, tone: "buff" });
+  const sourcedStats = primaryState && effectMarkers.some((marker) => ["buff", "debuff", "modifier", "continuous"].includes(marker.tone));
+  if (!sourcedStats && card.tempAtk > 0) chips.push({ label: `攻 +${card.tempAtk}`, tone: "buff" });
+  else if (!sourcedStats && card.tempDef > 0) chips.push({ label: `守 +${card.tempDef}`, tone: "buff" });
 
-  if (card.tempAtk < 0) chips.push({ label: `攻 ${card.tempAtk}`, tone: "debuff" });
-  else if (card.tempDef < 0) chips.push({ label: `守 ${card.tempDef}`, tone: "debuff" });
+  if (!sourcedStats && card.tempAtk < 0) chips.push({ label: `攻 ${card.tempAtk}`, tone: "debuff" });
+  else if (!sourcedStats && card.tempDef < 0) chips.push({ label: `守 ${card.tempDef}`, tone: "debuff" });
   else if (card.battleWear > 0) chips.push({ label: `损 -${card.battleWear}`, tone: "debuff" });
 
   if (card.destructionProtection) {
