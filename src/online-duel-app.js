@@ -24,7 +24,7 @@ const elements = Object.fromEntries([
   "app", "onlineTools", "onlineToolsToggle", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
   "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "roomDeckSelect", "roomDeckRefresh", "roomDeckStatus", "roomDeckError", "spectatorConsent", "spectatorStatus", "watchRoomLink", "watchEntry", "onlineSpectatorCount", "duelPanel", "aiPanel", "playerPanel",
   "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
-  "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "duelHint", "duelError", "versusStage", "versusPhase",
+  "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "handNavigation", "handPrevious", "handNext", "handVisibleRange", "duelHint", "duelError", "versusStage", "versusPhase",
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveLabel", "rivalGraveCount", "playerGraveLabel", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
@@ -47,6 +47,7 @@ let actionPending = false;
 let selection = null;
 let trapChoice = null;
 let handOrder = [];
+let handNavigationFrame = null;
 let locatedReadyCardId = null;
 let inspectorReturnFocus = null;
 let observedReceiptRoomCode = null;
@@ -1260,6 +1261,49 @@ function renderBoard(view, model) {
   }
 }
 
+function updateHandNavigation() {
+  handNavigationFrame = null;
+  const root = elements.hand;
+  const cards = [...root.children].filter((card) => card.matches('.card'));
+  const bounds = root.getBoundingClientRect();
+  const overflowing = root.clientWidth > 0 && root.scrollWidth - root.clientWidth > 2;
+  const before = overflowing && root.scrollLeft > 2;
+  const after = overflowing && root.scrollWidth - root.clientWidth - root.scrollLeft > 2;
+  elements.handNavigation.hidden = !overflowing;
+  root.dataset.scrollEdges = before && after ? "both" : before ? "left" : after ? "right" : "none";
+  const dragging = root.classList.contains("is-reordering");
+  elements.handPrevious.disabled = !before || dragging;
+  elements.handNext.disabled = !after || dragging;
+  const visible = cards.flatMap((card, index) => {
+    const box = card.getBoundingClientRect();
+    const center = box.left + box.width / 2;
+    return center >= bounds.left && center <= bounds.right ? [index + 1] : [];
+  });
+  const range = visible.length ? `${visible[0]}–${visible.at(-1)}` : "0";
+  elements.handVisibleRange.textContent = `${range}/${cards.length}`;
+}
+
+function scheduleHandNavigation() {
+  if (handNavigationFrame == null) handNavigationFrame = requestAnimationFrame(updateHandNavigation);
+}
+
+function scrollHandTo(left) {
+  elements.hand.scrollTo({ left, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+}
+
+function browseHand(direction) {
+  const root = elements.hand;
+  if (root.classList.contains("is-reordering")) return;
+  const bounds = root.getBoundingClientRect();
+  const cards = [...root.children].filter((card) => card.matches('.card'));
+  const card = direction > 0
+    ? cards.find((card) => card.getBoundingClientRect().right > bounds.right + 1)
+    : cards.reverse().find((card) => card.getBoundingClientRect().left < bounds.left - 1);
+  if (!card) return;
+  const box = card.getBoundingClientRect();
+  scrollHandTo(root.scrollLeft + (direction > 0 ? box.left - bounds.left - 2 : box.right - bounds.right + 2));
+}
+
 function locateNextReadyAction() {
   const actions = [
     ...[...elements.hand.querySelectorAll(".card.action-ready:not(.action-blocked)")].map((element) => ({ key: `hand:${element.dataset.cardUid}`, element })),
@@ -2041,6 +2085,17 @@ elements.cardInspector.addEventListener("close", () => {
 });
 elements.handSortType.addEventListener("click", () => { handOrder = sortHandCardsByType(onlineBoardState(client.view, selection).player.hand, handOrder).map((card) => card.uid); render(client.view); });
 elements.handReadyJump.addEventListener("click", locateNextReadyAction);
+elements.handPrevious.addEventListener("click", () => browseHand(-1));
+elements.handNext.addEventListener("click", () => browseHand(1));
+elements.hand.addEventListener("scroll", scheduleHandNavigation, { passive: true });
+new ResizeObserver(scheduleHandNavigation).observe(elements.hand);
+new MutationObserver(scheduleHandNavigation).observe(elements.hand, { childList: true, attributes: true, attributeFilter: ["class"] });
+elements.hand.addEventListener("keydown", (event) => {
+  if (event.target !== elements.hand || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  if (event.key === "Home" || event.key === "End") scrollHandTo(event.key === "Home" ? 0 : elements.hand.scrollWidth);
+  else browseHand(event.key === "ArrowRight" ? 1 : -1);
+});
 elements.hand.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key) || event.target.closest("button")) return;
   const card = event.target.closest(".card[data-card-uid]");

@@ -151,6 +151,18 @@ body[data-online-status]:is([data-duel-focus="target"], [data-duel-focus="attack
   filter: saturate(.65) brightness(.8) !important;
 }
 
+/* Browsing stays available during either player's turn without selecting cards. */
+.hand-navigation { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid rgba(141,176,192,.24); border-radius: 6px; background: #0c1721; }
+.hand-navigation > button { display: grid; place-items: center; width: 28px; height: 26px; padding: 0; border: 1px solid rgba(115,226,213,.35); border-radius: 4px; color: #d3fff7; background: #183039; font: inherit; font-size: 21px; cursor: pointer; }
+.hand-navigation > button:disabled { border-color: transparent; color: #63717e; background: #111c26; cursor: default; }
+.hand-navigation > button:focus-visible { outline: 2px solid #73e2d5; outline-offset: 1px; }
+.hand-navigation > span { min-width: 46px; color: #adc2d0; font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
+body[data-online-status] #handToolbar:has(.hand-navigation:not([hidden])) { display: flex; }
+body[data-online-status] #hand:focus-visible { outline: 1px solid rgba(115,226,213,.7); outline-offset: -1px; }
+body[data-online-status] #hand[data-scroll-edges="right"] { mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent); }
+body[data-online-status] #hand[data-scroll-edges="left"] { mask-image: linear-gradient(90deg, transparent, #000 14px); }
+body[data-online-status] #hand[data-scroll-edges="both"] { mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
+
 /* Hand controls have their own footer instead of covering art and rules. */
 body[data-online-status] :is(#hand > .card, .hand-drag-ghost) {
   display: grid;
@@ -380,6 +392,7 @@ body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #pl
   body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).online-placement-selected::after { content: "✓ 已选"; }
 }
 @media (max-width: 380px) {
+  .hand-navigation > span { font-size: 9px; }
   body[data-online-status] #app .duel-table .field-monster-card { --field-stats-height: 26px; grid-template-rows: 14px minmax(0,1fr) var(--field-stats-height); }
   body[data-online-status] #app .duel-table .field-monster-card .stat { font-size: 8px; }
   body[data-online-status] #app .duel-table .field-monster-card :is(.card-state-rail, .monster-element-chip) { display: none; }

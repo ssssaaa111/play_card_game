@@ -314,6 +314,50 @@ async function checkHandLayout(cdp, page) {
   return layout;
 }
 
+async function exerciseHandNavigation(cdp, page, timeoutMs, { selectLast = false, screenshotPath = "" } = {}) {
+  const before = await evaluate(cdp, page, `(() => ({
+    ids: [...document.querySelectorAll('#hand > .card')].map(card => card.dataset.cardUid),
+    turn: document.querySelector('#turnLabel').textContent,
+    range: document.querySelector('#handVisibleRange').textContent
+  }))()`);
+  await waitForPage(cdp, page, visibleExpression('#handNavigation'), "overflow hand navigation", timeoutMs);
+  assert.equal(await evaluate(cdp, page, `document.querySelector('#handPrevious').disabled`), true);
+  await click(cdp, page, '#handNext');
+  await waitForPage(cdp, page, `document.querySelector('#hand').scrollLeft > 2 && !document.querySelector('#handPrevious').disabled`, "hand page moves right", timeoutMs);
+  const pressInHand = async (key, keyCode) => {
+    await evaluate(cdp, page, `document.querySelector('#hand').focus({ preventScroll: true })`);
+    await page.cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode: keyCode });
+    await page.cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode: keyCode });
+  };
+  await pressInHand('End', 35);
+  await waitForPage(cdp, page, `(() => { const hand = document.querySelector('#hand'); return hand.scrollWidth - hand.clientWidth - hand.scrollLeft <= 2 && document.querySelector('#handNext').disabled; })()`, "keyboard reaches last hand card", timeoutMs);
+  const end = await evaluate(cdp, page, `({ scroll: document.querySelector('#hand').scrollLeft, range: document.querySelector('#handVisibleRange').textContent })`);
+  assert.notEqual(end.range, before.range);
+  await click(cdp, page, '#hand .card:last-child .card-detail-entry');
+  await waitForPage(cdp, page, visibleExpression('#cardInspector[open]'), "last hand card details", timeoutMs);
+  await click(cdp, page, '#inspectorClose');
+  assert.ok(Math.abs(await evaluate(cdp, page, `document.querySelector('#hand').scrollLeft`) - end.scroll) <= 2, "Closing details reset hand browsing position");
+  assert.equal(await evaluate(cdp, page, `document.body.dataset.duelSelection`), 'none', "Browsing selected or played a card");
+  assert.deepEqual(await evaluate(cdp, page, `[...document.querySelectorAll('#hand > .card')].map(card => card.dataset.cardUid)`), before.ids);
+  if (selectLast) {
+    await click(cdp, page, '#hand .card:last-child .card-head');
+    await waitForPage(cdp, page, visibleExpression('#choiceConfirmBtn'), "selecting the last visible hand card", timeoutMs);
+    assert.equal(await evaluate(cdp, page, `document.querySelector('#hand .card.selected')?.dataset.cardUid`), before.ids.at(-1));
+    assert.ok(Math.abs(await evaluate(cdp, page, `document.querySelector('#hand').scrollLeft`) - end.scroll) <= 2, "Selecting a card reset hand browsing position");
+    await click(cdp, page, '#choiceCancelBtn');
+    assert.ok(Math.abs(await evaluate(cdp, page, `document.querySelector('#hand').scrollLeft`) - end.scroll) <= 2, "Canceling a choice reset hand browsing position");
+  }
+  if (screenshotPath) {
+    await mkdir(path.dirname(screenshotPath), { recursive: true });
+    await writeFile(screenshotPath, Buffer.from((await page.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true })).data, "base64"));
+  }
+  await click(cdp, page, '#handPrevious');
+  await waitForPage(cdp, page, `document.querySelector('#hand').scrollLeft < ${end.scroll - 2}`, "hand page moves left", timeoutMs);
+  await pressInHand('Home', 36);
+  await waitForPage(cdp, page, `document.querySelector('#hand').scrollLeft <= 2 && document.querySelector('#handPrevious').disabled`, "keyboard returns to first hand card", timeoutMs);
+  return { turn: before.turn, firstRange: before.range, lastRange: end.range, detailsPreservedScroll: true, selectionPreservedScroll: selectLast, screenshotPath };
+}
+
 async function installStageObserver(cdp, page) {
   await evaluate(cdp, page, `(() => {
     window.__onlineStageHistory = [];
@@ -544,6 +588,12 @@ try {
       ? { width: innerWidth, headerHeight: header.height, fieldHeight: document.querySelector("#duelPanel").getBoundingClientRect().height } : null;
   })()`, "compact mobile header without overflow", options.timeoutMs);
   const handLayouts = { mobile: await checkHandLayout(cdp, firstPage) };
+  const handNavigationChecks = { ownTurn: await exerciseHandNavigation(cdp, firstPage, options.timeoutMs, {
+    selectLast: true, screenshotPath: path.join(options.artifactDir, `online-hand-navigation-${roomCode}.png`)
+  }) };
+  await secondPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  handNavigationChecks.rivalTurn = await exerciseHandNavigation(cdp, secondPage, options.timeoutMs);
+  await secondPage.cdp.send("Emulation.clearDeviceMetricsOverride");
   const openingHandIds = await evaluate(cdp, firstPage, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`);
   await click(cdp, firstPage, '#hand .card .card-detail-entry');
   await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), "mobile hand details", options.timeoutMs);
@@ -588,6 +638,7 @@ try {
   await firstPage.cdp.send("Emulation.clearDeviceMetricsOverride");
   await waitForPage(cdp, firstPage, `innerWidth > 1040 && document.querySelector(".topbar").getBoundingClientRect().height < 100`, "desktop layout restored", options.timeoutMs);
   handLayouts.desktop = await checkHandLayout(cdp, firstPage);
+  await waitForPage(cdp, firstPage, `document.querySelector('#handNavigation').hidden`, "hand navigation hides when all cards fit", options.timeoutMs);
   await click(cdp, firstPage, "#hand .card.action-ready");
   await waitForPage(cdp, firstPage, visibleExpression("#choiceConfirmBtn"), "desktop summon command", options.timeoutMs);
   const workspaceScreenshot = await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
@@ -797,7 +848,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);
