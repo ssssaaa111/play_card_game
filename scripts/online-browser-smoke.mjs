@@ -252,13 +252,16 @@ async function doubleClickText(cdp, page, selector, text) {
 }
 
 async function doubleClick(cdp, page, selector) {
-  const point = await evaluate(cdp, page, `(() => {
+  const point = await waitForPage(cdp, page, `(async () => {
     const element = [...document.querySelectorAll(${JSON.stringify(selector)})]
       .find((entry) => !entry.hidden && entry.getClientRects().length && !entry.disabled);
     if (!element) return null;
+    element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    await new Promise(requestAnimationFrame);
     const rect = element.getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  })()`);
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    return element.contains(document.elementFromPoint(x, y)) ? { x, y } : null;
+  })()`, `double-clickable ${selector}`, page.cdp.timeoutMs);
   await dispatchDoubleClick(page, point, selector);
 }
 
@@ -754,6 +757,44 @@ try {
   await click(cdp, firstPage, '#fieldModeBtn');
   await waitForPage(cdp, firstPage, `!document.querySelector('#playerField .field-monster-card.defense')`, "defense card returned to attack", options.timeoutMs);
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-attack-state="ready"]'), "attack-ready field highlight", options.timeoutMs);
+  await click(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
+  await click(cdp, firstPage, '#fieldAttackBtn');
+  await waitForPage(cdp, firstPage, visibleExpression('.online-attack-preview[data-preview-mode="direct"]'), "compact direct-attack decision", options.timeoutMs);
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('.online-attack-route').textContent`), /日冕骑士.*月见演出测试/);
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('.online-attack-outcome').textContent`), /预计造成 1700 伤害.*4000 → 2300/);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('.online-attack-details').open`), false);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .online-attack-source').length`), 1);
+  const attackChoiceLayouts = {};
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+    await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    attackChoiceLayouts[width] = await waitForPage(cdp, firstPage, `(() => {
+      if (innerWidth !== ${width}) return null;
+      const panel = document.querySelector('#choiceActions').getBoundingClientRect();
+      const confirm = document.querySelector('#choiceConfirmBtn').getBoundingClientRect();
+      const preview = document.querySelector('#onlineBattlePreview').getBoundingClientRect();
+      return panel.height < 230 && panel.top >= 0 && panel.bottom <= innerHeight && confirm.bottom <= panel.bottom && confirm.top >= preview.bottom && document.documentElement.scrollWidth <= innerWidth
+        ? { width: innerWidth, height: panel.height, confirmVisible: true } : null;
+    })()`, 'compact attack decision and reachable confirmation', options.timeoutMs);
+  }
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, `innerWidth > 1040`, 'attack decision desktop viewport restored', options.timeoutMs);
+  await waitForPage(cdp, firstPage, `document.querySelector('#actionStage').hidden && document.querySelector('#phaseStage').hidden`, 'attack preview screenshot without transient presentations', options.timeoutMs);
+  const attackChoicePath = path.join(options.artifactDir, `online-attack-choice-${roomCode}.png`);
+  await writeFile(attackChoicePath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await click(cdp, firstPage, '.online-attack-details summary');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('.online-attack-details').open`), true);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, `(() => {
+    const panel = document.querySelector('#choiceActions').getBoundingClientRect();
+    const preview = document.querySelector('#onlineBattlePreview').getBoundingClientRect();
+    const button = document.querySelector('#choiceConfirmBtn').getBoundingClientRect();
+    return innerWidth === 844 && preview.top >= panel.top && preview.bottom <= button.top && button.bottom <= innerHeight;
+  })()`, 'expanded attack detail scrolls inside landscape panel', options.timeoutMs);
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, `innerWidth > 1040`, 'expanded detail desktop viewport restored', options.timeoutMs);
+  await click(cdp, firstPage, '#choiceCancelBtn');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`), /4000 \/ 4000/);
+  assert.equal(await evaluate(cdp, firstPage, visibleExpression('.online-attack-source')), false, 'Cancel left an attack source highlighted');
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, `(() => Boolean(document.querySelector(".online-response-attacker")) || (document.querySelector("#actionStage")?.innerText || "").includes("直接攻击"))()`, "declared attack presentation", options.timeoutMs);
   await waitForPage(cdp, secondPage, `(() => { const button = document.querySelector("#responseActivate"); return Boolean(button && !button.disabled && button.getClientRects().length); })()`, "trap activation", options.timeoutMs);
@@ -863,12 +904,33 @@ try {
     waitForPage(cdp, firstPage, textMatchExpression("#aiField", "铁壁守卫"), "1P sees 2P summon", options.timeoutMs),
     waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers [data-seat="p2"]', "铁壁守卫"), "spectator sees 2P summon", options.timeoutMs)
   ]);
+  await waitForPage(cdp, secondPage, `document.querySelector('#actionStage').hidden`, 'rematch summon presentation completed', options.timeoutMs);
+  await endTurn(cdp, secondPage, options.timeoutMs);
+  await waitForPage(cdp, firstPage, textMatchExpression('#hand .card.action-ready', '日冕骑士'), 'rematch 1P summon available', options.timeoutMs);
+  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '日冕骑士');
+  await waitForPage(cdp, firstPage, `document.querySelector('#actionStage').hidden`, 'rematch attacker presentation completed', options.timeoutMs);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, `innerWidth === 844`, 'landscape slot shortcut viewport', options.timeoutMs);
+  await click(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
+  await click(cdp, firstPage, '#fieldAttackBtn');
+  await waitForPage(cdp, firstPage, textMatchExpression('.online-attack-route', '铁壁守卫'), 'unique monster target preselected', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').hidden`), true, 'Unique target rendered a redundant candidate list');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), false);
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('.online-attack-outcome').textContent`), /预计造成 800 伤害.*4000 → 3200/);
+  await click(cdp, firstPage, '#choiceCancelBtn');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`), /4000 \/ 4000/);
+  // The explicit button opens a preview; double-click intentionally executes the sole legal attack.
+  await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
+  await waitForPage(cdp, firstPage, textMatchExpression('#aiPanel', '3200 / 4000'), 'landscape unique-target quick attack deals damage once', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#aiField .slot[data-card-uid]').length`), 0);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerField .slot[data-card-uid]').dataset.monsterState`), 'spent');
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, monsterEffectsPath, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);

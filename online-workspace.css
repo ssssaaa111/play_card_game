@@ -431,3 +431,36 @@ body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #pl
   body[data-online-status] #app .duel-table .field-monster-card .card-state-chip { height: 10px; font-size: 7px; padding: 0 2px; background: #14212f; }
   body[data-online-status] #app .duel-table .field-monster-card .card-state-chip:not(:first-child) { display: none; }
 }
+
+/* Attack decisions keep the route and expected LP change together. */
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { grid-template-rows: minmax(0,1fr) auto 40px; max-height: min(350px, calc(100dvh - 180px)); gap: 8px; padding: 10px; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #choiceText { display: none; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #onlineBattlePreview { grid-area: 1 / 1 / 2 / -1; min-height: 0; align-self: stretch; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #fieldTargets { grid-area: 2 / 1 / 3 / -1; max-height: 98px; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #choiceConfirmBtn { grid-area: 3 / 1 / 4 / 2; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #choiceCancelBtn { grid-area: 3 / 2 / 4 / 3; }
+body[data-online-status] #app .duel-table .slot.online-attack-source { opacity: 1 !important; border-color: #73e2d5 !important; box-shadow: inset 0 0 0 1px rgba(115,226,213,.45) !important; }
+body[data-online-status][data-duel-targeting="attack"] #app .duel-table #aiPanel.online-direct-target::after { content: none; }
+.online-attack-preview { display: grid; align-content: start; gap: 8px; padding: 0 2px; color: #dae8ee; }
+.online-attack-route { display: grid; grid-template-columns: minmax(0,1fr) 20px minmax(0,1fr); align-items: center; gap: 8px; }
+.online-attack-participant { display: grid; min-width: 0; gap: 3px; }
+.online-attack-participant small { color: #8198a9; font-size: 9px; }
+.online-attack-participant strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.online-attack-participant > span { color: #c1d5df; font-size: 10px; }
+.online-attack-participant:last-child { text-align: right; }
+.online-attack-route-arrow { color: #73e2d5; font-size: 22px; }
+.online-attack-outcome { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding-top: 7px; border-top: 1px solid rgba(127,182,183,.2); }
+.online-attack-outcome strong { color: #ffe0a0; font-size: 12px; }
+.online-attack-outcome > span { align-self: center; color: #b5d1d9; font-size: 10px; }
+.online-attack-preview[data-tone="danger"] .online-attack-outcome strong { color: #ff9bb2; }
+.online-attack-details { font-size: 10px; }
+.online-attack-details > summary { width: fit-content; color: #90b6bd; cursor: pointer; }
+.online-attack-details > summary:focus-visible { outline: 2px solid #73e2d5; outline-offset: 3px; }
+.online-attack-caveat { color: #8496a6; font-size: 9px; }
+body[data-online-status] #fieldTargets .online-target { min-height: 40px; margin: 0; padding: 6px 9px; gap: 3px; }
+body[data-online-status] #fieldTargets .online-target strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+body[data-online-status] #fieldTargets .online-target small { font-size: 9px; }
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
+  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { max-height: calc(100dvh - 100px); width: min(480px, calc(100vw - 20px)); gap: 6px; padding: 8px; }
+  .online-attack-preview { gap: 5px; }
+}

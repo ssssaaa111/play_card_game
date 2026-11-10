@@ -3,13 +3,43 @@ import assert from "node:assert/strict";
 import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineResponseBattleView, onlineGameResultView, onlineRematchView, onlineActionReceipt, latestOnlineActionReceipt, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineSpectatorActionSummary, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "../src/online-duel-ui.js";
 import { DuelRoom } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
-import { chooseOnlineCard, onlineBattlePreview } from "../src/online-duel-ui.js";
+import { chooseOnlineCard, onlineBattlePreview, onlineAttackDecisionView } from "../src/online-duel-ui.js";
 
 const monster = (id) => ({ id, templateId: "iron-guardian", name: id, type: "monster", atk: 900, def: 2100 });
 function snapshot() {
   const player = () => ({ hand: [], monsterZone: Array(5).fill(null), spellTrapZone: Array(5).fill(null), grave: [], banished: [] });
   return { status: "playing", revision: 3, viewerSeatId: "p1", opponentSeatId: "p2", turn: { playerId: "p1", phase: "main" }, players: { p1: player(), p2: player() }, legalActions: { actions: {} } };
 }
+
+test("compact attack decisions handle 2P direct attacks and unique targets without changing the view", () => {
+  const view = snapshot();
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  view.turn = { playerId: "p2", phase: "battle" };
+  view.players.p1.lp = 1000;
+  view.players.p2.lp = 3000;
+  view.seats = [{ seatId: "p1", name: "星野" }, { seatId: "p2", name: "月见" }];
+  view.players.p2.monsterZone[2] = { ...monster("attacker"), tempAtk: 500 };
+  view.legalActions.actions.declareAttack = [{ type: "DECLARE_ATTACK", attackerCardId: "attacker" }];
+  const project = () => onlineAttackDecisionView(view, onlineSelectionModel(view, selectOnlineCard(view, "attacker", "DECLARE_ATTACK")));
+  const before = structuredClone(view);
+  assert.equal(project().source.stat, "ATK 1400");
+  assert.equal(project().source.slot, "我方第 3 格");
+  assert.equal(project().target.name, "星野");
+  assert.equal(project().summary, "预计造成 1400 伤害");
+  assert.equal(project().lp, "对手 LP 1000 → 0");
+  assert.deepEqual(project().candidates, []);
+  assert.deepEqual(view, before);
+  view.players.p1.monsterZone[4] = { ...monster("target"), mode: "defense", def: 1200 };
+  view.legalActions.actions.declareAttack[0].targetCardId = "target";
+  assert.equal(project().target.name, "target", "the sole legal target is selected automatically");
+  assert.equal(project().summary, "预计无 LP 伤害");
+  assert.equal(project().lp, "对手 LP 1000 → 1000");
+  assert.equal(project().result, "击破目标");
+  assert.equal(onlineAttackDecisionView(view, null), null);
+  view.viewerRole = "spectator";
+  assert.equal(project(), null);
+});
 
 test("viewer identity keeps two tabs visually tied to their own reserved seats", () => {
   const view = snapshot();

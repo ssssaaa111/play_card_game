@@ -2,7 +2,7 @@ import { createCardElement } from "./card-renderer.js";
 import { renderHandCards } from "./hand-renderer.js?v=20261030-interaction-v2-2";
 import { renderMonsterZones, renderSupportZones } from "./field-renderer.js?v=20261111-monster-status-1";
 import { buildDuelControlsView } from "./control-renderer.js";
-import { renderBattlePreviewElement } from "./battle-preview-renderer.js";
+import { renderOnlineAttackPreview } from "./online-attack-preview-renderer.js?v=20261111-attack-choice-1";
 import { createOnlineActionRunner } from "./online-action-runner.js";
 import { createDirectActivationTracker } from "./direct-activation.js";
 import { createAudioController, createAudioSettings } from "./audio.js";
@@ -17,7 +17,7 @@ import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineBattlePreview, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261111-monster-status-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261111-attack-choice-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -1069,6 +1069,7 @@ function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
 
 async function sendAction(action) {
   if (actionPending || chainResolutionActive || !action || connectionPaused()) return;
+  directActivationTracker.reset();
   hideRecoveryBrief();
   clearEndTurnConfirmation();
   clearActionReceipt();
@@ -1085,6 +1086,7 @@ async function sendAction(action) {
 
 async function prepareSelectedAttack() {
   if (actionPending || !selection?.cardId) return;
+  directActivationTracker.reset();
   const cardId = selection.cardId;
   const model = onlineSelectionModel(client.view, selection);
   const intent = onlineAttackIntent(client.view, model);
@@ -1204,8 +1206,10 @@ function renderBoard(view, model) {
       materialTargetAt: (index) => model?.tributeCount ? { ok: owner === "player" && Boolean(duelist.field[index]), reason: "选择召唤祭品" } : null,
       selectedTributeIndexes: duelist.field.flatMap((card, index) => model?.tributeCardIds.includes(card?.uid) ? [index] : []),
       placementTargetAt: (index) => placement("monsterZone", index),
-      onSlotClick: (index) => clickSlot("monsterZone", index),
-      onSlotDoubleClick: (index) => click("monsterZone", index, true),
+      onSlotClick: (index) => duelist.field[index]
+        ? monsterClick(index, directActivationTracker.register(`field:${owner}:${duelist.field[index].uid || duelist.field[index].id}`))
+        : clickSlot("monsterZone", index),
+      onSlotDoubleClick: (index) => duelist.field[index] ? monsterClick(index, true) : click("monsterZone", index, true),
       onCardClick: (index) => monsterClick(index, directActivationTracker.register(`field:${owner}:${duelist.field[index].uid || duelist.field[index].id}`))
     });
     renderSupportZones({
@@ -1219,6 +1223,13 @@ function renderBoard(view, model) {
       onCardClick: (_card, index) => click("spellTrapZone", index, directActivationTracker.register(`field:${owner}:spellTrapZone:${index}`)),
       onCardDoubleClick: (_card, index) => click("spellTrapZone", index, true)
     });
+  }
+  if (selection?.actionType === "DECLARE_ATTACK" && state.selected) {
+    const source = elements.playerField.children[state.selected.index];
+    source?.classList.add("online-attack-source");
+    source?.setAttribute("aria-label", `攻击者：${model.card.name}`);
+    const chip = source?.querySelector(".field-state-chip.selected");
+    if (chip) chip.textContent = "攻击者";
   }
   if (model?.stage === "placement") {
     const root = selection.actionType === "SET_TRAP" ? elements.playerTraps : elements.playerField;
@@ -1369,9 +1380,8 @@ function renderCommands(view, model) {
   elements.choiceText.textContent = prompt;
   elements.choiceConfirmBtn.textContent = confirmLabel;
   elements.choiceConfirmBtn.disabled = !canAct || !model?.action;
-  const preview = isAttack ? onlineBattlePreview(view, model) : null;
-  elements.onlineBattlePreview.hidden = !preview;
-  renderBattlePreviewElement(document, elements.onlineBattlePreview, preview);
+  const attackDecision = isAttack ? onlineAttackDecisionView(view, model) : null;
+  renderOnlineAttackPreview(document, elements.onlineBattlePreview, attackDecision);
   elements.choiceCancelBtn.disabled = actionPending;
   elements.choiceActions.classList.toggle("target-choice", interaction.choice.target);
   elements.choiceActions.classList.toggle("online-attack-choice", isAttack);
@@ -1392,7 +1402,8 @@ function renderCommands(view, model) {
   elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "单击选择，双击快捷执行；需要目标时，合法候选会高亮。" : "可以查看公开卡牌和墓地。";
   const fieldPrompt = model?.stage === "placement" ? `选择${model.card.type === "trap" ? "盖放" : "召唤"}位置 · 已选第 ${model.index + 1} 格`
     : model?.stage === "material" ? `选择祭品 · ${model.tributeCardIds.length}/${model.tributeCount}`
-      : targeting ? model.targetCardId ? `已选目标 · ${cardName(view, model.targetCardId)}` : `选择${isAttack ? "攻击" : "效果"}目标 · ${model.targetIds.length} 个可选`
+      : isAttack ? `${model.card.name} → ${attackDecision?.target.name || "选择目标"}`
+        : targeting ? model.targetCardId ? `已选目标 · ${cardName(view, model.targetCardId)}` : `选择效果目标 · ${model.targetIds.length} 个可选`
         : prompt;
   elements.duelHint.textContent = model ? fieldPrompt : endTurnWarning || actionReceipt?.text || elements.commandTitle.textContent;
   elements.duelHint.dataset.kind = selectedField && !attackIntent.available ? "unavailable" : model ? "action" : endTurnWarning ? "turn-warning" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
@@ -1422,7 +1433,15 @@ function renderCommands(view, model) {
     button.className = "online-target";
     button.disabled = actionPending;
     button.setAttribute("aria-pressed", String(targetId === model.targetCardId));
-    button.textContent = `${cardName(view, targetId)}${targetId === model.targetCardId ? " · 已选择 ✓" : " · 点击选择"}`;
+    const candidate = attackDecision?.candidates.find((entry) => entry.id === targetId);
+    const label = document.createElement("strong");
+    label.textContent = `${cardName(view, targetId)}${targetId === model.targetCardId ? " · 已选择 ✓" : ""}`;
+    button.appendChild(label);
+    if (candidate) {
+      const detail = document.createElement("small");
+      detail.textContent = `${candidate.slot} · ${candidate.stat}`;
+      button.appendChild(detail);
+    }
     button.addEventListener("click", () => chooseCard(targetId));
     elements.fieldTargets.appendChild(button);
   }

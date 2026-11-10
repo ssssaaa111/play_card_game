@@ -1,4 +1,4 @@
-import { makeBattlePreview, makeAttackIntentPreview } from "./rules.js";
+import { makeBattlePreview, makeAttackIntentPreview, totalAtk, totalDef } from "./rules.js";
 import { createTrapResponse, selectTrapResponse } from "./response-state.js";
 import { describeBattleOutcome } from "./battle.js";
 
@@ -1118,6 +1118,40 @@ export function onlineBattlePreview(view, model) {
       label: outcome.diff < 0 ? "我方 LP" : "对手 LP",
       value: `${suffersDamage.lp} → ${lpAfter}`
     }, { label: "提示", value: "按当前攻防预估，卡牌效果可能改变结果" }]
+  };
+}
+
+export function onlineAttackDecisionView(view, model) {
+  if (spectatorView(view)) return null;
+  const preview = onlineBattlePreview(view, model);
+  if (!preview) return null;
+  const self = view.players[view.viewerSeatId];
+  const rival = view.players[view.opponentSeatId];
+  const sourceIndex = self.monsterZone.findIndex((card) => card?.id === model.card.id);
+  const candidates = model.targetIds.flatMap((id) => {
+    const index = rival.monsterZone.findIndex((card) => card?.id === id && !card.hidden);
+    const card = rival.monsterZone[index];
+    return card ? [{ id, name: card.name, slot: `第 ${index + 1} 格`, stat: card.mode === "defense" ? `DEF ${totalDef(card)}` : `ATK ${totalAtk(card)}` }] : [];
+  });
+  const target = candidates.find((entry) => entry.id === model.targetCardId);
+  const direct = Boolean(model.action && !model.action.targetCardId);
+  const targetCard = target ? rival.monsterZone.find((card) => card?.id === target.id) : null;
+  const outcome = model.action ? describeBattleOutcome(model.card, targetCard) : null;
+  const lp = preview.rows.find((row) => ["我方 LP", "对手 LP"].includes(row.label));
+  return {
+    source: { name: model.card.name, slot: `我方第 ${sourceIndex + 1} 格`, stat: `ATK ${totalAtk(model.card)}` },
+    target: target || (direct
+      ? { name: view.seats?.find((seat) => seat.seatId === view.opponentSeatId)?.name || "对手", slot: "玩家", stat: "直接攻击" }
+      : { name: "选择目标", slot: "对手场上", stat: `${candidates.length} 个合法目标` }),
+    candidates,
+    tone: outcome?.diff < 0 ? "danger" : preview.tone || "neutral",
+    summary: !outcome ? "点击场上高亮怪兽，或下方目标按钮。"
+      : outcome.finalDamage > 0 ? outcome.diff < 0 ? `预计我方损失 ${outcome.finalDamage} LP` : `预计造成 ${outcome.finalDamage} 伤害`
+        : "预计无 LP 伤害",
+    result: !outcome ? "等待选择" : outcome.destroysAttacker && outcome.destroysTarget ? "双方同归于尽"
+      : outcome.destroysAttacker ? "我方怪兽被击破" : outcome.destroysTarget ? "击破目标" : direct ? "直击" : "双方保留",
+    lp: lp ? `${lp.label} ${lp.value}` : "",
+    preview
   };
 }
 
