@@ -55,7 +55,7 @@ const attackChainResponseDemo = process.argv.includes("--scenario=attack-chain-r
 const multiChainResponseDemo = process.argv.includes("--scenario=multi-chain-response");
 if ((responseDemo || handFeedbackDemo || effectChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
 const demoOpeningHands = effectChoiceDemo ? {
-  p1: ["solar-knight", "twin-summon", "gale-mage", "blade-sigil", "dispelling-ray"],
+  p1: ["solar-knight", "trio-ember-recall", "trio-ember-recall", "blade-sigil", "dispelling-ray"],
   p2: ["iron-guardian", "weakening-web", "mirror-snare", "blade-sigil", "twin-summon"]
 } : handFeedbackDemo ? {
   p1: ["solar-knight", "gale-mage", "war-chant", "twin-summon", "iron-guardian"],
@@ -80,7 +80,9 @@ const roomStore = new DuelRoomStore({ filePath: roomStorePath, createRoom: (opti
   ...options,
   disconnectGraceMs,
   turnTimeoutMs,
-  ...(demoOpeningHands ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: demoOpeningHands }) } : {})
+  ...(demoOpeningHands ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: demoOpeningHands,
+    ...(effectChoiceDemo ? { openingGraves: { p1: ["gale-mage", "iron-guardian", "war-chant"] } } : {})
+  }) } : {})
 }) });
 const connections = new Map();
 const responseTimers = new Map();

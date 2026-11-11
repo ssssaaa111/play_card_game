@@ -1184,6 +1184,25 @@ export function onlineEffectDecisionView(view, model) {
   };
 }
 
+export function onlineGraveChoiceView(view, model, seatId = view?.viewerSeatId) {
+  if (spectatorView(view) || model?.card.type !== "spell" || model.stage !== "target"
+    || view.gameOver || view.turn.playerId !== view.viewerSeatId || view.machine?.responseWindow
+    || !view.players[view.viewerSeatId].hand.some(card => card.id === model.card.id)) return null;
+  const grave = (view.players[seatId]?.grave || []).filter(card => card && !card.hidden);
+  const legalIds = new Set(model.targetIds);
+  const count = grave.filter(card => legalIds.has(card.id)).length;
+  if (!count) return null;
+  const selectedId = grave.some(card => legalIds.has(card.id) && card.id === model.targetCardId) ? model.targetCardId : null;
+  return {
+    sourceId: model.card.id, seatId, count, selectedId,
+    title: `${model.card.name} · 选择墓地目标`, effect: cardHandSummary(model.card),
+    canConfirm: Boolean(selectedId && model.action?.targetCardId === selectedId),
+    cards: grave.map(card => ({ card, eligible: legalIds.has(card.id), selected: card.id === selectedId,
+      reason: legalIds.has(card.id) ? card.id === selectedId ? "已选目标" : "可选目标"
+        : model.card.effect === "graveRevive" && card.type !== "monster" ? "只能选择墓地怪兽" : "当前效果不能选择这张牌" }))
+  };
+}
+
 export function onlineBoardState(view, selection) {
   const project = (seatId) => {
     const player = view.players[seatId];

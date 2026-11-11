@@ -17,7 +17,7 @@ import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261111-effect-choice-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261111-grave-choice-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -28,7 +28,7 @@ const elements = Object.fromEntries([
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveLabel", "rivalGraveCount", "playerGraveLabel", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
-  "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
+  "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "graveChoiceActions", "graveChoiceStatus", "graveChoiceConfirm", "graveChoiceCancel", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
   "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChain", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfLabel", "resultSelfName", "resultSelfLp", "resultRivalLabel", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
   "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
@@ -950,41 +950,76 @@ function appendCardDetail(card) {
   elements.inspectorContent.appendChild(entry);
 }
 
-function appendCardCollection(cards, title) {
+function appendCardCollection(cards, title, choice = null) {
   const visibleCards = cards.filter((entry) => entry && !entry.hidden);
   const summary = document.createElement("p");
   summary.className = "online-zone-summary";
-  summary.innerHTML = `<strong>${visibleCards.length} 张公开卡牌</strong><span>按入墓顺序排列 · 点击查看完整效果</span>`;
+  summary.innerHTML = choice
+    ? `<strong>${choice.count} 个可选 · ${visibleCards.length} 张公开卡牌</strong><span>${escapeHtml(choice.effect)}</span>`
+    : `<strong>${visibleCards.length} 张公开卡牌</strong><span>按入墓顺序排列 · 点击查看完整效果</span>`;
   const grid = document.createElement("section");
   grid.className = "online-zone-browser";
   grid.setAttribute("aria-label", title);
-  for (const card of [...visibleCards].reverse()) {
+  const ordered = [...visibleCards].reverse();
+  if (choice) ordered.sort((left, right) => Number(choice.cards.find(entry => entry.card.id === right.id).eligible) - Number(choice.cards.find(entry => entry.card.id === left.id).eligible));
+  for (const card of ordered) {
     const display = onlineDisplayCard(card);
     const detail = onlineCardDetailView(card);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "online-zone-card";
     button.dataset.cardId = card.id;
-    button.setAttribute("aria-label", `查看${card.name}详情`);
+    const candidate = choice?.cards.find(entry => entry.card.id === card.id);
+    button.setAttribute("aria-label", choice ? `选择${card.name}，${candidate.reason}` : `查看${card.name}详情`);
+    if (choice) {
+      button.dataset.graveSelect = "true";
+      button.disabled = !candidate.eligible || actionPending;
+      button.setAttribute("aria-pressed", String(candidate.selected));
+    }
     button.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: false }));
     const caption = document.createElement("span");
     caption.className = "online-zone-card-caption";
     caption.innerHTML = `<strong>${escapeHtml(card.name)}</strong><small>${escapeHtml(detail.typeLabel)}${card.type === "monster" ? ` · ATK ${Math.max(0, Number(card.atk || 0) + Number(card.tempAtk || 0))}` : ""}</small>`;
     button.appendChild(caption);
-    grid.appendChild(button);
+    if (choice) {
+      const reason = document.createElement("small");
+      reason.className = "online-grave-reason";
+      reason.textContent = candidate.reason;
+      caption.appendChild(reason);
+      const entry = document.createElement("article");
+      entry.className = "online-grave-entry";
+      entry.dataset.eligible = String(candidate.eligible);
+      entry.dataset.selected = String(candidate.selected);
+      const detailButton = document.createElement("button");
+      detailButton.type = "button";
+      detailButton.className = "online-grave-detail";
+      detailButton.dataset.cardId = card.id;
+      detailButton.setAttribute("aria-label", `查看${card.name}详情`);
+      detailButton.textContent = "查看详情";
+      entry.append(button, detailButton);
+      grid.appendChild(entry);
+    } else grid.appendChild(button);
   }
   elements.inspectorContent.append(summary, grid);
 }
 
-function showCards(cards, title = "卡牌详情", { collection = false, preserveCollection = false } = {}) {
-  if (collection) inspectorCollection = { cards: cards.filter(Boolean), title };
+function showCards(cards, title = "卡牌详情", { collection = false, preserveCollection = false, seatId = null } = {}) {
+  const choice = collection && seatId ? onlineGraveChoiceView(client.view, onlineSelectionModel(client.view, selection), seatId) : null;
+  if (collection) inspectorCollection = { cards: cards.filter(Boolean), title, seatId, choiceSourceId: choice?.sourceId, scrollTop: inspectorCollection?.seatId === seatId ? inspectorCollection.scrollTop || 0 : 0 };
   else if (!preserveCollection) inspectorCollection = null;
-  elements.inspectorTitle.textContent = title;
-  elements.inspectorKicker.textContent = collection ? "PUBLIC ZONE" : "CARD ARCHIVE";
+  elements.inspectorTitle.textContent = choice?.title || title;
+  elements.inspectorKicker.textContent = choice ? "GRAVE TARGET" : collection ? "PUBLIC ZONE" : "CARD ARCHIVE";
   elements.inspectorBack.hidden = !(!collection && inspectorCollection);
+  elements.inspectorBack.textContent = inspectorCollection?.choiceSourceId ? "← 返回选目标" : "← 返回墓地";
+  elements.cardInspector.dataset.collection = String(collection);
+  elements.cardInspector.dataset.graveChoice = String(Boolean(choice));
+  elements.graveChoiceActions.hidden = !choice;
+  elements.graveChoiceConfirm.disabled = actionPending || !choice?.canConfirm;
+  elements.graveChoiceCancel.disabled = actionPending;
+  elements.graveChoiceStatus.textContent = choice?.selectedId ? `已选：${onlineCard(client.view, choice.selectedId)?.name}` : "选择一张高亮卡牌";
   elements.inspectorContent.replaceChildren();
   const visibleCards = cards.filter((entry) => entry && !entry.hidden);
-  if (collection && visibleCards.length) appendCardCollection(visibleCards, title);
+  if (collection && visibleCards.length) appendCardCollection(visibleCards, title, choice);
   else visibleCards.forEach(appendCardDetail);
   if (!elements.inspectorContent.childElementCount) {
     const empty = document.createElement("div");
@@ -997,6 +1032,35 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
     document.body.dataset.onlineOverlay = "detail";
     elements.cardInspector.showModal();
     elements.inspectorClose.focus({ preventScroll: true });
+  }
+  if (collection) elements.inspectorContent.scrollTop = inspectorCollection.scrollTop;
+}
+
+function showGrave(seatId) {
+  showCards(client.view.players[seatId].grave, seatId === client.view.viewerSeatId ? "我方墓地" : "对手墓地", { collection: true, seatId });
+}
+
+function activeGraveChoice(view, model) {
+  return Object.keys(view.players).map(seatId => onlineGraveChoiceView(view, model, seatId))
+    .find(choice => choice && choice.count === model.targetIds.length) || null;
+}
+
+function maybeOpenGraveChoice() {
+  const choice = activeGraveChoice(client.view, onlineSelectionModel(client.view, selection));
+  if (choice?.count > 1) showGrave(choice.seatId);
+}
+
+function refreshGraveChoice(view, model) {
+  if (!elements.cardInspector.open || !inspectorCollection?.choiceSourceId) return;
+  const choice = onlineGraveChoiceView(view, model, inspectorCollection.seatId);
+  if (!choice || choice.sourceId !== inspectorCollection.choiceSourceId) {
+    closeInspector();
+    inspectorCollection = null;
+  } else if (elements.cardInspector.dataset.collection === "true") {
+    const focusedId = document.activeElement?.dataset.cardId;
+    inspectorCollection.scrollTop = elements.inspectorContent.scrollTop;
+    showGrave(choice.seatId);
+    [...elements.inspectorContent.querySelectorAll("[data-grave-select]")].find(button => button.dataset.cardId === focusedId)?.focus({ preventScroll: true });
   }
 }
 
@@ -1032,10 +1096,12 @@ function chooseHandCard(id, { directActivate = false } = {}) {
   if (!alreadySelected) chooseCard(id);
   if (!directActivate) {
     if (alreadySelected) chooseCard(id);
+    else maybeOpenGraveChoice();
     return;
   }
   const model = onlineSelectionModel(client.view, selection);
   if (model?.action) sendAction(model.action);
+  else maybeOpenGraveChoice();
 }
 
 function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
@@ -1353,6 +1419,7 @@ function renderCommands(view, model) {
   const monsterStatus = selectedField ? onlineMonsterStatus(view, model.card.id) : null;
   const name = model?.card.name || "";
   const effectDecision = onlineEffectDecisionView(view, model);
+  const graveChoice = activeGraveChoice(view, model);
   const confirmLabel = isAttack ? model?.targetIds.length ? "确认攻击" : "直接攻击" : inHand ? model?.card.type === "monster" ? "确认召唤" : model?.card.type === "trap" ? "确认盖放" : "确认发动" : "确认";
   const prompt = model?.stage === "material" ? `${name}：选择祭品 ${model.tributeCardIds.length}/${model.tributeCount}。`
     : model?.stage === "placement" ? `${name}：已选第 ${model.index + 1} 格，可点击其他高亮空位。`
@@ -1439,7 +1506,17 @@ function renderCommands(view, model) {
   elements.aiPanel.setAttribute("aria-current", directAttackReady ? "true" : "false");
   elements.fieldTargets.replaceChildren();
   elements.fieldTargets.hidden = !interaction.choice.targetList;
-  for (const targetId of model?.targetIds || []) {
+  if (graveChoice?.count > 1) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "online-target online-open-grave";
+    button.textContent = `打开${graveChoice.seatId === view.viewerSeatId ? "我方" : "对手"}墓地 · ${graveChoice.count} 个可选`;
+    button.addEventListener("click", () => showGrave(graveChoice.seatId));
+    elements.fieldTargets.appendChild(button);
+  }
+  elements.playerGrave.classList.toggle("online-pile-target", graveChoice?.seatId === view.viewerSeatId);
+  elements.rivalGrave.classList.toggle("online-pile-target", Boolean(graveChoice && graveChoice.seatId !== view.viewerSeatId));
+  for (const targetId of graveChoice ? [] : model?.targetIds || []) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "online-target";
@@ -2006,6 +2083,7 @@ function render(view) {
   trapChoice = onlineTrapResponseChoice(view, trapChoice);
   renderBoard(view, model);
   renderCommands(view, model);
+  refreshGraveChoice(view, model);
   renderResponse(view);
   renderGameResult(view);
   renderEvents(view);
@@ -2112,9 +2190,22 @@ elements.endTurnButton.addEventListener("keydown", (event) => {
 });
 elements.inspectorClose.addEventListener("click", closeInspector);
 elements.inspectorBack.addEventListener("click", () => {
-  if (inspectorCollection) showCards(inspectorCollection.cards, inspectorCollection.title, { collection: true });
+  if (inspectorCollection?.seatId) showGrave(inspectorCollection.seatId);
+  else if (inspectorCollection) showCards(inspectorCollection.cards, inspectorCollection.title, { collection: true });
 });
-elements.inspectorBackdrop.addEventListener("click", closeInspector);
+elements.graveChoiceConfirm.addEventListener("click", () => {
+  const model = onlineSelectionModel(client.view, selection);
+  const choice = onlineGraveChoiceView(client.view, model, inspectorCollection?.seatId);
+  if (!choice?.canConfirm || actionPending) return;
+  closeInspector();
+  void sendAction(model.action);
+});
+elements.graveChoiceCancel.addEventListener("click", () => { if (cancelSelection()) closeInspector(); });
+elements.inspectorBackdrop.addEventListener("click", (event) => {
+  // The picker can open underneath the second click of a hand double-click.
+  if (event.detail > 1 && inspectorCollection?.choiceSourceId) return;
+  closeInspector();
+});
 elements.cardInspector.addEventListener("click", (event) => { if (event.target === elements.cardInspector) closeInspector(); });
 elements.cardInspector.addEventListener("close", () => {
   document.body.dataset.onlineOverlay = "none";
@@ -2196,11 +2287,15 @@ elements.duelPanel.addEventListener("click", (event) => {
 elements.hand.addEventListener("click", (event) => {
   if (!event.target.closest?.(".card, button")) cancelSelection();
 });
-for (const [id, own] of [["playerGrave", true], ["rivalGrave", false]]) elements[id].addEventListener("click", () => showCards(client.view.players[own ? client.view.viewerSeatId : client.view.opponentSeatId].grave, own ? "我方墓地" : "对手墓地", { collection: true }));
-for (const [id, own] of [["logSelfGrave", true], ["logRivalGrave", false]]) elements[id].addEventListener("click", () => showCards(client.view.players[own ? client.view.viewerSeatId : client.view.opponentSeatId].grave, own ? "我方墓地" : "对手墓地", { collection: true }));
+for (const [id, own] of [["playerGrave", true], ["rivalGrave", false], ["logSelfGrave", true], ["logRivalGrave", false]]) elements[id].addEventListener("click", () => showGrave(own ? client.view.viewerSeatId : client.view.opponentSeatId));
 elements.inspectorContent.addEventListener("click", (event) => {
-  const button = event.target.closest?.(".online-zone-card[data-card-id]");
+  const button = event.target.closest?.(".online-zone-card[data-card-id], .online-grave-detail[data-card-id]");
   if (!button) return;
+  if (button.dataset.graveSelect) {
+    if (!button.disabled) chooseCard(button.dataset.cardId);
+    return;
+  }
+  if (inspectorCollection) inspectorCollection.scrollTop = elements.inspectorContent.scrollTop;
   const card = onlineCard(client.view, button.dataset.cardId);
   if (card) showCards([card], card.name, { preserveCollection: true });
 });

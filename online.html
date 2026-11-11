@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="ui-polish.css">
   <link rel="stylesheet" href="duel-focus.css">
   <link rel="stylesheet" href="online-duel.css?v=20261109-hand-feedback-1">
-  <link rel="stylesheet" href="online-workspace.css?v=20261111-effect-choice-1">
+  <link rel="stylesheet" href="online-workspace.css?v=20261111-grave-choice-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
@@ -156,7 +156,7 @@
       <span class="phase-stage-detail" data-phase-stage-detail>部署怪兽 · 发动支援 · 构筑战线</span>
     </div>
   </div>
-  <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><div class="online-inspector-heading"><button class="btn online-inspector-back" id="inspectorBack" type="button" hidden>← 返回墓地</button><span id="inspectorKicker">CARD ARCHIVE</span><h2 id="inspectorTitle">卡牌详情</h2></div><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
+  <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><div class="online-inspector-heading"><button class="btn online-inspector-back" id="inspectorBack" type="button" hidden>← 返回墓地</button><span id="inspectorKicker">CARD ARCHIVE</span><h2 id="inspectorTitle">卡牌详情</h2></div><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><footer id="graveChoiceActions" class="online-grave-actions" hidden><span id="graveChoiceStatus" aria-live="polite"></span><button id="graveChoiceConfirm" class="btn primary" type="button" disabled>确认发动</button><button id="graveChoiceCancel" class="btn" type="button">取消发动</button></footer><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
   <dialog id="onlineResponse" class="online-response" aria-labelledby="responseTitle" aria-describedby="responseLead responseBattleSummary responseText">
     <section class="online-response-panel">
       <div class="online-response-scroll">
@@ -201,6 +201,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js?v=20261111-effect-choice-1"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261111-grave-choice-1"></script>
 </body>
 </html>

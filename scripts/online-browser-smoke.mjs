@@ -503,8 +503,58 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').hidden`), true);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), false);
   await click(cdp, firstPage, '#choiceCancelBtn');
-  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '双重召唤');
-  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '疾风术士');
+  const reviveSelector = '#hand .card.action-ready[data-card-id="trio-ember-recall"]';
+  await click(cdp, firstPage, reviveSelector);
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open][data-grave-choice="true"]'), 'grave picker opened for multiple targets', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#inspectorContent [data-grave-select]:not(:disabled)').length`), 2);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceConfirm').disabled`), true);
+  const guard = '#inspectorContent .online-grave-entry:has(.card[data-card-id="iron-guardian"]) [data-grave-select]';
+  const mage = '#inspectorContent .online-grave-entry:has(.card[data-card-id="gale-mage"]) [data-grave-select]';
+  const spell = '#inspectorContent .online-grave-entry:has(.card[data-card-id="war-chant"])';
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector(${JSON.stringify(spell + ' [data-grave-select]')}).disabled`), true);
+  await click(cdp, firstPage, guard);
+  await click(cdp, firstPage, `${spell} .online-grave-detail`);
+  await waitForPage(cdp, firstPage, textMatchExpression('#inspectorTitle', '战意高扬'), 'unavailable grave card details remain readable', options.timeoutMs);
+  await click(cdp, firstPage, '#inspectorBack');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceStatus').textContent`), /铁壁守卫/);
+  await click(cdp, firstPage, '#inspectorClose');
+  await click(cdp, firstPage, '#fieldTargets .online-open-grave');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceStatus').textContent`), /铁壁守卫/);
+  await click(cdp, firstPage, '#graveChoiceCancel');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="trio-ember-recall"]').length`), 2);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .slot[data-card-uid]').length`), 1);
+  await doubleClick(cdp, firstPage, reviveSelector);
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open][data-grave-choice="true"]'), 'hand double-click keeps multi-target grave picker open', options.timeoutMs);
+  const graveLayouts = {};
+  let graveMobilePath;
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+    await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    graveLayouts[width] = await waitForPage(cdp, firstPage, `(() => {
+      const panel = document.querySelector('#cardInspector .online-inspector-panel').getBoundingClientRect();
+      const content = document.querySelector('#inspectorContent');
+      const footer = document.querySelector('#graveChoiceActions').getBoundingClientRect();
+      const confirm = document.querySelector('#graveChoiceConfirm').getBoundingClientRect();
+      return innerWidth === ${width} && panel.top >= 0 && panel.bottom <= innerHeight && content.getBoundingClientRect().bottom <= footer.top && confirm.bottom <= panel.bottom && confirm.height >= 40 && content.scrollWidth <= content.clientWidth + 2 && (innerWidth < 1040 || content.scrollHeight <= content.clientHeight + 2)
+        ? { width: innerWidth, panelHeight: panel.height, confirmVisible: true } : null;
+    })()`, 'grave choice scrolls above fixed confirmation', options.timeoutMs);
+    if (width === 320) {
+      graveMobilePath = path.join(options.artifactDir, `online-grave-choice-mobile-${roomCode}.png`);
+      await writeFile(graveMobilePath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+    }
+  }
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, `innerWidth > 1040`, 'grave desktop viewport restored', options.timeoutMs);
+  const gravePath = path.join(options.artifactDir, `online-grave-choice-${roomCode}.png`);
+  await writeFile(gravePath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await click(cdp, firstPage, mage);
+  await click(cdp, firstPage, '#graveChoiceConfirm');
+  await waitForPage(cdp, firstPage, textMatchExpression('#playerField .slot[data-index="1"]', '疾风术士'), 'chosen grave monster revived', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#cardInspector').open`), false);
+  await click(cdp, firstPage, reviveSelector);
+  await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '余烁归轨 → 铁壁守卫'), 'unique grave target uses compact confirmation', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#cardInspector').open`), false);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), false);
+  await click(cdp, firstPage, '#choiceCancelBtn');
   await settle(firstPage);
   await click(cdp, firstPage, '#hand .card.action-ready[data-card-id="blade-sigil"]');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').children.length`), 2);
@@ -563,7 +613,7 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#aiTraps .trap-slot[data-index="3"]').classList.contains('empty')`), true);
   await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '镜光反制'), 'destroyed trap becomes public to spectator', options.timeoutMs);
   const reportPath = path.join(options.artifactDir, `online-effect-choice-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true }, null, 2)}\n`, 'utf8');
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, graveLayouts, gravePath, graveMobilePath, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true, graveSelection: true, graveDetailsPreserved: true, graveCancelPreserved: true, uniqueGraveCompact: true }, null, 2)}\n`, 'utf8');
   console.log(`online-effect-choice-smoke passed (${roomCode}, unique, multiple, equipment, concealed slot, spectator)`);
   console.log(`screenshot: ${screenshotPath}`);
 }
@@ -651,7 +701,7 @@ try {
   await click(cdp, firstPage, "#readyButton");
   await click(cdp, secondPage, "#readyButton");
   await Promise.all([
-    waitForPage(cdp, firstPage, textMatchExpression("#hand .card", "双重召唤"), "1P fixed opening", options.timeoutMs),
+    waitForPage(cdp, firstPage, textMatchExpression("#hand .card", options.effectChoices ? "余烁归轨" : "双重召唤"), "1P fixed opening", options.timeoutMs),
     waitForPage(cdp, secondPage, textMatchExpression("#hand .card", "弱化力场"), "2P fixed opening", options.timeoutMs),
     waitForPage(cdp, spectatorPage, `(() => {
       const board = document.querySelector("#watchPlayers");
