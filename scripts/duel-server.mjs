@@ -48,12 +48,16 @@ const configuredTurnTimeoutMs = Number.parseInt(process.env.DUEL_TURN_TIMEOUT_MS
 const turnTimeoutMs = Number.isFinite(configuredTurnTimeoutMs) ? Math.max(1_000, configuredTurnTimeoutMs) : 90_000;
 const responseDemo = process.argv.includes("--scenario=trap-response");
 const handFeedbackDemo = process.argv.includes("--scenario=hand-feedback");
+const effectChoiceDemo = process.argv.includes("--scenario=effect-choice");
 const summonResponseDemo = process.argv.includes("--scenario=summon-response");
 const chainResponseDemo = process.argv.includes("--scenario=chain-response");
 const attackChainResponseDemo = process.argv.includes("--scenario=attack-chain-response");
 const multiChainResponseDemo = process.argv.includes("--scenario=multi-chain-response");
-if ((responseDemo || handFeedbackDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
-const demoOpeningHands = handFeedbackDemo ? {
+if ((responseDemo || handFeedbackDemo || effectChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const demoOpeningHands = effectChoiceDemo ? {
+  p1: ["solar-knight", "twin-summon", "gale-mage", "blade-sigil", "dispelling-ray"],
+  p2: ["iron-guardian", "weakening-web", "mirror-snare", "blade-sigil", "twin-summon"]
+} : handFeedbackDemo ? {
   p1: ["solar-knight", "gale-mage", "war-chant", "twin-summon", "iron-guardian"],
   p2: ["iron-guardian", "war-chant", "weakening-web", "mirror-snare", "blade-sigil"]
 } : multiChainResponseDemo ? {

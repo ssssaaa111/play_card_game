@@ -80,6 +80,28 @@ test("restart preserves card order events and receipts while excluding downtime 
   assert.throws(() => restored.submit("one-new", { revision: receipt.revision, commandId: "old-choice", action: { type: "END_TURN" } }), { code: "STALE_REVISION" });
 });
 
+test("equipment receipts restore their engine effect IDs without applying the bonus twice", (t) => {
+  const f = fixture(t, { createState: options => createOnlineDuelState({ ...options, openingHands: {
+    p1: ["solar-knight", "blade-sigil", "iron-guardian", "gale-mage", "twin-summon"]
+  } }) });
+  start(f.room);
+  const summon = f.room.viewFor("p1").legalActions.actions.summon.find(action => action.index === 0);
+  submit(f.room, "one", summon, "summon-before-equipment");
+  const action = f.room.viewFor("p1").legalActions.actions.activateCard.find(action => action.targetCardId === summon.cardId);
+  const receipt = submit(f.room, "one", action, "saved-equipment");
+  assert.ok(receipt.eventIds.some(id => typeof id === "string" && id.startsWith("continuous:")));
+  f.store.save();
+  const restored = f.reload();
+  f.resume(restored);
+  const before = restored.engine.getState();
+  assert.equal(restored.viewFor("p1").players.p1.monsterZone[0].tempAtk, 300);
+  assert.deepEqual(restored.submit("one-new", { revision: receipt.revision - 1, commandId: receipt.commandId, action }), { ...receipt, duplicate: true });
+  assert.deepEqual(restored.engine.getState(), before);
+  const invalid = restored.toSnapshot();
+  invalid.commandReceipts.find(([, entry]) => entry.commandId === receipt.commandId)[1].eventIds.push("continuous:unknown-card");
+  assert.throws(() => new DuelRoom({ code: restored.code }).restoreSnapshot(invalid), { code: "INVALID_ROOM_SNAPSHOT" });
+});
+
 function chainState() {
   const card = (id, uid) => ({ ...cardById(id), uid, mode: "attack", used: false, tempAtk: 0, tempDef: 0 });
   const p1 = createDuelist("p1"), p2 = createDuelist("p2");
