@@ -1,6 +1,7 @@
 import { makeBattlePreview, makeAttackIntentPreview, totalAtk, totalDef } from "./rules.js";
 import { createTrapResponse, selectTrapResponse } from "./response-state.js";
 import { describeBattleOutcome } from "./battle.js";
+import { cardHandSummary } from "./cards.js";
 
 function spectatorView(view) {
   return view?.viewerRole === "spectator";
@@ -1152,6 +1153,34 @@ export function onlineAttackDecisionView(view, model) {
       : outcome.destroysAttacker ? "我方怪兽被击破" : outcome.destroysTarget ? "击破目标" : direct ? "直击" : "双方保留",
     lp: lp ? `${lp.label} ${lp.value}` : "",
     preview
+  };
+}
+
+export function onlineEffectDecisionView(view, model) {
+  if (spectatorView(view) || model?.card.type !== "spell" || model.stage !== "target" || !model.targetIds.length
+    || !view.players[view.viewerSeatId].hand.some(card => card.id === model.card.id)) return null;
+  const candidates = model.targetIds.map((id) => {
+    for (const [seat, player] of Object.entries(view.players)) {
+      for (const [zone, label] of [["monsterZone", "怪兽区"], ["spellTrapZone", "魔陷区"], ["grave", "墓地"], ["banished", "除外区"]]) {
+        const index = player[zone]?.findIndex(card => card?.id === id) ?? -1;
+        if (index < 0) continue;
+        const card = player[zone][index];
+        return {
+          id, name: card.hidden ? "盖放卡" : card.name,
+          location: `${seat === view.viewerSeatId ? "我方" : "对手"}${label} · 第 ${index + 1} ${zone.endsWith("Zone") ? "格" : "张"}`,
+          detail: card.hidden ? "身份未公开" : card.type === "monster" ? `ATK ${totalAtk(card)} · DEF ${totalDef(card)}` : card.type === "spell" ? "魔法卡" : "陷阱卡"
+        };
+      }
+    }
+    return { id, name: "未公开目标", location: "", detail: "身份未公开" };
+  });
+  const target = candidates.find(card => card.id === model.targetCardId) || null;
+  return {
+    title: target ? `${model.card.name} → ${target.name}` : `${model.card.name} · 选择目标（${candidates.length}）`,
+    effect: cardHandSummary(model.card),
+    target,
+    candidates,
+    hint: target ? `${target.location} · ${target.detail}` : "单击选择，确认或双击目标发动。"
   };
 }
 

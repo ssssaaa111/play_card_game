@@ -17,6 +17,7 @@ function parseArgs(argv) {
     frontendUrl: process.env.ONLINE_BROWSER_FRONTEND_URL || DEFAULT_FRONTEND_URL,
     duelServerUrl: process.env.ONLINE_BROWSER_DUEL_SERVER_URL || DEFAULT_DUEL_SERVER_URL,
     timeoutMs: Number(process.env.ONLINE_BROWSER_TIMEOUT_MS) || 45_000,
+    effectChoices: false,
     artifactDir: process.env.ONLINE_BROWSER_ARTIFACT_DIR || path.resolve(".tmp", "online-browser-smoke")
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -25,6 +26,7 @@ function parseArgs(argv) {
     else if (argv[index] === "--duel-server-url" && value) result.duelServerUrl = value, index += 1;
     else if (argv[index] === "--timeout-ms" && value) result.timeoutMs = Number(value) || result.timeoutMs, index += 1;
     else if (argv[index] === "--artifact-dir" && value) result.artifactDir = path.resolve(value), index += 1;
+    else if (argv[index] === "--effect-choices") result.effectChoices = true;
   }
   return result;
 }
@@ -492,6 +494,80 @@ async function startBrowser(browserBin, profileDir, timeoutMs) {
   };
 }
 
+async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, options, roomCode) {
+  const settle = page => waitForPage(cdp, page, `document.querySelector('#actionStage').hidden && document.querySelector('#phaseStage').hidden`, 'effect presentation completed', options.timeoutMs);
+  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '日冕骑士');
+  await settle(firstPage);
+  await click(cdp, firstPage, '#hand .card.action-ready[data-card-id="blade-sigil"]');
+  await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '锋刃刻印 → 日冕骑士'), 'unique spell target', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').hidden`), true);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), false);
+  await click(cdp, firstPage, '#choiceCancelBtn');
+  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '双重召唤');
+  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '疾风术士');
+  await settle(firstPage);
+  await click(cdp, firstPage, '#hand .card.action-ready[data-card-id="blade-sigil"]');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').children.length`), 2);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), true);
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').textContent`), /第 1 格.*1700.*第 2 格.*1200/);
+  const layouts = {};
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+    await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    layouts[width] = await waitForPage(cdp, firstPage, `(() => {
+      const panel = document.querySelector('#choiceActions').getBoundingClientRect();
+      const choices = document.querySelector('#fieldTargets').getBoundingClientRect();
+      const button = document.querySelector('#choiceConfirmBtn').getBoundingClientRect();
+      return innerWidth === ${width} && panel.top >= 0 && panel.bottom <= innerHeight && choices.bottom <= button.top && button.height >= 38 && document.documentElement.scrollWidth <= innerWidth
+        ? { width: innerWidth, height: panel.height, confirmVisible: true } : null;
+    })()`, 'spell target responsive panel', options.timeoutMs);
+  }
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, `innerWidth > 1040`, 'effect desktop viewport restored', options.timeoutMs);
+  await settle(firstPage);
+  const screenshotPath = path.join(options.artifactDir, `online-effect-choice-${roomCode}.png`);
+  await writeFile(screenshotPath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await click(cdp, firstPage, '#fieldTargets .online-target:last-child');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#choiceText').textContent`), /锋刃刻印 → 疾风术士/);
+  await click(cdp, firstPage, '#playerField .slot[data-index="0"]');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#choiceText').textContent`), /锋刃刻印 → 日冕骑士/);
+  await doubleClickText(cdp, firstPage, '#fieldTargets .online-target', '疾风术士');
+  await waitForPage(cdp, firstPage, textMatchExpression('#playerField .slot[data-index="1"] .stats', '1500'), 'equipment applied to chosen mage', options.timeoutMs);
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#playerField .slot[data-index="0"] .stats').textContent`), /1700/);
+  await settle(firstPage);
+  await endTurn(cdp, firstPage, options.timeoutMs);
+  await waitForPage(cdp, secondPage, textMatchExpression('#turnLabel', '你的回合'), 'defender sets concealed targets', options.timeoutMs);
+  await doubleClickText(cdp, secondPage, '#hand .card.action-ready', '弱化力场');
+  await settle(secondPage);
+  await click(cdp, secondPage, '#hand .card.action-ready[data-card-id="mirror-snare"]');
+  await click(cdp, secondPage, '#playerTraps .trap-slot[data-index="3"]');
+  await click(cdp, secondPage, '#choiceConfirmBtn');
+  await settle(secondPage);
+  await endTurn(cdp, secondPage, options.timeoutMs);
+  await waitForPage(cdp, firstPage, textMatchExpression('#turnLabel', '你的回合'), 'dispel turn', options.timeoutMs);
+  await click(cdp, firstPage, '#hand .card.action-ready[data-card-id="dispelling-ray"]');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#aiTraps .trap-slot.targetable').length`), 2);
+  const hiddenTargets = await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').textContent`);
+  assert.match(hiddenTargets, /盖放卡.*第 1 格.*盖放卡.*第 4 格/);
+  assert.doesNotMatch(hiddenTargets, /镜光反制|弱化力场/);
+  await click(cdp, firstPage, '#fieldTargets .online-target:last-child');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#choiceText').textContent`), /解印射线 → 盖放卡.*第 4 格/);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#aiTraps .trap-slot.target-selected[data-index="3"]').length`), 1);
+  await settle(firstPage);
+  const coveredPath = path.join(options.artifactDir, `online-covered-target-${roomCode}.png`);
+  await writeFile(coveredPath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await click(cdp, firstPage, '#choiceCancelBtn');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#aiTraps .trap-slot:not(.empty)').length`), 2);
+  await click(cdp, firstPage, '#hand .card.action-ready[data-card-id="dispelling-ray"]');
+  await doubleClickText(cdp, firstPage, '#fieldTargets .online-target', '第 4 格');
+  await waitForPage(cdp, firstPage, `document.querySelectorAll('#aiTraps .trap-slot:not(.empty)').length === 1`, 'selected covered trap destroyed', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#aiTraps .trap-slot[data-index="3"]').classList.contains('empty')`), true);
+  await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '镜光反制'), 'destroyed trap becomes public to spectator', options.timeoutMs);
+  const reportPath = path.join(options.artifactDir, `online-effect-choice-${roomCode}.json`);
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true }, null, 2)}\n`, 'utf8');
+  console.log(`online-effect-choice-smoke passed (${roomCode}, unique, multiple, equipment, concealed slot, spectator)`);
+  console.log(`screenshot: ${screenshotPath}`);
+}
+
 const options = parseArgs(process.argv.slice(2));
 const frontend = new URL(options.frontendUrl);
 const duelServer = new URL(options.duelServerUrl);
@@ -511,6 +587,7 @@ let roomCode = "";
 const cdp = null; // Page helpers use each page's isolated DevTools connection.
 
 try {
+  await mkdir(options.artifactDir, { recursive: true });
   const [frontendHealth, duelHealth] = await Promise.all([
     fetch(new URL("/online.html", frontend)),
     fetch(new URL("/health", duelServer))
@@ -583,6 +660,9 @@ try {
     })()`, "spectator hidden-hand board", options.timeoutMs)
   ]);
 
+  if (options.effectChoices) {
+    await exerciseEffectChoices(firstPage, secondPage, spectatorPage, options, roomCode);
+  } else {
   // Exercise the real responsive header and selection states before the duel sequence.
   await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   const mobileLayout = await waitForPage(cdp, firstPage, `(() => {
@@ -628,7 +708,6 @@ try {
   assert.equal(selectionAppearance.selectedIndex, "4", "Clicking the last mobile slot did not change the destination");
   assert.notEqual(selectionAppearance.selectedColor, selectionAppearance.candidateColor, "Selected slot is indistinguishable from other candidates");
   assert.match(selectionAppearance.label, /已选/);
-  await mkdir(options.artifactDir, { recursive: true });
   const mobileScreenshot = await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
   await writeFile(path.join(options.artifactDir, `online-workspace-mobile-${roomCode}.png`), Buffer.from(mobileScreenshot.data, "base64"));
   await click(cdp, firstPage, "#choiceCancelBtn");
@@ -824,7 +903,6 @@ try {
     return stages.some((stage) => stage && !stage.hidden && stage.getClientRects().length && (stage.innerText || "").includes("1200"));
   })()`, "visible 1200-damage presentation", options.timeoutMs);
   await new Promise((resolve) => setTimeout(resolve, 1_100));
-  await mkdir(options.artifactDir, { recursive: true });
   const screenshot = await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
   const screenshotPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.png`);
   await writeFile(screenshotPath, Buffer.from(screenshot.data, "base64"));
@@ -934,6 +1012,7 @@ try {
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);
+  }
 } catch (error) {
   try {
     const reportPath = await saveFailureArtifacts({

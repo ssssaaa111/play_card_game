@@ -58,6 +58,17 @@ function hiddenCard(id) {
   return { id, hidden: true, name: "隐藏卡牌", type: "hidden" };
 }
 
+function concealedTargetIds(state, viewerSeatId) {
+  const rival = state.players[otherSeatId(state, viewerSeatId)];
+  const slots = rival.zoneSlots?.spellTrapZone || rival.spellTrapZone || [];
+  return new Map(slots.flatMap((id, index) => state.cards[id]?.type === "trap"
+    ? [[id, `hidden:spell-trap:${index}`]] : []));
+}
+
+export function resolveDuelTargetId(state, viewerSeatId, targetId) {
+  return [...concealedTargetIds(state, viewerSeatId)].find(([, alias]) => alias === targetId)?.[0] || targetId;
+}
+
 function zoneCards(state, cardIds = []) {
   return cardIds.map((cardId) => publicCard(state.cards?.[cardId])).filter(Boolean);
 }
@@ -259,6 +270,12 @@ export function buildDuelView(state, viewerSeatId, {
   legalActions.unavailableHandActions = Object.fromEntries([...rejectedHandActions]
     .filter(([cardId]) => !playableCards.has(cardId))
     .map(([cardId, reason]) => [cardId, onlineHandBlocker(state, viewerSeatId, state.cards[cardId], reason)]));
+  const concealedTargets = concealedTargetIds(state, viewerSeatId);
+  for (const actions of Object.values(legalActions.actions)) {
+    for (const action of actions) {
+      if (concealedTargets.has(action.targetCardId)) action.targetCardId = concealedTargets.get(action.targetCardId);
+    }
+  }
 
   return {
     protocolVersion: 1,

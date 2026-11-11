@@ -17,7 +17,7 @@ import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261111-attack-choice-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261111-effect-choice-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -1215,7 +1215,7 @@ function renderBoard(view, model) {
     renderSupportZones({
       document, root: elements[owner === "ai" ? "aiTraps" : "playerTraps"], duelist, owner, state, assetForCard,
       targetableAt: (index) => targeting && isTarget(duelist.traps[index]),
-      targetSelectedAt: (index) => targeting && duelist.traps[index]?.uid === model.targetCardId,
+      targetSelectedAt: (index) => targeting && (duelist.traps[index]?.uid || duelist.traps[index]?.id) === model.targetCardId,
       spellTargetAt: (index) => targeting ? { ok: isTarget(duelist.traps[index]), reason: "请选择高亮目标" } : null,
       placementTargetAt: (index) => placement("spellTrapZone", index),
       onSlotClick: (index) => clickSlot("spellTrapZone", index),
@@ -1352,6 +1352,7 @@ function renderCommands(view, model) {
   const selectedField = Boolean(model && !inHand && !selection.actionType);
   const monsterStatus = selectedField ? onlineMonsterStatus(view, model.card.id) : null;
   const name = model?.card.name || "";
+  const effectDecision = onlineEffectDecisionView(view, model);
   const confirmLabel = isAttack ? model?.targetIds.length ? "确认攻击" : "直接攻击" : inHand ? model?.card.type === "monster" ? "确认召唤" : model?.card.type === "trap" ? "确认盖放" : "确认发动" : "确认";
   const prompt = model?.stage === "material" ? `${name}：选择祭品 ${model.tributeCardIds.length}/${model.tributeCount}。`
     : model?.stage === "placement" ? `${name}：已选第 ${model.index + 1} 格，可点击其他高亮空位。`
@@ -1378,6 +1379,15 @@ function renderCommands(view, model) {
   elements.fieldModeBtn.textContent = controls.modeText;
   elements.choiceActions.hidden = !model || selectedField;
   elements.choiceText.textContent = prompt;
+  if (effectDecision) {
+    elements.choiceText.replaceChildren();
+    for (const [tag, className, text] of [["strong", "online-effect-title", effectDecision.title], ["span", "online-effect-summary", effectDecision.effect], ["small", "online-effect-target", effectDecision.hint]]) {
+      const line = document.createElement(tag);
+      line.className = className;
+      line.textContent = text;
+      elements.choiceText.appendChild(line);
+    }
+  }
   elements.choiceConfirmBtn.textContent = confirmLabel;
   elements.choiceConfirmBtn.disabled = !canAct || !model?.action;
   const attackDecision = isAttack ? onlineAttackDecisionView(view, model) : null;
@@ -1385,6 +1395,7 @@ function renderCommands(view, model) {
   elements.choiceCancelBtn.disabled = actionPending;
   elements.choiceActions.classList.toggle("target-choice", interaction.choice.target);
   elements.choiceActions.classList.toggle("online-attack-choice", isAttack);
+  elements.choiceActions.classList.toggle("online-effect-choice", Boolean(effectDecision));
   elements.choiceActions.classList.toggle("single-target", interaction.choice.targetSingle);
   elements.choiceActions.classList.toggle("single-choice", interaction.choice.single);
   elements.choiceActions.classList.toggle("multiple-choice", interaction.choice.multiple);
@@ -1403,6 +1414,7 @@ function renderCommands(view, model) {
   const fieldPrompt = model?.stage === "placement" ? `选择${model.card.type === "trap" ? "盖放" : "召唤"}位置 · 已选第 ${model.index + 1} 格`
     : model?.stage === "material" ? `选择祭品 · ${model.tributeCardIds.length}/${model.tributeCount}`
       : isAttack ? `${model.card.name} → ${attackDecision?.target.name || "选择目标"}`
+        : effectDecision ? effectDecision.target ? `${effectDecision.title} · ${effectDecision.target.location}` : effectDecision.title
         : targeting ? model.targetCardId ? `已选目标 · ${cardName(view, model.targetCardId)}` : `选择效果目标 · ${model.targetIds.length} 个可选`
         : prompt;
   elements.duelHint.textContent = model ? fieldPrompt : endTurnWarning || actionReceipt?.text || elements.commandTitle.textContent;
@@ -1433,16 +1445,20 @@ function renderCommands(view, model) {
     button.className = "online-target";
     button.disabled = actionPending;
     button.setAttribute("aria-pressed", String(targetId === model.targetCardId));
-    const candidate = attackDecision?.candidates.find((entry) => entry.id === targetId);
+    const candidate = (attackDecision || effectDecision)?.candidates.find((entry) => entry.id === targetId);
     const label = document.createElement("strong");
-    label.textContent = `${cardName(view, targetId)}${targetId === model.targetCardId ? " · 已选择 ✓" : ""}`;
+    label.textContent = `${candidate?.name || cardName(view, targetId)}${targetId === model.targetCardId ? " · 已选择 ✓" : ""}`;
     button.appendChild(label);
     if (candidate) {
       const detail = document.createElement("small");
-      detail.textContent = `${candidate.slot} · ${candidate.stat}`;
+      detail.textContent = candidate.location ? `${candidate.location} · ${candidate.detail}` : `${candidate.slot} · ${candidate.stat}`;
       button.appendChild(detail);
     }
-    button.addEventListener("click", () => chooseCard(targetId));
+    button.addEventListener("click", () => {
+      const direct = directActivationTracker.register(`target:${model.card.id}:${targetId}`);
+      chooseCard(targetId);
+      if (direct) sendAction(onlineSelectionModel(client.view, selection)?.action);
+    });
     elements.fieldTargets.appendChild(button);
   }
 }

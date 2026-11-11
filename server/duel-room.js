@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { GameEngine, GameRuleError } from "../src/game-engine.js";
 import { DuelProtocolError, normalizeCommandEnvelope, normalizeDisplayName, sanitizeOnlineAction } from "../src/duel-command.js";
-import { buildDuelView, buildSpectatorView } from "../src/duel-view.js";
+import { buildDuelView, buildSpectatorView, resolveDuelTargetId } from "../src/duel-view.js";
 import { createOnlineDuelState } from "./online-duel-state.js";
 import { normalizeOnlineDeckChoice } from "../src/online-decks.js";
 import {
@@ -158,13 +158,17 @@ export class DuelRoom {
       snapshotAssert(snapshot.recordedDuelNumber === (snapshot.status === "finished" ? snapshot.duelNumber : snapshot.duelNumber - 1));
     }
     snapshotAssert(Array.isArray(snapshot.commandReceipts) && snapshot.commandReceipts.length <= MAX_REMEMBERED_COMMANDS);
+    const effectEventIds = new Set((snapshot.state?.events || [])
+      .filter(event => ["CONTINUOUS_EFFECT_REGISTERED", "CONTINUOUS_EFFECT_RELEASED"].includes(event.type)
+        && typeof event.id === "string" && /^continuous:[A-Za-z0-9:_-]{1,160}$/.test(event.id))
+      .map(event => event.id));
     const receipts = new Map();
     for (const entry of snapshot.commandReceipts) {
       const [key, receipt] = Array.isArray(entry) ? entry : [];
       snapshotAssert(typeof key === "string" && receipt && ROOM_SEAT_IDS.some((id) => key === `${id}:${receipt.commandId}`) && !receipts.has(key));
       snapshotAssert(typeof receipt.commandId === "string" && /^[A-Za-z0-9:_-]{1,160}$/.test(receipt.commandId));
       snapshotAssert(nonnegativeInteger(receipt.revision) && receipt.revision <= snapshot.revision && receipt.duplicate === false);
-      snapshotAssert(Array.isArray(receipt.eventIds) && receipt.eventIds.every(nonnegativeInteger));
+      snapshotAssert(Array.isArray(receipt.eventIds) && receipt.eventIds.every(id => nonnegativeInteger(id) || effectEventIds.has(id)));
       receipts.set(key, receipt);
     }
     for (const timer of [snapshot.responseTimer, snapshot.turnTimer]) {
@@ -396,6 +400,7 @@ export class DuelRoom {
 
     const rivalSeatId = ROOM_SEAT_IDS.find((seatId) => seatId !== seat.seatId);
     const action = sanitizeOnlineAction(envelope.action, { seatId: seat.seatId, rivalId: rivalSeatId });
+    if (action.targetCardId) action.targetCardId = resolveDuelTargetId(this.engine.getState(), seat.seatId, action.targetCardId);
     let events;
     try {
       events = this.#dispatchAction(action);
