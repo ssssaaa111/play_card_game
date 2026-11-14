@@ -64,6 +64,7 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/online-auth-client.js");
   checkModuleSyntax("src/online-duel-client.js");
   checkModuleSyntax("src/online-spectator-app.js");
+  checkModuleSyntax("src/public-report.js");
   checkModuleSyntax("src/spectator-ui.js");
   checkModuleSyntax("src/spectator-smoke.js");
   checkModuleSyntax("src/pre-duel-preview.js");

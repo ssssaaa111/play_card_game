@@ -13,7 +13,8 @@ import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
-import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1";
+import { OnlineDuelClient } from "./online-duel-client.js?v=20261114-public-history-1";
+import { installPublicReport } from "./public-report.js?v=20261114-public-history-1";
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
@@ -39,6 +40,7 @@ const elements = Object.fromEntries([
 const STORAGE_KEY_PREFIX = "star-card-duel:online-session:v2";
 const AUDIO_STORAGE_KEY = "star-card-duel:online-audio:v1";
 const client = new OnlineDuelClient();
+const publicReport = installPublicReport(client);
 const authClient = new OnlineAuthClient();
 let currentAccount = null;
 let authMode = "login";
@@ -290,6 +292,7 @@ function renderAccountState() {
   elements.accountBadge.title = currentAccount ? `${currentAccount.displayName} · @${currentAccount.handle}` : "";
   elements.playerName.value = currentAccount?.displayName || "决斗者";
   if (!signedIn) {
+    publicReport.close();
     elements.lobbyPanel.hidden = true;
     elements.roomPanel.hidden = true;
     elements.duelPanel.hidden = true;

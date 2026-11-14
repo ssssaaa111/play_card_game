@@ -307,6 +307,10 @@ async function handleMessage(socket, rawMessage) {
     }
 
     const room = activeRoomFor(socket);
+    if (message.type === DuelClientMessage.publicHistory) {
+      ack(socket, requestId, room.publicHistoryFor(connection.id, message.payload));
+      return;
+    }
     if (connection.role === "spectator" && ![DuelClientMessage.syncRoom, DuelClientMessage.leaveRoom].includes(message.type)) {
       throw new DuelRoomError("观战连接只读，不能操作对局或更改房间。", "SPECTATOR_READ_ONLY");
     }

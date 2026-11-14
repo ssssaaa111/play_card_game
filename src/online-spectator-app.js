@@ -1,10 +1,12 @@
-import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1";
+import { OnlineDuelClient } from "./online-duel-client.js?v=20261114-public-history-1";
+import { installPublicReport } from "./public-report.js?v=20261114-public-history-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
 import { monsterAssets } from "./data.js";
 import { spectatorCard, spectatorName, spectatorStatus, spectatorTimeline } from "./spectator-ui.js?v=20261107-spectator-1";
 
 const el = Object.fromEntries([...document.querySelectorAll("[id]")].map((element) => [element.id, element]));
 const client = new OnlineDuelClient();
+const publicReport = installPublicReport(client);
 const auth = new OnlineAuthClient();
 let watching = "", pending = false, retries = 0, reconnectTimer = null;
 const url = new URL(location.href);
@@ -90,6 +92,7 @@ function render(view) {
   if (!el.watchEvents.children.length) el.watchEvents.append(text("li", "等待第一步公开行动"));
 }
 function clearBoard(message) {
+  publicReport.close();
   el.watchBoard.hidden = true; el.watchPlayers.replaceChildren(); el.watchEvents.replaceChildren();
   if (el.watchDetail.open) el.watchDetail.close();
   el.watchConnection.textContent = message; el.watchLeave.disabled = true;

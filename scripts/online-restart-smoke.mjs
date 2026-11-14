@@ -152,7 +152,13 @@ try {
     assert.ok(!JSON.stringify(observer.view).includes(counter.id));
   }
   const handIds = first.view.players.p1.hand.map((card) => card.id);
+  const publicBeforeRestart = await first.request("room/public-history");
+  assert.equal(publicBeforeRestart.entries[0].type, "DUEL_STARTED");
+  assert.ok(!JSON.stringify(publicBeforeRestart).includes(counter.id));
+  assert.ok(!JSON.stringify(publicBeforeRestart).includes("restart-private"));
+  if (spectatorScenario) assert.deepEqual(await observer.request("room/public-history"), publicBeforeRestart);
   await crashServer(); await startServer(); await resume();
+  assert.deepEqual((await first.request("room/public-history")).entries, publicBeforeRestart.entries);
   assert.equal(first.view.chainResponse.triggerEventId, chainId);
   assert.deepEqual(first.view.players.p1.hand.map((card) => card.id), handIds);
   assert.equal(first.view.players.p2.lp, 4000);
@@ -161,9 +167,11 @@ try {
   const envelope = { revision: first.view.revision, commandId: "restart-settlement", action: { type: "RESPOND_CHAIN_TRAP", cardId: counter.id, triggerEventId: chainId } };
   await first.request("duel/command", envelope); await first.sync();
   assert.equal(first.view.players.p2.lp, 2300);
+  const settledReport = await first.request("room/public-history");
   await crashServer(); await startServer(); await resume();
   assert.equal((await first.request("duel/command", envelope)).duplicate, true);
   await first.sync(); assert.equal(first.view.players.p2.lp, 2300);
+  assert.deepEqual((await first.request("room/public-history")).entries, settledReport.entries);
   await second.request("duel/forfeit"); await first.request("room/rematch");
   await crashServer(); await startServer(); await resume();
   assert.equal(first.view.series.wins.p1, 1);
@@ -174,10 +182,15 @@ try {
   assert.equal(first.view.turn.playerId, "p2");
   assert.equal(first.view.players.p1.deckCount, 51);
   assert.equal(second.view.players.p2.deckCount, 45);
+  const previousReport = await first.request("room/public-history", { duelNumber: 1 });
+  assert.equal(previousReport.finished, true);
+  assert.match(previousReport.entries.map((entry) => entry.text).join("\n"), /获胜/);
+  assert.deepEqual(previousReport.duels, [1, 2]);
   if (spectatorScenario) {
     await observer.sync(); assert.equal(observer.view.turn.playerId, "p2"); assert.equal(observer.view.series.completed, 1);
     const beforeLeave = first.view.revision;
     await observer.request("room/leave"); await first.sync();
+    await assert.rejects(observer.request("room/public-history"), { code: "NOT_IN_ROOM" });
     assert.equal(first.view.revision, beforeLeave);
     assert.equal(first.view.turnTimer.paused, false);
     assert.ok(first.view.seats.every((seat) => seat.connected));

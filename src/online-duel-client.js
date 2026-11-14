@@ -1,4 +1,4 @@
-import { DuelClientMessage, DuelServerMessage, createClientMessage } from "./duel-command.js?v=20261107-spectator-1";
+import { DuelClientMessage, DuelServerMessage, createClientMessage } from "./duel-command.js?v=20261114-public-history-1";
 
 function defaultServerUrl() {
   if (typeof window === "undefined") return "ws://127.0.0.1:5178/duel";
@@ -122,6 +122,10 @@ export class OnlineDuelClient {
 
   sync() {
     return this.request(DuelClientMessage.syncRoom, {});
+  }
+
+  publicHistory(query = {}) {
+    return this.request(DuelClientMessage.publicHistory, query);
   }
 
   sendAction(action) {

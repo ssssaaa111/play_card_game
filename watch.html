@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>星魂决斗 · 只读观战</title><link rel="stylesheet" href="watch.css?v=20261107-spectator-1"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>星魂决斗 · 只读观战</title><link rel="stylesheet" href="watch.css?v=20261107-spectator-1"><link rel="stylesheet" href="public-report.css?v=20261114-public-history-1"></head>
 <body>
   <main>
     <header class="watch-header"><div><span class="kicker">SPECTATOR · READ ONLY</span><h1>星魂决斗 · 只读观战</h1><p>仅公开场面 · 不展示双方手牌、牌序和未发动的盖牌 · 无音效</p></div><a id="duelLink" href="online.html">对战大厅</a></header>
@@ -13,7 +13,7 @@
     </section>
     <p id="watchError" role="alert"></p>
     <section id="watchBoard" hidden aria-label="公开观战画面">
-      <div class="watch-phase"><strong id="watchPhase" role="status"></strong><span id="watchSeries"></span></div>
+      <div class="watch-phase"><strong id="watchPhase" role="status"></strong><span id="watchSeries"></span><button type="button" data-public-report>完整公开战报</button></div>
       <p class="watch-stale" id="watchStale" hidden>连接已中断，下方是最后收到的公开画面，正在尝试重连。没有任何对局操作权限。</p>
       <div id="watchPlayers"></div>
       <section class="watch-panel"><h2>当前公开连锁</h2><p id="watchChain">暂无未结算连锁</p></section>
@@ -21,5 +21,5 @@
     </section>
     <dialog id="watchDetail"><div><h2 id="watchDetailName"></h2><p id="watchDetailStats"></p><p id="watchDetailText"></p><button id="watchDetailClose" type="button">关闭详情</button></div></dialog>
   </main>
-  <script type="module" src="src/online-spectator-app.js?v=20261107-spectator-1"></script>
+  <script type="module" src="src/online-spectator-app.js?v=20261114-public-history-1"></script>
 </body></html>
