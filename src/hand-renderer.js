@@ -4,6 +4,7 @@ import { handInsertionPoint, handInsertionPreview } from "./hand-order.js";
 const handDragSessions = new WeakMap();
 
 export const handDragThreshold = (pointerType) => pointerType === "touch" ? 12 : 6;
+export const primaryHandPointer = (event) => event.pointerType !== "touch" || event.isPrimary !== false;
 export function bindHandVisibilityCancel(document, cancel) {
   const hidden = () => { if (document.hidden) cancel(); };
   document.addEventListener("visibilitychange", hidden);
@@ -279,7 +280,7 @@ export function renderHandCards({
         document.defaultView?.setTimeout(() => { suppressClick = false; }, 0);
       };
       cardEl.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0 || event.isPrimary === false || event.target.closest("button") || handDragSessions.has(root)) return;
+        if (event.button !== 0 || !primaryHandPointer(event) || event.target.closest("button") || handDragSessions.has(root)) return;
         const rect = cardEl.getBoundingClientRect();
         pointerDrag = {
           pointerId: event.pointerId,

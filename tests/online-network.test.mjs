@@ -5,7 +5,7 @@ import { OnlineDuelClient } from "../src/online-duel-client.js";
 import { OnlineAuthClient } from "../src/online-auth-client.js";
 import { installOnlineLifecycle } from "../src/online-lifecycle.js";
 import { startSocketHeartbeat } from "../server/socket-heartbeat.js";
-import { handDragThreshold, bindHandVisibilityCancel } from "../src/hand-renderer.js";
+import { handDragThreshold, bindHandVisibilityCancel, primaryHandPointer } from "../src/hand-renderer.js";
 
 class Clock {
   next = 0; jobs = new Map();
@@ -168,6 +168,10 @@ test("server heartbeat tolerates healthy pongs but terminates a silent open sock
 });
 
 test("touch movement has a jitter guard and hiding the page cancels an active gesture", () => {
+  assert.equal(primaryHandPointer({ pointerType: "touch", isPrimary: false }), false);
+  assert.equal(primaryHandPointer({ pointerType: "touch", isPrimary: true }), true);
+  assert.equal(primaryHandPointer({ pointerType: "mouse", isPrimary: false }), true);
+  assert.equal(primaryHandPointer({}), true);
   assert.equal(handDragThreshold("touch"), 12); assert.equal(handDragThreshold("mouse"), 6);
   const document = new Target(); let canceled = 0;
   const dispose = bindHandVisibilityCancel(document, () => canceled++);

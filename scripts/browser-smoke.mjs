@@ -258,6 +258,10 @@ async function main() {
 }
 
 main().catch((error) => {
+  if (process.env.GITHUB_ACTIONS) {
+    const message = String(error.message || error).split("\n")[0].slice(0, 2000).replaceAll("%", "%25").replaceAll("\r", "%0D");
+    console.error(`::error title=Browser smoke failure::${message}`);
+  }
   console.error(error.message || error);
   process.exitCode = 1;
 });
