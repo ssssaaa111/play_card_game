@@ -210,14 +210,26 @@ function textMatchExpression(selector, text) {
 }
 
 async function click(cdp, page, selector) {
-  const point = await waitForPage(cdp, page, `(() => {
+  const point = await waitForPage(cdp, page, `(async () => {
     const element = document.querySelector(${JSON.stringify(selector)});
     if (!element || element.disabled || element.hidden || !element.getClientRects().length) return null;
     element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+    await new Promise(requestAnimationFrame);
     const rect = element.getBoundingClientRect();
     const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
     return element.contains(document.elementFromPoint(x, y)) ? { x, y } : null;
-  })()`, `clickable ${selector}`, page.cdp.timeoutMs);
+  })()`, `clickable ${selector}`, page.cdp.timeoutMs).catch(async (error) => {
+    const state = await evaluate(cdp, page, `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      const rect = element?.getBoundingClientRect();
+      const hit = rect && document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return { viewport: [innerWidth, innerHeight], visibility: document.visibilityState,
+        disabled: element?.disabled, hidden: element?.hidden,
+        rect: rect?.toJSON(), hit: hit ? hit.tagName + '#' + hit.id + '.' + hit.className : null,
+        dialogs: [...document.querySelectorAll('dialog[open]')].map(dialog => dialog.id || dialog.className) };
+    })()`).catch(() => null);
+    throw new Error(`${error.message}; click state: ${JSON.stringify(state)}`, { cause: error });
+  });
   await page.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
   await page.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, button: "left", clickCount: 1 });
   await page.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, button: "left", clickCount: 1 });
@@ -1019,7 +1031,9 @@ try {
     publicReportLayouts.push(layout);
   }
   await spectatorPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, spectatorPage, `innerWidth > 1040`, 'public report desktop viewport restored', options.timeoutMs);
   await click(cdp, spectatorPage, '.public-report [data-close]');
+  await waitForPage(cdp, spectatorPage, `!document.querySelector('.public-report').open`, 'public report closed before leaving spectator', options.timeoutMs);
   const beforeResume = await evaluate(cdp, firstPage, `document.querySelector('#connectionStatus').textContent`);
   const beforeResumeLp = await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`);
   await firstPage.cdp.send('Page.setWebLifecycleState', { state: 'frozen' });
