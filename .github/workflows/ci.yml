@@ -50,6 +50,17 @@ jobs:
             sleep 0.25
           done
           npm run smoke:browser
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-smoke-failure-${{ github.run_attempt }}
+          path: |
+            .tmp/browser-smoke-failures/
+            server.out.log
+            server.err.log
+          if-no-files-found: warn
+          retention-days: 14
 
   online-smoke:
     name: Online duel smoke

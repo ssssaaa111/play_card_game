@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -169,7 +169,7 @@ function runBrowser({ browserBin, profileDir, url, timeoutMs, viewport = null, v
     let stderr = "";
     const timer = setTimeout(() => {
       child.kill();
-      reject(new Error(`Browser smoke timed out after ${timeoutMs}ms: ${url}`));
+      reject(Object.assign(new Error(`Browser smoke timed out after ${timeoutMs}ms: ${url}`), { browserResult: { stdout, stderr } }));
     }, timeoutMs);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -177,7 +177,7 @@ function runBrowser({ browserBin, profileDir, url, timeoutMs, viewport = null, v
     child.stderr.on("data", (chunk) => { stderr += chunk; });
     child.on("error", (error) => {
       clearTimeout(timer);
-      reject(error);
+      reject(Object.assign(error, { browserResult: { stdout, stderr } }));
     });
     child.on("close", (code) => {
       clearTimeout(timer);
@@ -216,9 +216,9 @@ async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin, seed = "" }) {
   const profileDir = await createBrowserProfileDir();
   const page = smoke.startsWith("spectator-layout-") ? "/watch.html" : "/";
   const url = `${baseUrl}${page}?test=1&smoke=${encodeURIComponent(smoke)}${seed ? `&seed=${encodeURIComponent(seed)}` : ""}&t=${Date.now()}`;
-  let smokeError = null;
+  let smokeError = null, result = null;
   try {
-    const result = await runBrowser({
+    result = await runBrowser({
       browserBin,
       profileDir,
       url,
@@ -237,6 +237,17 @@ async function runSmoke({ smoke, baseUrl, timeoutMs, browserBin, seed = "" }) {
     console.log(`${smoke} passed ${detail ? `(${detail})` : ""}`);
   } catch (error) {
     smokeError = error;
+    try {
+      const artifactDir = path.resolve(".tmp", "browser-smoke-failures", smoke.replace(/[^a-zA-Z0-9_-]/g, "_"));
+      const captured = result || error.browserResult || {};
+      await mkdir(artifactDir, { recursive: true });
+      await Promise.all([
+        writeFile(path.join(artifactDir, "page.html"), captured.stdout || "", "utf8"),
+        writeFile(path.join(artifactDir, "browser.stderr.log"), captured.stderr || "", "utf8"),
+        writeFile(path.join(artifactDir, "failure.json"), JSON.stringify({ smoke, url, timeoutMs, code: captured.code ?? null, error: error.message, status: smokeStatusFromDom(captured.stdout || "") }, null, 2), "utf8")
+      ]);
+      console.error(`Browser smoke failure evidence: ${artifactDir}`);
+    } catch (captureError) { console.error(`Unable to save browser smoke evidence: ${captureError.message}`); }
     throw error;
   } finally {
     try {
