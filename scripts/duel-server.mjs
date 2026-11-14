@@ -16,6 +16,7 @@ import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
 import { DuelRoomStore, RoomPersistenceError } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { OnlineDeckError } from "../src/online-decks.js";
+import { startSocketHeartbeat } from "../server/socket-heartbeat.js";
 import {
   ONLINE_AUTH_COOKIE,
   OnlineAuthAttemptLimiter,
@@ -307,6 +308,10 @@ async function handleMessage(socket, rawMessage) {
     }
 
     const room = activeRoomFor(socket);
+    if (message.type === DuelClientMessage.publicHistory) {
+      ack(socket, requestId, room.publicHistoryFor(connection.id, message.payload));
+      return;
+    }
     if (connection.role === "spectator" && ![DuelClientMessage.syncRoom, DuelClientMessage.leaveRoom].includes(message.type)) {
       throw new DuelRoomError("观战连接只读，不能操作对局或更改房间。", "SPECTATOR_READ_ONLY");
     }
@@ -439,6 +444,7 @@ const webSocketServer = new WebSocketServer({
     done(true);
   }
 });
+startSocketHeartbeat(webSocketServer);
 webSocketServer.on("connection", (socket, request) => {
   const account = authStore.accountForCookieHeader(request.headers.cookie || "");
   const connection = { id: randomUUID(), roomCode: null, seatId: null, account };

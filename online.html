@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="ui-polish.css">
   <link rel="stylesheet" href="duel-focus.css">
   <link rel="stylesheet" href="online-duel.css?v=20261109-hand-feedback-1">
+  <link rel="stylesheet" href="public-report.css?v=20261114-public-history-1">
   <link rel="stylesheet" href="online-workspace.css?v=20261111-effect-choice-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
@@ -103,7 +104,7 @@
         </div>
       </section>
       <aside class="online-event-log" id="eventLog" aria-label="战斗记录" hidden>
-        <header><div><span>DUEL TIMELINE</span><strong>战斗记录</strong></div><button class="btn" id="eventLogClose" type="button" aria-label="关闭战斗记录">×</button></header>
+        <header><div><span>DUEL TIMELINE</span><strong>战斗记录</strong></div><button class="btn" type="button" data-public-report>完整公开战报</button><button class="btn" id="eventLogClose" type="button" aria-label="关闭战斗记录">×</button></header>
         <p class="online-event-log-guide">按时间查看本局公开事件，点击卡牌名称可查看详情。</p>
         <nav class="online-event-zones" aria-label="公开区域"><button id="logSelfGrave" type="button"><span>我方墓地</span><b id="logSelfGraveCount">0</b></button><button id="logRivalGrave" type="button"><span>对手墓地</span><b id="logRivalGraveCount">0</b></button></nav>
         <div id="eventLogList" class="online-event-log-list" role="feed" aria-live="polite"></div>
@@ -189,7 +190,7 @@
       </div>
       <div class="online-series-score" id="resultSeries" aria-label="本房间系列战绩"><span>ROOM SERIES</span><strong id="resultSeriesScore">0 : 0</strong><small id="resultSeriesDetail">已完成 0 局</small></div>
       <p id="resultRematchStatus" class="online-rematch-status" role="status" aria-live="polite">双方确认后可在当前房间再来一局。</p>
-      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button id="resultLobby" class="btn" type="button">返回大厅</button><button id="resultRematch" class="btn primary" type="button">再来一局</button></footer>
+      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button class="btn" type="button" data-public-report>完整公开战报</button><button id="resultLobby" class="btn" type="button">返回大厅</button><button id="resultRematch" class="btn primary" type="button">再来一局</button></footer>
     </section>
   </dialog>
   <dialog id="onlineForfeit" class="online-forfeit" aria-labelledby="forfeitTitle" aria-describedby="forfeitSummary">
@@ -201,6 +202,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js?v=20261111-effect-choice-1"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261114-network-recovery-1"></script>
 </body>
 </html>

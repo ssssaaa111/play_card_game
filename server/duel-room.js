@@ -5,6 +5,7 @@ import { DuelProtocolError, normalizeCommandEnvelope, normalizeDisplayName, sani
 import { buildDuelView, buildSpectatorView, resolveDuelTargetId } from "../src/duel-view.js";
 import { createOnlineDuelState } from "./online-duel-state.js";
 import { normalizeOnlineDeckChoice } from "../src/online-decks.js";
+import { newPublicHistory, appendPublicHistory, historyPage, restorePublicHistories } from "./public-history.js";
 import {
   onlineAttackResponse,
   onlineChainResponse,
@@ -90,6 +91,7 @@ export class DuelRoom {
     this.seats = new Map();
     this.spectators = new Set();
     this.commandReceipts = new Map();
+    this.publicHistories = [];
   }
 
   seatList() {
@@ -107,6 +109,7 @@ export class DuelRoom {
       seats: this.seatList().map(({ connectionId, connected, reconnectDeadlineAt, ...seat }) => seat),
       state: this.engine?.getState() || null,
       commandReceipts: [...this.commandReceipts],
+      publicHistories: this.publicHistories,
       responseTimer: this.responseTimerKey ? {
         key: this.responseTimerKey, declarationEventId: this.responseDeclarationEventId,
         remainingMs: remainingTime(this.responseDeadlineAt, this.responseRemainingMs, now)
@@ -180,6 +183,12 @@ export class DuelRoom {
       responseTimeoutMs: snapshot.settings.responseTimeoutMs, disconnectGraceMs: snapshot.settings.disconnectGraceMs,
       turnTimeoutMs: snapshot.settings.turnTimeoutMs, seats, engine, commandReceipts: receipts
     });
+    try {
+      this.publicHistories = restorePublicHistories(snapshot.publicHistories ?? [], this.duelNumber);
+      const current = this.publicHistories.find((game) => game.duelNumber === this.duelNumber);
+      snapshotAssert(!current || current.processedEvents <= engine.getState().events.length);
+      if (engine && !current) this.publicHistories.push(newPublicHistory(this.duelNumber, this.seatList(), engine.getState(), { partial: true }));
+    } catch { snapshotAssert(false); }
     this.#syncResponseTimer();
     snapshotAssert((this.responseTimerKey == null) === (snapshot.responseTimer == null));
     if (snapshot.responseTimer) {
@@ -202,6 +211,19 @@ export class DuelRoom {
 
   seatForConnection(connectionId) {
     return this.seatList().find((seat) => seat.connectionId === connectionId) || null;
+  }
+
+  publicHistoryFor(connectionId, query = {}) {
+    if (!this.seatForConnection(connectionId) && !(this.spectators.has(connectionId) && this.spectatingAllowed())) {
+      throw new DuelRoomError("请先以玩家或获准观众身份进入房间。", "NOT_IN_ROOM");
+    }
+    const duelNumber = query.duelNumber ?? this.duelNumber;
+    if (!Number.isSafeInteger(duelNumber) || duelNumber < 1) throw new DuelRoomError("对局编号无效。", "INVALID_HISTORY_QUERY");
+    const history = this.publicHistories.find((game) => game.duelNumber === duelNumber);
+    if (!history) throw new DuelRoomError("该局尚无公开战报。", "HISTORY_NOT_FOUND");
+    try {
+      return { ...historyPage(history, query), roomCode: this.code, duels: this.publicHistories.map((game) => game.duelNumber) };
+    } catch { throw new DuelRoomError("战报分页参数无效。", "INVALID_HISTORY_QUERY"); }
   }
 
   seatForToken(reconnectToken) {
@@ -826,6 +848,11 @@ export class DuelRoom {
   }
 
   #touch() {
+    if (this.engine) {
+      let history = this.publicHistories.find((game) => game.duelNumber === this.duelNumber);
+      if (!history) { history = newPublicHistory(this.duelNumber, this.seatList(), this.engine.getState()); this.publicHistories.push(history); }
+      appendPublicHistory(history, this.engine.getState());
+    }
     this.revision += 1;
     this.updatedAt = this.now();
   }

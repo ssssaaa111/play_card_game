@@ -3,6 +3,15 @@ import { handInsertionPoint, handInsertionPreview } from "./hand-order.js";
 
 const handDragSessions = new WeakMap();
 
+export const handDragThreshold = (pointerType) => pointerType === "touch" ? 12 : 6;
+export const primaryHandPointer = (event) => event.pointerType !== "touch" || event.isPrimary !== false;
+export function bindHandVisibilityCancel(document, cancel) {
+  const hidden = () => { if (document.hidden) cancel(); };
+  document.addEventListener("visibilitychange", hidden);
+  document.addEventListener("freeze", cancel);
+  return () => { document.removeEventListener("visibilitychange", hidden); document.removeEventListener("freeze", cancel); };
+}
+
 function enabledClassEntries(entries = {}) {
   return Object.entries(entries)
     .filter(([, enabled]) => Boolean(enabled))
@@ -169,6 +178,7 @@ export function renderHandCards({
       let pointerDrag = null;
       let dragGhost = null;
       let placeholder = null;
+      let unbindVisibility = null;
 
       const positionDragGhost = (event) => {
         if (!dragGhost) return;
@@ -177,7 +187,7 @@ export function renderHandCards({
       };
       const updatePointerDrag = (event) => {
         if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
-        if (!pointerDrag.active && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) < 6) return;
+        if (!pointerDrag.active && Math.hypot(event.clientX - pointerDrag.x, event.clientY - pointerDrag.y) < handDragThreshold(pointerDrag.pointerType)) return;
         if (!pointerDrag.active) {
           pointerDrag.active = true;
           pointerDrag.bounds = root.getBoundingClientRect();
@@ -245,6 +255,7 @@ export function renderHandCards({
         const finished = pointerDrag;
         const pendingRender = handDragSessions.get(root)?.pendingRender;
         pointerDrag = null;
+        unbindVisibility?.(); unbindVisibility = null;
         handDragSessions.delete(root);
         document.removeEventListener("pointermove", updatePointerDrag);
         document.removeEventListener("pointerup", finishPointerDrag);
@@ -269,10 +280,11 @@ export function renderHandCards({
         document.defaultView?.setTimeout(() => { suppressClick = false; }, 0);
       };
       cardEl.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0 || event.target.closest("button") || handDragSessions.has(root)) return;
+        if (event.button !== 0 || !primaryHandPointer(event) || event.target.closest("button") || handDragSessions.has(root)) return;
         const rect = cardEl.getBoundingClientRect();
         pointerDrag = {
           pointerId: event.pointerId,
+          pointerType: event.pointerType,
           x: event.clientX, y: event.clientY,
           offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top,
           rect, active: false, insertion: null
@@ -284,6 +296,7 @@ export function renderHandCards({
         document.addEventListener("pointermove", updatePointerDrag, { passive: false });
         document.addEventListener("pointerup", finishPointerDrag);
         document.addEventListener("pointercancel", cancelPointerDrag);
+        unbindVisibility = bindHandVisibilityCancel(document, cancelPointerDrag);
         document.addEventListener("keydown", escapePointerDrag);
         document.defaultView?.addEventListener("blur", cancelPointerDrag);
         cardEl.addEventListener("lostpointercapture", cancelPointerDrag);

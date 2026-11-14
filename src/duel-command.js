@@ -7,6 +7,7 @@ export const DuelClientMessage = Object.freeze({
   setSpectatorConsent: "room/spectator-consent",
   watchRoom: "room/watch",
   syncRoom: "room/sync",
+  publicHistory: "room/public-history",
   leaveRoom: "room/leave",
   requestRematch: "room/rematch",
   forfeitRoom: "duel/forfeit",

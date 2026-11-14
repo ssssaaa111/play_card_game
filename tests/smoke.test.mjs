@@ -64,6 +64,8 @@ test("main modules parse as browser ES modules", () => {
   checkModuleSyntax("src/online-auth-client.js");
   checkModuleSyntax("src/online-duel-client.js");
   checkModuleSyntax("src/online-spectator-app.js");
+  checkModuleSyntax("src/public-report.js");
+  checkModuleSyntax("src/online-lifecycle.js");
   checkModuleSyntax("src/spectator-ui.js");
   checkModuleSyntax("src/spectator-smoke.js");
   checkModuleSyntax("src/pre-duel-preview.js");
@@ -88,7 +90,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
 
   assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=[^"]+"/);
   assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=[^"]+"><\/script>/);
-  assert.match(app, /hand-renderer\.js\?v=20261030-interaction-v2-2/);
+  assert.match(app, /hand-renderer\.js\?v=20261114-network-recovery-1/);
   assert.match(app, /field-renderer\.js\?v=[^"\s]+/);
   assert.match(app, /online-duel-ui\.js\?v=[^"]+/);
   assert.match(app, /trap-response-renderer\.js\?v=20261102-multi-chain-1/);
@@ -147,7 +149,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
   assert.match(html, /href="duel-table\.css"/);
   assert.match(html, /href="duel-focus\.css"/);
-  assert.match(app, /import \{ renderHandCards \} from "\.\/hand-renderer\.js\?v=20261030-interaction-v2-2"/);
+  assert.match(app, /import \{ renderHandCards \} from "\.\/hand-renderer\.js\?v=20261114-network-recovery-1"/);
   assert.match(app, /client\.requestRematch\(\)/);
   assert.match(app, /onlineSeriesView\(view\)/);
   assert.match(app, /elements\.resultReopenButton\.addEventListener\("click", openOnlineResult\)/);

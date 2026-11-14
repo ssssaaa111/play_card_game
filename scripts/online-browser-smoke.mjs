@@ -210,14 +210,26 @@ function textMatchExpression(selector, text) {
 }
 
 async function click(cdp, page, selector) {
-  const point = await waitForPage(cdp, page, `(() => {
+  const point = await waitForPage(cdp, page, `(async () => {
     const element = document.querySelector(${JSON.stringify(selector)});
     if (!element || element.disabled || element.hidden || !element.getClientRects().length) return null;
     element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+    await new Promise(requestAnimationFrame);
     const rect = element.getBoundingClientRect();
     const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
     return element.contains(document.elementFromPoint(x, y)) ? { x, y } : null;
-  })()`, `clickable ${selector}`, page.cdp.timeoutMs);
+  })()`, `clickable ${selector}`, page.cdp.timeoutMs).catch(async (error) => {
+    const state = await evaluate(cdp, page, `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      const rect = element?.getBoundingClientRect();
+      const hit = rect && document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return { viewport: [innerWidth, innerHeight], visibility: document.visibilityState,
+        disabled: element?.disabled, hidden: element?.hidden,
+        rect: rect?.toJSON(), hit: hit ? hit.tagName + '#' + hit.id + '.' + hit.className : null,
+        dialogs: [...document.querySelectorAll('dialog[open]')].map(dialog => dialog.id || dialog.className) };
+    })()`).catch(() => null);
+    throw new Error(`${error.message}; click state: ${JSON.stringify(state)}`, { cause: error });
+  });
   await page.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
   await page.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, button: "left", clickCount: 1 });
   await page.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, button: "left", clickCount: 1 });
@@ -1003,10 +1015,37 @@ try {
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#aiField .slot[data-card-uid]').length`), 0);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerField .slot[data-card-uid]').dataset.monsterState`), 'spent');
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await click(cdp, spectatorPage, '[data-public-report]');
+  await waitForPage(cdp, spectatorPage, textMatchExpression('.public-report [data-status]', '第 2 局'), 'current public history', options.timeoutMs);
+  await evaluate(cdp, spectatorPage, `(() => { const select = document.querySelector('.public-report [data-game]'); select.value = '1'; select.dispatchEvent(new Event('change', {bubbles: true})); })()`);
+  await waitForPage(cdp, spectatorPage, textMatchExpression('.public-report [data-status]', '已结束'), 'previous duel public history', options.timeoutMs);
+  assert.match(await evaluate(cdp, spectatorPage, `document.querySelector('.public-report [data-entries] li').textContent`), /本局开始/);
+  const publicReportLayouts = [];
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+    await spectatorPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await waitForPage(cdp, spectatorPage, `innerWidth === ${width}`, 'public report viewport', options.timeoutMs);
+    const layout = await evaluate(cdp, spectatorPage, `(() => { const dialog = document.querySelector('.public-report'); return { width: innerWidth, height: innerHeight,
+      listHeight: dialog.querySelector('ol').clientHeight,
+      fits: [...dialog.querySelectorAll('button,select')].every(element => { const r = element.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 1 && r.top >= 0 && r.bottom <= innerHeight + 1 && r.height >= 44; }) }; })()`);
+    assert.ok(layout.fits && layout.listHeight > 60, `Public report controls overflow: ${JSON.stringify(layout)}`);
+    publicReportLayouts.push(layout);
+  }
+  await spectatorPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, spectatorPage, `innerWidth > 1040`, 'public report desktop viewport restored', options.timeoutMs);
+  await click(cdp, spectatorPage, '.public-report [data-close]');
+  await waitForPage(cdp, spectatorPage, `!document.querySelector('.public-report').open`, 'public report closed before leaving spectator', options.timeoutMs);
+  const beforeResume = await evaluate(cdp, firstPage, `document.querySelector('#connectionStatus').textContent`);
+  const beforeResumeLp = await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`);
+  await firstPage.cdp.send('Page.setWebLifecycleState', { state: 'frozen' });
+  await firstPage.cdp.send('Page.setWebLifecycleState', { state: 'active' });
+  await firstPage.cdp.send('Page.bringToFront');
+  await waitForPage(cdp, firstPage, `document.body.dataset.onlineConnection === 'connected' && /已同步最新战况|连接已恢复/.test(document.querySelector('#connectionStatus').textContent)`, 'foreground reconciles after browser freeze', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`), beforeResumeLp);
+  assert.equal(await evaluate(cdp, firstPage, `!document.querySelector('#actionStage').hidden`), false, 'Foreground replayed historical action');
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
@@ -1014,6 +1053,10 @@ try {
   console.log(`stage report: ${reportPath}`);
   }
 } catch (error) {
+  if (process.env.GITHUB_ACTIONS) {
+    const message = String(error.message || error).split("\n")[0].slice(0, 2000).replaceAll("%", "%25").replaceAll("\r", "%0D");
+    console.error(`::error title=Online browser smoke failure::${message}`);
+  }
   try {
     const reportPath = await saveFailureArtifacts({
       artifactDir: options.artifactDir,
