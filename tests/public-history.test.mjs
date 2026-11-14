@@ -113,3 +113,15 @@ test("summoning does not create a misleading duplicate monster activation line",
   const history = newPublicHistory(1, [], state); appendPublicHistory(history, state);
   assert.equal(history.entries.length, 2); assert.match(history.entries[1].text, /召唤《骑士》/);
 });
+
+test("a later public summon in the same command cannot identify an earlier private draw", () => {
+  const state = { players: { p1: { lp: 4000, monsterZone: ["drawn"] }, p2: { lp: 4000 } }, cards: { drawn: { name: "后来公开的怪兽", type: "monster" } }, events: [
+    { type: "CARDS_DRAWN", playerId: "p1", cardIds: ["drawn"] },
+    { type: "CARD_MOVED", cardId: "drawn", from: { playerId: "p1", zone: "deck" }, to: { playerId: "p1", zone: "hand" } },
+    { type: "MONSTER_SUMMONED", playerId: "p1", cardId: "drawn" }
+  ] };
+  const history = newPublicHistory(1, [], state); appendPublicHistory(history, state);
+  assert.ok(!history.entries.some((entry) => entry.type === "CARD_MOVED"));
+  assert.ok(!history.entries.find((entry) => entry.type === "CARDS_DRAWN").text.includes("后来公开"));
+  assert.match(history.entries.at(-1).text, /召唤《后来公开的怪兽》/);
+});

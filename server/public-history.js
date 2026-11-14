@@ -51,7 +51,12 @@ export function appendPublicHistory(history, state) {
       case "CARD_DESTROYED": text = `${card(event.cardId)}被破坏`; break;
       case "CARD_MOVED": {
         const zone = { grave: "墓地", banished: "除外区", hand: "手牌", deck: "牌库（牌序不公开）" }[event.to?.zone];
-        if (!zone || !visible.has(event.cardId) || events.some((other) => ["CARD_DESTROYED", "CARD_TRIBUTED"].includes(other.type) && other.cardId === event.cardId)) continue;
+        const publicMove = ["monsterZone", "grave", "banished"].includes(event.from?.zone)
+          || (event.from?.zone === "spellTrapZone" && state.cards[event.cardId]?.type === "spell")
+          || ["grave", "banished"].includes(event.to?.zone);
+        // A later summon in this same atomic action must not identify an earlier
+        // private draw (deck -> hand) or hand -> deck shuffle.
+        if (!zone || !publicMove || !visible.has(event.cardId) || events.some((other) => ["CARD_DESTROYED", "CARD_TRIBUTED"].includes(other.type) && other.cardId === event.cardId)) continue;
         text = `${card(event.cardId)}移至${zone}`; break;
       }
       case "STAT_MODIFIED": {
