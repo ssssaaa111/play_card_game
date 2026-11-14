@@ -1020,10 +1020,18 @@ try {
   }
   await spectatorPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await click(cdp, spectatorPage, '.public-report [data-close]');
+  const beforeResume = await evaluate(cdp, firstPage, `document.querySelector('#connectionStatus').textContent`);
+  const beforeResumeLp = await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`);
+  await firstPage.cdp.send('Page.setWebLifecycleState', { state: 'frozen' });
+  await firstPage.cdp.send('Page.setWebLifecycleState', { state: 'active' });
+  await firstPage.cdp.send('Page.bringToFront');
+  await waitForPage(cdp, firstPage, `document.body.dataset.onlineConnection === 'connected' && /已同步最新战况|连接已恢复/.test(document.querySelector('#connectionStatus').textContent)`, 'foreground reconciles after browser freeze', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`), beforeResumeLp);
+  assert.equal(await evaluate(cdp, firstPage, `!document.querySelector('#actionStage').hidden`), false, 'Foreground replayed historical action');
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);

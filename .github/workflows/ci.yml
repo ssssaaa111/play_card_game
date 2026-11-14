@@ -77,7 +77,7 @@ jobs:
           done
           npm run smoke:online -- --scenario=trap-response
           npm run smoke:online -- --custom-decks
-          npm run smoke:online-restart -- --spectator
+          npm run smoke:online-restart -- --spectator --network
 
   online-browser-smoke:
     name: Online duel browser smoke

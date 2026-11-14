@@ -20,10 +20,12 @@ export function installPublicReport(client) {
     <footer><button type="button" data-first>开局</button><button type="button" data-prev>上一页</button><span data-page></span><button type="button" data-next>下一页</button><button type="button" data-last>最新页</button></footer>`;
   document.body.append(dialog);
   const el = Object.fromEntries(["close", "game", "turn", "refresh", "export", "status", "error", "entries", "first", "prev", "next", "last", "page"].map((id) => [id, dialog.querySelector(`[data-${id}]`)]));
-  let data = null, room = null, pending = false, generation = 0, opener = null;
+  let data = null, room = null, pending = false, generation = 0, opener = null, stale = false;
   const controls = () => {
-    for (const id of ["game", "turn", "refresh", "export", "first", "prev", "next", "last"]) el[id].disabled = pending || !data;
-    if (!pending && data) {
+    const connected = client.socket?.readyState === 1;
+    for (const id of ["game", "turn", "refresh", "export", "first", "prev", "next", "last"]) el[id].disabled = pending || !data || !connected;
+    el.refresh.disabled = pending || !connected;
+    if (!pending && data && connected) {
       el.first.disabled = el.prev.disabled = data.page === 0;
       el.next.disabled = el.last.disabled = data.page >= data.pages - 1;
     }
@@ -39,7 +41,7 @@ export function installPublicReport(client) {
     try {
       const next = await client.publicHistory({ ...(duelNumber ? { duelNumber } : {}), page, turn });
       if (version !== generation || !dialog.open || next.roomCode !== room) return;
-      data = next;
+      data = next; stale = false;
       options(el.game, data.duels.map((id) => [id, `第 ${id} 局`]), data.duelNumber);
       options(el.turn, [[0, "全部回合"], ...data.turns.map((id) => [id, `第 ${id} 回合`])], turn);
       el.status.textContent = `房间 ${data.roomCode} · 第 ${data.duelNumber} 局 · ${data.finished ? "已结束" : "进行中，可刷新获取最新"} · 共 ${data.total} 条${data.partial ? "（旧房间，升级前记录缺失）" : "（从开局记录）"}`;
@@ -50,7 +52,7 @@ export function installPublicReport(client) {
       }));
       el.entries.scrollTop = 0;
     } catch (error) { if (version === generation) { el.error.textContent = error.message; el.status.textContent = "读取未成功；可关闭后重试。"; } }
-    finally { if (version === generation) { pending = false; controls(); el.refresh.disabled = false; } }
+    finally { if (version === generation) { pending = false; controls(); } }
   }
   function close() { generation += 1; pending = false; data = null; if (dialog.open) dialog.close(); }
   document.addEventListener("click", (event) => {
@@ -91,7 +93,11 @@ export function installPublicReport(client) {
     finally { if (version === generation) { pending = false; controls(); } }
   });
   client.on("watch-ended", close);
-  client.on("view", (view) => { if (dialog.open && view.roomCode !== room) close(); });
-  client.on("connection", ({ connected }) => { if (!connected && dialog.open) { generation += 1; pending = false; el.status.textContent = "连接中断，当前为已读取的公开战报；恢复连接后可刷新。"; controls(); } });
+  client.on("view", (view) => {
+    if (!dialog.open) return;
+    if (view.roomCode !== room) close();
+    else if (stale) { stale = false; el.status.textContent = "连接已恢复，可刷新读取最新公开记录。"; controls(); }
+  });
+  client.on("connection", ({ connected }) => { if (!connected && dialog.open) { stale = true; generation += 1; pending = false; el.status.textContent = data ? "连接中断，当前为已读取的公开战报；恢复连接后可刷新。" : "连接中断，战报尚未读取完成；恢复连接后可重试。"; controls(); } });
   return { close };
 }

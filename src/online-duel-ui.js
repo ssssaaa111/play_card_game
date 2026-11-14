@@ -167,10 +167,10 @@ export function onlineConnectionView(view, {
     return {
       kind: "self",
       kicker: recoveryFailed ? "RECOVERY FAILED" : "RECONNECTING",
-      title: recoveryFailed ? "暂时无法恢复对局" : "正在恢复连接",
+      title: recoveryFailed ? "暂时无法恢复对局" : transportState === "checking" ? "正在校准最新战况" : "正在恢复连接",
       summary: recoveryFailed
         ? "原房间可能已经失效。你可以立即重试，或返回大厅重新创建房间。"
-        : "对局已安全暂停，正在使用本页保存的身份找回原座位。",
+        : "本页已锁定操作，正在核对最新战况。服务端计时和断线保护以恢复后的状态为准。",
       status: recoveryFailed ? "等待你的选择" : reconnectAttempt > 0 ? `第 ${reconnectAttempt} 次重连中…` : "正在连接对战服务…",
       showActions: true
     };

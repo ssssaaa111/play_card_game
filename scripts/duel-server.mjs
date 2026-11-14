@@ -16,6 +16,7 @@ import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
 import { DuelRoomStore, RoomPersistenceError } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { OnlineDeckError } from "../src/online-decks.js";
+import { startSocketHeartbeat } from "../server/socket-heartbeat.js";
 import {
   ONLINE_AUTH_COOKIE,
   OnlineAuthAttemptLimiter,
@@ -443,6 +444,7 @@ const webSocketServer = new WebSocketServer({
     done(true);
   }
 });
+startSocketHeartbeat(webSocketServer);
 webSocketServer.on("connection", (socket, request) => {
   const account = authStore.accountForCookieHeader(request.headers.cookie || "");
   const connection = { id: randomUUID(), roomCode: null, seatId: null, account };

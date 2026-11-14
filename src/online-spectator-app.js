@@ -1,6 +1,7 @@
-import { OnlineDuelClient } from "./online-duel-client.js?v=20261114-public-history-1";
-import { installPublicReport } from "./public-report.js?v=20261114-public-history-1";
-import { OnlineAuthClient } from "./online-auth-client.js";
+import { OnlineDuelClient } from "./online-duel-client.js?v=20261114-network-recovery-1";
+import { installOnlineLifecycle } from "./online-lifecycle.js?v=20261114-network-recovery-1";
+import { installPublicReport } from "./public-report.js?v=20261114-network-recovery-1";
+import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
 import { monsterAssets } from "./data.js";
 import { spectatorCard, spectatorName, spectatorStatus, spectatorTimeline } from "./spectator-ui.js?v=20261107-spectator-1";
 
@@ -119,7 +120,7 @@ async function join() {
     el.watchError.textContent = error.message;
     if (["SPECTATING_CLOSED", "ROOM_NOT_FOUND", "AUTH_REQUIRED", "SPECTATORS_FULL"].includes(error.code)) {
       watching = ""; clearBoard(error.message);
-    }
+    } else if (watching) client.resetConnection();
   } finally { pending = false; updateControls(); }
 }
 client.on("view", render);
@@ -152,6 +153,21 @@ el.watchLeave.addEventListener("click", async () => {
   const next = new URL(location.href); next.searchParams.delete("room"); history.replaceState(null, "", next);
 });
 el.watchDetailClose.addEventListener("click", () => el.watchDetail.close());
+installOnlineLifecycle({ client, document, window,
+  onSuspend: () => { if (el.watchDetail.open) el.watchDetail.close(); },
+  onResume: async () => {
+    if (!watching || pending) return;
+    el.watchStale.hidden = false;
+    el.watchPhase.textContent = "正在校准公开画面 · 最后收到的场面";
+    updateControls();
+    if (client.socket?.readyState !== 1) { retries = 0; await join(); return; }
+    try {
+      await client.sync();
+      el.watchConnection.textContent = "已恢复最新公开画面；仍为只读观战。";
+      updateControls();
+    } catch { client.resetConnection(); scheduleReconnect(); }
+  }
+});
 setInterval(() => { if (client.view && watching && el.watchStale.hidden) el.watchPhase.textContent = spectatorStatus(client.view); }, 1000);
 function signedIn(account) {
   el.watchAuth.hidden = true; el.watchJoinPanel.hidden = false;

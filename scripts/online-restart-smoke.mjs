@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { WebSocket } from "ws";
 import { deckPresets } from "../src/data.js";
+import { OnlineDuelClient } from "../src/online-duel-client.js";
 
 // Own isolated process and files: never restart an existing developer/user service.
 const directory = await mkdtemp(join(tmpdir(), "star-duel-restart-"));
@@ -19,6 +20,8 @@ const base = `http://127.0.0.1:${port}`;
 let server = null, serverOutput = "";
 const clients = [];
 const spectatorScenario = process.argv.includes("--spectator");
+const networkScenario = process.argv.includes("--network");
+let networkClient = null;
 
 async function startServer() {
   serverOutput = "";
@@ -196,8 +199,29 @@ try {
     assert.ok(first.view.seats.every((seat) => seat.connected));
   }
   assert.equal((await fetch(`${base}/online-rooms-${port}.json`)).status, 404);
-  console.log(`online-restart-smoke passed (4 hard restarts: waiting deck, active chain, duplicate receipt, rematch + identity + privacy${spectatorScenario ? ", spectator consent + read-only + hidden data + revoke + restore" : ""})`);
+  if (networkScenario) {
+    class DroppedReplySocket extends WebSocket {
+      constructor(url) { super(url, { headers: { Cookie: cookie2 } }); }
+      emit(type, ...args) {
+        if (this.dropReplies && type === "message") return false;
+        return super.emit(type, ...args);
+      }
+    }
+    networkClient = new OnlineDuelClient({ url: `ws://127.0.0.1:${port}/duel`, WebSocketImpl: DroppedReplySocket, requestTimeoutMs: 400 });
+    await networkClient.connect(); await networkClient.resumeRoom(p2);
+    assert.equal(networkClient.view.turn.playerId, "p2");
+    const before = (await networkClient.publicHistory()).total;
+    networkClient.socket.dropReplies = true;
+    await assert.rejects(networkClient.sendAction({ type: "END_TURN" }), { code: "RESPONSE_TIMEOUT" });
+    assert.equal(networkClient.socket, null);
+    await networkClient.connect(); await networkClient.resumeRoom();
+    assert.equal(networkClient.view.turn.playerId, "p1", "lost acknowledgement must recover the committed turn, not resend it");
+    assert.ok((await networkClient.publicHistory()).total > before);
+    assert.equal(networkClient.pending.size, 0);
+  }
+  console.log(`online-restart-smoke passed (4 hard restarts: waiting deck, active chain, duplicate receipt, rematch + identity + privacy${spectatorScenario ? ", spectator consent + read-only + hidden data + revoke + restore" : ""}${networkScenario ? ", lost acknowledgement + timeout + no resend" : ""})`);
 } finally {
+  networkClient?.disconnect();
   for (const client of clients) client.socket?.terminate();
   await crashServer();
   await rm(directory, { recursive: true, force: true });

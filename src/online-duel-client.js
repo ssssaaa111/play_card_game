@@ -11,11 +11,14 @@ function requestId() {
 }
 
 export class OnlineDuelClient {
-  constructor({ url = defaultServerUrl(), WebSocketImpl = globalThis.WebSocket, requestTimeoutMs = 8_000 } = {}) {
+  constructor({ url = defaultServerUrl(), WebSocketImpl = globalThis.WebSocket, requestTimeoutMs = 8_000, connectTimeoutMs = 8_000, timers = globalThis } = {}) {
     if (!WebSocketImpl) throw new Error("WebSocket is not available in this environment");
     this.url = url;
     this.WebSocketImpl = WebSocketImpl;
     this.requestTimeoutMs = requestTimeoutMs;
+    this.connectTimeoutMs = connectTimeoutMs;
+    this.timers = timers;
+    this.connectAttempt = null;
     this.socket = null;
     this.connectionPromise = null;
     this.view = null;
@@ -34,41 +37,50 @@ export class OnlineDuelClient {
   connect() {
     if (this.socket?.readyState === this.WebSocketImpl.OPEN) return Promise.resolve();
     if (this.connectionPromise) return this.connectionPromise;
-    this.connectionPromise = new Promise((resolve, reject) => {
-      const socket = new this.WebSocketImpl(this.url);
-      this.socket = socket;
-      const handleOpen = () => {
-        cleanup();
-        this.connectionPromise = null;
-        resolve();
-      };
-      const handleError = () => {
-        cleanup();
-        if (this.socket === socket) this.socket = null;
-        this.connectionPromise = null;
-        reject(new Error(`Unable to connect to ${this.url}`));
-      };
-      const cleanup = () => {
-        socket.removeEventListener("open", handleOpen);
-        socket.removeEventListener("error", handleError);
-      };
-      socket.addEventListener("open", handleOpen);
-      socket.addEventListener("error", handleError);
-      socket.addEventListener("message", (event) => this.#handleMessage(event.data));
-      socket.addEventListener("close", () => {
-        if (this.socket !== socket) return;
-        this.socket = null;
-        this.connectionPromise = null;
-        this.#rejectPending(new Error("Duel server connection closed"));
-        this.#emit("connection", { connected: false });
-      });
+    let socket;
+    try { socket = new this.WebSocketImpl(this.url); }
+    catch { return Promise.reject(Object.assign(new Error("无法连接对战服务，请检查网络或服务地址。"), { code: "CONNECT_FAILED" })); }
+    this.socket = socket;
+    let resolve, reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    this.connectionPromise = promise;
+    const cleanup = () => {
+      this.timers.clearTimeout(timer);
+      socket.removeEventListener("open", handleOpen);
+      this.connectAttempt = null;
+      this.connectionPromise = null;
+    };
+    const fail = (error) => { cleanup(); reject(error); };
+    const handleOpen = () => {
+      if (this.socket !== socket) return;
+      cleanup(); resolve();
+    };
+    const timer = this.timers.setTimeout(() => {
+      if (this.socket === socket) this.resetConnection(Object.assign(new Error("连接对战服务超时，可检查网络后重试。"), { code: "CONNECT_TIMEOUT" }));
+    }, this.connectTimeoutMs);
+    this.connectAttempt = { fail };
+    socket.addEventListener("open", handleOpen);
+    socket.addEventListener("message", (event) => { if (this.socket === socket) this.#handleMessage(event.data); });
+    socket.addEventListener("error", () => {
+      if (this.socket === socket) this.resetConnection(Object.assign(new Error("对战连接发生错误，正在重新同步。"), { code: "CONNECTION_LOST" }));
     });
-    return this.connectionPromise;
+    socket.addEventListener("close", () => {
+      if (this.socket === socket) this.resetConnection(Object.assign(new Error("对战连接已中断，已发送操作不会自动重发。"), { code: "CONNECTION_LOST" }));
+    });
+    return promise;
   }
 
   disconnect() {
-    this.socket?.close();
+    this.resetConnection(Object.assign(new Error("连接已关闭。"), { code: "DISCONNECTED" }), { notify: false });
+  }
+
+  resetConnection(error = Object.assign(new Error("网络已中断，正在恢复最新战况。"), { code: "CONNECTION_LOST" }), { notify = true } = {}) {
+    const socket = this.socket;
     this.socket = null;
+    this.connectAttempt?.fail(error);
+    this.#rejectPending(error);
+    try { socket?.close(); } catch {}
+    if (socket && notify) this.#emit("connection", { connected: false, reason: error.message, code: error.code });
   }
 
   async createRoom(name) {
@@ -145,12 +157,12 @@ export class OnlineDuelClient {
     const id = requestId();
     const message = createClientMessage(type, payload, id);
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Duel request timed out: ${type}`));
+      const timer = this.timers.setTimeout(() => {
+        if (this.pending.has(id)) this.resetConnection(Object.assign(new Error("服务响应超时，正在核对最新战况；已发送操作不会自动重发。"), { code: "RESPONSE_TIMEOUT" }));
       }, this.requestTimeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      this.socket.send(JSON.stringify(message));
+      try { this.socket.send(JSON.stringify(message)); }
+      catch { this.resetConnection(Object.assign(new Error("发送未能确认，正在重新同步；请勿重复操作。"), { code: "SEND_FAILED" })); }
     });
   }
 
@@ -183,7 +195,7 @@ export class OnlineDuelClient {
     }
     const pending = message.requestId ? this.pending.get(message.requestId) : null;
     if (pending) {
-      clearTimeout(pending.timer);
+      this.timers.clearTimeout(pending.timer);
       this.pending.delete(message.requestId);
       if (message.type === DuelServerMessage.error) {
         const error = new Error(message.error?.message || "Duel request failed");
@@ -191,7 +203,7 @@ export class OnlineDuelClient {
         pending.reject(error);
       } else {
         if (message.data?.view) this.#acceptView(message.data.view);
-        pending.resolve(message.data || {});
+        pending.resolve(message.data?.view ? { ...message.data, view: this.view } : message.data || {});
       }
       return;
     }
@@ -199,6 +211,7 @@ export class OnlineDuelClient {
   }
 
   #acceptView(view) {
+    if (this.view?.roomCode === view.roomCode && Number(view.revision) < Number(this.view.revision)) return;
     this.view = view;
     this.#emit("view", view);
   }
@@ -209,7 +222,7 @@ export class OnlineDuelClient {
 
   #rejectPending(error) {
     for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer);
+      this.timers.clearTimeout(pending.timer);
       pending.reject(error);
     }
     this.pending.clear();

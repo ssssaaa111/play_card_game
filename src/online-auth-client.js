@@ -10,11 +10,13 @@ function defaultAuthServerUrl() {
 }
 
 export class OnlineAuthClient {
-  constructor({ baseUrl = defaultAuthServerUrl(), fetchImpl = globalThis.fetch } = {}) {
+  constructor({ baseUrl = defaultAuthServerUrl(), fetchImpl = globalThis.fetch, requestTimeoutMs = 10_000, timers = globalThis } = {}) {
     if (!fetchImpl) throw new Error("Fetch is not available in this environment");
     this.baseUrl = String(baseUrl).replace(/\/$/, "");
     this.fetchImpl = (...args) => fetchImpl(...args);
     this.account = null;
+    this.requestTimeoutMs = requestTimeoutMs;
+    this.timers = timers;
   }
 
   async session() {
@@ -42,10 +44,25 @@ export class OnlineAuthClient {
   }
 
   async #request(path, { method = "GET", body } = {}) {
+    const controller = new AbortController();
+    let timer;
+    try {
+      return await Promise.race([
+        this.#fetch(path, { method, body, signal: controller.signal }),
+        new Promise((_, reject) => { timer = this.timers.setTimeout(() => {
+          controller.abort();
+          reject(Object.assign(new Error("登录服务响应超时，请检查网络后重试。"), { code: "AUTH_TIMEOUT" }));
+        }, this.requestTimeoutMs); })
+      ]);
+    } finally { this.timers.clearTimeout(timer); }
+  }
+
+  async #fetch(path, { method, body, signal }) {
     let response;
     try {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         method,
+        signal,
         credentials: "include",
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined
