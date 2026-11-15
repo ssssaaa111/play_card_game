@@ -807,6 +807,17 @@ function actionBattleResult(cue) {
   }
 }
 
+function actionPresentationTiming(cue) {
+  const resolvedBattle = ["impact", "guard"].includes(cue.kind) || (cue.kind === "attack" && cue.resultType);
+  if (resolvedBattle) return { duration: 2800, emphasis: "major", resultDelay: 760 };
+  if (cue.kind === "attack") return { duration: 2100, emphasis: "major", resultDelay: 360 };
+  if (cue.kind === "summon" && cue.label === "王牌降临") return { duration: 2300, emphasis: "major", resultDelay: 420 };
+  if (cue.kind === "trap") return { duration: 2000, emphasis: "standard", resultDelay: 300 };
+  if (["spell", "effect"].includes(cue.kind)) return { duration: 1850, emphasis: "standard", resultDelay: 260 };
+  if (cue.kind === "summon") return { duration: 1700, emphasis: "standard", resultDelay: 240 };
+  return { duration: 1350, emphasis: "minor", resultDelay: 180 };
+}
+
 // Convert one public event cue into a compact, non-blocking presentation model.
 // `onlineCard` only resolves public cards, so this model can never reveal a
 // concealed hand or set-card identity to players or spectators.
@@ -847,6 +858,7 @@ export function onlineActionPresentation(view, cue) {
   const tone = cue.kind === "attack" || cue.kind === "impact" ? "attack"
     : cue.kind === "trap" || cue.kind === "set" ? "trap"
       : cue.kind === "spell" || cue.kind === "effect" || cue.kind === "draw" ? "spell" : "summon";
+  const timing = actionPresentationTiming(cue);
   return {
     id: Number(cue.id) || 0,
     kind: cue.kind,
@@ -857,9 +869,7 @@ export function onlineActionPresentation(view, cue) {
     source: { cardId: cue.cardId || null, name: sourceCard?.name || sourceFallback, meta: actionCardMeta(sourceCard), public: Boolean(sourceCard) },
     target,
     result,
-    duration: ["impact", "guard"].includes(cue.kind) || (cue.kind === "attack" && cue.resultType)
-      ? 3200
-      : cue.kind === "attack" ? 2800 : 2600
+    ...timing
   };
 }
 

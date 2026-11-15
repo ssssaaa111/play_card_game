@@ -807,7 +807,9 @@ test("public action presentations explain source, target, and result without an 
   assert.equal(presentation.actorLabel, "月见的行动");
   assert.deepEqual([presentation.source.name, presentation.target.name], ["破阵星线", "守望铁卫"]);
   assert.equal(presentation.result, "目标已锁定 · 效果正在结算");
-  assert.equal(presentation.duration, 2600);
+  assert.equal(presentation.duration, 1850);
+  assert.equal(presentation.emphasis, "standard");
+  assert.equal(presentation.resultDelay, 260);
   assert.equal("requiresConfirmation" in presentation, false);
 });
 
@@ -848,7 +850,9 @@ test("delayed battle results retain their damage after an attack response window
   assert.equal(cue.damage, 800);
   assert.equal(cue.damagePlayerId, "p1");
   assert.equal(onlineActionPresentation(view, cue).result, "击破目标 · 800 点伤害");
-  assert.equal(onlineActionPresentation(view, cue).duration, 3200);
+  assert.equal(onlineActionPresentation(view, cue).duration, 2800);
+  assert.equal(onlineActionPresentation(view, cue).emphasis, "major");
+  assert.equal(onlineActionPresentation(view, cue).resultDelay, 760);
 
   cue.direct = true;
   cue.targetCardId = null;
@@ -883,6 +887,9 @@ test("effect draws become compact cues while ordinary turn draws stay with the t
   assert.deepEqual(onlineActionCue(view, [{ id: 81, type: "CARDS_DRAWN", playerId: "p2", count: 2, sourceCardId: "seer:2" }]), {
     id: 81, kind: "draw", actor: "ai", count: 2, label: "对手抽卡"
   });
+  const presentation = onlineActionPresentation(view, onlineActionCue(view, [{ id: 81, type: "CARDS_DRAWN", playerId: "p2", count: 2, sourceCardId: "seer:2" }]));
+  assert.equal(presentation.duration, 1350);
+  assert.equal(presentation.emphasis, "minor");
 });
 
 test("a selected attack-position monster can carry its intent from main into battle", () => {

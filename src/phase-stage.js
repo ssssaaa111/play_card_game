@@ -62,7 +62,12 @@ export function phaseStageCuesFromEvents(events = []) {
     .filter(Boolean);
 }
 
-export function createPhaseStageController({ root, window: win = globalThis.window } = {}) {
+export function createPhaseStageController({
+  root,
+  window: win = globalThis.window,
+  canPlay = () => true,
+  onIdle = () => {}
+} = {}) {
   const code = root?.querySelector?.("[data-phase-stage-code]") || null;
   const title = root?.querySelector?.("[data-phase-stage-title]") || null;
   const actor = root?.querySelector?.("[data-phase-stage-actor]") || null;
@@ -81,11 +86,15 @@ export function createPhaseStageController({ root, window: win = globalThis.wind
     timer = null;
     if (queue.length > 0) {
       timer = win.setTimeout(pump, 40);
+    } else {
+      onIdle();
     }
   }
 
   function pump() {
-    if (!root || active || queue.length === 0) return;
+    if (!root || active || queue.length === 0 || !canPlay()) return;
+    if (timer) win.clearTimeout(timer);
+    timer = null;
     const cue = queue.shift();
     active = cue;
     sequence += 1;
@@ -128,5 +137,17 @@ export function createPhaseStageController({ root, window: win = globalThis.wind
     root.dataset.active = "false";
   }
 
-  return { enqueue, reset };
+  function resume() {
+    pump();
+  }
+
+  function hasWork() {
+    return Boolean(active || timer || queue.length > 0);
+  }
+
+  function isActive() {
+    return Boolean(active);
+  }
+
+  return { enqueue, reset, resume, hasWork, isActive };
 }

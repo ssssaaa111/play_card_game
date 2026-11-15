@@ -128,7 +128,8 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /playChainResolutionStage\(view, cue\)/);
   assert.match(app, /playActionStage\(view, cue\)/);
   assert.match(app, /let actionStageQueue = \[\]/);
-  assert.match(app, /function finishActionStage\(\)[\s\S]*actionStageQueue\.shift\(\)/);
+  assert.match(app, /function finishActionStage\(\)[\s\S]*phaseStageController\.resume\(\)[\s\S]*pumpActionStageQueue\(\)/);
+  assert.match(app, /function pumpActionStageQueue\(\)[\s\S]*actionStageQueue\.shift\(\)/);
   assert.match(app, /actionStageQueue\.length >= 4/);
   assert.match(app, /onlineReconnectBrief\(view\)/);
   assert.match(app, /client\.resumeRoom\(session\)/);

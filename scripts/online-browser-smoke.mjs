@@ -366,11 +366,24 @@ async function exerciseHandNavigation(cdp, page, timeoutMs, { selectLast = false
 async function installStageObserver(cdp, page) {
   await evaluate(cdp, page, `(() => {
     window.__onlineStageHistory = [];
+    window.__onlineRhythmHistory = [];
     const roots = [
       ["action", document.querySelector("#actionStage")],
       ["chain", document.querySelector("#chainResolutionStage")]
     ];
     const capture = () => {
+      const action = document.querySelector('#actionStage');
+      const beat = {
+        phase: !document.querySelector('#phaseStage').hidden,
+        action: !action.hidden,
+        title: action.querySelector('h2')?.textContent || '',
+        epic: document.querySelectorAll('.epic-action').length,
+        damage: document.querySelector('.life-delta')?.textContent || ''
+      };
+      const beatKey = JSON.stringify(beat);
+      if (window.__onlineRhythmHistory.at(-1)?.key !== beatKey) {
+        window.__onlineRhythmHistory.push({ ...beat, key: beatKey, at: Math.round(performance.now()) });
+      }
       for (const [kind, element] of roots) {
         if (!element || element.hidden || !element.getClientRects().length) continue;
         const entry = {
@@ -386,7 +399,7 @@ async function installStageObserver(cdp, page) {
         if (last?.key !== key) window.__onlineStageHistory.push({ ...entry, key });
       }
     };
-    for (const [, element] of roots) {
+    for (const element of [...roots.map(([, element]) => element), document.querySelector('#phaseStage'), document.querySelector('#effectLayer')]) {
       if (element) new MutationObserver(capture).observe(element, { attributes: true, childList: true, subtree: true });
     }
     capture();
@@ -1050,6 +1063,13 @@ try {
   // The explicit button opens a preview; double-click intentionally executes the sole legal attack.
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, textMatchExpression('#aiPanel', '3200 / 4000'), 'landscape unique-target quick attack deals damage once', options.timeoutMs);
+  await waitForPage(cdp, firstPage, `(window.__onlineRhythmHistory || []).some((entry) => entry.damage === '-800')`, 'damage caption follows attack impact', options.timeoutMs);
+  const rhythm = await evaluate(cdp, firstPage, `(window.__onlineRhythmHistory || []).map(({ key, ...entry }) => entry)`);
+  assert.ok(rhythm.some((entry) => entry.phase), 'No phase presentation was observed');
+  assert.ok(rhythm.some((entry) => entry.epic > 0), 'Key attack lost its impact caption');
+  assert.ok(rhythm.every((entry) => !entry.phase || (!entry.action && !entry.epic && !entry.damage)), 'Phase and action effects overlapped');
+  assert.ok(rhythm.every((entry) => !entry.damage || !entry.epic), 'Damage caption overlapped the attack caption');
+  assert.ok(rhythm.every((entry) => !['魔法发动', '怪兽召唤', '后场盖放', '转为守备', '转为攻击'].includes(entry.title) || !entry.epic), 'Ordinary action repeated a central caption');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#aiField .slot[data-card-uid]').length`), 0);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerField .slot[data-card-uid]').dataset.monsterState`), 'spent');
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
@@ -1058,7 +1078,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);

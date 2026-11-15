@@ -17,7 +17,7 @@ import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261111-grave-choice-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261112-presentation-rhythm-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -64,6 +64,7 @@ let cueCleanupTimer = null;
 let actionStageTimer = null;
 let actionStageCurrentKey = null;
 let actionStageQueue = [];
+const actionVfxTimers = new Set();
 let chainResolutionTimer = null;
 let chainResolutionActive = false;
 let lastResultKey = null;
@@ -126,7 +127,12 @@ const animationController = createAnimationController({
     : Math.max(0, Number(card?.atk || 0) + Number(card?.tempAtk || 0)),
   playSound
 });
-const phaseStageController = createPhaseStageController({ root: elements.phaseStage, window });
+const phaseStageController = createPhaseStageController({
+  root: elements.phaseStage,
+  window,
+  canPlay: () => !actionStageTimer && elements.actionStage.hidden && !chainResolutionActive,
+  onIdle: () => pumpActionStageQueue()
+});
 const runCommand = createOnlineActionRunner((pending) => {
   actionPending = pending;
   render(client.view);
@@ -527,12 +533,24 @@ function clearActionStage({ clearQueue = true } = {}) {
   if (actionStageTimer) window.clearTimeout(actionStageTimer);
   actionStageTimer = null;
   actionStageCurrentKey = null;
-  if (clearQueue) actionStageQueue = [];
+  if (clearQueue) {
+    actionStageQueue = [];
+    for (const timer of actionVfxTimers) window.clearTimeout(timer);
+    actionVfxTimers.clear();
+    if (cueCleanupTimer) window.clearTimeout(cueCleanupTimer);
+    cueCleanupTimer = null;
+    elements.effectLayer?.replaceChildren();
+    if (elements.effectLayer) {
+      delete elements.effectLayer.dataset.onlineCue;
+      delete elements.effectLayer.dataset.onlineActor;
+    }
+  }
   if (!elements.actionStage) return;
   elements.actionStage.hidden = true;
   elements.actionStage.replaceChildren();
   delete elements.actionStage.dataset.kind;
   delete elements.actionStage.dataset.actor;
+  delete elements.actionStage.dataset.emphasis;
   elements.actionStage.dataset.queueDepth = String(actionStageQueue.length);
   document.body.dataset.onlineActionStage = "false";
 }
@@ -567,6 +585,18 @@ function actionStageVisual(view, item, role) {
 
 function finishActionStage() {
   clearActionStage({ clearQueue: false });
+  phaseStageController.resume();
+  if (!phaseStageController.hasWork()) pumpActionStageQueue();
+}
+
+function queueActionStage(key, view, cue, model) {
+  if (actionStageQueue.length >= 4) actionStageQueue.shift();
+  actionStageQueue.push({ key, view, cue, model });
+  elements.actionStage.dataset.queueDepth = String(actionStageQueue.length);
+}
+
+function pumpActionStageQueue() {
+  if (actionStageTimer || !elements.actionStage.hidden || chainResolutionActive || phaseStageController.hasWork()) return;
   const next = actionStageQueue.shift();
   if (next) showActionStage(next.view, next.cue, next.model);
 }
@@ -594,15 +624,18 @@ function showActionStage(view, cue, model) {
   const result = document.createElement("p");
   result.className = "online-action-stage-result";
   result.textContent = model.result;
+  frame.style.setProperty("--online-action-result-delay", `${model.resultDelay}ms`);
   frame.append(header, route, result);
   elements.actionStage.dataset.kind = model.tone;
   elements.actionStage.dataset.actor = cue.actor;
+  elements.actionStage.dataset.emphasis = model.emphasis;
   elements.actionStage.dataset.queueDepth = String(actionStageQueue.length);
   elements.actionStage.appendChild(frame);
   elements.actionStage.hidden = false;
   document.body.dataset.onlineActionStage = "true";
   actionStageCurrentKey = `${model.id}:${model.kind}`;
   actionStageTimer = window.setTimeout(finishActionStage, model.duration);
+  playActionVfx(view, cue);
 }
 
 function playActionStage(view, cue) {
@@ -610,10 +643,8 @@ function playActionStage(view, cue) {
   if (!model || !elements.actionStage) return;
   const key = `${model.id}:${model.kind}`;
   if (actionStageCurrentKey === key || actionStageQueue.some((entry) => entry.key === key)) return;
-  if (actionStageTimer || !elements.actionStage.hidden) {
-    if (actionStageQueue.length >= 4) actionStageQueue.shift();
-    actionStageQueue.push({ key, view, cue, model });
-    elements.actionStage.dataset.queueDepth = String(actionStageQueue.length);
+  if (actionStageTimer || !elements.actionStage.hidden || chainResolutionActive || phaseStageController.hasWork()) {
+    queueActionStage(key, view, cue, model);
     return;
   }
   showActionStage(view, cue, model);
@@ -628,12 +659,17 @@ function clearChainResolutionStage({ rerender = false } = {}) {
   elements.chainResolutionStage.replaceChildren();
   elements.duelPanel.inert = false;
   elements.handPanel.inert = connectionPaused();
-  if (rerender && client.view) render(client.view);
+  if (rerender) {
+    phaseStageController.resume();
+    if (!phaseStageController.hasWork()) pumpActionStageQueue();
+    if (client.view) render(client.view);
+  }
 }
 
 function playChainResolutionStage(view, cue) {
   clearActionStage();
   clearChainResolutionStage();
+  phaseStageController.reset();
   if (elements.onlineResponse.open) elements.onlineResponse.close();
   clearResponseCountdown();
   document.body.dataset.onlineResponse = "none";
@@ -800,22 +836,15 @@ function captureFieldPositions(view) {
   lastFieldPositions = positions;
 }
 
-function playPendingActionCue(view) {
-  const cue = pendingActionCue;
-  pendingActionCue = null;
-  if (!cue || !elements.effectLayer) {
-    captureFieldPositions(view);
-    return;
-  }
+function scheduleActionVfx(callback, delay) {
+  const timer = window.setTimeout(() => {
+    actionVfxTimers.delete(timer);
+    callback();
+  }, delay);
+  actionVfxTimers.add(timer);
+}
 
-  if (cue.kind === "chain") {
-    playChainResolutionStage(view, cue);
-    captureFieldPositions(view);
-    return;
-  }
-
-  playActionStage(view, cue);
-
+function playActionVfx(view, cue) {
   const currentSourceIndex = cardFieldIndex(view, cue.cardId, cue.actor);
   const sourceIndex = currentSourceIndex >= 0 ? currentSourceIndex : cue.sourceIndex;
   const targetOwner = cue.targetOwner || cue.rival;
@@ -838,7 +867,7 @@ function playPendingActionCue(view) {
     animationController.playArrow(source, target, "attack", cue.label);
     animationController.playEpicAction(cue.label, "attack", 1050);
     if (sourceIndex >= 0) animationController.playMonsterMotion(cue.actor, sourceIndex, "attack");
-    if (cue.resultType) window.setTimeout(() => {
+    if (cue.resultType) scheduleActionVfx(() => {
       if (cue.resultType === "ATTACK_CANCELED" || ["guardHold", "guardCounter"].includes(cue.outcome?.kind)) {
         animationController.playGuardShield(target);
       } else {
@@ -848,29 +877,26 @@ function playPendingActionCue(view) {
         if (cue.outcome?.destroysAttacker && cue.outcome?.destroysTarget) animationController.playImpactExplosion(source);
         animationController.shakeScreen();
       }
-      if (cue.damage) animationController.playLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
+      if (cue.damage) scheduleActionVfx(() => {
+        animationController.playLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
+      }, 760);
     }, 320);
   } else if (cue.kind === "summon") {
     const anchor = cardAnchor(view, cue.cardId, cue.actor);
     pulseActionAnchor(anchor, "summon");
-    animationController.playEpicAction(cue.label, "draw", 1000);
+    if (cue.label === "王牌降临") animationController.playEpicAction(cue.label, "draw", 1050);
   } else if (["spell", "trap", "effect"].includes(cue.kind)) {
     const card = onlineCard(view, cue.cardId);
     pulseActionAnchor(cardAnchor(view, cue.cardId, cue.actor), cue.kind);
-    animationController.playEpicAction(cue.label, cue.kind === "trap" ? "guard" : "draw", 1000);
     if (cue.targetCardId) animationController.playArrow(source, target, cue.kind === "trap" ? "trap" : "spell", cue.label);
     if (card) animationController.playCenterCardEffect(card, cue.actor === "player" ? "我方效果发动" : "对手效果发动");
   } else if (cue.kind === "set") {
     const anchor = cue.slotIndex != null ? animationController.trapElement(cue.actor, cue.slotIndex) : animationController.panelElement(cue.actor);
     pulseActionAnchor(anchor, "set");
-    animationController.playEpicAction(cue.label, "guard", 900);
   } else if (cue.kind === "mode") {
     const anchor = cardAnchor(view, cue.cardId, cue.actor);
     pulseActionAnchor(anchor, "mode");
-    animationController.playEpicAction(cue.label, cue.mode === "defense" ? "guard" : "attack", 900);
     if (sourceIndex >= 0) animationController.playMonsterMotion(cue.actor, sourceIndex, cue.mode === "defense" ? "guard" : "stand");
-  } else if (cue.kind === "draw") {
-    animationController.playEpicAction(`${cue.label}${cue.count > 1 ? ` ×${cue.count}` : ""}`, "draw", 850);
   } else if (cue.kind === "guard") {
     animationController.playEpicAction(cue.label, "guard", 1000);
     animationController.playGuardShield(target);
@@ -878,8 +904,27 @@ function playPendingActionCue(view) {
     animationController.playEpicAction(cue.label, "attack", 900);
     animationController.playImpactExplosion(target);
     animationController.shakeScreen();
-    if (cue.damage) animationController.playLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
+    if (cue.damage) scheduleActionVfx(() => {
+      animationController.playLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
+    }, 940);
   }
+}
+
+function playPendingActionCue(view) {
+  const cue = pendingActionCue;
+  pendingActionCue = null;
+  if (!cue || !elements.effectLayer) {
+    captureFieldPositions(view);
+    return;
+  }
+
+  if (cue.kind === "chain") {
+    playChainResolutionStage(view, cue);
+    captureFieldPositions(view);
+    return;
+  }
+
+  playActionStage(view, cue);
   captureFieldPositions(view);
 }
 
@@ -1777,11 +1822,16 @@ function renderGameResult(view) {
   if (lastResultKey === result.key) return;
   lastResultKey = result.key;
   if (resultRevealTimer) clearTimeout(resultRevealTimer);
-  resultRevealTimer = window.setTimeout(() => {
+  const revealResult = () => {
+    if (chainResolutionActive || actionStageTimer || actionStageQueue.length || phaseStageController.hasWork()) {
+      resultRevealTimer = window.setTimeout(revealResult, 120);
+      return;
+    }
     resultRevealTimer = null;
     if (!elements.onlineResult.open) elements.onlineResult.showModal();
     elements.resultRematch.focus({ preventScroll: true });
-  }, 1050);
+  };
+  resultRevealTimer = window.setTimeout(revealResult, 1050);
 }
 
 function openOnlineResult() {
