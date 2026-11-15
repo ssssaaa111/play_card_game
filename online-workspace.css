@@ -562,7 +562,17 @@ body[data-online-status] #onlineResult footer {
   background: var(--online-dialog-surface);
   box-shadow: none;
 }
-body[data-online-status] #cardInspector .online-inspector-panel { padding: var(--online-dialog-space); }
+body[data-online-status] #cardInspector { overflow: hidden; }
+body[data-online-status] #cardInspector .online-inspector-panel { display: grid; grid-template-rows: auto minmax(0,1fr) auto; gap: 12px; padding: var(--online-dialog-space); overflow: hidden; }
+body[data-online-status] #cardInspector header { margin: 0; }
+body[data-online-status] #cardInspector #inspectorContent { min-height: 0; align-content: start; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 2px; }
+body[data-online-status] #cardInspector .online-inspector-entry { align-items: start; }
+body[data-online-status] #cardInspector .online-inspector-entry > .card { pointer-events: none; }
+body[data-online-status] #cardInspector .online-inspector-entry > .card .card-text { display: none; }
+body[data-online-status] #cardInspector .online-inspector-entry > .card:not(.monster) .stats { display: none; }
+body[data-online-status] #cardInspector .online-inspector-effect { flex: initial; min-height: 0; }
+body[data-online-status] #cardInspector .online-inspector-meta dd { min-width: 0; overflow-wrap: anywhere; }
+body[data-online-status] #cardInspector .online-inspector-hint { margin: 0; }
 body[data-online-status] #cardInspector[data-grave-choice="true"] .online-inspector-panel { gap: 12px; }
 body[data-online-status] #cardInspector .online-inspector-heading > span { font-size: 10px; }
 body[data-online-status] #cardInspector #inspectorTitle { font-size: clamp(18px, 3vw, 24px); }
@@ -575,3 +585,12 @@ body[data-online-status] #onlineResult h2 { font-size: clamp(26px, 5vw, 36px); l
 body[data-online-status] #onlineResult #resultSummary { margin: 8px 0 16px; font-size: 12px; }
 body[data-online-status] #onlineResult .online-series-score { margin-top: 12px; }
 body[data-online-status] #onlineResult .online-rematch-status { margin-top: 12px; }
+
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
+  body[data-online-status] #cardInspector .online-inspector-entry { grid-template-columns: 144px minmax(0,1fr); gap: 12px; padding: 10px; }
+  body[data-online-status] #cardInspector .online-inspector-entry > .card { width: 144px; height: 220px; min-height: 220px; aspect-ratio: auto; grid-template-rows: auto minmax(112px,1fr) auto auto; gap: 5px; }
+  body[data-online-status] #cardInspector .online-inspector-entry > .card .art { min-height: 112px; }
+  body[data-online-status] #cardInspector .online-inspector-copy { gap: 8px; padding: 0; }
+  body[data-online-status] #cardInspector .online-inspector-effect { padding: 10px; }
+  body[data-online-status] #cardInspector .online-inspector-hint { display: none; }
+}
