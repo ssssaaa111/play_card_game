@@ -423,6 +423,30 @@ async function stageHistory(cdp, page) {
   return evaluate(cdp, page, `(window.__onlineStageHistory || []).map(({ key, ...entry }) => entry)`);
 }
 
+async function checkDialogLayouts(cdp, page, selector, options, roomCode) {
+  const layouts = [];
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+    await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    layouts.push(await waitForPage(cdp, page, `(() => {
+      const dialog = document.querySelector(${JSON.stringify(selector)});
+      const footer = dialog.querySelector('footer').getBoundingClientRect();
+      const buttons = [...dialog.querySelectorAll('footer .btn')].filter(button => button.getClientRects().length);
+      const content = dialog.querySelector('.online-response-scroll, .online-result-content').getBoundingClientRect();
+      return innerWidth === ${width} && dialog.open && buttons.length >= 2 && content.bottom <= footer.top + 1
+        && buttons.every(button => { const rect = button.getBoundingClientRect(); return rect.height >= 44 && rect.top >= footer.top && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth; })
+        && document.documentElement.scrollWidth <= innerWidth
+        ? { width: innerWidth, height: innerHeight, buttonHeight: buttons[0].getBoundingClientRect().height, footerVisible: true } : null;
+    })()`, `${selector} fixed footer and touch targets at ${width}`, options.timeoutMs));
+    if (width === 844) {
+      const image = await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true });
+      await writeFile(path.join(options.artifactDir, `${selector.slice(1)}-landscape-${roomCode}.png`), Buffer.from(image.data, 'base64'));
+    }
+  }
+  await page.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, page, 'innerWidth > 1040', 'dialog desktop viewport restored', options.timeoutMs);
+  return layouts;
+}
+
 async function failurePageState(cdp, page) {
   if (!page?.cdp) return null;
   try {
@@ -559,7 +583,7 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
       const content = document.querySelector('#inspectorContent');
       const footer = document.querySelector('#graveChoiceActions').getBoundingClientRect();
       const confirm = document.querySelector('#graveChoiceConfirm').getBoundingClientRect();
-      return innerWidth === ${width} && panel.top >= 0 && panel.bottom <= innerHeight && content.getBoundingClientRect().bottom <= footer.top && confirm.bottom <= panel.bottom && confirm.height >= 40 && content.scrollWidth <= content.clientWidth + 2 && (innerWidth < 1040 || content.scrollHeight <= content.clientHeight + 2)
+      return innerWidth === ${width} && panel.top >= 0 && panel.bottom <= innerHeight && content.getBoundingClientRect().bottom <= footer.top && confirm.bottom <= panel.bottom && confirm.height >= 44 && content.scrollWidth <= content.clientWidth + 2 && (innerWidth < 1040 || content.scrollHeight <= content.clientHeight + 2)
         ? { width: innerWidth, panelHeight: panel.height, confirmVisible: true } : null;
     })()`, 'grave choice scrolls above fixed confirmation', options.timeoutMs);
     if (width === 320) {
@@ -952,6 +976,7 @@ try {
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, `(() => Boolean(document.querySelector(".online-response-attacker")) || (document.querySelector("#actionStage")?.innerText || "").includes("直接攻击"))()`, "declared attack presentation", options.timeoutMs);
   await waitForPage(cdp, secondPage, `(() => { const button = document.querySelector("#responseActivate"); return Boolean(button && !button.disabled && button.getClientRects().length); })()`, "trap activation", options.timeoutMs);
+  const responseLayouts = await checkDialogLayouts(cdp, secondPage, '#onlineResponse', options, roomCode);
 
   // Refresh must preserve the authenticated seat and pending response, without replaying history or applying damage.
   await reloadPage(cdp, secondPage, options.timeoutMs);
@@ -1038,6 +1063,7 @@ try {
   ]);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#resultSeriesScore")?.textContent?.trim()`), "0 : 1");
   assert.equal(await evaluate(cdp, secondPage, `document.querySelector("#resultSeriesScore")?.textContent?.trim()`), "1 : 0");
+  const resultLayouts = await checkDialogLayouts(cdp, firstPage, '#onlineResult', options, roomCode);
   await click(cdp, secondPage, "#resultRematch");
   await waitForPage(cdp, firstPage, textMatchExpression("#resultRematch", "接受再战"), "rival rematch invitation", options.timeoutMs);
   await reloadPage(cdp, secondPage, options.timeoutMs);
@@ -1115,7 +1141,7 @@ try {
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, browserFreezeResumed: true, beforeResume };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, responseLayouts, resultLayouts, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);

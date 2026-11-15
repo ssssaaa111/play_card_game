@@ -505,3 +505,71 @@ body[data-online-status] #fieldTargets .online-target small { font-size: 9px; }
   body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { max-height: calc(100dvh - 100px); width: min(480px, calc(100vw - 20px)); gap: 6px; padding: 8px; }
   .online-attack-preview { gap: 5px; }
 }
+
+/* Dialogs share a surface, spacing and action hierarchy across online flows. */
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) {
+  --online-dialog-space: clamp(12px, 2.5vw, 20px);
+  --online-dialog-surface: #0d1621;
+  --online-dialog-line: rgba(144, 178, 196, .22);
+}
+body[data-online-status] :is(#onlineResponse, #onlineResult, .online-inspector-panel) {
+  border-radius: 16px;
+  background-color: var(--online-dialog-surface, #0d1621);
+}
+body[data-online-status] :is(#onlineResponse, #onlineResult)::backdrop,
+body[data-online-status] #cardInspector .online-inspector-backdrop {
+  background: rgba(3, 7, 12, .76);
+  backdrop-filter: blur(4px);
+}
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--online-dialog-line);
+  border-radius: 8px;
+  color: #c6d6e2;
+  background: #172533;
+  box-shadow: none;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn.primary {
+  color: #211b10;
+  border-color: #e4bc70;
+  background: linear-gradient(135deg, #f6bd60, #ffdc96);
+  font-weight: 800;
+}
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn:hover:not(:disabled) { filter: brightness(1.12); }
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn:focus-visible { outline: 2px solid #73e2d5; outline-offset: 2px; }
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn:disabled { opacity: .45; cursor: not-allowed; }
+body[data-online-status] #onlineResponse .online-response-scroll { padding: var(--online-dialog-space); }
+body[data-online-status] #onlineResponse header { margin-bottom: 12px; }
+body[data-online-status] #onlineResponse header > p { margin: 8px 0 0; color: #a5bacb; font-size: 12px; }
+body[data-online-status] #onlineResponse[data-response-mode="single"] #responseStatus { display: none; }
+body[data-online-status] #onlineResponse #responseError:empty { display: none; }
+body[data-online-status] #onlineResponse footer,
+body[data-online-status] #onlineResult footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 12px var(--online-dialog-space);
+  border-top: 1px solid var(--online-dialog-line);
+  background: var(--online-dialog-surface);
+  box-shadow: none;
+}
+body[data-online-status] #cardInspector .online-inspector-panel { padding: var(--online-dialog-space); }
+body[data-online-status] #cardInspector[data-grave-choice="true"] .online-inspector-panel { gap: 12px; }
+body[data-online-status] #cardInspector .online-inspector-heading > span { font-size: 10px; }
+body[data-online-status] #cardInspector #inspectorTitle { font-size: clamp(18px, 3vw, 24px); }
+body[data-online-status] #cardInspector .online-grave-actions { gap: 8px; padding-top: 12px; border-color: var(--online-dialog-line); background: transparent; }
+body[data-online-status] #cardInspector .online-grave-detail { min-height: 44px; border-radius: 8px; font-size: 11px; }
+body[data-online-status] #onlineResult { max-height: calc(100dvh - 24px); }
+body[data-online-status] #onlineResult .online-result-panel { grid-template-rows: minmax(0, 1fr) auto; max-height: calc(100dvh - 26px); padding: 0; overflow: hidden; }
+body[data-online-status] #onlineResult .online-result-content { display: grid; justify-items: center; width: 100%; min-height: 0; padding: var(--online-dialog-space); overflow-y: auto; }
+body[data-online-status] #onlineResult h2 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; }
+body[data-online-status] #onlineResult #resultSummary { margin: 8px 0 16px; font-size: 12px; }
+body[data-online-status] #onlineResult .online-series-score { margin-top: 12px; }
+body[data-online-status] #onlineResult .online-rematch-status { margin-top: 12px; }

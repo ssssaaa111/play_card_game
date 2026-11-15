@@ -1752,12 +1752,12 @@ function renderResponse(view) {
     elements.responseLead.textContent = chainResponse
       ? "对手陷阱已加入连锁；发动反制将无效上一段效果，放弃则立即按后进先出结算。"
       : panel.singleChoice
-      ? "唯一可用陷阱已自动选中，直接决定发动或放弃。"
-      : `选择一张陷阱响应本次${summonResponse ? "召唤" : "攻击"}，双击候选可直接发动。`;
+      ? "唯一陷阱已选中，可发动或放弃。"
+      : "选择陷阱；双击可直接发动。";
     elements.responseText.hidden = panel.singleChoice;
     elements.responseActivate.disabled ||= actionPending;
     elements.responsePass.disabled = actionPending;
-    elements.responsePass.textContent = chainResponse ? "不再连锁，开始结算" : "放弃响应，继续结算";
+    elements.responsePass.textContent = chainResponse ? "不再连锁" : "放弃响应";
     elements.responseChoices.querySelectorAll("button").forEach((button) => {
       button.disabled = actionPending || panel.singleChoice;
       button.classList.toggle("single-ready", panel.singleChoice);

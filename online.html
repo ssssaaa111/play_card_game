@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="duel-focus.css">
   <link rel="stylesheet" href="online-duel.css?v=20261112-presentation-rhythm-1">
   <link rel="stylesheet" href="public-report.css?v=20261114-public-history-1">
-  <link rel="stylesheet" href="online-workspace.css?v=20261111-grave-choice-1">
+  <link rel="stylesheet" href="online-workspace.css?v=20261116-dialog-unity-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
@@ -175,22 +175,24 @@
         <p id="responseStatus" role="status" aria-live="polite"></p>
         <p id="responseError" class="error-copy" role="alert"></p>
       </div>
-      <footer><button id="responseActivate" class="btn primary" type="button">发动陷阱</button><button id="responsePass" class="btn" type="button">放弃响应，继续结算</button></footer>
+      <footer><button id="responseActivate" class="btn primary" type="button">发动陷阱</button><button id="responsePass" class="btn" type="button">放弃响应</button></footer>
     </section>
   </dialog>
   <dialog id="onlineResult" class="online-result" aria-labelledby="resultTitle" aria-describedby="resultSummary">
     <section class="online-result-panel">
-      <span id="resultKicker" class="online-result-kicker">DUEL COMPLETE</span>
-      <h2 id="resultTitle">决斗结束</h2>
-      <p id="resultSummary">本局决斗已经结束。</p>
-      <div class="online-result-score" aria-label="最终生命值">
-        <article><span id="resultSelfLabel">你</span><strong id="resultSelfName">玩家</strong><b id="resultSelfLp">4000 LP</b></article>
-        <i>VS</i>
-        <article><span id="resultRivalLabel">对手</span><strong id="resultRivalName">对手</strong><b id="resultRivalLp">4000 LP</b></article>
+      <div class="online-result-content">
+        <span id="resultKicker" class="online-result-kicker">DUEL COMPLETE</span>
+        <h2 id="resultTitle">决斗结束</h2>
+        <p id="resultSummary">本局决斗已经结束。</p>
+        <div class="online-result-score" aria-label="最终生命值">
+          <article><span id="resultSelfLabel">你</span><strong id="resultSelfName">玩家</strong><b id="resultSelfLp">4000 LP</b></article>
+          <i>VS</i>
+          <article><span id="resultRivalLabel">对手</span><strong id="resultRivalName">对手</strong><b id="resultRivalLp">4000 LP</b></article>
+        </div>
+        <div class="online-series-score" id="resultSeries" aria-label="本房间系列战绩"><span>ROOM SERIES</span><strong id="resultSeriesScore">0 : 0</strong><small id="resultSeriesDetail">已完成 0 局</small></div>
+        <p id="resultRematchStatus" class="online-rematch-status" role="status" aria-live="polite">双方确认后可在当前房间再来一局。</p>
       </div>
-      <div class="online-series-score" id="resultSeries" aria-label="本房间系列战绩"><span>ROOM SERIES</span><strong id="resultSeriesScore">0 : 0</strong><small id="resultSeriesDetail">已完成 0 局</small></div>
-      <p id="resultRematchStatus" class="online-rematch-status" role="status" aria-live="polite">双方确认后可在当前房间再来一局。</p>
-      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button class="btn" type="button" data-public-report>完整公开战报</button><button id="resultLobby" class="btn" type="button">返回大厅</button><button id="resultRematch" class="btn primary" type="button">再来一局</button></footer>
+      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button id="resultRematch" class="btn primary" type="button">再来一局</button><button class="btn" type="button" data-public-report>完整公开战报</button><button id="resultLobby" class="btn" type="button">返回大厅</button></footer>
     </section>
   </dialog>
   <dialog id="onlineForfeit" class="online-forfeit" aria-labelledby="forfeitTitle" aria-describedby="forfeitSummary">
