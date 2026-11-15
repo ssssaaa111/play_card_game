@@ -603,7 +603,8 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
     await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-attack-state="ready"]'), 'next attack available', options.timeoutMs);
   };
   await play(firstPage, 'chain-nullifier');
-  await play(firstPage, 'chain-nullifier');
+  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '断链裁决');
+  await waitForPage(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="chain-nullifier"]').length === 0`, 'a fresh double-click immediately after confirmation plays the next card', options.timeoutMs);
   await play(firstPage, 'solar-knight');
   await waitForPage(cdp, firstPage, textMatchExpression('#playerField', '日冕骑士'), 'chain attacker summoned', options.timeoutMs);
   await endTurn(cdp, firstPage, options.timeoutMs);
@@ -655,7 +656,7 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
     assert.ok(history.filter(beat => beat.chain).every(beat => !beat.phase && !beat.action && !beat.response && !beat.damage), 'Chain overlaps another presentation');
     assert.ok(history.filter(beat => beat.result).every(beat => !beat.chain && !beat.action && !beat.epic && !beat.damage), 'Result covers the lethal hit');
   }
-  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
+  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
   console.log(`online-chain-rhythm-smoke passed (${roomCode}, four links, response priority, damage, replay, lethal result, spectator)`);
 }
 

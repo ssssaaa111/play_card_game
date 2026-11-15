@@ -3,7 +3,7 @@ import { renderHandCards } from "./hand-renderer.js?v=20261114-network-recovery-
 import { renderMonsterZones, renderSupportZones } from "./field-renderer.js?v=20261111-monster-status-1";
 import { buildDuelControlsView } from "./control-renderer.js";
 import { renderOnlineAttackPreview } from "./online-attack-preview-renderer.js?v=20261111-attack-choice-1";
-import { createOnlineActionRunner } from "./online-action-runner.js";
+import { createOnlineActionRunner } from "./online-action-runner.js?v=20261116-rapid-commands-1";
 import { createDirectActivationTracker } from "./direct-activation.js";
 import { createAudioController, createAudioSettings } from "./audio.js";
 import { createAnimationController } from "./animation.js";

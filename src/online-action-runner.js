@@ -16,7 +16,10 @@ export function createOnlineActionRunner(onPending = () => {}, now = () => perfo
     }
   };
   // The second click of a double-click can land on the hand after a dialog closes.
-  // Ordinary clicks and keyboard activation remain available immediately.
-  run.blocksRepeatedClick = (detail) => detail > 1 && (pending || now() < repeatClickUntil);
+  // A new first click starts a separate gesture, including a fresh double-click.
+  run.blocksRepeatedClick = (detail) => {
+    if (detail === 1 && !pending) repeatClickUntil = -Infinity;
+    return detail > 1 && (pending || now() < repeatClickUntil);
+  };
   return run;
 }
