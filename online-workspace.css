@@ -469,6 +469,8 @@ body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice
 .online-effect-title { color: #d6fff6; font-size: 13px; }
 .online-effect-summary { color: #e7cf9e; font-size: 11px; }
 .online-effect-target { color: #a5bdca; font-size: 10px; }
+.online-tribute-choice .online-target[aria-pressed="true"] { border-color: #f6bd60; background: #352c1c; box-shadow: inset 0 0 0 1px #f6bd60; }
+body[data-online-status] #app #handCommand > #choiceActions.online-tribute-choice #fieldTargets .online-target { min-height: 44px; }
 .online-open-grave { grid-column: 1 / -1; }
 body[data-online-status] #cardInspector[data-grave-choice="true"] .online-inspector-panel { display: grid; grid-template-rows: auto minmax(0,1fr) auto; gap: 10px; height: auto; max-height: min(620px, calc(100dvh - 24px)); overflow: hidden; padding: 12px; }
 body[data-online-status] #cardInspector[data-grave-choice="true"] header { margin: 0; }

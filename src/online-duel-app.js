@@ -19,7 +19,7 @@ import { installPublicReport } from "./public-report.js?v=20261114-network-recov
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261112-presentation-rhythm-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261116-tribute-choice-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -1151,7 +1151,7 @@ function chooseHandCard(id, { directActivate = false } = {}) {
     return;
   }
   const model = onlineSelectionModel(client.view, selection);
-  if (model?.action) sendAction(model.action);
+  if (model?.action && !model.tributeCount) sendAction(model.action);
   else maybeOpenGraveChoice();
 }
 
@@ -1178,7 +1178,7 @@ function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
     if (!keepChosenTribute) chooseCard(card.id);
   }
   else if (selection && !["placement", "material", "target"].includes(model?.stage)) cancelSelection();
-  if (directActivate && directCandidate) {
+  if (directActivate && directCandidate && !model?.tributeCount) {
     const action = onlineSelectionModel(view, selection)?.action;
     if (action) sendAction(action);
   }
@@ -1470,6 +1470,7 @@ function renderCommands(view, model) {
   const monsterStatus = selectedField ? onlineMonsterStatus(view, model.card.id) : null;
   const name = model?.card.name || "";
   const effectDecision = onlineEffectDecisionView(view, model);
+  const tributeDecision = onlineTributeDecisionView(view, model);
   const graveChoice = activeGraveChoice(view, model);
   const confirmLabel = isAttack ? model?.targetIds.length ? "确认攻击" : "直接攻击" : inHand ? model?.card.type === "monster" ? "确认召唤" : model?.card.type === "trap" ? "确认盖放" : "确认发动" : "确认";
   const prompt = model?.stage === "material" ? `${name}：选择祭品 ${model.tributeCardIds.length}/${model.tributeCount}。`
@@ -1506,14 +1507,25 @@ function renderCommands(view, model) {
       elements.choiceText.appendChild(line);
     }
   }
+  if (tributeDecision) {
+    elements.choiceText.replaceChildren();
+    for (const [tag, className, text] of [["strong", "online-effect-title", tributeDecision.title], ["span", "online-effect-summary", `${tributeDecision.progress} · ${tributeDecision.summary}`], ["small", "online-effect-target", tributeDecision.hint]]) {
+      const line = document.createElement(tag);
+      line.className = className;
+      line.textContent = text;
+      elements.choiceText.appendChild(line);
+    }
+  }
   elements.choiceConfirmBtn.textContent = confirmLabel;
   elements.choiceConfirmBtn.disabled = !canAct || !model?.action;
   const attackDecision = isAttack ? onlineAttackDecisionView(view, model) : null;
   renderOnlineAttackPreview(document, elements.onlineBattlePreview, attackDecision);
   elements.choiceCancelBtn.disabled = actionPending;
+  elements.choiceCancelBtn.textContent = tributeDecision ? "取消召唤" : "取消";
   elements.choiceActions.classList.toggle("target-choice", interaction.choice.target);
   elements.choiceActions.classList.toggle("online-attack-choice", isAttack);
-  elements.choiceActions.classList.toggle("online-effect-choice", Boolean(effectDecision));
+  elements.choiceActions.classList.toggle("online-effect-choice", Boolean(effectDecision || tributeDecision));
+  elements.choiceActions.classList.toggle("online-tribute-choice", Boolean(tributeDecision));
   elements.choiceActions.classList.toggle("single-target", interaction.choice.targetSingle);
   elements.choiceActions.classList.toggle("single-choice", interaction.choice.single);
   elements.choiceActions.classList.toggle("multiple-choice", interaction.choice.multiple);
@@ -1541,7 +1553,7 @@ function renderCommands(view, model) {
   elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type : "none";
   elements.duelHint.dataset.tone = !model && actionReceipt ? actionReceipt.tone || "neutral" : "neutral";
   elements.duelPanel.dataset.battleResult = !model && actionReceipt?.kind === "battle-result" ? actionReceipt.result : "none";
-  elements.handGuide.textContent = view.gameOver ? "决斗已结束 · 可查看卡牌详情" : model ? "确认或双击高亮候选执行" : "单击选择 · 双击快捷出牌";
+  elements.handGuide.textContent = view.gameOver ? "决斗已结束 · 可查看卡牌详情" : tributeDecision ? "选祭品与落点 · 确认后召唤" : model ? "确认或双击高亮候选执行" : "单击选择 · 双击快捷出牌";
   const inBattle = view.turn.phase === "battle";
   elements.battleButton.textContent = turnControl.battle.label;
   elements.battleButton.title = turnControl.battle.title;
@@ -1556,7 +1568,23 @@ function renderCommands(view, model) {
   elements.aiPanel.classList.toggle("online-direct-target", directAttackReady);
   elements.aiPanel.setAttribute("aria-current", directAttackReady ? "true" : "false");
   elements.fieldTargets.replaceChildren();
-  elements.fieldTargets.hidden = !interaction.choice.targetList;
+  elements.fieldTargets.hidden = !interaction.choice.targetList && !tributeDecision;
+  elements.fieldTargets.setAttribute("aria-label", tributeDecision ? "召唤祭品" : "可选目标");
+  for (const candidate of tributeDecision?.candidates || []) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "online-target";
+    button.dataset.tributeId = candidate.id;
+    button.disabled = actionPending;
+    button.setAttribute("aria-pressed", String(candidate.selected));
+    const label = document.createElement("strong");
+    label.textContent = `${candidate.name}${candidate.selected ? " · 祭品 ✓" : ""}`;
+    const detail = document.createElement("small");
+    detail.textContent = `${candidate.location} · ${candidate.detail}`;
+    button.append(label, detail);
+    button.addEventListener("click", () => { directActivationTracker.reset(); chooseCard(candidate.id); });
+    elements.fieldTargets.appendChild(button);
+  }
   if (graveChoice?.count > 1) {
     const button = document.createElement("button");
     button.type = "button";

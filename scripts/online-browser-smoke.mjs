@@ -18,6 +18,7 @@ function parseArgs(argv) {
     duelServerUrl: process.env.ONLINE_BROWSER_DUEL_SERVER_URL || DEFAULT_DUEL_SERVER_URL,
     timeoutMs: Number(process.env.ONLINE_BROWSER_TIMEOUT_MS) || 45_000,
     effectChoices: false,
+    tributeChoices: false,
     artifactDir: process.env.ONLINE_BROWSER_ARTIFACT_DIR || path.resolve(".tmp", "online-browser-smoke")
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -27,6 +28,7 @@ function parseArgs(argv) {
     else if (argv[index] === "--timeout-ms" && value) result.timeoutMs = Number(value) || result.timeoutMs, index += 1;
     else if (argv[index] === "--artifact-dir" && value) result.artifactDir = path.resolve(value), index += 1;
     else if (argv[index] === "--effect-choices") result.effectChoices = true;
+    else if (argv[index] === "--tribute-choices") result.tributeChoices = true;
   }
   return result;
 }
@@ -543,6 +545,69 @@ async function startBrowser(browserBin, profileDir, timeoutMs) {
   };
 }
 
+async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, options, roomCode) {
+  const settle = () => waitForPage(cdp, firstPage, `document.querySelector('#actionStage').hidden && document.querySelector('#phaseStage').hidden`, 'tribute setup presentations completed', options.timeoutMs);
+  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '双重召唤');
+  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '日冕骑士');
+  await waitForPage(cdp, firstPage, textMatchExpression('#playerField', '日冕骑士'), 'first tribute summoned', options.timeoutMs);
+  await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '铁壁守卫');
+  await waitForPage(cdp, firstPage, textMatchExpression('#playerField', '铁壁守卫'), 'second tribute summoned', options.timeoutMs);
+  await settle();
+  await endTurn(cdp, firstPage, options.timeoutMs);
+  await waitForPage(cdp, secondPage, textMatchExpression('#turnLabel', '你的回合'), 'rival setup turn', options.timeoutMs);
+  await endTurn(cdp, secondPage, options.timeoutMs);
+  const boss = '#hand .card.action-ready[data-card-id="starfall-colossus"]';
+  await waitForPage(cdp, firstPage, visibleExpression(boss), 'tribute summon available', options.timeoutMs);
+  await click(cdp, firstPage, boss);
+  await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 0/2'), 'empty tribute count', options.timeoutMs);
+  const first = '#fieldTargets [data-tribute-id]:nth-child(1)';
+  const second = '#fieldTargets [data-tribute-id]:nth-child(2)';
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), true);
+  await click(cdp, firstPage, first);
+  await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 1/2'), 'partial tribute count', options.timeoutMs);
+  await click(cdp, firstPage, '#playerField .slot[data-index="1"]');
+  await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 2/2'), 'field and list tribute selections agree', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#fieldTargets [aria-pressed="true"]').length`), 2);
+  await doubleClick(cdp, firstPage, '#playerField .slot[data-index="1"]');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="starfall-colossus"]').length`), 1, 'Double-clicking the last tribute must not summon');
+  await click(cdp, firstPage, first);
+  await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 1/2'), 'list deselects tribute', options.timeoutMs);
+  await click(cdp, firstPage, first);
+  await click(cdp, firstPage, '#playerField .slot[data-index="4"]');
+  await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '召唤至第 5 格'), 'chosen destination displayed', options.timeoutMs);
+  const layouts = [];
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+    await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    layouts.push(await waitForPage(cdp, firstPage, `(() => {
+      const panel = document.querySelector('#choiceActions').getBoundingClientRect();
+      const list = document.querySelector('#fieldTargets').getBoundingClientRect();
+      const confirm = document.querySelector('#choiceConfirmBtn').getBoundingClientRect();
+      return innerWidth === ${width} && panel.top >= 0 && panel.bottom <= innerHeight && list.bottom <= confirm.top && confirm.bottom <= panel.bottom && document.documentElement.scrollWidth <= innerWidth
+        ? { width: innerWidth, height: innerHeight, confirmationVisible: true } : null;
+    })()`, 'tribute list and confirmation stay in viewport', options.timeoutMs));
+    await writeFile(path.join(options.artifactDir, `online-tribute-${width}-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  }
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'tribute desktop viewport restored', options.timeoutMs);
+  await click(cdp, firstPage, '#choiceCancelBtn');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .slot[data-card-uid]').length`), 2);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="starfall-colossus"]').length`), 1);
+  await click(cdp, firstPage, boss);
+  await click(cdp, firstPage, first);
+  await click(cdp, firstPage, second);
+  await click(cdp, firstPage, '#playerField .slot[data-index="1"]');
+  await click(cdp, firstPage, '#choiceConfirmBtn');
+  await Promise.all([
+    waitForPage(cdp, firstPage, textMatchExpression('#playerField .slot[data-index="1"]', '坠星巨卫'), 'boss occupies a released tribute slot', options.timeoutMs),
+    waitForPage(cdp, secondPage, textMatchExpression('#aiField', '坠星巨卫'), 'rival sees tribute summon', options.timeoutMs),
+    waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '坠星巨卫'), 'spectator sees tribute summon', options.timeoutMs)
+  ]);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="starfall-colossus"]').length`), 0);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerGraveCount').textContent`), '3');
+  await writeFile(path.join(options.artifactDir, `online-tribute-${roomCode}.json`), `${JSON.stringify({ roomCode, layouts, cancelledWithoutConsuming: true, doubleClickDidNotCommit: true, releasedSlotUsed: true, rivalAndSpectatorSynced: true }, null, 2)}\n`, 'utf8');
+  console.log(`online-tribute-choice-smoke passed (${roomCode}, select, deselect, cancel, explicit confirm, released slot, spectator)`);
+}
+
 async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, options, roomCode) {
   const settle = page => waitForPage(cdp, page, `document.querySelector('#actionStage').hidden && document.querySelector('#phaseStage').hidden`, 'effect presentation completed', options.timeoutMs);
   await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '日冕骑士');
@@ -750,7 +815,7 @@ try {
   await click(cdp, firstPage, "#readyButton");
   await click(cdp, secondPage, "#readyButton");
   await Promise.all([
-    waitForPage(cdp, firstPage, textMatchExpression("#hand .card", options.effectChoices ? "余烁归轨" : "双重召唤"), "1P fixed opening", options.timeoutMs),
+    waitForPage(cdp, firstPage, textMatchExpression("#hand .card", options.tributeChoices ? "坠星巨卫" : options.effectChoices ? "余烁归轨" : "双重召唤"), "1P fixed opening", options.timeoutMs),
     waitForPage(cdp, secondPage, textMatchExpression("#hand .card", "弱化力场"), "2P fixed opening", options.timeoutMs),
     waitForPage(cdp, spectatorPage, `(() => {
       const board = document.querySelector("#watchPlayers");
@@ -759,7 +824,9 @@ try {
     })()`, "spectator hidden-hand board", options.timeoutMs)
   ]);
 
-  if (options.effectChoices) {
+  if (options.tributeChoices) {
+    await exerciseTributeChoices(firstPage, secondPage, spectatorPage, options, roomCode);
+  } else if (options.effectChoices) {
     await exerciseEffectChoices(firstPage, secondPage, spectatorPage, options, roomCode);
   } else {
   // Exercise the real responsive header and selection states before the duel sequence.

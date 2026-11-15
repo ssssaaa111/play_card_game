@@ -1194,6 +1194,29 @@ export function onlineEffectDecisionView(view, model) {
   };
 }
 
+export function onlineTributeDecisionView(view, model) {
+  const self = view?.players?.[view?.viewerSeatId];
+  if (spectatorView(view) || !model?.tributeCount || !self
+    || !self.hand.some(card => card.id === model.card.id)
+    || view.gameOver || view.turn?.playerId !== view.viewerSeatId || view.machine?.responseWindow) return null;
+  const candidates = self.monsterZone.flatMap((card, index) => card && !card.hidden ? [{
+    id: card.id, name: card.name, location: `我方怪兽区 · 第 ${index + 1} 格`,
+    detail: `ATK ${totalAtk(card)} · DEF ${totalDef(card)}`,
+    selected: model.tributeCardIds.includes(card.id)
+  }] : []);
+  const selected = candidates.filter(card => card.selected);
+  const complete = selected.length === model.tributeCount;
+  return {
+    title: `${model.card.name} · 祭品召唤`,
+    progress: `已选 ${selected.length}/${model.tributeCount} 只祭品`,
+    summary: selected.length ? selected.map(card => card.name).join("、") : "从场上或下方名单选择我方怪兽。",
+    hint: complete && model.index != null
+      ? `召唤至第 ${model.index + 1} 格 · 确认后才释放祭品，点击其他高亮空位可改落点。`
+      : "再次点击可取消选择；确认召唤前，手牌和场面保持不变。",
+    candidates
+  };
+}
+
 export function onlineGraveChoiceView(view, model, seatId = view?.viewerSeatId) {
   if (spectatorView(view) || model?.card.type !== "spell" || model.stage !== "target"
     || view.gameOver || view.turn.playerId !== view.viewerSeatId || view.machine?.responseWindow
