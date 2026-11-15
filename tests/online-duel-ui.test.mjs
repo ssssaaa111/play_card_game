@@ -665,6 +665,12 @@ test("multi-link chain cues replay every link in resolution order and explain ne
   assert.equal(cue.resolutionOrder, "CL4 → CL3 → CL2 → CL1");
   assert.equal(cue.summary, "CL4、CL2 生效 · CL3、CL1 被无效");
   assert.equal(cue.outcome, "《日冕骑士》直接命中月见 · 1700 伤害");
+  assert.equal(cue.duration, 3830);
+  assert.equal(cue.followUp.kind, "impact");
+  assert.equal(cue.followUp.cardId, "attacker:1");
+  assert.equal(cue.followUp.damage, 1700);
+  assert.equal(cue.followUp.damagePlayerId, "p2");
+  assert.match(onlineActionPresentation(view, cue.followUp).result, /直接命中 · 1700/);
   assert.deepEqual(cue.links.map(({ chainIndex, actor, status, negatedByChainIndex }) => ({ chainIndex, actor, status, negatedByChainIndex })), [
     { chainIndex: 4, actor: "player", status: "resolved", negatedByChainIndex: null },
     { chainIndex: 3, actor: "ai", status: "negated", negatedByChainIndex: 4 },
@@ -672,6 +678,40 @@ test("multi-link chain cues replay every link in resolution order and explain ne
     { chainIndex: 1, actor: "ai", status: "negated", negatedByChainIndex: 2 }
   ]);
   assert.deepEqual(onlineActionCue(view, events), cue, "the chain replay must take priority over a generic trap cue");
+});
+
+test("single-trap resolution is brief and a blocked attack never gains phantom damage", () => {
+  const view = snapshot();
+  const events = [
+    { id: 31, type: "CHAIN_LINK_RESOLVED", playerId: "p2", linkId: 1, cardId: "mirror:1" },
+    { id: 32, type: "CHAIN_RESOLVED", playerId: "p2" },
+    { id: 33, type: "ATTACK_CANCELED", playerId: "p1", attackerCardId: "knight:1", reason: "attackerMissing" }
+  ];
+  const cue = onlineChainResolutionCue(view, events);
+  assert.equal(cue.duration, 1800);
+  assert.ok(cue.resultDelay < cue.duration);
+  assert.equal(cue.followUp.kind, "guard");
+  assert.equal(cue.followUp.damage, 0);
+  assert.match(onlineActionPresentation(view, cue.followUp).result, /阻断/);
+  assert.equal(onlineChainResolutionCue(view, events.slice(0, 2)).followUp, null);
+});
+
+test("chain follow-up damage belongs to the resumed battle and supports either viewing seat", () => {
+  const view = snapshot();
+  view.viewerSeatId = "p2";
+  view.opponentSeatId = "p1";
+  const cue = onlineChainResolutionCue(view, [
+    { id: 20, type: "DAMAGE_DEALT", playerId: "p1", amount: 400 },
+    { id: 21, type: "CHAIN_LINK_RESOLVED", playerId: "p1", linkId: 1 },
+    { id: 22, type: "CHAIN_RESOLVED", playerId: "p1" },
+    { id: 23, type: "DAMAGE_DEALT", playerId: "p2", amount: 600 },
+    { id: 24, type: "BATTLE_RESOLVED", playerId: "p1", rivalId: "p2", direct: true, attackerCardId: "knight:1", outcome: { kind: "direct", finalDamage: 600, damagePlayerId: "p2" } },
+    { id: 25, type: "GAME_OVER_DECLARED", playerId: "p1" }
+  ]);
+  assert.equal(cue.followUp.actor, "ai");
+  assert.equal(cue.followUp.damage, 600);
+  assert.equal(cue.followUp.damagePlayerId, "p2");
+  assert.equal(cue.followUp.resultType, "BATTLE_RESOLVED");
 });
 
 test("latest chain replay isolates the newest completed chain from older public history", () => {

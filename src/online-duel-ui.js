@@ -587,6 +587,9 @@ export function onlineChainResolutionCue(view, events = []) {
     && Number(event.id) > Number(completed.id)
   );
   const battleReceipt = battleEvent ? battleResultReceipt(view, battleEvent, fresh) : null;
+  const followUp = onlineActionCue(view, fresh.slice(completedIndex + 1).filter((event) =>
+    ["DAMAGE_DEALT", "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED"].includes(event.type)
+  ));
   return {
     id: Number(completed.id) || 0,
     kind: "chain",
@@ -597,6 +600,9 @@ export function onlineChainResolutionCue(view, events = []) {
     resolutionOrder: links.map((link) => `CL${link.chainIndex}`).join(" → "),
     summary: `${resolvedLabel} 生效${negatedLabel ? ` · ${negatedLabel} 被无效` : ""}`,
     outcome: battleReceipt?.text || "",
+    followUp,
+    duration: linkCount === 1 ? 1800 : Math.min(7_200, 1_750 + linkCount * 520),
+    resultDelay: 360 + linkCount * 480,
     links
   };
 }

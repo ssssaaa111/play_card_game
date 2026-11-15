@@ -19,6 +19,7 @@ function parseArgs(argv) {
     timeoutMs: Number(process.env.ONLINE_BROWSER_TIMEOUT_MS) || 45_000,
     effectChoices: false,
     tributeChoices: false,
+    chainRhythm: false,
     artifactDir: process.env.ONLINE_BROWSER_ARTIFACT_DIR || path.resolve(".tmp", "online-browser-smoke")
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -29,6 +30,7 @@ function parseArgs(argv) {
     else if (argv[index] === "--artifact-dir" && value) result.artifactDir = path.resolve(value), index += 1;
     else if (argv[index] === "--effect-choices") result.effectChoices = true;
     else if (argv[index] === "--tribute-choices") result.tributeChoices = true;
+    else if (argv[index] === "--chain-rhythm") result.chainRhythm = true;
   }
   return result;
 }
@@ -390,6 +392,10 @@ async function installStageObserver(cdp, page) {
       const beat = {
         phase: !document.querySelector('#phaseStage').hidden,
         action: !action.hidden,
+        chain: !document.querySelector('#chainResolutionStage').hidden,
+        response: document.querySelector('#onlineResponse').open,
+        waiting: Boolean(document.querySelector('body[data-online-response="waiting"]')),
+        result: document.querySelector('#onlineResult').open,
         title: action.querySelector('h2')?.textContent || '',
         epic: document.querySelectorAll('.epic-action').length,
         damage: document.querySelector('.life-delta')?.textContent || ''
@@ -413,9 +419,10 @@ async function installStageObserver(cdp, page) {
         if (last?.key !== key) window.__onlineStageHistory.push({ ...entry, key });
       }
     };
-    for (const element of [...roots.map(([, element]) => element), document.querySelector('#phaseStage'), document.querySelector('#effectLayer')]) {
+    for (const element of [...roots.map(([, element]) => element), document.querySelector('#phaseStage'), document.querySelector('#effectLayer'), document.querySelector('#onlineResponse'), document.querySelector('#onlineResult')]) {
       if (element) new MutationObserver(capture).observe(element, { attributes: true, childList: true, subtree: true });
     }
+    new MutationObserver(capture).observe(document.body, { attributes: true, attributeFilter: ['data-online-response'] });
     capture();
     return true;
   })()`);
@@ -543,6 +550,79 @@ async function startBrowser(browserBin, profileDir, timeoutMs) {
     devtoolsUrl: `ws://127.0.0.1:${activePort.port}${activePort.browserPath}`,
     devtoolsHttpOrigin: `http://127.0.0.1:${activePort.port}`
   };
+}
+
+async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options, roomCode) {
+  const settle = page => waitForPage(cdp, page, `document.querySelector('#actionStage').hidden && document.querySelector('#chainResolutionStage').hidden && document.querySelector('#phaseStage').hidden`, 'chain rhythm presentations completed', options.timeoutMs);
+  const play = async (page, id) => {
+    const selector = `#hand .card.action-ready[data-card-id="${id}"]`;
+    const before = await evaluate(cdp, page, `document.querySelectorAll(${JSON.stringify(selector)}).length`);
+    await click(cdp, page, selector);
+    await click(cdp, page, '#choiceConfirmBtn');
+    await waitForPage(cdp, page, `document.querySelectorAll(${JSON.stringify(selector)}).length < ${before}`, `confirmed ${id}`, options.timeoutMs);
+  };
+  const nextRound = async () => {
+    await settle(firstPage);
+    await endTurn(cdp, firstPage, options.timeoutMs);
+    await waitForPage(cdp, secondPage, textMatchExpression('#turnLabel', '你的回合'), 'defender turn', options.timeoutMs);
+    await endTurn(cdp, secondPage, options.timeoutMs);
+    await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-attack-state="ready"]'), 'next attack available', options.timeoutMs);
+  };
+  await play(firstPage, 'chain-nullifier');
+  await play(firstPage, 'chain-nullifier');
+  await play(firstPage, 'solar-knight');
+  await waitForPage(cdp, firstPage, textMatchExpression('#playerField', '日冕骑士'), 'chain attacker summoned', options.timeoutMs);
+  await endTurn(cdp, firstPage, options.timeoutMs);
+  await waitForPage(cdp, secondPage, textMatchExpression('#turnLabel', '你的回合'), 'defender setup turn', options.timeoutMs);
+  await play(secondPage, 'mirror-snare');
+  await play(secondPage, 'chain-nullifier');
+  await endTurn(cdp, secondPage, options.timeoutMs);
+  await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-attack-state="ready"]'), 'chain attack available', options.timeoutMs);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
+  await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'attack response', options.timeoutMs);
+  await click(cdp, secondPage, '#responseActivate');
+  await waitForPage(cdp, firstPage, visibleExpression('#onlineResponse[open]'), 'CL2 response', options.timeoutMs);
+  await click(cdp, firstPage, '#responseChoices button');
+  await click(cdp, firstPage, '#responseActivate');
+  await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'CL3 response', options.timeoutMs);
+  await click(cdp, secondPage, '#responseActivate');
+  await waitForPage(cdp, firstPage, textMatchExpression('#responseTitle', 'CL4'), 'single candidate retains CL4 title', options.timeoutMs);
+  await click(cdp, firstPage, '#responseActivate');
+  await waitForPage(cdp, firstPage, visibleExpression('#chainResolutionStage'), 'four-link resolution', options.timeoutMs);
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#chainResolutionStage').textContent`), /CL4 → CL3 → CL2 → CL1/);
+  await waitForPage(cdp, firstPage, `(() => { const delta = document.querySelector('.life-delta'); return delta?.textContent === '-1700' && Number(getComputedStyle(delta).opacity) > .9; })()`, 'readable damage follows chain', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#chainResolutionStage').hidden && !document.querySelector('#onlineResult').open && !document.querySelector('.epic-action')`), true);
+  assert.equal(await evaluate(cdp, firstPage, `Number(getComputedStyle(document.querySelector('#effectLayer')).zIndex) > Number(getComputedStyle(document.querySelector('#actionStage')).zIndex)`), true, 'Damage must be visible above the action card on mobile');
+  assert.equal(await evaluate(cdp, firstPage, `(() => { const delta = document.querySelector('.life-delta').getBoundingClientRect(); return delta.top > document.querySelector('#actionStage').getBoundingClientRect().bottom && delta.bottom < innerHeight; })()`), true, 'Damage must not cover the mobile action card');
+  await writeFile(path.join(options.artifactDir, `online-chain-impact-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '2300 LP'), 'spectator chain damage', options.timeoutMs);
+  await settle(firstPage);
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'chain desktop viewport restored', options.timeoutMs);
+  const beforeReplay = await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.length`);
+  await click(cdp, firstPage, '#onlineToolsToggle');
+  await click(cdp, firstPage, '#lastChainButton');
+  await waitForPage(cdp, firstPage, `!document.querySelector('#chainResolutionStage').hidden && getComputedStyle(document.querySelector('.online-chain-resolution-result')).opacity > .9`, 'readable chain replay summary', options.timeoutMs);
+  await writeFile(path.join(options.artifactDir, `online-chain-resolution-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await settle(firstPage);
+  assert.equal(await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.slice(${beforeReplay}).some(beat => beat.damage || beat.action)`), false, 'Manual replay must not repeat a hit or damage');
+  for (const lp of [600, 0]) {
+    await nextRound();
+    await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
+    await waitForPage(cdp, secondPage, textMatchExpression('#playerPanel', `${lp} / 4000`), 'next direct-attack LP', options.timeoutMs);
+  }
+  await Promise.all([firstPage, secondPage].map(page => waitForPage(cdp, page, visibleExpression('#onlineResult[open]'), 'lethal hit finishes before result', options.timeoutMs)));
+  const histories = await Promise.all([firstPage, secondPage].map(page => evaluate(cdp, page, `window.__onlineRhythmHistory.map(({ key, ...beat }) => beat)`)));
+  for (const history of histories) {
+    assert.ok(history.some(beat => beat.chain), 'No chain playback recorded');
+    assert.ok(history.some(beat => beat.damage === '-1700'), 'No post-chain damage recorded');
+    assert.ok(history.filter(beat => beat.response || beat.waiting).every(beat => !beat.phase && !beat.action && !beat.chain && !beat.epic && !beat.damage), 'Background presentations overlap a response');
+    assert.ok(history.filter(beat => beat.chain).every(beat => !beat.phase && !beat.action && !beat.response && !beat.damage), 'Chain overlaps another presentation');
+    assert.ok(history.filter(beat => beat.result).every(beat => !beat.chain && !beat.action && !beat.epic && !beat.damage), 'Result covers the lethal hit');
+  }
+  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
+  console.log(`online-chain-rhythm-smoke passed (${roomCode}, four links, response priority, damage, replay, lethal result, spectator)`);
 }
 
 async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, options, roomCode) {
@@ -815,8 +895,8 @@ try {
   await click(cdp, firstPage, "#readyButton");
   await click(cdp, secondPage, "#readyButton");
   await Promise.all([
-    waitForPage(cdp, firstPage, textMatchExpression("#hand .card", options.tributeChoices ? "坠星巨卫" : options.effectChoices ? "余烁归轨" : "双重召唤"), "1P fixed opening", options.timeoutMs),
-    waitForPage(cdp, secondPage, textMatchExpression("#hand .card", "弱化力场"), "2P fixed opening", options.timeoutMs),
+    waitForPage(cdp, firstPage, textMatchExpression("#hand .card", options.chainRhythm ? "断链裁决" : options.tributeChoices ? "坠星巨卫" : options.effectChoices ? "余烁归轨" : "双重召唤"), "1P fixed opening", options.timeoutMs),
+    waitForPage(cdp, secondPage, textMatchExpression("#hand .card", options.chainRhythm ? "镜光反制" : "弱化力场"), "2P fixed opening", options.timeoutMs),
     waitForPage(cdp, spectatorPage, `(() => {
       const board = document.querySelector("#watchPlayers");
       return document.querySelectorAll("#watchPlayers .watch-player").length === 2
@@ -824,7 +904,9 @@ try {
     })()`, "spectator hidden-hand board", options.timeoutMs)
   ]);
 
-  if (options.tributeChoices) {
+  if (options.chainRhythm) {
+    await exerciseChainRhythm(firstPage, secondPage, spectatorPage, options, roomCode);
+  } else if (options.tributeChoices) {
     await exerciseTributeChoices(firstPage, secondPage, spectatorPage, options, roomCode);
   } else if (options.effectChoices) {
     await exerciseEffectChoices(firstPage, secondPage, spectatorPage, options, roomCode);

@@ -471,6 +471,7 @@ body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).targe
 }
 
 body[data-online-status="playing"] > .online-effect-layer { z-index: 140; }
+body[data-online-status="playing"] > .online-effect-layer:has(.life-delta) { z-index: 170; }
 .online-effect-layer[data-online-cue] { overflow: visible; }
 .online-recovery-brief {
   position: fixed;

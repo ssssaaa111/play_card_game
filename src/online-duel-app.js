@@ -19,7 +19,7 @@ import { installPublicReport } from "./public-report.js?v=20261114-network-recov
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261116-tribute-choice-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261116-chain-rhythm-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -491,6 +491,11 @@ function syncActionReceipt(view) {
       sourceIndex: previousSource?.index ?? null,
       targetIndex: previousTarget?.index ?? null
     };
+    if (cue.followUp) pendingActionCue.followUp = {
+      ...cue.followUp,
+      sourceIndex: lastFieldPositions.get(cue.followUp.cardId)?.index ?? null,
+      targetIndex: lastFieldPositions.get(cue.followUp.targetCardId)?.index ?? null
+    };
   }
   const receipt = latestOnlineActionReceipt(view, lastObservedEventId);
   lastObservedEventId = Math.max(lastObservedEventId, newestId);
@@ -672,7 +677,7 @@ function clearChainResolutionStage({ rerender = false } = {}) {
   }
 }
 
-function playChainResolutionStage(view, cue) {
+function playChainResolutionStage(view, cue, { replay = false } = {}) {
   clearActionStage();
   clearChainResolutionStage();
   phaseStageController.reset();
@@ -730,13 +735,13 @@ function playChainResolutionStage(view, cue) {
 
   const result = document.createElement("footer");
   result.className = "online-chain-resolution-result";
-  result.style.setProperty("--chain-result-delay", `${360 + cue.linkCount * 480}ms`);
+  result.style.setProperty("--chain-result-delay", `${cue.resultDelay}ms`);
   const resultKicker = document.createElement("span");
   resultKicker.textContent = "RESOLUTION COMPLETE";
   const resultSummary = document.createElement("strong");
   resultSummary.textContent = cue.summary;
   result.append(resultKicker, resultSummary);
-  if (cue.outcome) {
+  if (cue.outcome && (replay || !cue.followUp)) {
     const outcome = document.createElement("p");
     outcome.textContent = cue.outcome;
     result.appendChild(outcome);
@@ -749,8 +754,13 @@ function playChainResolutionStage(view, cue) {
   chainResolutionActive = true;
   elements.duelPanel.inert = true;
   elements.handPanel.inert = true;
-  const duration = Math.min(7_200, 1_750 + cue.linkCount * 520);
-  chainResolutionTimer = window.setTimeout(() => clearChainResolutionStage({ rerender: true }), duration);
+  chainResolutionTimer = window.setTimeout(() => {
+    clearChainResolutionStage();
+    if (!replay && cue.followUp) playActionStage(view, cue.followUp);
+    phaseStageController.resume();
+    if (!phaseStageController.hasWork()) pumpActionStageQueue();
+    if (client.view) render(client.view);
+  }, cue.duration);
 }
 
 function latestChainCue(view = client.view) {
@@ -826,10 +836,10 @@ function showRecoveryBrief(view) {
 
 function replayLatestChain() {
   const cue = latestChainCue();
-  if (!cue || chainResolutionActive) return;
+  if (!cue || chainResolutionActive || client.view?.machine?.responseWindow) return;
   hideRecoveryBrief();
   setEventLogOpen(false);
-  playChainResolutionStage(client.view, cue);
+  playChainResolutionStage(client.view, cue, { replay: true });
 }
 
 function captureFieldPositions(view) {
@@ -848,6 +858,15 @@ function scheduleActionVfx(callback, delay) {
     callback();
   }, delay);
   actionVfxTimers.add(timer);
+}
+
+function playOnlineLifeDelta(owner, amount) {
+  animationController.playLifeDelta(owner, amount);
+  const delta = elements.effectLayer.lastElementChild;
+  if (!delta?.classList.contains("life-delta") || elements.actionStage.hidden) return;
+  const bottom = elements.actionStage.getBoundingClientRect().bottom;
+  // The number rises 28px; keep its whole motion below the action card.
+  delta.style.setProperty("--y", `${Math.min(window.innerHeight - 64, Math.max(parseFloat(delta.style.getPropertyValue("--y")) || 0, bottom + 40))}px`);
 }
 
 function playActionVfx(view, cue) {
@@ -884,7 +903,7 @@ function playActionVfx(view, cue) {
         animationController.shakeScreen();
       }
       if (cue.damage) scheduleActionVfx(() => {
-        animationController.playLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
+        playOnlineLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
       }, 760);
     }, 320);
   } else if (cue.kind === "summon") {
@@ -911,7 +930,7 @@ function playActionVfx(view, cue) {
     animationController.playImpactExplosion(target);
     animationController.shakeScreen();
     if (cue.damage) scheduleActionVfx(() => {
-      animationController.playLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
+      playOnlineLifeDelta(cue.damagePlayerId ? ownerForSeat(view, cue.damagePlayerId) : cue.rival, -cue.damage);
     }, 940);
   }
 }
@@ -919,7 +938,7 @@ function playActionVfx(view, cue) {
 function playPendingActionCue(view) {
   const cue = pendingActionCue;
   pendingActionCue = null;
-  if (!cue || !elements.effectLayer) {
+  if (!cue || !elements.effectLayer || view.machine?.responseWindow) {
     captureFieldPositions(view);
     return;
   }
@@ -1749,6 +1768,11 @@ function renderResponseCountdown(view) {
 }
 
 function renderResponse(view) {
+  if (view.machine.responseWindow) {
+    clearActionStage();
+    clearChainResolutionStage();
+    phaseStageController.reset();
+  }
   renderResponseBattle(view);
   const activeResponse = view.attackResponse || view.summonResponse || view.chainResponse;
   const summonResponse = activeResponse?.eventName === "summon";
@@ -1774,9 +1798,9 @@ function renderResponse(view) {
     elements.onlineResponse.classList.toggle("single-response", panel.singleChoice);
     elements.responseChoices.hidden = panel.choices.length === 0;
     elements.responseKicker.textContent = chainResponse ? "CHAIN RESPONSE" : summonResponse ? "SUMMON RESPONSE" : "ATTACK RESPONSE";
-    elements.responseTitle.textContent = panel.singleChoice
+    elements.responseTitle.textContent = chainResponse ? `是否加入 CL${(view.machine?.chainLength || 0) + 1} 反制` : panel.singleChoice
       ? (summonResponse ? "召唤完成 · 可发动一张陷阱" : "可发动一张陷阱")
-      : chainResponse ? `是否加入 CL${(view.machine?.chainLength || 0) + 1} 反制` : (summonResponse ? "选择本次召唤的响应" : "选择本次攻击的响应");
+      : (summonResponse ? "选择本次召唤的响应" : "选择本次攻击的响应");
     elements.responseLead.textContent = chainResponse
       ? "对手陷阱已加入连锁；发动反制将无效上一段效果，放弃则立即按后进先出结算。"
       : panel.singleChoice

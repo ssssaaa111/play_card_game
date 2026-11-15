@@ -130,8 +130,12 @@ jobs:
             DUEL_ROOM_STORE="$RUNNER_TEMP/card-duel-tribute-rooms.json" \
             node scripts/duel-server.mjs --port=5180 --scenario=tribute-choice > online-browser-tributes.out.log 2> online-browser-tributes.err.log &
           tribute_pid=$!
+          DUEL_AUTH_STORE="$RUNNER_TEMP/card-duel-chain-auth.json" \
+            DUEL_ROOM_STORE="$RUNNER_TEMP/card-duel-chain-rooms.json" \
+            node scripts/duel-server.mjs --port=5181 --scenario=multi-chain-response > online-browser-chain.out.log 2> online-browser-chain.err.log &
+          chain_pid=$!
           cleanup() {
-            kill "$frontend_pid" "$duel_pid" "$effect_pid" "$tribute_pid" 2>/dev/null || true
+            kill "$frontend_pid" "$duel_pid" "$effect_pid" "$tribute_pid" "$chain_pid" 2>/dev/null || true
           }
           trap cleanup EXIT
 
@@ -140,7 +144,8 @@ jobs:
             if curl --fail --silent http://127.0.0.1:5177/online.html > /dev/null \
               && curl --fail --silent http://127.0.0.1:5178/health > /dev/null \
               && curl --fail --silent http://127.0.0.1:5179/health > /dev/null \
-              && curl --fail --silent http://127.0.0.1:5180/health > /dev/null; then
+              && curl --fail --silent http://127.0.0.1:5180/health > /dev/null \
+              && curl --fail --silent http://127.0.0.1:5181/health > /dev/null; then
               ready=1
               break
             fi
@@ -148,7 +153,7 @@ jobs:
           done
           if [[ "$ready" -ne 1 ]]; then
             echo "Online browser smoke services did not become ready." >&2
-            cat online-browser-frontend.err.log online-browser-duel.err.log online-browser-effects.err.log online-browser-tributes.err.log >&2 || true
+            cat online-browser-frontend.err.log online-browser-duel.err.log online-browser-effects.err.log online-browser-tributes.err.log online-browser-chain.err.log >&2 || true
             exit 1
           fi
 
@@ -168,6 +173,12 @@ jobs:
             --duel-server-url http://127.0.0.1:5180 \
             --artifact-dir .tmp/online-browser-smoke/tributes \
             --timeout-ms 45000
+          npm run smoke:online-browser -- \
+            --chain-rhythm \
+            --frontend-url http://127.0.0.1:5177 \
+            --duel-server-url http://127.0.0.1:5181 \
+            --artifact-dir .tmp/online-browser-smoke/chains \
+            --timeout-ms 45000
       - name: Upload browser smoke evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -183,5 +194,7 @@ jobs:
             online-browser-effects.err.log
             online-browser-tributes.out.log
             online-browser-tributes.err.log
+            online-browser-chain.out.log
+            online-browser-chain.err.log
           if-no-files-found: warn
           retention-days: 14
