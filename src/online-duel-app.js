@@ -1,5 +1,5 @@
 import { createCardElement } from "./card-renderer.js";
-import { renderHandCards } from "./hand-renderer.js?v=20261030-interaction-v2-2";
+import { renderHandCards } from "./hand-renderer.js?v=20261114-network-recovery-1";
 import { renderMonsterZones, renderSupportZones } from "./field-renderer.js?v=20261111-monster-status-1";
 import { buildDuelControlsView } from "./control-renderer.js";
 import { renderOnlineAttackPreview } from "./online-attack-preview-renderer.js?v=20261111-attack-choice-1";
@@ -13,10 +13,12 @@ import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
-import { OnlineDuelClient } from "./online-duel-client.js?v=20261107-spectator-1";
+import { OnlineDuelClient } from "./online-duel-client.js?v=20261114-network-recovery-1";
+import { installOnlineLifecycle } from "./online-lifecycle.js?v=20261114-network-recovery-1";
+import { installPublicReport } from "./public-report.js?v=20261114-network-recovery-1";
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
-import { OnlineAuthClient } from "./online-auth-client.js";
+import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
 import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261112-presentation-rhythm-1";
 
 const elements = Object.fromEntries([
@@ -39,6 +41,7 @@ const elements = Object.fromEntries([
 const STORAGE_KEY_PREFIX = "star-card-duel:online-session:v2";
 const AUDIO_STORAGE_KEY = "star-card-duel:online-audio:v1";
 const client = new OnlineDuelClient();
+const publicReport = installPublicReport(client);
 const authClient = new OnlineAuthClient();
 let currentAccount = null;
 let authMode = "login";
@@ -242,13 +245,15 @@ async function attemptReconnect({ immediate = false } = {}) {
     reconnectAttempt = 0;
     recoveryFailed = false;
     setConnection("connected", `连接已恢复 · ${seatName(result.view, result.seatId)}`);
+    setError();
     render(result.view);
     return true;
   } catch (error) {
     recoveryResumePending = false;
-    const terminal = ["ROOM_NOT_FOUND", "UNKNOWN_SEAT", "INVALID_MESSAGE"].includes(error.code);
+    const terminal = ["ROOM_NOT_FOUND", "UNKNOWN_SEAT", "INVALID_MESSAGE", "ACCOUNT_MISMATCH", "AUTH_REQUIRED"].includes(error.code);
     recoveryFailed = terminal || reconnectAttempt >= 8;
     setConnection(recoveryFailed ? "error" : "reconnecting", recoveryFailed ? "无法恢复原房间" : "连接中断 · 正在重试");
+    if (terminal) setError(error.message);
     renderConnectionState();
     if (!recoveryFailed) scheduleReconnect(immediate ? 700 : undefined);
     return false;
@@ -296,6 +301,7 @@ function renderAccountState() {
   elements.accountBadge.title = currentAccount ? `${currentAccount.displayName} · @${currentAccount.handle}` : "";
   elements.playerName.value = currentAccount?.displayName || "决斗者";
   if (!signedIn) {
+    publicReport.close();
     elements.lobbyPanel.hidden = true;
     elements.roomPanel.hidden = true;
     elements.duelPanel.hidden = true;
@@ -1726,7 +1732,7 @@ function renderResponse(view) {
   const responseSoundId = responseEventId ? `${responseEventId}:${activeResponse.eventName}:${view.machine?.chainLength || 0}` : null;
   if (responseSoundId && responseSoundId !== lastResponseSoundId) {
     lastResponseSoundId = responseSoundId;
-    playSound("trap");
+    if (!document.hidden) playSound("trap");
   } else if (!responseSoundId) lastResponseSoundId = null;
   if (trapChoice) {
     const panel = renderTrapResponsePanel({ document, ...responseRendererOptions(view), elements: {
@@ -1847,7 +1853,7 @@ function reviewFinalBoard() {
 }
 
 async function requestOnlineRematch() {
-  if (rematchPending || !client.view?.gameOver) return;
+  if (rematchPending || !client.view?.gameOver || transportState !== "connected") return;
   rematchPending = true;
   rematchError = "";
   elements.resultRematch.disabled = true;
@@ -1952,14 +1958,14 @@ function renderRoomDeck(view, self) {
     elements.roomDeckStatus.textContent = error.message;
   }
   elements.roomDeckStatus.dataset.invalid = String(invalid);
-  elements.roomDeckSelect.disabled = locked || roomDeckPending;
-  elements.roomDeckRefresh.disabled = locked || roomDeckPending;
-  elements.readyButton.disabled = roomDeckPending || spectatorConsentPending || (!self?.ready && invalid);
+  elements.roomDeckSelect.disabled = locked || roomDeckPending || transportState !== "connected";
+  elements.roomDeckRefresh.disabled = locked || roomDeckPending || transportState !== "connected";
+  elements.readyButton.disabled = roomDeckPending || spectatorConsentPending || transportState !== "connected" || (!self?.ready && invalid);
   elements.readyButton.textContent = roomDeckPending ? "正在提交…" : self?.ready ? "取消准备" : "准备";
 }
 
 async function toggleRoomReady() {
-  if (roomDeckPending || spectatorConsentPending || client.view?.status !== "waiting") return;
+  if (roomDeckPending || spectatorConsentPending || transportState !== "connected" || client.view?.status !== "waiting") return;
   const self = client.view.seats.find((seat) => seat.seatId === client.view.viewerSeatId);
   roomDeckPending = true;
   setError();
@@ -2011,7 +2017,7 @@ function renderRoom(view) {
   const self = view.seats.find((seat) => seat.seatId === view.viewerSeatId);
   renderRoomDeck(view, self);
   elements.spectatorConsent.checked = Boolean(self?.spectatorConsent);
-  elements.spectatorConsent.disabled = spectatorConsentPending || roomDeckPending || Boolean(self?.ready) || playing;
+  elements.spectatorConsent.disabled = spectatorConsentPending || roomDeckPending || Boolean(self?.ready) || playing || transportState !== "connected";
   elements.spectatorStatus.textContent = view.spectators?.enabled
     ? `双方均已同意 · ${view.spectators.count} 位观众`
     : "默认关闭，需要双方同意后开放";
@@ -2096,6 +2102,7 @@ function render(view) {
     recoveryResumePending = false;
     rebaseRecoveredView(view);
   }
+  if (document.hidden && !restoring) rebaseRecoveredView(view);
   syncRoomUrl(view.roomCode);
   renderRoom(view);
   syncActionReceipt(view);
@@ -2143,7 +2150,7 @@ function render(view) {
 }
 
 client.on("view", render);
-client.on("connection", ({ connected }) => {
+client.on("connection", ({ connected, reason }) => {
   if (connected) {
     if (transportState === "connecting") setConnection("connected", "服务已连接");
     return;
@@ -2151,10 +2158,39 @@ client.on("connection", ({ connected }) => {
   if (intentionalDisconnect) return;
   recoveryFailed = false;
   setConnection(storedSession() ? "reconnecting" : "error", storedSession() ? "连接中断 · 正在恢复" : "连接已断开");
-  renderConnectionState();
+  if (reason) setError(reason);
+  clearEndTurnConfirmation();
+  if (client.view) { rebaseRecoveredView(client.view); render(client.view); }
   if (currentAccount) scheduleReconnect(500);
 });
 client.on("error", (error) => setError(error.message));
+
+installOnlineLifecycle({ client, document, window,
+  onSuspend: () => {
+    clearEndTurnConfirmation();
+    elements.onlineTools.open = false;
+    if (client.view) rebaseRecoveredView(client.view);
+  },
+  onResume: async () => {
+    if (intentionalDisconnect || reconnectInFlight || !storedSession()) return;
+    if (client.pending.size) client.resetConnection();
+    if (client.socket?.readyState !== 1) return attemptReconnect({ immediate: true });
+    clearReconnectTimer();
+    setConnection("checking", "正在校准最新战况");
+    recoveryResumePending = true;
+    render(client.view);
+    try {
+      const result = await client.sync();
+      setConnection("connected", "已同步最新战况");
+      setError();
+      render(result.view);
+    } catch {
+      recoveryResumePending = false;
+      client.resetConnection();
+      await attemptReconnect({ immediate: true });
+    }
+  }
+});
 elements.authLoginTab.addEventListener("click", () => setAuthMode("login"));
 elements.authRegisterTab.addEventListener("click", () => setAuthMode("register"));
 elements.authForm.addEventListener("submit", submitAuth);
@@ -2162,13 +2198,14 @@ elements.logoutButton.addEventListener("click", () => { void logoutAccount(); })
 for (const [id, join] of [["createRoom", false], ["joinRoom", true]]) elements[id].addEventListener("click", async () => {
   try {
     setError();
+    await client.connect();
     const result = join ? await client.joinRoom(elements.roomCodeInput.value, elements.playerName.value) : await client.createRoom(elements.playerName.value);
     saveSession(); setConnection("connected", `身份已保存 · ${seatName(result.view, result.seatId)}`); render(result.view);
   } catch (error) { setError(error.message); }
 });
 elements.readyButton.addEventListener("click", () => { void toggleRoomReady(); });
 elements.spectatorConsent.addEventListener("change", async () => {
-  if (spectatorConsentPending || roomDeckPending || client.view?.status !== "waiting") return;
+  if (spectatorConsentPending || roomDeckPending || transportState !== "connected" || client.view?.status !== "waiting") return;
   spectatorConsentPending = true;
   const allowed = elements.spectatorConsent.checked;
   elements.spectatorConsent.disabled = true;

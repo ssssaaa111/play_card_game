@@ -1,0 +1,19 @@
+.public-report { color: #e6eef8; background: #111d2b; border: 1px solid #5a788a; border-radius: 10px; width: min(860px, calc(100vw - 24px)); height: min(820px, calc(100dvh - 32px)); max-width: none; max-height: none; padding: 16px; overflow: hidden; }
+.public-report[open] { display: grid; grid-template-rows: auto auto auto auto auto minmax(0,1fr) auto; gap: 8px; }
+.public-report::backdrop { background: #000b; }
+.public-report header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.public-report h2 { margin: 0; font-size: 19px; }
+.public-report p { margin: 0; overflow-wrap: anywhere; font-size: 12px; }
+.public-report .report-note { color: #adbfce; }
+.public-report button, .public-report select { min-height: 44px; min-width: 0; font: inherit; color: inherit; background: #1b2c3d; border: 1px solid #486074; border-radius: 5px; padding: 6px 10px; }
+.public-report button:disabled { opacity: .4; }
+.public-report button:focus-visible, .public-report select:focus-visible, .public-report ol:focus-visible { outline: 2px solid #7de3dd; outline-offset: 1px; }
+.public-report .report-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
+.public-report label { display: grid; gap: 3px; font-size: 12px; }
+.public-report [data-error] { color: #ffb0b8; }
+.public-report ol { min-height: 0; overflow-y: auto; margin: 0; padding: 8px 8px 8px 46px; border-block: 1px solid #344b5d; font-size: 13px; }
+.public-report li { padding: 7px 0; overflow-wrap: anywhere; }
+.public-report footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.public-report [data-page] { flex: 1 1 100px; text-align: center; font-size: 12px; }
+@media(max-width: 450px) { .public-report { padding: 10px; width: calc(100vw - 12px); height: calc(100dvh - 16px); } .public-report .report-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .public-report header { gap: 6px; } .public-report h2 { font-size: 17px; } .public-report footer { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); } .public-report [data-page] { grid-column: 1/-1; grid-row: 1; } .public-report footer button { padding-inline: 4px; } }
+@media(max-height: 500px) { .public-report { padding: 8px; gap: 4px; } .public-report .report-note { display: none; } .public-report[open] { grid-template-rows: auto auto auto auto minmax(0,1fr) auto; } }
