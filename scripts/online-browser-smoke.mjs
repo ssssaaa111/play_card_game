@@ -1057,9 +1057,11 @@ try {
     cards: [...document.querySelectorAll("#playerField .field-monster-card")].map(card => {
       const rect = card.getBoundingClientRect();
       const art = card.querySelector(".art").getBoundingClientRect();
+      const head = card.querySelector('.card-head').getBoundingClientRect();
       return { name: card.querySelector(".card-name").textContent, defense: card.classList.contains("defense"),
         width: rect.width, height: rect.height, slotWidth: card.closest(".slot").getBoundingClientRect().width,
-        artHeight: art.height, nameSize: parseFloat(getComputedStyle(card.querySelector(".card-name")).fontSize),
+        artHeight: art.height, artWidth: art.width, artBelowName: art.top >= head.bottom - 1,
+        nameSize: parseFloat(getComputedStyle(card.querySelector(".card-name")).fontSize),
         nameHeight: card.querySelector(".card-name").getBoundingClientRect().height,
         status: card.querySelector('.card-state-chip')?.textContent,
         statusHeight: card.querySelector('.card-state-chip')?.getBoundingClientRect().height || 0,
@@ -1085,9 +1087,12 @@ try {
         assert.ok(stat.inside && stat.width > 0 && stat.contentWidth <= stat.width + 1, `${stat.text} clipped at ${layout.width}px`);
       }
       if (layout.width > 1040) {
-        assert.ok(card.width >= card.slotWidth * .8, `${card.name} shrank inside its desktop slot`);
+        assert.ok(card.width >= Math.min(280, card.slotWidth * .8) - 1, `${card.name} shrank inside its desktop slot`);
         assert.ok(card.nameSize >= 11, `${card.name} desktop name is too small`);
         assert.ok(card.nameHeight >= 14, `${card.name} desktop name collapsed`);
+        if (card.height >= 180 && card.width / card.height <= 1.7) {
+          assert.ok(card.artWidth >= card.width * .85 && card.artBelowName, `${card.name} leaves a blank text column inside its tall card at ${layout.width}px`);
+        }
       }
     }
   };
@@ -1104,12 +1109,12 @@ try {
   assert.equal(fieldCardLayout.desktop.cards[0].defense, true);
   const fieldScreenshotPath = path.join(options.artifactDir, `online-field-cards-${roomCode}.png`);
   await writeFile(fieldScreenshotPath, Buffer.from((await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true })).data, "base64"));
-  for (const [width, height] of [[390, 844], [320, 720], [844, 390]]) {
+  for (const [width, height] of [[1920, 1080], [2560, 1440], [3840, 2160], [390, 844], [320, 720], [844, 390]]) {
     await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
     await waitForPage(cdp, firstPage, `innerWidth === ${width}`, "field-card responsive viewport", options.timeoutMs);
     fieldCardLayout[width] = await readFieldCards();
     assertFieldCards(fieldCardLayout[width]);
-    handLayouts[width] = await checkHandLayout(cdp, firstPage);
+    if (width <= 1040) handLayouts[width] = await checkHandLayout(cdp, firstPage);
     if (width === 390) {
       await writeFile(path.join(options.artifactDir, `online-field-cards-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true })).data, "base64"));
     }
@@ -1128,6 +1133,12 @@ try {
   await click(cdp, firstPage, '#playerField .slot:has(.field-monster-card.defense)');
   await click(cdp, firstPage, '#fieldModeBtn');
   await waitForPage(cdp, firstPage, `!document.querySelector('#playerField .field-monster-card.defense')`, "defense card returned to attack", options.timeoutMs);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 2560, height: 1440, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, `innerWidth === 2560 && document.querySelector('#actionStage').hidden && document.querySelector('#phaseStage').hidden`, 'large portrait field card without transient stages', options.timeoutMs);
+  const largeCardClip = await evaluate(cdp, firstPage, `(() => { const r = document.querySelector('#playerField .slot').getBoundingClientRect(); return { x: Math.max(0,r.x - 6), y: Math.max(0,r.y - 6), width: r.width + 12, height: r.height + 12, scale: 1 }; })()`);
+  await writeFile(path.join(options.artifactDir, `online-field-card-large-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, clip: largeCardClip })).data, 'base64'));
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, 'innerWidth > 1040 && innerWidth < 1920', 'field-card desktop viewport restored after 4K check', options.timeoutMs);
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-attack-state="ready"]'), "attack-ready field highlight", options.timeoutMs);
   await click(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await click(cdp, firstPage, '#fieldAttackBtn');
