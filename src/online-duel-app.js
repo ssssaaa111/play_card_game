@@ -1912,7 +1912,11 @@ function renderGameResult(view) {
       return;
     }
     resultRevealTimer = null;
-    if (!elements.onlineResult.open) elements.onlineResult.showModal();
+    if (elements.onlineResult.open) return;
+    closeInspector();
+    publicReport.close();
+    setEventLogOpen(false);
+    elements.onlineResult.showModal();
     elements.resultRematch.focus({ preventScroll: true });
   };
   resultRevealTimer = window.setTimeout(revealResult, 1050);
