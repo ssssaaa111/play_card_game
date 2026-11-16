@@ -21,6 +21,7 @@ function parseArgs(argv) {
     tributeChoices: false,
     chainRhythm: false,
     pendingFeedback: false,
+    selectionExpiry: false,
     artifactDir: process.env.ONLINE_BROWSER_ARTIFACT_DIR || path.resolve(".tmp", "online-browser-smoke")
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -33,6 +34,7 @@ function parseArgs(argv) {
     else if (argv[index] === "--tribute-choices") result.tributeChoices = true;
     else if (argv[index] === "--chain-rhythm") result.chainRhythm = true;
     else if (argv[index] === "--pending-feedback") result.pendingFeedback = true;
+    else if (argv[index] === "--selection-expiry") result.selectionExpiry = true;
   }
   return result;
 }
@@ -756,6 +758,50 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
   console.log(`online-tribute-choice-smoke passed (${roomCode}, select, deselect, cancel, explicit confirm, released slot, spectator)`);
 }
 
+async function exerciseSelectionExpiry(firstPage, secondPage, spectatorPage, options, roomCode) {
+  const resets = [];
+  for (const [page, nextPage, cardId, width, height] of [
+    [firstPage, secondPage, 'solar-knight', 390, 844],
+    [secondPage, firstPage, 'mirror-snare', 844, 390]
+  ]) {
+    await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    const hand = await evaluate(cdp, page, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`);
+    await click(cdp, page, `#hand .card[data-card-id="${cardId}"] .card-name`);
+    await waitForPage(cdp, page, visibleExpression('#choiceConfirmBtn'), 'unconfirmed placement before timeout', options.timeoutMs);
+    await click(cdp, page, cardId === 'mirror-snare' ? '#playerTraps .trap-slot[data-index="4"]' : '#playerField .slot[data-index="4"]');
+    await waitForPage(cdp, page, `document.querySelector('#turnLabel').textContent === '对手回合' && document.querySelector('#duelHint').dataset.kind === 'selection-reset'`, 'authoritative timeout cancels selection', options.timeoutMs);
+    const reset = await evaluate(cdp, page, `(() => {
+      const hint = document.querySelector('#duelHint'), rect = hint.getBoundingClientRect();
+      return { width: innerWidth, height: innerHeight, text: hint.textContent, visible: rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight,
+        hand: [...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid), selection: document.body.dataset.duelSelection,
+        confirmHidden: document.querySelector('#choiceActions').hidden, phaseHidden: document.querySelector('#phaseStage').hidden,
+        fieldCount: document.querySelectorAll('#playerField .slot[data-card-uid], #playerTraps .trap-slot:not(.empty)').length };
+    })()`);
+    assert.match(reset.text, /回合时间已到，原选择已取消/);
+    assert.equal(reset.visible, true, 'Selection reset feedback is outside the viewport');
+    assert.deepEqual(reset.hand, hand, 'An expired choice consumed a card');
+    assert.equal(reset.selection, 'none');
+    assert.equal(reset.confirmHidden, true, 'Stale placement can still be confirmed');
+    assert.equal(reset.phaseHidden, true, 'Phase presentation covers the cancellation reason');
+    assert.equal(reset.fieldCount, 0, 'Expired choice placed a card');
+    await waitForPage(cdp, nextPage, textMatchExpression('#turnLabel', '你的回合'), 'next player received timeout turn', options.timeoutMs);
+    await writeFile(path.join(options.artifactDir, `online-selection-expiry-${width}-${roomCode}.png`), Buffer.from((await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+    resets.push(reset);
+    await page.cdp.send('Emulation.clearDeviceMetricsOverride');
+  }
+  await click(cdp, firstPage, '#hand .card[data-card-id="solar-knight"] .card-name');
+  await waitForPage(cdp, firstPage, visibleExpression('#choiceConfirmBtn'), 'fresh placement next turn', options.timeoutMs);
+  await click(cdp, firstPage, '#choiceConfirmBtn');
+  await Promise.all([
+    waitForPage(cdp, firstPage, textMatchExpression('#playerField', '日冕骑士'), 'fresh summon succeeds', options.timeoutMs),
+    waitForPage(cdp, secondPage, textMatchExpression('#aiField', '日冕骑士'), 'rival sees fresh summon', options.timeoutMs),
+    waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '日冕骑士'), 'spectator sees fresh summon', options.timeoutMs)
+  ]);
+  assert.notEqual(await evaluate(cdp, firstPage, `document.querySelector('#duelHint').dataset.kind`), 'selection-reset', 'A successful command looked like an invalidated choice');
+  await writeFile(path.join(options.artifactDir, `online-selection-expiry-${roomCode}.json`), `${JSON.stringify({ roomCode, resets, freshSummonSynced: true }, null, 2)}\n`, 'utf8');
+  console.log(`online-selection-expiry-smoke passed (${roomCode}, both seats, preserved hands, fresh summon, spectator)`);
+}
+
 async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, options, roomCode) {
   const settle = page => waitForPage(cdp, page, `document.querySelector('#actionStage').hidden && document.querySelector('#phaseStage').hidden`, 'effect presentation completed', options.timeoutMs);
   await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '日冕骑士');
@@ -976,7 +1022,9 @@ try {
     })()`, "spectator hidden-hand board", options.timeoutMs)
   ]);
 
-  if (options.chainRhythm) {
+  if (options.selectionExpiry) {
+    await exerciseSelectionExpiry(firstPage, secondPage, spectatorPage, options, roomCode);
+  } else if (options.chainRhythm) {
     await exerciseChainRhythm(firstPage, secondPage, spectatorPage, options, roomCode);
   } else if (options.tributeChoices) {
     await exerciseTributeChoices(firstPage, secondPage, spectatorPage, options, roomCode);

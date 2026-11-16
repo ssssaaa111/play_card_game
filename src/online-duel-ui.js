@@ -1094,6 +1094,21 @@ export function selectOnlineCard(view, cardId, actionType = null) {
   };
 }
 
+export function onlineSelectionResetView(view, previousView, selection) {
+  if (!selection || !previousView || !view || spectatorView(view) || view.gameOver || view.status !== "playing"
+    || view.roomCode !== previousView.roomCode || view.duelNumber !== previousView.duelNumber
+    || view.seats?.some(seat => seat.connected === false)
+    || (!view.machine?.responseWindow && onlineSelectionModel(view, selection))) return null;
+  const previousEventId = Math.max(0, ...(previousView.recentEvents || []).map(event => Number(event.id) || 0));
+  const freshEvents = (view.recentEvents || []).filter(event => Number(event.id) > previousEventId);
+  const turnChanged = view.turn.playerId !== previousView.turn.playerId || freshEvents.some(event => event.type === "TURN_STARTED");
+  const timedOut = turnChanged && freshEvents.some(event => event.type === "TURN_ENDED" && event.playerId === previousView.turn.playerId && event.endedBy === "timeout");
+  const phase = { main: "主要阶段", battle: "战斗阶段", end: "结束阶段" }[view.turn.phase] || "新阶段";
+  const reason = timedOut ? "回合时间已到" : turnChanged ? "回合已切换"
+    : view.machine?.responseWindow ? "已进入响应" : view.turn.phase !== previousView.turn.phase ? `已进入${phase}` : "战况已更新";
+  return { kind: "selection-reset", text: `${reason}，原选择已取消${view.turn.playerId === view.viewerSeatId && !view.machine?.responseWindow ? "，请重新选择" : ""}。` };
+}
+
 export function onlineSelectionModel(view, selection) {
   if (!selection || selection.revision !== view.revision) return null;
   const card = onlineCard(view, selection.cardId);

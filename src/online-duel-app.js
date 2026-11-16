@@ -19,7 +19,7 @@ import { installPublicReport } from "./public-report.js?v=20261114-network-recov
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261117-pending-feedback-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineSelectionResetView, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261117-selection-reset-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -49,6 +49,7 @@ let authPending = false;
 let actionPending = false;
 let pendingCommand = null;
 let selection = null;
+let selectionView = null;
 let trapChoice = null;
 let handOrder = [];
 let handNavigationFrame = null;
@@ -422,6 +423,16 @@ function clearActionReceipt() {
   actionReceiptTimer = null;
 }
 
+function showActionReceipt(receipt) {
+  clearActionReceipt();
+  actionReceipt = receipt;
+  actionReceiptTimer = setTimeout(() => {
+    actionReceipt = null;
+    actionReceiptTimer = null;
+    render(client.view);
+  }, receipt.kind === "battle-result" ? 3800 : 2800);
+}
+
 function clearEndTurnConfirmation() {
   endTurnConfirmation = null;
   if (endTurnConfirmationTimer) window.clearTimeout(endTurnConfirmationTimer);
@@ -504,13 +515,7 @@ function syncActionReceipt(view) {
   const eventSound = [...freshEvents].reverse().map((event) => onlineEventSound(view, event)).find(Boolean);
   if (eventSound) playSound(eventSound);
   if (!receipt) return;
-  clearActionReceipt();
-  actionReceipt = receipt;
-  actionReceiptTimer = setTimeout(() => {
-    actionReceipt = null;
-    actionReceiptTimer = null;
-    render(client.view);
-  }, receipt.kind === "battle-result" ? 3800 : 2800);
+  showActionReceipt(receipt);
 }
 
 function ownerForSeat(view, seatId) {
@@ -1572,8 +1577,8 @@ function renderCommands(view, model) {
         : prompt;
   elements.duelHint.textContent = model ? fieldPrompt : endTurnWarning || actionReceipt?.text || elements.commandTitle.textContent;
   elements.duelHint.dataset.kind = selectedField && !attackIntent.available ? "unavailable" : model ? "action" : endTurnWarning ? "turn-warning" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
-  elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor : "none";
-  elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type : "none";
+  elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor || "none" : "none";
+  elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type || "none" : "none";
   elements.duelHint.dataset.tone = !model && actionReceipt ? actionReceipt.tone || "neutral" : "neutral";
   elements.duelPanel.dataset.battleResult = !model && actionReceipt?.kind === "battle-result" ? actionReceipt.result : "none";
   elements.handGuide.textContent = view.gameOver ? "决斗已结束 · 可查看卡牌详情" : tributeDecision ? "选祭品与落点 · 确认后召唤" : model ? "确认或双击高亮候选执行" : "单击选择 · 双击快捷出牌";
@@ -1759,7 +1764,7 @@ function paintResponseCountdown(view = client.view) {
     elements.commandSignal.textContent = countdown.paused ? "已暂停" : `${countdown.seconds}s`;
     if (!countdown.ownResponse) {
       elements.commandHint.textContent = countdown.label;
-      elements.duelHint.textContent = countdown.label;
+      elements.duelHint.textContent = actionReceipt?.kind === "selection-reset" ? `原选择已取消 · ${countdown.label}` : countdown.label;
     }
   }
   return countdown;
@@ -1842,7 +1847,7 @@ function renderResponse(view) {
   elements.commandTitle.textContent = ownResponse ? `轮到你响应${responseLabel}` : "等待对手响应";
   elements.commandHint.textContent = text;
   elements.commandSignal.textContent = "响应中";
-  elements.duelHint.textContent = text;
+  elements.duelHint.textContent = actionReceipt?.kind === "selection-reset" ? `原选择已取消 · ${text}` : text;
   elements.duelHint.dataset.kind = "status";
   renderResponseCountdown(view);
 }
@@ -2187,9 +2192,16 @@ function render(view) {
     elements.lastChainButton.hidden = true;
     return;
   }
+  const selectionReset = onlineSelectionResetView(view, selectionView, selection);
+  if (selectionReset) {
+    showActionReceipt(selectionReset);
+    directActivationTracker.reset();
+    phaseStageController.reset();
+  }
   if (view.machine.responseWindow) selection = null;
   const model = onlineSelectionModel(view, selection);
   if (!model) selection = null;
+  selectionView = selection ? view : null;
   const ownTurn = view.turn.playerId === view.viewerSeatId;
   const inHand = view.players[view.viewerSeatId].hand.some((card) => card.id === selection?.cardId);
   const interaction = onlineInteractionView(model, {
