@@ -1074,6 +1074,7 @@ function appendCardCollection(cards, title, choice = null) {
 }
 
 function showCards(cards, title = "卡牌详情", { collection = false, preserveCollection = false, seatId = null } = {}) {
+  directActivationTracker.reset();
   const choice = collection && seatId ? onlineGraveChoiceView(client.view, onlineSelectionModel(client.view, selection), seatId) : null;
   if (collection) inspectorCollection = { cards: cards.filter(Boolean), title, seatId, choiceSourceId: choice?.sourceId, scrollTop: inspectorCollection?.seatId === seatId ? inspectorCollection.scrollTop || 0 : 0 };
   else if (!preserveCollection) inspectorCollection = null;
@@ -1143,6 +1144,7 @@ function chooseCard(id) {
   clearEndTurnConfirmation();
   clearActionReceipt();
   selection = next;
+  if (!selection) directActivationTracker.reset();
   playSound("click");
   render(view);
 }

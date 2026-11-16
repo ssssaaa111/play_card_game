@@ -980,6 +980,14 @@ try {
   await click(cdp, firstPage, '#inspectorClose');
   assert.deepEqual(await evaluate(cdp, firstPage, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`), openingHandIds, "Selected-card detail click activated a card");
   assert.equal(await evaluate(cdp, firstPage, visibleExpression('#choiceConfirmBtn')), true, "Closing details lost the pending choice");
+  await click(cdp, firstPage, '#hand .card.selected .card-name');
+  await waitForPage(cdp, firstPage, `!document.querySelector('#endTurnButton').disabled`, 'hand input has settled after closing details', options.timeoutMs);
+  assert.deepEqual(await evaluate(cdp, firstPage, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`), openingHandIds, 'A single click after viewing details must not play the selected card');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceActions').hidden`), true, 'A single click after details should cancel the current selection');
+  await click(cdp, firstPage, '#hand .card.action-ready');
+  assert.equal(await evaluate(cdp, firstPage, visibleExpression('#choiceConfirmBtn')), true, 'Reselecting the same card after cancellation must not directly play it');
+  const detailClickBoundary = true;
+  await writeFile(path.join(options.artifactDir, `online-detail-click-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 320, height: 720, deviceScaleFactor: 1, mobile: false });
   handLayouts.narrowSelected = await checkHandLayout(cdp, firstPage);
   await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
@@ -1329,7 +1337,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, responseLayouts, resultLayouts, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);
