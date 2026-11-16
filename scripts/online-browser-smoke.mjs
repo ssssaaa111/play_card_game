@@ -466,6 +466,24 @@ async function checkInspectorLayouts(cdp, page, options, roomCode, label) {
   return layouts;
 }
 
+async function checkChoiceControls(cdp, page, timeoutMs) {
+  return waitForPage(cdp, page, `(() => {
+    const panel = document.querySelector('#choiceActions').getBoundingClientRect();
+    const confirm = document.querySelector('#choiceConfirmBtn');
+    const cancel = document.querySelector('#choiceCancelBtn');
+    const a = confirm.getBoundingClientRect(), b = cancel.getBoundingClientRect();
+    const primary = getComputedStyle(confirm), secondary = getComputedStyle(cancel);
+    const gap = b.left - a.right;
+    return !document.querySelector('#choiceActions').hidden && a.height >= 44 && b.height >= 44
+      && Math.abs(a.top - b.top) <= 1 && Math.abs(gap - 8) <= 1
+      && a.top >= panel.top && a.bottom <= panel.bottom + 1 && b.bottom <= innerHeight
+      && primary.borderRadius === '8px' && secondary.borderRadius === '8px'
+      && getComputedStyle(document.querySelector('#choiceActions')).borderRadius === '16px'
+      && primary.backgroundImage.includes('linear-gradient') && secondary.backgroundImage === 'none'
+      ? { confirmHeight: a.height, cancelHeight: b.height, gap, buttonRadius: primary.borderRadius, panelRadius: '16px', primaryAndSecondaryDistinct: true } : null;
+  })()`, 'consistent reachable confirmation and cancellation controls', timeoutMs);
+}
+
 async function checkDialogLayouts(cdp, page, selector, options, roomCode) {
   const layouts = [];
   for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
@@ -673,8 +691,10 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
 async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, options, roomCode) {
   const settle = () => waitForPage(cdp, firstPage, `document.querySelector('#actionStage').hidden && document.querySelector('#phaseStage').hidden`, 'tribute setup presentations completed', options.timeoutMs);
   await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '双重召唤');
+  await waitForPage(cdp, firstPage, `!document.querySelector('#hand .card[data-card-id="twin-summon"]') && !document.querySelector('#endTurnButton').disabled`, 'extra summon command completed', options.timeoutMs);
   await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '日冕骑士');
   await waitForPage(cdp, firstPage, textMatchExpression('#playerField', '日冕骑士'), 'first tribute summoned', options.timeoutMs);
+  await waitForPage(cdp, firstPage, `!document.querySelector('#endTurnButton').disabled`, 'first tribute command completed', options.timeoutMs);
   await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '铁壁守卫');
   await waitForPage(cdp, firstPage, textMatchExpression('#playerField', '铁壁守卫'), 'second tribute summoned', options.timeoutMs);
   await settle();
@@ -701,7 +721,7 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
   await click(cdp, firstPage, '#playerField .slot[data-index="4"]');
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '召唤至第 5 格'), 'chosen destination displayed', options.timeoutMs);
   const layouts = [];
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [320, 568], [844, 390], [568, 320]]) {
     await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     layouts.push(await waitForPage(cdp, firstPage, `(() => {
       const panel = document.querySelector('#choiceActions').getBoundingClientRect();
@@ -710,6 +730,7 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
       return innerWidth === ${width} && panel.top >= 0 && panel.bottom <= innerHeight && list.bottom <= confirm.top && confirm.bottom <= panel.bottom && document.documentElement.scrollWidth <= innerWidth
         ? { width: innerWidth, height: innerHeight, confirmationVisible: true } : null;
     })()`, 'tribute list and confirmation stay in viewport', options.timeoutMs));
+    layouts.at(-1).controls = await checkChoiceControls(cdp, firstPage, options.timeoutMs);
     await writeFile(path.join(options.artifactDir, `online-tribute-${width}-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   }
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
@@ -801,15 +822,18 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), true);
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').textContent`), /第 1 格.*1700.*第 2 格.*1200/);
   const layouts = {};
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [320, 568], [844, 390], [568, 320]]) {
+    const layoutKey = height === 568 ? '320x568' : String(width);
     await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-    layouts[width] = await waitForPage(cdp, firstPage, `(() => {
+    layouts[layoutKey] = await waitForPage(cdp, firstPage, `(() => {
       const panel = document.querySelector('#choiceActions').getBoundingClientRect();
       const choices = document.querySelector('#fieldTargets').getBoundingClientRect();
       const button = document.querySelector('#choiceConfirmBtn').getBoundingClientRect();
       return innerWidth === ${width} && panel.top >= 0 && panel.bottom <= innerHeight && choices.bottom <= button.top && button.height >= 38 && document.documentElement.scrollWidth <= innerWidth
         ? { width: innerWidth, height: panel.height, confirmVisible: true } : null;
     })()`, 'spell target responsive panel', options.timeoutMs);
+    layouts[layoutKey].controls = await checkChoiceControls(cdp, firstPage, options.timeoutMs);
+    if (width === 568) await writeFile(path.join(options.artifactDir, `online-effect-controls-landscape-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   }
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, `innerWidth > 1040`, 'effect desktop viewport restored', options.timeoutMs);
@@ -985,6 +1009,7 @@ try {
   await click(cdp, firstPage, "#hand .card.action-ready");
   await waitForPage(cdp, firstPage, visibleExpression("#choiceConfirmBtn"), "mobile summon command", options.timeoutMs);
   handLayouts.mobileSelected = await checkHandLayout(cdp, firstPage);
+  const ordinaryControls = await checkChoiceControls(cdp, firstPage, options.timeoutMs);
   await click(cdp, firstPage, '#hand .card.selected .card-detail-entry');
   await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), "selected-card details without activation", options.timeoutMs);
   await click(cdp, firstPage, '#inspectorClose');
@@ -1158,9 +1183,10 @@ try {
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('.online-attack-details').open`), false);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .online-attack-source').length`), 1);
   const attackChoiceLayouts = {};
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [320, 568], [844, 390], [568, 320]]) {
+    const layoutKey = height === 568 ? '320x568' : String(width);
     await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
-    attackChoiceLayouts[width] = await waitForPage(cdp, firstPage, `(() => {
+    attackChoiceLayouts[layoutKey] = await waitForPage(cdp, firstPage, `(() => {
       if (innerWidth !== ${width}) return null;
       const panel = document.querySelector('#choiceActions').getBoundingClientRect();
       const confirm = document.querySelector('#choiceConfirmBtn').getBoundingClientRect();
@@ -1168,6 +1194,8 @@ try {
       return panel.height < 230 && panel.top >= 0 && panel.bottom <= innerHeight && confirm.bottom <= panel.bottom && confirm.top >= preview.bottom && document.documentElement.scrollWidth <= innerWidth
         ? { width: innerWidth, height: panel.height, confirmVisible: true } : null;
     })()`, 'compact attack decision and reachable confirmation', options.timeoutMs);
+    attackChoiceLayouts[layoutKey].controls = await checkChoiceControls(cdp, firstPage, options.timeoutMs);
+    if (width === 568) await writeFile(path.join(options.artifactDir, `online-attack-controls-landscape-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   }
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, `innerWidth > 1040`, 'attack decision desktop viewport restored', options.timeoutMs);
@@ -1358,7 +1386,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, responseLayouts, resultLayouts, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);

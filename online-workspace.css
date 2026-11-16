@@ -444,7 +444,7 @@ body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #pl
 }
 
 /* Attack decisions keep the route and expected LP change together. */
-body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { grid-template-rows: minmax(0,1fr) auto 40px; max-height: min(350px, calc(100dvh - 180px)); gap: 8px; padding: 10px; }
+body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { grid-template-rows: minmax(0,1fr) auto 44px; max-height: min(350px, calc(100dvh - 180px)); gap: 8px; padding: 10px; border-radius: 16px; }
 body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #choiceText { display: none; }
 body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #onlineBattlePreview { grid-area: 1 / 1 / 2 / -1; min-height: 0; align-self: stretch; }
 body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #fieldTargets { grid-area: 2 / 1 / 3 / -1; max-height: 98px; }
@@ -468,7 +468,7 @@ body[data-online-status][data-duel-targeting="attack"] #app .duel-table #aiPanel
 .online-attack-details > summary { width: fit-content; color: #90b6bd; cursor: pointer; }
 .online-attack-details > summary:focus-visible { outline: 2px solid #73e2d5; outline-offset: 3px; }
 .online-attack-caveat { color: #8496a6; font-size: 9px; }
-body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice { position: fixed; z-index: 95; inset: auto auto max(10px, var(--safe-area-bottom)) 50%; transform: translateX(-50%); display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) 40px; align-content: start; gap: 8px; width: min(560px, calc(100vw - 20px)); height: auto; max-height: min(300px, calc(100dvh - 140px)); overflow: hidden; padding: 12px; border: 1px solid rgba(115,226,213,.45); border-radius: 12px; background: #0b141ef7; box-shadow: var(--table-shadow); }
+body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice { position: fixed; z-index: 95; inset: auto auto max(10px, var(--safe-area-bottom)) 50%; transform: translateX(-50%); display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) 44px; align-content: start; gap: 8px; width: min(560px, calc(100vw - 20px)); height: auto; max-height: min(300px, calc(100dvh - 140px)); overflow: hidden; padding: 12px; border: 1px solid rgba(115,226,213,.45); border-radius: 16px; background: #0b141ef7; box-shadow: var(--table-shadow); }
 body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice::before,
 body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice::after { content: none; }
 body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice #choiceText { grid-area: 1 / 1 / 2 / -1; display: grid; gap: 5px; padding: 0; max-height: 105px; overflow-y: auto; white-space: normal; }
@@ -476,7 +476,7 @@ body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice
 body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice #fieldTargets[hidden] { display: none; }
 body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice #choiceConfirmBtn { grid-area: 3 / 1 / 4 / 2; }
 body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice #choiceCancelBtn { grid-area: 3 / 2 / 4 / 3; }
-body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice :is(#choiceConfirmBtn, #choiceCancelBtn) { width: 100%; height: 40px; min-height: 40px; }
+body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice :is(#choiceConfirmBtn, #choiceCancelBtn) { width: 100%; height: 44px; min-height: 44px; }
 .online-effect-title { color: #d6fff6; font-size: 13px; }
 .online-effect-summary { color: #e7cf9e; font-size: 11px; }
 .online-effect-target { color: #a5bdca; font-size: 10px; }
@@ -515,12 +515,12 @@ body[data-online-status] #fieldTargets .online-target { min-height: 40px; margin
 body[data-online-status] #fieldTargets .online-target strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 body[data-online-status] #fieldTargets .online-target small { font-size: 9px; }
 @media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
-  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { max-height: calc(100dvh - 100px); width: min(480px, calc(100vw - 20px)); gap: 6px; padding: 8px; }
+  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { max-height: calc(100dvh - 100px); width: min(480px, calc(100vw - 20px)); gap: 8px; padding: 8px; }
   .online-attack-preview { gap: 5px; }
 }
 
 /* Dialogs share a surface, spacing and action hierarchy across online flows. */
-body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) {
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult, #choiceActions) {
   --online-dialog-space: clamp(12px, 2.5vw, 20px);
   --online-dialog-surface: #0d1621;
   --online-dialog-line: rgba(144, 178, 196, .22);
@@ -534,7 +534,8 @@ body[data-online-status] #cardInspector .online-inspector-backdrop {
   background: rgba(3, 7, 12, .76);
   backdrop-filter: blur(4px);
 }
-body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn {
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn,
+body[data-online-status] #app #handCommand > #choiceActions :is(#choiceConfirmBtn, #choiceCancelBtn) {
   min-height: 44px;
   min-width: 44px;
   padding: 9px 12px;
@@ -547,15 +548,21 @@ body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .bt
   line-height: 1.35;
   white-space: normal;
 }
-body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn.primary {
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn.primary,
+body[data-online-status] #app #handCommand > #choiceActions #choiceConfirmBtn {
   color: #211b10;
   border-color: #e4bc70;
   background: linear-gradient(135deg, #f6bd60, #ffdc96);
   font-weight: 800;
 }
-body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn:hover:not(:disabled) { filter: brightness(1.12); }
-body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn:focus-visible { outline: 2px solid #73e2d5; outline-offset: 2px; }
-body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn:disabled { opacity: .45; cursor: not-allowed; }
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn:hover:not(:disabled),
+body[data-online-status] #app #handCommand > #choiceActions .btn:hover:not(:disabled) { filter: brightness(1.12); }
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn:focus-visible,
+body[data-online-status] #app #handCommand > #choiceActions .btn:focus-visible { outline: 2px solid #73e2d5; outline-offset: 2px; }
+body[data-online-status] :is(#onlineResponse, #cardInspector, #onlineResult) .btn:disabled,
+body[data-online-status] #app #handCommand > #choiceActions .btn:disabled { opacity: .45; cursor: not-allowed; }
+body[data-online-status] #app #handCommand > #choiceActions { gap: 8px; border-radius: 16px; }
+body[data-online-status] #app #handCommand > #choiceActions :is(#choiceConfirmBtn, #choiceCancelBtn) { height: 44px; }
 body[data-online-status] #onlineResponse .online-response-scroll { padding: var(--online-dialog-space); }
 body[data-online-status] #onlineResponse header { margin-bottom: 12px; }
 body[data-online-status] #onlineResponse header > p { margin: 8px 0 0; color: #a5bacb; font-size: 12px; }
