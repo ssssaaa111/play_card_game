@@ -1,4 +1,4 @@
-import { createDuelist, buildDeck, buildDeckFromDefinition } from "../src/deck.js";
+import { createDuelist, buildDeck, buildDeckFromDefinition, cardById, cloneCard } from "../src/deck.js";
 import { buildEngineStateFromUiState } from "../src/engine-adapter.js";
 import { ControllerKind, DuelMode, createDuelSessionConfig } from "../src/duel-session.js";
 import { PHASES, TIMINGS } from "../src/turn-state.js";
@@ -20,23 +20,25 @@ function onlineDeck(preset) {
     .forEach((card, index) => { deck[deck.length - 1 - index] = card; });
   return deck;
 }
-function prepareDuelist(seatId, deckPreset, openingHand = null, deckChoice = null) {
+function prepareDuelist(seatId, deckPreset, openingHand = null, deckChoice = null, openingGrave = []) {
   const duelist = createDuelist(seatId);
   const selectedDeck = normalizeOnlineDeckChoice(deckChoice);
   duelist.deck = selectedDeck ? buildDeckFromDefinition(selectedDeck) : onlineDeck(deckPreset);
   // Server-only deterministic openings for repeatable browser QA, never a client option.
-  duelist.hand = openingHand ? openingHand.map((id) => {
+  const takeOpeningCard = (id) => {
     let index = duelist.deck.findIndex((card) => card.id === id);
     if (index < 0) {
       if (selectedDeck) throw new Error(`QA opening card ${id} is absent from the selected deck`);
-      const replacement = buildDeck(deckPreset).find((card) => card.id === id && onlineCardSupported(card));
-      if (!replacement) throw new Error(`Opening card ${id} is not supported by the online deck`);
-      duelist.deck.push(replacement);
+      const replacement = cardById(id);
+      if (!replacement || !onlineCardSupported(replacement)) throw new Error(`Opening card ${id} is not supported by the online deck`);
+      duelist.deck.push(cloneCard(replacement));
       index = duelist.deck.length - 1;
     }
     return duelist.deck.splice(index, 1)[0];
-  }) : duelist.deck.splice(0, 5);
-  if (!selectedDeck) duelist.deck = duelist.deck.slice(0, 35);
+  };
+  duelist.hand = openingHand ? openingHand.map(takeOpeningCard) : duelist.deck.splice(0, 5);
+  duelist.grave = openingGrave.map(takeOpeningCard);
+  if (!selectedDeck) duelist.deck = duelist.deck.slice(0, Math.max(0, 35 - duelist.grave.length));
   return duelist;
 }
 
@@ -44,7 +46,8 @@ export function createOnlineDuelState({
   seatIds = ["p1", "p2"],
   deckPreset = "basicExpansion",
   deckChoices = {},
-  openingHands = {}
+  openingHands = {},
+  openingGraves = {}
 } = {}) {
   const [firstSeatId, secondSeatId] = seatIds;
   const session = createDuelSessionConfig({
@@ -59,8 +62,8 @@ export function createOnlineDuelState({
   const uiState = {
     cardDefinitionsComplete: true,
     ...session,
-    [firstSeatId]: prepareDuelist(firstSeatId, deckPreset, openingHands[firstSeatId], deckChoices[firstSeatId]),
-    [secondSeatId]: prepareDuelist(secondSeatId, deckPreset, openingHands[secondSeatId], deckChoices[secondSeatId]),
+    [firstSeatId]: prepareDuelist(firstSeatId, deckPreset, openingHands[firstSeatId], deckChoices[firstSeatId], openingGraves[firstSeatId]),
+    [secondSeatId]: prepareDuelist(secondSeatId, deckPreset, openingHands[secondSeatId], deckChoices[secondSeatId], openingGraves[secondSeatId]),
     turn: firstSeatId,
     phase: PHASES.main,
     timing: TIMINGS.mainOpen,

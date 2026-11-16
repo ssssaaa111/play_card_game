@@ -130,7 +130,8 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /playChainResolutionStage\(view, cue\)/);
   assert.match(app, /playActionStage\(view, cue\)/);
   assert.match(app, /let actionStageQueue = \[\]/);
-  assert.match(app, /function finishActionStage\(\)[\s\S]*actionStageQueue\.shift\(\)/);
+  assert.match(app, /function finishActionStage\(\)[\s\S]*phaseStageController\.resume\(\)[\s\S]*pumpActionStageQueue\(\)/);
+  assert.match(app, /function pumpActionStageQueue\(\)[\s\S]*actionStageQueue\.shift\(\)/);
   assert.match(app, /actionStageQueue\.length >= 4/);
   assert.match(app, /onlineReconnectBrief\(view\)/);
   assert.match(app, /client\.resumeRoom\(session\)/);
@@ -160,7 +161,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /await authClient\.session\(\)/);
   assert.match(app, /房间已恢复/);
   assert.match(app, /event\.target === elements\.cardInspector/);
-  assert.match(app, /elements\.inspectorBackdrop\.addEventListener\("click", closeInspector\)/);
+  assert.match(app, /elements\.inspectorBackdrop\.addEventListener\("click",/);
   // Toggle/cancel behavior is covered by online-duel-ui.test.mjs, independent
   // of whether its implementation lives in the app or an extracted helper.
   const chooseCardSource = app.slice(app.indexOf("function chooseCard"), app.indexOf("function chooseSlot"));

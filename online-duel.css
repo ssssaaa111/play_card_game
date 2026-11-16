@@ -471,6 +471,7 @@ body[data-duel-targeting="effect"] #app .duel-table :is(.slot, .trap-slot).targe
 }
 
 body[data-online-status="playing"] > .online-effect-layer { z-index: 140; }
+body[data-online-status="playing"] > .online-effect-layer:has(.life-delta) { z-index: 170; }
 .online-effect-layer[data-online-cue] { overflow: visible; }
 .online-recovery-brief {
   position: fixed;
@@ -648,6 +649,14 @@ body[data-online-chain-playback="true"] { overflow: hidden; }
 .online-action-stage[data-kind="attack"] { --online-action-color: 255, 93, 74; }
 .online-action-stage[data-kind="spell"] { --online-action-color: 80, 210, 220; }
 .online-action-stage[data-kind="trap"] { --online-action-color: 197, 143, 255; }
+.online-action-stage[data-emphasis="major"] .online-action-stage-frame {
+  border-color: rgba(var(--online-action-color), .82);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, .54), inset 0 1px rgba(255, 255, 255, .12), 0 0 34px rgba(var(--online-action-color), .24);
+}
+.online-action-stage[data-emphasis="minor"] .online-action-stage-frame {
+  background: linear-gradient(105deg, rgba(var(--online-action-color), .1), transparent 32%), rgba(9, 13, 23, .91);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .4), inset 0 1px rgba(255, 255, 255, .06);
+}
 .online-action-stage-frame {
   position: relative;
   overflow: hidden;
@@ -772,6 +781,7 @@ body[data-online-chain-playback="true"] { overflow: hidden; }
   font-weight: 700;
   text-align: center;
   letter-spacing: .04em;
+  animation: online-action-result-in .24s ease-out var(--online-action-result-delay, 180ms) both;
 }
 @keyframes online-action-stage-in {
   from { opacity: 0; transform: translateY(-16px) scale(.96); filter: blur(4px); }
@@ -780,6 +790,10 @@ body[data-online-chain-playback="true"] { overflow: hidden; }
 @keyframes online-action-route {
   from { opacity: 0; transform: scaleX(.08); }
   to { opacity: 1; transform: scaleX(1); }
+}
+@keyframes online-action-result-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @media (max-width: 620px) {
   .online-action-stage { top: 62px; width: calc(100vw - 16px); }
@@ -795,5 +809,5 @@ body[data-online-chain-playback="true"] { overflow: hidden; }
   .online-action-stage-result { margin-top: 5px; padding-top: 5px; font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .online-action-stage-frame, .online-action-stage-arrow i { animation: none; }
+  .online-action-stage-frame, .online-action-stage-arrow i, .online-action-stage-result { animation: none; }
 }

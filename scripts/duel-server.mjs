@@ -50,13 +50,17 @@ const turnTimeoutMs = Number.isFinite(configuredTurnTimeoutMs) ? Math.max(1_000,
 const responseDemo = process.argv.includes("--scenario=trap-response");
 const handFeedbackDemo = process.argv.includes("--scenario=hand-feedback");
 const effectChoiceDemo = process.argv.includes("--scenario=effect-choice");
+const tributeChoiceDemo = process.argv.includes("--scenario=tribute-choice");
 const summonResponseDemo = process.argv.includes("--scenario=summon-response");
 const chainResponseDemo = process.argv.includes("--scenario=chain-response");
 const attackChainResponseDemo = process.argv.includes("--scenario=attack-chain-response");
 const multiChainResponseDemo = process.argv.includes("--scenario=multi-chain-response");
-if ((responseDemo || handFeedbackDemo || effectChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
-const demoOpeningHands = effectChoiceDemo ? {
-  p1: ["solar-knight", "twin-summon", "gale-mage", "blade-sigil", "dispelling-ray"],
+if ((responseDemo || handFeedbackDemo || effectChoiceDemo || tributeChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const demoOpeningHands = tributeChoiceDemo ? {
+  p1: ["starfall-colossus", "twin-summon", "solar-knight", "iron-guardian", "weakening-web"],
+  p2: ["iron-guardian", "weakening-web", "mirror-snare", "blade-sigil", "twin-summon"]
+} : effectChoiceDemo ? {
+  p1: ["solar-knight", "trio-ember-recall", "trio-ember-recall", "blade-sigil", "dispelling-ray"],
   p2: ["iron-guardian", "weakening-web", "mirror-snare", "blade-sigil", "twin-summon"]
 } : handFeedbackDemo ? {
   p1: ["solar-knight", "gale-mage", "war-chant", "twin-summon", "iron-guardian"],
@@ -81,7 +85,9 @@ const roomStore = new DuelRoomStore({ filePath: roomStorePath, createRoom: (opti
   ...options,
   disconnectGraceMs,
   turnTimeoutMs,
-  ...(demoOpeningHands ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: demoOpeningHands }) } : {})
+  ...(demoOpeningHands ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: demoOpeningHands,
+    ...(effectChoiceDemo ? { openingGraves: { p1: ["gale-mage", "iron-guardian", "war-chant"] } } : {})
+  }) } : {})
 }) });
 const connections = new Map();
 const responseTimers = new Map();

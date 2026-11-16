@@ -230,7 +230,36 @@ export function onlineResponseBattleView(view) {
     attackerStat: `ATK ${attackerValue}`,
     targetName: target?.name || `${targetSeat?.name || "防守方"}的生命值`,
     targetStat: target ? `${targetMode === "defense" ? "DEF" : "ATK"} ${targetValue}` : `LP ${targetValue}`,
-    summary: directSummary || preview?.result || "攻击已锁定，等待响应。"
+    summary: directSummary || preview?.result || "攻击已锁定，等待响应。",
+    summaryLabel: view.machine?.chainLength > 0 ? "原始攻击预估（未计入连锁）" : "若不发动陷阱"
+  };
+}
+
+export function onlinePendingCommandView(view, pending) {
+  if (!pending?.action || !view || view.gameOver || view.revision !== pending.revision) return null;
+  const type = pending.action.type;
+  const title = {
+    SUMMON_MONSTER: "正在提交召唤", SET_TRAP: "正在提交盖放", ACTIVATE_CARD: "正在提交发动",
+    DECLARE_ATTACK: "正在提交攻击", CHANGE_MONSTER_MODE: "正在切换表示",
+    CHANGE_PHASE: "正在切换阶段", END_TURN: "正在结束回合", SKIP_REMAINING_ATTACKS: "正在结束攻击"
+  }[type] || (/^(RESPOND_|PASS_)/.test(type) ? "正在提交响应" : "正在提交操作");
+  return { title, signal: "提交中", hint: "等待服务器确认，请稍候。" };
+}
+
+export function onlineChainResponseDecisionView(view) {
+  const response = view?.chainResponse;
+  const chain = (view?.machine?.chain || []).filter(link => link.committed);
+  if (spectatorView(view) || view?.gameOver || !response || !chain.length
+    || view.machine?.responseWindow?.playerId !== view.viewerSeatId) return null;
+  const target = chain.find(link => link.cardId === response.targetCardId) || chain.at(-1);
+  const indexOf = link => Number(link.linkId) || chain.indexOf(link) + 1;
+  const card = target.card && !target.card.hidden ? target.card : onlineCard(view, target.cardId);
+  const targetLabel = `CL${indexOf(target)}《${card?.name || "公开陷阱"}》`;
+  const order = [...chain].reverse().map(link => `CL${indexOf(link)}`).join(" → ");
+  return {
+    title: `是否加入 CL${chain.length + 1} 反制`,
+    lead: `可反制 ${targetLabel}；不再连锁则按 ${order} 结算。`,
+    passHint: `不追加新效果，立即结算现有连锁（${order}）。`
   };
 }
 
@@ -587,6 +616,9 @@ export function onlineChainResolutionCue(view, events = []) {
     && Number(event.id) > Number(completed.id)
   );
   const battleReceipt = battleEvent ? battleResultReceipt(view, battleEvent, fresh) : null;
+  const followUp = onlineActionCue(view, fresh.slice(completedIndex + 1).filter((event) =>
+    ["DAMAGE_DEALT", "BATTLE_RESOLVED", "ATTACK_CANCELED", "ATTACK_TARGET_CHANGED"].includes(event.type)
+  ));
   return {
     id: Number(completed.id) || 0,
     kind: "chain",
@@ -597,6 +629,9 @@ export function onlineChainResolutionCue(view, events = []) {
     resolutionOrder: links.map((link) => `CL${link.chainIndex}`).join(" → "),
     summary: `${resolvedLabel} 生效${negatedLabel ? ` · ${negatedLabel} 被无效` : ""}`,
     outcome: battleReceipt?.text || "",
+    followUp,
+    duration: linkCount === 1 ? 1800 : Math.min(7_200, 1_750 + linkCount * 520),
+    resultDelay: 360 + linkCount * 480,
     links
   };
 }
@@ -807,6 +842,17 @@ function actionBattleResult(cue) {
   }
 }
 
+function actionPresentationTiming(cue) {
+  const resolvedBattle = ["impact", "guard"].includes(cue.kind) || (cue.kind === "attack" && cue.resultType);
+  if (resolvedBattle) return { duration: 2800, emphasis: "major", resultDelay: 760 };
+  if (cue.kind === "attack") return { duration: 2100, emphasis: "major", resultDelay: 360 };
+  if (cue.kind === "summon" && cue.label === "王牌降临") return { duration: 2300, emphasis: "major", resultDelay: 420 };
+  if (cue.kind === "trap") return { duration: 2000, emphasis: "standard", resultDelay: 300 };
+  if (["spell", "effect"].includes(cue.kind)) return { duration: 1850, emphasis: "standard", resultDelay: 260 };
+  if (cue.kind === "summon") return { duration: 1700, emphasis: "standard", resultDelay: 240 };
+  return { duration: 1350, emphasis: "minor", resultDelay: 180 };
+}
+
 // Convert one public event cue into a compact, non-blocking presentation model.
 // `onlineCard` only resolves public cards, so this model can never reveal a
 // concealed hand or set-card identity to players or spectators.
@@ -847,6 +893,7 @@ export function onlineActionPresentation(view, cue) {
   const tone = cue.kind === "attack" || cue.kind === "impact" ? "attack"
     : cue.kind === "trap" || cue.kind === "set" ? "trap"
       : cue.kind === "spell" || cue.kind === "effect" || cue.kind === "draw" ? "spell" : "summon";
+  const timing = actionPresentationTiming(cue);
   return {
     id: Number(cue.id) || 0,
     kind: cue.kind,
@@ -857,9 +904,7 @@ export function onlineActionPresentation(view, cue) {
     source: { cardId: cue.cardId || null, name: sourceCard?.name || sourceFallback, meta: actionCardMeta(sourceCard), public: Boolean(sourceCard) },
     target,
     result,
-    duration: ["impact", "guard"].includes(cue.kind) || (cue.kind === "attack" && cue.resultType)
-      ? 3200
-      : cue.kind === "attack" ? 2800 : 2600
+    ...timing
   };
 }
 
@@ -1181,6 +1226,48 @@ export function onlineEffectDecisionView(view, model) {
     target,
     candidates,
     hint: target ? `${target.location} · ${target.detail}` : "单击选择，确认或双击目标发动。"
+  };
+}
+
+export function onlineTributeDecisionView(view, model) {
+  const self = view?.players?.[view?.viewerSeatId];
+  if (spectatorView(view) || !model?.tributeCount || !self
+    || !self.hand.some(card => card.id === model.card.id)
+    || view.gameOver || view.turn?.playerId !== view.viewerSeatId || view.machine?.responseWindow) return null;
+  const candidates = self.monsterZone.flatMap((card, index) => card && !card.hidden ? [{
+    id: card.id, name: card.name, location: `我方怪兽区 · 第 ${index + 1} 格`,
+    detail: `ATK ${totalAtk(card)} · DEF ${totalDef(card)}`,
+    selected: model.tributeCardIds.includes(card.id)
+  }] : []);
+  const selected = candidates.filter(card => card.selected);
+  const complete = selected.length === model.tributeCount;
+  return {
+    title: `${model.card.name} · 祭品召唤`,
+    progress: `已选 ${selected.length}/${model.tributeCount} 只祭品`,
+    summary: selected.length ? selected.map(card => card.name).join("、") : "从场上或下方名单选择我方怪兽。",
+    hint: complete && model.index != null
+      ? `召唤至第 ${model.index + 1} 格 · 确认后才释放祭品，点击其他高亮空位可改落点。`
+      : "再次点击可取消选择；确认召唤前，手牌和场面保持不变。",
+    candidates
+  };
+}
+
+export function onlineGraveChoiceView(view, model, seatId = view?.viewerSeatId) {
+  if (spectatorView(view) || model?.card.type !== "spell" || model.stage !== "target"
+    || view.gameOver || view.turn.playerId !== view.viewerSeatId || view.machine?.responseWindow
+    || !view.players[view.viewerSeatId].hand.some(card => card.id === model.card.id)) return null;
+  const grave = (view.players[seatId]?.grave || []).filter(card => card && !card.hidden);
+  const legalIds = new Set(model.targetIds);
+  const count = grave.filter(card => legalIds.has(card.id)).length;
+  if (!count) return null;
+  const selectedId = grave.some(card => legalIds.has(card.id) && card.id === model.targetCardId) ? model.targetCardId : null;
+  return {
+    sourceId: model.card.id, seatId, count, selectedId,
+    title: `${model.card.name} · 选择墓地目标`, effect: cardHandSummary(model.card),
+    canConfirm: Boolean(selectedId && model.action?.targetCardId === selectedId),
+    cards: grave.map(card => ({ card, eligible: legalIds.has(card.id), selected: card.id === selectedId,
+      reason: legalIds.has(card.id) ? card.id === selectedId ? "已选目标" : "可选目标"
+        : model.card.effect === "graveRevive" && card.type !== "monster" ? "只能选择墓地怪兽" : "当前效果不能选择这张牌" }))
   };
 }
 

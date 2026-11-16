@@ -40,3 +40,27 @@ test("the trailing click of a confirmation double-click cannot select the hand u
   time += 401;
   assert.equal(run.blocksRepeatedClick(2), false);
 });
+
+test("a new double-click can start immediately after the previous command completes", async () => {
+  let time = 1000;
+  const run = createOnlineActionRunner(() => {}, () => time);
+  await run(async () => {});
+  time += 30;
+  assert.equal(run.blocksRepeatedClick(2), true, "the previous gesture's trailing click remains blocked");
+  assert.equal(run.blocksRepeatedClick(1), false, "a fresh gesture starts with its own first click");
+  time += 40;
+  assert.equal(run.blocksRepeatedClick(2), false, "the new gesture does not need to wait 400ms");
+});
+
+test("clicks during a pending command and keyboard input do not release trailing-click protection", async () => {
+  const run = createOnlineActionRunner(() => {}, () => 1000);
+  let release;
+  const pending = run(() => new Promise(resolve => { release = resolve; }));
+  assert.equal(run.blocksRepeatedClick(1), false);
+  assert.equal(run.blocksRepeatedClick(2), true);
+  release();
+  await pending;
+  assert.equal(run.blocksRepeatedClick(0), false);
+  assert.equal(run.blocksRepeatedClick(2), true, "keyboard input is not the first click of a new pointer gesture");
+  assert.equal(run.blocksRepeatedClick(3), true, "extra clicks in the old gesture are also blocked");
+});

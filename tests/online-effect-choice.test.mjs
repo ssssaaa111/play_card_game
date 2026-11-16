@@ -4,7 +4,8 @@ import { DuelRoom } from "../server/duel-room.js";
 import { createDuelist, cardById } from "../src/deck.js";
 import { buildEngineStateFromUiState } from "../src/engine-adapter.js";
 import { createDuelSessionConfig, ControllerKind, DuelMode } from "../src/duel-session.js";
-import { chooseOnlineCard, selectOnlineCard, onlineSelectionModel, onlineEffectDecisionView } from "../src/online-duel-ui.js";
+import { chooseOnlineCard, selectOnlineCard, onlineSelectionModel, onlineEffectDecisionView, onlineGraveChoiceView } from "../src/online-duel-ui.js";
+import { createOnlineDuelState } from "../server/online-duel-state.js";
 
 function fixture(active = "p1") {
   const card = (template, uid) => ({ ...cardById(template), uid, mode: "attack", used: false, tempAtk: 0, tempDef: 0 });
@@ -95,4 +96,44 @@ test("empty or invalid concealed slots cannot change the room", () => {
     assert.throws(() => room.submit("one", { revision: before.revision, commandId: targetCardId, action: { type: "ACTIVATE_CARD", cardId: "dispel", targetCardId } }), { code: "ILLEGAL_COMMAND" });
     assert.deepEqual(room.viewFor("p1"), before);
   }
+});
+
+for (const seat of ["p1", "p2"]) test(`${seat} grave choice retains legal selection while explaining ineligible cards`, () => {
+  const { room, model } = fixture(seat);
+  const view = room.viewFor(seat), before = structuredClone(view);
+  const choice = onlineGraveChoiceView(view, model(view, "revive"));
+  assert.equal(choice.count, 2);
+  assert.equal(choice.canConfirm, false);
+  assert.match(choice.cards.find(entry => entry.card.id === "grave-spell").reason, /只能选择墓地怪兽/);
+  const selected = onlineGraveChoiceView(view, model(view, "revive", "grave-guard"));
+  assert.equal(selected.selectedId, "grave-guard");
+  assert.equal(selected.canConfirm, true);
+  assert.equal(selected.cards.filter(entry => entry.selected).length, 1);
+  assert.deepEqual(view, before);
+  assert.equal(onlineGraveChoiceView(view, model(view, "equip")), null);
+  view.turn.playerId = seat === "p1" ? "p2" : "p1";
+  assert.equal(onlineGraveChoiceView(view, model(view, "revive")), null);
+});
+
+test("unique grave choice is preselected while stale or spectator choices stay unavailable", () => {
+  const { room, model } = fixture();
+  const view = room.viewFor("p1");
+  view.legalActions.actions.activateCard = view.legalActions.actions.activateCard.filter(action => action.cardId !== "revive" || action.targetCardId === "grave-mage");
+  assert.equal(onlineGraveChoiceView(view, model(view, "revive")).count, 1);
+  assert.equal(onlineGraveChoiceView(view, model(view, "revive")).canConfirm, true);
+  const selection = selectOnlineCard(view, "revive");
+  view.revision++;
+  assert.equal(onlineGraveChoiceView(view, onlineSelectionModel(view, selection)), null);
+  view.viewerRole = "spectator";
+  assert.equal(onlineGraveChoiceView(view, model(view, "revive")), null);
+});
+
+test("server-only grave opening draws distinct cards without changing deck size", () => {
+  const state = createOnlineDuelState({ openingHands: { p1: ["solar-knight", "trio-ember-recall", "trio-ember-recall", "blade-sigil", "dispelling-ray"] }, openingGraves: { p1: ["gale-mage", "iron-guardian", "war-chant"] } });
+  const self = state.players.p1;
+  assert.equal(self.hand.length, 5);
+  assert.equal(self.grave.length, 3);
+  assert.equal(self.deck.length, 32);
+  const cards = [...self.hand, ...self.grave, ...self.deck];
+  assert.equal(new Set(cards).size, 40);
 });

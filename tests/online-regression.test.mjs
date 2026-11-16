@@ -4,7 +4,7 @@ import { DuelRoom } from "../server/duel-room.js";
 import { createDuelist, cardById } from "../src/deck.js";
 import { buildEngineStateFromUiState } from "../src/engine-adapter.js";
 import { createDuelSessionConfig, ControllerKind, DuelMode } from "../src/duel-session.js";
-import { chooseOnlineCard, selectOnlineCard, onlineSelectionModel, onlineBattlePreview, onlineAttackDecisionView } from "../src/online-duel-ui.js";
+import { chooseOnlineCard, selectOnlineCard, onlineSelectionModel, onlineBattlePreview, onlineAttackDecisionView, onlineTributeDecisionView } from "../src/online-duel-ui.js";
 
 // Stable cards and IDs: this regression needs neither a server nor a browser.
 function fixedState() {
@@ -19,6 +19,60 @@ function fixedState() {
   return buildEngineStateFromUiState({
     ...createDuelSessionConfig({ mode: DuelMode.onlinePvp, seatIds: ["p1", "p2"], localPlayerId: "p1", controllers: { p1: ControllerKind.human, p2: ControllerKind.human } }),
     cardDefinitionsComplete: true, p1, p2, turn: "p1", phase: "main", timing: "mainOpen", gameEvents: []
+  });
+}
+
+for (const active of ["p1", "p2"]) {
+  test(`${active} tribute decisions identify the actual sacrifices and commit only the chosen pair`, () => {
+    const card = (id, uid) => ({ ...cardById(id), uid, mode: "attack", used: false, tempAtk: 0, tempDef: 0 });
+    const self = createDuelist(active);
+    const rivalId = active === "p1" ? "p2" : "p1";
+    const rival = createDuelist(rivalId);
+    self.hand = [card("starfall-colossus", "boss")];
+    self.field = [card("solar-knight", "first"), null, card("solar-knight", "third"), null, card("iron-guardian", "fifth")];
+    self.field[2].tempAtk = 300;
+    [self, rival].forEach((player, index) => { player.deck = [card("iron-guardian", `deck:${index}`)]; });
+    const room = new DuelRoom({ code: "TRB234", createState: () => buildEngineStateFromUiState({
+      ...createDuelSessionConfig({ mode: DuelMode.onlinePvp, seatIds: ["p1", "p2"], localPlayerId: active, controllers: { p1: ControllerKind.human, p2: ControllerKind.human } }),
+      cardDefinitionsComplete: true, [active]: self, [rivalId]: rival, turn: active, phase: "main", timing: "mainOpen", gameEvents: []
+    }) });
+    room.join({ name: "星野", connectionId: "one" });
+    room.join({ name: "月见", connectionId: "two" });
+    room.setReady("one", true); room.setReady("two", true);
+    const view = room.viewFor(active);
+    const before = structuredClone(view);
+    let selection = selectOnlineCard(view, "boss");
+    const project = () => onlineTributeDecisionView(view, onlineSelectionModel(view, selection));
+    assert.equal(project().progress, "已选 0/2 只祭品");
+    assert.deepEqual(project().candidates.map(card => card.location), ["我方怪兽区 · 第 1 格", "我方怪兽区 · 第 3 格", "我方怪兽区 · 第 5 格"]);
+    assert.match(project().candidates[2].detail, /ATK 900 · DEF 2100/);
+    selection = chooseOnlineCard(view, selection, "third");
+    assert.equal(onlineSelectionModel(view, selection).action, null);
+    assert.equal(project().progress, "已选 1/2 只祭品");
+    assert.match(project().candidates[1].detail, /ATK 2000/);
+    selection = chooseOnlineCard(view, selection, "third");
+    assert.equal(project().progress, "已选 0/2 只祭品");
+    selection = chooseOnlineCard(view, selection, "third");
+    selection = chooseOnlineCard(view, selection, "fifth");
+    selection.index = 2;
+    const model = onlineSelectionModel(view, selection);
+    assert.equal(project().progress, "已选 2/2 只祭品");
+    assert.equal(project().summary, "日冕骑士、铁壁守卫");
+    assert.match(project().hint, /召唤至第 3 格/);
+    assert.deepEqual(project().candidates.filter(card => card.selected).map(card => card.id), ["third", "fifth"]);
+    assert.deepEqual(room.viewFor(active), before, "selecting, deselecting and cancelling do not consume any card");
+    assert.equal(onlineTributeDecisionView({ ...view, viewerRole: "spectator" }, model), null);
+    assert.equal(onlineTributeDecisionView(view, onlineSelectionModel(view, { ...selection, revision: -1 })), null);
+    const request = { revision: view.revision, commandId: "tribute-confirm", action: model.action };
+    const connection = active === "p1" ? "one" : "two";
+    room.submit(connection, request);
+    const after = room.viewFor(active);
+    assert.equal(after.players[active].monsterZone[2].id, "boss");
+    assert.equal(after.players[active].monsterZone[0].id, "first");
+    assert.deepEqual(new Set(after.players[active].grave.map(card => card.id)), new Set(["third", "fifth"]));
+    assert.equal(after.players[active].hand.length, 0);
+    room.submit(connection, request);
+    assert.deepEqual(room.viewFor(active), after, "duplicate confirmation cannot sacrifice again");
   });
 }
 
