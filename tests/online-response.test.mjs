@@ -6,7 +6,7 @@ import { createDuelist, cardById } from "../src/deck.js";
 import { buildEngineStateFromUiState } from "../src/engine-adapter.js";
 import { createDuelSessionConfig, ControllerKind, DuelMode } from "../src/duel-session.js";
 import { sanitizeOnlineAction } from "../src/duel-command.js";
-import { onlineTrapResponseChoice } from "../src/online-duel-ui.js";
+import { onlineTrapResponseChoice, onlineResponseBattleView, onlineChainResponseDecisionView } from "../src/online-duel-ui.js";
 
 function battle({ traps = ["mirror-snare", "weakening-web"], targets = [], lp = 4000, deckSize = 5, now, responseTimeoutMs, attackerCounter = false, attackerCounters = null, defenderCounters = 0 } = {}) {
   const card = (id, uid) => ({ ...cardById(id), uid, mode: "attack", used: false, tempAtk: 0, tempDef: 0 });
@@ -151,6 +151,53 @@ test("the attacker can chain a nullifier and restore the original battle", () =>
   assert.equal(after.players.p2.grave[0].templateId, "mirror-snare");
   assert.ok(after.recentEvents.some((event) => event.type === "EFFECT_SKIPPED" && event.cardId === "trap:0"));
   assert.equal(after.machine.pendingAttack, null);
+});
+
+test("a chain response labels the original attack separately from passing the committed trap", () => {
+  const duel = battle({ traps: ["mirror-snare"], attackerCounter: true });
+  duel.declare();
+  assert.equal(onlineResponseBattleView(duel.room.viewFor("p2")).summaryLabel, "若不发动陷阱");
+  duel.respond();
+  const view = duel.room.viewFor("p1");
+  const before = structuredClone(view);
+  const decision = onlineChainResponseDecisionView(view);
+  assert.equal(decision.title, "是否加入 CL2 反制");
+  assert.equal(decision.lead, "可反制 CL1《镜光反制》；不再连锁则按 CL1 结算。");
+  assert.match(decision.passHint, /立即结算现有连锁/);
+  assert.equal(onlineResponseBattleView(view).summaryLabel, "原始攻击预估（未计入连锁）");
+  assert.match(onlineResponseBattleView(view).summary, /1700/);
+  assert.deepEqual(duel.room.viewFor("p1"), before, "reading a decision must not settle the pending chain");
+  assert.equal(onlineChainResponseDecisionView(duel.room.viewFor("p2")), null);
+  assert.equal(onlineChainResponseDecisionView({ ...view, viewerRole: "spectator" }), null);
+  duel.counterResponse("PASS_CHAIN_RESPONSE");
+  const after = duel.room.viewFor("p1");
+  assert.equal(after.players.p1.monsterZone[0], null);
+  assert.equal(after.players.p2.lp, 4000, "the original 1700 estimate is not the result of passing CL1");
+  assert.equal(onlineChainResponseDecisionView(after), null);
+});
+
+test("chain decisions follow the current public counter and order as priority changes", () => {
+  const duel = battle({ traps: ["mirror-snare"], attackerCounters: 2, defenderCounters: 1 });
+  duel.declare(); duel.respond(); duel.counterResponse();
+  const third = onlineChainResponseDecisionView(duel.room.viewFor("p2"));
+  assert.equal(third.title, "是否加入 CL3 反制");
+  assert.equal(third.lead, "可反制 CL2《断链裁决》；不再连锁则按 CL2 → CL1 结算。");
+  duel.defenderCounterResponse();
+  const fourth = onlineChainResponseDecisionView(duel.room.viewFor("p1"));
+  assert.equal(fourth.title, "是否加入 CL4 反制");
+  assert.equal(fourth.lead, "可反制 CL3《断链裁决》；不再连锁则按 CL3 → CL2 → CL1 结算。");
+  duel.counterResponse("RESPOND_CHAIN_TRAP", "attacker-chain-trap:1");
+  assert.equal(duel.room.viewFor("p2").players.p2.lp, 2300);
+});
+
+test("summon counter decisions identify the committed summon trap without inventing a battle estimate", () => {
+  const duel = summonBattle({ counter: true });
+  duel.summon(); duel.respond();
+  const view = duel.room.viewFor("p2");
+  assert.equal(onlineResponseBattleView(view), null);
+  assert.equal(onlineChainResponseDecisionView(view).lead, "可反制 CL1《召雷陷阵》；不再连锁则按 CL1 结算。");
+  duel.counterResponse("PASS_CHAIN_RESPONSE");
+  assert.equal(duel.room.viewFor("p2").players.p2.lp, 3600);
 });
 
 test("passing or timing out on an attack chain lets the defense trap resolve", () => {

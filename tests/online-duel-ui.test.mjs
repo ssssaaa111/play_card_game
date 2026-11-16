@@ -299,7 +299,8 @@ test("pending attack responses expose a compact public battle comparison", () =>
     attackerStat: "ATK 1700",
     targetName: "铁壁守卫",
     targetStat: "DEF 2100",
-    summary: "攻击方承受 400 点守备力差值伤害；双方怪兽保留，目标会产生战斗损耗。"
+    summary: "攻击方承受 400 点守备力差值伤害；双方怪兽保留，目标会产生战斗损耗。",
+    summaryLabel: "若不发动陷阱"
   });
 
   view.machine.pendingAttack = { playerId: "p1", rivalId: "p2", attackerCardId: "attacker:1", targetCardId: null, direct: true, declarationEventId: 24 };
@@ -312,7 +313,8 @@ test("pending attack responses expose a compact public battle comparison", () =>
     attackerStat: "ATK 1700",
     targetName: "月见的生命值",
     targetStat: "LP 4000",
-    summary: "预计造成 1700 点生命值伤害。"
+    summary: "预计造成 1700 点生命值伤害。",
+    summaryLabel: "若不发动陷阱"
   });
 });
 

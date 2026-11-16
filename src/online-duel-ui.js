@@ -230,7 +230,25 @@ export function onlineResponseBattleView(view) {
     attackerStat: `ATK ${attackerValue}`,
     targetName: target?.name || `${targetSeat?.name || "防守方"}的生命值`,
     targetStat: target ? `${targetMode === "defense" ? "DEF" : "ATK"} ${targetValue}` : `LP ${targetValue}`,
-    summary: directSummary || preview?.result || "攻击已锁定，等待响应。"
+    summary: directSummary || preview?.result || "攻击已锁定，等待响应。",
+    summaryLabel: view.machine?.chainLength > 0 ? "原始攻击预估（未计入连锁）" : "若不发动陷阱"
+  };
+}
+
+export function onlineChainResponseDecisionView(view) {
+  const response = view?.chainResponse;
+  const chain = (view?.machine?.chain || []).filter(link => link.committed);
+  if (spectatorView(view) || view?.gameOver || !response || !chain.length
+    || view.machine?.responseWindow?.playerId !== view.viewerSeatId) return null;
+  const target = chain.find(link => link.cardId === response.targetCardId) || chain.at(-1);
+  const indexOf = link => Number(link.linkId) || chain.indexOf(link) + 1;
+  const card = target.card && !target.card.hidden ? target.card : onlineCard(view, target.cardId);
+  const targetLabel = `CL${indexOf(target)}《${card?.name || "公开陷阱"}》`;
+  const order = [...chain].reverse().map(link => `CL${indexOf(link)}`).join(" → ");
+  return {
+    title: `是否加入 CL${chain.length + 1} 反制`,
+    lead: `可反制 ${targetLabel}；不再连锁则按 ${order} 结算。`,
+    passHint: `不追加新效果，立即结算现有连锁（${order}）。`
   };
 }
 

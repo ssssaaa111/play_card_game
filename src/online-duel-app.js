@@ -19,7 +19,7 @@ import { installPublicReport } from "./public-report.js?v=20261114-network-recov
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261116-chain-rhythm-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261117-response-decision-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -1698,7 +1698,7 @@ function renderResponseBattle(view) {
   elements.responseBattleBadge.textContent = battle.badge;
   elements.responseTargetName.textContent = battle.targetName;
   elements.responseTargetStat.textContent = battle.targetStat;
-  elements.responseBattleSummary.textContent = `若不发动陷阱：${battle.summary}`;
+  elements.responseBattleSummary.textContent = `${battle.summaryLabel}：${battle.summary}`;
 }
 
 function selectResponse(index) {
@@ -1779,6 +1779,7 @@ function renderResponse(view) {
   const activeResponse = view.attackResponse || view.summonResponse || view.chainResponse;
   const summonResponse = activeResponse?.eventName === "summon";
   const chainResponse = activeResponse?.eventName === "chain";
+  const chainDecision = onlineChainResponseDecisionView(view);
   elements.onlineResponse.dataset.responseAvailable = String(Boolean(activeResponse));
   elements.onlineResponse.dataset.responseCandidates = String(activeResponse?.candidates?.length || 0);
   elements.onlineResponse.dataset.responsePrompt = activeResponse?.eventName || view.machine.responseWindow?.prompt || "none";
@@ -1800,18 +1801,19 @@ function renderResponse(view) {
     elements.onlineResponse.classList.toggle("single-response", panel.singleChoice);
     elements.responseChoices.hidden = panel.choices.length === 0;
     elements.responseKicker.textContent = chainResponse ? "CHAIN RESPONSE" : summonResponse ? "SUMMON RESPONSE" : "ATTACK RESPONSE";
-    elements.responseTitle.textContent = chainResponse ? `是否加入 CL${(view.machine?.chainLength || 0) + 1} 反制` : panel.singleChoice
+    elements.responseTitle.textContent = chainDecision?.title || (chainResponse ? `是否加入 CL${(view.machine?.chainLength || 0) + 1} 反制` : panel.singleChoice
       ? (summonResponse ? "召唤完成 · 可发动一张陷阱" : "可发动一张陷阱")
-      : (summonResponse ? "选择本次召唤的响应" : "选择本次攻击的响应");
-    elements.responseLead.textContent = chainResponse
-      ? "对手陷阱已加入连锁；发动反制将无效上一段效果，放弃则立即按后进先出结算。"
+      : (summonResponse ? "选择本次召唤的响应" : "选择本次攻击的响应"));
+    elements.responseLead.textContent = chainDecision?.lead || (chainResponse
+      ? "追加反制，或不再连锁并结算现有连锁。"
       : panel.singleChoice
       ? "唯一陷阱已选中，可发动或放弃。"
-      : "选择陷阱；双击可直接发动。";
+      : "选择陷阱；双击可直接发动。");
     elements.responseText.hidden = panel.singleChoice;
     elements.responseActivate.disabled ||= actionPending;
     elements.responsePass.disabled = actionPending;
     elements.responsePass.textContent = chainResponse ? "不再连锁" : "放弃响应";
+    elements.responsePass.title = chainDecision?.passHint || "";
     elements.responseChoices.querySelectorAll("button").forEach((button) => {
       button.disabled = actionPending || panel.singleChoice;
       button.classList.toggle("single-ready", panel.singleChoice);

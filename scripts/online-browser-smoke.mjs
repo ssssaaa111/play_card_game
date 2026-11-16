@@ -616,13 +616,23 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'attack response', options.timeoutMs);
+  assert.match(await evaluate(cdp, secondPage, `document.querySelector('#responseBattleSummary').textContent`), /^若不发动陷阱：/);
   await click(cdp, secondPage, '#responseActivate');
   await waitForPage(cdp, firstPage, visibleExpression('#onlineResponse[open]'), 'CL2 response', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#responseLead').textContent`), '可反制 CL1《镜光反制》；不再连锁则按 CL1 结算。');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('#responseBattleSummary').textContent`), /^原始攻击预估（未计入连锁）：/);
+  await writeFile(path.join(options.artifactDir, `online-response-decision-CL2-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await click(cdp, firstPage, '#responseChoices button');
   await click(cdp, firstPage, '#responseActivate');
   await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'CL3 response', options.timeoutMs);
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#responseLead').textContent`), '可反制 CL2《断链裁决》；不再连锁则按 CL2 → CL1 结算。');
   await click(cdp, secondPage, '#responseActivate');
   await waitForPage(cdp, firstPage, textMatchExpression('#responseTitle', 'CL4'), 'single candidate retains CL4 title', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#responseLead').textContent`), '可反制 CL3《断链裁决》；不再连锁则按 CL3 → CL2 → CL1 结算。');
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, `innerWidth === 844 && document.querySelector('#responsePass').getBoundingClientRect().bottom <= innerHeight`, 'CL4 decision buttons fit landscape', options.timeoutMs);
+  await writeFile(path.join(options.artifactDir, `online-response-decision-CL4-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await click(cdp, firstPage, '#responseActivate');
   await waitForPage(cdp, firstPage, visibleExpression('#chainResolutionStage'), 'four-link resolution', options.timeoutMs);
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#chainResolutionStage').textContent`), /CL4 → CL3 → CL2 → CL1/);
@@ -656,7 +666,7 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
     assert.ok(history.filter(beat => beat.chain).every(beat => !beat.phase && !beat.action && !beat.response && !beat.damage), 'Chain overlaps another presentation');
     assert.ok(history.filter(beat => beat.result).every(beat => !beat.chain && !beat.action && !beat.epic && !beat.damage), 'Result covers the lethal hit');
   }
-  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
+  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
   console.log(`online-chain-rhythm-smoke passed (${roomCode}, four links, response priority, damage, replay, lethal result, spectator)`);
 }
 
