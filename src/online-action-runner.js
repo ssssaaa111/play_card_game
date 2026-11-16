@@ -2,17 +2,17 @@
 export function createOnlineActionRunner(onPending = () => {}, now = () => performance.now()) {
   let pending = false;
   let repeatClickUntil = -Infinity;
-  const run = async (action) => {
+  const run = async (action, context = null) => {
     if (pending) return false;
     pending = true;
     try {
-      onPending(true);
+      onPending(true, context);
       await action();
       return true;
     } finally {
       pending = false;
       repeatClickUntil = now() + 400;
-      onPending(false);
+      onPending(false, null);
     }
   };
   // The second click of a double-click can land on the hand after a dialog closes.

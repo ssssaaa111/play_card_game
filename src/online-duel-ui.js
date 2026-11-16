@@ -235,6 +235,17 @@ export function onlineResponseBattleView(view) {
   };
 }
 
+export function onlinePendingCommandView(view, pending) {
+  if (!pending?.action || !view || view.gameOver || view.revision !== pending.revision) return null;
+  const type = pending.action.type;
+  const title = {
+    SUMMON_MONSTER: "正在提交召唤", SET_TRAP: "正在提交盖放", ACTIVATE_CARD: "正在提交发动",
+    DECLARE_ATTACK: "正在提交攻击", CHANGE_MONSTER_MODE: "正在切换表示",
+    CHANGE_PHASE: "正在切换阶段", END_TURN: "正在结束回合", SKIP_REMAINING_ATTACKS: "正在结束攻击"
+  }[type] || (/^(RESPOND_|PASS_)/.test(type) ? "正在提交响应" : "正在提交操作");
+  return { title, signal: "提交中", hint: "等待服务器确认，请稍候。" };
+}
+
 export function onlineChainResponseDecisionView(view) {
   const response = view?.chainResponse;
   const chain = (view?.machine?.chain || []).filter(link => link.committed);

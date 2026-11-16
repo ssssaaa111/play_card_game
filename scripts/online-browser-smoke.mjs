@@ -20,6 +20,7 @@ function parseArgs(argv) {
     effectChoices: false,
     tributeChoices: false,
     chainRhythm: false,
+    pendingFeedback: false,
     artifactDir: process.env.ONLINE_BROWSER_ARTIFACT_DIR || path.resolve(".tmp", "online-browser-smoke")
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -31,6 +32,7 @@ function parseArgs(argv) {
     else if (argv[index] === "--effect-choices") result.effectChoices = true;
     else if (argv[index] === "--tribute-choices") result.tributeChoices = true;
     else if (argv[index] === "--chain-rhythm") result.chainRhythm = true;
+    else if (argv[index] === "--pending-feedback") result.pendingFeedback = true;
   }
   return result;
 }
@@ -1076,7 +1078,32 @@ try {
   })()`, "compact attack hint without covering card art", options.timeoutMs);
 
   await doubleClickText(cdp, firstPage, "#hand .card.action-ready", "疾风术士");
+  let pendingFeedback = null;
+  if (options.pendingFeedback) {
+    await waitForPage(cdp, firstPage, `document.querySelector('#handCommand').getAttribute('aria-busy') === 'true' && /正在提交召唤.*等待服务器确认/.test(document.querySelector('#duelHint').textContent)`, 'summon submission feedback', options.timeoutMs);
+    assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .slot[data-card-uid]').length`), 1, 'Delayed summon changed the field before confirmation');
+    await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+    await doubleClickText(cdp, firstPage, '#hand .card', '疾风术士');
+    const mobile = await evaluate(cdp, firstPage, `(() => {
+      const hint = document.querySelector('#duelHint'), rect = hint.getBoundingClientRect();
+      return { text: hint.textContent, busy: document.querySelector('#handCommand').getAttribute('aria-busy'), visible: rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight, selected: document.querySelectorAll('#hand .card.selected').length };
+    })()`);
+    assert.match(mobile.text, /正在提交召唤.*等待服务器确认/);
+    assert.equal(mobile.busy, 'true');
+    assert.equal(mobile.visible, true, 'Mobile submission feedback is outside the viewport');
+    assert.equal(mobile.selected, 0, 'Repeated pending clicks opened a new selection');
+    const screenshotPath = path.join(options.artifactDir, `online-pending-feedback-mobile-${roomCode}.png`);
+    await writeFile(screenshotPath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+    await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+    pendingFeedback = { mobile, screenshotPath, repeatedClicksIgnored: true };
+  }
   await waitForPage(cdp, firstPage, textMatchExpression('#hand .card[data-action-label="次数用完"]', "铁壁守卫"), "authoritative summon exhaustion reason", options.timeoutMs);
+  if (options.pendingFeedback) {
+    await waitForPage(cdp, firstPage, `document.querySelector('#handCommand').getAttribute('aria-busy') === 'false' && !/正在提交召唤/.test(document.querySelector('#duelHint').textContent)`, 'submission feedback cleared', options.timeoutMs);
+    assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .slot[data-card-uid]').length`), 2, 'Repeated pending clicks submitted another summon');
+    assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="gale-mage"]').length`), 0);
+    pendingFeedback.clearedAfterConfirmation = true;
+  }
   await click(cdp, firstPage, '#hand .card[data-action-label="次数用完"]');
   await waitForPage(cdp, firstPage, textMatchExpression("#duelHint", "本回合召唤次数已用完"), "clicked unavailable-card explanation", options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#cardInspector").open`), false, "Unavailable-card click opened details instead of explaining the rule");
@@ -1386,7 +1413,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, responseLayouts, resultLayouts, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);

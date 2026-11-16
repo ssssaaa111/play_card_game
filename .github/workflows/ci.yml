@@ -122,6 +122,8 @@ jobs:
           frontend_pid=$!
           node scripts/duel-server.mjs --port=5178 --scenario=trap-response > online-browser-duel.out.log 2> online-browser-duel.err.log &
           duel_pid=$!
+          node scripts/duel-latency-proxy.mjs --port=5182 --target=ws://127.0.0.1:5178/duel --delay-ms=4000 > online-browser-latency.out.log 2> online-browser-latency.err.log &
+          latency_pid=$!
           DUEL_AUTH_STORE="$RUNNER_TEMP/card-duel-effect-auth.json" \
             DUEL_ROOM_STORE="$RUNNER_TEMP/card-duel-effect-rooms.json" \
             node scripts/duel-server.mjs --port=5179 --scenario=effect-choice > online-browser-effects.out.log 2> online-browser-effects.err.log &
@@ -135,7 +137,7 @@ jobs:
             node scripts/duel-server.mjs --port=5181 --scenario=multi-chain-response > online-browser-chain.out.log 2> online-browser-chain.err.log &
           chain_pid=$!
           cleanup() {
-            kill "$frontend_pid" "$duel_pid" "$effect_pid" "$tribute_pid" "$chain_pid" 2>/dev/null || true
+            kill "$frontend_pid" "$duel_pid" "$effect_pid" "$tribute_pid" "$chain_pid" "$latency_pid" 2>/dev/null || true
           }
           trap cleanup EXIT
 
@@ -143,6 +145,7 @@ jobs:
           for attempt in {1..40}; do
             if curl --fail --silent http://127.0.0.1:5177/online.html > /dev/null \
               && curl --fail --silent http://127.0.0.1:5178/health > /dev/null \
+              && curl --fail --silent http://127.0.0.1:5182/health > /dev/null \
               && curl --fail --silent http://127.0.0.1:5179/health > /dev/null \
               && curl --fail --silent http://127.0.0.1:5180/health > /dev/null \
               && curl --fail --silent http://127.0.0.1:5181/health > /dev/null; then
@@ -153,13 +156,14 @@ jobs:
           done
           if [[ "$ready" -ne 1 ]]; then
             echo "Online browser smoke services did not become ready." >&2
-            cat online-browser-frontend.err.log online-browser-duel.err.log online-browser-effects.err.log online-browser-tributes.err.log online-browser-chain.err.log >&2 || true
+            cat online-browser-frontend.err.log online-browser-duel.err.log online-browser-effects.err.log online-browser-tributes.err.log online-browser-chain.err.log online-browser-latency.err.log >&2 || true
             exit 1
           fi
 
           npm run smoke:online-browser -- \
+            --pending-feedback \
             --frontend-url http://127.0.0.1:5177 \
-            --duel-server-url http://127.0.0.1:5178 \
+            --duel-server-url http://127.0.0.1:5182 \
             --timeout-ms 45000
           npm run smoke:online-browser -- \
             --effect-choices \
@@ -190,6 +194,8 @@ jobs:
             online-browser-frontend.err.log
             online-browser-duel.out.log
             online-browser-duel.err.log
+            online-browser-latency.out.log
+            online-browser-latency.err.log
             online-browser-effects.out.log
             online-browser-effects.err.log
             online-browser-tributes.out.log

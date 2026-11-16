@@ -19,7 +19,7 @@ import { installPublicReport } from "./public-report.js?v=20261114-network-recov
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261117-response-decision-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261117-pending-feedback-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -47,6 +47,7 @@ let currentAccount = null;
 let authMode = "login";
 let authPending = false;
 let actionPending = false;
+let pendingCommand = null;
 let selection = null;
 let trapChoice = null;
 let handOrder = [];
@@ -136,8 +137,9 @@ const phaseStageController = createPhaseStageController({
   canPlay: () => !actionStageTimer && elements.actionStage.hidden && !chainResolutionActive,
   onIdle: () => pumpActionStageQueue()
 });
-const runCommand = createOnlineActionRunner((pending) => {
+const runCommand = createOnlineActionRunner((pending, context) => {
   actionPending = pending;
+  pendingCommand = pending ? context : null;
   render(client.view);
 });
 const assetForCard = (card) => monsterAssets[card.id] || "";
@@ -1219,7 +1221,7 @@ async function sendAction(action) {
       if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
       setError(error.message);
     }
-  });
+  }, { action, revision: client.view.revision });
 }
 
 async function prepareSelectedAttack() {
@@ -1257,7 +1259,7 @@ async function prepareSelectedAttack() {
       setError(error.message);
       selection = selectOnlineCard(client.view, cardId);
     }
-  });
+  }, { action: { type: "CHANGE_PHASE" }, revision: client.view.revision });
 }
 
 async function quickAttack(cardId) {
@@ -1845,6 +1847,21 @@ function renderResponse(view) {
   renderResponseCountdown(view);
 }
 
+function renderPendingCommand(view) {
+  const feedback = connectionPaused(view) ? null : onlinePendingCommandView(view, pendingCommand);
+  elements.handCommand.setAttribute("aria-busy", String(Boolean(feedback)));
+  if (!feedback) return;
+  elements.commandSignal.textContent = feedback.signal;
+  elements.commandTitle.textContent = feedback.title;
+  elements.commandHint.textContent = feedback.hint;
+  elements.duelHint.textContent = `${feedback.title} · ${feedback.hint}`;
+  elements.duelHint.dataset.kind = "status";
+  if (elements.onlineResponse.open) {
+    elements.responseStatus.textContent = feedback.hint;
+    elements[/^PASS_/.test(pendingCommand.action.type) ? "responsePass" : "responseActivate"].textContent = "正在提交…";
+  }
+}
+
 function renderGameResult(view) {
   const result = onlineGameResultView(view);
   if (!result) {
@@ -2198,6 +2215,7 @@ function render(view) {
   renderCommands(view, model);
   refreshGraveChoice(view, model);
   renderResponse(view);
+  renderPendingCommand(view);
   renderGameResult(view);
   renderEvents(view);
   renderConnectionState(view);
