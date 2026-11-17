@@ -643,6 +643,24 @@ async function startBrowser(browserBin, profileDir, timeoutMs) {
   };
 }
 
+async function checkChainPlaybackControls(cdp, page, busy) {
+  const controls = await evaluate(cdp, page, `({
+    busy: document.body.dataset.onlineChainPlayback === 'true',
+    phaseDisabled: document.querySelector('#battleButton').disabled,
+    endDisabled: document.querySelector('#endTurnButton').disabled,
+    label: document.querySelector('#endTurnButton').textContent,
+    confirming: document.querySelector('#endTurnButton').dataset.confirming === 'true'
+  })`);
+  assert.equal(controls.busy, busy);
+  assert.equal(controls.endDisabled, busy, busy ? 'End turn is clickable during chain playback' : 'End turn stayed disabled after chain playback');
+  if (busy) {
+    assert.equal(controls.phaseDisabled, true, 'Phase controls remained active during chain playback');
+    assert.equal(controls.label, '连锁演出中');
+    assert.equal(controls.confirming, false, 'An old end-turn confirmation survived chain playback');
+  }
+  return controls;
+}
+
 async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options, roomCode) {
   const settle = page => waitForPage(cdp, page, `document.querySelector('#actionStage').hidden && document.querySelector('#chainResolutionStage').hidden && document.querySelector('#phaseStage').hidden`, 'chain rhythm presentations completed', options.timeoutMs);
   const play = async (page, id) => {
@@ -698,6 +716,8 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   await click(cdp, firstPage, '#responseActivate');
   await waitForPage(cdp, firstPage, visibleExpression('#chainResolutionStage'), 'four-link resolution', options.timeoutMs);
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#chainResolutionStage').textContent`), /CL4 → CL3 → CL2 → CL1/);
+  const playbackControls = { live: await checkChainPlaybackControls(cdp, firstPage, true) };
+  await writeFile(path.join(options.artifactDir, `online-chain-controls-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await waitForPage(cdp, firstPage, `(() => { const delta = document.querySelector('.life-delta'); return delta?.textContent === '-1700' && Number(getComputedStyle(delta).opacity) > .9; })()`, 'readable damage follows chain', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#chainResolutionStage').hidden && !document.querySelector('#onlineResult').open && !document.querySelector('.epic-action')`), true);
   assert.equal(await evaluate(cdp, firstPage, `Number(getComputedStyle(document.querySelector('#effectLayer')).zIndex) > Number(getComputedStyle(document.querySelector('#actionStage')).zIndex)`), true, 'Damage must be visible above the action card on mobile');
@@ -705,14 +725,17 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   await writeFile(path.join(options.artifactDir, `online-chain-impact-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '2300 LP'), 'spectator chain damage', options.timeoutMs);
   await settle(firstPage);
+  playbackControls.liveResumed = await checkChainPlaybackControls(cdp, firstPage, false);
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'chain desktop viewport restored', options.timeoutMs);
   const beforeReplay = await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.length`);
   await click(cdp, firstPage, '#onlineToolsToggle');
   await click(cdp, firstPage, '#lastChainButton');
   await waitForPage(cdp, firstPage, `!document.querySelector('#chainResolutionStage').hidden && getComputedStyle(document.querySelector('.online-chain-resolution-result')).opacity > .9`, 'readable chain replay summary', options.timeoutMs);
+  playbackControls.replay = await checkChainPlaybackControls(cdp, firstPage, true);
   await writeFile(path.join(options.artifactDir, `online-chain-resolution-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await settle(firstPage);
+  playbackControls.replayResumed = await checkChainPlaybackControls(cdp, firstPage, false);
   assert.equal(await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.slice(${beforeReplay}).some(beat => beat.damage || beat.action)`), false, 'Manual replay must not repeat a hit or damage');
   for (const lp of [600, 0]) {
     await nextRound();
@@ -728,7 +751,7 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
     assert.ok(history.filter(beat => beat.chain).every(beat => !beat.phase && !beat.action && !beat.response && !beat.damage), 'Chain overlaps another presentation');
     assert.ok(history.filter(beat => beat.result).every(beat => !beat.chain && !beat.action && !beat.epic && !beat.damage), 'Result covers the lethal hit');
   }
-  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
+  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, playbackControls, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
   console.log(`online-chain-rhythm-smoke passed (${roomCode}, four links, response priority, damage, replay, lethal result, spectator)`);
 }
 

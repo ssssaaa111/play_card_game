@@ -449,7 +449,7 @@ function endTurnConfirmationActive(view = client.view) {
 
 function requestEndTurn() {
   const view = client.view;
-  if (!view || actionPending || selection || connectionPaused()) return;
+  if (!view || actionPending || chainResolutionActive || selection || connectionPaused()) return;
   if (elements.endTurnButton.dataset.confirming === "true" || endTurnConfirmationActive(view)) {
     clearEndTurnConfirmation();
     sendAction({ type: "END_TURN" });
@@ -761,6 +761,7 @@ function playChainResolutionStage(view, cue, { replay = false } = {}) {
   chainResolutionActive = true;
   elements.duelPanel.inert = true;
   elements.handPanel.inert = true;
+  renderCommands(view, onlineSelectionModel(view, selection));
   chainResolutionTimer = window.setTimeout(() => {
     clearChainResolutionStage();
     if (!replay && cue.followUp) playActionStage(view, cue.followUp);
@@ -1482,8 +1483,8 @@ function locateNextReadyAction() {
 
 function renderCommands(view, model) {
   const ownTurn = view.turn.playerId === view.viewerSeatId;
-  const canAct = ownTurn && !actionPending && !view.gameOver && !view.machine.responseWindow;
-  if (endTurnConfirmation && (!ownTurn || Boolean(selection) || view.machine.responseWindow || endTurnConfirmation.revision !== view.revision)) {
+  const canAct = ownTurn && !actionPending && !chainResolutionActive && !view.gameOver && !view.machine.responseWindow;
+  if (endTurnConfirmation && (chainResolutionActive || !ownTurn || Boolean(selection) || view.machine.responseWindow || endTurnConfirmation.revision !== view.revision)) {
     clearEndTurnConfirmation();
   }
   const turnControl = onlineTurnControlView(view, { endTurnArmed: endTurnConfirmationActive(view) });
@@ -1567,9 +1568,9 @@ function renderCommands(view, model) {
   elements.handCommand.dataset.active = String(Boolean(model));
   elements.handCommand.dataset.signal = actionPending || model ? "active" : canAct ? "ready" : "idle";
   elements.handCommand.dataset.step = model ? model.action ? "execute" : "locate" : "select";
-  elements.commandSignal.textContent = view.gameOver ? "结束" : actionPending ? "结算中" : model ? "操作中" : canAct ? "待命" : "等待";
-  elements.commandTitle.textContent = view.gameOver ? "决斗结束" : canAct ? "选择一张手牌或场上怪兽" : "对手正在行动";
-  elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : canAct ? "单击选择，双击快捷执行；需要目标时，合法候选会高亮。" : "可以查看公开卡牌和墓地。";
+  elements.commandSignal.textContent = view.gameOver ? "结束" : chainResolutionActive ? "演出中" : actionPending ? "结算中" : model ? "操作中" : canAct ? "待命" : "等待";
+  elements.commandTitle.textContent = view.gameOver ? "决斗结束" : chainResolutionActive ? "连锁演出中" : canAct ? "选择一张手牌或场上怪兽" : "对手正在行动";
+  elements.commandHint.textContent = view.gameOver ? "可查看卡牌详情与战斗记录。" : chainResolutionActive ? "连锁演出结束后可继续操作。" : canAct ? "单击选择，双击快捷执行；需要目标时，合法候选会高亮。" : "可以查看公开卡牌和墓地。";
   const fieldPrompt = model?.stage === "placement" ? `选择${model.card.type === "trap" ? "盖放" : "召唤"}位置 · 已选第 ${model.index + 1} 格`
     : model?.stage === "material" ? `选择祭品 · ${model.tributeCardIds.length}/${model.tributeCount}`
       : isAttack ? `${model.card.name} → ${attackDecision?.target.name || "选择目标"}`
@@ -1585,11 +1586,11 @@ function renderCommands(view, model) {
   elements.handGuide.textContent = view.gameOver ? "决斗已结束 · 可查看卡牌详情" : tributeDecision ? "选祭品与落点 · 确认后召唤" : model ? "确认或双击高亮候选执行" : "单击选择 · 双击快捷出牌";
   const inBattle = view.turn.phase === "battle";
   elements.battleButton.textContent = turnControl.battle.label;
-  elements.battleButton.title = turnControl.battle.title;
+  elements.battleButton.title = chainResolutionActive ? "连锁演出结束后可继续操作。" : turnControl.battle.title;
   elements.battleButton.dataset.currentPhase = String(inBattle);
   elements.battleButton.disabled = !canAct || Boolean(selection) || view.turn.phase !== "main" || !view.legalActions.can.endTurn;
-  elements.endTurnButton.textContent = turnControl.endTurn.label;
-  elements.endTurnButton.title = turnControl.endTurn.title;
+  elements.endTurnButton.textContent = chainResolutionActive ? "连锁演出中" : turnControl.endTurn.label;
+  elements.endTurnButton.title = chainResolutionActive ? "连锁演出结束后可继续操作。" : turnControl.endTurn.title;
   elements.endTurnButton.dataset.pendingActions = String(turnControl.requiresEndTurnConfirmation);
   elements.endTurnButton.dataset.confirming = String(turnControl.endTurn.confirming);
   elements.endTurnButton.disabled = !canAct || Boolean(selection) || !view.legalActions.can.endTurn;
