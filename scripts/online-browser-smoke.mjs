@@ -436,6 +436,9 @@ async function installStageObserver(cdp, page) {
         waiting: Boolean(document.querySelector('body[data-online-response="waiting"]')),
         result: document.querySelector('#onlineResult').open,
         title: action.querySelector('h2')?.textContent || '',
+        hint: document.querySelector('#duelHint').textContent,
+        hintKind: document.querySelector('#duelHint').dataset.kind,
+        hintTone: document.querySelector('#duelHint').dataset.tone,
         epic: document.querySelectorAll('.epic-action').length,
         damage: document.querySelector('.life-delta')?.textContent || ''
       };
@@ -458,7 +461,7 @@ async function installStageObserver(cdp, page) {
         if (last?.key !== key) window.__onlineStageHistory.push({ ...entry, key });
       }
     };
-    for (const element of [...roots.map(([, element]) => element), document.querySelector('#phaseStage'), document.querySelector('#effectLayer'), document.querySelector('#onlineResponse'), document.querySelector('#onlineResult')]) {
+    for (const element of [...roots.map(([, element]) => element), document.querySelector('#phaseStage'), document.querySelector('#effectLayer'), document.querySelector('#onlineResponse'), document.querySelector('#onlineResult'), document.querySelector('#duelHint')]) {
       if (element) new MutationObserver(capture).observe(element, { attributes: true, childList: true, subtree: true });
     }
     new MutationObserver(capture).observe(document.body, { attributes: true, attributeFilter: ['data-online-response'] });
@@ -726,6 +729,8 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '2300 LP'), 'spectator chain damage', options.timeoutMs);
   await settle(firstPage);
   playbackControls.liveResumed = await checkChainPlaybackControls(cdp, firstPage, false);
+  await waitForPage(cdp, firstPage, `document.querySelector('#duelHint').dataset.kind === 'battle-result' && document.querySelector('#duelHint').textContent.includes('1700')`, 'battle receipt follows the complete hit', options.timeoutMs);
+  await writeFile(path.join(options.artifactDir, `online-battle-receipt-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'chain desktop viewport restored', options.timeoutMs);
   const beforeReplay = await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.length`);
@@ -736,7 +741,7 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   await writeFile(path.join(options.artifactDir, `online-chain-resolution-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await settle(firstPage);
   playbackControls.replayResumed = await checkChainPlaybackControls(cdp, firstPage, false);
-  assert.equal(await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.slice(${beforeReplay}).some(beat => beat.damage || beat.action)`), false, 'Manual replay must not repeat a hit or damage');
+  assert.equal(await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.slice(${beforeReplay}).some(beat => beat.damage || beat.action || beat.hintKind === 'battle-result')`), false, 'Manual replay must not repeat a hit, damage or old receipt');
   for (const lp of [600, 0]) {
     await nextRound();
     await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
@@ -749,6 +754,9 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
     assert.ok(history.some(beat => beat.damage === '-1700'), 'No post-chain damage recorded');
     assert.ok(history.filter(beat => beat.response || beat.waiting).every(beat => !beat.phase && !beat.action && !beat.chain && !beat.epic && !beat.damage), 'Background presentations overlap a response');
     assert.ok(history.filter(beat => beat.chain).every(beat => !beat.phase && !beat.action && !beat.response && !beat.damage), 'Chain overlaps another presentation');
+    assert.ok(history.some(beat => beat.hintKind === 'battle-result' && beat.hint.includes('1700')), 'Post-chain receipt never appeared');
+    assert.ok(history.filter(beat => beat.hintKind === 'battle-result').every(beat => !beat.chain && !beat.action && !beat.damage), 'Battle receipt reveals the result before playback finishes');
+    assert.ok(history.filter(beat => beat.hintTone === 'victory' || beat.hintTone === 'defeat').every(beat => !beat.chain && !beat.action && !beat.damage), 'Victory hint reveals the lethal result early');
     assert.ok(history.filter(beat => beat.result).every(beat => !beat.chain && !beat.action && !beat.epic && !beat.damage), 'Result covers the lethal hit');
   }
   await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, playbackControls, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
@@ -1452,6 +1460,10 @@ try {
     waitForPage(cdp, firstPage, `document.querySelector("#eventLogList")?.textContent?.includes("1200 伤害")`, "exact battle receipt", options.timeoutMs),
     waitForPage(cdp, spectatorPage, `document.querySelector("#watchPlayers")?.textContent?.includes("2800 LP")`, "spectator final LP", options.timeoutMs)
   ]);
+  await Promise.all([firstPage, secondPage].map(page => waitForPage(cdp, page, `document.querySelector('#duelHint').dataset.kind === 'battle-result' && document.querySelector('#duelHint').textContent.includes('1200')`, 'single-trap receipt follows playback', options.timeoutMs)));
+  for (const page of [firstPage, secondPage]) {
+    assert.equal(await evaluate(cdp, page, `window.__onlineRhythmHistory.some(beat => beat.hintKind === 'battle-result' && (beat.chain || beat.action || beat.damage))`), false, 'Single-trap receipt appeared during playback');
+  }
   const [firstStages, secondStages, spectatorSummary] = await Promise.all([
     stageHistory(cdp, firstPage),
     stageHistory(cdp, secondPage),
@@ -1564,11 +1576,13 @@ try {
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, textMatchExpression('#aiPanel', '3200 / 4000'), 'landscape unique-target quick attack deals damage once', options.timeoutMs);
   await waitForPage(cdp, firstPage, `(window.__onlineRhythmHistory || []).some((entry) => entry.damage === '-800')`, 'damage caption follows attack impact', options.timeoutMs);
+  await waitForPage(cdp, firstPage, `document.querySelector('#duelHint').dataset.kind === 'battle-result' && document.querySelector('#duelHint').textContent.includes('800')`, 'direct battle receipt follows damage', options.timeoutMs);
   const rhythm = await evaluate(cdp, firstPage, `(window.__onlineRhythmHistory || []).map(({ key, ...entry }) => entry)`);
   assert.ok(rhythm.some((entry) => entry.phase), 'No phase presentation was observed');
   assert.ok(rhythm.some((entry) => entry.epic > 0), 'Key attack lost its impact caption');
   assert.ok(rhythm.every((entry) => !entry.phase || (!entry.action && !entry.epic && !entry.damage)), 'Phase and action effects overlapped');
   assert.ok(rhythm.every((entry) => !entry.damage || !entry.epic), 'Damage caption overlapped the attack caption');
+  assert.ok(rhythm.filter(entry => entry.hintKind === 'battle-result').every(entry => !entry.chain && !entry.action && !entry.damage), 'Direct battle receipt appeared during playback');
   assert.ok(rhythm.every((entry) => !['魔法发动', '怪兽召唤', '后场盖放', '转为守备', '转为攻击'].includes(entry.title) || !entry.epic), 'Ordinary action repeated a central caption');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#aiField .slot[data-card-uid]').length`), 0);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerField .slot[data-card-uid]').dataset.monsterState`), 'spent');

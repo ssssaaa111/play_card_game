@@ -58,6 +58,7 @@ let inspectorReturnFocus = null;
 let observedReceiptRoomCode = null;
 let lastObservedEventId = 0;
 let actionReceipt = null;
+let pendingBattleReceipt = null;
 let actionReceiptTimer = null;
 let lastResponseSoundId = null;
 let responseCountdownInterval = null;
@@ -419,8 +420,20 @@ function cardName(view, id) { return onlineCard(view, id)?.name || "盖放卡牌
 
 function clearActionReceipt() {
   actionReceipt = null;
+  pendingBattleReceipt = null;
   if (actionReceiptTimer) clearTimeout(actionReceiptTimer);
   actionReceiptTimer = null;
+}
+
+function presentationPending() {
+  return Boolean(pendingActionCue || chainResolutionActive || actionStageTimer
+    || actionStageQueue.length || phaseStageController.hasWork());
+}
+
+function releaseBattleReceipt() {
+  if (!pendingBattleReceipt || presentationPending()) return false;
+  showActionReceipt(pendingBattleReceipt);
+  return true;
 }
 
 function showActionReceipt(receipt) {
@@ -515,7 +528,12 @@ function syncActionReceipt(view) {
   const eventSound = [...freshEvents].reverse().map((event) => onlineEventSound(view, event)).find(Boolean);
   if (eventSound) playSound(eventSound);
   if (!receipt) return;
-  showActionReceipt(receipt);
+  if (receipt.kind === "battle-result" && presentationPending()) {
+    clearActionReceipt();
+    pendingBattleReceipt = receipt;
+  } else {
+    showActionReceipt(receipt);
+  }
 }
 
 function ownerForSeat(view, seatId) {
@@ -617,6 +635,7 @@ function pumpActionStageQueue() {
   if (actionStageTimer || !elements.actionStage.hidden || chainResolutionActive || phaseStageController.hasWork()) return;
   const next = actionStageQueue.shift();
   if (next) showActionStage(next.view, next.cue, next.model);
+  else if (releaseBattleReceipt() && client.view) render(client.view);
 }
 
 function showActionStage(view, cue, model) {
@@ -685,6 +704,7 @@ function clearChainResolutionStage({ rerender = false } = {}) {
 }
 
 function playChainResolutionStage(view, cue, { replay = false } = {}) {
+  if (replay) clearActionReceipt();
   clearActionStage();
   clearChainResolutionStage();
   phaseStageController.reset();
@@ -1904,14 +1924,14 @@ function renderGameResult(view) {
   elements.resultRematchStatus.textContent = rematchError || rematch?.status || "双方确认后可在当前房间再来一局。";
   elements.resultRematchStatus.dataset.state = rematchError ? "error" : rematchPending ? "ready" : rematch?.selfReady ? "waiting" : rematch?.rivalReady ? "ready" : "idle";
   if (elements.onlineForfeit.open) elements.onlineForfeit.close();
-  elements.duelHint.textContent = `${result.title} · ${result.summary}`;
+  elements.duelHint.textContent = presentationPending() ? "战斗结算中" : `${result.title} · ${result.summary}`;
   elements.duelHint.dataset.kind = "status";
-  elements.duelHint.dataset.tone = result.tone;
+  elements.duelHint.dataset.tone = presentationPending() ? "neutral" : result.tone;
   if (lastResultKey === result.key) return;
   lastResultKey = result.key;
   if (resultRevealTimer) clearTimeout(resultRevealTimer);
   const revealResult = () => {
-    if (chainResolutionActive || actionStageTimer || actionStageQueue.length || phaseStageController.hasWork()) {
+    if (presentationPending()) {
       resultRevealTimer = window.setTimeout(revealResult, 120);
       return;
     }
@@ -2192,6 +2212,7 @@ function render(view) {
   syncRoomUrl(view.roomCode);
   renderRoom(view);
   syncActionReceipt(view);
+  releaseBattleReceipt();
   renderTurnCountdown(view);
   elements.duelPanel.hidden = view.status === "waiting";
   elements.handPanel.hidden = view.status === "waiting";
