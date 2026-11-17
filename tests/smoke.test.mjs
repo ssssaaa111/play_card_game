@@ -93,7 +93,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /hand-renderer\.js\?v=20261114-network-recovery-1/);
   assert.match(app, /field-renderer\.js\?v=[^"\s]+/);
   assert.match(app, /online-duel-ui\.js\?v=[^"]+/);
-  assert.match(app, /trap-response-renderer\.js\?v=20261102-multi-chain-1/);
+  assert.match(app, /trap-response-renderer\.js\?v=20261117-response-takeover-1/);
   assert.doesNotMatch(app, /from "\.\/online-duel-ui\.js"/);
   assert.match(html, /id="lobbyPanel"/);
   assert.match(html, /id="authPanel"/);

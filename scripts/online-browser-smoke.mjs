@@ -641,6 +641,11 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   assert.match(await evaluate(cdp, secondPage, `document.querySelector('#responseBattleSummary').textContent`), /^若不发动陷阱：/);
   await click(cdp, secondPage, '#responseActivate');
   await waitForPage(cdp, firstPage, visibleExpression('#onlineResponse[open]'), 'CL2 response', options.timeoutMs);
+  await click(cdp, firstPage, '#responseChain .chain-stack-card');
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), 'inspect a public chain card during response', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorTitle').textContent`), '镜光反制');
+  await click(cdp, firstPage, '#inspectorClose');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#onlineResponse').open && document.querySelector('#onlineResponse').contains(document.activeElement)`), true, 'Closing chain details lost the active response');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#responseLead').textContent`), '可反制 CL1《镜光反制》；不再连锁则按 CL1 结算。');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#responseBattleSummary').textContent`), /^原始攻击预估（未计入连锁）：/);
   await writeFile(path.join(options.artifactDir, `online-response-decision-CL2-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
@@ -1291,9 +1296,20 @@ try {
   await click(cdp, firstPage, '#choiceCancelBtn');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`), /4000 \/ 4000/);
   assert.equal(await evaluate(cdp, firstPage, visibleExpression('.online-attack-source')), false, 'Cancel left an attack source highlighted');
+  await click(cdp, secondPage, '#logToggle');
+  await click(cdp, secondPage, '#eventLog [data-public-report]');
+  await waitForPage(cdp, secondPage, visibleExpression('.public-report[open]'), 'rival reading a report before response', options.timeoutMs);
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, `(() => Boolean(document.querySelector(".online-response-attacker")) || (document.querySelector("#actionStage")?.innerText || "").includes("直接攻击"))()`, "declared attack presentation", options.timeoutMs);
   await waitForPage(cdp, secondPage, `(() => { const button = document.querySelector("#responseActivate"); return Boolean(button && !button.disabled && button.getClientRects().length); })()`, "trap activation", options.timeoutMs);
+  assert.deepEqual(await evaluate(cdp, secondPage, `[...document.querySelectorAll('dialog[open]')].map(dialog => dialog.id || dialog.className)`), ['onlineResponse'], 'Response retained a stale report underneath');
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#eventLog').hidden`), true, 'Response retained the old timeline');
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#onlineResponse').contains(document.activeElement)`), true, 'Response focus remained in a closed browsing window');
+  await secondPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  const responseScreenshotPath = path.join(options.artifactDir, `online-response-takeover-mobile-${roomCode}.png`);
+  await writeFile(responseScreenshotPath, Buffer.from((await secondPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await secondPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  const responseTakeover = { closedReport: true, closedTimeline: true, focusEnteredResponse: true, responseScreenshotPath };
   const responseLayouts = await checkDialogLayouts(cdp, secondPage, '#onlineResponse', options, roomCode);
 
   // Refresh must preserve the authenticated seat and pending response, without replaying history or applying damage.
@@ -1340,6 +1356,8 @@ try {
       players: document.querySelector("#watchPlayers")?.textContent?.replace(/\\s+/g, " ").trim() || ""
     }))()`)
   ]);
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelectorAll('dialog[open]').length === 0 && document.querySelector('#eventLog').hidden`), true, 'Resolving the response exposed an old browsing window');
+  responseTakeover.resolutionReturnedToBoard = true;
   assert.ok(firstStages.some((entry) => entry.text.includes("双重召唤")), "Spell action stage was not recorded");
   assert.ok(firstStages.some((entry) => entry.text.includes("怪兽召唤")), "Queued summon stage was not recorded");
   assert.ok(firstStages.some((entry) => entry.depth >= 1), "Second action replaced the active public action instead of queuing");
@@ -1480,7 +1498,7 @@ try {
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, responseLayouts, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);

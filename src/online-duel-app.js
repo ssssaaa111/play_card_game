@@ -8,7 +8,7 @@ import { createDirectActivationTracker } from "./direct-activation.js";
 import { createAudioController, createAudioSettings } from "./audio.js";
 import { createAnimationController } from "./animation.js";
 import { createPhaseStageController, phaseStageCue } from "./phase-stage.js";
-import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js?v=20261102-multi-chain-1";
+import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js?v=20261117-response-takeover-1";
 import { selectTrapResponse } from "./response-state.js";
 import { trapActivationText } from "./traps.js";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
@@ -1800,7 +1800,7 @@ function renderResponse(view) {
     const panel = renderTrapResponsePanel({ document, ...responseRendererOptions(view), elements: {
       chainText: elements.responseText, chainStatus: elements.responseStatus, chainYes: elements.responseActivate,
       chainChoices: elements.responseChoices, chainStack: elements.responseChain
-    }, onSelect: selectResponse, onActivate: (index) => respondToTrap(true, index), onCardClick: (cardId) => {
+    }, onSelect: selectResponse, onActivate: (index) => respondToTrap(true, index), onCardClick: (_templateId, cardId) => {
       const card = (view.machine?.chain || []).find((link) => link.cardId === cardId)?.card || onlineCard(view, cardId);
       if (card) showCards([card], card.name);
     } });
@@ -1828,6 +1828,8 @@ function renderResponse(view) {
     });
     if (!elements.onlineResponse.open) {
       closeInspector();
+      publicReport.close();
+      setEventLogOpen(false);
       elements.onlineResponse.showModal();
       elements[panel.singleChoice ? "responseActivate" : "responsePass"].focus({ preventScroll: true });
     }
