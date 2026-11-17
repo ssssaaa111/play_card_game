@@ -339,6 +339,41 @@ async function checkHandLayout(cdp, page) {
   return layout;
 }
 
+async function checkGuidanceLayout(cdp, page) {
+  const layout = await evaluate(cdp, page, `(() => {
+    const hint = document.querySelector('#duelHint'), rect = hint.getBoundingClientRect(), style = getComputedStyle(hint);
+    const above = document.querySelector('#aiTraps').getBoundingClientRect(), below = document.querySelector('#playerTraps').getBoundingClientRect();
+    return { width: innerWidth, height: innerHeight, text: hint.textContent, fontSize: parseFloat(style.fontSize),
+      rect: rect.toJSON(), aboveBottom: above.bottom, belowTop: below.top,
+      clipped: hint.scrollWidth > hint.clientWidth + 1 || hint.scrollHeight > hint.clientHeight + 1,
+      pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 };
+  })()`);
+  const shortLandscape = layout.width <= 1040 && layout.width > layout.height && layout.height <= 400;
+  assert.ok(layout.fontSize >= (shortLandscape ? 12 : 13), `Guidance text is too small at ${layout.width}x${layout.height}`);
+  if (layout.width >= 2560) assert.ok(layout.fontSize >= 18, 'Large-screen guidance did not scale up');
+  assert.equal(layout.clipped, false, `Guidance text is clipped at ${layout.width}x${layout.height}`);
+  assert.equal(layout.pageOverflow, false, 'Guidance introduced horizontal page overflow');
+  assert.ok(layout.rect.width > 0 && layout.rect.top >= layout.aboveBottom - 1 && layout.rect.bottom <= layout.belowTop + 1,
+    `Guidance overlaps a support zone at ${layout.width}x${layout.height}`);
+  return layout;
+}
+
+async function exerciseGuidanceLayouts(cdp, page, options, roomCode) {
+  const layouts = [];
+  await waitForPage(cdp, page, `document.querySelector('#phaseStage').hidden && document.querySelector('#actionStage').hidden`, 'guidance without transient presentation', options.timeoutMs);
+  for (const [width, height] of [[1440, 900], [1920, 1080], [2560, 1440], [3840, 2160], [390, 844], [320, 720], [844, 390], [568, 320]]) {
+    await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await click(cdp, page, '#hand .card[data-card-id="iron-guardian"] .card-name');
+    await waitForPage(cdp, page, textMatchExpression('#duelHint', '等待对手行动'), 'long unavailable-card guidance', options.timeoutMs);
+    layouts.push(await checkGuidanceLayout(cdp, page));
+    if ([3840, 390, 320, 568].includes(width)) {
+      await writeFile(path.join(options.artifactDir, `online-guidance-${width}x${height}-${roomCode}.png`), Buffer.from((await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+    }
+  }
+  await page.cdp.send('Emulation.clearDeviceMetricsOverride');
+  return layouts;
+}
+
 async function exerciseHandNavigation(cdp, page, timeoutMs, { selectLast = false, screenshotPath = "" } = {}) {
   const before = await evaluate(cdp, page, `(() => ({
     ids: [...document.querySelectorAll('#hand > .card')].map(card => card.dataset.cardUid),
@@ -789,6 +824,7 @@ async function exerciseSelectionExpiry(firstPage, secondPage, spectatorPage, opt
     assert.equal(reset.confirmHidden, true, 'Stale placement can still be confirmed');
     assert.equal(reset.phaseHidden, true, 'Phase presentation covers the cancellation reason');
     assert.equal(reset.fieldCount, 0, 'Expired choice placed a card');
+    reset.guidance = await checkGuidanceLayout(cdp, page);
     await waitForPage(cdp, nextPage, textMatchExpression('#turnLabel', '你的回合'), 'next player received timeout turn', options.timeoutMs);
     await writeFile(path.join(options.artifactDir, `online-selection-expiry-${width}-${roomCode}.png`), Buffer.from((await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
     resets.push(reset);
@@ -1145,6 +1181,7 @@ try {
     assert.equal(mobile.busy, 'true');
     assert.equal(mobile.visible, true, 'Mobile submission feedback is outside the viewport');
     assert.equal(mobile.selected, 0, 'Repeated pending clicks opened a new selection');
+    mobile.guidance = await checkGuidanceLayout(cdp, firstPage);
     const screenshotPath = path.join(options.artifactDir, `online-pending-feedback-mobile-${roomCode}.png`);
     await writeFile(screenshotPath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
     await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
@@ -1239,6 +1276,7 @@ try {
 
   await endTurn(cdp, firstPage, options.timeoutMs);
   await waitForPage(cdp, secondPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "2P turn", options.timeoutMs);
+  const guidanceLayouts = await exerciseGuidanceLayouts(cdp, firstPage, options, roomCode);
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-monster-state="waiting"]'), "rival-turn monster waiting state", options.timeoutMs);
   await doubleClickText(cdp, secondPage, "#hand .card.action-ready", "弱化力场");
   await waitForPage(cdp, secondPage, visibleExpression("#playerTraps .trap-slot:not(.empty)"), "set weakening web", options.timeoutMs);
@@ -1498,7 +1536,7 @@ try {
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);

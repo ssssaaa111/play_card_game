@@ -103,7 +103,7 @@ body[data-online-status] #app .hand .card.selected {
   box-shadow: 0 0 0 2px rgba(115,226,213,.22), 0 10px 22px rgba(0,0,0,.4);
 }
 body[data-online-status] #app .hand .card.online-card-explained { border-color: #ce98a3; box-shadow: 0 0 0 2px rgba(206,152,163,.18); }
-body[data-online-status] #app .duel-table #duelHint[data-kind="unavailable"] { max-width: min(620px, calc(100% - 20px)); color: #ffe3b2; border-color: rgba(230,182,108,.65); background: #261f17; white-space: normal; line-height: 1.4; text-align: center; }
+body[data-online-status] #app .duel-table #duelHint[data-kind="unavailable"] { color: #ffe3b2; border-color: rgba(230,182,108,.65); background: #261f17; }
 body[data-online-status] #app .duel-table .field-state-chip:not(.selected) { display: none; }
 body[data-online-status] #app .duel-table :is(.placement-candidate, .targetable, .attack-target) {
   animation: none;
@@ -611,4 +611,40 @@ body[data-online-status] #onlineResult .online-rematch-status { margin-top: 12px
   body[data-online-status] #cardInspector .online-inspector-copy { gap: 8px; padding: 0; }
   body[data-online-status] #cardInspector .online-inspector-effect { padding: 10px; }
   body[data-online-status] #cardInspector .online-inspector-hint { display: none; }
+}
+
+/* Guidance owns a flexible row so readable text cannot cover either support zone. */
+body[data-online-status] #app .duel-table .field {
+  grid-template-rows: minmax(0,1fr) var(--support-track-size) auto var(--support-track-size) minmax(0,1fr);
+}
+body[data-online-status] #app .duel-table .center-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  gap: 8px;
+  padding: 0;
+}
+body[data-online-status] #app .duel-table .center-line::before,
+body[data-online-status] #app .duel-table .center-line::after { flex: 1 1 0; min-width: 0; }
+body[data-online-status] #app .duel-table #duelHint {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(760px, calc(100% - 16px));
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: clamp(13px, calc(8px + .5vw), 18px);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: .01em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  -webkit-line-clamp: unset;
+}
+:where(body[data-online-status]) #app .duel-table .center-line span { color: #e6eff7; background: #0b141e; }
+@media (orientation: landscape) and (max-height: 400px) and (max-width: 1040px) {
+  body[data-online-status] #app .duel-table #duelHint { min-height: 28px; padding: 4px 8px; font-size: 12px; line-height: 1.35; }
 }
