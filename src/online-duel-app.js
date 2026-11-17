@@ -1382,6 +1382,7 @@ function renderBoard(view, model) {
     slot?.classList.add("online-placement-selected");
     slot?.setAttribute("aria-pressed", "true");
   }
+  for (const slot of elements.playerField.querySelectorAll(".tribute-selected")) slot.setAttribute("aria-pressed", "true");
   const canAct = !actionPending && !view.gameOver && !view.machine.responseWindow && state.turn === "player";
   const hand = reconcileHandOrder(state.player.hand, handOrder);
   handOrder = hand.map((card) => card.uid);

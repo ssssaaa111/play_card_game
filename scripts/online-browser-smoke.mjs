@@ -732,6 +732,33 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   console.log(`online-chain-rhythm-smoke passed (${roomCode}, four links, response priority, damage, replay, lethal result, spectator)`);
 }
 
+async function checkTributeSelectionAppearance(cdp, page) {
+  const appearance = await evaluate(cdp, page, `(() => ({
+    width: innerWidth, height: innerHeight,
+    choices: [...document.querySelectorAll('#fieldTargets [data-tribute-id]')].map(button => {
+      const slot = [...document.querySelectorAll('#playerField .slot')].find(slot => slot.dataset.cardUid === button.dataset.tributeId);
+      return { selected: button.getAttribute('aria-pressed') === 'true', border: getComputedStyle(button).borderColor,
+        shadow: getComputedStyle(button).boxShadow, text: button.querySelector('strong').textContent,
+        fieldSelected: slot.classList.contains('tribute-selected'), fieldPressed: slot.getAttribute('aria-pressed') === 'true',
+        fieldBorder: getComputedStyle(slot).borderColor, fieldBadge: getComputedStyle(slot, '::after').content };
+    })
+  }))()`);
+  assert.ok(appearance.choices.length >= 2, 'No tribute candidates were checked');
+  for (const choice of appearance.choices) {
+    assert.equal(choice.border, choice.fieldBorder, 'List and field disagree on tribute selection color');
+    assert.equal(choice.selected, choice.fieldSelected, 'List and field disagree on selected tribute');
+    assert.equal(choice.selected, choice.fieldPressed, 'Field pressed state disagrees with the tribute list');
+    assert.equal(choice.fieldBadge.includes('✓'), choice.selected, 'Selected tribute must have a check mark');
+    if (choice.selected) {
+      assert.match(choice.text, /✓/);
+      assert.match(choice.shadow, /115, 226, 213/, 'Selected tribute retained an old gold inset');
+    }
+  }
+  const selected = appearance.choices.find(choice => choice.selected), candidate = appearance.choices.find(choice => !choice.selected);
+  if (selected && candidate) assert.notEqual(selected.border, candidate.border, 'Selected and available tribute look identical');
+  return appearance;
+}
+
 async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, options, roomCode) {
   const settle = () => waitForPage(cdp, firstPage, `document.querySelector('#actionStage').hidden && document.querySelector('#phaseStage').hidden`, 'tribute setup presentations completed', options.timeoutMs);
   await doubleClickText(cdp, firstPage, '#hand .card.action-ready', '双重召唤');
@@ -754,6 +781,11 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), true);
   await click(cdp, firstPage, first);
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 1/2'), 'partial tribute count', options.timeoutMs);
+  await settle();
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  const selectionAppearance = { partial: await checkTributeSelectionAppearance(cdp, firstPage) };
+  await writeFile(path.join(options.artifactDir, `online-tribute-selection-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await click(cdp, firstPage, '#playerField .slot[data-index="1"]');
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 2/2'), 'field and list tribute selections agree', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#fieldTargets [aria-pressed="true"]').length`), 2);
@@ -761,6 +793,7 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="starfall-colossus"]').length`), 1, 'Double-clicking the last tribute must not summon');
   await click(cdp, firstPage, first);
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 1/2'), 'list deselects tribute', options.timeoutMs);
+  selectionAppearance.deselected = await checkTributeSelectionAppearance(cdp, firstPage);
   await click(cdp, firstPage, first);
   await click(cdp, firstPage, '#playerField .slot[data-index="4"]');
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '召唤至第 5 格'), 'chosen destination displayed', options.timeoutMs);
@@ -775,11 +808,13 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
         ? { width: innerWidth, height: innerHeight, confirmationVisible: true } : null;
     })()`, 'tribute list and confirmation stay in viewport', options.timeoutMs));
     layouts.at(-1).controls = await checkChoiceControls(cdp, firstPage, options.timeoutMs);
+    layouts.at(-1).selection = await checkTributeSelectionAppearance(cdp, firstPage);
     await writeFile(path.join(options.artifactDir, `online-tribute-${width}-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   }
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'tribute desktop viewport restored', options.timeoutMs);
   await click(cdp, firstPage, '#choiceCancelBtn');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .tribute-selected, #playerField [aria-pressed="true"]').length`), 0, 'Cancelled tribute selection left a selected field marker');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .slot[data-card-uid]').length`), 2);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="starfall-colossus"]').length`), 1);
   await click(cdp, firstPage, boss);
@@ -794,7 +829,7 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
   ]);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="starfall-colossus"]').length`), 0);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerGraveCount').textContent`), '3');
-  await writeFile(path.join(options.artifactDir, `online-tribute-${roomCode}.json`), `${JSON.stringify({ roomCode, layouts, cancelledWithoutConsuming: true, doubleClickDidNotCommit: true, releasedSlotUsed: true, rivalAndSpectatorSynced: true }, null, 2)}\n`, 'utf8');
+  await writeFile(path.join(options.artifactDir, `online-tribute-${roomCode}.json`), `${JSON.stringify({ roomCode, layouts, selectionAppearance, cancelledWithoutConsuming: true, doubleClickDidNotCommit: true, releasedSlotUsed: true, rivalAndSpectatorSynced: true }, null, 2)}\n`, 'utf8');
   console.log(`online-tribute-choice-smoke passed (${roomCode}, select, deselect, cancel, explicit confirm, released slot, spectator)`);
 }
 
@@ -931,6 +966,15 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   await writeFile(screenshotPath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await click(cdp, firstPage, '#fieldTargets .online-target:last-child');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#choiceText').textContent`), /锋刃刻印 → 疾风术士/);
+  const selectionPalette = await evaluate(cdp, firstPage, `(() => {
+    const selected = document.querySelector('#fieldTargets [aria-pressed="true"]'), candidate = document.querySelector('#fieldTargets [aria-pressed="false"]');
+    return { selected: getComputedStyle(selected).borderColor, candidate: getComputedStyle(candidate).borderColor,
+      fieldSelected: getComputedStyle(document.querySelector('#playerField .target-selected')).borderColor,
+      fieldCandidate: getComputedStyle(document.querySelector('#playerField .targetable:not(.target-selected)')).borderColor };
+  })()`);
+  assert.equal(selectionPalette.selected, selectionPalette.fieldSelected, 'Spell target list and field use different selected colors');
+  assert.equal(selectionPalette.candidate, selectionPalette.fieldCandidate, 'Spell target list and field use different candidate colors');
+  assert.notEqual(selectionPalette.selected, selectionPalette.candidate);
   await click(cdp, firstPage, '#playerField .slot[data-index="0"]');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#choiceText').textContent`), /锋刃刻印 → 日冕骑士/);
   await doubleClickText(cdp, firstPage, '#fieldTargets .online-target', '疾风术士');
@@ -966,7 +1010,7 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#aiTraps .trap-slot[data-index="3"]').classList.contains('empty')`), true);
   await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '镜光反制'), 'destroyed trap becomes public to spectator', options.timeoutMs);
   const reportPath = path.join(options.artifactDir, `online-effect-choice-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, graveLayouts, graveDetailLayouts, gravePath, graveMobilePath, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true, graveSelection: true, graveDetailsPreserved: true, graveCancelPreserved: true, uniqueGraveCompact: true }, null, 2)}\n`, 'utf8');
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, selectionPalette, graveLayouts, graveDetailLayouts, gravePath, graveMobilePath, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true, graveSelection: true, graveDetailsPreserved: true, graveCancelPreserved: true, uniqueGraveCompact: true }, null, 2)}\n`, 'utf8');
   console.log(`online-effect-choice-smoke passed (${roomCode}, unique, multiple, equipment, concealed slot, spectator)`);
   console.log(`screenshot: ${screenshotPath}`);
 }
