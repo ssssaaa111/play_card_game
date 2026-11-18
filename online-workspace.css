@@ -603,6 +603,7 @@ body[data-online-status] #cardInspector .online-inspector-hint { margin: 0; }
 body[data-online-status] #cardInspector[data-grave-choice="true"] .online-inspector-panel { gap: 12px; }
 body[data-online-status] #cardInspector .online-inspector-heading > span { font-size: 10px; }
 body[data-online-status] #cardInspector #inspectorTitle { font-size: clamp(18px, 3vw, 24px); }
+body[data-online-status] #cardInspector #inspectorContext { margin: 4px 0 0; padding-left: 8px; border-left: 2px solid #73e2d5; color: #b0eadd; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 body[data-online-status] #cardInspector .online-grave-actions { gap: 8px; padding-top: 12px; border-color: var(--online-dialog-line); background: transparent; }
 body[data-online-status] #cardInspector .online-grave-detail { min-height: 44px; border-radius: 8px; font-size: 11px; }
 body[data-online-status] #onlineResult { max-height: calc(100dvh - 24px); }

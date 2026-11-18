@@ -477,7 +477,7 @@ async function stageHistory(cdp, page) {
 async function checkInspectorLayouts(cdp, page, options, roomCode, label) {
   const original = await evaluate(cdp, page, `({ width: innerWidth, height: innerHeight })`);
   const layouts = [];
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 568], [844, 390], [568, 320]]) {
+  for (const [width, height] of [[1440, 900], [3840, 2160], [390, 844], [320, 568], [844, 390], [568, 320]]) {
     await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     await waitForPage(cdp, page, `innerWidth === ${width} && innerHeight === ${height}`, 'inspector viewport', options.timeoutMs);
     await click(cdp, page, '.online-inspector-meta > div:last-child');
@@ -488,6 +488,8 @@ async function checkInspectorLayouts(cdp, page, options, roomCode, label) {
       const content = body.getBoundingClientRect();
       const close = document.querySelector('#inspectorClose').getBoundingClientRect();
       const back = document.querySelector('#inspectorBack');
+      const context = document.querySelector('#inspectorContext');
+      const contextRect = context.getBoundingClientRect();
       const last = body.querySelector('.online-inspector-meta > div:last-child').getBoundingClientRect();
       const bounds = panel.getBoundingClientRect();
       const controls = [document.querySelector('#inspectorClose'), ...(!back.hidden ? [back] : [])];
@@ -495,8 +497,9 @@ async function checkInspectorLayouts(cdp, page, options, roomCode, label) {
         && content.top >= header.bottom && content.bottom <= bounds.bottom
         && last.top >= content.top - 1 && last.bottom <= content.bottom + 1
         && body.scrollWidth <= body.clientWidth + 1 && document.documentElement.scrollWidth <= innerWidth
+        && (context.hidden || contextRect.top >= header.top - 1 && contextRect.bottom <= header.bottom + 1 && context.scrollWidth <= context.clientWidth + 1)
         && controls.every(button => { const rect = button.getBoundingClientRect(); return rect.height >= 44 && rect.top >= bounds.top && rect.bottom <= content.top; })
-        ? { width: innerWidth, height: innerHeight, closeTop: close.top, bodyScrolled: body.scrollTop, fixedControlsVisible: true, allMetadataReachable: true } : null;
+        ? { width: innerWidth, height: innerHeight, closeTop: close.top, bodyScrolled: body.scrollTop, fixedControlsVisible: true, allMetadataReachable: true, contextText: context.hidden ? '' : context.textContent } : null;
     })()`, 'inspector controls stay visible at the end of its body', options.timeoutMs));
     if (width === 844 || height === 568 || height === 320) {
       const screenshot = await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true });
@@ -975,9 +978,17 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   const mage = '#inspectorContent .online-grave-entry:has(.card[data-card-id="gale-mage"]) [data-grave-select]';
   const spell = '#inspectorContent .online-grave-entry:has(.card[data-card-id="war-chant"])';
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector(${JSON.stringify(spell + ' [data-grave-select]')}).disabled`), true);
+  await click(cdp, firstPage, `${spell} .online-grave-detail`);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '余烁归轨 · 尚未选择目标');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').hidden`), false);
+  await click(cdp, firstPage, '#inspectorBack');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '', 'Target context leaked into the target list');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceConfirm').disabled`), true, 'Reading details selected a target');
   await click(cdp, firstPage, guard);
   await click(cdp, firstPage, `${spell} .online-grave-detail`);
   await waitForPage(cdp, firstPage, textMatchExpression('#inspectorTitle', '战意高扬'), 'unavailable grave card details remain readable', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '余烁归轨 · 已选目标：铁壁守卫');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceActions').hidden`), true, 'Details exposed an activation button for the card being inspected');
   const graveDetailLayouts = await checkInspectorLayouts(cdp, firstPage, options, roomCode, 'grave-detail');
   await click(cdp, firstPage, '#inspectorBack');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceStatus').textContent`), /铁壁守卫/);
@@ -1014,6 +1025,14 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   await click(cdp, firstPage, '#graveChoiceConfirm');
   await waitForPage(cdp, firstPage, textMatchExpression('#playerField .slot[data-index="1"]', '疾风术士'), 'chosen grave monster revived', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#cardInspector').open`), false);
+  await click(cdp, firstPage, '#logToggle');
+  await click(cdp, firstPage, '#logSelfGrave');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('.online-zone-summary').textContent`), /最新入墓在前/);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('.online-zone-browser .online-zone-card .card').dataset.cardId`), 'trio-ember-recall', 'Grave order disagrees with its latest-first label');
+  await click(cdp, firstPage, '#inspectorContent .online-zone-card');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').hidden && document.querySelector('#inspectorContext').textContent === ''`), true, 'Ordinary grave details retained an old target');
+  await click(cdp, firstPage, '#inspectorClose');
+  await click(cdp, firstPage, '#eventLogClose');
   await click(cdp, firstPage, reviveSelector);
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '余烁归轨 → 铁壁守卫'), 'unique grave target uses compact confirmation', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#cardInspector').open`), false);
@@ -1089,7 +1108,7 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#aiTraps .trap-slot[data-index="3"]').classList.contains('empty')`), true);
   await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '镜光反制'), 'destroyed trap becomes public to spectator', options.timeoutMs);
   const reportPath = path.join(options.artifactDir, `online-effect-choice-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, selectionPalette, graveLayouts, graveDetailLayouts, gravePath, graveMobilePath, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true, graveSelection: true, graveDetailsPreserved: true, graveCancelPreserved: true, uniqueGraveCompact: true }, null, 2)}\n`, 'utf8');
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, selectionPalette, graveLayouts, graveDetailLayouts, gravePath, graveMobilePath, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true, graveSelection: true, graveDetailsPreserved: true, graveDetailContext: true, ordinaryGraveClearedContext: true, latestGraveFirst: true, graveCancelPreserved: true, uniqueGraveCompact: true }, null, 2)}\n`, 'utf8');
   console.log(`online-effect-choice-smoke passed (${roomCode}, unique, multiple, equipment, concealed slot, spectator)`);
   console.log(`screenshot: ${screenshotPath}`);
 }

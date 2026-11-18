@@ -30,7 +30,7 @@ const elements = Object.fromEntries([
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveLabel", "rivalGraveCount", "playerGraveLabel", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
-  "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "graveChoiceActions", "graveChoiceStatus", "graveChoiceConfirm", "graveChoiceCancel", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
+  "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContext", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "graveChoiceActions", "graveChoiceStatus", "graveChoiceConfirm", "graveChoiceCancel", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
   "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responsePreview", "responseChain", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfLabel", "resultSelfName", "resultSelfLp", "resultRivalLabel", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
   "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
@@ -1054,7 +1054,7 @@ function appendCardCollection(cards, title, choice = null) {
   summary.className = "online-zone-summary";
   summary.innerHTML = choice
     ? `<strong>${choice.count} 个可选 · ${visibleCards.length} 张公开卡牌</strong><span>${escapeHtml(choice.effect)}</span>`
-    : `<strong>${visibleCards.length} 张公开卡牌</strong><span>按入墓顺序排列 · 点击查看完整效果</span>`;
+    : `<strong>${visibleCards.length} 张公开卡牌</strong><span>最新入墓在前 · 点击查看详情</span>`;
   const grid = document.createElement("section");
   grid.className = "online-zone-browser";
   grid.setAttribute("aria-label", title);
@@ -1110,6 +1110,12 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
   elements.inspectorKicker.textContent = choice ? "GRAVE TARGET" : collection ? "PUBLIC ZONE" : "CARD ARCHIVE";
   elements.inspectorBack.hidden = !(!collection && inspectorCollection);
   elements.inspectorBack.textContent = inspectorCollection?.choiceSourceId ? "← 返回选目标" : "← 返回墓地";
+  const graveContext = !collection && inspectorCollection?.choiceSourceId
+    ? onlineGraveChoiceView(client.view, onlineSelectionModel(client.view, selection), inspectorCollection.seatId) : null;
+  const contextVisible = Boolean(graveContext && graveContext.sourceId === inspectorCollection.choiceSourceId);
+  elements.inspectorContext.hidden = !contextVisible;
+  elements.inspectorContext.textContent = contextVisible
+    ? `${cardName(client.view, graveContext.sourceId)} · ${graveContext.selectedId ? `已选目标：${cardName(client.view, graveContext.selectedId)}` : "尚未选择目标"}` : "";
   elements.cardInspector.dataset.collection = String(collection);
   elements.cardInspector.dataset.graveChoice = String(Boolean(choice));
   elements.graveChoiceActions.hidden = !choice;
