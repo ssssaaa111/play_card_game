@@ -103,19 +103,19 @@ body[data-online-status] #app .hand .card.selected {
   box-shadow: 0 0 0 2px rgba(115,226,213,.22), 0 10px 22px rgba(0,0,0,.4);
 }
 body[data-online-status] #app .hand .card.online-card-explained { border-color: #ce98a3; box-shadow: 0 0 0 2px rgba(206,152,163,.18); }
-body[data-online-status] #app .duel-table #duelHint[data-kind="unavailable"] { max-width: min(620px, calc(100% - 20px)); color: #ffe3b2; border-color: rgba(230,182,108,.65); background: #261f17; white-space: normal; line-height: 1.4; text-align: center; }
+body[data-online-status] #app .duel-table #duelHint[data-kind="unavailable"] { color: #ffe3b2; border-color: rgba(230,182,108,.65); background: #261f17; }
 body[data-online-status] #app .duel-table .field-state-chip:not(.selected) { display: none; }
-body[data-online-status] #app .duel-table :is(.placement-candidate, .targetable, .attack-target) {
+body[data-online-status] #app .duel-table :is(.placement-candidate, .targetable, .attack-target, .tribute-candidate) {
   animation: none;
 }
 
-body[data-online-status] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target) {
+body[data-online-status] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target, .tribute-candidate) {
   outline: none;
   border-color: #e6b66c !important;
   box-shadow: inset 0 -2px 0 rgba(246,189,96,.7), 0 0 0 1px rgba(246,189,96,.15) !important;
   transform: none;
 }
-body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target)::after {
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target, .tribute-candidate)::after {
   content: "可选目标";
   border: 1px solid rgba(246,189,96,.5);
   color: #ffe4b0;
@@ -124,6 +124,7 @@ body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-
   letter-spacing: 0;
 }
 body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).placement-candidate::after { content: "可选落点"; }
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).tribute-candidate::after { content: "可选祭品"; }
 body[data-online-status] #app .duel-table :is(.slot, .trap-slot):is(.online-placement-selected, .target-selected, .tribute-selected) {
   z-index: 8;
   opacity: 1 !important;
@@ -135,7 +136,8 @@ body[data-online-status] #app .duel-table :is(.slot, .trap-slot):is(.online-plac
   transform: none;
 }
 body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).target-selected::after,
-body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).online-placement-selected::after {
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).online-placement-selected::after,
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).tribute-selected::after {
   content: "✓ 已选目标";
   border-color: #73e2d5;
   color: #092826;
@@ -143,7 +145,9 @@ body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-
   font-weight: 900;
 }
 body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).online-placement-selected::after { content: "✓ 已选落点"; }
-body[data-online-status] .online-target[aria-pressed="true"] { border-color: #73e2d5; color: #c5fff4; background: rgba(40,111,103,.23); }
+body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).tribute-selected::after { content: "✓ 已选祭品"; }
+body[data-online-status] .online-target[aria-pressed="false"]:not(:disabled) { border-color: #e6b66c; }
+body[data-online-status] .online-target[aria-pressed="true"] { border-color: #73e2d5; color: #c5fff4; background: rgba(40,111,103,.23); box-shadow: inset 0 0 0 1px rgba(115,226,213,.5); }
 /* Keep the log in the hand toolbar, clear of the fifth monster/support slot. */
 body[data-online-status] #app .hand-toolbar .online-log-toggle { position: static; flex: 0 0 auto; min-height: 30px; padding: 5px 9px; font-size: 10px; white-space: nowrap; }
 body[data-online-status][data-duel-targeting]:not([data-duel-targeting="none"]) #app .duel-table #playerField .slot[data-attack-state="ready"]::before { display: none; }
@@ -389,7 +393,7 @@ body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #pl
   body[data-online-status] .online-identity { max-width: 96px; }
   .online-tools > summary { min-height: 38px; padding: 6px 8px; font-size: 10px; }
   .online-tools > summary > span { display: none; }
-  body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target)::after {
+  body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot):is(.placement-candidate, .targetable, .attack-target, .tribute-candidate)::after {
     left: 50%;
     right: auto;
     width: max-content;
@@ -402,6 +406,8 @@ body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #pl
   }
   body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).placement-candidate::after { content: "可选"; }
   body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).online-placement-selected::after { content: "✓ 已选"; }
+  body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).tribute-candidate::after { content: "可选"; }
+  body[data-online-status][data-duel-targeting] #app .duel-table :is(.slot, .trap-slot).tribute-selected::after { content: "✓ 已选"; }
 }
 @media (max-width: 380px) {
   .hand-navigation > span { font-size: 9px; }
@@ -480,7 +486,6 @@ body[data-online-status] #app #handCommand > #choiceActions.online-effect-choice
 .online-effect-title { color: #d6fff6; font-size: 13px; }
 .online-effect-summary { color: #e7cf9e; font-size: 11px; }
 .online-effect-target { color: #a5bdca; font-size: 10px; }
-.online-tribute-choice .online-target[aria-pressed="true"] { border-color: #f6bd60; background: #352c1c; box-shadow: inset 0 0 0 1px #f6bd60; }
 body[data-online-status] #app #handCommand > #choiceActions.online-tribute-choice #fieldTargets .online-target { min-height: 44px; }
 .online-open-grave { grid-column: 1 / -1; }
 body[data-online-status] #cardInspector[data-grave-choice="true"] .online-inspector-panel { display: grid; grid-template-rows: auto minmax(0,1fr) auto; gap: 10px; height: auto; max-height: min(620px, calc(100dvh - 24px)); overflow: hidden; padding: 12px; }
@@ -566,8 +571,9 @@ body[data-online-status] #app #handCommand > #choiceActions :is(#choiceConfirmBt
 body[data-online-status] #onlineResponse .online-response-scroll { padding: var(--online-dialog-space); }
 body[data-online-status] #onlineResponse header { margin-bottom: 12px; }
 body[data-online-status] #onlineResponse header > p { margin: 8px 0 0; color: #a5bacb; font-size: 12px; }
-body[data-online-status] #onlineResponse[data-response-mode="single"] #responseStatus { display: none; }
+body[data-online-status] #onlineResponse #responseStatus:empty { display: none; }
 body[data-online-status] #onlineResponse #responseError:empty { display: none; }
+body[data-online-status] #onlineResponse .online-response-preview { margin: 12px 0 0; color: #ffe5aa; }
 body[data-online-status] #onlineResponse footer,
 body[data-online-status] #onlineResult footer {
   display: grid;
@@ -581,6 +587,9 @@ body[data-online-status] #onlineResult footer {
   box-shadow: none;
 }
 body[data-online-status] #cardInspector { overflow: hidden; }
+body[data-online-status] #onlineResponse footer :is(#responseCountdown, #responseStatus) { grid-column: 1 / -1; margin: 0; }
+body[data-online-status] #onlineResponse footer #responseCountdown { justify-self: start; max-width: 100%; }
+body[data-online-status] #onlineResponse footer #responseStatus { padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 12px; }
 body[data-online-status] #cardInspector .online-inspector-panel { display: grid; grid-template-rows: auto minmax(0,1fr) auto; gap: 12px; padding: var(--online-dialog-space); overflow: hidden; }
 body[data-online-status] #cardInspector header { margin: 0; }
 body[data-online-status] #cardInspector #inspectorContent { min-height: 0; align-content: start; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 2px; }
@@ -594,6 +603,7 @@ body[data-online-status] #cardInspector .online-inspector-hint { margin: 0; }
 body[data-online-status] #cardInspector[data-grave-choice="true"] .online-inspector-panel { gap: 12px; }
 body[data-online-status] #cardInspector .online-inspector-heading > span { font-size: 10px; }
 body[data-online-status] #cardInspector #inspectorTitle { font-size: clamp(18px, 3vw, 24px); }
+body[data-online-status] #cardInspector #inspectorContext { margin: 4px 0 0; padding-left: 8px; border-left: 2px solid #73e2d5; color: #b0eadd; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 body[data-online-status] #cardInspector .online-grave-actions { gap: 8px; padding-top: 12px; border-color: var(--online-dialog-line); background: transparent; }
 body[data-online-status] #cardInspector .online-grave-detail { min-height: 44px; border-radius: 8px; font-size: 11px; }
 body[data-online-status] #onlineResult { max-height: calc(100dvh - 24px); }
@@ -603,6 +613,9 @@ body[data-online-status] #onlineResult h2 { font-size: clamp(26px, 5vw, 36px); l
 body[data-online-status] #onlineResult #resultSummary { margin: 8px 0 16px; font-size: 12px; }
 body[data-online-status] #onlineResult .online-series-score { margin-top: 12px; }
 body[data-online-status] #onlineResult .online-rematch-status { margin-top: 12px; }
+body[data-online-status] #onlineResult footer { grid-template-columns: minmax(0,1fr); gap: 4px; }
+body[data-online-status] #onlineResult .online-result-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; min-width: 0; }
+body[data-online-status] #onlineResult .online-result-secondary .btn { border-color: transparent; color: #a5bacb; background: transparent; }
 
 @media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
   body[data-online-status] #cardInspector .online-inspector-entry { grid-template-columns: 144px minmax(0,1fr); gap: 12px; padding: 10px; }
@@ -611,4 +624,40 @@ body[data-online-status] #onlineResult .online-rematch-status { margin-top: 12px
   body[data-online-status] #cardInspector .online-inspector-copy { gap: 8px; padding: 0; }
   body[data-online-status] #cardInspector .online-inspector-effect { padding: 10px; }
   body[data-online-status] #cardInspector .online-inspector-hint { display: none; }
+}
+
+/* Guidance owns a flexible row so readable text cannot cover either support zone. */
+body[data-online-status] #app .duel-table .field {
+  grid-template-rows: minmax(0,1fr) var(--support-track-size) auto var(--support-track-size) minmax(0,1fr);
+}
+body[data-online-status] #app .duel-table .center-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  gap: 8px;
+  padding: 0;
+}
+body[data-online-status] #app .duel-table .center-line::before,
+body[data-online-status] #app .duel-table .center-line::after { flex: 1 1 0; min-width: 0; }
+body[data-online-status] #app .duel-table #duelHint {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(760px, calc(100% - 16px));
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: clamp(13px, calc(8px + .5vw), 18px);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: .01em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  -webkit-line-clamp: unset;
+}
+:where(body[data-online-status]) #app .duel-table .center-line span { color: #e6eff7; background: #0b141e; }
+@media (orientation: landscape) and (max-height: 400px) and (max-width: 1040px) {
+  body[data-online-status] #app .duel-table #duelHint { min-height: 28px; padding: 4px 8px; font-size: 12px; line-height: 1.35; }
 }

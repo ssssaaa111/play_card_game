@@ -21,6 +21,7 @@ function parseArgs(argv) {
     tributeChoices: false,
     chainRhythm: false,
     pendingFeedback: false,
+    selectionExpiry: false,
     artifactDir: process.env.ONLINE_BROWSER_ARTIFACT_DIR || path.resolve(".tmp", "online-browser-smoke")
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -33,6 +34,7 @@ function parseArgs(argv) {
     else if (argv[index] === "--tribute-choices") result.tributeChoices = true;
     else if (argv[index] === "--chain-rhythm") result.chainRhythm = true;
     else if (argv[index] === "--pending-feedback") result.pendingFeedback = true;
+    else if (argv[index] === "--selection-expiry") result.selectionExpiry = true;
   }
   return result;
 }
@@ -337,6 +339,41 @@ async function checkHandLayout(cdp, page) {
   return layout;
 }
 
+async function checkGuidanceLayout(cdp, page) {
+  const layout = await evaluate(cdp, page, `(() => {
+    const hint = document.querySelector('#duelHint'), rect = hint.getBoundingClientRect(), style = getComputedStyle(hint);
+    const above = document.querySelector('#aiTraps').getBoundingClientRect(), below = document.querySelector('#playerTraps').getBoundingClientRect();
+    return { width: innerWidth, height: innerHeight, text: hint.textContent, fontSize: parseFloat(style.fontSize),
+      rect: rect.toJSON(), aboveBottom: above.bottom, belowTop: below.top,
+      clipped: hint.scrollWidth > hint.clientWidth + 1 || hint.scrollHeight > hint.clientHeight + 1,
+      pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 };
+  })()`);
+  const shortLandscape = layout.width <= 1040 && layout.width > layout.height && layout.height <= 400;
+  assert.ok(layout.fontSize >= (shortLandscape ? 12 : 13), `Guidance text is too small at ${layout.width}x${layout.height}`);
+  if (layout.width >= 2560) assert.ok(layout.fontSize >= 18, 'Large-screen guidance did not scale up');
+  assert.equal(layout.clipped, false, `Guidance text is clipped at ${layout.width}x${layout.height}`);
+  assert.equal(layout.pageOverflow, false, 'Guidance introduced horizontal page overflow');
+  assert.ok(layout.rect.width > 0 && layout.rect.top >= layout.aboveBottom - 1 && layout.rect.bottom <= layout.belowTop + 1,
+    `Guidance overlaps a support zone at ${layout.width}x${layout.height}`);
+  return layout;
+}
+
+async function exerciseGuidanceLayouts(cdp, page, options, roomCode) {
+  const layouts = [];
+  await waitForPage(cdp, page, `document.querySelector('#phaseStage').hidden && document.querySelector('#actionStage').hidden`, 'guidance without transient presentation', options.timeoutMs);
+  for (const [width, height] of [[1440, 900], [1920, 1080], [2560, 1440], [3840, 2160], [390, 844], [320, 720], [844, 390], [568, 320]]) {
+    await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await click(cdp, page, '#hand .card[data-card-id="iron-guardian"] .card-name');
+    await waitForPage(cdp, page, textMatchExpression('#duelHint', '等待对手行动'), 'long unavailable-card guidance', options.timeoutMs);
+    layouts.push(await checkGuidanceLayout(cdp, page));
+    if ([3840, 390, 320, 568].includes(width)) {
+      await writeFile(path.join(options.artifactDir, `online-guidance-${width}x${height}-${roomCode}.png`), Buffer.from((await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+    }
+  }
+  await page.cdp.send('Emulation.clearDeviceMetricsOverride');
+  return layouts;
+}
+
 async function exerciseHandNavigation(cdp, page, timeoutMs, { selectLast = false, screenshotPath = "" } = {}) {
   const before = await evaluate(cdp, page, `(() => ({
     ids: [...document.querySelectorAll('#hand > .card')].map(card => card.dataset.cardUid),
@@ -399,6 +436,9 @@ async function installStageObserver(cdp, page) {
         waiting: Boolean(document.querySelector('body[data-online-response="waiting"]')),
         result: document.querySelector('#onlineResult').open,
         title: action.querySelector('h2')?.textContent || '',
+        hint: document.querySelector('#duelHint').textContent,
+        hintKind: document.querySelector('#duelHint').dataset.kind,
+        hintTone: document.querySelector('#duelHint').dataset.tone,
         epic: document.querySelectorAll('.epic-action').length,
         damage: document.querySelector('.life-delta')?.textContent || ''
       };
@@ -421,7 +461,7 @@ async function installStageObserver(cdp, page) {
         if (last?.key !== key) window.__onlineStageHistory.push({ ...entry, key });
       }
     };
-    for (const element of [...roots.map(([, element]) => element), document.querySelector('#phaseStage'), document.querySelector('#effectLayer'), document.querySelector('#onlineResponse'), document.querySelector('#onlineResult')]) {
+    for (const element of [...roots.map(([, element]) => element), document.querySelector('#phaseStage'), document.querySelector('#effectLayer'), document.querySelector('#onlineResponse'), document.querySelector('#onlineResult'), document.querySelector('#duelHint')]) {
       if (element) new MutationObserver(capture).observe(element, { attributes: true, childList: true, subtree: true });
     }
     new MutationObserver(capture).observe(document.body, { attributes: true, attributeFilter: ['data-online-response'] });
@@ -437,7 +477,7 @@ async function stageHistory(cdp, page) {
 async function checkInspectorLayouts(cdp, page, options, roomCode, label) {
   const original = await evaluate(cdp, page, `({ width: innerWidth, height: innerHeight })`);
   const layouts = [];
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 568], [844, 390], [568, 320]]) {
+  for (const [width, height] of [[1440, 900], [3840, 2160], [390, 844], [320, 568], [844, 390], [568, 320]]) {
     await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     await waitForPage(cdp, page, `innerWidth === ${width} && innerHeight === ${height}`, 'inspector viewport', options.timeoutMs);
     await click(cdp, page, '.online-inspector-meta > div:last-child');
@@ -448,6 +488,8 @@ async function checkInspectorLayouts(cdp, page, options, roomCode, label) {
       const content = body.getBoundingClientRect();
       const close = document.querySelector('#inspectorClose').getBoundingClientRect();
       const back = document.querySelector('#inspectorBack');
+      const context = document.querySelector('#inspectorContext');
+      const contextRect = context.getBoundingClientRect();
       const last = body.querySelector('.online-inspector-meta > div:last-child').getBoundingClientRect();
       const bounds = panel.getBoundingClientRect();
       const controls = [document.querySelector('#inspectorClose'), ...(!back.hidden ? [back] : [])];
@@ -455,8 +497,9 @@ async function checkInspectorLayouts(cdp, page, options, roomCode, label) {
         && content.top >= header.bottom && content.bottom <= bounds.bottom
         && last.top >= content.top - 1 && last.bottom <= content.bottom + 1
         && body.scrollWidth <= body.clientWidth + 1 && document.documentElement.scrollWidth <= innerWidth
+        && (context.hidden || contextRect.top >= header.top - 1 && contextRect.bottom <= header.bottom + 1 && context.scrollWidth <= context.clientWidth + 1)
         && controls.every(button => { const rect = button.getBoundingClientRect(); return rect.height >= 44 && rect.top >= bounds.top && rect.bottom <= content.top; })
-        ? { width: innerWidth, height: innerHeight, closeTop: close.top, bodyScrolled: body.scrollTop, fixedControlsVisible: true, allMetadataReachable: true } : null;
+        ? { width: innerWidth, height: innerHeight, closeTop: close.top, bodyScrolled: body.scrollTop, fixedControlsVisible: true, allMetadataReachable: true, contextText: context.hidden ? '' : context.textContent } : null;
     })()`, 'inspector controls stay visible at the end of its body', options.timeoutMs));
     if (width === 844 || height === 568 || height === 320) {
       const screenshot = await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true });
@@ -488,8 +531,14 @@ async function checkChoiceControls(cdp, page, timeoutMs) {
 
 async function checkDialogLayouts(cdp, page, selector, options, roomCode) {
   const layouts = [];
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+  const sizes = selector === '#onlineResult'
+    ? [[1440, 900], [3840, 2160], [390, 844], [320, 568], [844, 390], [568, 320]]
+    : [[1440, 900], [390, 844], [320, 720], [844, 390]];
+  for (const [width, height] of sizes) {
     await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    if (selector === '#onlineResponse') {
+      await evaluate(cdp, page, `(() => { const scroll = document.querySelector('.online-response-scroll'); scroll.scrollTop = scroll.scrollHeight; })()`);
+    }
     layouts.push(await waitForPage(cdp, page, `(() => {
       const dialog = document.querySelector(${JSON.stringify(selector)});
       const footer = dialog.querySelector('footer').getBoundingClientRect();
@@ -500,14 +549,51 @@ async function checkDialogLayouts(cdp, page, selector, options, roomCode) {
         && document.documentElement.scrollWidth <= innerWidth
         ? { width: innerWidth, height: innerHeight, buttonHeight: buttons[0].getBoundingClientRect().height, footerVisible: true } : null;
     })()`, `${selector} fixed footer and touch targets at ${width}`, options.timeoutMs));
-    if (width === 844) {
+    if (selector === '#onlineResponse') layouts.at(-1).decision = await checkResponseDecisionLayout(cdp, page);
+    if (selector === '#onlineResult') {
+      const actions = await evaluate(cdp, page, `(() => {
+        const buttons = [...document.querySelectorAll('#onlineResult footer .btn')];
+        const rects = buttons.map(button => button.getBoundingClientRect());
+        const primary = getComputedStyle(buttons[0]);
+        return { order: buttons.map(button => button.id || 'report'),
+          primaryFirst: primary.backgroundImage.includes('linear-gradient'),
+          sameRows: Math.abs(rects[0].top - rects[1].top) <= 1 && Math.abs(rects[2].top - rects[3].top) <= 1,
+          separated: rects[0].bottom <= rects[2].top && rects[1].bottom <= rects[3].top,
+          gaps: [rects[1].left - rects[0].right, rects[3].left - rects[2].right],
+          quietSecondary: buttons.slice(2).every(button => { const style = getComputedStyle(button); return style.backgroundColor === 'rgba(0, 0, 0, 0)' && style.borderTopColor === 'rgba(0, 0, 0, 0)'; }) };
+      })()`);
+      assert.deepEqual(actions.order, ['resultRematch', 'resultReview', 'report', 'resultLobby']);
+      assert.ok(actions.primaryFirst && actions.sameRows && actions.separated && actions.quietSecondary && actions.gaps.every(gap => Math.abs(gap - 8) <= 1), `Result actions lost their hierarchy: ${JSON.stringify(actions)}`);
+      layouts.at(-1).actions = actions;
+    }
+    if (width === 844 || selector === '#onlineResult' && (width === 390 || height === 320)) {
       const image = await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true });
-      await writeFile(path.join(options.artifactDir, `${selector.slice(1)}-landscape-${roomCode}.png`), Buffer.from(image.data, 'base64'));
+      const name = selector === '#onlineResult' ? `online-result-actions-${width}x${height}` : `${selector.slice(1)}-landscape`;
+      await writeFile(path.join(options.artifactDir, `${name}-${roomCode}.png`), Buffer.from(image.data, 'base64'));
     }
   }
   await page.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, page, 'innerWidth > 1040', 'dialog desktop viewport restored', options.timeoutMs);
   return layouts;
+}
+
+async function checkResponseDecisionLayout(cdp, page) {
+  const layout = await evaluate(cdp, page, `(() => {
+    const dialog = document.querySelector('#onlineResponse');
+    const footer = dialog.querySelector('footer'), bounds = footer.getBoundingClientRect();
+    const timer = document.querySelector('#responseCountdown'), rect = timer.getBoundingClientRect();
+    const activate = document.querySelector('#responseActivate').getBoundingClientRect();
+    const status = document.querySelector('#responseStatus');
+    return { width: innerWidth, height: innerHeight,
+      countdownVisible: footer.contains(timer) && rect.height > 0 && rect.top >= bounds.top && rect.bottom <= activate.top && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth,
+      countdownText: timer.textContent,
+      noRepeatedInstructions: status.textContent === '' && !dialog.querySelector('.online-response-rule'),
+      candidateEffectsVisible: [...dialog.querySelectorAll('.trap-choice-effect')].every(effect => effect.textContent.trim().length > 0),
+      scrolledBody: document.querySelector('.online-response-scroll').scrollTop };
+  })()`);
+  assert.ok(layout.countdownVisible && /秒/.test(layout.countdownText), `Response countdown left the fixed actions: ${JSON.stringify(layout)}`);
+  assert.ok(layout.noRepeatedInstructions && layout.candidateEffectsVisible, 'Response repeats instructions or lost candidate effects');
+  return layout;
 }
 
 async function failurePageState(cdp, page) {
@@ -606,6 +692,24 @@ async function startBrowser(browserBin, profileDir, timeoutMs) {
   };
 }
 
+async function checkChainPlaybackControls(cdp, page, busy) {
+  const controls = await evaluate(cdp, page, `({
+    busy: document.body.dataset.onlineChainPlayback === 'true',
+    phaseDisabled: document.querySelector('#battleButton').disabled,
+    endDisabled: document.querySelector('#endTurnButton').disabled,
+    label: document.querySelector('#endTurnButton').textContent,
+    confirming: document.querySelector('#endTurnButton').dataset.confirming === 'true'
+  })`);
+  assert.equal(controls.busy, busy);
+  assert.equal(controls.endDisabled, busy, busy ? 'End turn is clickable during chain playback' : 'End turn stayed disabled after chain playback');
+  if (busy) {
+    assert.equal(controls.phaseDisabled, true, 'Phase controls remained active during chain playback');
+    assert.equal(controls.label, '连锁演出中');
+    assert.equal(controls.confirming, false, 'An old end-turn confirmation survived chain playback');
+  }
+  return controls;
+}
+
 async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options, roomCode) {
   const settle = page => waitForPage(cdp, page, `document.querySelector('#actionStage').hidden && document.querySelector('#chainResolutionStage').hidden && document.querySelector('#phaseStage').hidden`, 'chain rhythm presentations completed', options.timeoutMs);
   const play = async (page, id) => {
@@ -639,23 +743,35 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   assert.match(await evaluate(cdp, secondPage, `document.querySelector('#responseBattleSummary').textContent`), /^若不发动陷阱：/);
   await click(cdp, secondPage, '#responseActivate');
   await waitForPage(cdp, firstPage, visibleExpression('#onlineResponse[open]'), 'CL2 response', options.timeoutMs);
+  await click(cdp, firstPage, '#responseChain .chain-stack-card');
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), 'inspect a public chain card during response', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorTitle').textContent`), '镜光反制');
+  await click(cdp, firstPage, '#inspectorClose');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#onlineResponse').open && document.querySelector('#onlineResponse').contains(document.activeElement)`), true, 'Closing chain details lost the active response');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#responseLead').textContent`), '可反制 CL1《镜光反制》；不再连锁则按 CL1 结算。');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#responseBattleSummary').textContent`), /^原始攻击预估（未计入连锁）：/);
+  const responseDecisions = { cl2BeforeSelection: await checkResponseDecisionLayout(cdp, firstPage) };
   await writeFile(path.join(options.artifactDir, `online-response-decision-CL2-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await click(cdp, firstPage, '#responseChoices button');
+  responseDecisions.cl2Selected = await checkResponseDecisionLayout(cdp, firstPage);
   await click(cdp, firstPage, '#responseActivate');
   await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'CL3 response', options.timeoutMs);
   assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#responseLead').textContent`), '可反制 CL2《断链裁决》；不再连锁则按 CL2 → CL1 结算。');
+  responseDecisions.cl3 = await checkResponseDecisionLayout(cdp, secondPage);
   await click(cdp, secondPage, '#responseActivate');
   await waitForPage(cdp, firstPage, textMatchExpression('#responseTitle', 'CL4'), 'single candidate retains CL4 title', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#responseLead').textContent`), '可反制 CL3《断链裁决》；不再连锁则按 CL3 → CL2 → CL1 结算。');
   await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: false });
   await waitForPage(cdp, firstPage, `innerWidth === 844 && document.querySelector('#responsePass').getBoundingClientRect().bottom <= innerHeight`, 'CL4 decision buttons fit landscape', options.timeoutMs);
+  await evaluate(cdp, firstPage, `(() => { const scroll = document.querySelector('.online-response-scroll'); scroll.scrollTop = scroll.scrollHeight; })()`);
+  responseDecisions.cl4Landscape = await checkResponseDecisionLayout(cdp, firstPage);
   await writeFile(path.join(options.artifactDir, `online-response-decision-CL4-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await click(cdp, firstPage, '#responseActivate');
   await waitForPage(cdp, firstPage, visibleExpression('#chainResolutionStage'), 'four-link resolution', options.timeoutMs);
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#chainResolutionStage').textContent`), /CL4 → CL3 → CL2 → CL1/);
+  const playbackControls = { live: await checkChainPlaybackControls(cdp, firstPage, true) };
+  await writeFile(path.join(options.artifactDir, `online-chain-controls-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await waitForPage(cdp, firstPage, `(() => { const delta = document.querySelector('.life-delta'); return delta?.textContent === '-1700' && Number(getComputedStyle(delta).opacity) > .9; })()`, 'readable damage follows chain', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#chainResolutionStage').hidden && !document.querySelector('#onlineResult').open && !document.querySelector('.epic-action')`), true);
   assert.equal(await evaluate(cdp, firstPage, `Number(getComputedStyle(document.querySelector('#effectLayer')).zIndex) > Number(getComputedStyle(document.querySelector('#actionStage')).zIndex)`), true, 'Damage must be visible above the action card on mobile');
@@ -663,15 +779,20 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   await writeFile(path.join(options.artifactDir, `online-chain-impact-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '2300 LP'), 'spectator chain damage', options.timeoutMs);
   await settle(firstPage);
+  playbackControls.liveResumed = await checkChainPlaybackControls(cdp, firstPage, false);
+  await waitForPage(cdp, firstPage, `document.querySelector('#duelHint').dataset.kind === 'battle-result' && document.querySelector('#duelHint').textContent.includes('1700')`, 'battle receipt follows the complete hit', options.timeoutMs);
+  await writeFile(path.join(options.artifactDir, `online-battle-receipt-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'chain desktop viewport restored', options.timeoutMs);
   const beforeReplay = await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.length`);
   await click(cdp, firstPage, '#onlineToolsToggle');
   await click(cdp, firstPage, '#lastChainButton');
   await waitForPage(cdp, firstPage, `!document.querySelector('#chainResolutionStage').hidden && getComputedStyle(document.querySelector('.online-chain-resolution-result')).opacity > .9`, 'readable chain replay summary', options.timeoutMs);
+  playbackControls.replay = await checkChainPlaybackControls(cdp, firstPage, true);
   await writeFile(path.join(options.artifactDir, `online-chain-resolution-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await settle(firstPage);
-  assert.equal(await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.slice(${beforeReplay}).some(beat => beat.damage || beat.action)`), false, 'Manual replay must not repeat a hit or damage');
+  playbackControls.replayResumed = await checkChainPlaybackControls(cdp, firstPage, false);
+  assert.equal(await evaluate(cdp, firstPage, `window.__onlineRhythmHistory.slice(${beforeReplay}).some(beat => beat.damage || beat.action || beat.hintKind === 'battle-result')`), false, 'Manual replay must not repeat a hit, damage or old receipt');
   for (const lp of [600, 0]) {
     await nextRound();
     await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
@@ -684,10 +805,40 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
     assert.ok(history.some(beat => beat.damage === '-1700'), 'No post-chain damage recorded');
     assert.ok(history.filter(beat => beat.response || beat.waiting).every(beat => !beat.phase && !beat.action && !beat.chain && !beat.epic && !beat.damage), 'Background presentations overlap a response');
     assert.ok(history.filter(beat => beat.chain).every(beat => !beat.phase && !beat.action && !beat.response && !beat.damage), 'Chain overlaps another presentation');
+    assert.ok(history.some(beat => beat.hintKind === 'battle-result' && beat.hint.includes('1700')), 'Post-chain receipt never appeared');
+    assert.ok(history.filter(beat => beat.hintKind === 'battle-result').every(beat => !beat.chain && !beat.action && !beat.damage), 'Battle receipt reveals the result before playback finishes');
+    assert.ok(history.filter(beat => beat.hintTone === 'victory' || beat.hintTone === 'defeat').every(beat => !beat.chain && !beat.action && !beat.damage), 'Victory hint reveals the lethal result early');
     assert.ok(history.filter(beat => beat.result).every(beat => !beat.chain && !beat.action && !beat.epic && !beat.damage), 'Result covers the lethal hit');
   }
-  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
+  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, playbackControls, responseDecisions, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
   console.log(`online-chain-rhythm-smoke passed (${roomCode}, four links, response priority, damage, replay, lethal result, spectator)`);
+}
+
+async function checkTributeSelectionAppearance(cdp, page) {
+  const appearance = await evaluate(cdp, page, `(() => ({
+    width: innerWidth, height: innerHeight,
+    choices: [...document.querySelectorAll('#fieldTargets [data-tribute-id]')].map(button => {
+      const slot = [...document.querySelectorAll('#playerField .slot')].find(slot => slot.dataset.cardUid === button.dataset.tributeId);
+      return { selected: button.getAttribute('aria-pressed') === 'true', border: getComputedStyle(button).borderColor,
+        shadow: getComputedStyle(button).boxShadow, text: button.querySelector('strong').textContent,
+        fieldSelected: slot.classList.contains('tribute-selected'), fieldPressed: slot.getAttribute('aria-pressed') === 'true',
+        fieldBorder: getComputedStyle(slot).borderColor, fieldBadge: getComputedStyle(slot, '::after').content };
+    })
+  }))()`);
+  assert.ok(appearance.choices.length >= 2, 'No tribute candidates were checked');
+  for (const choice of appearance.choices) {
+    assert.equal(choice.border, choice.fieldBorder, 'List and field disagree on tribute selection color');
+    assert.equal(choice.selected, choice.fieldSelected, 'List and field disagree on selected tribute');
+    assert.equal(choice.selected, choice.fieldPressed, 'Field pressed state disagrees with the tribute list');
+    assert.equal(choice.fieldBadge.includes('✓'), choice.selected, 'Selected tribute must have a check mark');
+    if (choice.selected) {
+      assert.match(choice.text, /✓/);
+      assert.match(choice.shadow, /115, 226, 213/, 'Selected tribute retained an old gold inset');
+    }
+  }
+  const selected = appearance.choices.find(choice => choice.selected), candidate = appearance.choices.find(choice => !choice.selected);
+  if (selected && candidate) assert.notEqual(selected.border, candidate.border, 'Selected and available tribute look identical');
+  return appearance;
 }
 
 async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, options, roomCode) {
@@ -712,6 +863,11 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), true);
   await click(cdp, firstPage, first);
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 1/2'), 'partial tribute count', options.timeoutMs);
+  await settle();
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  const selectionAppearance = { partial: await checkTributeSelectionAppearance(cdp, firstPage) };
+  await writeFile(path.join(options.artifactDir, `online-tribute-selection-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await click(cdp, firstPage, '#playerField .slot[data-index="1"]');
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 2/2'), 'field and list tribute selections agree', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#fieldTargets [aria-pressed="true"]').length`), 2);
@@ -719,6 +875,7 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="starfall-colossus"]').length`), 1, 'Double-clicking the last tribute must not summon');
   await click(cdp, firstPage, first);
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '已选 1/2'), 'list deselects tribute', options.timeoutMs);
+  selectionAppearance.deselected = await checkTributeSelectionAppearance(cdp, firstPage);
   await click(cdp, firstPage, first);
   await click(cdp, firstPage, '#playerField .slot[data-index="4"]');
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '召唤至第 5 格'), 'chosen destination displayed', options.timeoutMs);
@@ -733,11 +890,13 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
         ? { width: innerWidth, height: innerHeight, confirmationVisible: true } : null;
     })()`, 'tribute list and confirmation stay in viewport', options.timeoutMs));
     layouts.at(-1).controls = await checkChoiceControls(cdp, firstPage, options.timeoutMs);
+    layouts.at(-1).selection = await checkTributeSelectionAppearance(cdp, firstPage);
     await writeFile(path.join(options.artifactDir, `online-tribute-${width}-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   }
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'tribute desktop viewport restored', options.timeoutMs);
   await click(cdp, firstPage, '#choiceCancelBtn');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .tribute-selected, #playerField [aria-pressed="true"]').length`), 0, 'Cancelled tribute selection left a selected field marker');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#playerField .slot[data-card-uid]').length`), 2);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="starfall-colossus"]').length`), 1);
   await click(cdp, firstPage, boss);
@@ -752,8 +911,53 @@ async function exerciseTributeChoices(firstPage, secondPage, spectatorPage, opti
   ]);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#hand .card[data-card-id="starfall-colossus"]').length`), 0);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerGraveCount').textContent`), '3');
-  await writeFile(path.join(options.artifactDir, `online-tribute-${roomCode}.json`), `${JSON.stringify({ roomCode, layouts, cancelledWithoutConsuming: true, doubleClickDidNotCommit: true, releasedSlotUsed: true, rivalAndSpectatorSynced: true }, null, 2)}\n`, 'utf8');
+  await writeFile(path.join(options.artifactDir, `online-tribute-${roomCode}.json`), `${JSON.stringify({ roomCode, layouts, selectionAppearance, cancelledWithoutConsuming: true, doubleClickDidNotCommit: true, releasedSlotUsed: true, rivalAndSpectatorSynced: true }, null, 2)}\n`, 'utf8');
   console.log(`online-tribute-choice-smoke passed (${roomCode}, select, deselect, cancel, explicit confirm, released slot, spectator)`);
+}
+
+async function exerciseSelectionExpiry(firstPage, secondPage, spectatorPage, options, roomCode) {
+  const resets = [];
+  for (const [page, nextPage, cardId, width, height] of [
+    [firstPage, secondPage, 'solar-knight', 390, 844],
+    [secondPage, firstPage, 'mirror-snare', 844, 390]
+  ]) {
+    await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    const hand = await evaluate(cdp, page, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`);
+    await click(cdp, page, `#hand .card[data-card-id="${cardId}"] .card-name`);
+    await waitForPage(cdp, page, visibleExpression('#choiceConfirmBtn'), 'unconfirmed placement before timeout', options.timeoutMs);
+    await click(cdp, page, cardId === 'mirror-snare' ? '#playerTraps .trap-slot[data-index="4"]' : '#playerField .slot[data-index="4"]');
+    await waitForPage(cdp, page, `document.querySelector('#turnLabel').textContent === '对手回合' && document.querySelector('#duelHint').dataset.kind === 'selection-reset'`, 'authoritative timeout cancels selection', options.timeoutMs);
+    const reset = await evaluate(cdp, page, `(() => {
+      const hint = document.querySelector('#duelHint'), rect = hint.getBoundingClientRect();
+      return { width: innerWidth, height: innerHeight, text: hint.textContent, visible: rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight,
+        hand: [...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid), selection: document.body.dataset.duelSelection,
+        confirmHidden: document.querySelector('#choiceActions').hidden, phaseHidden: document.querySelector('#phaseStage').hidden,
+        fieldCount: document.querySelectorAll('#playerField .slot[data-card-uid], #playerTraps .trap-slot:not(.empty)').length };
+    })()`);
+    assert.match(reset.text, /回合时间已到，原选择已取消/);
+    assert.equal(reset.visible, true, 'Selection reset feedback is outside the viewport');
+    assert.deepEqual(reset.hand, hand, 'An expired choice consumed a card');
+    assert.equal(reset.selection, 'none');
+    assert.equal(reset.confirmHidden, true, 'Stale placement can still be confirmed');
+    assert.equal(reset.phaseHidden, true, 'Phase presentation covers the cancellation reason');
+    assert.equal(reset.fieldCount, 0, 'Expired choice placed a card');
+    reset.guidance = await checkGuidanceLayout(cdp, page);
+    await waitForPage(cdp, nextPage, textMatchExpression('#turnLabel', '你的回合'), 'next player received timeout turn', options.timeoutMs);
+    await writeFile(path.join(options.artifactDir, `online-selection-expiry-${width}-${roomCode}.png`), Buffer.from((await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+    resets.push(reset);
+    await page.cdp.send('Emulation.clearDeviceMetricsOverride');
+  }
+  await click(cdp, firstPage, '#hand .card[data-card-id="solar-knight"] .card-name');
+  await waitForPage(cdp, firstPage, visibleExpression('#choiceConfirmBtn'), 'fresh placement next turn', options.timeoutMs);
+  await click(cdp, firstPage, '#choiceConfirmBtn');
+  await Promise.all([
+    waitForPage(cdp, firstPage, textMatchExpression('#playerField', '日冕骑士'), 'fresh summon succeeds', options.timeoutMs),
+    waitForPage(cdp, secondPage, textMatchExpression('#aiField', '日冕骑士'), 'rival sees fresh summon', options.timeoutMs),
+    waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '日冕骑士'), 'spectator sees fresh summon', options.timeoutMs)
+  ]);
+  assert.notEqual(await evaluate(cdp, firstPage, `document.querySelector('#duelHint').dataset.kind`), 'selection-reset', 'A successful command looked like an invalidated choice');
+  await writeFile(path.join(options.artifactDir, `online-selection-expiry-${roomCode}.json`), `${JSON.stringify({ roomCode, resets, freshSummonSynced: true }, null, 2)}\n`, 'utf8');
+  console.log(`online-selection-expiry-smoke passed (${roomCode}, both seats, preserved hands, fresh summon, spectator)`);
 }
 
 async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, options, roomCode) {
@@ -774,11 +978,33 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   const mage = '#inspectorContent .online-grave-entry:has(.card[data-card-id="gale-mage"]) [data-grave-select]';
   const spell = '#inspectorContent .online-grave-entry:has(.card[data-card-id="war-chant"])';
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector(${JSON.stringify(spell + ' [data-grave-select]')}).disabled`), true);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, 'innerWidth === 390', 'mobile inspector navigation', options.timeoutMs);
+  await click(cdp, firstPage, `${spell} .online-grave-detail`);
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.id`), 'inspectorBack', 'Opening nested details lost keyboard focus');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '余烁归轨 · 尚未选择目标');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').hidden`), false);
+  for (const type of ['keyDown', 'keyUp']) await firstPage.cdp.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, ...(type === 'keyDown' ? { text: '\r' } : {}) });
+  await waitForPage(cdp, firstPage, `document.querySelector('#cardInspector').dataset.collection === 'true'`, 'Enter returns to the grave list', options.timeoutMs);
+  const inspectorNavigation = await evaluate(cdp, firstPage, `(() => ({
+    returnedToSameCard: document.activeElement.dataset.cardId === document.querySelector(${JSON.stringify(spell + ' .online-grave-detail')}).dataset.cardId,
+    returnedToDetailsButton: document.activeElement.matches('.online-grave-detail'),
+    scrollTop: document.querySelector('#inspectorContent').scrollTop
+  }))()`);
+  assert.ok(inspectorNavigation.returnedToSameCard && inspectorNavigation.returnedToDetailsButton && inspectorNavigation.scrollTop > 0, `Returning from details lost its place: ${JSON.stringify(inspectorNavigation)}`);
+  await writeFile(path.join(options.artifactDir, `online-inspector-return-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '', 'Target context leaked into the target list');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceConfirm').disabled`), true, 'Reading details selected a target');
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'inspector navigation desktop restored', options.timeoutMs);
   await click(cdp, firstPage, guard);
   await click(cdp, firstPage, `${spell} .online-grave-detail`);
   await waitForPage(cdp, firstPage, textMatchExpression('#inspectorTitle', '战意高扬'), 'unavailable grave card details remain readable', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '余烁归轨 · 已选目标：铁壁守卫');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceActions').hidden`), true, 'Details exposed an activation button for the card being inspected');
   const graveDetailLayouts = await checkInspectorLayouts(cdp, firstPage, options, roomCode, 'grave-detail');
   await click(cdp, firstPage, '#inspectorBack');
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.matches('.online-grave-detail') && document.activeElement.dataset.cardId === document.querySelector(${JSON.stringify(spell + ' .online-grave-detail')}).dataset.cardId`), true, 'Pointer return focused a different grave card');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceStatus').textContent`), /铁壁守卫/);
   await click(cdp, firstPage, '#inspectorClose');
   await click(cdp, firstPage, '#fieldTargets .online-open-grave');
@@ -813,6 +1039,19 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   await click(cdp, firstPage, '#graveChoiceConfirm');
   await waitForPage(cdp, firstPage, textMatchExpression('#playerField .slot[data-index="1"]', '疾风术士'), 'chosen grave monster revived', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#cardInspector').open`), false);
+  await click(cdp, firstPage, '#logToggle');
+  await click(cdp, firstPage, '#logSelfGrave');
+  assert.match(await evaluate(cdp, firstPage, `document.querySelector('.online-zone-summary').textContent`), /最新入墓在前/);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('.online-zone-browser .online-zone-card .card').dataset.cardId`), 'trio-ember-recall', 'Grave order disagrees with its latest-first label');
+  await click(cdp, firstPage, '#inspectorContent .online-zone-card');
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.id`), 'inspectorBack', 'Ordinary grave details lost their return control');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').hidden && document.querySelector('#inspectorContext').textContent === ''`), true, 'Ordinary grave details retained an old target');
+  for (const type of ['keyDown', 'keyUp']) await firstPage.cdp.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, ...(type === 'keyDown' ? { text: '\r' } : {}) });
+  await waitForPage(cdp, firstPage, `document.querySelector('#cardInspector').dataset.collection === 'true'`, 'Enter returns to an ordinary grave list', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.matches('.online-zone-card') && document.activeElement.dataset.cardId === document.querySelector('.online-zone-browser .online-zone-card').dataset.cardId`), true, 'Ordinary grave return lost the original card');
+  inspectorNavigation.ordinaryReturn = true;
+  await click(cdp, firstPage, '#inspectorClose');
+  await click(cdp, firstPage, '#eventLogClose');
   await click(cdp, firstPage, reviveSelector);
   await waitForPage(cdp, firstPage, textMatchExpression('#choiceText', '余烁归轨 → 铁壁守卫'), 'unique grave target uses compact confirmation', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#cardInspector').open`), false);
@@ -844,6 +1083,15 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   await writeFile(screenshotPath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await click(cdp, firstPage, '#fieldTargets .online-target:last-child');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#choiceText').textContent`), /锋刃刻印 → 疾风术士/);
+  const selectionPalette = await evaluate(cdp, firstPage, `(() => {
+    const selected = document.querySelector('#fieldTargets [aria-pressed="true"]'), candidate = document.querySelector('#fieldTargets [aria-pressed="false"]');
+    return { selected: getComputedStyle(selected).borderColor, candidate: getComputedStyle(candidate).borderColor,
+      fieldSelected: getComputedStyle(document.querySelector('#playerField .target-selected')).borderColor,
+      fieldCandidate: getComputedStyle(document.querySelector('#playerField .targetable:not(.target-selected)')).borderColor };
+  })()`);
+  assert.equal(selectionPalette.selected, selectionPalette.fieldSelected, 'Spell target list and field use different selected colors');
+  assert.equal(selectionPalette.candidate, selectionPalette.fieldCandidate, 'Spell target list and field use different candidate colors');
+  assert.notEqual(selectionPalette.selected, selectionPalette.candidate);
   await click(cdp, firstPage, '#playerField .slot[data-index="0"]');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#choiceText').textContent`), /锋刃刻印 → 日冕骑士/);
   await doubleClickText(cdp, firstPage, '#fieldTargets .online-target', '疾风术士');
@@ -879,7 +1127,7 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#aiTraps .trap-slot[data-index="3"]').classList.contains('empty')`), true);
   await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '镜光反制'), 'destroyed trap becomes public to spectator', options.timeoutMs);
   const reportPath = path.join(options.artifactDir, `online-effect-choice-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, graveLayouts, graveDetailLayouts, gravePath, graveMobilePath, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true, graveSelection: true, graveDetailsPreserved: true, graveCancelPreserved: true, uniqueGraveCompact: true }, null, 2)}\n`, 'utf8');
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, selectionPalette, graveLayouts, graveDetailLayouts, inspectorNavigation, gravePath, graveMobilePath, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true, graveSelection: true, graveDetailsPreserved: true, graveDetailContext: true, ordinaryGraveClearedContext: true, latestGraveFirst: true, graveCancelPreserved: true, uniqueGraveCompact: true }, null, 2)}\n`, 'utf8');
   console.log(`online-effect-choice-smoke passed (${roomCode}, unique, multiple, equipment, concealed slot, spectator)`);
   console.log(`screenshot: ${screenshotPath}`);
 }
@@ -976,7 +1224,9 @@ try {
     })()`, "spectator hidden-hand board", options.timeoutMs)
   ]);
 
-  if (options.chainRhythm) {
+  if (options.selectionExpiry) {
+    await exerciseSelectionExpiry(firstPage, secondPage, spectatorPage, options, roomCode);
+  } else if (options.chainRhythm) {
     await exerciseChainRhythm(firstPage, secondPage, spectatorPage, options, roomCode);
   } else if (options.tributeChoices) {
     await exerciseTributeChoices(firstPage, secondPage, spectatorPage, options, roomCode);
@@ -1092,6 +1342,7 @@ try {
     assert.equal(mobile.busy, 'true');
     assert.equal(mobile.visible, true, 'Mobile submission feedback is outside the viewport');
     assert.equal(mobile.selected, 0, 'Repeated pending clicks opened a new selection');
+    mobile.guidance = await checkGuidanceLayout(cdp, firstPage);
     const screenshotPath = path.join(options.artifactDir, `online-pending-feedback-mobile-${roomCode}.png`);
     await writeFile(screenshotPath, Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
     await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
@@ -1186,6 +1437,7 @@ try {
 
   await endTurn(cdp, firstPage, options.timeoutMs);
   await waitForPage(cdp, secondPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "2P turn", options.timeoutMs);
+  const guidanceLayouts = await exerciseGuidanceLayouts(cdp, firstPage, options, roomCode);
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-monster-state="waiting"]'), "rival-turn monster waiting state", options.timeoutMs);
   await doubleClickText(cdp, secondPage, "#hand .card.action-ready", "弱化力场");
   await waitForPage(cdp, secondPage, visibleExpression("#playerTraps .trap-slot:not(.empty)"), "set weakening web", options.timeoutMs);
@@ -1243,9 +1495,20 @@ try {
   await click(cdp, firstPage, '#choiceCancelBtn');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`), /4000 \/ 4000/);
   assert.equal(await evaluate(cdp, firstPage, visibleExpression('.online-attack-source')), false, 'Cancel left an attack source highlighted');
+  await click(cdp, secondPage, '#logToggle');
+  await click(cdp, secondPage, '#eventLog [data-public-report]');
+  await waitForPage(cdp, secondPage, visibleExpression('.public-report[open]'), 'rival reading a report before response', options.timeoutMs);
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, `(() => Boolean(document.querySelector(".online-response-attacker")) || (document.querySelector("#actionStage")?.innerText || "").includes("直接攻击"))()`, "declared attack presentation", options.timeoutMs);
   await waitForPage(cdp, secondPage, `(() => { const button = document.querySelector("#responseActivate"); return Boolean(button && !button.disabled && button.getClientRects().length); })()`, "trap activation", options.timeoutMs);
+  assert.deepEqual(await evaluate(cdp, secondPage, `[...document.querySelectorAll('dialog[open]')].map(dialog => dialog.id || dialog.className)`), ['onlineResponse'], 'Response retained a stale report underneath');
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#eventLog').hidden`), true, 'Response retained the old timeline');
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#onlineResponse').contains(document.activeElement)`), true, 'Response focus remained in a closed browsing window');
+  await secondPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  const responseScreenshotPath = path.join(options.artifactDir, `online-response-takeover-mobile-${roomCode}.png`);
+  await writeFile(responseScreenshotPath, Buffer.from((await secondPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await secondPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  const responseTakeover = { closedReport: true, closedTimeline: true, focusEnteredResponse: true, responseScreenshotPath };
   const responseLayouts = await checkDialogLayouts(cdp, secondPage, '#onlineResponse', options, roomCode);
 
   // Refresh must preserve the authenticated seat and pending response, without replaying history or applying damage.
@@ -1283,6 +1546,10 @@ try {
     waitForPage(cdp, firstPage, `document.querySelector("#eventLogList")?.textContent?.includes("1200 伤害")`, "exact battle receipt", options.timeoutMs),
     waitForPage(cdp, spectatorPage, `document.querySelector("#watchPlayers")?.textContent?.includes("2800 LP")`, "spectator final LP", options.timeoutMs)
   ]);
+  await Promise.all([firstPage, secondPage].map(page => waitForPage(cdp, page, `document.querySelector('#duelHint').dataset.kind === 'battle-result' && document.querySelector('#duelHint').textContent.includes('1200')`, 'single-trap receipt follows playback', options.timeoutMs)));
+  for (const page of [firstPage, secondPage]) {
+    assert.equal(await evaluate(cdp, page, `window.__onlineRhythmHistory.some(beat => beat.hintKind === 'battle-result' && (beat.chain || beat.action || beat.damage))`), false, 'Single-trap receipt appeared during playback');
+  }
   const [firstStages, secondStages, spectatorSummary] = await Promise.all([
     stageHistory(cdp, firstPage),
     stageHistory(cdp, secondPage),
@@ -1292,6 +1559,8 @@ try {
       players: document.querySelector("#watchPlayers")?.textContent?.replace(/\\s+/g, " ").trim() || ""
     }))()`)
   ]);
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelectorAll('dialog[open]').length === 0 && document.querySelector('#eventLog').hidden`), true, 'Resolving the response exposed an old browsing window');
+  responseTakeover.resolutionReturnedToBoard = true;
   assert.ok(firstStages.some((entry) => entry.text.includes("双重召唤")), "Spell action stage was not recorded");
   assert.ok(firstStages.some((entry) => entry.text.includes("怪兽召唤")), "Queued summon stage was not recorded");
   assert.ok(firstStages.some((entry) => entry.depth >= 1), "Second action replaced the active public action instead of queuing");
@@ -1323,6 +1592,10 @@ try {
   await click(cdp, firstPage, "#forfeitCancel");
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#onlineForfeit").open`), false);
   assert.equal(await evaluate(cdp, firstPage, `document.body.dataset.onlineResult`), "none", "Canceling surrender ended the duel");
+  await click(cdp, secondPage, '#logToggle');
+  await waitForPage(cdp, secondPage, visibleExpression('#eventLog'), 'rival timeline before the duel ends', options.timeoutMs);
+  await click(cdp, secondPage, '#hand .card .card-detail-entry');
+  await waitForPage(cdp, secondPage, visibleExpression('#cardInspector[open]'), 'rival reads details before the duel ends', options.timeoutMs);
   await click(cdp, firstPage, "#onlineToolsToggle");
   await click(cdp, firstPage, "#forfeitButton");
   await click(cdp, firstPage, "#forfeitConfirm");
@@ -1333,6 +1606,37 @@ try {
   ]);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#resultSeriesScore")?.textContent?.trim()`), "0 : 1");
   assert.equal(await evaluate(cdp, secondPage, `document.querySelector("#resultSeriesScore")?.textContent?.trim()`), "1 : 0");
+  assert.deepEqual(await evaluate(cdp, secondPage, `[...document.querySelectorAll('dialog[open]')].map(dialog => dialog.id || dialog.className)`), ['onlineResult'], 'Automatic result left an old browsing dialog underneath');
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.id`), 'resultRematch', 'Result should focus its primary action');
+  const resultKeyboardOrder = [];
+  for (const expected of ['resultReview', 'report', 'resultLobby']) {
+    await firstPage.cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+    await firstPage.cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+    const focused = await evaluate(cdp, firstPage, `document.activeElement.id || (document.activeElement.matches('[data-public-report]') ? 'report' : '')`);
+    assert.equal(focused, expected, 'Result keyboard order differs from visual action order');
+    resultKeyboardOrder.push(focused);
+  }
+  for (const expected of ['report', 'resultReview', 'resultRematch']) {
+    await firstPage.cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+    await firstPage.cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+    assert.equal(await evaluate(cdp, firstPage, `document.activeElement.id || (document.activeElement.matches('[data-public-report]') ? 'report' : '')`), expected, 'Result reverse keyboard order differs from visual action order');
+  }
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#eventLog').hidden`), true, 'Automatic result retained the timeline over the final board');
+  await click(cdp, secondPage, '#resultReview');
+  assert.equal(await evaluate(cdp, secondPage, `document.querySelectorAll('dialog[open]').length`), 0, 'Reviewing the final board exposed stale details');
+  assert.equal(await evaluate(cdp, secondPage, `document.activeElement.id`), 'resultReopenButton');
+  await secondPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, secondPage, visibleExpression('#resultReopenButton'), 'mobile final board remains accessible', options.timeoutMs);
+  const reviewScreenshotPath = path.join(options.artifactDir, `online-result-review-mobile-${roomCode}.png`);
+  await writeFile(reviewScreenshotPath, Buffer.from((await secondPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await secondPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await click(cdp, secondPage, '#resultReopenButton');
+  await click(cdp, secondPage, '#onlineResult [data-public-report]');
+  await waitForPage(cdp, secondPage, visibleExpression('.public-report[open]'), 'intentional report from result', options.timeoutMs);
+  await click(cdp, secondPage, '.public-report [data-close]');
+  await waitForPage(cdp, secondPage, visibleExpression('#onlineResult[open]'), 'closing report returns to result', options.timeoutMs);
+  assert.equal(await evaluate(cdp, secondPage, `document.activeElement.matches('#onlineResult [data-public-report]')`), true, 'Report close lost its result-page entry point');
+  const resultTakeover = { closedStaleDetails: true, closedTimeline: true, reviewBoardUnobstructed: true, intentionalReportReturned: true, resultKeyboardOrder, reviewScreenshotPath };
   const resultLayouts = await checkDialogLayouts(cdp, firstPage, '#onlineResult', options, roomCode);
   await click(cdp, secondPage, "#resultRematch");
   await waitForPage(cdp, firstPage, textMatchExpression("#resultRematch", "接受再战"), "rival rematch invitation", options.timeoutMs);
@@ -1372,11 +1676,13 @@ try {
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, textMatchExpression('#aiPanel', '3200 / 4000'), 'landscape unique-target quick attack deals damage once', options.timeoutMs);
   await waitForPage(cdp, firstPage, `(window.__onlineRhythmHistory || []).some((entry) => entry.damage === '-800')`, 'damage caption follows attack impact', options.timeoutMs);
+  await waitForPage(cdp, firstPage, `document.querySelector('#duelHint').dataset.kind === 'battle-result' && document.querySelector('#duelHint').textContent.includes('800')`, 'direct battle receipt follows damage', options.timeoutMs);
   const rhythm = await evaluate(cdp, firstPage, `(window.__onlineRhythmHistory || []).map(({ key, ...entry }) => entry)`);
   assert.ok(rhythm.some((entry) => entry.phase), 'No phase presentation was observed');
   assert.ok(rhythm.some((entry) => entry.epic > 0), 'Key attack lost its impact caption');
   assert.ok(rhythm.every((entry) => !entry.phase || (!entry.action && !entry.epic && !entry.damage)), 'Phase and action effects overlapped');
   assert.ok(rhythm.every((entry) => !entry.damage || !entry.epic), 'Damage caption overlapped the attack caption');
+  assert.ok(rhythm.filter(entry => entry.hintKind === 'battle-result').every(entry => !entry.chain && !entry.action && !entry.damage), 'Direct battle receipt appeared during playback');
   assert.ok(rhythm.every((entry) => !['魔法发动', '怪兽召唤', '后场盖放', '转为守备', '转为攻击'].includes(entry.title) || !entry.epic), 'Ordinary action repeated a central caption');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelectorAll('#aiField .slot[data-card-uid]').length`), 0);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerField .slot[data-card-uid]').dataset.monsterState`), 'spent');
@@ -1411,7 +1717,7 @@ try {
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, publicReportLayouts, responseLayouts, resultLayouts, browserFreezeResumed: true, beforeResume };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);

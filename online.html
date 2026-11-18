@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="duel-focus.css">
   <link rel="stylesheet" href="online-duel.css?v=20261116-chain-rhythm-1">
   <link rel="stylesheet" href="public-report.css?v=20261114-public-history-1">
-  <link rel="stylesheet" href="online-workspace.css?v=20261117-action-controls-1">
+  <link rel="stylesheet" href="online-workspace.css?v=20261119-grave-context-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
@@ -157,8 +157,8 @@
       <span class="phase-stage-detail" data-phase-stage-detail>部署怪兽 · 发动支援 · 构筑战线</span>
     </div>
   </div>
-  <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><div class="online-inspector-heading"><button class="btn online-inspector-back" id="inspectorBack" type="button" hidden>← 返回墓地</button><span id="inspectorKicker">CARD ARCHIVE</span><h2 id="inspectorTitle">卡牌详情</h2></div><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><footer id="graveChoiceActions" class="online-grave-actions" hidden><span id="graveChoiceStatus" aria-live="polite"></span><button id="graveChoiceConfirm" class="btn primary" type="button" disabled>确认发动</button><button id="graveChoiceCancel" class="btn" type="button">取消发动</button></footer><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
-  <dialog id="onlineResponse" class="online-response" aria-labelledby="responseTitle" aria-describedby="responseLead responseBattleSummary responseText">
+  <dialog class="online-inspector" id="cardInspector" aria-labelledby="inspectorTitle" aria-describedby="inspectorContext"><button class="online-inspector-backdrop" id="inspectorBackdrop" type="button" aria-label="关闭卡牌详情"></button><section class="online-inspector-panel"><header><div class="online-inspector-heading"><button class="btn online-inspector-back" id="inspectorBack" type="button" hidden>← 返回墓地</button><span id="inspectorKicker">CARD ARCHIVE</span><h2 id="inspectorTitle">卡牌详情</h2><p id="inspectorContext" role="status" aria-live="polite" hidden></p></div><button class="btn" id="inspectorClose" type="button" aria-label="关闭卡牌详情">×</button></header><div id="inspectorContent"></div><footer id="graveChoiceActions" class="online-grave-actions" hidden><span id="graveChoiceStatus" aria-live="polite"></span><button id="graveChoiceConfirm" class="btn primary" type="button" disabled>确认发动</button><button id="graveChoiceCancel" class="btn" type="button">取消发动</button></footer><p class="online-inspector-hint">点击弹窗外空白处或按 Esc 关闭</p></section></dialog>
+  <dialog id="onlineResponse" class="online-response" aria-labelledby="responseTitle" aria-describedby="responseLead responseBattleSummary">
     <section class="online-response-panel">
       <div class="online-response-scroll">
         <header><span id="responseKicker">ATTACK RESPONSE</span><h2 id="responseTitle">对手发起攻击 · 你的响应</h2><p id="responseLead">攻击已锁定，选择发动陷阱或放弃响应。</p></header>
@@ -168,14 +168,12 @@
           <article class="online-response-combatant target"><span>目标</span><strong id="responseTargetName">防守目标</strong><b id="responseTargetStat">DEF 0</b></article>
         </div>
         <p id="responseBattleSummary" class="online-response-summary" hidden></p>
-        <p id="responseCountdown" class="online-response-countdown" role="timer" aria-live="off"></p>
-        <p id="responseText" class="online-response-rule"></p>
         <div id="responseChain" class="chain-stack" hidden></div>
         <div id="responseChoices" class="chain-choices"></div>
-        <p id="responseStatus" role="status" aria-live="polite"></p>
+        <p id="responsePreview" class="online-response-preview" hidden></p>
         <p id="responseError" class="error-copy" role="alert"></p>
       </div>
-      <footer><button id="responseActivate" class="btn primary" type="button">发动陷阱</button><button id="responsePass" class="btn" type="button">放弃响应</button></footer>
+      <footer><p id="responseCountdown" class="online-response-countdown" role="timer" aria-live="off"></p><p id="responseStatus" role="status" aria-live="polite"></p><button id="responseActivate" class="btn primary" type="button">发动陷阱</button><button id="responsePass" class="btn" type="button">放弃响应</button></footer>
     </section>
   </dialog>
   <dialog id="onlineResult" class="online-result" aria-labelledby="resultTitle" aria-describedby="resultSummary">
@@ -192,7 +190,10 @@
         <div class="online-series-score" id="resultSeries" aria-label="本房间系列战绩"><span>ROOM SERIES</span><strong id="resultSeriesScore">0 : 0</strong><small id="resultSeriesDetail">已完成 0 局</small></div>
         <p id="resultRematchStatus" class="online-rematch-status" role="status" aria-live="polite">双方确认后可在当前房间再来一局。</p>
       </div>
-      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button id="resultRematch" class="btn primary" type="button">再来一局</button><button class="btn" type="button" data-public-report>完整公开战报</button><button id="resultLobby" class="btn" type="button">返回大厅</button></footer>
+      <footer>
+        <div class="online-result-actions" role="group" aria-label="继续对局"><button id="resultRematch" class="btn primary" type="button">再来一局</button><button id="resultReview" class="btn" type="button">查看残局</button></div>
+        <div class="online-result-actions online-result-secondary" role="group" aria-label="战报与离开"><button class="btn" type="button" data-public-report>完整公开战报</button><button id="resultLobby" class="btn" type="button">返回大厅</button></div>
+      </footer>
     </section>
   </dialog>
   <dialog id="onlineForfeit" class="online-forfeit" aria-labelledby="forfeitTitle" aria-describedby="forfeitSummary">
@@ -204,6 +205,6 @@
       <footer><button id="forfeitCancel" class="btn" type="button">继续决斗</button><button id="forfeitConfirm" class="btn online-danger-btn" type="button">确认认输</button></footer>
     </section>
   </dialog>
-  <script type="module" src="/src/online-duel-app.js?v=20261117-pending-feedback-1"></script>
+  <script type="module" src="/src/online-duel-app.js?v=20261119-inspector-focus-1"></script>
 </body>
 </html>

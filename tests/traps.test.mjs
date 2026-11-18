@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   selectRedirectTarget,
   trapActivationText,
+  trapResponsePreviewText,
   trapCanResolve,
   trapConsumesAttack,
   trapMatchesEvent,
@@ -127,4 +128,18 @@ test("describes attack targets before asking for trap activation", () => {
     trapActivationText(trap("redirectAttack"), "attack", { owner, rival, context: { attackerIndex: 0, targetIndex: 0 } }),
     "对手的突击者（攻击 1800 / 守备 1000）正在攻击你的高防守卫（攻击 900 / 守备 2200）。发动后会把攻击改为你的低防术士（攻击 1400 / 守备 900）。 注意：换位目标守备 900 低于当前目标守备 2200。 是否连锁发动「测试陷阱」？测试效果。"
   );
+});
+
+test("compact response preview keeps the actual redirect target and its defense warning", () => {
+  const owner = { field: [
+    { name: "高防守卫", atk: 900, def: 2200, tempDef: 0 },
+    { name: "低防术士", atk: 1400, def: 900, tempDef: 100 }
+  ] };
+  assert.equal(trapResponsePreviewText(trap("redirectAttack"), { owner, context: { targetIndex: 0 } }),
+    "发动后会把攻击改为你的低防术士（攻击 1400 / 守备 1000）。 注意：换位目标守备 1000 低于当前目标守备 2200。");
+  assert.equal(trapResponsePreviewText(trap("redirectAttack"), { owner, context: { targetIndex: -1 } }),
+    "发动后会把攻击改为你的高防守卫（攻击 900 / 守备 2200）。");
+  assert.equal(trapResponsePreviewText(trap("redirectAttack"), { owner: { field: [owner.field[0]] }, context: { targetIndex: 0 } }), "当前没有可换位的其他怪兽。");
+  assert.equal(trapResponsePreviewText(trap("attackCancel"), { owner }), "");
+  assert.equal(trapResponsePreviewText(null), "");
 });

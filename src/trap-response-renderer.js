@@ -196,7 +196,7 @@ function renderChainStack({
       name.type = "button";
       name.dataset.cardId = entry.cardId;
       name.title = `查看 ${entry.name} 详情`;
-      name.addEventListener("click", () => onCardClick(entry.cardId));
+      name.addEventListener("click", () => onCardClick(entry.cardId, entry.runtimeCardId));
     }
     const status = document.createElement("span");
     status.className = "chain-stack-state";
