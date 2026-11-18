@@ -1137,6 +1137,8 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
     document.body.dataset.onlineOverlay = "detail";
     elements.cardInspector.showModal();
     elements.inspectorClose.focus({ preventScroll: true });
+  } else if (preserveCollection && !elements.inspectorBack.hidden) {
+    elements.inspectorBack.focus({ preventScroll: true });
   }
   if (collection) elements.inspectorContent.scrollTop = inspectorCollection.scrollTop;
 }
@@ -2405,8 +2407,13 @@ elements.endTurnButton.addEventListener("keydown", (event) => {
 });
 elements.inspectorClose.addEventListener("click", closeInspector);
 elements.inspectorBack.addEventListener("click", () => {
+  const returnPoint = inspectorCollection?.returnPoint;
   if (inspectorCollection?.seatId) showGrave(inspectorCollection.seatId);
   else if (inspectorCollection) showCards(inspectorCollection.cards, inspectorCollection.title, { collection: true });
+  const origin = returnPoint && [...elements.inspectorContent.querySelectorAll(
+    returnPoint.detail ? ".online-grave-detail" : ".online-zone-card"
+  )].find(button => button.dataset.cardId === returnPoint.cardId && !button.disabled);
+  (origin || elements.inspectorClose).focus({ preventScroll: true });
 });
 elements.graveChoiceConfirm.addEventListener("click", () => {
   const model = onlineSelectionModel(client.view, selection);
@@ -2510,7 +2517,10 @@ elements.inspectorContent.addEventListener("click", (event) => {
     if (!button.disabled) chooseCard(button.dataset.cardId);
     return;
   }
-  if (inspectorCollection) inspectorCollection.scrollTop = elements.inspectorContent.scrollTop;
+  if (inspectorCollection) {
+    inspectorCollection.scrollTop = elements.inspectorContent.scrollTop;
+    inspectorCollection.returnPoint = { cardId: button.dataset.cardId, detail: button.classList.contains("online-grave-detail") };
+  }
   const card = onlineCard(client.view, button.dataset.cardId);
   if (card) showCards([card], card.name, { preserveCollection: true });
 });

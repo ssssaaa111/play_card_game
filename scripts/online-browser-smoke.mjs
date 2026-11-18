@@ -978,12 +978,25 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   const mage = '#inspectorContent .online-grave-entry:has(.card[data-card-id="gale-mage"]) [data-grave-select]';
   const spell = '#inspectorContent .online-grave-entry:has(.card[data-card-id="war-chant"])';
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector(${JSON.stringify(spell + ' [data-grave-select]')}).disabled`), true);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, 'innerWidth === 390', 'mobile inspector navigation', options.timeoutMs);
   await click(cdp, firstPage, `${spell} .online-grave-detail`);
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.id`), 'inspectorBack', 'Opening nested details lost keyboard focus');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '余烁归轨 · 尚未选择目标');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').hidden`), false);
-  await click(cdp, firstPage, '#inspectorBack');
+  for (const type of ['keyDown', 'keyUp']) await firstPage.cdp.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, ...(type === 'keyDown' ? { text: '\r' } : {}) });
+  await waitForPage(cdp, firstPage, `document.querySelector('#cardInspector').dataset.collection === 'true'`, 'Enter returns to the grave list', options.timeoutMs);
+  const inspectorNavigation = await evaluate(cdp, firstPage, `(() => ({
+    returnedToSameCard: document.activeElement.dataset.cardId === document.querySelector(${JSON.stringify(spell + ' .online-grave-detail')}).dataset.cardId,
+    returnedToDetailsButton: document.activeElement.matches('.online-grave-detail'),
+    scrollTop: document.querySelector('#inspectorContent').scrollTop
+  }))()`);
+  assert.ok(inspectorNavigation.returnedToSameCard && inspectorNavigation.returnedToDetailsButton && inspectorNavigation.scrollTop > 0, `Returning from details lost its place: ${JSON.stringify(inspectorNavigation)}`);
+  await writeFile(path.join(options.artifactDir, `online-inspector-return-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '', 'Target context leaked into the target list');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceConfirm').disabled`), true, 'Reading details selected a target');
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'inspector navigation desktop restored', options.timeoutMs);
   await click(cdp, firstPage, guard);
   await click(cdp, firstPage, `${spell} .online-grave-detail`);
   await waitForPage(cdp, firstPage, textMatchExpression('#inspectorTitle', '战意高扬'), 'unavailable grave card details remain readable', options.timeoutMs);
@@ -991,6 +1004,7 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceActions').hidden`), true, 'Details exposed an activation button for the card being inspected');
   const graveDetailLayouts = await checkInspectorLayouts(cdp, firstPage, options, roomCode, 'grave-detail');
   await click(cdp, firstPage, '#inspectorBack');
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.matches('.online-grave-detail') && document.activeElement.dataset.cardId === document.querySelector(${JSON.stringify(spell + ' .online-grave-detail')}).dataset.cardId`), true, 'Pointer return focused a different grave card');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceStatus').textContent`), /铁壁守卫/);
   await click(cdp, firstPage, '#inspectorClose');
   await click(cdp, firstPage, '#fieldTargets .online-open-grave');
@@ -1030,7 +1044,12 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('.online-zone-summary').textContent`), /最新入墓在前/);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('.online-zone-browser .online-zone-card .card').dataset.cardId`), 'trio-ember-recall', 'Grave order disagrees with its latest-first label');
   await click(cdp, firstPage, '#inspectorContent .online-zone-card');
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.id`), 'inspectorBack', 'Ordinary grave details lost their return control');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').hidden && document.querySelector('#inspectorContext').textContent === ''`), true, 'Ordinary grave details retained an old target');
+  for (const type of ['keyDown', 'keyUp']) await firstPage.cdp.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, ...(type === 'keyDown' ? { text: '\r' } : {}) });
+  await waitForPage(cdp, firstPage, `document.querySelector('#cardInspector').dataset.collection === 'true'`, 'Enter returns to an ordinary grave list', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.matches('.online-zone-card') && document.activeElement.dataset.cardId === document.querySelector('.online-zone-browser .online-zone-card').dataset.cardId`), true, 'Ordinary grave return lost the original card');
+  inspectorNavigation.ordinaryReturn = true;
   await click(cdp, firstPage, '#inspectorClose');
   await click(cdp, firstPage, '#eventLogClose');
   await click(cdp, firstPage, reviveSelector);
@@ -1108,7 +1127,7 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#aiTraps .trap-slot[data-index="3"]').classList.contains('empty')`), true);
   await waitForPage(cdp, spectatorPage, textMatchExpression('#watchPlayers', '镜光反制'), 'destroyed trap becomes public to spectator', options.timeoutMs);
   const reportPath = path.join(options.artifactDir, `online-effect-choice-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, selectionPalette, graveLayouts, graveDetailLayouts, gravePath, graveMobilePath, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true, graveSelection: true, graveDetailsPreserved: true, graveDetailContext: true, ordinaryGraveClearedContext: true, latestGraveFirst: true, graveCancelPreserved: true, uniqueGraveCompact: true }, null, 2)}\n`, 'utf8');
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, layouts, selectionPalette, graveLayouts, graveDetailLayouts, inspectorNavigation, gravePath, graveMobilePath, screenshotPath, coveredPath, uniqueTarget: true, targetSwitch: true, doubleClickTarget: true, concealedSlotTarget: true, canceledWithoutActivation: true, graveSelection: true, graveDetailsPreserved: true, graveDetailContext: true, ordinaryGraveClearedContext: true, latestGraveFirst: true, graveCancelPreserved: true, uniqueGraveCompact: true }, null, 2)}\n`, 'utf8');
   console.log(`online-effect-choice-smoke passed (${roomCode}, unique, multiple, equipment, concealed slot, spectator)`);
   console.log(`screenshot: ${screenshotPath}`);
 }
