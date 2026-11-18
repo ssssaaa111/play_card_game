@@ -1439,10 +1439,28 @@ try {
   await waitForPage(cdp, secondPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "2P turn", options.timeoutMs);
   const guidanceLayouts = await exerciseGuidanceLayouts(cdp, firstPage, options, roomCode);
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-monster-state="waiting"]'), "rival-turn monster waiting state", options.timeoutMs);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  await click(cdp, firstPage, '#hand .card:last-child .card-detail-entry');
+  const inspectorCloseOrigin = await evaluate(cdp, firstPage, `({ cardId: document.querySelector('#hand .card:last-child').dataset.cardUid, scrollLeft: document.querySelector('#hand').scrollLeft, revision: Number(document.querySelector('#app').dataset.revision) })`);
   await doubleClickText(cdp, secondPage, "#hand .card.action-ready", "弱化力场");
   await waitForPage(cdp, secondPage, visibleExpression("#playerTraps .trap-slot:not(.empty)"), "set weakening web", options.timeoutMs);
+  await waitForPage(cdp, firstPage, `Number(document.querySelector('#app').dataset.revision) > ${inspectorCloseOrigin.revision}`, 'hand refreshed while details remain open', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#cardInspector').open`), true, 'Incoming action dismissed the card being read');
+  for (const type of ['keyDown', 'keyUp']) await firstPage.cdp.send('Input.dispatchKeyEvent', { type, key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await waitForPage(cdp, firstPage, `!document.querySelector('#cardInspector').open && document.activeElement.matches('.card-detail-entry')`, 'Escape restores the refreshed hand entry', options.timeoutMs);
+  const inspectorCloseFocus = { escape: await evaluate(cdp, firstPage, `({ cardId: document.activeElement.closest('.card').dataset.cardUid, scrollLeft: document.querySelector('#hand').scrollLeft })`) };
+  assert.equal(inspectorCloseFocus.escape.cardId, inspectorCloseOrigin.cardId, 'Escape returned to another hand card');
+  assert.ok(Math.abs(inspectorCloseFocus.escape.scrollLeft - inspectorCloseOrigin.scrollLeft) <= 1, 'Closing details moved the hand scroll position');
+  await writeFile(path.join(options.artifactDir, `online-inspector-close-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await click(cdp, firstPage, '#hand .card:last-child .card-detail-entry');
   await endTurn(cdp, secondPage, options.timeoutMs);
   await waitForPage(cdp, firstPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "1P attack turn", options.timeoutMs);
+  await click(cdp, firstPage, '#inspectorClose');
+  await waitForPage(cdp, firstPage, `document.activeElement.matches('.card-detail-entry')`, 'Close button restores the refreshed hand entry', options.timeoutMs);
+  inspectorCloseFocus.button = await evaluate(cdp, firstPage, `({ cardId: document.activeElement.closest('.card').dataset.cardUid })`);
+  assert.equal(inspectorCloseFocus.button.cardId, inspectorCloseOrigin.cardId, 'Turn change returned to another hand card');
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'inspector close desktop restored', options.timeoutMs);
 
   await click(cdp, firstPage, '#playerField .slot:has(.field-monster-card.defense)');
   await click(cdp, firstPage, '#fieldModeBtn');
@@ -1717,7 +1735,7 @@ try {
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, inspectorCloseFocus, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);

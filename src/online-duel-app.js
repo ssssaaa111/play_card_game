@@ -1133,7 +1133,9 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
     elements.inspectorContent.appendChild(empty);
   }
   if (!elements.cardInspector.open) {
-    inspectorReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const handCard = origin?.closest("#hand .card[data-card-uid]");
+    inspectorReturnFocus = { element: origin, handCardId: handCard?.dataset.cardUid, detail: Boolean(origin?.closest(".card-detail-entry")) };
     document.body.dataset.onlineOverlay = "detail";
     elements.cardInspector.showModal();
     elements.inspectorClose.focus({ preventScroll: true });
@@ -2431,9 +2433,19 @@ elements.inspectorBackdrop.addEventListener("click", (event) => {
 elements.cardInspector.addEventListener("click", (event) => { if (event.target === elements.cardInspector) closeInspector(); });
 elements.cardInspector.addEventListener("close", () => {
   document.body.dataset.onlineOverlay = "none";
-  const returnFocus = inspectorReturnFocus;
+  const returnPoint = inspectorReturnFocus;
   inspectorReturnFocus = null;
-  if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+  const available = target => Boolean(target?.isConnected
+    && target.matches("button,[href],input,select,textarea,[tabindex]")
+    && !target.matches(":disabled") && !target.closest("[hidden],[inert]") && target.getClientRects().length);
+  let target = returnPoint?.element;
+  if (!available(target) && returnPoint?.handCardId) {
+    const card = [...elements.hand.querySelectorAll(".card[data-card-uid]")].find(card => card.dataset.cardUid === returnPoint.handCardId);
+    target = returnPoint.detail ? card?.querySelector(".card-detail-entry") : card;
+    if (!available(target)) target = elements.hand;
+  }
+  const dialog = document.querySelector("dialog[open]");
+  if (available(target) && (!dialog || dialog.contains(target))) target.focus({ preventScroll: true });
 });
 elements.handSortType.addEventListener("click", () => { handOrder = sortHandCardsByType(onlineBoardState(client.view, selection).player.hand, handOrder).map((card) => card.uid); render(client.view); });
 elements.handReadyJump.addEventListener("click", locateNextReadyAction);
