@@ -154,7 +154,7 @@ function attackEventText({ owner = null, rival = null, context = {} } = {}) {
   return `对手的${monsterText(attacker)}正在攻击${targetText}`;
 }
 
-function redirectPreviewText(trap, { owner = null, context = {} } = {}) {
+export function trapResponsePreviewText(trap, { owner = null, context = {} } = {}) {
   if (trap?.trigger !== "redirectAttack") return "";
   const currentTarget = context.targetIndex >= 0 ? owner?.field?.[context.targetIndex] : null;
   const redirectIndex = selectRedirectTarget(owner?.field || [], context.targetIndex ?? -1);
@@ -174,6 +174,6 @@ export function trapActivationText(trap, eventName, { owner = null, rival = null
       : eventName === "chain"
         ? `对手发动了陷阱${context.sourceTrap?.name ? `「${context.sourceTrap.name}」` : ""}`
         : `对手召唤了 ${monsterText(context.summoned)}`;
-  const preview = redirectPreviewText(trap, { owner, context });
+  const preview = trapResponsePreviewText(trap, { owner, context });
   return `${eventText}。${preview ? `${preview} ` : ""}是否连锁发动「${trap.name}」？${trap.text}`;
 }

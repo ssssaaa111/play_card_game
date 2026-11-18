@@ -10,7 +10,7 @@ import { createAnimationController } from "./animation.js";
 import { createPhaseStageController, phaseStageCue } from "./phase-stage.js";
 import { renderTrapResponsePanel, buildTrapResponseView } from "./trap-response-renderer.js?v=20261117-response-takeover-1";
 import { selectTrapResponse } from "./response-state.js";
-import { trapActivationText } from "./traps.js";
+import { trapActivationText, trapResponsePreviewText } from "./traps.js?v=20261118-response-summary-1";
 import { reconcileHandOrder, shiftHandCard, insertHandCard, sortHandCardsByType } from "./hand-order.js";
 import { monsterAssets } from "./data.js";
 import { OnlineDuelClient } from "./online-duel-client.js?v=20261114-network-recovery-1";
@@ -31,7 +31,7 @@ const elements = Object.fromEntries([
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
   "fieldAttackBtn", "fieldModeBtn", "fieldDetailBtn", "fieldCancelBtn", "choiceActions", "choiceText", "fieldTargets", "choiceConfirmBtn", "choiceCancelBtn",
   "cardInspector", "inspectorTitle", "inspectorKicker", "inspectorContent", "inspectorBack", "inspectorClose", "inspectorBackdrop", "graveChoiceActions", "graveChoiceStatus", "graveChoiceConfirm", "graveChoiceCancel", "viewerIdentity", "viewerName", "viewerSeatLabel", "onlineBattlePreview",
-  "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responseText", "responseChain", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
+  "onlineResponse", "responseKicker", "responseTitle", "responseLead", "responseBattle", "responseAttackerName", "responseAttackerStat", "responseBattleBadge", "responseTargetName", "responseTargetStat", "responseBattleSummary", "responseCountdown", "responsePreview", "responseChain", "responseChoices", "responseStatus", "responseActivate", "responsePass", "responseError",
   "onlineResult", "resultKicker", "resultTitle", "resultSummary", "resultSelfLabel", "resultSelfName", "resultSelfLp", "resultRivalLabel", "resultRivalName", "resultRivalLp", "resultSeries", "resultSeriesScore", "resultSeriesDetail", "resultReview", "resultLobby", "resultRematch", "resultRematchStatus",
   "forfeitButton", "resultReopenButton", "onlineForfeit", "forfeitTitle", "forfeitSummary", "forfeitError", "forfeitCancel", "forfeitConfirm",
   "connectionOverlay", "connectionKicker", "connectionTitle", "connectionSummary", "connectionDetail", "connectionActions", "connectionRetry", "connectionLobby", "soundBtn", "lastChainButton", "effectLayer", "actionStage", "chainResolutionStage", "phaseStage",
@@ -1730,13 +1730,18 @@ function renderResponseBattle(view) {
   elements.responseBattleSummary.textContent = `${battle.summaryLabel}：${battle.summary}`;
 }
 
+function renderResponsePreview({ choice, traps }) {
+  elements.responsePreview.textContent = trapResponsePreviewText(traps[choice.selectedIndex], choice.details);
+  elements.responsePreview.hidden = !elements.responsePreview.textContent;
+}
+
 function selectResponse(index) {
   if (actionPending) return;
   trapChoice = selectTrapResponse(trapChoice, index) || trapChoice;
   // Keep the clicked button mounted so a second click can become a double-click.
-  const panel = buildTrapResponseView(responseRendererOptions(client.view));
-  elements.responseText.textContent = panel.detailsText;
-  elements.responseStatus.textContent = panel.statusText;
+  const options = responseRendererOptions(client.view);
+  const panel = buildTrapResponseView(options);
+  renderResponsePreview(options);
   elements.responseActivate.textContent = panel.actionText;
   elements.responseActivate.disabled = panel.actionDisabled;
   for (const button of elements.responseChoices.children) {
@@ -1819,13 +1824,15 @@ function renderResponse(view) {
     if (!document.hidden) playSound("trap");
   } else if (!responseSoundId) lastResponseSoundId = null;
   if (trapChoice) {
-    const panel = renderTrapResponsePanel({ document, ...responseRendererOptions(view), elements: {
-      chainText: elements.responseText, chainStatus: elements.responseStatus, chainYes: elements.responseActivate,
+    const options = responseRendererOptions(view);
+    const panel = renderTrapResponsePanel({ document, ...options, elements: {
+      chainYes: elements.responseActivate,
       chainChoices: elements.responseChoices, chainStack: elements.responseChain
     }, onSelect: selectResponse, onActivate: (index) => respondToTrap(true, index), onCardClick: (_templateId, cardId) => {
       const card = (view.machine?.chain || []).find((link) => link.cardId === cardId)?.card || onlineCard(view, cardId);
       if (card) showCards([card], card.name);
     } });
+    renderResponsePreview(options);
     elements.onlineResponse.dataset.responseMode = panel.singleChoice ? "single" : "multiple";
     elements.onlineResponse.classList.toggle("single-response", panel.singleChoice);
     elements.responseChoices.hidden = panel.choices.length === 0;
@@ -1837,8 +1844,8 @@ function renderResponse(view) {
       ? "追加反制，或不再连锁并结算现有连锁。"
       : panel.singleChoice
       ? "唯一陷阱已选中，可发动或放弃。"
-      : "选择陷阱；双击可直接发动。");
-    elements.responseText.hidden = panel.singleChoice;
+      : "选择 1 张陷阱，双击可直接发动。");
+    elements.responseStatus.textContent = "";
     elements.responseActivate.disabled ||= actionPending;
     elements.responsePass.disabled = actionPending;
     elements.responsePass.textContent = chainResponse ? "不再连锁" : "放弃响应";

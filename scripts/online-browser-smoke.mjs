@@ -533,6 +533,9 @@ async function checkDialogLayouts(cdp, page, selector, options, roomCode) {
     : [[1440, 900], [390, 844], [320, 720], [844, 390]];
   for (const [width, height] of sizes) {
     await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    if (selector === '#onlineResponse') {
+      await evaluate(cdp, page, `(() => { const scroll = document.querySelector('.online-response-scroll'); scroll.scrollTop = scroll.scrollHeight; })()`);
+    }
     layouts.push(await waitForPage(cdp, page, `(() => {
       const dialog = document.querySelector(${JSON.stringify(selector)});
       const footer = dialog.querySelector('footer').getBoundingClientRect();
@@ -543,6 +546,7 @@ async function checkDialogLayouts(cdp, page, selector, options, roomCode) {
         && document.documentElement.scrollWidth <= innerWidth
         ? { width: innerWidth, height: innerHeight, buttonHeight: buttons[0].getBoundingClientRect().height, footerVisible: true } : null;
     })()`, `${selector} fixed footer and touch targets at ${width}`, options.timeoutMs));
+    if (selector === '#onlineResponse') layouts.at(-1).decision = await checkResponseDecisionLayout(cdp, page);
     if (selector === '#onlineResult') {
       const actions = await evaluate(cdp, page, `(() => {
         const buttons = [...document.querySelectorAll('#onlineResult footer .btn')];
@@ -568,6 +572,25 @@ async function checkDialogLayouts(cdp, page, selector, options, roomCode) {
   await page.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, page, 'innerWidth > 1040', 'dialog desktop viewport restored', options.timeoutMs);
   return layouts;
+}
+
+async function checkResponseDecisionLayout(cdp, page) {
+  const layout = await evaluate(cdp, page, `(() => {
+    const dialog = document.querySelector('#onlineResponse');
+    const footer = dialog.querySelector('footer'), bounds = footer.getBoundingClientRect();
+    const timer = document.querySelector('#responseCountdown'), rect = timer.getBoundingClientRect();
+    const activate = document.querySelector('#responseActivate').getBoundingClientRect();
+    const status = document.querySelector('#responseStatus');
+    return { width: innerWidth, height: innerHeight,
+      countdownVisible: footer.contains(timer) && rect.height > 0 && rect.top >= bounds.top && rect.bottom <= activate.top && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth,
+      countdownText: timer.textContent,
+      noRepeatedInstructions: status.textContent === '' && !dialog.querySelector('.online-response-rule'),
+      candidateEffectsVisible: [...dialog.querySelectorAll('.trap-choice-effect')].every(effect => effect.textContent.trim().length > 0),
+      scrolledBody: document.querySelector('.online-response-scroll').scrollTop };
+  })()`);
+  assert.ok(layout.countdownVisible && /秒/.test(layout.countdownText), `Response countdown left the fixed actions: ${JSON.stringify(layout)}`);
+  assert.ok(layout.noRepeatedInstructions && layout.candidateEffectsVisible, 'Response repeats instructions or lost candidate effects');
+  return layout;
 }
 
 async function failurePageState(cdp, page) {
@@ -724,16 +747,21 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#onlineResponse').open && document.querySelector('#onlineResponse').contains(document.activeElement)`), true, 'Closing chain details lost the active response');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#responseLead').textContent`), '可反制 CL1《镜光反制》；不再连锁则按 CL1 结算。');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#responseBattleSummary').textContent`), /^原始攻击预估（未计入连锁）：/);
+  const responseDecisions = { cl2BeforeSelection: await checkResponseDecisionLayout(cdp, firstPage) };
   await writeFile(path.join(options.artifactDir, `online-response-decision-CL2-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await click(cdp, firstPage, '#responseChoices button');
+  responseDecisions.cl2Selected = await checkResponseDecisionLayout(cdp, firstPage);
   await click(cdp, firstPage, '#responseActivate');
   await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'CL3 response', options.timeoutMs);
   assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#responseLead').textContent`), '可反制 CL2《断链裁决》；不再连锁则按 CL2 → CL1 结算。');
+  responseDecisions.cl3 = await checkResponseDecisionLayout(cdp, secondPage);
   await click(cdp, secondPage, '#responseActivate');
   await waitForPage(cdp, firstPage, textMatchExpression('#responseTitle', 'CL4'), 'single candidate retains CL4 title', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#responseLead').textContent`), '可反制 CL3《断链裁决》；不再连锁则按 CL3 → CL2 → CL1 结算。');
   await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: false });
   await waitForPage(cdp, firstPage, `innerWidth === 844 && document.querySelector('#responsePass').getBoundingClientRect().bottom <= innerHeight`, 'CL4 decision buttons fit landscape', options.timeoutMs);
+  await evaluate(cdp, firstPage, `(() => { const scroll = document.querySelector('.online-response-scroll'); scroll.scrollTop = scroll.scrollHeight; })()`);
+  responseDecisions.cl4Landscape = await checkResponseDecisionLayout(cdp, firstPage);
   await writeFile(path.join(options.artifactDir, `online-response-decision-CL4-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await click(cdp, firstPage, '#responseActivate');
@@ -779,7 +807,7 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
     assert.ok(history.filter(beat => beat.hintTone === 'victory' || beat.hintTone === 'defeat').every(beat => !beat.chain && !beat.action && !beat.damage), 'Victory hint reveals the lethal result early');
     assert.ok(history.filter(beat => beat.result).every(beat => !beat.chain && !beat.action && !beat.epic && !beat.damage), 'Result covers the lethal hit');
   }
-  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, playbackControls, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
+  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, playbackControls, responseDecisions, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
   console.log(`online-chain-rhythm-smoke passed (${roomCode}, four links, response priority, damage, replay, lethal result, spectator)`);
 }
 
