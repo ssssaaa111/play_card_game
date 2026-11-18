@@ -608,6 +608,9 @@ body[data-online-status] #onlineResult h2 { font-size: clamp(26px, 5vw, 36px); l
 body[data-online-status] #onlineResult #resultSummary { margin: 8px 0 16px; font-size: 12px; }
 body[data-online-status] #onlineResult .online-series-score { margin-top: 12px; }
 body[data-online-status] #onlineResult .online-rematch-status { margin-top: 12px; }
+body[data-online-status] #onlineResult footer { grid-template-columns: minmax(0,1fr); gap: 4px; }
+body[data-online-status] #onlineResult .online-result-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; min-width: 0; }
+body[data-online-status] #onlineResult .online-result-secondary .btn { border-color: transparent; color: #a5bacb; background: transparent; }
 
 @media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
   body[data-online-status] #cardInspector .online-inspector-entry { grid-template-columns: 144px minmax(0,1fr); gap: 12px; padding: 10px; }

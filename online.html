@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="duel-focus.css">
   <link rel="stylesheet" href="online-duel.css?v=20261116-chain-rhythm-1">
   <link rel="stylesheet" href="public-report.css?v=20261114-public-history-1">
-  <link rel="stylesheet" href="online-workspace.css?v=20261118-selection-states-1">
+  <link rel="stylesheet" href="online-workspace.css?v=20261118-result-actions-1">
 </head>
 <body data-online-status="waiting" data-duel-focus="idle">
   <div id="app">
@@ -192,7 +192,10 @@
         <div class="online-series-score" id="resultSeries" aria-label="本房间系列战绩"><span>ROOM SERIES</span><strong id="resultSeriesScore">0 : 0</strong><small id="resultSeriesDetail">已完成 0 局</small></div>
         <p id="resultRematchStatus" class="online-rematch-status" role="status" aria-live="polite">双方确认后可在当前房间再来一局。</p>
       </div>
-      <footer><button id="resultReview" class="btn" type="button">查看残局</button><button id="resultRematch" class="btn primary" type="button">再来一局</button><button class="btn" type="button" data-public-report>完整公开战报</button><button id="resultLobby" class="btn" type="button">返回大厅</button></footer>
+      <footer>
+        <div class="online-result-actions" role="group" aria-label="继续对局"><button id="resultRematch" class="btn primary" type="button">再来一局</button><button id="resultReview" class="btn" type="button">查看残局</button></div>
+        <div class="online-result-actions online-result-secondary" role="group" aria-label="战报与离开"><button class="btn" type="button" data-public-report>完整公开战报</button><button id="resultLobby" class="btn" type="button">返回大厅</button></div>
+      </footer>
     </section>
   </dialog>
   <dialog id="onlineForfeit" class="online-forfeit" aria-labelledby="forfeitTitle" aria-describedby="forfeitSummary">

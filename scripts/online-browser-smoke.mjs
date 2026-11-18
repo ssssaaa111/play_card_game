@@ -528,7 +528,10 @@ async function checkChoiceControls(cdp, page, timeoutMs) {
 
 async function checkDialogLayouts(cdp, page, selector, options, roomCode) {
   const layouts = [];
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+  const sizes = selector === '#onlineResult'
+    ? [[1440, 900], [3840, 2160], [390, 844], [320, 568], [844, 390], [568, 320]]
+    : [[1440, 900], [390, 844], [320, 720], [844, 390]];
+  for (const [width, height] of sizes) {
     await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     layouts.push(await waitForPage(cdp, page, `(() => {
       const dialog = document.querySelector(${JSON.stringify(selector)});
@@ -540,9 +543,26 @@ async function checkDialogLayouts(cdp, page, selector, options, roomCode) {
         && document.documentElement.scrollWidth <= innerWidth
         ? { width: innerWidth, height: innerHeight, buttonHeight: buttons[0].getBoundingClientRect().height, footerVisible: true } : null;
     })()`, `${selector} fixed footer and touch targets at ${width}`, options.timeoutMs));
-    if (width === 844) {
+    if (selector === '#onlineResult') {
+      const actions = await evaluate(cdp, page, `(() => {
+        const buttons = [...document.querySelectorAll('#onlineResult footer .btn')];
+        const rects = buttons.map(button => button.getBoundingClientRect());
+        const primary = getComputedStyle(buttons[0]);
+        return { order: buttons.map(button => button.id || 'report'),
+          primaryFirst: primary.backgroundImage.includes('linear-gradient'),
+          sameRows: Math.abs(rects[0].top - rects[1].top) <= 1 && Math.abs(rects[2].top - rects[3].top) <= 1,
+          separated: rects[0].bottom <= rects[2].top && rects[1].bottom <= rects[3].top,
+          gaps: [rects[1].left - rects[0].right, rects[3].left - rects[2].right],
+          quietSecondary: buttons.slice(2).every(button => { const style = getComputedStyle(button); return style.backgroundColor === 'rgba(0, 0, 0, 0)' && style.borderTopColor === 'rgba(0, 0, 0, 0)'; }) };
+      })()`);
+      assert.deepEqual(actions.order, ['resultRematch', 'resultReview', 'report', 'resultLobby']);
+      assert.ok(actions.primaryFirst && actions.sameRows && actions.separated && actions.quietSecondary && actions.gaps.every(gap => Math.abs(gap - 8) <= 1), `Result actions lost their hierarchy: ${JSON.stringify(actions)}`);
+      layouts.at(-1).actions = actions;
+    }
+    if (width === 844 || selector === '#onlineResult' && (width === 390 || height === 320)) {
       const image = await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true });
-      await writeFile(path.join(options.artifactDir, `${selector.slice(1)}-landscape-${roomCode}.png`), Buffer.from(image.data, 'base64'));
+      const name = selector === '#onlineResult' ? `online-result-actions-${width}x${height}` : `${selector.slice(1)}-landscape`;
+      await writeFile(path.join(options.artifactDir, `${name}-${roomCode}.png`), Buffer.from(image.data, 'base64'));
     }
   }
   await page.cdp.send('Emulation.clearDeviceMetricsOverride');
@@ -1521,6 +1541,20 @@ try {
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector("#resultSeriesScore")?.textContent?.trim()`), "0 : 1");
   assert.equal(await evaluate(cdp, secondPage, `document.querySelector("#resultSeriesScore")?.textContent?.trim()`), "1 : 0");
   assert.deepEqual(await evaluate(cdp, secondPage, `[...document.querySelectorAll('dialog[open]')].map(dialog => dialog.id || dialog.className)`), ['onlineResult'], 'Automatic result left an old browsing dialog underneath');
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.id`), 'resultRematch', 'Result should focus its primary action');
+  const resultKeyboardOrder = [];
+  for (const expected of ['resultReview', 'report', 'resultLobby']) {
+    await firstPage.cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+    await firstPage.cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+    const focused = await evaluate(cdp, firstPage, `document.activeElement.id || (document.activeElement.matches('[data-public-report]') ? 'report' : '')`);
+    assert.equal(focused, expected, 'Result keyboard order differs from visual action order');
+    resultKeyboardOrder.push(focused);
+  }
+  for (const expected of ['report', 'resultReview', 'resultRematch']) {
+    await firstPage.cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+    await firstPage.cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+    assert.equal(await evaluate(cdp, firstPage, `document.activeElement.id || (document.activeElement.matches('[data-public-report]') ? 'report' : '')`), expected, 'Result reverse keyboard order differs from visual action order');
+  }
   assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#eventLog').hidden`), true, 'Automatic result retained the timeline over the final board');
   await click(cdp, secondPage, '#resultReview');
   assert.equal(await evaluate(cdp, secondPage, `document.querySelectorAll('dialog[open]').length`), 0, 'Reviewing the final board exposed stale details');
@@ -1536,7 +1570,7 @@ try {
   await click(cdp, secondPage, '.public-report [data-close]');
   await waitForPage(cdp, secondPage, visibleExpression('#onlineResult[open]'), 'closing report returns to result', options.timeoutMs);
   assert.equal(await evaluate(cdp, secondPage, `document.activeElement.matches('#onlineResult [data-public-report]')`), true, 'Report close lost its result-page entry point');
-  const resultTakeover = { closedStaleDetails: true, closedTimeline: true, reviewBoardUnobstructed: true, intentionalReportReturned: true, reviewScreenshotPath };
+  const resultTakeover = { closedStaleDetails: true, closedTimeline: true, reviewBoardUnobstructed: true, intentionalReportReturned: true, resultKeyboardOrder, reviewScreenshotPath };
   const resultLayouts = await checkDialogLayouts(cdp, firstPage, '#onlineResult', options, roomCode);
   await click(cdp, secondPage, "#resultRematch");
   await waitForPage(cdp, firstPage, textMatchExpression("#resultRematch", "接受再战"), "rival rematch invitation", options.timeoutMs);
