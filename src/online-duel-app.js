@@ -1417,6 +1417,9 @@ function renderBoard(view, model) {
   const canAct = !actionPending && !view.gameOver && !view.machine.responseWindow && state.turn === "player";
   const hand = reconcileHandOrder(state.player.hand, handOrder);
   handOrder = hand.map((card) => card.uid);
+  const focusedHandCard = document.activeElement?.closest("#hand .card[data-card-uid]");
+  const focusedHandDetail = document.activeElement?.matches(".card-detail-entry");
+  const focusedHandIndex = [...elements.hand.children].indexOf(focusedHandCard);
   renderHandCards({
     document, root: elements.hand, cards: hand, assetForCard, started: true, canAct,
     directReorder: true,
@@ -1428,6 +1431,13 @@ function renderBoard(view, model) {
     onCardDoubleClick: (card) => chooseHandCard(card.uid, { directActivate: true }),
     onCardDetail: (card) => showCards([onlineCard(view, card.uid)], card.name)
   });
+  if (focusedHandCard && !elements.handPanel.inert) {
+    const cards = [...elements.hand.querySelectorAll(".card[data-card-uid]")];
+    const next = cards.find(card => card.dataset.cardUid === focusedHandCard.dataset.cardUid)
+      || cards[Math.min(focusedHandIndex, cards.length - 1)];
+    const target = focusedHandDetail ? next?.querySelector(".card-detail-entry") : next;
+    (target || elements.hand).focus({ preventScroll: true });
+  }
   const actionSummary = onlineTurnActionSummary(view);
   if (![...actionSummary.handCardIds.map((id) => `hand:${id}`), ...actionSummary.attackCardIds.map((id) => `field:${id}`)].includes(locatedReadyCardId)) locatedReadyCardId = null;
   elements.handPanel.dataset.readyCount = String(actionSummary.total);
@@ -2432,12 +2442,14 @@ elements.inspectorBackdrop.addEventListener("click", (event) => {
 });
 elements.cardInspector.addEventListener("click", (event) => { if (event.target === elements.cardInspector) closeInspector(); });
 elements.cardInspector.addEventListener("close", () => {
+  if (elements.cardInspector.open) return;
   document.body.dataset.onlineOverlay = "none";
   const returnPoint = inspectorReturnFocus;
   inspectorReturnFocus = null;
   const available = target => Boolean(target?.isConnected
     && target.matches("button,[href],input,select,textarea,[tabindex]")
     && !target.matches(":disabled") && !target.closest("[hidden],[inert]") && target.getClientRects().length);
+  if (available(document.activeElement) && !elements.cardInspector.contains(document.activeElement)) return;
   let target = returnPoint?.element;
   if (!available(target) && returnPoint?.handCardId) {
     const card = [...elements.hand.querySelectorAll(".card[data-card-uid]")].find(card => card.dataset.cardUid === returnPoint.handCardId);
@@ -2465,6 +2477,7 @@ elements.hand.addEventListener("keydown", (event) => {
   const card = event.target.closest(".card[data-card-uid]");
   if (!card) return;
   event.preventDefault();
+  if (event.repeat) return;
   const cardId = card.dataset.cardUid;
   const model = onlineSelectionModel(client.view, selection);
   if (selection?.cardId === cardId && model?.action) void sendAction(model.action);

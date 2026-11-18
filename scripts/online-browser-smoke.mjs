@@ -474,6 +474,43 @@ async function stageHistory(cdp, page) {
   return evaluate(cdp, page, `(window.__onlineStageHistory || []).map(({ key, ...entry }) => entry)`);
 }
 
+async function pressPageKey(page, key, code, windowsVirtualKeyCode, extra = {}) {
+  const text = key === 'Enter' ? '\r' : key === ' ' ? ' ' : '';
+  await page.cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode, ...(text ? { text } : {}), ...extra });
+  await page.cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode, modifiers: extra.modifiers || 0 });
+}
+
+async function exerciseHandKeyboard(cdp, page, options, roomCode) {
+  const before = await evaluate(cdp, page, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`);
+  await page.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  await click(cdp, page, '#hand .card[data-card-id="solar-knight"] .card-detail-entry');
+  await pressPageKey(page, 'Escape', 'Escape', 27);
+  await pressPageKey(page, 'Tab', 'Tab', 9, { modifiers: 8 });
+  assert.equal(await evaluate(cdp, page, `document.activeElement.dataset.cardId`), 'solar-knight');
+  const states = [];
+  for (const [key, code, keyCode] of [['Enter', 'Enter', 13], [' ', 'Space', 32]]) {
+    await pressPageKey(page, key, code, keyCode);
+    await pressPageKey(page, key, code, keyCode, { autoRepeat: true });
+    const selected = await evaluate(cdp, page, `({ focused: document.activeElement.dataset.cardId, tag: document.activeElement.tagName, id: document.activeElement.id, visibility: document.visibilityState,
+      selected: document.activeElement.classList.contains('selected'),
+      outline: parseFloat(getComputedStyle(document.activeElement).outlineWidth),
+      busy: document.querySelector('#handCommand').getAttribute('aria-busy'),
+      monsters: document.querySelectorAll('#playerField .slot[data-card-uid]').length })`);
+    assert.equal(selected.focused, 'solar-knight', `Selecting a hand card lost its keyboard cursor (${code}): ${JSON.stringify(selected)}`);
+    assert.ok(selected.selected && selected.outline >= 2, 'Keyboard selection lost its visible focus');
+    assert.equal(selected.busy, 'false', 'Holding a key confirmed a command');
+    assert.equal(selected.monsters, 0, 'Holding a key summoned a monster');
+    if (key === 'Enter') await writeFile(path.join(options.artifactDir, `online-hand-keyboard-mobile-${roomCode}.png`), Buffer.from((await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+    await pressPageKey(page, 'Escape', 'Escape', 27);
+    assert.equal(await evaluate(cdp, page, `document.activeElement.dataset.cardId === 'solar-knight' && !document.activeElement.classList.contains('selected')`), true, 'Canceling lost its hand cursor');
+    states.push({ key: code, ...selected, cancelPreservedFocus: true });
+  }
+  assert.deepEqual(await evaluate(cdp, page, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`), before, 'Keyboard selection or cancellation consumed a card');
+  await page.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, page, 'innerWidth > 1040', 'keyboard hand desktop restored', options.timeoutMs);
+  return { states, heldKeysIgnored: true, canceledWithoutPlaying: true };
+}
+
 async function checkInspectorLayouts(cdp, page, options, roomCode, label) {
   const original = await evaluate(cdp, page, `({ width: innerWidth, height: innerHeight })`);
   const layouts = [];
@@ -1307,6 +1344,7 @@ try {
   const workspaceScreenshotPath = path.join(options.artifactDir, `online-workspace-desktop-${roomCode}.png`);
   await writeFile(workspaceScreenshotPath, Buffer.from(workspaceScreenshot.data, "base64"));
   await click(cdp, firstPage, "#choiceCancelBtn");
+  const keyboardHand = await exerciseHandKeyboard(cdp, firstPage, options, roomCode);
 
   await click(cdp, firstPage, '#hand .card[data-card-id="twin-summon"]');
   await click(cdp, firstPage, '#hand .card.selected .card-detail-entry');
@@ -1314,7 +1352,14 @@ try {
   await click(cdp, firstPage, '#inspectorClose');
   assert.deepEqual(await evaluate(cdp, firstPage, `[...document.querySelectorAll('#hand .card')].map(card => card.dataset.cardUid)`), openingHandIds, "Spell detail click activated the spell");
   await click(cdp, firstPage, '#choiceCancelBtn');
-  await doubleClickText(cdp, firstPage, "#hand .card", "双重召唤");
+  await click(cdp, firstPage, '#hand .card[data-card-id="twin-summon"] .card-detail-entry');
+  await pressPageKey(firstPage, 'Escape', 'Escape', 27);
+  await pressPageKey(firstPage, 'Tab', 'Tab', 9, { modifiers: 8 });
+  await pressPageKey(firstPage, 'Enter', 'Enter', 13);
+  await pressPageKey(firstPage, 'Enter', 'Enter', 13);
+  await waitForPage(cdp, firstPage, `!document.querySelector('#hand .card[data-card-id="twin-summon"]') && document.activeElement.matches('#hand > .card')`, 'keyboard confirmation plays once and advances the cursor', options.timeoutMs);
+  keyboardHand.afterConfirmation = await evaluate(cdp, firstPage, `({ focusedCard: document.activeElement.dataset.cardId, handCount: document.querySelectorAll('#hand > .card').length })`);
+  assert.equal(keyboardHand.afterConfirmation.handCount, openingHandIds.length - 1, 'Keyboard confirmation played more than one card');
   await waitForPage(cdp, firstPage, textMatchExpression("#actionStage", "双重召唤"), "spell action stage", options.timeoutMs);
   await waitForPage(cdp, firstPage, textMatchExpression("#hand .card.action-ready", "日冕骑士"), "solar knight action", options.timeoutMs);
   await doubleClickText(cdp, firstPage, "#hand .card.action-ready", "日冕骑士");
@@ -1737,7 +1782,7 @@ try {
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
   const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, inspectorCloseFocus, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
-  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
+  await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, keyboardHand, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
   console.log(`screenshot: ${screenshotPath}`);
   console.log(`stage report: ${reportPath}`);
