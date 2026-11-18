@@ -1012,6 +1012,21 @@ function cancelSelection() {
   return true;
 }
 
+function cancelChoice() {
+  if (actionPending || !selection) return false;
+  const view = client.view;
+  if (selection.actionType !== "DECLARE_ATTACK"
+    || !view.players[view.viewerSeatId].monsterZone.some(card => card?.id === selection.cardId)) return cancelSelection();
+  clearEndTurnConfirmation();
+  selection = selectOnlineCard(view, selection.cardId);
+  directActivationTracker.reset();
+  playSound("click");
+  render(view);
+  [elements.fieldAttackBtn, elements.fieldModeBtn, elements.fieldDetailBtn]
+    .find(button => !button.disabled && button.getClientRects().length && !button.closest("[hidden],[inert]"))?.focus({ preventScroll: true });
+  return true;
+}
+
 function closeInspector() {
   if (elements.cardInspector.open) elements.cardInspector.close();
 }
@@ -1591,7 +1606,7 @@ function renderCommands(view, model) {
   const attackDecision = isAttack ? onlineAttackDecisionView(view, model) : null;
   renderOnlineAttackPreview(document, elements.onlineBattlePreview, attackDecision);
   elements.choiceCancelBtn.disabled = actionPending;
-  elements.choiceCancelBtn.textContent = tributeDecision ? "取消召唤" : "取消";
+  elements.choiceCancelBtn.textContent = isAttack ? "返回操作" : tributeDecision ? "取消召唤" : "取消";
   elements.choiceActions.classList.toggle("target-choice", interaction.choice.target);
   elements.choiceActions.classList.toggle("online-attack-choice", isAttack);
   elements.choiceActions.classList.toggle("online-effect-choice", Boolean(effectDecision || tributeDecision));
@@ -2401,7 +2416,8 @@ elements.onlineForfeit.addEventListener("cancel", (event) => {
 });
 elements.connectionRetry.addEventListener("click", () => { recoveryFailed = false; reconnectAttempt = 0; void attemptReconnect({ immediate: true }); });
 elements.connectionLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
-for (const id of ["fieldCancelBtn", "choiceCancelBtn"]) elements[id].addEventListener("click", cancelSelection);
+elements.fieldCancelBtn.addEventListener("click", cancelSelection);
+elements.choiceCancelBtn.addEventListener("click", cancelChoice);
 elements.fieldAttackBtn.addEventListener("click", prepareSelectedAttack);
 elements.fieldModeBtn.addEventListener("click", () => sendAction(onlineCardActions(client.view, selection?.cardId).find((action) => action.type === "CHANGE_MONSTER_MODE")));
 elements.fieldDetailBtn.addEventListener("click", () => { const card = onlineCard(client.view, selection?.cardId); if (card) showCards([card], card.name); });
@@ -2557,7 +2573,7 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   if (!elements.recoveryBrief.hidden) hideRecoveryBrief({ focus: true });
-  else cancelSelection();
+  else cancelChoice();
 });
 elements.roomCodeInput.value = new URLSearchParams(window.location.search).get("room") || "";
 renderSoundButton();
