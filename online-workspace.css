@@ -662,3 +662,33 @@ body[data-online-status] #app .duel-table #duelHint {
 @media (orientation: landscape) and (max-height: 400px) and (max-width: 1040px) {
   body[data-online-status] #app .duel-table #duelHint { min-height: 28px; padding: 4px 8px; font-size: 12px; line-height: 1.35; }
 }
+
+@media (orientation: landscape) and (max-height: 360px) and (max-width: 640px) {
+  body[data-online-status] #app .duel-table .field {
+    --support-track-size: 23px;
+    top: 52px;
+    gap: 3px;
+  }
+  body[data-online-status] #app .duel-table .zone-row { column-gap: 3px; }
+  body[data-online-status] #app .duel-table .slot:has(.field-monster-card) { padding: 1px; }
+  body[data-online-status] #app .duel-table .field-monster-card {
+    grid-template-columns: minmax(0, 1fr) minmax(36px, 62%);
+    grid-template-rows: 12px minmax(0, 1fr);
+    padding: 1px;
+  }
+  body[data-online-status] #app .duel-table .field-monster-card .card-head { grid-area: 1 / 1 / 2 / -1; }
+  body[data-online-status] #app .duel-table .field-monster-card .art { grid-area: 2 / 1; }
+  body[data-online-status] #app .duel-table .field-monster-card .stats {
+    grid-area: 2 / 2;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    align-self: stretch;
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+  body[data-online-status] #app .duel-table .field-monster-card .stat { padding: 0; font-size: 7.5px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-rail,
+  body[data-online-status] #app .duel-table .slot .field-selection-chip { display: none; }
+  body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #playerField .slot[data-attack-state="ready"]::before { content: none; }
+}

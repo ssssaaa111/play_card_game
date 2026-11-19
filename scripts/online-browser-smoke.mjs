@@ -1465,12 +1465,12 @@ try {
         }) };
     })
   }))()`);
-  const assertFieldCards = (layout) => {
+  const assertFieldCards = (layout, { shortLandscape = false } = {}) => {
     assert.ok(layout.scrollWidth <= layout.width, `Field overflow at ${layout.width}px`);
     assert.equal(layout.cards.length, 2);
     for (const card of layout.cards) {
       assert.ok(card.artHeight >= 16, `${card.name} art collapsed at ${layout.width}px`);
-      assert.ok(card.statusHeight >= 8, `${card.name} action state disappeared at ${layout.width}px`);
+      if (!shortLandscape) assert.ok(card.statusHeight >= 8, `${card.name} action state disappeared at ${layout.width}px`);
       assert.equal(card.faceTransform, "none", `${card.name} text rotated with defense art`);
       assert.equal(card.statsTransform, "none");
       assert.equal(card.stats.length, 2);
@@ -1510,6 +1510,16 @@ try {
       await writeFile(path.join(options.artifactDir, `online-field-cards-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true })).data, "base64"));
     }
   }
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 568, height: 320, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, 'innerWidth === 568 && innerHeight === 320', 'short landscape field-card viewport', options.timeoutMs);
+  await click(cdp, firstPage, '#playerField .slot[data-monster-state="defense"]');
+  await waitForPage(cdp, firstPage, visibleExpression('#fieldActionBar'), 'selected defense card in short landscape', options.timeoutMs);
+  fieldCardLayout.shortLandscape = await readFieldCards();
+  assertFieldCards(fieldCardLayout.shortLandscape, { shortLandscape: true });
+  assert.equal(fieldCardLayout.shortLandscape.cards[0].defense, true);
+  await checkGuidanceLayout(cdp, firstPage);
+  await writeFile(path.join(options.artifactDir, `online-field-cards-568x320-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await click(cdp, firstPage, '#fieldCancelBtn');
   await firstPage.cdp.send("Emulation.clearDeviceMetricsOverride");
   await waitForPage(cdp, firstPage, `innerWidth > 1040`, "field-card desktop viewport restored", options.timeoutMs);
 
