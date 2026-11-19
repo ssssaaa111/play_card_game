@@ -25,7 +25,7 @@ const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
   "app", "onlineTools", "onlineToolsToggle", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
   "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "roomDeckSelect", "roomDeckRefresh", "roomDeckStatus", "roomDeckError", "spectatorConsent", "spectatorStatus", "watchRoomLink", "watchEntry", "onlineSpectatorCount", "duelPanel", "aiPanel", "playerPanel",
-  "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
+  "duelField", "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
   "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "handNavigation", "handPrevious", "handNext", "handVisibleRange", "duelHint", "duelError", "versusStage", "versusPhase",
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveLabel", "rivalGraveCount", "playerGraveLabel", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
@@ -1354,6 +1354,9 @@ function renderDuelist(root, view, seatId, rival) {
 function renderBoard(view, model) {
   const state = onlineBoardState(view, selection);
   state.pendingTrapChoice = trapChoice;
+  const focusedSlot = document.activeElement?.closest(".slot,.trap-slot");
+  const focusedZone = [elements.aiField, elements.aiTraps, elements.playerField, elements.playerTraps]
+    .find(root => focusedSlot && root.contains(focusedSlot));
   for (const owner of ["ai", "player"]) {
     const duelist = state[owner];
     const seatId = owner === "player" ? view.viewerSeatId : view.opponentSeatId;
@@ -1429,6 +1432,10 @@ function renderBoard(view, model) {
     slot?.setAttribute("aria-pressed", "true");
   }
   for (const slot of elements.playerField.querySelectorAll(".tribute-selected")) slot.setAttribute("aria-pressed", "true");
+  if (focusedZone && !focusedZone.closest("[hidden],[inert]")) {
+    const slot = [...focusedZone.children].find(element => element.dataset.index === focusedSlot.dataset.index);
+    if (slot && !slot.disabled) slot.focus({ preventScroll: true });
+  }
   const canAct = !actionPending && !view.gameOver && !view.machine.responseWindow && state.turn === "player";
   const hand = reconcileHandOrder(state.player.hand, handOrder);
   handOrder = hand.map((card) => card.uid);
@@ -2487,6 +2494,11 @@ elements.hand.addEventListener("keydown", (event) => {
   event.preventDefault();
   if (event.key === "Home" || event.key === "End") scrollHandTo(event.key === "Home" ? 0 : elements.hand.scrollWidth);
   else browseHand(event.key === "ArrowRight" ? 1 : -1);
+});
+elements.duelField.addEventListener("keydown", (event) => {
+  if (!["Enter", " "].includes(event.key) || !event.target.matches(".slot,.trap-slot")) return;
+  if (event.repeat) event.preventDefault();
+  else directActivationTracker.reset();
 });
 elements.hand.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key) || event.target.closest("button")) return;

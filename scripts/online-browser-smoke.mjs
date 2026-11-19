@@ -511,6 +511,34 @@ async function exerciseHandKeyboard(cdp, page, options, roomCode) {
   return { states, heldKeysIgnored: true, canceledWithoutPlaying: true };
 }
 
+async function exerciseFieldKeyboard(cdp, page, options, roomCode) {
+  await page.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  await click(cdp, page, '#playerField .slot[data-index="0"]');
+  await pressPageKey(page, 'Escape', 'Escape', 27);
+  const revision = await evaluate(cdp, page, `document.querySelector('#app').dataset.revision`);
+  const states = [];
+  for (const [key, code, keyCode] of [['Enter', 'Enter', 13], [' ', 'Space', 32]]) {
+    await pressPageKey(page, key, code, keyCode);
+    await pressPageKey(page, key, code, keyCode, { autoRepeat: true });
+    const selected = await evaluate(cdp, page, `({ zone: document.activeElement.parentElement.id, index: document.activeElement.dataset.index,
+      outline: parseFloat(getComputedStyle(document.activeElement).outlineWidth),
+      menuVisible: !document.querySelector('#fieldActionBar').hidden, previewHidden: document.querySelector('#choiceActions').hidden })`);
+    assert.equal(selected.zone, 'playerField', 'Field selection lost its keyboard cursor');
+    assert.equal(selected.index, '0');
+    assert.ok(selected.menuVisible && selected.previewHidden && selected.outline >= 2, 'Holding a field key changed selection or opened an attack');
+    await pressPageKey(page, key, code, keyCode);
+    assert.equal(await evaluate(cdp, page, `document.querySelector('#fieldActionBar').hidden && document.querySelector('#choiceActions').hidden`), true, 'Independent keyboard presses were treated as a double-click attack');
+    states.push({ key: code, ...selected, secondPressCanceled: true });
+  }
+  assert.equal(await evaluate(cdp, page, `document.querySelector('#app').dataset.revision`), revision, 'Field keyboard selection sent a server action');
+  await writeFile(path.join(options.artifactDir, `online-field-keyboard-mobile-${roomCode}.png`), Buffer.from((await page.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await pressPageKey(page, 'Tab', 'Tab', 9);
+  assert.equal(await evaluate(cdp, page, `document.activeElement.parentElement.id === 'playerField' && document.activeElement.dataset.index === '1'`), true, 'Tab restarted instead of moving to the next slot');
+  await page.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, page, 'innerWidth > 1040', 'field keyboard desktop restored', options.timeoutMs);
+  return { states, revisionUnchanged: true, tabContinued: true };
+}
+
 async function checkInspectorLayouts(cdp, page, options, roomCode, label) {
   const original = await evaluate(cdp, page, `({ width: innerWidth, height: innerHeight })`);
   const layouts = [];
@@ -1316,6 +1344,9 @@ try {
   handLayouts.narrowSelected = await checkHandLayout(cdp, firstPage);
   await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await click(cdp, firstPage, "#playerField .placement-candidate:nth-child(5)");
+  await pressPageKey(firstPage, ' ', 'Space', 32);
+  await pressPageKey(firstPage, ' ', 'Space', 32, { autoRepeat: true });
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.parentElement.id === 'playerField' && document.activeElement.dataset.index === '4'`), true, 'Selecting a summon destination lost its keyboard cursor');
   const selectionAppearance = await evaluate(cdp, firstPage, `(() => {
     const selected = document.querySelector("#playerField .online-placement-selected");
     const candidate = document.querySelector("#playerField .placement-candidate:not(.online-placement-selected)");
@@ -1517,6 +1548,7 @@ try {
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, 'innerWidth > 1040 && innerWidth < 1920', 'field-card desktop viewport restored after 4K check', options.timeoutMs);
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-attack-state="ready"]'), "attack-ready field highlight", options.timeoutMs);
+  const keyboardField = await exerciseFieldKeyboard(cdp, firstPage, options, roomCode);
   await click(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await click(cdp, firstPage, '#fieldAttackBtn');
   await waitForPage(cdp, firstPage, visibleExpression('.online-attack-preview[data-preview-mode="direct"]'), "compact direct-attack decision", options.timeoutMs);
@@ -1757,6 +1789,11 @@ try {
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').hidden`), true, 'Unique target rendered a redundant candidate list');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), false);
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('.online-attack-outcome').textContent`), /预计造成 800 伤害.*4000 → 3200/);
+  await click(cdp, firstPage, '#aiField .slot.attack-target');
+  await pressPageKey(firstPage, 'Enter', 'Enter', 13);
+  await pressPageKey(firstPage, 'Enter', 'Enter', 13, { autoRepeat: true });
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.parentElement.id === 'aiField' && document.activeElement.getAttribute('aria-pressed') === 'true'`), true, 'Selecting an attack target lost its keyboard cursor');
+  keyboardField.targetPreservedFocus = true;
   await click(cdp, firstPage, '#choiceCancelBtn');
   assert.equal(await evaluate(cdp, firstPage, `!document.querySelector('#fieldActionBar').hidden && document.querySelector('#fieldActionName').textContent === '日冕骑士'`), true, 'Unique-target preview lost its attacker on return');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`), /4000 \/ 4000/);
@@ -1805,7 +1842,7 @@ try {
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, attackPreviewReturn, inspectorCloseFocus, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, keyboardField, attackPreviewReturn, inspectorCloseFocus, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, keyboardHand, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
