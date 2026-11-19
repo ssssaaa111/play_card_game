@@ -57,6 +57,29 @@ function snapshotAssert(condition) {
 const nonnegativeInteger = (value) => Number.isSafeInteger(value) && value >= 0;
 const remainingTime = (deadline, remaining, now) => deadline == null ? remaining : Math.max(0, deadline - now);
 
+// Older servers omitted room finalization when an automatic turn draw was lethal.
+// Accept only that recorded event sequence; unrelated snapshot mismatches still fail closed.
+function unrecordedTimeoutResult(snapshot, state) {
+  if (snapshot.status !== "playing" || !state?.gameOver || state.turn.phase !== "draw"
+    || snapshot.recordedDuelNumber !== snapshot.duelNumber - 1 || snapshot.series.completed !== snapshot.recordedDuelNumber
+    || snapshot.turnTimer != null || snapshot.responseTimer != null) return false;
+  const events = state.events.slice(-10);
+  const types = ["TURN_ENDED", "COMMAND_DISPATCHED", "TURN_STARTED", "ACTION_WINDOW_OPENED", "COMMAND_DISPATCHED",
+    "CARDS_DRAWN", "DRAW_FAILED", "DAMAGE_DEALT", "GAME_OVER_DECLARED", "TURN_DRAW_RESOLVED"];
+  if (events.length !== types.length || events.some((event, index) => event.type !== types[index])) return false;
+  const [ended, , started, , , , failed, damage, declared, draw] = events;
+  const { gameOver } = state;
+  return ended.reason === "online-turn-timeout" && ended.endedBy === "timeout"
+    && ended.nextPlayerId === draw.playerId && started.playerId === draw.playerId && state.turn.playerId === draw.playerId
+    && failed.reason === "turn" && failed.playerId === draw.playerId && damage.playerId === draw.playerId
+    && state.players[draw.playerId]?.lp === 0 && draw.phaseAdvanced === false
+    && gameOver.reason === "lp-zero" && declared.reason === gameOver.reason
+    && gameOver.triggerEventId === damage.id && declared.triggerEventId === damage.id
+    && gameOver.winnerId === declared.winnerId && ROOM_SEAT_IDS.includes(gameOver.winnerId)
+    && gameOver.loserIds.length === 1 && gameOver.loserIds[0] === draw.playerId
+    && declared.loserIds?.length === 1 && declared.loserIds[0] === draw.playerId;
+}
+
 export class DuelRoom {
   constructor({
     code,
@@ -153,10 +176,11 @@ export class DuelRoom {
       });
     }
     const engine = snapshot.state ? new GameEngine(snapshot.state) : null;
+    const pendingTimeoutResult = unrecordedTimeoutResult(snapshot, engine?.getState());
     snapshotAssert(snapshot.status === "waiting" ? !engine && snapshot.duelNumber === 0 : Boolean(engine) && snapshot.duelNumber > 0);
     if (engine) {
       snapshotAssert(Object.keys(engine.getState().players).sort().join(",") === "p1,p2");
-      snapshotAssert(Boolean(engine.getState().gameOver) === (snapshot.status === "finished"));
+      snapshotAssert(Boolean(engine.getState().gameOver) === (snapshot.status === "finished") || pendingTimeoutResult);
       snapshotAssert(snapshot.status !== "playing" || seats.size === 2);
       snapshotAssert(snapshot.recordedDuelNumber === (snapshot.status === "finished" ? snapshot.duelNumber : snapshot.duelNumber - 1));
     }
@@ -203,6 +227,11 @@ export class DuelRoom {
       snapshotAssert(this.turnTimerPlayerId === snapshot.turnTimer.playerId && snapshot.turnTimer.remainingMs <= this.turnTimeoutMs);
       this.turnDeadlineAt = null;
       this.turnRemainingMs = snapshot.turnTimer.remainingMs;
+    }
+    if (pendingTimeoutResult) {
+      this.status = "finished";
+      this.#recordDuelResult();
+      this.#clearDisconnectDeadlines();
     }
     // Reconnection changes the projection; old pending choices must not reuse the saved revision.
     this.#touch();
@@ -721,6 +750,10 @@ export class DuelRoom {
       endedBy: "timeout",
       endedAt: this.now()
     });
+    if (this.engine.getState().gameOver) {
+      this.status = "finished";
+      this.#recordDuelResult();
+    }
     this.#touch();
     return true;
   }

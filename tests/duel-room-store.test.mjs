@@ -162,6 +162,94 @@ test("finished results and one accepted rematch survive a second service instanc
   assert.equal(restored.series.completed, 2);
 });
 
+function lethalTimeoutFixture(t) {
+  const f = fixture(t, { turnTimeoutMs: 5_000, createState: options => {
+    const state = createOnlineDuelState(options);
+    state.players.p2.grave.push(...state.players.p2.deck.splice(0));
+    state.players.p2.lp = 200;
+    return state;
+  } });
+  start(f.room);
+  f.setNow(15_000);
+  assert.equal(f.room.expireTurnTimeout(), true);
+  return f;
+}
+
+function legacyTimeoutSnapshot(f) {
+  const snapshot = f.room.toSnapshot();
+  snapshot.status = "playing";
+  snapshot.recordedDuelNumber = 0;
+  snapshot.series = { completed: 0, draws: 0, wins: { p1: 0, p2: 0 } };
+  return snapshot;
+}
+
+test("lethal timeout draw finalizes once and survives restart before a rematch", (t) => {
+  const f = lethalTimeoutFixture(t);
+  const expected = f.room.engine.getState();
+  assert.equal(expected.gameOver.winnerId, "p1");
+  assert.equal(f.room.status, "finished");
+  assert.deepEqual(f.room.series, { completed: 1, draws: 0, wins: { p1: 1, p2: 0 } });
+  assert.equal(f.room.recordedDuelNumber, 1);
+  assert.equal(f.room.turnTimeoutView(), null);
+  assert.equal(f.room.responseTimeoutView(), null);
+  assert.equal(f.room.expireTurnTimeout(), false);
+  f.store.save();
+  const restored = f.reload();
+  assert.deepEqual(restored.engine.getState(), expected);
+  assert.deepEqual(restored.series, f.room.series);
+  f.resume(restored);
+  restored.requestRematch("one-new");
+  restored.requestRematch("two-new");
+  assert.equal(restored.duelNumber, 2);
+  assert.equal(restored.status, "playing");
+  assert.equal(restored.viewFor("p1").turn.playerId, "p2");
+  assert.equal(restored.series.completed, 1);
+});
+
+test("legacy unrecorded timeout results restore without replaying damage or counting twice", (t) => {
+  const f = lethalTimeoutFixture(t);
+  const snapshot = legacyTimeoutSnapshot(f);
+  const content = JSON.stringify({ version: 1, rooms: [snapshot] });
+  writeFileSync(f.filePath, content);
+  const store = new DuelRoomStore(f.settings), restored = store.require(f.room.code);
+  assert.equal(readFileSync(f.filePath, "utf8"), content, "Loading must not overwrite the original snapshot");
+  assert.deepEqual(restored.engine.getState(), snapshot.state);
+  assert.equal(restored.status, "finished");
+  assert.deepEqual(restored.series, { completed: 1, draws: 0, wins: { p1: 1, p2: 0 } });
+  assert.equal(restored.recordedDuelNumber, 1);
+  assert.equal(restored.turnTimeoutView(), null);
+  assert.equal(restored.disconnectTimeoutDelay(), null);
+  store.save();
+  const reloaded = f.reload();
+  assert.deepEqual(reloaded.series, restored.series);
+  assert.deepEqual(reloaded.engine.getState(), snapshot.state);
+  f.resume(reloaded);
+  assert.equal(reloaded.publicHistoryFor("one-new").entries.filter(event => event.type === "GAME_OVER_DECLARED").length, 1);
+  reloaded.requestRematch("one-new");
+  reloaded.requestRematch("two-new");
+  assert.equal(reloaded.duelNumber, 2);
+  assert.equal(reloaded.series.completed, 1);
+});
+
+test("legacy timeout repair rejects unrelated or contradictory result metadata", (t) => {
+  const f = lethalTimeoutFixture(t);
+  const original = legacyTimeoutSnapshot(f);
+  for (const mutate of [
+    snapshot => { snapshot.state.events.findLast(event => event.type === "TURN_ENDED").reason = "manual"; },
+    snapshot => { snapshot.state.events.at(-1).phaseAdvanced = true; },
+    snapshot => { snapshot.state.gameOver.winnerId = "p2"; },
+    snapshot => { snapshot.series.completed = 1; snapshot.series.draws = 1; },
+    snapshot => { snapshot.turnTimer = { playerId: "p2", remainingMs: 1_000 }; }
+  ]) {
+    const snapshot = structuredClone(original);
+    mutate(snapshot);
+    const content = JSON.stringify({ version: 1, rooms: [snapshot] });
+    writeFileSync(f.filePath, content);
+    assert.throws(() => new DuelRoomStore(f.settings), { code: "ROOM_STORAGE_FAILED" });
+    assert.equal(readFileSync(f.filePath, "utf8"), content);
+  }
+});
+
 test("store expiry uses saved activity time and ignores incomplete temporary writes", (t) => {
   const f = fixture(t); f.store.save();
   writeFileSync(`${f.filePath}.tmp`, "interrupted write");
