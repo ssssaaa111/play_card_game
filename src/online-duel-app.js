@@ -59,6 +59,7 @@ let observedReceiptRoomCode = null;
 let lastObservedEventId = 0;
 let actionReceipt = null;
 let pendingBattleReceipt = null;
+let pendingAttackFocus = null;
 let actionReceiptTimer = null;
 let lastResponseSoundId = null;
 let responseCountdownInterval = null;
@@ -492,6 +493,7 @@ function syncActionReceipt(view) {
     observedReceiptRoomCode = view.roomCode;
     lastObservedEventId = newestId;
     clearActionReceipt();
+    pendingAttackFocus = null;
     pendingActionCue = null;
     lastFieldPositions = new Map();
     clearActionStage();
@@ -503,6 +505,7 @@ function syncActionReceipt(view) {
   if (freshEvents.length) hideRecoveryBrief();
   const cue = onlineActionCue(view, freshEvents);
   const turnEvent = [...freshEvents].reverse().find((event) => event.type === "TURN_STARTED");
+  if (turnEvent) pendingAttackFocus = null;
   const phaseEvent = !cue ? [...freshEvents].reverse().find((event) => event.type === "PHASE_CHANGED") : null;
   const stageEvent = turnEvent || phaseEvent;
   if (stageEvent) {
@@ -636,6 +639,7 @@ function pumpActionStageQueue() {
   const next = actionStageQueue.shift();
   if (next) showActionStage(next.view, next.cue, next.model);
   else if (releaseBattleReceipt() && client.view) render(client.view);
+  else if (client.view) restoreAttackFocus(client.view);
 }
 
 function showActionStage(view, cue, model) {
@@ -809,6 +813,7 @@ function rebaseRecoveredView(view) {
   observedReceiptRoomCode = view?.roomCode || null;
   lastObservedEventId = newestId;
   pendingActionCue = null;
+  pendingAttackFocus = null;
   selection = null;
   clearActionReceipt();
   clearActionStage();
@@ -1194,6 +1199,7 @@ function chooseCard(id) {
   if (view.machine?.responseWindow) return;
   const next = chooseOnlineCard(view, selection, id);
   if (next === selection) return;
+  pendingAttackFocus = null;
   clearEndTurnConfirmation();
   clearActionReceipt();
   selection = next;
@@ -1258,8 +1264,13 @@ function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
   }
 }
 
-async function sendAction(action) {
+async function sendAction(action, { returnAttackFocus = false } = {}) {
   if (actionPending || chainResolutionActive || !action || connectionPaused()) return;
+  if (!client.view.machine.responseWindow) {
+    pendingAttackFocus = returnAttackFocus && action.type === "DECLARE_ATTACK"
+      ? { attackerId: action.attackerCardId, afterEventId: lastObservedEventId }
+      : null;
+  }
   directActivationTracker.reset();
   hideRecoveryBrief();
   clearEndTurnConfirmation();
@@ -1269,6 +1280,7 @@ async function sendAction(action) {
   return runCommand(async () => {
     try { await client.sendAction(action); }
     catch (error) {
+      if (action.type === "DECLARE_ATTACK") pendingAttackFocus = null;
       if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
       setError(error.message);
     }
@@ -1541,6 +1553,22 @@ function locateNextReadyAction() {
   next.element.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   next.element.classList.remove("online-ready-located");
   requestAnimationFrame(() => next.element.classList.add("online-ready-located"));
+}
+
+function restoreAttackFocus(view) {
+  if (!pendingAttackFocus) return;
+  if (view.gameOver || view.turn.playerId !== view.viewerSeatId) {
+    pendingAttackFocus = null;
+    return;
+  }
+  if (actionPending || view.machine.responseWindow || presentationPending() || connectionPaused(view)) return;
+  const finishedAttack = view.recentEvents.some(event =>
+    event.id > pendingAttackFocus.afterEventId && event.attackerCardId === pendingAttackFocus.attackerId
+    && (event.type === "BATTLE_RESOLVED" || event.type === "ATTACK_CANCELED"));
+  if (!finishedAttack) return;
+  pendingAttackFocus = null;
+  if (document.activeElement !== document.body || selection || document.querySelector("dialog[open]")) return;
+  elements.playerField.querySelector('.slot[data-attack-state="ready"]:not(:disabled)')?.focus({ preventScroll: true });
 }
 
 function renderCommands(view, model) {
@@ -2311,6 +2339,7 @@ function render(view) {
   renderConnectionState(view);
   playPendingActionCue(view);
   if (restoring) showRecoveryBrief(view);
+  restoreAttackFocus(view);
 }
 
 client.on("view", render);
@@ -2407,7 +2436,9 @@ elements.copyRoomCode.addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(url.toString()); elements.copyRoomCode.title = "邀请链接已复制"; }
   catch { elements.copyRoomCode.title = `房间码 ${client.view.roomCode}，可手动复制`; }
 });
-elements.choiceConfirmBtn.addEventListener("click", () => sendAction(onlineSelectionModel(client.view, selection)?.action));
+elements.choiceConfirmBtn.addEventListener("click", (event) => {
+  void sendAction(onlineSelectionModel(client.view, selection)?.action, { returnAttackFocus: event.detail === 0 });
+});
 elements.responseActivate.addEventListener("click", () => respondToTrap(true));
 elements.responsePass.addEventListener("click", () => respondToTrap(false));
 elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());

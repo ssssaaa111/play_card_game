@@ -677,6 +677,8 @@ async function failurePageState(cdp, page) {
         rival: text("#aiPanel"),
         connection: text("#connectionText"),
         command: text("#handCommand"),
+        focus: document.activeElement?.id || document.activeElement?.getAttribute("data-testid") || document.activeElement?.tagName,
+        damageIndicators: document.querySelectorAll('.life-delta').length,
         actionStage: text("#actionStage"),
         chainStage: text("#chainResolutionStage"),
         response: text("#onlineResponse"),
@@ -1617,7 +1619,11 @@ try {
   await click(cdp, secondPage, '#logToggle');
   await click(cdp, secondPage, '#eventLog [data-public-report]');
   await waitForPage(cdp, secondPage, visibleExpression('.public-report[open]'), 'rival reading a report before response', options.timeoutMs);
-  await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
+  await click(cdp, firstPage, '#playerField .slot[data-index="0"]');
+  await click(cdp, firstPage, '#fieldAttackBtn');
+  await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').focus()`);
+  assert.equal(await evaluate(cdp, firstPage, `document.activeElement.id`), 'choiceConfirmBtn');
+  await pressPageKey(firstPage, 'Enter', 'Enter', 13);
   await waitForPage(cdp, firstPage, `(() => Boolean(document.querySelector(".online-response-attacker")) || (document.querySelector("#actionStage")?.innerText || "").includes("直接攻击"))()`, "declared attack presentation", options.timeoutMs);
   await waitForPage(cdp, secondPage, `(() => { const button = document.querySelector("#responseActivate"); return Boolean(button && !button.disabled && button.getClientRects().length); })()`, "trap activation", options.timeoutMs);
   assert.deepEqual(await evaluate(cdp, secondPage, `[...document.querySelectorAll('dialog[open]')].map(dialog => dialog.id || dialog.className)`), ['onlineResponse'], 'Response retained a stale report underneath');
@@ -1666,6 +1672,17 @@ try {
     waitForPage(cdp, spectatorPage, `document.querySelector("#watchPlayers")?.textContent?.includes("2800 LP")`, "spectator final LP", options.timeoutMs)
   ]);
   await Promise.all([firstPage, secondPage].map(page => waitForPage(cdp, page, `document.querySelector('#duelHint').dataset.kind === 'battle-result' && document.querySelector('#duelHint').textContent.includes('1200')`, 'single-trap receipt follows playback', options.timeoutMs)));
+  const battleHandoff = await waitForPage(cdp, firstPage, `(() => {
+    const slot = document.activeElement;
+    const next = slot.matches('#playerField .slot[data-attack-state="ready"]');
+    return next && document.querySelector('#actionStage').hidden && document.querySelector('#chainResolutionStage').hidden
+      && !document.querySelector('.life-delta') ? { next: slot.querySelector('.card-name').textContent, focusVisible: slot.matches(':focus-visible') } : null;
+  })()`, 'keyboard focus moves to a ready attacker after playback', options.timeoutMs);
+  assert.deepEqual(battleHandoff, { next: '疾风术士', focusVisible: true });
+  await writeFile(path.join(options.artifactDir, `online-battle-handoff-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await pressPageKey(firstPage, 'Enter', 'Enter', 13);
+  assert.equal(await evaluate(cdp, firstPage, `!document.querySelector('#fieldActionBar').hidden && document.querySelector('#fieldActionName').textContent === '疾风术士' && document.querySelector('#choiceActions').hidden`), true, 'Selecting the focused monster started another attack');
+  await pressPageKey(firstPage, 'Escape', 'Escape', 27);
   for (const page of [firstPage, secondPage]) {
     assert.equal(await evaluate(cdp, page, `window.__onlineRhythmHistory.some(beat => beat.hintKind === 'battle-result' && (beat.chain || beat.action || beat.damage))`), false, 'Single-trap receipt appeared during playback');
   }
@@ -1842,7 +1859,7 @@ try {
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, keyboardField, attackPreviewReturn, inspectorCloseFocus, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, battleHandoff, keyboardField, attackPreviewReturn, inspectorCloseFocus, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, keyboardHand, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);
