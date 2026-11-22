@@ -1,0 +1,56 @@
+{
+  "basic": {
+    "kind": "custom",
+    "name": "星魂基础扩展 01",
+    "ids": [
+      "star-soul-apprentice", "star-soul-apprentice", "rift-bulwark", "rift-bulwark",
+      "gale-mage", "night-oracle", "solar-knight", "iron-guardian",
+      "sky-raider", "dusk-alchemist", "nova-squire", "aegis-mender",
+      "ember-drake", "star-lancer", "prism-saint", "void-hound",
+      "soul-resonance", "soul-resonance", "seer-call", "seer-call",
+      "element-echo", "star-shield", "war-chant", "twin-summon",
+      "battle-trance", "grave-return", "pierce-line", "eclipse-barrier",
+      "blade-sigil", "aegis-plate", "dispelling-ray",
+      "soul-parry", "soul-parry", "weakening-web", "storm-shift",
+      "guard-sigil", "mirror-snare", "counter-array", "void-lock",
+      "reversal-flare", "chain-nullifier", "summon-flare"
+    ]
+  },
+  "rush": {
+    "kind": "custom",
+    "name": "速攻炎风",
+    "ids": [
+      "ember-drake", "ember-drake", "flare-titan", "flame-captain",
+      "flame-captain", "star-lancer", "star-lancer", "sky-raider",
+      "sky-raider", "gale-mage", "gale-mage", "void-hound",
+      "burst-rune", "burst-rune", "war-chant", "war-chant",
+      "rally-strike", "rally-strike", "seer-call", "twin-summon",
+      "element-echo", "ember-drake", "sky-raider", "flame-captain",
+      "star-lancer", "void-hound", "solar-knight", "mirror-snare",
+      "summon-flare", "summon-flare", "counter-array", "storm-shift",
+      "void-lock", "phantom-switch", "burst-rune", "war-chant",
+      "rally-strike", "seer-call", "twin-summon", "element-echo",
+      "pierce-line", "battle-trance", "star-breach", "flame-gale-burst",
+      "nova-squire", "blade-sigil", "overclock-core", "dispelling-ray",
+      "reversal-flare", "chain-nullifier"
+    ]
+  },
+  "burn": {
+    "kind": "custom",
+    "name": "炎岚效果伤害",
+    "ids": [
+      "ember-drake", "ember-drake", "ember-drake",
+      "gale-mage", "gale-mage", "gale-mage",
+      "seer-call", "seer-call", "seer-call",
+      "last-spark", "last-spark", "last-spark",
+      "burst-rune", "burst-rune", "burst-rune",
+      "flame-gale-burst", "flame-gale-burst", "flame-gale-burst",
+      "grave-return", "grave-return", "grave-return",
+      "star-lancer", "star-lancer", "iron-guardian", "iron-guardian",
+      "twin-summon", "twin-summon", "renewal", "renewal",
+      "element-echo", "element-echo", "storm-shift", "storm-shift",
+      "mirror-snare", "mirror-snare", "guard-sigil", "guard-sigil",
+      "weakening-web", "weakening-web", "chain-nullifier"
+    ]
+  }
+}
