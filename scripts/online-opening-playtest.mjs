@@ -3,15 +3,14 @@ import { createHash } from "node:crypto";
 import { DuelRoom } from "../server/duel-room.js";
 import { battleValue, totalAtk, totalDef } from "../src/rules.js";
 import decks from "./fixtures/online-opening-decks.json" with { type: "json" };
-import { GraveReturnTrialRoom } from "./fixtures/online-grave-return-trial.mjs";
 
 const openingTurns = 4;
 const connections = { p1: "first", p2: "second" };
 const drawEffects = new Set(["draw2", "comebackDraw"]);
 const damageEffects = new Set(["burn500", "fireWindCombo", "pierceLine"]);
 
-function startRoom(first, second, seed, Room) {
-  const room = new Room({ code: "QA2345" });
+function startRoom(first, second, seed, graveReturnTurnLimit) {
+  const room = new DuelRoom({ code: "QA2345", graveReturnTurnLimit });
   for (const [seatId, name] of [["p1", first], ["p2", second]]) {
     room.join({ name, connectionId: connections[seatId] });
     room.setDeck(connections[seatId], decks[name]);
@@ -95,8 +94,8 @@ function playAction(view) {
   return actions.endTurn[0];
 }
 
-function playOpening(first, second, seed, Room) {
-  const room = startRoom(first, second, seed, Room);
+function playOpening(first, second, seed, graveReturnTurnLimit) {
+  const room = startRoom(first, second, seed, graveReturnTurnLimit);
   let turn = 1, eventCount = 0, firstDamageTurn = null, followerDamageBeforeTurn = 0, actionsThisTurn = 0;
   let state = room.engine.getState();
   const passed = [];
@@ -166,10 +165,10 @@ for (const first of Object.keys(decks)) {
   for (const second of Object.keys(decks)) {
     if (first === second) continue;
     const seeds = Array.from({ length: gamesPerOrder }, (_, index) => `${seed}:${first}:${second}:${index}`);
-    const games = seeds.map(gameSeed => playOpening(first, second, gameSeed, DuelRoom));
+    const games = seeds.map(gameSeed => playOpening(first, second, gameSeed, !runGraveReturnTrial));
     const matchup = { first, second, ...summarize(games) };
     if (runGraveReturnTrial) {
-      const candidate = seeds.map(gameSeed => playOpening(first, second, gameSeed, GraveReturnTrialRoom));
+      const candidate = seeds.map(gameSeed => playOpening(first, second, gameSeed, true));
       const damageChanges = games.map((game, index) => candidate[index].followerDamageBeforeTurn - game.followerDamageBeforeTurn);
       matchup.graveReturnTrial = {
         baselineRecoveries: summarizeRecoveries(games),

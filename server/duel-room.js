@@ -5,6 +5,7 @@ import { DuelProtocolError, normalizeCommandEnvelope, normalizeDisplayName, sani
 import { buildDuelView, buildSpectatorView, resolveDuelTargetId } from "../src/duel-view.js";
 import { createOnlineDuelState } from "./online-duel-state.js";
 import { normalizeOnlineDeckChoice } from "../src/online-decks.js";
+import { graveReturnLimit, graveReturnUsed, isGraveReturn } from "../src/online-grave-return.js";
 import { newPublicHistory, appendPublicHistory, historyPage, restorePublicHistories } from "./public-history.js";
 import {
   onlineAttackResponse,
@@ -93,11 +94,14 @@ export class DuelRoom {
     now = () => Date.now(),
     responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS,
     disconnectGraceMs = DEFAULT_DISCONNECT_GRACE_MS,
-    turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS
+    turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
+    graveReturnTurnLimit = true
   } = {}) {
     if (!code) throw new DuelRoomError("Room code is required");
     this.code = code;
     this.createState = createState;
+    // The opening playtest opts out to replay the historical control group.
+    this.graveReturnTurnLimit = graveReturnTurnLimit;
     this.now = now;
     this.revision = 0;
     this.status = "waiting";
@@ -457,17 +461,19 @@ export class DuelRoom {
 
     const rivalSeatId = ROOM_SEAT_IDS.find((seatId) => seatId !== seat.seatId);
     const action = sanitizeOnlineAction(envelope.action, { seatId: seat.seatId, rivalId: rivalSeatId });
+    const state = this.engine.getState();
     const isBattleAction = action.type === "CHANGE_PHASE" || action.type === "DECLARE_ATTACK";
-    if (isBattleAction || action.targetCardId) {
-      const state = this.engine.getState();
-      if (isBattleAction && openingBattleLocked(state)) {
-        throw new DuelRoomError("先手首回合不能进入战斗阶段。", "ILLEGAL_COMMAND");
-      }
-      if (action.targetCardId) action.targetCardId = resolveDuelTargetId(state, seat.seatId, action.targetCardId);
+    if (isBattleAction && openingBattleLocked(state)) {
+      throw new DuelRoomError("先手首回合不能进入战斗阶段。", "ILLEGAL_COMMAND");
     }
+    if (this.graveReturnTurnLimit && action.type === "ACTIVATE_CARD" && isGraveReturn(state.cards[action.cardId])
+        && state.players[seat.seatId].hand.includes(action.cardId) && graveReturnUsed(state, seat.seatId)) {
+      throw new DuelRoomError(graveReturnLimit.reason, "ILLEGAL_COMMAND");
+    }
+    if (action.targetCardId) action.targetCardId = resolveDuelTargetId(state, seat.seatId, action.targetCardId);
     let events;
     try {
-      events = this.#dispatchAction(action);
+      events = this.#dispatchAction(action, state);
     } catch (error) {
       if (error instanceof GameRuleError || error instanceof DuelProtocolError) {
         throw new DuelRoomError(error.message, "ILLEGAL_COMMAND");
@@ -527,6 +533,7 @@ export class DuelRoom {
       duelNumber: this.duelNumber,
       nextFirstPlayerId: this.#nextFirstPlayerId(),
       series: clone(this.series),
+      graveReturnTurnLimit: this.graveReturnTurnLimit,
       seats
     });
     view.turn.openingBattleLocked = openingBattleLocked(state);
@@ -537,9 +544,9 @@ export class DuelRoom {
     return view;
   }
 
-  #dispatchAction(action) {
+  #dispatchAction(action, initialState = this.engine.getState()) {
     // A network command may dispatch several engine actions. Commit all or none.
-    const engine = new GameEngine(this.engine.getState());
+    const engine = new GameEngine(initialState);
     const events = [];
     if (["RESPOND_TRAP", "PASS_ATTACK_RESPONSE"].includes(action.type)) {
       const state = engine.getState();
