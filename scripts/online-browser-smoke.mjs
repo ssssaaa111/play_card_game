@@ -1399,11 +1399,6 @@ try {
   await waitForPage(cdp, firstPage, `(window.__onlineStageHistory || []).some((entry) => entry.kind === "action" && entry.depth >= 1)`, "queued public action", options.timeoutMs);
   await waitForPage(cdp, firstPage, textMatchExpression("#actionStage", "怪兽召唤"), "queued summon stage", options.timeoutMs);
   await waitForPage(cdp, firstPage, visibleExpression("#playerField .slot[data-card-uid]"), "summoned attacker", options.timeoutMs);
-  await waitForPage(cdp, firstPage, `(() => {
-    const slot = document.querySelector('#playerField .slot[data-attack-state="ready"]');
-    if (!slot) return false;
-    return parseFloat(getComputedStyle(slot, "::before").height) < 32;
-  })()`, "compact attack hint without covering card art", options.timeoutMs);
 
   await doubleClickText(cdp, firstPage, "#hand .card.action-ready", "疾风术士");
   let pendingFeedback = null;
@@ -1440,6 +1435,28 @@ try {
   const feedbackScreenshot = await firstPage.cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
   const handFeedbackPath = path.join(options.artifactDir, `online-hand-feedback-${roomCode}.png`);
   await writeFile(handFeedbackPath, Buffer.from(feedbackScreenshot.data, "base64"));
+
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  const openingRevision = await evaluate(cdp, firstPage, `document.querySelector('#app').dataset.revision`);
+  await doubleClick(cdp, firstPage, '#playerField .slot[data-index="0"]');
+  const openingTurn = await evaluate(cdp, firstPage, `({
+    phase: document.querySelector('#phaseLabel').textContent,
+    label: document.querySelector('#battleButton').textContent,
+    topDisabled: document.querySelector('#battleButton').disabled,
+    monsterDisabled: document.querySelector('#fieldAttackBtn').disabled,
+    previewClosed: document.querySelector('#choiceActions').hidden,
+    hint: document.querySelector('#duelHint').textContent,
+    revision: document.querySelector('#app').dataset.revision
+  })`);
+  assert.ok(openingTurn.topDisabled && openingTurn.monsterDisabled && openingTurn.previewClosed);
+  assert.equal(openingTurn.phase, '主要阶段');
+  assert.equal(openingTurn.label, '首回合禁攻');
+  assert.match(openingTurn.hint, /先手首回合不能攻击/);
+  assert.equal(openingTurn.revision, openingRevision, 'Opening double-click sent a phase or attack command');
+  await writeFile(path.join(options.artifactDir, `online-opening-turn-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await click(cdp, firstPage, '#fieldCancelBtn');
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'opening-turn desktop restored', options.timeoutMs);
 
   // Verify real cards after summoning, including defense and narrow-screen stat legibility.
   const fieldCardLayout = {};
@@ -1525,6 +1542,8 @@ try {
 
   await endTurn(cdp, firstPage, options.timeoutMs);
   await waitForPage(cdp, secondPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "2P turn", options.timeoutMs);
+  assert.equal(await evaluate(cdp, secondPage, `!document.querySelector('#battleButton').disabled`), true, 'The follower could not enter battle on their first turn');
+  openingTurn.followerCanEnterBattle = true;
   const guidanceLayouts = await exerciseGuidanceLayouts(cdp, firstPage, options, roomCode);
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-monster-state="waiting"]'), "rival-turn monster waiting state", options.timeoutMs);
   await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
@@ -1559,7 +1578,10 @@ try {
   await writeFile(path.join(options.artifactDir, `online-field-card-large-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true, clip: largeCardClip })).data, 'base64'));
   await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, 'innerWidth > 1040 && innerWidth < 1920', 'field-card desktop viewport restored after 4K check', options.timeoutMs);
-  await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-attack-state="ready"]'), "attack-ready field highlight", options.timeoutMs);
+  await waitForPage(cdp, firstPage, `(() => {
+    const slot = document.querySelector('#playerField .slot[data-attack-state="ready"]');
+    return slot && parseFloat(getComputedStyle(slot, "::before").height) < 32;
+  })()`, "compact attack hint without covering card art", options.timeoutMs);
   const keyboardField = await exerciseFieldKeyboard(cdp, firstPage, options, roomCode);
   await click(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await click(cdp, firstPage, '#fieldAttackBtn');
@@ -1869,7 +1891,7 @@ try {
   await click(cdp, spectatorPage, "#watchLeave");
   await waitForPage(cdp, firstPage, textMatchExpression("#onlineSpectatorCount", "观众 0"), "spectator left count", options.timeoutMs);
   assert.equal(await evaluate(cdp, spectatorPage, visibleExpression("#watchBoard")), false, "Leaving spectator retained the public board");
-  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, battleHandoff, keyboardField, attackPreviewReturn, inspectorCloseFocus, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
+  const lifecycle = { refreshedPendingResponse: true, refreshedSpectator: true, restoredRematchAcceptance: true, secondPlayerSummoned: true, spectatorLeft: true, openingTurn, battleHandoff, keyboardField, attackPreviewReturn, inspectorCloseFocus, guidanceLayouts, publicReportLayouts, responseLayouts, responseTakeover, resultLayouts, resultTakeover, browserFreezeResumed: true, beforeResume };
   const reportPath = path.join(options.artifactDir, `online-action-stage-${roomCode}.json`);
   await writeFile(reportPath, `${JSON.stringify({ roomCode, screenshotPath, workspaceScreenshotPath, handFeedbackPath, pendingFeedback, fieldScreenshotPath, fieldCardLayout, handLayouts, inspectorLayouts, detailClickBoundary, ordinaryControls, handNavigationChecks, keyboardHand, monsterEffectsPath, attackChoicePath, attackChoiceLayouts, mobileLayout, selectionAppearance, firstStages, secondStages, rhythm, spectatorSummary, lifecycle }, null, 2)}\n`, "utf8");
   console.log(`online-browser-smoke passed (${roomCode}, consent spectator, queued action stage, refreshed trap response, 1200 damage, refreshed rematch, 2P summon)`);

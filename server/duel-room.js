@@ -57,6 +57,12 @@ function snapshotAssert(condition) {
 const nonnegativeInteger = (value) => Number.isSafeInteger(value) && value >= 0;
 const remainingTime = (deadline, remaining, now) => deadline == null ? remaining : Math.max(0, deadline - now);
 
+function openingBattleLocked(state) {
+  // Restored duels that already entered battle can finish their turn.
+  return !state.gameOver && state.turn.phase === "main"
+    && !state.events.some(event => event.type === "TURN_ENDED");
+}
+
 // Older servers omitted room finalization when an automatic turn draw was lethal.
 // Accept only that recorded event sequence; unrelated snapshot mismatches still fail closed.
 function unrecordedTimeoutResult(snapshot, state) {
@@ -451,7 +457,14 @@ export class DuelRoom {
 
     const rivalSeatId = ROOM_SEAT_IDS.find((seatId) => seatId !== seat.seatId);
     const action = sanitizeOnlineAction(envelope.action, { seatId: seat.seatId, rivalId: rivalSeatId });
-    if (action.targetCardId) action.targetCardId = resolveDuelTargetId(this.engine.getState(), seat.seatId, action.targetCardId);
+    const isBattleAction = action.type === "CHANGE_PHASE" || action.type === "DECLARE_ATTACK";
+    if (isBattleAction || action.targetCardId) {
+      const state = this.engine.getState();
+      if (isBattleAction && openingBattleLocked(state)) {
+        throw new DuelRoomError("先手首回合不能进入战斗阶段。", "ILLEGAL_COMMAND");
+      }
+      if (action.targetCardId) action.targetCardId = resolveDuelTargetId(state, seat.seatId, action.targetCardId);
+    }
     let events;
     try {
       events = this.#dispatchAction(action);
@@ -506,7 +519,8 @@ export class DuelRoom {
         spectators: { enabled: this.spectatingAllowed(), count: this.spectators.size }
       };
     }
-    const view = buildDuelView(this.engine.getState(), seatId, {
+    const state = this.engine.getState();
+    const view = buildDuelView(state, seatId, {
       roomCode: this.code,
       revision: this.revision,
       status: this.status,
@@ -515,6 +529,7 @@ export class DuelRoom {
       series: clone(this.series),
       seats
     });
+    view.turn.openingBattleLocked = openingBattleLocked(state);
     view.responseTimer = this.responseTimeoutView();
     view.turnTimer = this.turnTimeoutView();
     view.deckSelection = deckSelection;

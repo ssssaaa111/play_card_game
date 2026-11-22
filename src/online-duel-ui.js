@@ -993,6 +993,7 @@ export function onlineTurnControlView(view, { endTurnArmed = false } = {}) {
   const ownTurn = view?.turn?.playerId === view?.viewerSeatId;
   const blocked = !ownTurn || Boolean(view?.gameOver) || Boolean(view?.machine?.responseWindow) || !view?.legalActions?.can?.endTurn;
   const inBattle = view?.turn?.phase === "battle";
+  const openingLocked = ownTurn && Boolean(view?.turn?.openingBattleLocked);
   const attackCount = summary.attackCardIds.length;
   const confirming = Boolean(endTurnArmed && summary.total > 0 && !blocked);
   return {
@@ -1000,8 +1001,8 @@ export function onlineTurnControlView(view, { endTurnArmed = false } = {}) {
     attackCount,
     requiresEndTurnConfirmation: summary.total > 0,
     battle: {
-      label: inBattle ? "战斗阶段" : attackCount > 0 ? `进入战斗 · ${attackCount} 可攻击` : "进入战斗",
-      title: inBattle ? "当前处于战斗阶段" : attackCount > 0 ? `进入战斗阶段，${attackCount} 只怪兽可以攻击` : "进入战斗阶段"
+      label: openingLocked ? "首回合禁攻" : inBattle ? "战斗阶段" : attackCount > 0 ? `进入战斗 · ${attackCount} 可攻击` : "进入战斗",
+      title: openingLocked ? "先手首回合不能进入战斗阶段。" : inBattle ? "当前处于战斗阶段" : attackCount > 0 ? `进入战斗阶段，${attackCount} 只怪兽可以攻击` : "进入战斗阶段"
     },
     endTurn: {
       confirming,
@@ -1026,7 +1027,7 @@ export function onlineAttackIntent(view, model) {
   const ownTurn = view?.turn?.playerId === view?.viewerSeatId;
   const self = view?.players?.[view?.viewerSeatId];
   const blocked = Boolean(view?.gameOver || view?.machine?.responseWindow || view?.machine?.pendingAttack
-    || view?.machine?.chainLength || view?.seats?.some((seat) => seat.connected === false));
+    || view?.machine?.chainLength || view?.turn?.openingBattleLocked || view?.seats?.some((seat) => seat.connected === false));
   const eligible = Boolean(model?.card?.type === "monster"
     && self?.monsterZone?.some((card) => card?.id === model.card.id)
     && ownTurn && !blocked && model.card.mode !== "defense" && !model.card.used
@@ -1071,6 +1072,7 @@ export function onlineMonsterStatus(view, cardId) {
     return { ...status, detail: `${status.detail}${canChange ? "可先切换为攻击表示。" : card.changedMode ? "本回合已切换过表示。" : "可在主要阶段切换表示。"}` };
   }
   if (["locked", "spent"].includes(status.key)) return status;
+  if (view.turn?.openingBattleLocked) return { key: "locked", label: "首回合禁攻", tone: "locked", detail: "先手首回合不能攻击。" };
   const intent = onlineAttackIntent(view, onlineSelectionModel(view, selectOnlineCard(view, cardId)));
   if (intent.available) return { key: "ready", label: "可攻击", tone: "ready", detail: intent.requiresBattlePhase ? "可自动进入战斗阶段；单击选择目标，双击快捷攻击。" : "单击选择目标，双击快捷攻击。" };
   return view.turn?.phase === "battle"

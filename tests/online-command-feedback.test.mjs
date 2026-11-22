@@ -66,10 +66,11 @@ test('an expired turn explains discarded placement without consuming the selecte
 
 test('selection reset reasons follow actual phase, response, and battle changes while recovery and results retain priority', () => {
   const room = startedRoom();
-  const before = room.viewFor('p1');
+  room.submit('one', { revision: room.revision, commandId: 'pass-opener', action: { type: 'END_TURN' } });
+  const before = room.viewFor('p2');
   const selection = selectOnlineCard(before, before.legalActions.actions.summon[0].cardId);
-  room.submit('one', { revision: before.revision, commandId: 'phase-change', action: { type: 'CHANGE_PHASE', phase: 'battle' } });
-  const battle = room.viewFor('p1');
+  room.submit('two', { revision: before.revision, commandId: 'phase-change', action: { type: 'CHANGE_PHASE', phase: 'battle' } });
+  const battle = room.viewFor('p2');
   assert.match(onlineSelectionResetView(battle, before, selection).text, /已进入战斗阶段，原选择已取消，请重新选择/);
   assert.match(onlineSelectionResetView({ ...battle, turn: before.turn }, before, selection).text, /战况已更新/);
   assert.match(onlineSelectionResetView({ ...battle, machine: { ...battle.machine, responseWindow: { playerId: 'p2' } } }, before, selection).text, /已进入响应/);

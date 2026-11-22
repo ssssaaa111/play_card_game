@@ -19,7 +19,7 @@ import { installPublicReport } from "./public-report.js?v=20261114-network-recov
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineSelectionResetView, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261117-selection-reset-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineSelectionResetView, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261122-opening-turn-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -1667,7 +1667,9 @@ function renderCommands(view, model) {
         : effectDecision ? effectDecision.target ? `${effectDecision.title} · ${effectDecision.target.location}` : effectDecision.title
         : targeting ? model.targetCardId ? `已选目标 · ${cardName(view, model.targetCardId)}` : `选择效果目标 · ${model.targetIds.length} 个可选`
         : prompt;
-  elements.duelHint.textContent = model ? fieldPrompt : endTurnWarning || actionReceipt?.text || elements.commandTitle.textContent;
+  const openingBattleLocked = ownTurn && view.turn.openingBattleLocked;
+  const idleHint = openingBattleLocked ? "先手首回合可部署卡牌，不能进入战斗。" : elements.commandTitle.textContent;
+  elements.duelHint.textContent = model ? fieldPrompt : endTurnWarning || actionReceipt?.text || idleHint;
   elements.duelHint.dataset.kind = selectedField && !attackIntent.available ? "unavailable" : model ? "action" : endTurnWarning ? "turn-warning" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
   elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor || "none" : "none";
   elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type || "none" : "none";
@@ -1678,7 +1680,7 @@ function renderCommands(view, model) {
   elements.battleButton.textContent = turnControl.battle.label;
   elements.battleButton.title = chainResolutionActive ? "连锁演出结束后可继续操作。" : turnControl.battle.title;
   elements.battleButton.dataset.currentPhase = String(inBattle);
-  elements.battleButton.disabled = !canAct || Boolean(selection) || view.turn.phase !== "main" || !view.legalActions.can.endTurn;
+  elements.battleButton.disabled = !canAct || Boolean(selection) || openingBattleLocked || view.turn.phase !== "main" || !view.legalActions.can.endTurn;
   elements.endTurnButton.textContent = chainResolutionActive ? "连锁演出中" : turnControl.endTurn.label;
   elements.endTurnButton.title = chainResolutionActive ? "连锁演出结束后可继续操作。" : turnControl.endTurn.title;
   elements.endTurnButton.dataset.pendingActions = String(turnControl.requiresEndTurnConfirmation);

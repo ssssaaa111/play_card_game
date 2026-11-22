@@ -64,6 +64,7 @@ test("restart preserves card order events and receipts while excluding downtime 
   f.setNow(3_613_000);
   const restored = f.reload();
   assert.deepEqual(restored.engine.getState(), expected);
+  assert.equal(restored.viewFor("p1").turn.openingBattleLocked, true);
   assert.equal(restored.viewFor("p1").turnTimer.remainingMs, 87_000);
   assert.equal(restored.expireTurnTimeout(), false);
   assert.equal(restored.expireDisconnectTimeout(), false);
@@ -78,6 +79,9 @@ test("restart preserves card order events and receipts while excluding downtime 
   assert.deepEqual(restored.submit("one-new", { revision: receipt.revision - 1, commandId: receipt.commandId, action }), { ...receipt, duplicate: true });
   assert.deepEqual(restored.engine.getState(), before);
   assert.throws(() => restored.submit("one-new", { revision: receipt.revision, commandId: "old-choice", action: { type: "END_TURN" } }), { code: "STALE_REVISION" });
+  assert.throws(() => submit(restored, "one-new", { type: "CHANGE_PHASE", phase: "battle" }, "opener-battle"), { code: "ILLEGAL_COMMAND" });
+  submit(restored, "one-new", { type: "END_TURN" }, "pass-opener");
+  assert.equal(restored.viewFor("p2").turn.openingBattleLocked, false);
 });
 
 test("equipment receipts restore their engine effect IDs without applying the bonus twice", (t) => {
@@ -157,6 +161,7 @@ test("finished results and one accepted rematch survive a second service instanc
   restored.requestRematch("two-new");
   assert.equal(restored.duelNumber, 2);
   assert.equal(restored.viewFor("p1").turn.playerId, "p2");
+  assert.equal(restored.viewFor("p2").turn.openingBattleLocked, true);
   assert.equal(restored.viewFor("p1").players.p1.deckCount, 51);
   restored.forfeit("two-new");
   assert.equal(restored.series.completed, 2);
