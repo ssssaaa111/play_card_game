@@ -4,9 +4,9 @@ export function createGraveReturnTrialState(config) {
   return createOnlineDuelState({
     ...config,
     openingHands: {
-      p1: ["grave-return", "grave-return", "solar-knight", "war-chant", "guard-sigil"],
-      p2: ["grave-return", "solar-knight", "gale-mage", "war-chant", "guard-sigil"]
+      p1: ["grave-return", "material-reclaim", "solar-knight", "starwake-recall", "guard-sigil"],
+      p2: ["material-reclaim", "grave-return", "gale-mage", "war-chant", "guard-sigil"]
     },
-    openingGraves: { p1: ["iron-guardian", "mirror-snare"], p2: ["iron-guardian"] }
+    openingGraves: { p1: ["iron-guardian", "mirror-snare", "gale-mage"], p2: ["iron-guardian"] }
   });
 }

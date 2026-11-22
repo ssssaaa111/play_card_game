@@ -54,7 +54,7 @@ function publicCard(card, graveReturnTurnLimit = true) {
     effect: card.effect || "",
     trigger: card.trigger || "",
     text: limitedRecovery ? `${text}${graveReturnRuleText}` : card.type === "trap" ? text.replace("盖放后自动触发：", "盖放后可发动：") : text,
-    ...(limitedRecovery ? { handSummary: "墓地回收 · 抽 1 张 · 同名每回合 1 次" } : {})
+    ...(limitedRecovery ? { handSummary: "回收并抽 1 张 · 每回合共用 1 次" } : {})
   };
 }
 

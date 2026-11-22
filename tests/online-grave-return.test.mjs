@@ -34,29 +34,34 @@ function play(room, seatId, group, template, targetId) {
   return submit(room, seatId, action);
 }
 
-function makeRecoveryAction(room, seatId, targetTemplate) {
+function makeRecoveryAction(room, seatId, targetTemplate, spellTemplate = "grave-return") {
   const { hand, grave } = room.viewFor(seatId).players[seatId];
-  const cardId = hand.find(card => card.templateId === "grave-return").id;
+  const cardId = hand.find(card => card.templateId === spellTemplate).id;
   const targetCardId = grave.find(card => card.templateId === targetTemplate).id;
   return { type: "ACTIVATE_CARD", cardId, targetCardId };
 }
 
-test("the room enforces the name limit across copies and resets it for the next turn and rematch", () => {
+test("the two recovery spells share their limit in both orders and reset on the next turn and rematch", () => {
   const room = start(new DuelRoom({ code: "QA2345", createState: createGraveReturnTrialState }));
+  for (const card of room.viewFor("p1").players.p1.hand.filter(card => card.effect === "graveReturn")) {
+    assert.ok(onlineCardDetailView(card).effectText.endsWith(graveReturnRuleText));
+    assert.match(card.handSummary, /每回合共用 1 次/);
+  }
   const first = makeRecoveryAction(room, "p1", "iron-guardian");
   assert.throws(() => submit(room, "p1", { ...first, targetCardId: "missing" }), { code: "ILLEGAL_COMMAND" });
   const accepted = submit(room, "p1", first);
-  const second = makeRecoveryAction(room, "p1", "mirror-snare");
+  const second = makeRecoveryAction(room, "p1", "mirror-snare", "material-reclaim");
   const view = room.viewFor("p1");
-  const secondCard = view.players.p1.hand.find(card => card.id === second.cardId);
-  assert.ok(onlineCardDetailView(secondCard).effectText.endsWith(graveReturnRuleText));
-  assert.match(secondCard.handSummary, /同名每回合 1 次/);
   assert.equal(onlineHandActionView(view, second.cardId).reason, graveReturnLimit.reason);
   assert.ok(!view.legalActions.actions.activateCard.some(action => action.cardId === second.cardId));
   assert.ok(view.players.p1.hand.some(card => card.id === first.targetCardId));
   assert.throws(() => submit(room, "p1", second), blocked);
   assert.deepEqual(room.viewFor("p1"), view);
   assert.equal(room.submit("p1", accepted).duplicate, true);
+
+  const reviveTarget = view.players.p1.grave.find(card => card.templateId === "gale-mage").id;
+  play(room, "p1", "activateCard", "starwake-recall", reviveTarget);
+  assert.ok(room.viewFor("p1").players.p1.monsterZone.some(card => card?.id === reviveTarget));
 
   const saved = room.toSnapshot();
   const restored = new DuelRoom({ code: room.code, createState: createGraveReturnTrialState }).restoreSnapshot(saved);
@@ -65,7 +70,10 @@ test("the room enforces the name limit across copies and resets it for the next 
   }
   assert.throws(() => submit(restored, "p1", second), blocked);
   submit(restored, "p1", endTurn);
-  submit(restored, "p2", makeRecoveryAction(restored, "p2", "iron-guardian"));
+  submit(restored, "p2", makeRecoveryAction(restored, "p2", "iron-guardian", "material-reclaim"));
+  const reverse = makeRecoveryAction(restored, "p2", "material-reclaim");
+  assert.deepEqual(restored.viewFor("p2").legalActions.unavailableHandActions[reverse.cardId], graveReturnLimit);
+  assert.throws(() => submit(restored, "p2", reverse), blocked);
   submit(restored, "p2", endTurn);
   submit(restored, "p1", second);
   assert.ok(restored.viewFor("p1").players.p1.hand.some(card => card.id === second.targetCardId));
@@ -75,18 +83,18 @@ test("the room enforces the name limit across copies and resets it for the next 
   restored.requestRematch("p2");
   assert.equal(restored.duelNumber, 2);
   assert.equal(restored.viewFor("p2").turn.playerId, "p2");
-  submit(restored, "p2", makeRecoveryAction(restored, "p2", "iron-guardian"));
+  submit(restored, "p2", makeRecoveryAction(restored, "p2", "iron-guardian", "material-reclaim"));
 });
 
-test("an old save keeps its completed activations and applies the limit to the rest of the turn", () => {
+test("an old save counts prior Material Reclaim activations toward the shared limit", () => {
   const createState = config => createOnlineDuelState({
     ...config,
-    openingHands: { p1: ["grave-return", "grave-return", "grave-return", "solar-knight", "war-chant"] },
+    openingHands: { p1: ["material-reclaim", "material-reclaim", "grave-return", "solar-knight", "war-chant"] },
     openingGraves: { p1: ["iron-guardian", "mirror-snare", "gale-mage"] }
   });
   const old = start(new DuelRoom({ code: "QA2345", createState, graveReturnTurnLimit: false }));
-  submit(old, "p1", makeRecoveryAction(old, "p1", "iron-guardian"));
-  submit(old, "p1", makeRecoveryAction(old, "p1", "mirror-snare"));
+  submit(old, "p1", makeRecoveryAction(old, "p1", "iron-guardian", "material-reclaim"));
+  submit(old, "p1", makeRecoveryAction(old, "p1", "mirror-snare", "material-reclaim"));
   const snapshot = old.toSnapshot();
   const restored = new DuelRoom({ code: old.code }).restoreSnapshot(snapshot);
   for (const seatId of ["p1", "p2"]) {
@@ -144,7 +152,7 @@ function fixedDamageOpening(extraDraws, graveReturnTurnLimit = true) {
   return { room, cast, firstRune };
 }
 
-test("the online name limit blocks the known three-Star-Dust-Recovery opener", () => {
+test("the online recovery limit blocks the known three-Star-Dust-Recovery opener", () => {
   const extraDraws = ["grave-return", "grave-return"];
   const baseline = fixedDamageOpening(extraDraws, false);
   for (let round = 0; round < 2; round += 1) {
@@ -166,12 +174,25 @@ test("the online name limit blocks the known three-Star-Dust-Recovery opener", (
   }
 });
 
-test("a different template with the same effect still has its own activation rules", () => {
-  const { room, cast, firstRune } = fixedDamageOpening(["material-reclaim", "material-reclaim"]);
+test("the shared limit blocks the fixed opener that mixes both spells", () => {
+  const extraDraws = ["material-reclaim", "material-reclaim"];
+  const baseline = fixedDamageOpening(extraDraws, false);
   for (let round = 0; round < 2; round += 1) {
-    cast("material-reclaim", firstRune);
-    cast("burst-rune");
+    baseline.cast("material-reclaim", baseline.firstRune);
+    baseline.cast("burst-rune");
   }
-  assert.equal(room.viewFor("p1").players.p2.lp, 0);
-  assert.equal(room.viewFor("p1").gameOver.winnerId, "p1");
+  assert.equal(baseline.room.viewFor("p1").players.p2.lp, 0);
+  assert.equal(baseline.room.viewFor("p1").gameOver.winnerId, "p1");
+
+  const { room } = fixedDamageOpening(extraDraws);
+  const second = makeRecoveryAction(room, "p1", "burst-rune", "material-reclaim");
+  const view = room.viewFor("p1");
+  assert.throws(() => submit(room, "p1", second), blocked);
+  assert.deepEqual(room.viewFor("p1"), view);
+  assert.equal(view.players.p2.lp, 600);
+  assert.equal(view.gameOver, null);
+  assert.ok(!room.engine.getState().events.some(event => ["TURN_ENDED", "ATTACK_DECLARED"].includes(event.type)));
+  submit(room, "p1", endTurn);
+  assert.equal(room.viewFor("p2").turn.playerId, "p2");
+  assert.equal(room.viewFor("p2").players.p2.lp, 600);
 });

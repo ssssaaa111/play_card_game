@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { DuelRoom } from "../server/duel-room.js";
+import { isGraveReturn } from "../src/online-grave-return.js";
 import { battleValue, totalAtk, totalDef } from "../src/rules.js";
 import decks from "./fixtures/online-opening-decks.json" with { type: "json" };
 
@@ -119,7 +120,7 @@ function playOpening(first, second, seed, graveReturnTurnLimit) {
         firstDamageTurn ??= turn;
         if (turn === 1 && event.playerId === "p2") followerDamageBeforeTurn += event.amount;
       }
-      if (turn <= openingTurns && event.type === "CARD_ACTIVATED" && state.cards[event.cardId]?.templateId === "grave-return") {
+      if (turn <= openingTurns && event.type === "CARD_ACTIVATED" && isGraveReturn(state.cards[event.cardId])) {
         recoveries.push({ turn, targetEffect: state.cards[event.targetCardId]?.effect });
       }
     }
