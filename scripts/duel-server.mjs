@@ -55,7 +55,10 @@ const summonResponseDemo = process.argv.includes("--scenario=summon-response");
 const chainResponseDemo = process.argv.includes("--scenario=chain-response");
 const attackChainResponseDemo = process.argv.includes("--scenario=attack-chain-response");
 const multiChainResponseDemo = process.argv.includes("--scenario=multi-chain-response");
-if ((responseDemo || handFeedbackDemo || effectChoiceDemo || tributeChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const graveReturnLimitDemo = process.argv.includes("--scenario=grave-return-limit");
+if ((responseDemo || handFeedbackDemo || effectChoiceDemo || tributeChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo || graveReturnLimitDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const graveReturnTrial = graveReturnLimitDemo ? await import("./fixtures/online-grave-return-trial.mjs") : null;
+const Room = graveReturnTrial?.GraveReturnTrialRoom ?? DuelRoom;
 const demoOpeningHands = tributeChoiceDemo ? {
   p1: ["starfall-colossus", "twin-summon", "solar-knight", "iron-guardian", "weakening-web"],
   p2: ["iron-guardian", "weakening-web", "mirror-snare", "blade-sigil", "twin-summon"]
@@ -81,13 +84,14 @@ const demoOpeningHands = tributeChoiceDemo ? {
     : ["ember-drake", "iron-guardian", "solar-knight", "void-hound", "gale-mage"]
 } : null;
 const roomStorePath = process.env.DUEL_ROOM_STORE || fileURLToPath(new URL(`../.data/online-rooms-${port}.json`, import.meta.url));
-const roomStore = new DuelRoomStore({ filePath: roomStorePath, createRoom: (options) => new DuelRoom({
+const roomStore = new DuelRoomStore({ filePath: roomStorePath, createRoom: (options) => new Room({
   ...options,
   disconnectGraceMs,
   turnTimeoutMs,
   ...(demoOpeningHands ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: demoOpeningHands,
     ...(effectChoiceDemo ? { openingGraves: { p1: ["gale-mage", "iron-guardian", "war-chant"] } } : {})
-  }) } : {})
+  }) } : {}),
+  ...(graveReturnTrial ? { createState: graveReturnTrial.createGraveReturnTrialState } : {})
 }) });
 const connections = new Map();
 const responseTimers = new Map();

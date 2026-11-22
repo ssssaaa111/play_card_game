@@ -3,14 +3,15 @@ import { createHash } from "node:crypto";
 import { DuelRoom } from "../server/duel-room.js";
 import { battleValue, totalAtk, totalDef } from "../src/rules.js";
 import decks from "./fixtures/online-opening-decks.json" with { type: "json" };
+import { GraveReturnTrialRoom } from "./fixtures/online-grave-return-trial.mjs";
 
 const openingTurns = 4;
 const connections = { p1: "first", p2: "second" };
 const drawEffects = new Set(["draw2", "comebackDraw"]);
 const damageEffects = new Set(["burn500", "fireWindCombo", "pierceLine"]);
 
-function startRoom(first, second, seed) {
-  const room = new DuelRoom({ code: "QA2345" });
+function startRoom(first, second, seed, Room) {
+  const room = new Room({ code: "QA2345" });
   for (const [seatId, name] of [["p1", first], ["p2", second]]) {
     room.join({ name, connectionId: connections[seatId] });
     room.setDeck(connections[seatId], decks[name]);
@@ -94,11 +95,12 @@ function playAction(view) {
   return actions.endTurn[0];
 }
 
-function playOpening(first, second, seed) {
-  const room = startRoom(first, second, seed);
+function playOpening(first, second, seed, Room) {
+  const room = startRoom(first, second, seed, Room);
   let turn = 1, eventCount = 0, firstDamageTurn = null, followerDamageBeforeTurn = 0, actionsThisTurn = 0;
   let state = room.engine.getState();
   const passed = [];
+  const recoveries = [];
   for (let step = 1; turn <= openingTurns && !state.gameOver; step += 1) {
     assert.ok(step <= 100, `Command limit reached (${seed})`);
     const seatId = state.machine.responseWindow?.playerId || state.turn.playerId;
@@ -118,10 +120,13 @@ function playOpening(first, second, seed) {
         firstDamageTurn ??= turn;
         if (turn === 1 && event.playerId === "p2") followerDamageBeforeTurn += event.amount;
       }
+      if (turn <= openingTurns && event.type === "CARD_ACTIVATED" && state.cards[event.cardId]?.templateId === "grave-return") {
+        recoveries.push({ turn, targetEffect: state.cards[event.targetCardId]?.effect });
+      }
     }
     eventCount = state.events.length;
   }
-  return { firstDamageTurn, followerDamageBeforeTurn, passed, firstTurnWin: turn === 1 && state.gameOver?.winnerId === "p1" };
+  return { firstDamageTurn, followerDamageBeforeTurn, passed, firstTurnWin: turn === 1 && state.gameOver?.winnerId === "p1", recoveries };
 }
 
 function summarize(games) {
@@ -142,15 +147,42 @@ function summarize(games) {
   };
 }
 
+function summarizeRecoveries(games) {
+  const cases = games.flatMap(game => game.recoveries);
+  return {
+    gamesWithRecovery: games.filter(game => game.recoveries.length > 0).length,
+    byTurn: [1, 2, 3, 4].map(turn => cases.filter(entry => entry.turn === turn).length),
+    drawSpell: cases.filter(entry => drawEffects.has(entry.targetEffect)).length,
+    damageSpell: cases.filter(entry => damageEffects.has(entry.targetEffect)).length
+  };
+}
+
 const gamesPerOrder = Number(process.argv.find(arg => arg.startsWith("--games="))?.slice(8) ?? "100");
 const seed = process.argv.find(arg => arg.startsWith("--seed="))?.slice(7) ?? "opening-playtest-v1";
+const runGraveReturnTrial = process.argv.includes("--grave-return-trial");
 assert.ok(Number.isSafeInteger(gamesPerOrder) && gamesPerOrder > 0 && gamesPerOrder <= 1000, "Use --games=1 through --games=1000 per seat order");
 const matchups = [];
 for (const first of Object.keys(decks)) {
   for (const second of Object.keys(decks)) {
     if (first === second) continue;
-    const games = Array.from({ length: gamesPerOrder }, (_, index) => playOpening(first, second, `${seed}:${first}:${second}:${index}`));
-    matchups.push({ first, second, ...summarize(games) });
+    const seeds = Array.from({ length: gamesPerOrder }, (_, index) => `${seed}:${first}:${second}:${index}`);
+    const games = seeds.map(gameSeed => playOpening(first, second, gameSeed, DuelRoom));
+    const matchup = { first, second, ...summarize(games) };
+    if (runGraveReturnTrial) {
+      const candidate = seeds.map(gameSeed => playOpening(first, second, gameSeed, GraveReturnTrialRoom));
+      const damageChanges = games.map((game, index) => candidate[index].followerDamageBeforeTurn - game.followerDamageBeforeTurn);
+      matchup.graveReturnTrial = {
+        baselineRecoveries: summarizeRecoveries(games),
+        recoveries: summarizeRecoveries(candidate),
+        followerDamageChanges: {
+          decreased: damageChanges.filter(change => change < 0).length,
+          same: damageChanges.filter(change => change === 0).length,
+          increased: damageChanges.filter(change => change > 0).length
+        },
+        ...summarize(candidate)
+      };
+    }
+    matchups.push(matchup);
   }
 }
 console.log(JSON.stringify({
