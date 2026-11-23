@@ -56,8 +56,11 @@ const chainResponseDemo = process.argv.includes("--scenario=chain-response");
 const attackChainResponseDemo = process.argv.includes("--scenario=attack-chain-response");
 const multiChainResponseDemo = process.argv.includes("--scenario=multi-chain-response");
 const graveReturnLimitDemo = process.argv.includes("--scenario=grave-return-limit");
-if ((responseDemo || handFeedbackDemo || effectChoiceDemo || tributeChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo || graveReturnLimitDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
+const openingDrawOneDemo = process.argv.includes("--scenario=opening-damage-draw-one");
+const openingDamageDemo = openingDrawOneDemo || process.argv.includes("--scenario=opening-damage");
+if ((responseDemo || handFeedbackDemo || effectChoiceDemo || tributeChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo || graveReturnLimitDemo || openingDamageDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
 const graveReturnTrial = graveReturnLimitDemo ? await import("./fixtures/online-grave-return-trial.mjs") : null;
+const openingPressureTrial = openingDamageDemo ? await import("./fixtures/online-opening-pressure.mjs") : null;
 const demoOpeningHands = tributeChoiceDemo ? {
   p1: ["starfall-colossus", "twin-summon", "solar-knight", "iron-guardian", "weakening-web"],
   p2: ["iron-guardian", "weakening-web", "mirror-snare", "blade-sigil", "twin-summon"]
@@ -90,7 +93,8 @@ const roomStore = new DuelRoomStore({ filePath: roomStorePath, createRoom: (opti
   ...(demoOpeningHands ? { createState: (config) => createOnlineDuelState({ ...config, openingHands: demoOpeningHands,
     ...(effectChoiceDemo ? { openingGraves: { p1: ["gale-mage", "iron-guardian", "war-chant"] } } : {})
   }) } : {}),
-  ...(graveReturnTrial ? { createState: graveReturnTrial.createGraveReturnTrialState } : {})
+  ...(graveReturnTrial ? { createState: graveReturnTrial.createGraveReturnTrialState } : {}),
+  ...(openingPressureTrial ? { createState: config => openingPressureTrial.createOpeningDamageScenario(config, openingDrawOneDemo) } : {})
 }) });
 const connections = new Map();
 const responseTimers = new Map();
