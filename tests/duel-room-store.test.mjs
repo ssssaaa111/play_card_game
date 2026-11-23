@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createSeededOpening } from "../scripts/fixtures/online-opening-pressure.mjs";
 import { DuelRoom } from "../server/duel-room.js";
 import { DuelRoomStore } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
@@ -11,7 +12,7 @@ import { createDuelist, cardById } from "../src/deck.js";
 import { buildEngineStateFromUiState } from "../src/engine-adapter.js";
 import { ControllerKind, DuelMode, createDuelSessionConfig } from "../src/duel-session.js";
 import { deckPresets } from "../src/data.js";
-import { onlineCardDetailView } from "../src/online-duel-ui.js";
+import { onlineCardDetailView, onlineHandActionView } from "../src/online-duel-ui.js";
 
 function fixture(t, options = {}) {
   const directory = mkdtempSync(join(tmpdir(), "star-duel-rooms-"));
@@ -138,6 +139,42 @@ for (const damage of [400, 500]) {
     assert.equal(cardById("burst-rune").effect, "burn500");
   });
 }
+
+test("the local Burst Rune trial limits the recovered copy across restart and resets next turn", (t) => {
+  const f = fixture(t, { createState: options => createSeededOpening({ ...options,
+    openingHands: { p1: ["burst-rune", "burst-rune", "material-reclaim", "solar-knight", "iron-guardian"] }
+  }, "rune-replay-limit", { burstRuneOncePerTurn: true }) });
+  start(f.room);
+  const view = f.room.viewFor("p1");
+  const [first, second] = view.players.p1.hand.filter(card => card.templateId === "burst-rune");
+  const recovery = view.players.p1.hand.find(card => card.templateId === "material-reclaim");
+  const activate = cardId => ({ type: "ACTIVATE_CARD", cardId });
+  submit(f.room, "one", activate(first.id), "first-rune");
+  submit(f.room, "one", { ...activate(recovery.id), targetCardId: first.id }, "recover-first");
+  f.store.save();
+
+  const restored = f.reload();
+  f.resume(restored);
+  const recoveredView = restored.viewFor("p1");
+  assert.equal(onlineHandActionView(recoveredView, first.id).label, "本回合已发动");
+  assert.equal(onlineHandActionView(recoveredView, second.id).ok, true);
+  assert.match(onlineCardDetailView(recoveredView.players.p1.hand.find(card => card.id === first.id)).effectText, /同一张卡每回合只能发动 1 次/);
+  assert.deepEqual(recoveredView.legalActions.actions.activateCard.map(action => action.cardId), [second.id]);
+  assert.throws(() => submit(restored, "one-new", activate(first.id), "blocked-rune"),
+    { code: "ILLEGAL_COMMAND", message: /already been activated this turn/ });
+  assert.deepEqual(restored.viewFor("p1"), recoveredView);
+  assert.equal(restored.viewFor("p2").players.p2.lp, 3600);
+  submit(restored, "one-new", activate(second.id), "second-rune");
+  assert.equal(restored.viewFor("p2").players.p2.lp, 3200);
+
+  submit(restored, "one-new", { type: "END_TURN" }, "pass-first");
+  submit(restored, "two-new", { type: "END_TURN" }, "pass-second");
+  assert.equal(onlineHandActionView(restored.viewFor("p1"), first.id).ok, true);
+  submit(restored, "one-new", activate(first.id), "next-turn-rune");
+  assert.equal(restored.viewFor("p2").players.p2.lp, 2800);
+  const damageEvents = restored.engine.getState().events.filter(event => event.type === "DAMAGE_DEALT");
+  assert.deepEqual(damageEvents.map(event => [event.sourceCardId, event.amount]), [[first.id, 400], [second.id, 400], [first.id, 400]]);
+});
 
 test("equipment receipts restore their engine effect IDs without applying the bonus twice", (t) => {
   const f = fixture(t, { createState: options => createOnlineDuelState({ ...options, openingHands: {

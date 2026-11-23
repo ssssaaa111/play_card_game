@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { DuelRoom } from "../server/duel-room.js";
+import { cardActivatedThisTurn } from "../src/game-engine.js";
 import { isGraveReturn } from "../src/online-grave-return.js";
 import { battleValue, totalAtk, totalDef } from "../src/rules.js";
 import decks from "./fixtures/online-opening-decks.json" with { type: "json" };
@@ -8,7 +9,7 @@ import { createSeededOpening, mixedRecoveryDecks } from "./fixtures/online-openi
 const openingTurns = 4;
 const connections = { p1: "first", p2: "second" };
 const drawEffects = new Set(["draw2", "comebackDraw"]);
-const damageEffects = new Set(["burn400", "burn500", "fireWindCombo", "pierceLine"]);
+const damageEffects = new Set(["burn400", "burn400OncePerTurn", "burn500", "fireWindCombo", "pierceLine"]);
 
 function startRoom(first, second, seed, graveReturnTurnLimit, deckLists, adjustments) {
   const room = new DuelRoom({
@@ -36,7 +37,7 @@ function responseAction(view) {
   return { type: "RESPOND_CHAIN_TRAP", cardId: candidates[0].cardId, triggerEventId };
 }
 
-function playAction(view, canDrawTwo) {
+function playAction(view, canDrawTwo, state) {
   if (view.machine.responseWindow) return responseAction(view);
   const { hand, monsterZone, grave } = view.players[view.viewerSeatId];
   const opposingField = view.players[view.opponentSeatId].monsterZone;
@@ -70,12 +71,16 @@ function playAction(view, canDrawTwo) {
     if (extraSummon) return extraSummon;
   }
 
-  const damage = actions.activateCard.find(action => damageEffects.has(effect(action))) || recover(card => damageEffects.has(card?.effect));
+  const delayedRune = card => card?.effect === "burn400OncePerTurn" && cardActivatedThisTurn(state, card.id);
+  const damage = actions.activateCard.find(action => damageEffects.has(effect(action)))
+    || recover(card => damageEffects.has(card?.effect) && !delayedRune(card));
   if (damage) return damage;
   const spell = actions.activateCard.find(action => !["extraSummon", "graveReturn", "attackReset"].includes(effect(action))
     && !isDrawSpell(handCard(action))
     && (effect(action) !== "directStrike" || (!view.turn.openingBattleLocked && opposingField.some(Boolean))));
   if (spell) return spell;
+  const prepareRune = recover(delayedRune);
+  if (prepareRune) return prepareRune;
 
   const defend = actions.changeMode.find(action => (
     action.mode === "defense" && monsterZone.some(card => card?.id === action.cardId && totalDef(card) > totalAtk(card))
@@ -90,9 +95,9 @@ function playAction(view, canDrawTwo) {
 
 function playOpening(first, second, seed, {
   graveReturnTurnLimit = true, deckLists = decks, trackPressure = false, drawTwoOnce = false, trace = false,
-  lastSparkDrawOne = false, burstRune400 = false
+  lastSparkDrawOne = false, burstRune400 = false, burstRuneOncePerTurn = false
 } = {}) {
-  const room = startRoom(first, second, seed, graveReturnTurnLimit, deckLists, { lastSparkDrawOne, burstRune400 });
+  const room = startRoom(first, second, seed, graveReturnTurnLimit, deckLists, { lastSparkDrawOne, burstRune400, burstRuneOncePerTurn });
   const turnLimit = trackPressure ? 2 : openingTurns;
   const pressure = trackPressure ? {
     turns: Array.from({ length: turnLimit }, () => ({ drawTwo: 0, damage: { p1: 0, p2: 0 } })),
@@ -120,7 +125,7 @@ function playOpening(first, second, seed, {
         pressure.followerOptions = { canAct: hasAny, summon: can.summon, setTrap: can.setTrap };
       }
     }
-    const action = playAction(view, !drawTwoOnce || pressure.turns[turn - 1].drawTwo === 0);
+    const action = playAction(view, !drawTwoOnce || pressure.turns[turn - 1].drawTwo === 0, state);
     assert.ok(action, `No legal action (${seed}, turn ${turn}, ${seatId})`);
     if (seatId === state.turn.playerId && !["CHANGE_PHASE", "END_TURN"].includes(action.type)) actionsThisTurn += 1;
     room.submit(connections[seatId], { revision: view.revision, commandId: `playtest-${step}`, action });
@@ -238,17 +243,22 @@ const gamesPerOrder = Number(process.argv.find(arg => arg.startsWith("--games=")
 const seed = process.argv.find(arg => arg.startsWith("--seed="))?.slice(7) ?? "opening-playtest-v1";
 const runGraveReturnTrial = process.argv.includes("--grave-return-trial");
 const runMixedRecovery = process.argv.includes("--mixed-recovery");
-const runBurstRuneTrial = process.argv.includes("--burst-rune-400-trial");
-const runLastSparkTrial = process.argv.includes("--last-spark-draw-one-trial");
-const compareCardVariants = runBurstRuneTrial || runLastSparkTrial;
+const cardTrials = [
+  ["--burst-rune-400-trial", "burstRune400"],
+  ["--last-spark-draw-one-trial", "lastSparkDrawOne"],
+  ["--burst-rune-once-per-turn-trial", "burstRuneOncePerTurn"]
+].filter(([flag]) => process.argv.includes(flag));
+const cardTrial = cardTrials[0]?.[1];
+const compareCardVariants = Boolean(cardTrial);
+const use400InBothVariants = compareCardVariants && cardTrial !== "burstRune400";
 const traceOpenings = process.argv.includes("--trace-openings");
 const openingCase = process.argv.find(arg => arg.startsWith("--opening-case="))?.slice("--opening-case=".length);
 assert.ok(Number.isSafeInteger(gamesPerOrder) && gamesPerOrder > 0 && gamesPerOrder <= 1000, "Use --games=1 through --games=1000 per seat order");
 assert.ok(!(runGraveReturnTrial && runMixedRecovery), "Choose one playtest comparison");
 assert.ok(!traceOpenings || runMixedRecovery, "Opening traces require --mixed-recovery");
-assert.ok(!runBurstRuneTrial || (runMixedRecovery && !openingCase), "The Burst Rune comparison requires a mixed recovery batch");
-assert.ok(!runLastSparkTrial || runMixedRecovery, "The Last Spark comparison requires --mixed-recovery");
-assert.ok(!(runBurstRuneTrial && runLastSparkTrial), "Choose one card comparison");
+assert.ok(cardTrials.length <= 1, "Choose one card comparison");
+assert.ok(!compareCardVariants || runMixedRecovery, "Card comparisons require --mixed-recovery");
+assert.ok(cardTrial !== "burstRune400" || !openingCase, "The 500 vs 400 comparison requires a batch");
 const deckLists = runMixedRecovery ? mixedRecoveryDecks() : decks;
 function replayOpeningCase() {
   assert.ok(runMixedRecovery, "A fixed opening case requires --mixed-recovery");
@@ -257,11 +267,11 @@ function replayOpeningCase() {
   const play = (variant = {}) => playOpening(first, second, `${seed}:${openingCase}`, {
     deckLists, trackPressure: true, trace: true, ...variant
   });
-  if (runLastSparkTrial) {
+  if (use400InBothVariants) {
     return {
       openingCase,
       current: play({ burstRune400: true }),
-      lastSparkDrawOne: play({ burstRune400: true, lastSparkDrawOne: true })
+      [cardTrial]: play({ burstRune400: true, [cardTrial]: true })
     };
   }
   return {
@@ -284,13 +294,11 @@ function printBatchReport() {
       const seeds = Array.from({ length: gamesPerOrder }, (_, index) => `${seed}:${first}:${second}:${index}`);
       const options = {
         deckLists, graveReturnTurnLimit: !runGraveReturnTrial, trackPressure: runMixedRecovery, trace: traceOpenings,
-        burstRune400: runLastSparkTrial || (!runMixedRecovery && !runGraveReturnTrial)
+        burstRune400: use400InBothVariants || (!runMixedRecovery && !runGraveReturnTrial)
       };
       const games = seeds.map(gameSeed => playOpening(first, second, gameSeed, options));
       if (runMixedRecovery) {
-        let candidateKey = "drawTwoOnce";
-        if (runBurstRuneTrial) candidateKey = "burstRune400";
-        if (runLastSparkTrial) candidateKey = "lastSparkDrawOne";
+        const candidateKey = cardTrial ?? "drawTwoOnce";
         const candidate = seeds.map(gameSeed => playOpening(first, second, gameSeed, { ...options, [candidateKey]: true }));
         if (!compareCardVariants) assert.ok(candidate.every(game => game.pressure.turns.every(turn => turn.drawTwo <= 1)));
         const matchup = {
@@ -305,7 +313,7 @@ function printBatchReport() {
           }
           matchup.followerFirstTurnWinChanges = { gained, lost };
         }
-        if (runLastSparkTrial) {
+        if (use400InBothVariants) {
           const handoffDamageChanges = games.map((game, index) => candidate[index].followerDamageBeforeTurn - game.followerDamageBeforeTurn);
           matchup.followerDamageBeforeTurnChanges = {
             decreased: handoffDamageChanges.filter(change => change < 0).length,
@@ -317,7 +325,7 @@ function printBatchReport() {
           const damage = game => first === "burn" ? game.followerDamageBeforeTurn : game.pressure.turns[1].damage.p1;
           const selected = [games, candidate].map(samples =>
             samples.reduce((peak, game, index) => damage(game) > damage(samples[peak]) ? index : peak, 0));
-          if (runLastSparkTrial) {
+          if (use400InBothVariants) {
             const differences = games.map((game, index) => Math.abs(damage(game) - damage(candidate[index])));
             selected.push(differences.indexOf(Math.max(...differences)));
           }

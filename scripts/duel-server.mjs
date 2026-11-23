@@ -57,15 +57,16 @@ const attackChainResponseDemo = process.argv.includes("--scenario=attack-chain-r
 const multiChainResponseDemo = process.argv.includes("--scenario=multi-chain-response");
 const graveReturnLimitDemo = process.argv.includes("--scenario=grave-return-limit");
 const openingDrawOneDemo = process.argv.includes("--scenario=opening-damage-draw-one");
+const openingRuneOnceDemo = process.argv.includes("--scenario=opening-damage-rune-once");
 const openingRune400Demo = process.argv.includes("--scenario=opening-damage-rune-400");
-const openingDamageDemo = openingDrawOneDemo || openingRune400Demo || process.argv.includes("--scenario=opening-damage");
+const openingDamageDemo = openingDrawOneDemo || openingRune400Demo || openingRuneOnceDemo || process.argv.includes("--scenario=opening-damage");
 const openingCase = process.argv.find(arg => arg.startsWith("--opening-case="))?.slice("--opening-case=".length);
 if (openingCase !== undefined && !openingDamageDemo) throw new Error("--opening-case requires an opening damage scenario");
 if ((responseDemo || handFeedbackDemo || effectChoiceDemo || tributeChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo || graveReturnLimitDemo || openingDamageDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
 const graveReturnTrial = graveReturnLimitDemo ? await import("./fixtures/online-grave-return-trial.mjs") : null;
 const openingPressureTrial = openingDamageDemo ? await import("./fixtures/online-opening-pressure.mjs") : null;
 const openingPressureState = openingPressureTrial?.createOpeningDamageScenario({
-  lastSparkDrawOne: openingDrawOneDemo, burstRune400: openingRune400Demo
+  lastSparkDrawOne: openingDrawOneDemo, burstRune400: openingRune400Demo || openingRuneOnceDemo, burstRuneOncePerTurn: openingRuneOnceDemo
 }, openingCase);
 const demoOpeningHands = tributeChoiceDemo ? {
   p1: ["starfall-colossus", "twin-summon", "solar-knight", "iron-guardian", "weakening-web"],

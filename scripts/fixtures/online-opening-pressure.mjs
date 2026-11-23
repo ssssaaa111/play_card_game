@@ -9,7 +9,9 @@ export function mixedRecoveryDecks() {
   return { ...decks, burn: { kind: "custom", name: "炎岚混合回收", ids } };
 }
 
-export function createSeededOpening(config, seed, { lastSparkDrawOne = false, burstRune400 = false } = {}) {
+export function createSeededOpening(config, seed, {
+  lastSparkDrawOne = false, burstRune400 = false, burstRuneOncePerTurn = false
+} = {}) {
   let randomState = createHash("sha256").update(seed).digest().readUInt32LE();
   const previousRandom = Math.random;
   let state;
@@ -18,7 +20,7 @@ export function createSeededOpening(config, seed, { lastSparkDrawOne = false, bu
       randomState = (Math.imul(1664525, randomState) + 1013904223) >>> 0;
       return randomState / 2 ** 32;
     };
-    state = createOnlineDuelState({ ...config, legacyBurstRuneDamage: !burstRune400 });
+    state = createOnlineDuelState({ ...config, legacyBurstRuneDamage: !(burstRune400 || burstRuneOncePerTurn) });
   } finally {
     Math.random = previousRandom;
   }
@@ -27,6 +29,13 @@ export function createSeededOpening(config, seed, { lastSparkDrawOne = false, bu
       if (card.templateId !== "last-spark") continue;
       card.effect = "draw1";
       card.text = "抽 1 张卡。";
+    }
+  }
+  if (burstRuneOncePerTurn) {
+    const limitedRune = { effect: "burn400OncePerTurn", text: "对对手造成 400 点伤害。同一张卡每回合只能发动 1 次。" };
+    state.cardDefinitions["burst-rune"] = { ...state.cardDefinitions["burst-rune"], ...limitedRune };
+    for (const card of Object.values(state.cards)) {
+      if (card.templateId === "burst-rune") Object.assign(card, limitedRune);
     }
   }
   return state;
