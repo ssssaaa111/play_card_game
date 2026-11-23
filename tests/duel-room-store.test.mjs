@@ -6,10 +6,12 @@ import { tmpdir } from "node:os";
 import { DuelRoom } from "../server/duel-room.js";
 import { DuelRoomStore } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
+import { cardHandSummary } from "../src/cards.js";
 import { createDuelist, cardById } from "../src/deck.js";
 import { buildEngineStateFromUiState } from "../src/engine-adapter.js";
 import { ControllerKind, DuelMode, createDuelSessionConfig } from "../src/duel-session.js";
 import { deckPresets } from "../src/data.js";
+import { onlineCardDetailView } from "../src/online-duel-ui.js";
 
 function fixture(t, options = {}) {
   const directory = mkdtempSync(join(tmpdir(), "star-duel-rooms-"));
@@ -83,6 +85,59 @@ test("restart preserves card order events and receipts while excluding downtime 
   submit(restored, "one-new", { type: "END_TURN" }, "pass-opener");
   assert.equal(restored.viewFor("p2").turn.openingBattleLocked, false);
 });
+
+for (const damage of [400, 500]) {
+  test(`Burst Rune keeps its saved ${damage} damage after recovery and uses 400 in the rematch`, (t) => {
+    const openingHands = {
+      p1: ["burst-rune", "material-reclaim", "ember-drake", "gale-mage", "element-echo"],
+      p2: ["burst-rune", "iron-guardian", "gale-mage", "solar-knight", "twin-summon"]
+    };
+    const createState = options => createOnlineDuelState({ ...options, openingHands, legacyBurstRuneDamage: damage === 500 });
+    const f = fixture(t, { createState });
+    start(f.room);
+    const view = f.room.viewFor("p1");
+    const rune = view.players.p1.hand.find(card => card.templateId === "burst-rune");
+    const recovery = view.players.p1.hand.find(card => card.templateId === "material-reclaim");
+    assert.equal(cardHandSummary(rune), `对方 LP -${damage}`);
+    assert.equal(onlineCardDetailView(rune).effectText, `对对手造成 ${damage} 点伤害。`);
+    const castRune = view.legalActions.actions.activateCard.find(action => action.cardId === rune.id);
+    const receipt = submit(f.room, "one", castRune, "first-rune");
+    assert.equal(f.room.viewFor("p2").players.p2.lp, 4000 - damage);
+    f.store.save();
+
+    const restored = new DuelRoomStore({
+      ...f.settings,
+      createRoom: config => new DuelRoom({ ...config, now: f.settings.now,
+        createState: options => createOnlineDuelState({ ...options, openingHands }) })
+    }).require(f.room.code);
+    assert.deepEqual(restored.engine.getState(), f.room.engine.getState());
+    f.resume(restored);
+    assert.deepEqual(restored.submit("one-new", { revision: receipt.revision - 1, commandId: receipt.commandId, action: castRune }),
+      { ...receipt, duplicate: true });
+    assert.equal(restored.viewFor("p2").players.p2.lp, 4000 - damage);
+    const recoverRune = restored.viewFor("p1").legalActions.actions.activateCard.find(action =>
+      action.cardId === recovery.id && action.targetCardId === rune.id);
+    submit(restored, "one-new", recoverRune, "recover-rune");
+    const recovered = restored.viewFor("p1").players.p1.hand.find(card => card.id === rune.id);
+    assert.equal(recovered.effect, `burn${damage}`);
+    submit(restored, "one-new", castRune, "second-rune");
+    assert.equal(restored.viewFor("p2").players.p2.lp, 4000 - 2 * damage);
+    const damageEvents = restored.engine.getState().events.filter(event => event.type === "DAMAGE_DEALT");
+    assert.deepEqual(damageEvents.map(event => [event.sourceCardId, event.amount]), [[rune.id, damage], [rune.id, damage]]);
+
+    restored.forfeit("one-new");
+    restored.requestRematch("one-new");
+    restored.requestRematch("two-new");
+    const rematch = restored.viewFor("p2");
+    assert.equal(rematch.turn.playerId, "p2");
+    const rematchRune = rematch.players.p2.hand.find(card => card.templateId === "burst-rune");
+    assert.equal(cardHandSummary(rematchRune), "对方 LP -400");
+    const castRematchRune = rematch.legalActions.actions.activateCard.find(action => action.cardId === rematchRune.id);
+    submit(restored, "two-new", castRematchRune, "rematch-rune");
+    assert.equal(restored.viewFor("p1").players.p1.lp, 3600);
+    assert.equal(cardById("burst-rune").effect, "burn500");
+  });
+}
 
 test("equipment receipts restore their engine effect IDs without applying the bonus twice", (t) => {
   const f = fixture(t, { createState: options => createOnlineDuelState({ ...options, openingHands: {

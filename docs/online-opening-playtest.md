@@ -152,3 +152,9 @@ node scripts/online-opening-playtest.mjs --mixed-recovery --burst-rune-400-trial
 仅 `basic:burn:35` 的后手首轮胜负发生变化。两边沿相同顺序发动符文和攻击，400 版的先手以 100 LP 接过回合。后手首轮取胜由 3/200 降至 2/200，这批样本的斩杀局数很少，结果用于复盘具体变化。建议把 400 作为正式联机候选，重点复验牌面、回收后再次发动和房间恢复。
 
 本机用 `node scripts/duel-server.mjs --port=5273 --scenario=opening-damage-rune-400 --opening-case=burn:rush:46` 选择同一牌序。房间 `3DUU8M` 双端实点了两次余烬星愿和两发符文，后手以 3200 LP 接过回合。该牌序的 500 版在 `MLLRXW` 实点为 3000 LP。
+
+### 联机采用 400 点伤害
+
+联机新局和同房再战使用 400 点伤害，牌面、详情与结算使用同一局的卡牌数据。已开打的 500 点旧局从存档恢复后继续使用原值。未指定历史实验模式的开局批量测试使用 400 点，`--mixed-recovery --burst-rune-400-trial` 保留 500 与 400 的同种子对照。
+
+本机以 `node scripts/duel-server.mjs --port=5274 --scenario=opening-damage-rune-400` 启动固定牌序 `burn:basic:34`。房间 `HT7AB9` 双端实点赤焰幼龙和爆裂符文后，后手剩余 3400 LP。重启服务并恢复房间后，用星屑返轨回收并再次发动符文，双方同步到 3000 LP，随后后手接过回合。房间存档回归覆盖 400 和 500 两种续局、重复指令及下一局切换到 400。

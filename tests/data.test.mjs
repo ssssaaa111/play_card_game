@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 
+import { createOnlineDuelState } from "../server/online-duel-state.js";
 import { aiProfiles, deckPresets, library, monsterAssets, roleProfiles, scenarioSetups } from "../src/data.js";
 import { canDispatchSpellFromUiState, canDispatchSummonEffectFromUiState, canDispatchTrapFromUiState } from "../src/engine-adapter.js";
 import { getCardEffectDefinition } from "../src/game-engine.js";
@@ -147,7 +148,8 @@ test("featured scenario metadata describes difficulty objectives and hints", () 
 });
 
 test("spell cards are backed by spell metadata", () => {
-  const spellCards = library.filter((card) => card.type === "spell");
+  const onlineCards = Object.values(createOnlineDuelState().cardDefinitions);
+  const spellCards = [...library, ...onlineCards].filter((card) => card.type === "spell");
   const effectsFromCards = new Set(spellCards.map((card) => card.effect));
   const validTargets = new Set(["ownMonster", "ownGraveMonster", "ownGraveCard", "enemyMonster", "enemySpellTrap"]);
   const validTargetRules = new Set(["strongest", "notSource"]);

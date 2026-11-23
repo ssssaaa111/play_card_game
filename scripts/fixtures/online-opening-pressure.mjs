@@ -18,20 +18,15 @@ export function createSeededOpening(config, seed, { lastSparkDrawOne = false, bu
       randomState = (Math.imul(1664525, randomState) + 1013904223) >>> 0;
       return randomState / 2 ** 32;
     };
-    state = createOnlineDuelState(config);
+    state = createOnlineDuelState({ ...config, legacyBurstRuneDamage: !burstRune400 });
   } finally {
     Math.random = previousRandom;
   }
-  if (lastSparkDrawOne || burstRune400) {
+  if (lastSparkDrawOne) {
     for (const card of Object.values(state.cards)) {
-      if (lastSparkDrawOne && card.templateId === "last-spark") {
-        card.effect = "draw1";
-        card.text = "抽 1 张卡。";
-      }
-      if (burstRune400 && card.templateId === "burst-rune") {
-        card.effect = "burn400";
-        card.text = "对对手造成 400 点伤害。";
-      }
+      if (card.templateId !== "last-spark") continue;
+      card.effect = "draw1";
+      card.text = "抽 1 张卡。";
     }
   }
   return state;

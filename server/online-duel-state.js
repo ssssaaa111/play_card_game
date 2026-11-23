@@ -47,7 +47,8 @@ export function createOnlineDuelState({
   deckPreset = "basicExpansion",
   deckChoices = {},
   openingHands = {},
-  openingGraves = {}
+  openingGraves = {},
+  legacyBurstRuneDamage = false
 } = {}) {
   const [firstSeatId, secondSeatId] = seatIds;
   const session = createDuelSessionConfig({
@@ -74,5 +75,16 @@ export function createOnlineDuelState({
     gameOverLosers: [],
     gameOverReason: ""
   };
-  return buildEngineStateFromUiState(uiState);
+  const state = buildEngineStateFromUiState(uiState);
+  if (legacyBurstRuneDamage) return state;
+  // Freeze the online card value at the start of this duel. Restores load the saved copies.
+  const burstRune = { effect: "burn400", text: "对对手造成 400 点伤害。" };
+  state.cardDefinitions = {
+    ...state.cardDefinitions,
+    "burst-rune": { ...state.cardDefinitions["burst-rune"], ...burstRune }
+  };
+  for (const card of Object.values(state.cards)) {
+    if (card.templateId === "burst-rune") Object.assign(card, burstRune);
+  }
+  return state;
 }

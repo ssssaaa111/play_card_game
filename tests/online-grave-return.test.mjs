@@ -128,7 +128,7 @@ function fixedDamageOpening(extraDraws, graveReturnTurnLimit = true) {
     const random = Math.random;
     try {
       Math.random = () => 0.999999;
-      return createOnlineDuelState(config);
+      return createOnlineDuelState({ ...config, legacyBurstRuneDamage: true });
     } finally {
       Math.random = random;
     }

@@ -271,7 +271,10 @@ function printBatchReport() {
       if (first === second) continue;
       if (runMixedRecovery && first !== "burn" && second !== "burn") continue;
       const seeds = Array.from({ length: gamesPerOrder }, (_, index) => `${seed}:${first}:${second}:${index}`);
-      const options = { deckLists, graveReturnTurnLimit: !runGraveReturnTrial, trackPressure: runMixedRecovery, trace: traceOpenings };
+      const options = {
+        deckLists, graveReturnTurnLimit: !runGraveReturnTrial, trackPressure: runMixedRecovery, trace: traceOpenings,
+        burstRune400: !runMixedRecovery && !runGraveReturnTrial
+      };
       const games = seeds.map(gameSeed => playOpening(first, second, gameSeed, options));
       if (runMixedRecovery) {
         const candidateKey = runBurstRuneTrial ? "burstRune400" : "drawTwoOnce";
