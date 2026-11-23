@@ -8,11 +8,11 @@ import { createSeededOpening, mixedRecoveryDecks } from "./fixtures/online-openi
 const openingTurns = 4;
 const connections = { p1: "first", p2: "second" };
 const drawEffects = new Set(["draw2", "comebackDraw"]);
-const damageEffects = new Set(["burn500", "fireWindCombo", "pierceLine"]);
+const damageEffects = new Set(["burn400", "burn500", "fireWindCombo", "pierceLine"]);
 
-function startRoom(first, second, seed, graveReturnTurnLimit, deckLists, lastSparkDrawOne) {
+function startRoom(first, second, seed, graveReturnTurnLimit, deckLists, adjustments) {
   const room = new DuelRoom({
-    code: "QA2345", graveReturnTurnLimit, createState: config => createSeededOpening(config, seed, lastSparkDrawOne)
+    code: "QA2345", graveReturnTurnLimit, createState: config => createSeededOpening(config, seed, adjustments)
   });
   for (const [seatId, name] of [["p1", first], ["p2", second]]) {
     room.join({ name, connectionId: connections[seatId] });
@@ -89,9 +89,10 @@ function playAction(view, canDrawTwo) {
 }
 
 function playOpening(first, second, seed, {
-  graveReturnTurnLimit = true, deckLists = decks, trackPressure = false, drawTwoOnce = false, trace = false, lastSparkDrawOne = false
+  graveReturnTurnLimit = true, deckLists = decks, trackPressure = false, drawTwoOnce = false, trace = false,
+  lastSparkDrawOne = false, burstRune400 = false
 } = {}) {
-  const room = startRoom(first, second, seed, graveReturnTurnLimit, deckLists, lastSparkDrawOne);
+  const room = startRoom(first, second, seed, graveReturnTurnLimit, deckLists, { lastSparkDrawOne, burstRune400 });
   const turnLimit = trackPressure ? 2 : openingTurns;
   const pressure = trackPressure ? {
     turns: Array.from({ length: turnLimit }, () => ({ drawTwo: 0, damage: { p1: 0, p2: 0 } })),
@@ -132,7 +133,7 @@ function playOpening(first, second, seed, {
         draws: events.filter(event => event.type === "CARDS_DRAWN")
           .map(event => ({ seat: event.playerId, cards: event.cardIds.map(cardName) })),
         damage: events.filter(event => event.type === "DAMAGE_DEALT" && event.amount > 0)
-          .map(event => ({ seat: event.playerId, amount: event.amount, source: cardName(event.sourceCardId) })),
+          .map(event => ({ seat: event.playerId, amount: event.amount, requested: event.requested, source: cardName(event.sourceCardId) })),
         lp: Object.fromEntries(Object.entries(state.players).map(([seat, player]) => [seat, player.lp]))
       });
     }
@@ -163,6 +164,7 @@ function playOpening(first, second, seed, {
     }
     eventCount = state.events.length;
   }
+  if (replay) replay.winnerId = state.gameOver?.winnerId ?? null;
   return { firstDamageTurn, followerDamageBeforeTurn, passed, firstTurnWin: turn === 1 && state.gameOver?.winnerId === "p1", recoveries, pressure, replay };
 }
 
@@ -244,7 +246,11 @@ function replayOpeningCase() {
     deckLists, trackPressure: true, trace: true, ...variant
   });
   return {
-    openingCase, current: play(), drawTwoOnce: play({ drawTwoOnce: true }), lastSparkDrawOne: play({ lastSparkDrawOne: true })
+    openingCase,
+    current: play(),
+    drawTwoOnce: play({ drawTwoOnce: true }),
+    lastSparkDrawOne: play({ lastSparkDrawOne: true }),
+    burstRune400: play({ burstRune400: true })
   };
 }
 if (openingCase) console.log(JSON.stringify(replayOpeningCase(), null, 2));

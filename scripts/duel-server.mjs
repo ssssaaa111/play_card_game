@@ -57,7 +57,8 @@ const attackChainResponseDemo = process.argv.includes("--scenario=attack-chain-r
 const multiChainResponseDemo = process.argv.includes("--scenario=multi-chain-response");
 const graveReturnLimitDemo = process.argv.includes("--scenario=grave-return-limit");
 const openingDrawOneDemo = process.argv.includes("--scenario=opening-damage-draw-one");
-const openingDamageDemo = openingDrawOneDemo || process.argv.includes("--scenario=opening-damage");
+const openingRune400Demo = process.argv.includes("--scenario=opening-damage-rune-400");
+const openingDamageDemo = openingDrawOneDemo || openingRune400Demo || process.argv.includes("--scenario=opening-damage");
 if ((responseDemo || handFeedbackDemo || effectChoiceDemo || tributeChoiceDemo || summonResponseDemo || chainResponseDemo || attackChainResponseDemo || multiChainResponseDemo || graveReturnLimitDemo || openingDamageDemo) && !["127.0.0.1", "localhost", "::1"].includes(host)) throw new Error("QA scenarios require a loopback host");
 const graveReturnTrial = graveReturnLimitDemo ? await import("./fixtures/online-grave-return-trial.mjs") : null;
 const openingPressureTrial = openingDamageDemo ? await import("./fixtures/online-opening-pressure.mjs") : null;
@@ -94,7 +95,11 @@ const roomStore = new DuelRoomStore({ filePath: roomStorePath, createRoom: (opti
     ...(effectChoiceDemo ? { openingGraves: { p1: ["gale-mage", "iron-guardian", "war-chant"] } } : {})
   }) } : {}),
   ...(graveReturnTrial ? { createState: graveReturnTrial.createGraveReturnTrialState } : {}),
-  ...(openingPressureTrial ? { createState: config => openingPressureTrial.createOpeningDamageScenario(config, openingDrawOneDemo) } : {})
+  ...(openingPressureTrial ? {
+    createState: config => openingPressureTrial.createOpeningDamageScenario(config, {
+      lastSparkDrawOne: openingDrawOneDemo, burstRune400: openingRune400Demo
+    })
+  } : {})
 }) });
 const connections = new Map();
 const responseTimers = new Map();

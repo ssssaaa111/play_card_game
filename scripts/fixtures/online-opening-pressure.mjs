@@ -9,7 +9,7 @@ export function mixedRecoveryDecks() {
   return { ...decks, burn: { kind: "custom", name: "炎岚混合回收", ids } };
 }
 
-export function createSeededOpening(config, seed, lastSparkDrawOne = false) {
+export function createSeededOpening(config, seed, { lastSparkDrawOne = false, burstRune400 = false } = {}) {
   let randomState = createHash("sha256").update(seed).digest().readUInt32LE();
   const previousRandom = Math.random;
   let state;
@@ -22,19 +22,26 @@ export function createSeededOpening(config, seed, lastSparkDrawOne = false) {
   } finally {
     Math.random = previousRandom;
   }
-  if (lastSparkDrawOne) {
+  if (lastSparkDrawOne || burstRune400) {
     for (const card of Object.values(state.cards)) {
-      if (card.templateId !== "last-spark") continue;
-      card.effect = "draw1";
-      card.text = "抽 1 张卡。";
+      if (lastSparkDrawOne && card.templateId === "last-spark") {
+        card.effect = "draw1";
+        card.text = "抽 1 张卡。";
+      }
+      if (burstRune400 && card.templateId === "burst-rune") {
+        card.effect = "burn400";
+        card.text = "对对手造成 400 点伤害。";
+      }
     }
   }
   return state;
 }
 
-export function createOpeningDamageScenario(config, lastSparkDrawOne) {
+export function createOpeningDamageScenario(config, adjustments) {
   const decks = mixedRecoveryDecks();
+  const opponent = adjustments.burstRune400 ? "basic" : "rush";
+  const index = adjustments.burstRune400 ? 34 : 46;
   return createSeededOpening({
-    ...config, deckChoices: { p1: decks.burn, p2: decks.rush }
-  }, "opening-mixed-v1:burn:rush:46", lastSparkDrawOne);
+    ...config, deckChoices: { p1: decks.burn, p2: decks[opponent] }
+  }, `opening-mixed-v1:burn:${opponent}:${index}`, adjustments);
 }

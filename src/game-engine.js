@@ -90,6 +90,7 @@ export const defaultCardEffects = Object.freeze({
     { requirements: [{ type: "minDeckCount", player: "self", count: 2 }] }
   ),
   burn200: oneShot([{ op: "dealDamage", player: "rival", amount: 200 }]),
+  burn400: oneShot([{ op: "dealDamage", player: "rival", amount: 400 }]),
   burn500: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
   heal300: oneShot([{ op: "heal", player: "self", amount: 300 }]),
   heal700: oneShot([{ op: "heal", player: "self", amount: 700 }]),
