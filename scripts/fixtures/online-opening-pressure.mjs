@@ -37,11 +37,13 @@ export function createSeededOpening(config, seed, { lastSparkDrawOne = false, bu
   return state;
 }
 
-export function createOpeningDamageScenario(config, adjustments) {
+export function createOpeningDamageScenario(adjustments, openingCase = adjustments.burstRune400 ? "burn:basic:34" : "burn:rush:46") {
+  if (!/^(basic:burn|rush:burn|burn:basic|burn:rush):\d+$/.test(openingCase)) {
+    throw new Error("Expected --opening-case=burn:rush:46 or another mixed recovery case");
+  }
+  const [first, second] = openingCase.split(":");
   const decks = mixedRecoveryDecks();
-  const opponent = adjustments.burstRune400 ? "basic" : "rush";
-  const index = adjustments.burstRune400 ? 34 : 46;
-  return createSeededOpening({
-    ...config, deckChoices: { p1: decks.burn, p2: decks[opponent] }
-  }, `opening-mixed-v1:burn:${opponent}:${index}`, adjustments);
+  return config => createSeededOpening({
+    ...config, deckChoices: { p1: decks[first], p2: decks[second] }
+  }, `opening-mixed-v1:${openingCase}`, adjustments);
 }

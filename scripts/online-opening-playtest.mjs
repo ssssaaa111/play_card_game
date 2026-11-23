@@ -165,7 +165,12 @@ function playOpening(first, second, seed, {
     eventCount = state.events.length;
   }
   if (replay) replay.winnerId = state.gameOver?.winnerId ?? null;
-  return { firstDamageTurn, followerDamageBeforeTurn, passed, firstTurnWin: turn === 1 && state.gameOver?.winnerId === "p1", recoveries, pressure, replay };
+  return {
+    firstDamageTurn, followerDamageBeforeTurn, passed,
+    firstTurnWin: turn === 1 && state.gameOver?.winnerId === "p1",
+    followerFirstTurnWin: turn === 2 && state.gameOver?.winnerId === "p2",
+    recoveries, pressure, replay
+  };
 }
 
 function summarize(games) {
@@ -205,7 +210,7 @@ function damageSummary(amounts) {
   };
 }
 
-function summarizePressure(games) {
+function summarizePressure(games, includeFollowerWins = false) {
   const count = predicate => games.filter(game => predicate(game.pressure)).length;
   return {
     turns: [0, 1].map(index => ({
@@ -214,6 +219,7 @@ function summarizePressure(games) {
       secondSeatDamageTaken: damageSummary(games.map(game => game.pressure.turns[index].damage.p2))
     })),
     firstTurnWins: games.filter(game => game.firstTurnWin).length,
+    ...(includeFollowerWins ? { followerFirstTurnWins: games.filter(game => game.followerFirstTurnWin).length } : {}),
     follower: {
       responseBeforeTurn: count(pressure => pressure.followerResponse),
       reachedTurn: count(pressure => pressure.followerOptions),
@@ -232,11 +238,13 @@ const gamesPerOrder = Number(process.argv.find(arg => arg.startsWith("--games=")
 const seed = process.argv.find(arg => arg.startsWith("--seed="))?.slice(7) ?? "opening-playtest-v1";
 const runGraveReturnTrial = process.argv.includes("--grave-return-trial");
 const runMixedRecovery = process.argv.includes("--mixed-recovery");
+const runBurstRuneTrial = process.argv.includes("--burst-rune-400-trial");
 const traceOpenings = process.argv.includes("--trace-openings");
 const openingCase = process.argv.find(arg => arg.startsWith("--opening-case="))?.slice("--opening-case=".length);
 assert.ok(Number.isSafeInteger(gamesPerOrder) && gamesPerOrder > 0 && gamesPerOrder <= 1000, "Use --games=1 through --games=1000 per seat order");
 assert.ok(!(runGraveReturnTrial && runMixedRecovery), "Choose one playtest comparison");
 assert.ok(!traceOpenings || runMixedRecovery, "Opening traces require --mixed-recovery");
+assert.ok(!runBurstRuneTrial || (runMixedRecovery && !openingCase), "The Burst Rune comparison requires a mixed recovery batch");
 const deckLists = runMixedRecovery ? mixedRecoveryDecks() : decks;
 function replayOpeningCase() {
   assert.ok(runMixedRecovery, "A fixed opening case requires --mixed-recovery");
@@ -266,15 +274,27 @@ function printBatchReport() {
       const options = { deckLists, graveReturnTurnLimit: !runGraveReturnTrial, trackPressure: runMixedRecovery, trace: traceOpenings };
       const games = seeds.map(gameSeed => playOpening(first, second, gameSeed, options));
       if (runMixedRecovery) {
-        const candidate = seeds.map(gameSeed => playOpening(first, second, gameSeed, { ...options, drawTwoOnce: true }));
-        assert.ok(candidate.every(game => game.pressure.turns.every(turn => turn.drawTwo <= 1)));
-        const matchup = { first, second, current: summarizePressure(games), drawTwoOnce: summarizePressure(candidate) };
+        const candidateKey = runBurstRuneTrial ? "burstRune400" : "drawTwoOnce";
+        const candidate = seeds.map(gameSeed => playOpening(first, second, gameSeed, { ...options, [candidateKey]: true }));
+        if (!runBurstRuneTrial) assert.ok(candidate.every(game => game.pressure.turns.every(turn => turn.drawTwo <= 1)));
+        const matchup = {
+          first, second, current: summarizePressure(games, runBurstRuneTrial),
+          [candidateKey]: summarizePressure(candidate, runBurstRuneTrial)
+        };
+        if (runBurstRuneTrial) {
+          const gained = [], lost = [];
+          for (const [index, game] of games.entries()) {
+            if (game.followerFirstTurnWin === candidate[index].followerFirstTurnWin) continue;
+            (candidate[index].followerFirstTurnWin ? gained : lost).push(seeds[index]);
+          }
+          matchup.followerFirstTurnWinChanges = { gained, lost };
+        }
         if (traceOpenings) {
           const damage = game => first === "burn" ? game.followerDamageBeforeTurn : game.pressure.turns[1].damage.p1;
           const peaks = [games, candidate].map(samples =>
             samples.reduce((peak, game, index) => damage(game) > damage(samples[peak]) ? index : peak, 0));
           matchup.traces = [...new Set(peaks)].map(index => ({
-            current: games[index].replay, drawTwoOnce: candidate[index].replay
+            current: games[index].replay, [candidateKey]: candidate[index].replay
           }));
         }
         matchups.push(matchup);
