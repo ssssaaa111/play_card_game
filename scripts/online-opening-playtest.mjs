@@ -239,12 +239,16 @@ const seed = process.argv.find(arg => arg.startsWith("--seed="))?.slice(7) ?? "o
 const runGraveReturnTrial = process.argv.includes("--grave-return-trial");
 const runMixedRecovery = process.argv.includes("--mixed-recovery");
 const runBurstRuneTrial = process.argv.includes("--burst-rune-400-trial");
+const runLastSparkTrial = process.argv.includes("--last-spark-draw-one-trial");
+const compareCardVariants = runBurstRuneTrial || runLastSparkTrial;
 const traceOpenings = process.argv.includes("--trace-openings");
 const openingCase = process.argv.find(arg => arg.startsWith("--opening-case="))?.slice("--opening-case=".length);
 assert.ok(Number.isSafeInteger(gamesPerOrder) && gamesPerOrder > 0 && gamesPerOrder <= 1000, "Use --games=1 through --games=1000 per seat order");
 assert.ok(!(runGraveReturnTrial && runMixedRecovery), "Choose one playtest comparison");
 assert.ok(!traceOpenings || runMixedRecovery, "Opening traces require --mixed-recovery");
 assert.ok(!runBurstRuneTrial || (runMixedRecovery && !openingCase), "The Burst Rune comparison requires a mixed recovery batch");
+assert.ok(!runLastSparkTrial || runMixedRecovery, "The Last Spark comparison requires --mixed-recovery");
+assert.ok(!(runBurstRuneTrial && runLastSparkTrial), "Choose one card comparison");
 const deckLists = runMixedRecovery ? mixedRecoveryDecks() : decks;
 function replayOpeningCase() {
   assert.ok(runMixedRecovery, "A fixed opening case requires --mixed-recovery");
@@ -253,6 +257,13 @@ function replayOpeningCase() {
   const play = (variant = {}) => playOpening(first, second, `${seed}:${openingCase}`, {
     deckLists, trackPressure: true, trace: true, ...variant
   });
+  if (runLastSparkTrial) {
+    return {
+      openingCase,
+      current: play({ burstRune400: true }),
+      lastSparkDrawOne: play({ burstRune400: true, lastSparkDrawOne: true })
+    };
+  }
   return {
     openingCase,
     current: play(),
@@ -273,18 +284,20 @@ function printBatchReport() {
       const seeds = Array.from({ length: gamesPerOrder }, (_, index) => `${seed}:${first}:${second}:${index}`);
       const options = {
         deckLists, graveReturnTurnLimit: !runGraveReturnTrial, trackPressure: runMixedRecovery, trace: traceOpenings,
-        burstRune400: !runMixedRecovery && !runGraveReturnTrial
+        burstRune400: runLastSparkTrial || (!runMixedRecovery && !runGraveReturnTrial)
       };
       const games = seeds.map(gameSeed => playOpening(first, second, gameSeed, options));
       if (runMixedRecovery) {
-        const candidateKey = runBurstRuneTrial ? "burstRune400" : "drawTwoOnce";
+        let candidateKey = "drawTwoOnce";
+        if (runBurstRuneTrial) candidateKey = "burstRune400";
+        if (runLastSparkTrial) candidateKey = "lastSparkDrawOne";
         const candidate = seeds.map(gameSeed => playOpening(first, second, gameSeed, { ...options, [candidateKey]: true }));
-        if (!runBurstRuneTrial) assert.ok(candidate.every(game => game.pressure.turns.every(turn => turn.drawTwo <= 1)));
+        if (!compareCardVariants) assert.ok(candidate.every(game => game.pressure.turns.every(turn => turn.drawTwo <= 1)));
         const matchup = {
-          first, second, current: summarizePressure(games, runBurstRuneTrial),
-          [candidateKey]: summarizePressure(candidate, runBurstRuneTrial)
+          first, second, current: summarizePressure(games, compareCardVariants),
+          [candidateKey]: summarizePressure(candidate, compareCardVariants)
         };
-        if (runBurstRuneTrial) {
+        if (compareCardVariants) {
           const gained = [], lost = [];
           for (const [index, game] of games.entries()) {
             if (game.followerFirstTurnWin === candidate[index].followerFirstTurnWin) continue;
@@ -292,11 +305,23 @@ function printBatchReport() {
           }
           matchup.followerFirstTurnWinChanges = { gained, lost };
         }
+        if (runLastSparkTrial) {
+          const handoffDamageChanges = games.map((game, index) => candidate[index].followerDamageBeforeTurn - game.followerDamageBeforeTurn);
+          matchup.followerDamageBeforeTurnChanges = {
+            decreased: handoffDamageChanges.filter(change => change < 0).length,
+            same: handoffDamageChanges.filter(change => change === 0).length,
+            increased: handoffDamageChanges.filter(change => change > 0).length
+          };
+        }
         if (traceOpenings) {
           const damage = game => first === "burn" ? game.followerDamageBeforeTurn : game.pressure.turns[1].damage.p1;
-          const peaks = [games, candidate].map(samples =>
+          const selected = [games, candidate].map(samples =>
             samples.reduce((peak, game, index) => damage(game) > damage(samples[peak]) ? index : peak, 0));
-          matchup.traces = [...new Set(peaks)].map(index => ({
+          if (runLastSparkTrial) {
+            const differences = games.map((game, index) => Math.abs(damage(game) - damage(candidate[index])));
+            selected.push(differences.indexOf(Math.max(...differences)));
+          }
+          matchup.traces = [...new Set(selected)].map(index => ({
             current: games[index].replay, [candidateKey]: candidate[index].replay
           }));
         }
