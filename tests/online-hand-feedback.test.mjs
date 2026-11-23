@@ -90,6 +90,30 @@ test("target blockers distinguish own monsters, enemy supports and grave monster
   assert.doesNotMatch(battle.reason, /主要阶段/);
 });
 
+test("Eclipse Barrier is blocked on an empty or single-element field and unlocks with both own elements", () => {
+  const state = makeState(["eclipse-barrier", "solar-knight", "void-hound", "iron-guardian", "twin-summon"]);
+  const spell = handId(state, "eclipse-barrier");
+  const light = handId(state, "solar-knight");
+  const shadow = handId(state, "void-hound");
+  place(state, handId(state, "void-hound", "p2"), "monsterZone", 0, "p2");
+  for (const ownLight of [false, true]) {
+    if (ownLight) place(state, light, "monsterZone", 0);
+    const view = buildDuelView(state, "p1");
+    assert.equal(view.legalActions.unavailableHandActions[spell].code, "ELEMENT_REQUIREMENT");
+    assert.equal(onlineHandActionView(view, spell).label, "属性不足");
+    assert.ok(!view.legalActions.actions.activateCard.some(action => action.cardId === spell));
+    const engine = new GameEngine(state);
+    const before = engine.getState();
+    assert.throws(() => engine.dispatch({ type: "ACTIVATE_CARD", playerId: "p1", cardId: spell }), /requires elements light, shadow/);
+    assert.deepEqual(engine.getState(), before);
+  }
+
+  place(state, shadow, "monsterZone", 1);
+  const view = buildDuelView(state, "p1");
+  assert.equal(onlineHandActionView(view, spell).ok, true);
+  assert.ok(view.legalActions.actions.activateCard.some(action => action.cardId === spell));
+});
+
 test("tribute and full support zone blockers provide actionable counts and capacity feedback", () => {
   const state = makeState(["starfall-colossus", "mirror-snare", "solar-knight", "blade-sigil", "weakening-web"]);
   const giant = handId(state, "starfall-colossus");

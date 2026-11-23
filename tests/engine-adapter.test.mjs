@@ -2223,6 +2223,8 @@ test("dispatches engine-backed light-shadow combo as life gain plus draw", () =>
   const state = appState();
   state.player.hand = [eclipse];
   state.player.deck = [deckCard];
+  state.player.field[0] = { ...uiMonster("eclipse-light", "solar-knight"), element: "light" };
+  state.player.field[1] = { ...uiMonster("eclipse-shadow", "void-hound"), element: "shadow" };
 
   assert.equal(canDispatchSpellFromUiState(eclipse), true);
   const events = dispatchActivateSpellFromUiState(state, "player", "ai", 0);

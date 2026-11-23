@@ -241,7 +241,7 @@ export const defaultCardEffects = Object.freeze({
   lightShadowCombo: oneShot([
     { op: "heal", player: "self", amount: 600 },
     { op: "drawCards", player: "self", count: 1 }
-  ]),
+  ], { requirements: [{ type: "requiredElements", player: "self", elements: ["light", "shadow"] }] }),
   splitToken: oneShot(
     [{ op: "createToken", player: "self", templateId: "spark-fragment-token", count: 2 }],
     {
