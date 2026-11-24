@@ -720,6 +720,35 @@ async function checkResponseDecisionLayout(cdp, page) {
   return layout;
 }
 
+async function rotateSelectedResponse(cdp, page, width, height, timeoutMs) {
+  const snapshot = `(() => {
+    const dialog = document.querySelector('#onlineResponse');
+    const selected = dialog.querySelector('#responseChoices [aria-pressed="true"]');
+    if (!dialog.open || !selected) return null;
+    const body = dialog.querySelector('.online-response-scroll').getBoundingClientRect();
+    const choice = selected.getBoundingClientRect();
+    const actionsReachable = ['responseActivate', 'responsePass'].every(id => {
+      const button = document.getElementById(id), box = button.getBoundingClientRect();
+      return !button.disabled && box.bottom <= innerHeight && button.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+    });
+    return { width: innerWidth, height: innerHeight, title: document.querySelector('#responseTitle').textContent,
+      selectedIndex: selected.dataset.trapChoiceIndex, revision: document.querySelector('#app').dataset.revision,
+      seconds: Number(document.querySelector('#responseCountdown').textContent.match(/\\d+/)?.[0] || 0),
+      selectedVisible: choice.top >= body.top - 1 && choice.bottom <= body.bottom + 1, actionsReachable };
+  })()`;
+  const before = await waitForPage(cdp, page, `(() => { const state = ${snapshot}; return state?.seconds > 0 && state.seconds < 15 ? state : null; })()`, 'selected response clock has counted down', timeoutMs);
+  await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  const after = await waitForPage(cdp, page, `(() => {
+    const state = ${snapshot};
+    return state?.width === ${width} && state.height === ${height} && state.selectedVisible && state.actionsReachable ? state : null;
+  })()`, 'rotation reveals the chosen trap with reachable confirmation', timeoutMs);
+  assert.equal(after.selectedIndex, before.selectedIndex, 'Rotation selected another trap');
+  assert.equal(after.title, before.title, 'Rotation changed the response window');
+  assert.equal(after.revision, before.revision, 'Rotation submitted a response');
+  assert.ok(after.seconds > 0 && after.seconds <= before.seconds, 'Rotation restarted the response countdown');
+  return { before, after };
+}
+
 async function failurePageState(cdp, page) {
   if (!page?.cdp) return null;
   try {
@@ -864,10 +893,13 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   await endTurn(cdp, secondPage, options.timeoutMs);
   await waitForPage(cdp, firstPage, visibleExpression('#playerField .slot[data-attack-state="ready"]'), 'chain attack available', options.timeoutMs);
   await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  await secondPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 1, mobile: false });
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'attack response', options.timeoutMs);
   assert.match(await evaluate(cdp, secondPage, `document.querySelector('#responseBattleSummary').textContent`), /^若不发动陷阱：/);
+  const cl1Rotated = await rotateSelectedResponse(cdp, secondPage, 568, 320, options.timeoutMs);
   await click(cdp, secondPage, '#responseActivate');
+  await secondPage.cdp.send('Emulation.clearDeviceMetricsOverride');
   await waitForPage(cdp, firstPage, visibleExpression('#onlineResponse[open]'), 'CL2 response', options.timeoutMs);
   await click(cdp, firstPage, '#responseChain .chain-stack-card');
   await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), 'inspect a public chain card during response', options.timeoutMs);
@@ -876,10 +908,11 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#onlineResponse').open && document.querySelector('#onlineResponse').contains(document.activeElement)`), true, 'Closing chain details lost the active response');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#responseLead').textContent`), '可反制 CL1《镜光反制》；不再连锁则按 CL1 结算。');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#responseBattleSummary').textContent`), /^原始攻击预估（未计入连锁）：/);
-  const responseDecisions = { cl2BeforeSelection: await checkResponseDecisionLayout(cdp, firstPage) };
+  const responseDecisions = { cl1Rotated, cl2BeforeSelection: await checkResponseDecisionLayout(cdp, firstPage) };
   await writeFile(path.join(options.artifactDir, `online-response-decision-CL2-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
-  await click(cdp, firstPage, '#responseChoices button');
+  await click(cdp, firstPage, '#responseChoices button:last-child');
   responseDecisions.cl2Selected = await checkResponseDecisionLayout(cdp, firstPage);
+  responseDecisions.cl2Rotated = await rotateSelectedResponse(cdp, firstPage, 568, 320, options.timeoutMs);
   await click(cdp, firstPage, '#responseActivate');
   await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'CL3 response', options.timeoutMs);
   assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#responseLead').textContent`), '可反制 CL2《断链裁决》；不再连锁则按 CL2 → CL1 结算。');
@@ -892,8 +925,9 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   await evaluate(cdp, firstPage, `(() => { const scroll = document.querySelector('.online-response-scroll'); scroll.scrollTop = scroll.scrollHeight; })()`);
   responseDecisions.cl4Landscape = await checkResponseDecisionLayout(cdp, firstPage);
   await writeFile(path.join(options.artifactDir, `online-response-decision-CL4-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
-  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  responseDecisions.cl4Rotated = await rotateSelectedResponse(cdp, firstPage, 320, 568, options.timeoutMs);
   await click(cdp, firstPage, '#responseActivate');
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await waitForPage(cdp, firstPage, visibleExpression('#chainResolutionStage'), 'four-link resolution', options.timeoutMs);
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#chainResolutionStage').textContent`), /CL4 → CL3 → CL2 → CL1/);
   const playbackControls = { live: await checkChainPlaybackControls(cdp, firstPage, true) };

@@ -1177,7 +1177,10 @@ function inspectorViewportKey() {
 }
 
 function revealInspectorEntry(scroller, entry, returnPoint) {
-  if (!returnPoint.viewportChanged && returnPoint.viewport === inspectorViewportKey()) return;
+  if (returnPoint.viewportChanged || returnPoint.viewport !== inspectorViewportKey()) revealScrolledEntry(scroller, entry);
+}
+
+function revealScrolledEntry(scroller, entry) {
   const frame = scroller.getBoundingClientRect();
   const box = entry.getBoundingClientRect();
   const leftEdge = frame.left + scroller.clientLeft;
@@ -2544,6 +2547,10 @@ window.addEventListener("resize", () => {
   const viewport = inspectorViewportKey();
   for (const point of [inspectorReturnFocus, inspectorCollection?.returnPoint]) {
     if (point && point.viewport !== viewport) point.viewportChanged = true;
+  }
+  if (elements.onlineResponse.open && !elements.cardInspector.open) {
+    const selected = elements.responseChoices.querySelector('[aria-pressed="true"]');
+    if (selected) revealScrolledEntry(selected.closest(".online-response-scroll"), selected);
   }
 });
 elements.handSortType.addEventListener("click", () => { handOrder = sortHandCardsByType(onlineBoardState(client.view, selection).player.hand, handOrder).map((card) => card.uid); render(client.view); });
