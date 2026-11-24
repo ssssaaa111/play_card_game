@@ -298,6 +298,10 @@ export const spellDefinitions = {
     handSummary: "对方 LP -400",
     caption: "爆裂伤害"
   },
+  burn400OncePerTurn: {
+    handSummary: "对方 LP -400 · 每张每回合 1 次",
+    caption: "爆裂伤害"
+  },
   burn500: {
     handSummary: "对方 LP -500",
     caption: "爆裂伤害"

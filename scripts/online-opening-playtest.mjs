@@ -342,7 +342,8 @@ function printBatchReport() {
       const seeds = Array.from({ length: gamesPerOrder }, (_, index) => `${seed}:${first}:${second}:${index}`);
       const options = {
         deckLists, graveReturnTurnLimit: !runGraveReturnTrial, trackPressure: runMixedRecovery, trace: traceOpenings, fourTurns,
-        burstRune400: use400InBothVariants || (!runMixedRecovery && !runGraveReturnTrial)
+        burstRune400: use400InBothVariants,
+        burstRuneOncePerTurn: !runMixedRecovery && !runGraveReturnTrial
       };
       const games = seeds.map(gameSeed => playOpening(first, second, gameSeed, options));
       if (runMixedRecovery) {

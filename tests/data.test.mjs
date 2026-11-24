@@ -149,7 +149,8 @@ test("featured scenario metadata describes difficulty objectives and hints", () 
 
 test("spell cards are backed by spell metadata", () => {
   const onlineCards = Object.values(createOnlineDuelState().cardDefinitions);
-  const spellCards = [...library, ...onlineCards].filter((card) => card.type === "spell");
+  const savedRune = createOnlineDuelState({ allowBurstRuneReplay: true }).cardDefinitions["burst-rune"];
+  const spellCards = [...library, ...onlineCards, savedRune].filter((card) => card.type === "spell");
   const effectsFromCards = new Set(spellCards.map((card) => card.effect));
   const validTargets = new Set(["ownMonster", "ownGraveMonster", "ownGraveCard", "enemyMonster", "enemySpellTrap"]);
   const validTargetRules = new Set(["strongest", "notSource"]);

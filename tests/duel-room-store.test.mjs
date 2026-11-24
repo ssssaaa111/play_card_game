@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createSeededOpening } from "../scripts/fixtures/online-opening-pressure.mjs";
 import { DuelRoom } from "../server/duel-room.js";
 import { DuelRoomStore } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
@@ -88,12 +87,14 @@ test("restart preserves card order events and receipts while excluding downtime 
 });
 
 for (const damage of [400, 500]) {
-  test(`Burst Rune keeps its saved ${damage} damage after recovery and uses 400 in the rematch`, (t) => {
+  test(`Burst Rune keeps its saved ${damage} damage and allows replays until the rematch`, (t) => {
     const openingHands = {
       p1: ["burst-rune", "material-reclaim", "ember-drake", "gale-mage", "element-echo"],
-      p2: ["burst-rune", "iron-guardian", "gale-mage", "solar-knight", "twin-summon"]
+      p2: ["burst-rune", "material-reclaim", "iron-guardian", "gale-mage", "solar-knight"]
     };
-    const createState = options => createOnlineDuelState({ ...options, openingHands, legacyBurstRuneDamage: damage === 500 });
+    const createState = options => createOnlineDuelState({
+      ...options, openingHands, legacyBurstRuneDamage: damage === 500, allowBurstRuneReplay: true
+    });
     const f = fixture(t, { createState });
     start(f.room);
     const view = f.room.viewFor("p1");
@@ -132,18 +133,23 @@ for (const damage of [400, 500]) {
     const rematch = restored.viewFor("p2");
     assert.equal(rematch.turn.playerId, "p2");
     const rematchRune = rematch.players.p2.hand.find(card => card.templateId === "burst-rune");
-    assert.equal(cardHandSummary(rematchRune), "对方 LP -400");
+    assert.equal(rematchRune.effect, "burn400OncePerTurn");
+    assert.equal(cardHandSummary(rematchRune), "对方 LP -400 · 每张每回合 1 次");
     const castRematchRune = rematch.legalActions.actions.activateCard.find(action => action.cardId === rematchRune.id);
     submit(restored, "two-new", castRematchRune, "rematch-rune");
+    const rematchRecovery = rematch.players.p2.hand.find(card => card.templateId === "material-reclaim");
+    submit(restored, "two-new", { type: "ACTIVATE_CARD", cardId: rematchRecovery.id, targetCardId: rematchRune.id }, "rematch-recover");
+    assert.equal(onlineHandActionView(restored.viewFor("p2"), rematchRune.id).label, "本回合已发动");
+    assert.throws(() => submit(restored, "two-new", castRematchRune, "rematch-replay"), { code: "ILLEGAL_COMMAND" });
     assert.equal(restored.viewFor("p1").players.p1.lp, 3600);
     assert.equal(cardById("burst-rune").effect, "burn500");
   });
 }
 
-test("the local Burst Rune trial limits the recovered copy across restart and resets next turn", (t) => {
-  const f = fixture(t, { createState: options => createSeededOpening({ ...options,
+test("new online duels limit the recovered copy across restart and reset next turn", (t) => {
+  const f = fixture(t, { createState: options => createOnlineDuelState({ ...options,
     openingHands: { p1: ["burst-rune", "burst-rune", "material-reclaim", "solar-knight", "iron-guardian"] }
-  }, "rune-replay-limit", { burstRuneOncePerTurn: true }) });
+  }) });
   start(f.room);
   const view = f.room.viewFor("p1");
   const [first, second] = view.players.p1.hand.filter(card => card.templateId === "burst-rune");
