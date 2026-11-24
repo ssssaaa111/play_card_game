@@ -1083,15 +1083,21 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open][data-grave-choice="true"]'), 'hand double-click keeps multi-target grave picker open', options.timeoutMs);
   const graveLayouts = {};
   let graveMobilePath;
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390]]) {
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [844, 390], [568, 320]]) {
+    const shortLandscape = width > height && height <= 400;
     await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     graveLayouts[width] = await waitForPage(cdp, firstPage, `(() => {
       const panel = document.querySelector('#cardInspector .online-inspector-panel').getBoundingClientRect();
       const content = document.querySelector('#inspectorContent');
+      const contentRect = content.getBoundingClientRect();
       const footer = document.querySelector('#graveChoiceActions').getBoundingClientRect();
       const confirm = document.querySelector('#graveChoiceConfirm').getBoundingClientRect();
-      return innerWidth === ${width} && panel.top >= 0 && panel.bottom <= innerHeight && content.getBoundingClientRect().bottom <= footer.top && confirm.bottom <= panel.bottom && confirm.height >= 44 && content.scrollWidth <= content.clientWidth + 2 && (innerWidth < 1040 || content.scrollHeight <= content.clientHeight + 2)
-        ? { width: innerWidth, panelHeight: panel.height, confirmVisible: true } : null;
+      const firstTargetsVisible = [...content.querySelectorAll('.online-grave-entry[data-eligible="true"]')].every(entry => {
+        const bounds = entry.getBoundingClientRect();
+        return bounds.top >= contentRect.top && bounds.bottom <= contentRect.bottom;
+      });
+      return innerWidth === ${width} && innerHeight === ${height} && panel.top >= 0 && panel.bottom <= innerHeight && contentRect.bottom <= footer.top && confirm.bottom <= panel.bottom && confirm.height >= 44 && content.scrollWidth <= content.clientWidth + 2 && (innerWidth < 1040 || content.scrollHeight <= content.clientHeight + 2) && (!${shortLandscape} || firstTargetsVisible)
+        ? { width: innerWidth, height: innerHeight, panelHeight: panel.height, confirmVisible: true, firstTargetsVisible } : null;
     })()`, 'grave choice scrolls above fixed confirmation', options.timeoutMs);
     if (width === 320) {
       graveMobilePath = path.join(options.artifactDir, `online-grave-choice-mobile-${roomCode}.png`);

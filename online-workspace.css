@@ -627,6 +627,45 @@ body[data-online-status] #onlineResult .online-result-secondary .btn { border-co
   body[data-online-status] #cardInspector .online-inspector-hint { display: none; }
 }
 
+@media (orientation: landscape) and (max-height: 400px) and (max-width: 1040px) {
+  body[data-online-status] #cardInspector[data-grave-choice="true"] #inspectorContent { gap: 6px; }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] .online-zone-summary {
+    flex-direction: row;
+    align-items: center;
+    padding: 5px 8px;
+  }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] .online-zone-browser {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 6px;
+  }
+  .online-grave-entry {
+    grid-template-columns: minmax(0,1fr) auto;
+    grid-template-rows: auto;
+  }
+  .online-grave-entry .online-zone-card {
+    grid-template-columns: 40px minmax(0,1fr);
+    align-content: center;
+    align-items: center;
+    min-height: 52px;
+    padding: 5px;
+    transform: none;
+  }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] #inspectorContent .card {
+    grid-template-rows: minmax(0,1fr);
+    height: 40px;
+    min-height: 0;
+    max-height: none;
+    padding: 0;
+    overflow: hidden;
+  }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] #inspectorContent .card > :not(.art) { display: none; }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] #inspectorContent .card .art { height: 100%; min-height: 0; }
+  .online-grave-entry .online-zone-card-caption strong { font-size: 12px; }
+  .online-grave-entry .online-zone-card-caption small { font-size: 10px; }
+  .online-grave-entry .online-grave-reason { margin-top: 0; }
+  .online-grave-entry .online-grave-detail { align-self: center; padding: 0 6px; }
+}
+
 /* Guidance owns a flexible row so readable text cannot cover either support zone. */
 body[data-online-status] #app .duel-table .field {
   grid-template-rows: minmax(0,1fr) var(--support-track-size) auto var(--support-track-size) minmax(0,1fr);
