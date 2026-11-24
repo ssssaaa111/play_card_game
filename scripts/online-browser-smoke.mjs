@@ -418,6 +418,52 @@ async function exerciseHandNavigation(cdp, page, timeoutMs, { selectLast = false
   return { turn: before.turn, firstRange: before.range, lastRange: end.range, detailsPreservedScroll: true, selectionPreservedScroll: selectLast, screenshotPath };
 }
 
+async function exerciseVerticalHandNavigation(cdp, page, timeoutMs) {
+  const idsExpression = `[...document.querySelectorAll('#hand > .card')].map(card => card.dataset.cardUid)`;
+  const atEnd = `(() => { const hand = document.querySelector('#hand'); return hand.scrollTop > 2 && hand.scrollHeight - hand.clientHeight - hand.scrollTop <= 2; })()`;
+  const point = (selector) => evaluate(cdp, page, `(() => {
+    const box = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+    return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };
+  })()`);
+  const slide = async (start, end) => {
+    await page.cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
+    for (const fraction of [0.25, 0.5, 0.75, 1]) {
+      const y = Math.round(start.y + (end.y - start.y) * fraction);
+      await page.cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x, y }] });
+    }
+    await page.cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  await page.cdp.send('Emulation.setDeviceMetricsOverride', { width: 568, height: 320, deviceScaleFactor: 1, mobile: false });
+  await page.cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+  try {
+    await waitForPage(cdp, page, `innerWidth === 568 && document.querySelector('#hand > .card:nth-child(6)') && document.querySelector('#phaseStage').hidden`, 'six cards in short landscape', timeoutMs);
+    const ids = await evaluate(cdp, page, idsExpression);
+    await evaluate(cdp, page, `document.querySelector('#hand').focus({ preventScroll: true })`);
+    await pressPageKey(page, 'End', 'End', 35);
+    await waitForPage(cdp, page, atEnd, 'End reaches the bottom row', timeoutMs);
+    await pressPageKey(page, 'Home', 'Home', 36);
+    await waitForPage(cdp, page, `document.querySelector('#hand').scrollTop <= 1`, 'Home returns to the top row', timeoutMs);
+    const swipe = await point('#hand > .card:nth-child(4) .card-head');
+    await slide(swipe, { y: swipe.y - 105 });
+    await waitForPage(cdp, page, atEnd, 'swiping from a card scrolls the hand', timeoutMs);
+    assert.deepEqual(await evaluate(cdp, page, idsExpression), ids, 'Browsing changed the hand order');
+    await click(cdp, page, '#hand > .card:last-child .card-detail-entry');
+    await waitForPage(cdp, page, visibleExpression('#cardInspector[open]'), 'details open on the bottom card', timeoutMs);
+    await click(cdp, page, '#inspectorClose');
+    await waitForPage(cdp, page, `${atEnd} && document.activeElement.closest('#hand > .card')?.dataset.cardUid === ${JSON.stringify(ids.at(-1))}`, 'details return to the same card and vertical position', timeoutMs);
+    const grip = await point('#hand > .card:last-child .hand-reorder-grip');
+    const target = await point('#hand > .card:nth-last-child(2) .hand-reorder-grip');
+    await slide(grip, { y: target.y - 8 });
+    const reordered = [...ids.slice(0, -2), ids.at(-1), ids.at(-2)];
+    await waitForPage(cdp, page, `JSON.stringify(${idsExpression}) === ${JSON.stringify(JSON.stringify(reordered))}`, 'dragging the grip reorders two cards', timeoutMs);
+    assert.equal(await evaluate(cdp, page, `${atEnd} && document.querySelector('#choiceActions').hidden`), true, 'Reordering moved the list or opened a card action');
+    return { cardCount: ids.length, keyboardReachedEnds: true, touchScrolled: true, detailsPreservedScroll: true, touchReorderedAtEnd: true };
+  } finally {
+    await page.cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    await page.cdp.send('Emulation.clearDeviceMetricsOverride');
+  }
+}
+
 async function installStageObserver(cdp, page) {
   await evaluate(cdp, page, `(() => {
     window.__onlineStageHistory = [];
@@ -1580,6 +1626,7 @@ try {
 
   await endTurn(cdp, firstPage, options.timeoutMs);
   await waitForPage(cdp, secondPage, `document.querySelector("#turnLabel")?.textContent?.trim() === "你的回合"`, "2P turn", options.timeoutMs);
+  handNavigationChecks.shortLandscape = await exerciseVerticalHandNavigation(cdp, secondPage, options.timeoutMs);
   assert.equal(await evaluate(cdp, secondPage, `!document.querySelector('#battleButton').disabled`), true, 'The follower could not enter battle on their first turn');
   openingTurn.followerCanEnterBattle = true;
   const guidanceLayouts = await exerciseGuidanceLayouts(cdp, firstPage, options, roomCode);

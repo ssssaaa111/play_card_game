@@ -90,7 +90,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
 
   assert.match(html, /<link rel="stylesheet" href="online-duel\.css\?v=[^"]+"/);
   assert.match(html, /<script type="module" src="\/src\/online-duel-app\.js\?v=[^"]+"><\/script>/);
-  assert.match(app, /hand-renderer\.js\?v=20261114-network-recovery-1/);
+  assert.match(app, /hand-renderer\.js\?v=[^"\s]+/);
   assert.match(app, /field-renderer\.js\?v=[^"\s]+/);
   assert.match(app, /online-duel-ui\.js\?v=[^"]+/);
   assert.match(app, /trap-response-renderer\.js\?v=20261117-response-takeover-1/);
@@ -150,7 +150,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
   assert.match(html, /href="duel-table\.css"/);
   assert.match(html, /href="duel-focus\.css"/);
-  assert.match(app, /import \{ renderHandCards \} from "\.\/hand-renderer\.js\?v=20261114-network-recovery-1"/);
+  assert.match(app, /import \{ renderHandCards \} from "\.\/hand-renderer\.js\?v=[^"\s]+"/);
   assert.match(app, /client\.requestRematch\(\)/);
   assert.match(app, /onlineSeriesView\(view\)/);
   assert.match(app, /elements\.resultReopenButton\.addEventListener\("click", openOnlineResult\)/);

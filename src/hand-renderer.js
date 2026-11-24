@@ -97,6 +97,7 @@ export function renderHandCards({
   fusionTargetForCard = () => null,
   fusionSelectedUids = [],
   directReorder = false,
+  reorderGrip = false,
   onMoveCard = () => {},
   onInsertCard = () => {},
   onCardDetail = () => {},
@@ -131,6 +132,14 @@ export function renderHandCards({
     });
     const cardEl = createCardElement(document, card, { asset: assetForCard(card), handSummary: true });
     const detailEntry = handDetailEntryView(card);
+    const grip = directReorder && reorderGrip ? document.createElement("span") : null;
+    if (grip) {
+      grip.className = "hand-reorder-grip";
+      grip.textContent = "⠿";
+      grip.title = "拖动调整手牌顺序";
+      grip.setAttribute("aria-hidden", "true");
+      cardEl.appendChild(grip);
+    }
     let suppressClick = false;
     cardEl.dataset.zone = "hand";
     cardEl.dataset.cardUid = card.uid || "";
@@ -281,6 +290,7 @@ export function renderHandCards({
       };
       cardEl.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 || !primaryHandPointer(event) || event.target.closest("button") || handDragSessions.has(root)) return;
+        if (event.pointerType === "touch" && grip?.getClientRects().length && event.target !== grip) return;
         const rect = cardEl.getBoundingClientRect();
         pointerDrag = {
           pointerId: event.pointerId,
@@ -309,7 +319,8 @@ export function renderHandCards({
       });
     }
 
-    cardEl.addEventListener("click", () => {
+    cardEl.addEventListener("click", (event) => {
+      if (event.target === grip) return;
       if (directReorder && suppressClick) {
         suppressClick = false;
         return;
@@ -318,7 +329,7 @@ export function renderHandCards({
     });
     cardEl.addEventListener("dblclick", (event) => {
       event.preventDefault();
-      if (suppressClick) return;
+      if (suppressClick || event.target === grip) return;
       onCardDoubleClick(card, index);
     });
     fragment.appendChild(cardEl);

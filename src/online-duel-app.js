@@ -1,5 +1,5 @@
 import { createCardElement } from "./card-renderer.js";
-import { renderHandCards } from "./hand-renderer.js?v=20261114-network-recovery-1";
+import { renderHandCards } from "./hand-renderer.js?v=20261125-landscape-hand-1";
 import { renderMonsterZones, renderSupportZones } from "./field-renderer.js?v=20261111-monster-status-1";
 import { buildDuelControlsView } from "./control-renderer.js";
 import { renderOnlineAttackPreview } from "./online-attack-preview-renderer.js?v=20261111-attack-choice-1";
@@ -1459,7 +1459,7 @@ function renderBoard(view, model) {
   const focusedHandIndex = [...elements.hand.children].indexOf(focusedHandCard);
   renderHandCards({
     document, root: elements.hand, cards: hand, assetForCard, started: true, canAct,
-    directReorder: true,
+    directReorder: true, reorderGrip: true,
     onMoveCard: (card, direction) => { handOrder = shiftHandCard(handOrder, card.uid, direction); render(client.view); },
     onInsertCard: (uid, beforeUid) => { handOrder = insertHandCard(handOrder, uid, beforeUid); render(client.view); },
     selectedZone: "hand", selectedUid: selection?.cardId,
@@ -1526,21 +1526,24 @@ function scheduleHandNavigation() {
   if (handNavigationFrame == null) handNavigationFrame = requestAnimationFrame(updateHandNavigation);
 }
 
-function scrollHandTo(left) {
-  elements.hand.scrollTo({ left, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+function scrollHandTo(position, vertical = false) {
+  elements.hand.scrollTo({ [vertical ? "top" : "left"]: position, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
 }
 
-function browseHand(direction) {
+function browseHand(direction, vertical = false) {
   const root = elements.hand;
   if (root.classList.contains("is-reordering")) return;
   const bounds = root.getBoundingClientRect();
   const cards = [...root.children].filter((card) => card.matches('.card'));
+  const near = vertical ? "top" : "left";
+  const far = vertical ? "bottom" : "right";
   const card = direction > 0
-    ? cards.find((card) => card.getBoundingClientRect().right > bounds.right + 1)
-    : cards.reverse().find((card) => card.getBoundingClientRect().left < bounds.left - 1);
+    ? cards.find((card) => card.getBoundingClientRect()[far] > bounds[far] + 1)
+    : cards.reverse().find((card) => card.getBoundingClientRect()[near] < bounds[near] - 1);
   if (!card) return;
   const box = card.getBoundingClientRect();
-  scrollHandTo(root.scrollLeft + (direction > 0 ? box.left - bounds.left - 2 : box.right - bounds.right + 2));
+  const current = vertical ? root.scrollTop : root.scrollLeft;
+  scrollHandTo(current + (direction > 0 ? box[near] - bounds[near] - 2 : box[far] - bounds[far] + 2), vertical);
 }
 
 function locateNextReadyAction() {
@@ -2526,10 +2529,16 @@ elements.hand.addEventListener("scroll", scheduleHandNavigation, { passive: true
 new ResizeObserver(scheduleHandNavigation).observe(elements.hand);
 new MutationObserver(scheduleHandNavigation).observe(elements.hand, { childList: true, attributes: true, attributeFilter: ["class"] });
 elements.hand.addEventListener("keydown", (event) => {
-  if (event.target !== elements.hand || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const hand = elements.hand;
+  if (event.target !== hand || hand.classList.contains("is-reordering")) return;
+  const vertical = getComputedStyle(hand).flexDirection === "column";
+  const previous = vertical ? "ArrowUp" : "ArrowLeft";
+  const next = vertical ? "ArrowDown" : "ArrowRight";
+  if (![previous, next, "Home", "End"].includes(event.key)) return;
   event.preventDefault();
-  if (event.key === "Home" || event.key === "End") scrollHandTo(event.key === "Home" ? 0 : elements.hand.scrollWidth);
-  else browseHand(event.key === "ArrowRight" ? 1 : -1);
+  if (event.key === "End") scrollHandTo(vertical ? hand.scrollHeight : hand.scrollWidth, vertical);
+  else if (event.key === "Home") scrollHandTo(0, vertical);
+  else browseHand(event.key === next ? 1 : -1, vertical);
 });
 elements.duelField.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key) || !event.target.matches(".slot,.trap-slot")) return;
