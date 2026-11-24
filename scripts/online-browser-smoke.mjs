@@ -1373,6 +1373,38 @@ try {
   await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 844, height: 390, deviceScaleFactor: 1, mobile: false });
   await waitForPage(cdp, firstPage, `document.querySelector(".topbar").getBoundingClientRect().height <= 60 && document.documentElement.scrollWidth <= innerWidth`, "compact landscape header without overflow", options.timeoutMs);
   handLayouts.landscape = await checkHandLayout(cdp, firstPage);
+  await firstPage.cdp.send("Emulation.setDeviceMetricsOverride", { width: 568, height: 320, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, `innerWidth === 568 && innerHeight === 320`, "short landscape hand", options.timeoutMs);
+  handLayouts.shortLandscape = await checkHandLayout(cdp, firstPage);
+  const shortHandLayout = `(() => {
+    const hand = document.querySelector('#hand');
+    const frame = hand.getBoundingClientRect();
+    const panel = document.querySelector('#handPanel').getBoundingClientRect();
+    return { left: frame.left - panel.left, right: panel.right - frame.right, bottom: innerHeight - frame.bottom,
+      overflowX: hand.scrollWidth - hand.clientWidth, overflowY: hand.scrollHeight - hand.clientHeight };
+  })()`;
+  const shortHandFits = await waitForPage(cdp, firstPage, `(() => {
+    const layout = ${shortHandLayout};
+    return layout.left >= -1 && layout.right >= -1 && layout.bottom >= -1 && layout.overflowX <= 1 && layout.overflowY <= 1
+      ? layout : null;
+  })()`, "the five opening hand rows fit inside the short landscape panel", options.timeoutMs).catch(async (error) => {
+    throw new Error(`${error.message}: ${JSON.stringify(await evaluate(cdp, firstPage, shortHandLayout))}`, { cause: error });
+  });
+  handLayouts.shortLandscape.bounds = shortHandFits;
+  await click(cdp, firstPage, '#handReadyJump');
+  await waitForPage(cdp, firstPage, `document.activeElement.matches('#hand .action-ready') && document.querySelector('#choiceActions').hidden`, "short landscape jump focuses a playable card without selecting it", options.timeoutMs);
+  await click(cdp, firstPage, '#hand > .card:last-child .card-detail-entry');
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), "last short landscape hand row opens details", options.timeoutMs);
+  await click(cdp, firstPage, '#inspectorClose');
+  assert.deepEqual(await evaluate(cdp, firstPage, `[...document.querySelectorAll('#hand > .card')].map(card => card.dataset.cardUid)`), openingHandIds, "Short landscape navigation changed the opening hand");
+  await click(cdp, firstPage, '#hand > .card.monster.action-ready');
+  await waitForPage(cdp, firstPage, `(() => {
+    const choice = document.querySelector('#choiceActions');
+    return !choice.hidden && choice.getBoundingClientRect().right <= document.querySelector('#hand').getBoundingClientRect().left;
+  })()`, "short landscape summon confirmation sits beside the hand", options.timeoutMs);
+  await click(cdp, firstPage, '#playerField .placement-candidate:nth-child(5)');
+  assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerField .online-placement-selected')?.dataset.index`), "4");
+  await click(cdp, firstPage, '#choiceCancelBtn');
   await firstPage.cdp.send("Emulation.clearDeviceMetricsOverride");
   await waitForPage(cdp, firstPage, `innerWidth > 1040 && document.querySelector(".topbar").getBoundingClientRect().height < 100`, "desktop layout restored", options.timeoutMs);
   handLayouts.desktop = await checkHandLayout(cdp, firstPage);
