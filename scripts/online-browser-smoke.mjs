@@ -1471,6 +1471,17 @@ try {
   })()`, "short landscape summon confirmation sits beside the hand", options.timeoutMs);
   await click(cdp, firstPage, '#playerField .placement-candidate:nth-child(5)');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#playerField .online-placement-selected')?.dataset.index`), "4");
+  for (const [width, height] of [[320, 568], [568, 320]]) {
+    await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await waitForPage(cdp, firstPage, `(() => {
+      const slot = document.querySelector('#playerField .online-placement-selected');
+      const confirm = document.querySelector('#choiceConfirmBtn');
+      const box = confirm.getBoundingClientRect();
+      return innerWidth === ${width} && innerHeight === ${height} && slot?.dataset.index === '4' && !confirm.disabled
+        && box.bottom <= innerHeight && confirm.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+    })()`, 'rotation preserves the fifth summon destination and confirmation', options.timeoutMs);
+  }
+  handLayouts.shortLandscape.placementRestored = true;
   await click(cdp, firstPage, '#choiceCancelBtn');
   await firstPage.cdp.send("Emulation.clearDeviceMetricsOverride");
   await waitForPage(cdp, firstPage, `innerWidth > 1040 && document.querySelector(".topbar").getBoundingClientRect().height < 100`, "desktop layout restored", options.timeoutMs);
@@ -1699,14 +1710,18 @@ try {
   const attackChoiceLayouts = {};
   for (const [width, height] of [[1440, 900], [390, 844], [320, 720], [320, 568], [844, 390], [568, 320]]) {
     const layoutKey = height === 568 ? '320x568' : String(width);
+    const landscape = width > height && width <= 1040;
     await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     attackChoiceLayouts[layoutKey] = await waitForPage(cdp, firstPage, `(() => {
-      if (innerWidth !== ${width}) return null;
+      if (innerWidth !== ${width} || innerHeight !== ${height}) return null;
       const panel = document.querySelector('#choiceActions').getBoundingClientRect();
       const confirm = document.querySelector('#choiceConfirmBtn').getBoundingClientRect();
       const preview = document.querySelector('#onlineBattlePreview').getBoundingClientRect();
-      return panel.height < 230 && panel.top >= 0 && panel.bottom <= innerHeight && confirm.bottom <= panel.bottom && confirm.top >= preview.bottom && document.documentElement.scrollWidth <= innerWidth
-        ? { width: innerWidth, height: panel.height, confirmVisible: true } : null;
+      const hand = document.querySelector('#handPanel').getBoundingClientRect();
+      const field = document.querySelector('#duelPanel').getBoundingClientRect();
+      const besideField = panel.left >= field.right && panel.top >= hand.top && panel.right <= hand.right + 1 && panel.bottom <= hand.bottom + 1;
+      return (${landscape} ? besideField : panel.height < 230) && panel.top >= 0 && panel.bottom <= innerHeight && confirm.bottom <= panel.bottom && confirm.top >= preview.bottom && document.documentElement.scrollWidth <= innerWidth
+        ? { width: innerWidth, height: panel.height, confirmVisible: true, besideField } : null;
     })()`, 'compact attack decision and reachable confirmation', options.timeoutMs);
     attackChoiceLayouts[layoutKey].controls = await checkChoiceControls(cdp, firstPage, options.timeoutMs);
     if (width === 568) await writeFile(path.join(options.artifactDir, `online-attack-controls-landscape-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
@@ -1944,6 +1959,21 @@ try {
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#fieldTargets').hidden`), true, 'Unique target rendered a redundant candidate list');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#choiceConfirmBtn').disabled`), false);
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('.online-attack-outcome').textContent`), /预计造成 800 伤害.*4000 → 3200/);
+  const attackTargetId = await evaluate(cdp, firstPage, `document.querySelector('#aiField .target-selected')?.dataset.cardUid`);
+  assert.ok(attackTargetId, 'Unique attack has no selected field target');
+  for (const [width, height] of [[320, 568], [568, 320]]) {
+    await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await waitForPage(cdp, firstPage, `(() => {
+      if (innerWidth !== ${width} || innerHeight !== ${height}) return false;
+      const confirm = document.querySelector('#choiceConfirmBtn');
+      const slot = document.querySelector('#aiField .target-selected');
+      return slot?.dataset.cardUid === ${JSON.stringify(attackTargetId)} && !confirm.disabled && [slot, confirm].every(element => {
+        const box = element.getBoundingClientRect();
+        return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+      });
+    })()`, 'rotation preserves the attack target and keeps it clickable', options.timeoutMs);
+  }
+  attackChoiceLayouts[568].targetRestored = true;
   await click(cdp, firstPage, '#aiField .slot.attack-target');
   await pressPageKey(firstPage, 'Enter', 'Enter', 13);
   await pressPageKey(firstPage, 'Enter', 'Enter', 13, { autoRepeat: true });
@@ -1952,6 +1982,7 @@ try {
   await click(cdp, firstPage, '#choiceCancelBtn');
   assert.equal(await evaluate(cdp, firstPage, `!document.querySelector('#fieldActionBar').hidden && document.querySelector('#fieldActionName').textContent === '日冕骑士'`), true, 'Unique-target preview lost its attacker on return');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#aiPanel').textContent`), /4000 \/ 4000/);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: false });
   // The explicit button opens a preview; double-click intentionally executes the sole legal attack.
   await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, firstPage, textMatchExpression('#aiPanel', '3200 / 4000'), 'landscape unique-target quick attack deals damage once', options.timeoutMs);

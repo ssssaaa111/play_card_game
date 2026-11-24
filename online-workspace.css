@@ -603,7 +603,20 @@ body[data-online-status] #fieldTargets .online-target { min-height: 40px; margin
 body[data-online-status] #fieldTargets .online-target strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 body[data-online-status] #fieldTargets .online-target small { font-size: 9px; }
 @media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
-  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { max-height: calc(100dvh - 100px); width: min(480px, calc(100vw - 20px)); gap: 8px; padding: 8px; }
+  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    max-height: none;
+    padding: 8px;
+    transform: none;
+  }
+  body[data-online-status] #app #handPanel:has(#choiceActions.online-attack-choice:not([hidden])) > :is(.hand-title, .hand-stack) {
+    visibility: hidden;
+  }
+  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #fieldTargets {
+    max-height: min(98px, 28dvh);
+  }
   .online-attack-preview { gap: 5px; }
 }
 
