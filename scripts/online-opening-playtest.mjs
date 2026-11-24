@@ -93,16 +93,27 @@ function playAction(view, canDrawTwo, state) {
   return actions.endTurn[0];
 }
 
+function followerBoard(state) {
+  const follower = state.players.p2;
+  return {
+    monster: follower.monsterZone.some(Boolean),
+    trap: follower.spellTrapZone.some(id => state.cards[id]?.type === "trap")
+  };
+}
+
 function playOpening(first, second, seed, {
   graveReturnTurnLimit = true, deckLists = decks, trackPressure = false, drawTwoOnce = false, trace = false,
-  lastSparkDrawOne = false, burstRune400 = false, burstRuneOncePerTurn = false
+  lastSparkDrawOne = false, burstRune400 = false, burstRuneOncePerTurn = false, fourTurns = false
 } = {}) {
   const room = startRoom(first, second, seed, graveReturnTurnLimit, deckLists, { lastSparkDrawOne, burstRune400, burstRuneOncePerTurn });
-  const turnLimit = trackPressure ? 2 : openingTurns;
+  const turnLimit = trackPressure && !fourTurns ? 2 : openingTurns;
   const pressure = trackPressure ? {
     turns: Array.from({ length: turnLimit }, () => ({ drawTwo: 0, damage: { p1: 0, p2: 0 } })),
     followerResponse: false, followerOptions: null, followerAttacked: false, followerFinished: null
   } : null;
+  const followUp = fourTurns ? { thirdTurnRecoveredRuneDamage: 0, fourthTurnStart: null, fourthTurnAttacked: false, fourthTurnEnd: null } : null;
+  const openingRunesCast = new Set();
+  const openingRunesRecovered = new Set();
   let turn = 1, eventCount = 0, firstDamageTurn = null, followerDamageBeforeTurn = 0, actionsThisTurn = 0;
   let state = room.engine.getState();
   const cardName = id => state.cards[id]?.templateId || id;
@@ -125,6 +136,9 @@ function playOpening(first, second, seed, {
         pressure.followerOptions = { canAct: hasAny, summon: can.summon, setTrap: can.setTrap };
       }
     }
+    if (followUp && turn === 4 && seatId === "p2" && !followUp.fourthTurnStart && view.turn.phase === "main" && !view.machine.responseWindow) {
+      followUp.fourthTurnStart = { ...followerBoard(state), canAct: view.legalActions.hasAny };
+    }
     const action = playAction(view, !drawTwoOnce || pressure.turns[turn - 1].drawTwo === 0, state);
     assert.ok(action, `No legal action (${seed}, turn ${turn}, ${seatId})`);
     if (seatId === state.turn.playerId && !["CHANGE_PHASE", "END_TURN"].includes(action.type)) actionsThisTurn += 1;
@@ -144,13 +158,8 @@ function playOpening(first, second, seed, {
     }
     for (const event of events) {
       if (event.type === "TURN_ENDED") {
-        if (pressure && turn === 2) {
-          const follower = state.players.p2;
-          pressure.followerFinished = {
-            monster: follower.monsterZone.some(Boolean),
-            trap: follower.spellTrapZone.some(id => state.cards[id]?.type === "trap")
-          };
-        }
+        if (pressure && turn === 2) pressure.followerFinished = followerBoard(state);
+        if (followUp && turn === 4) followUp.fourthTurnEnd = followerBoard(state);
         passed.push(actionsThisTurn === 0);
         actionsThisTurn = 0;
         turn += 1;
@@ -159,13 +168,21 @@ function playOpening(first, second, seed, {
         firstDamageTurn ??= turn;
         if (turn === 1 && event.playerId === "p2") followerDamageBeforeTurn += event.amount;
         if (pressure) pressure.turns[turn - 1].damage[event.playerId] += event.amount;
+        if (followUp && turn === 3 && event.playerId === "p2" && openingRunesRecovered.has(event.sourceCardId)) {
+          followUp.thirdTurnRecoveredRuneDamage += event.amount;
+        }
       }
       if (turn <= turnLimit && event.type === "CARD_ACTIVATED") {
         const card = state.cards[event.cardId];
         if (isGraveReturn(card)) recoveries.push({ turn, targetEffect: state.cards[event.targetCardId]?.effect });
         if (pressure && drawEffects.has(card?.effect)) pressure.turns[turn - 1].drawTwo += 1;
+        if (followUp && turn === 1) {
+          if (card?.templateId === "burst-rune") openingRunesCast.add(event.cardId);
+          if (isGraveReturn(card) && openingRunesCast.has(event.targetCardId)) openingRunesRecovered.add(event.targetCardId);
+        }
       }
       if (pressure && turn === 2 && event.type === "ATTACK_DECLARED" && event.playerId === "p2") pressure.followerAttacked = true;
+      if (followUp && turn === 4 && event.type === "ATTACK_DECLARED" && event.playerId === "p2") followUp.fourthTurnAttacked = true;
     }
     eventCount = state.events.length;
   }
@@ -174,7 +191,8 @@ function playOpening(first, second, seed, {
     firstDamageTurn, followerDamageBeforeTurn, passed,
     firstTurnWin: turn === 1 && state.gameOver?.winnerId === "p1",
     followerFirstTurnWin: turn === 2 && state.gameOver?.winnerId === "p2",
-    recoveries, pressure, replay
+    recoveries, pressure, replay,
+    ...(followUp ? { followUp: { ...followUp, winnerId: state.gameOver?.winnerId ?? null } } : {})
   };
 }
 
@@ -218,7 +236,7 @@ function damageSummary(amounts) {
 function summarizePressure(games, includeFollowerWins = false) {
   const count = predicate => games.filter(game => predicate(game.pressure)).length;
   return {
-    turns: [0, 1].map(index => ({
+    turns: games[0].pressure.turns.map((_, index) => ({
       repeatedDrawTwo: count(pressure => pressure.turns[index].drawTwo >= 2),
       firstSeatDamageTaken: damageSummary(games.map(game => game.pressure.turns[index].damage.p1)),
       secondSeatDamageTaken: damageSummary(games.map(game => game.pressure.turns[index].damage.p2))
@@ -239,6 +257,34 @@ function summarizePressure(games, includeFollowerWins = false) {
   };
 }
 
+function summarizeFollowUp(games) {
+  const count = predicate => games.filter(game => predicate(game.followUp)).length;
+  return {
+    reusedRecoveredRuneOnTurnThree: count(followUp => followUp.thirdTurnRecoveredRuneDamage > 0),
+    fourthTurnReached: count(followUp => followUp.fourthTurnStart),
+    fourthTurnCanAct: count(followUp => followUp.fourthTurnStart?.canAct),
+    fourthTurnStartedWithMonster: count(followUp => followUp.fourthTurnStart?.monster),
+    fourthTurnAttacked: count(followUp => followUp.fourthTurnAttacked),
+    fourthTurnFinished: count(followUp => followUp.fourthTurnEnd),
+    fourthTurnFinishedWithMonster: count(followUp => followUp.fourthTurnEnd?.monster),
+    firstSeatWinsThroughTurnFour: count(followUp => followUp.winnerId === "p1"),
+    secondSeatWinsThroughTurnFour: count(followUp => followUp.winnerId === "p2")
+  };
+}
+
+function compareReducedOpenings(games, candidates, seeds) {
+  return games.flatMap((game, index) => {
+    const candidate = candidates[index];
+    if (game.followerDamageBeforeTurn <= candidate.followerDamageBeforeTurn) return [];
+    return [{
+      seed: seeds[index],
+      firstTurnDamage: [game.followerDamageBeforeTurn, candidate.followerDamageBeforeTurn],
+      thirdTurnDamage: [game.pressure.turns[2].damage.p2, candidate.pressure.turns[2].damage.p2],
+      candidateThirdTurnRecoveredRuneDamage: candidate.followUp.thirdTurnRecoveredRuneDamage
+    }];
+  });
+}
+
 const gamesPerOrder = Number(process.argv.find(arg => arg.startsWith("--games="))?.slice(8) ?? "100");
 const seed = process.argv.find(arg => arg.startsWith("--seed="))?.slice(7) ?? "opening-playtest-v1";
 const runGraveReturnTrial = process.argv.includes("--grave-return-trial");
@@ -252,6 +298,7 @@ const cardTrial = cardTrials[0]?.[1];
 const compareCardVariants = Boolean(cardTrial);
 const use400InBothVariants = compareCardVariants && cardTrial !== "burstRune400";
 const traceOpenings = process.argv.includes("--trace-openings");
+const fourTurns = process.argv.includes("--four-turns");
 const openingCase = process.argv.find(arg => arg.startsWith("--opening-case="))?.slice("--opening-case=".length);
 assert.ok(Number.isSafeInteger(gamesPerOrder) && gamesPerOrder > 0 && gamesPerOrder <= 1000, "Use --games=1 through --games=1000 per seat order");
 assert.ok(!(runGraveReturnTrial && runMixedRecovery), "Choose one playtest comparison");
@@ -259,13 +306,14 @@ assert.ok(!traceOpenings || runMixedRecovery, "Opening traces require --mixed-re
 assert.ok(cardTrials.length <= 1, "Choose one card comparison");
 assert.ok(!compareCardVariants || runMixedRecovery, "Card comparisons require --mixed-recovery");
 assert.ok(cardTrial !== "burstRune400" || !openingCase, "The 500 vs 400 comparison requires a batch");
+assert.ok(!fourTurns || cardTrial === "burstRuneOncePerTurn", "--four-turns requires --burst-rune-once-per-turn-trial");
 const deckLists = runMixedRecovery ? mixedRecoveryDecks() : decks;
 function replayOpeningCase() {
   assert.ok(runMixedRecovery, "A fixed opening case requires --mixed-recovery");
   const [first, second] = openingCase.split(":");
   assert.match(openingCase, /^(basic:burn|rush:burn|burn:basic|burn:rush):\d+$/);
   const play = (variant = {}) => playOpening(first, second, `${seed}:${openingCase}`, {
-    deckLists, trackPressure: true, trace: true, ...variant
+    deckLists, trackPressure: true, trace: true, fourTurns, ...variant
   });
   if (use400InBothVariants) {
     return {
@@ -293,7 +341,7 @@ function printBatchReport() {
       if (runMixedRecovery && first !== "burn" && second !== "burn") continue;
       const seeds = Array.from({ length: gamesPerOrder }, (_, index) => `${seed}:${first}:${second}:${index}`);
       const options = {
-        deckLists, graveReturnTurnLimit: !runGraveReturnTrial, trackPressure: runMixedRecovery, trace: traceOpenings,
+        deckLists, graveReturnTurnLimit: !runGraveReturnTrial, trackPressure: runMixedRecovery, trace: traceOpenings, fourTurns,
         burstRune400: use400InBothVariants || (!runMixedRecovery && !runGraveReturnTrial)
       };
       const games = seeds.map(gameSeed => playOpening(first, second, gameSeed, options));
@@ -304,6 +352,11 @@ function printBatchReport() {
         const matchup = {
           first, second, current: summarizePressure(games, compareCardVariants),
           [candidateKey]: summarizePressure(candidate, compareCardVariants)
+        };
+        if (fourTurns) matchup.followUp = {
+          current: summarizeFollowUp(games),
+          [candidateKey]: summarizeFollowUp(candidate),
+          reducedOpenings: compareReducedOpenings(games, candidate, seeds)
         };
         if (compareCardVariants) {
           const gained = [], lost = [];
@@ -355,7 +408,7 @@ function printBatchReport() {
     }
   }
   console.log(JSON.stringify({
-    seed, gamesPerOrder, openingTurns: runMixedRecovery ? 2 : openingTurns,
+    seed, gamesPerOrder, openingTurns: runMixedRecovery && !fourTurns ? 2 : openingTurns,
     decks: deckLists,
     ...(!runMixedRecovery ? { firstDamageBuckets: [1, 2, 3, 4, "none"] } : {}),
     matchups
