@@ -451,13 +451,26 @@ async function exerciseVerticalHandNavigation(cdp, page, timeoutMs) {
     await waitForPage(cdp, page, visibleExpression('#cardInspector[open]'), 'details open on the bottom card', timeoutMs);
     await click(cdp, page, '#inspectorClose');
     await waitForPage(cdp, page, `${atEnd} && document.activeElement.closest('#hand > .card')?.dataset.cardUid === ${JSON.stringify(ids.at(-1))}`, 'details return to the same card and vertical position', timeoutMs);
+    for (const [width, height] of [[390, 844], [568, 320]]) {
+      await click(cdp, page, '#hand > .card:last-child .card-detail-entry');
+      await waitForPage(cdp, page, visibleExpression('#cardInspector[open]'), 'hand details before rotation', timeoutMs);
+      await page.cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      await click(cdp, page, '#inspectorClose');
+      await waitForPage(cdp, page, `(() => {
+        const focus = document.activeElement;
+        const card = focus.closest('#hand > .card');
+        if (!focus.matches('.card-detail-entry') || card?.dataset.cardUid !== ${JSON.stringify(ids.at(-1))}) return false;
+        const frame = document.querySelector('#hand').getBoundingClientRect(), box = card.getBoundingClientRect();
+        return box.left >= frame.left - 1 && box.right <= frame.right + 1 && box.top >= frame.top - 1 && box.bottom <= frame.bottom + 1;
+      })()`, 'returning after rotation reveals the same hand card', timeoutMs);
+    }
     const grip = await point('#hand > .card:last-child .hand-reorder-grip');
     const target = await point('#hand > .card:nth-last-child(2) .hand-reorder-grip');
     await slide(grip, { y: target.y - 8 });
     const reordered = [...ids.slice(0, -2), ids.at(-1), ids.at(-2)];
     await waitForPage(cdp, page, `JSON.stringify(${idsExpression}) === ${JSON.stringify(JSON.stringify(reordered))}`, 'dragging the grip reorders two cards', timeoutMs);
     assert.equal(await evaluate(cdp, page, `${atEnd} && document.querySelector('#choiceActions').hidden`), true, 'Reordering moved the list or opened a card action');
-    return { cardCount: ids.length, keyboardReachedEnds: true, touchScrolled: true, detailsPreservedScroll: true, touchReorderedAtEnd: true };
+    return { cardCount: ids.length, keyboardReachedEnds: true, touchScrolled: true, detailsPreservedScroll: true, rotationRestoredCard: true, touchReorderedAtEnd: true };
   } finally {
     await page.cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false });
     await page.cdp.send('Emulation.clearDeviceMetricsOverride');
@@ -1108,17 +1121,25 @@ async function exerciseEffectChoices(firstPage, secondPage, spectatorPage, optio
   await writeFile(path.join(options.artifactDir, `online-inspector-return-mobile-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '', 'Target context leaked into the target list');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceConfirm').disabled`), true, 'Reading details selected a target');
-  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
-  await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'inspector navigation desktop restored', options.timeoutMs);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 568, height: 320, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, 'innerWidth === 568', 'short landscape grave options', options.timeoutMs);
   await click(cdp, firstPage, guard);
   await click(cdp, firstPage, `${spell} .online-grave-detail`);
   await waitForPage(cdp, firstPage, textMatchExpression('#inspectorTitle', '战意高扬'), 'unavailable grave card details remain readable', options.timeoutMs);
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#inspectorContext').textContent`), '余烁归轨 · 已选目标：铁壁守卫');
   assert.equal(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceActions').hidden`), true, 'Details exposed an activation button for the card being inspected');
   const graveDetailLayouts = await checkInspectorLayouts(cdp, firstPage, options, roomCode, 'grave-detail');
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 1, mobile: false });
   await click(cdp, firstPage, '#inspectorBack');
   assert.equal(await evaluate(cdp, firstPage, `document.activeElement.matches('.online-grave-detail') && document.activeElement.dataset.cardId === document.querySelector(${JSON.stringify(spell + ' .online-grave-detail')}).dataset.cardId`), true, 'Pointer return focused a different grave card');
+  inspectorNavigation.rotatedReturn = await waitForPage(cdp, firstPage, `(() => {
+    const frame = document.querySelector('#inspectorContent').getBoundingClientRect();
+    const origin = document.activeElement.getBoundingClientRect();
+    return origin.top >= frame.top - 1 && origin.bottom <= frame.bottom + 1 && !document.querySelector('#graveChoiceConfirm').disabled;
+  })()`, 'rotation reveals the original grave entry and leaves the target confirmable', options.timeoutMs);
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceStatus').textContent`), /铁壁守卫/);
+  await firstPage.cdp.send('Emulation.clearDeviceMetricsOverride');
+  await waitForPage(cdp, firstPage, 'innerWidth > 1040', 'inspector navigation desktop restored', options.timeoutMs);
   await click(cdp, firstPage, '#inspectorClose');
   await click(cdp, firstPage, '#fieldTargets .online-open-grave');
   assert.match(await evaluate(cdp, firstPage, `document.querySelector('#graveChoiceStatus').textContent`), /铁壁守卫/);

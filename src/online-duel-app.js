@@ -1158,7 +1158,7 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
   if (!elements.cardInspector.open) {
     const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const handCard = origin?.closest("#hand .card[data-card-uid]");
-    inspectorReturnFocus = { element: origin, handCardId: handCard?.dataset.cardUid, detail: Boolean(origin?.closest(".card-detail-entry")) };
+    inspectorReturnFocus = { element: origin, handCardId: handCard?.dataset.cardUid, detail: Boolean(origin?.closest(".card-detail-entry")), viewport: inspectorViewportKey() };
     document.body.dataset.onlineOverlay = "detail";
     elements.cardInspector.showModal();
     elements.inspectorClose.focus({ preventScroll: true });
@@ -1170,6 +1170,21 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
 
 function showGrave(seatId) {
   showCards(client.view.players[seatId].grave, seatId === client.view.viewerSeatId ? "我方墓地" : "对手墓地", { collection: true, seatId });
+}
+
+function inspectorViewportKey() {
+  return `${window.innerWidth}x${window.innerHeight}`;
+}
+
+function revealInspectorEntry(scroller, entry, returnPoint) {
+  if (!returnPoint.viewportChanged && returnPoint.viewport === inspectorViewportKey()) return;
+  const frame = scroller.getBoundingClientRect();
+  const box = entry.getBoundingClientRect();
+  const leftEdge = frame.left + scroller.clientLeft;
+  const topEdge = frame.top + scroller.clientTop;
+  const left = box.left < leftEdge - 1 ? box.left - leftEdge : Math.max(0, box.right - leftEdge - scroller.clientWidth);
+  const top = box.top < topEdge - 1 ? box.top - topEdge : Math.max(0, box.bottom - topEdge - scroller.clientHeight);
+  if (Math.abs(left) > 1 || Math.abs(top) > 1) scroller.scrollBy({ left, top, behavior: "instant" });
 }
 
 function activeGraveChoice(view, model) {
@@ -2488,6 +2503,7 @@ elements.inspectorBack.addEventListener("click", () => {
     returnPoint.detail ? ".online-grave-detail" : ".online-zone-card"
   )].find(button => button.dataset.cardId === returnPoint.cardId && !button.disabled);
   (origin || elements.inspectorClose).focus({ preventScroll: true });
+  if (origin) revealInspectorEntry(elements.inspectorContent, origin, returnPoint);
 });
 elements.graveChoiceConfirm.addEventListener("click", () => {
   const model = onlineSelectionModel(client.view, selection);
@@ -2511,15 +2527,24 @@ elements.cardInspector.addEventListener("close", () => {
   const available = target => Boolean(target?.isConnected
     && target.matches("button,[href],input,select,textarea,[tabindex]")
     && !target.matches(":disabled") && !target.closest("[hidden],[inert]") && target.getClientRects().length);
-  if (available(document.activeElement) && !elements.cardInspector.contains(document.activeElement)) return;
-  let target = returnPoint?.element;
+  const active = document.activeElement;
+  let target = available(active) && !elements.cardInspector.contains(active) ? active : returnPoint?.element;
   if (!available(target) && returnPoint?.handCardId) {
     const card = [...elements.hand.querySelectorAll(".card[data-card-uid]")].find(card => card.dataset.cardUid === returnPoint.handCardId);
     target = returnPoint.detail ? card?.querySelector(".card-detail-entry") : card;
     if (!available(target)) target = elements.hand;
   }
   const dialog = document.querySelector("dialog[open]");
-  if (available(target) && (!dialog || dialog.contains(target))) target.focus({ preventScroll: true });
+  if (!available(target) || (dialog && !dialog.contains(target))) return;
+  if (target !== active) target.focus({ preventScroll: true });
+  const handCard = target.closest("#hand .card[data-card-uid]");
+  if (handCard && handCard.dataset.cardUid === returnPoint?.handCardId) revealInspectorEntry(elements.hand, handCard, returnPoint);
+});
+window.addEventListener("resize", () => {
+  const viewport = inspectorViewportKey();
+  for (const point of [inspectorReturnFocus, inspectorCollection?.returnPoint]) {
+    if (point && point.viewport !== viewport) point.viewportChanged = true;
+  }
 });
 elements.handSortType.addEventListener("click", () => { handOrder = sortHandCardsByType(onlineBoardState(client.view, selection).player.hand, handOrder).map((card) => card.uid); render(client.view); });
 elements.handReadyJump.addEventListener("click", locateNextReadyAction);
@@ -2617,7 +2642,7 @@ elements.inspectorContent.addEventListener("click", (event) => {
   }
   if (inspectorCollection) {
     inspectorCollection.scrollTop = elements.inspectorContent.scrollTop;
-    inspectorCollection.returnPoint = { cardId: button.dataset.cardId, detail: button.classList.contains("online-grave-detail") };
+    inspectorCollection.returnPoint = { cardId: button.dataset.cardId, detail: button.classList.contains("online-grave-detail"), viewport: inspectorViewportKey() };
   }
   const card = onlineCard(client.view, button.dataset.cardId);
   if (card) showCards([card], card.name, { preserveCollection: true });
