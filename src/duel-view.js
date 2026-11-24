@@ -1,4 +1,4 @@
-import { getLegalActions } from "./game-engine.js";
+import { cardActivatedThisTurn, getLegalActions } from "./game-engine.js";
 import { otherSeatId, seatIdsForState } from "./duel-session.js";
 import { onlineAttackResponse, onlineChainResponse, onlineSummonResponse } from "./online-response.js";
 import { onlineHandBlocker } from "./online-hand-feedback.js";
@@ -285,6 +285,11 @@ export function buildDuelView(state, viewerSeatId, {
     can.activateCard = legalActions.actions.activateCard.length > 0;
     legalActions.hasAny = can.summon || can.setTrap || can.activateCard || can.declareAttack || can.changeMode;
   }
+  const delayedGraveReturnTargets = new Set(legalActions.actions.activateCard
+    .filter(({ cardId, targetCardId }) => isGraveReturn(state.cards[cardId])
+      && state.cards[targetCardId]?.effect === "burn400OncePerTurn" && cardActivatedThisTurn(state, targetCardId))
+    .map(({ targetCardId }) => targetCardId));
+  if (delayedGraveReturnTargets.size) legalActions.delayedGraveReturnTargets = [...delayedGraveReturnTargets];
   const concealedTargets = concealedTargetIds(state, viewerSeatId);
   for (const actions of Object.values(legalActions.actions)) {
     for (const action of actions) {

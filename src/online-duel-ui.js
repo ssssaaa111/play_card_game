@@ -2,6 +2,7 @@ import { makeBattlePreview, makeAttackIntentPreview, totalAtk, totalDef } from "
 import { createTrapResponse, selectTrapResponse } from "./response-state.js";
 import { describeBattleOutcome } from "./battle.js";
 import { cardHandSummary } from "./cards.js";
+import { isGraveReturn } from "./online-grave-return.js";
 
 function spectatorView(view) {
   return view?.viewerRole === "spectator";
@@ -1218,6 +1219,11 @@ export function onlineAttackDecisionView(view, model) {
   };
 }
 
+function graveReturnTimingHint(view, source, targetId) {
+  return targetId && isGraveReturn(source) && view.legalActions?.delayedGraveReturnTargets?.includes(targetId)
+    ? "回收后下个己方回合可再发动" : "";
+}
+
 export function onlineEffectDecisionView(view, model) {
   if (spectatorView(view) || model?.card.type !== "spell" || model.stage !== "target" || !model.targetIds.length
     || !view.players[view.viewerSeatId].hand.some(card => card.id === model.card.id)) return null;
@@ -1242,7 +1248,8 @@ export function onlineEffectDecisionView(view, model) {
     effect: cardHandSummary(model.card),
     target,
     candidates,
-    hint: target ? `${target.location} · ${target.detail}` : "单击选择，确认或双击目标发动。"
+    hint: target ? [target.location, target.detail, graveReturnTimingHint(view, model.card, target.id)].filter(Boolean).join(" · ")
+      : "单击选择，确认或双击目标发动。"
   };
 }
 
@@ -1282,7 +1289,9 @@ export function onlineGraveChoiceView(view, model, seatId = view?.viewerSeatId) 
     sourceId: model.card.id, seatId, count, selectedId,
     title: `${model.card.name} · 选择墓地目标`, effect: cardHandSummary(model.card),
     canConfirm: Boolean(selectedId && model.action?.targetCardId === selectedId),
+    selectedTimingHint: graveReturnTimingHint(view, model.card, selectedId),
     cards: grave.map(card => ({ card, eligible: legalIds.has(card.id), selected: card.id === selectedId,
+      timingHint: legalIds.has(card.id) ? graveReturnTimingHint(view, model.card, card.id) : "",
       reason: legalIds.has(card.id) ? card.id === selectedId ? "已选目标" : "可选目标"
         : model.card.effect === "graveRevive" && card.type !== "monster" ? "只能选择墓地怪兽" : "当前效果不能选择这张牌" }))
   };

@@ -1093,6 +1093,7 @@ function appendCardCollection(cards, title, choice = null) {
       button.dataset.graveSelect = "true";
       button.disabled = !candidate.eligible || actionPending;
       button.setAttribute("aria-pressed", String(candidate.selected));
+      if (candidate.timingHint) button.setAttribute("aria-description", candidate.timingHint);
     }
     button.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: false }));
     const caption = document.createElement("span");
@@ -1102,7 +1103,7 @@ function appendCardCollection(cards, title, choice = null) {
     if (choice) {
       const reason = document.createElement("small");
       reason.className = "online-grave-reason";
-      reason.textContent = candidate.reason;
+      reason.textContent = [candidate.reason, candidate.timingHint].filter(Boolean).join(" · ");
       caption.appendChild(reason);
       const entry = document.createElement("article");
       entry.className = "online-grave-entry";
@@ -1141,7 +1142,9 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
   elements.graveChoiceActions.hidden = !choice;
   elements.graveChoiceConfirm.disabled = actionPending || !choice?.canConfirm;
   elements.graveChoiceCancel.disabled = actionPending;
-  elements.graveChoiceStatus.textContent = choice?.selectedId ? `已选：${onlineCard(client.view, choice.selectedId)?.name}` : "选择一张高亮卡牌";
+  elements.graveChoiceStatus.textContent = choice?.selectedId
+    ? [`已选：${cardName(client.view, choice.selectedId)}`, choice.selectedTimingHint].filter(Boolean).join(" · ")
+    : "选择一张高亮卡牌";
   elements.inspectorContent.replaceChildren();
   const visibleCards = cards.filter((entry) => entry && !entry.hidden);
   if (collection && visibleCards.length) appendCardCollection(visibleCards, title, choice);

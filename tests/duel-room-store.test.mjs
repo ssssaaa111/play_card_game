@@ -117,6 +117,7 @@ for (const damage of [400, 500]) {
     assert.deepEqual(restored.submit("one-new", { revision: receipt.revision - 1, commandId: receipt.commandId, action: castRune }),
       { ...receipt, duplicate: true });
     assert.equal(restored.viewFor("p2").players.p2.lp, 4000 - damage);
+    assert.equal(restored.viewFor("p1").legalActions.delayedGraveReturnTargets, undefined);
     const recoverRune = restored.viewFor("p1").legalActions.actions.activateCard.find(action =>
       action.cardId === recovery.id && action.targetCardId === rune.id);
     submit(restored, "one-new", recoverRune, "recover-rune");
