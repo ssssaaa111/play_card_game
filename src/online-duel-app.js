@@ -2542,6 +2542,9 @@ elements.cardInspector.addEventListener("close", () => {
   if (target !== active) target.focus({ preventScroll: true });
   const handCard = target.closest("#hand .card[data-card-uid]");
   if (handCard && handCard.dataset.cardUid === returnPoint?.handCardId) revealInspectorEntry(elements.hand, handCard, returnPoint);
+  if (target === returnPoint?.element && target.matches("#onlineResponse[open] #responseChain .chain-stack-card")) {
+    revealInspectorEntry(target.closest(".online-response-scroll"), target, returnPoint);
+  }
 });
 window.addEventListener("resize", () => {
   const viewport = inspectorViewportKey();

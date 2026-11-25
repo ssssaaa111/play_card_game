@@ -912,7 +912,26 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   await writeFile(path.join(options.artifactDir, `online-response-decision-CL2-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   await click(cdp, firstPage, '#responseChoices button:last-child');
   responseDecisions.cl2Selected = await checkResponseDecisionLayout(cdp, firstPage);
-  responseDecisions.cl2Rotated = await rotateSelectedResponse(cdp, firstPage, 568, 320, options.timeoutMs);
+  const cl2Selection = await evaluate(cdp, firstPage, `document.querySelector('#responseChoices [aria-pressed="true"]').dataset.trapChoiceIndex`);
+  await click(cdp, firstPage, '#responseChain .chain-stack-card');
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), 'chain details before rotation', options.timeoutMs);
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 568, height: 320, deviceScaleFactor: 1, mobile: false });
+  await waitForPage(cdp, firstPage, `innerWidth === 568 && document.querySelector('#cardInspector').open`, 'chain details remain open after rotation', options.timeoutMs);
+  await click(cdp, firstPage, '#inspectorClose');
+  responseDecisions.cl2DetailRotated = await waitForPage(cdp, firstPage, `(() => {
+    const response = document.querySelector('#onlineResponse');
+    const origin = response.querySelector('#responseChain .chain-stack-card');
+    if (!response.open || document.activeElement !== origin) return null;
+    const frame = response.querySelector('.online-response-scroll').getBoundingClientRect(), card = origin.getBoundingClientRect();
+    const selected = response.querySelector('#responseChoices [aria-pressed="true"]');
+    const activate = response.querySelector('#responseActivate'), box = activate.getBoundingClientRect();
+    return card.top >= frame.top - 1 && card.bottom <= frame.bottom + 1
+      && selected?.dataset.trapChoiceIndex === ${JSON.stringify(cl2Selection)} && !activate.disabled
+      && activate.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
+      ? { card: origin.textContent, selectedIndex: selected.dataset.trapChoiceIndex, restored: true } : null;
+  })()`, 'rotation returns focus and visibility to the original chain card', options.timeoutMs);
+  await writeFile(path.join(options.artifactDir, `online-chain-detail-return-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  responseDecisions.cl2Rotated = await rotateSelectedResponse(cdp, firstPage, 320, 568, options.timeoutMs);
   await click(cdp, firstPage, '#responseActivate');
   await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'CL3 response', options.timeoutMs);
   assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#responseLead').textContent`), '可反制 CL2《断链裁决》；不再连锁则按 CL2 → CL1 结算。');
