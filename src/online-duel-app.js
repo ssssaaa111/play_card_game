@@ -19,7 +19,7 @@ import { installPublicReport } from "./public-report.js?v=20261114-network-recov
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineSelectionResetView, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261122-opening-turn-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineSelectionResetView, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261126-response-reconnect-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -217,6 +217,10 @@ function renderConnectionState(view = client.view) {
   elements.endTurnButton.disabled = true;
   elements.responseActivate.disabled = true;
   elements.responsePass.disabled = true;
+  if (elements.onlineResponse.open) {
+    elements.responseChoices.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+    elements.responseStatus.textContent = panel.title;
+  }
 }
 
 function clearReconnectTimer() {
@@ -1841,7 +1845,7 @@ function renderResponsePreview({ choice, traps }) {
 }
 
 function selectResponse(index) {
-  if (actionPending) return;
+  if (actionPending || connectionPaused()) return;
   trapChoice = selectTrapResponse(trapChoice, index) || trapChoice;
   // Keep the clicked button mounted so a second click can become a double-click.
   const options = responseRendererOptions(client.view);

@@ -52,7 +52,7 @@ export function onlineResponseTimerView(view, now = Date.now()) {
     seconds,
     ownResponse,
     label: paused
-      ? "对局已暂停，响应倒计时冻结"
+      ? `响应计时已冻结 · 剩余 ${seconds} 秒`
       : spectatorView(view)
         ? `等待${responderName}响应 · ${seconds} 秒后自动结算`
         : ownResponse

@@ -749,6 +749,43 @@ async function rotateSelectedResponse(cdp, page, width, height, timeoutMs) {
   return { before, after };
 }
 
+async function reconnectDuringResponse(responder, rival, options, roomCode) {
+  const snapshot = `(() => {
+    const dialog = document.querySelector('#onlineResponse'), timer = document.querySelector('#responseCountdown');
+    const picks = [...document.querySelectorAll('#responseChoices button')];
+    const action = document.querySelector('#responseActivate');
+    return { open: dialog.open, priority: document.body.dataset.onlineResponse, paused: timer.dataset.paused === 'true',
+      clock: Number(timer.textContent.match(/剩余 (\\d+) 秒/)?.[1]), choice: picks.find(b => b.getAttribute('aria-pressed') === 'true')?.dataset.trapChoiceIndex,
+      title: document.querySelector('#responseTitle').textContent,
+      locked: action.disabled && document.querySelector('#responsePass').disabled && picks.every(button => button.disabled),
+      ready: !action.disabled && picks.some(button => !button.disabled),
+      protection: Number(document.querySelector('#connectionDetail').textContent.match(/剩余 (\\d+) 秒/)?.[1] || 0) };
+  })()`;
+  const rivalUrl = await evaluate(cdp, rival, 'location.href');
+  const before = await evaluate(cdp, responder, snapshot);
+  await rival.cdp.send('Page.navigate', { url: 'about:blank' });
+  let frozen;
+  try {
+    frozen = await waitForPage(cdp, responder, `(() => { const state = ${snapshot}; return state.paused && state.protection > 0 ? state : null; })()`, 'opponent disconnect freezes the response clock', options.timeoutMs);
+    assert.ok(frozen.open && frozen.locked && frozen.clock > 0 && frozen.clock <= before.clock, 'Paused response still accepts a decision or lost its clock');
+    assert.equal(frozen.choice, before.choice, 'Disconnect changed the selected trap');
+    await waitForPage(cdp, responder, `(() => { const state = ${snapshot}; return state.paused && state.protection <= ${frozen.protection - 2}; })()`, 'reconnection grace advances while the response clock stays frozen', options.timeoutMs);
+    assert.equal((await evaluate(cdp, responder, snapshot)).clock, frozen.clock, 'Response time drained during disconnect');
+    await writeFile(path.join(options.artifactDir, `online-response-reconnect-${roomCode}.png`), Buffer.from((await responder.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  } finally {
+    await rival.cdp.send('Page.navigate', { url: rivalUrl });
+  }
+  const resumed = await waitForPage(cdp, responder, `(() => { const state = ${snapshot}; return state.open && !state.paused && state.ready ? state : null; })()`, 'original responder can continue after reconnect', options.timeoutMs);
+  assert.equal(resumed.choice, before.choice, 'Reconnect changed the selected trap');
+  assert.equal(resumed.title, before.title, 'Reconnect changed the response window');
+  assert.equal(resumed.priority, 'acting');
+  assert.ok(resumed.clock <= frozen.clock && resumed.clock >= frozen.clock - 1, 'Reconnect restarted or consumed the response clock');
+  await waitForPage(cdp, rival, `Boolean(document.querySelector('#onlineResponse') && !document.querySelector('#onlineResponse').open && document.body.dataset.onlineResponse === 'waiting')`, 'reconnecting opponent remains on the waiting side of the response', options.timeoutMs);
+  await installStageObserver(cdp, rival);
+  if (await evaluate(cdp, rival, visibleExpression('#recoveryContinue'))) await click(cdp, rival, '#recoveryContinue');
+  return { frozen, resumed };
+}
+
 async function failurePageState(cdp, page) {
   if (!page?.cdp) return null;
   try {
@@ -932,6 +969,7 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
   })()`, 'rotation returns focus and visibility to the original chain card', options.timeoutMs);
   await writeFile(path.join(options.artifactDir, `online-chain-detail-return-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
   responseDecisions.cl2Rotated = await rotateSelectedResponse(cdp, firstPage, 320, 568, options.timeoutMs);
+  responseDecisions.cl2Reconnect = await reconnectDuringResponse(firstPage, secondPage, options, roomCode);
   await click(cdp, firstPage, '#responseActivate');
   await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'CL3 response', options.timeoutMs);
   assert.equal(await evaluate(cdp, secondPage, `document.querySelector('#responseLead').textContent`), '可反制 CL2《断链裁决》；不再连锁则按 CL2 → CL1 结算。');
