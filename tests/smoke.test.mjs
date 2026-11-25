@@ -140,7 +140,7 @@ test("online duel page keeps its room, board, and action mounts wired", () => {
   assert.match(app, /onlineSpectatorCount\.textContent = ` · 观众 \$\{view\.spectators\?\.count \|\| 0\}`/);
   assert.match(app, /rebaseRecoveredView\(view\)/);
   assert.match(app, /elements\.lastChainButton\.addEventListener\("click", replayLatestChain\)/);
-  assert.match(app, /if \(elements\.onlineResponse\.open\) elements\.onlineResponse\.close\(\)/);
+  assert.match(app, /function closeOnlineResponse\(\)[\s\S]*?elements\.onlineResponse\.close\(\)/);
   assert.match(html, /id="viewerIdentity"[^>]*hidden/);
   assert.match(html, /id="resultRematch"/);
   assert.match(html, /id="resultRematchStatus"[^>]*aria-live="polite"/);

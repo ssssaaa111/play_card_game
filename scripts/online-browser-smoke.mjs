@@ -989,8 +989,39 @@ async function exerciseChainRhythm(firstPage, secondPage, spectatorPage, options
     assert.ok(history.filter(beat => beat.hintTone === 'victory' || beat.hintTone === 'defeat').every(beat => !beat.chain && !beat.action && !beat.damage), 'Victory hint reveals the lethal result early');
     assert.ok(history.filter(beat => beat.result).every(beat => !beat.chain && !beat.action && !beat.epic && !beat.damage), 'Result covers the lethal hit');
   }
-  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, playbackControls, responseDecisions, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
-  console.log(`online-chain-rhythm-smoke passed (${roomCode}, four links, response priority, damage, replay, lethal result, spectator)`);
+  await click(cdp, firstPage, '#resultRematch');
+  await waitForPage(cdp, secondPage, textMatchExpression('#resultRematch', '接受再战'), 'timeout rematch invitation', options.timeoutMs);
+  await click(cdp, secondPage, '#resultRematch');
+  await waitForPage(cdp, secondPage, textMatchExpression('#turnLabel', '你的回合'), 'timeout rematch defender setup', options.timeoutMs);
+  await play(secondPage, 'mirror-snare');
+  await endTurn(cdp, secondPage, options.timeoutMs);
+  await waitForPage(cdp, firstPage, textMatchExpression('#turnLabel', '你的回合'), 'timeout rematch attacker setup', options.timeoutMs);
+  await play(firstPage, 'chain-nullifier');
+  await play(firstPage, 'solar-knight');
+  await nextRound();
+  await firstPage.cdp.send('Emulation.setDeviceMetricsOverride', { width: 568, height: 320, deviceScaleFactor: 1, mobile: false });
+  await doubleClick(cdp, firstPage, '#playerField .slot[data-attack-state="ready"]');
+  await waitForPage(cdp, secondPage, visibleExpression('#onlineResponse[open]'), 'timeout rematch attack response', options.timeoutMs);
+  await click(cdp, secondPage, '#responseActivate');
+  await waitForPage(cdp, firstPage, visibleExpression('#onlineResponse[open]'), 'timeout rematch counter opportunity', options.timeoutMs);
+  await click(cdp, firstPage, '#responseChain .chain-stack-card');
+  await waitForPage(cdp, firstPage, visibleExpression('#cardInspector[open]'), 'response details remain open while the server clock runs', options.timeoutMs);
+  await waitForPage(cdp, firstPage, `!document.querySelector('#chainResolutionStage').hidden`, 'actual response deadline starts chain playback', options.timeoutMs);
+  assert.equal(await evaluate(cdp, firstPage, `!document.querySelector('#cardInspector').open && !document.querySelector('#onlineResponse').open`), true, 'Expired response details cover chain playback');
+  await writeFile(path.join(options.artifactDir, `online-chain-detail-timeout-${roomCode}.png`), Buffer.from((await firstPage.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+  await Promise.all([settle(firstPage), settle(secondPage)]);
+  const detailTimeout = await evaluate(cdp, firstPage, `({
+    inspectorClosed: !document.querySelector('#cardInspector').open,
+    responseClosed: !document.querySelector('#onlineResponse').open,
+    attackerDestroyed: !document.querySelector('#playerField .slot[data-card-uid]'),
+    counterStillSet: Boolean(document.querySelector('#playerTraps .trap-slot:not(.empty)')),
+    unchangedLP: document.querySelector('#aiPanel').textContent.includes('4000 / 4000'),
+    fieldResumed: !document.querySelector('#endTurnButton').disabled
+  })`);
+  assert.ok(Object.values(detailTimeout).every(Boolean), `Expired chain card inspector did not return to the settled duel: ${JSON.stringify(detailTimeout)}`);
+  assert.match(await evaluate(cdp, secondPage, `document.querySelector('#playerPanel').textContent`), /4000 \/ 4000/);
+  await writeFile(path.join(options.artifactDir, `online-chain-rhythm-${roomCode}.json`), `${JSON.stringify({ roomCode, histories, playbackControls, responseDecisions, detailTimeout, responseDecisionLabels: true, rapidCommands: true, spectatorSynced: true, replayDidNotRepeatDamage: true, lethalResultWaited: true }, null, 2)}\n`);
+  console.log(`online-chain-rhythm-smoke passed (${roomCode}, four links, response priority, detail timeout, damage, replay, lethal result, spectator)`);
 }
 
 async function checkTributeSelectionAppearance(cdp, page) {

@@ -712,7 +712,7 @@ function playChainResolutionStage(view, cue, { replay = false } = {}) {
   clearActionStage();
   clearChainResolutionStage();
   phaseStageController.reset();
-  if (elements.onlineResponse.open) elements.onlineResponse.close();
+  closeOnlineResponse();
   clearResponseCountdown();
   document.body.dataset.onlineResponse = "none";
   const stage = elements.chainResolutionStage;
@@ -1036,6 +1036,15 @@ function closeInspector() {
   if (elements.cardInspector.open) elements.cardInspector.close();
 }
 
+function closeOnlineResponse() {
+  if (!elements.onlineResponse.open) return;
+  if (inspectorReturnFocus?.fromResponse) {
+    inspectorReturnFocus = null;
+    closeInspector();
+  }
+  elements.onlineResponse.close();
+}
+
 function appendCardDetail(card) {
   const display = onlineDisplayCard(card);
   const detail = onlineCardDetailView(card);
@@ -1122,7 +1131,7 @@ function appendCardCollection(cards, title, choice = null) {
   elements.inspectorContent.append(summary, grid);
 }
 
-function showCards(cards, title = "卡牌详情", { collection = false, preserveCollection = false, seatId = null } = {}) {
+function showCards(cards, title = "卡牌详情", { collection = false, preserveCollection = false, seatId = null, fromResponse = false } = {}) {
   directActivationTracker.reset();
   const choice = collection && seatId ? onlineGraveChoiceView(client.view, onlineSelectionModel(client.view, selection), seatId) : null;
   if (collection) inspectorCollection = { cards: cards.filter(Boolean), title, seatId, choiceSourceId: choice?.sourceId, scrollTop: inspectorCollection?.seatId === seatId ? inspectorCollection.scrollTop || 0 : 0 };
@@ -1158,7 +1167,7 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
   if (!elements.cardInspector.open) {
     const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const handCard = origin?.closest("#hand .card[data-card-uid]");
-    inspectorReturnFocus = { element: origin, handCardId: handCard?.dataset.cardUid, detail: Boolean(origin?.closest(".card-detail-entry")), viewport: inspectorViewportKey() };
+    inspectorReturnFocus = { element: origin, handCardId: handCard?.dataset.cardUid, detail: Boolean(origin?.closest(".card-detail-entry")), viewport: inspectorViewportKey(), fromResponse };
     document.body.dataset.onlineOverlay = "detail";
     elements.cardInspector.showModal();
     elements.inspectorClose.focus({ preventScroll: true });
@@ -1926,7 +1935,7 @@ function renderResponse(view) {
       chainChoices: elements.responseChoices, chainStack: elements.responseChain
     }, onSelect: selectResponse, onActivate: (index) => respondToTrap(true, index), onCardClick: (_templateId, cardId) => {
       const card = (view.machine?.chain || []).find((link) => link.cardId === cardId)?.card || onlineCard(view, cardId);
-      if (card) showCards([card], card.name);
+      if (card) showCards([card], card.name, { fromResponse: true });
     } });
     renderResponsePreview(options);
     elements.onlineResponse.dataset.responseMode = panel.singleChoice ? "single" : "multiple";
@@ -1958,7 +1967,7 @@ function renderResponse(view) {
       elements.onlineResponse.showModal();
       elements[panel.singleChoice ? "responseActivate" : "responsePass"].focus({ preventScroll: true });
     }
-  } else if (elements.onlineResponse.open) elements.onlineResponse.close();
+  } else closeOnlineResponse();
   if (!view.machine.responseWindow) {
     clearResponseCountdown();
     document.body.dataset.onlineResponse = "none";
