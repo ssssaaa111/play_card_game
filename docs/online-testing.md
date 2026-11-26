@@ -215,6 +215,15 @@ npm run smoke:online-browser -- --response-ack-loss --duel-server-url http://127
 
 现有三浏览器 CI 检查发动只提交一次、浏览器未收到确认回包、重连后关闭旧响应窗口、战报仅记录一次发动和一次 1200 伤害、双方和观战同步为 2800 LP，并可继续下一回合。运行产物为 `online-response-ack-loss-*.png` 和同名 JSON。
 
+陷阱响应请求在到达服务端前丢失的回归沿用同一个 `trap-response` 场景。转发器丢弃第一条发动请求并断开提交方连接，复测需启动新的转发器进程。
+
+```sh
+node scripts/duel-latency-proxy.mjs --port=5185 --target=ws://127.0.0.1:5178/duel --delay-ms=0 --drop-response-request
+npm run smoke:online-browser -- --response-request-loss --duel-server-url http://127.0.0.1:5185
+```
+
+现有三浏览器 CI 记录断线前、冻结时和重连后的秒数。重连后应显示原响应窗口和同一张陷阱，双方看到防守方 4000 LP。重新点击发动前，浏览器只发出过一次响应请求。重新确认后仅结算一次，双方和观战同步为 2800 LP，并可继续下一回合。运行产物为 `online-response-request-loss-*.png` 和同名 JSON。
+
 选择失效验收：未确认的选牌因服务端更新而失效时，原场地提示区区分“回合时间已到”“回合已切换”“已进入某阶段”“战况已更新”，明确说明原选择已取消；进入响应时保留响应与倒计时，并短暂补充取消说明。主动取消或确认不触发此提示，重新选择会清除提示；断线恢复、换房、再战及结算继续使用原有专门界面。取消说明出现时收起中央阶段字幕，避免字幕挡住原因；清空旧双击记录，旧目标与落点不能继续提交。
 
 `online-command-feedback` 使用真实房间及确定性时钟验证双方超时不消耗选牌、版本失效与提示优先级。现有三浏览器 CI 增加独立本机短回合服务（`DUEL_TURN_TIMEOUT_MS=10000`、`--scenario=trap-response`），通过 `smoke:online-browser -- --selection-expiry` 实际选择怪兽/盖牌的第 5 格，等待真正的服务端超时，再检查 390×844 和 844×390 的提示可见、阶段字幕收起、确认区关闭、手牌完整与场面为空。下一回合重新确认召唤并验证双方及观战同步，保存 `online-selection-expiry-*.png/json`，沿用现有 CI job；正式服务的回合时长不变。

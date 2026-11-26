@@ -21,7 +21,7 @@ function parseArgs(argv) {
     effectChoices: false,
     tributeChoices: false,
     chainRhythm: false,
-    responseAckLoss: false,
+    responseLoss: "",
     pendingFeedback: false,
     selectionExpiry: false,
     artifactDir: process.env.ONLINE_BROWSER_ARTIFACT_DIR || path.resolve(".tmp", "online-browser-smoke")
@@ -35,7 +35,8 @@ function parseArgs(argv) {
     else if (argv[index] === "--effect-choices") result.effectChoices = true;
     else if (argv[index] === "--tribute-choices") result.tributeChoices = true;
     else if (argv[index] === "--chain-rhythm") result.chainRhythm = true;
-    else if (argv[index] === "--response-ack-loss") result.responseAckLoss = true;
+    else if (argv[index] === "--response-ack-loss") result.responseLoss = "ack";
+    else if (argv[index] === "--response-request-loss") result.responseLoss = "request";
     else if (argv[index] === "--pending-feedback") result.pendingFeedback = true;
     else if (argv[index] === "--selection-expiry") result.selectionExpiry = true;
   }
@@ -789,8 +790,32 @@ async function reconnectDuringResponse(responder, rival, options, roomCode) {
   return { frozen, resumed };
 }
 
-async function exerciseResponseAckLoss(attacker, defender, spectator, options, roomCode) {
-  const { timeoutMs, artifactDir } = options;
+async function recoverLostResponseRequest(attacker, defender, timeoutMs) {
+  const clock = `Number(document.querySelector('#responseCountdown').textContent.match(/剩余 (\\d+) 秒/)?.[1])`;
+  const paused = `document.querySelector('#responseCountdown').dataset.paused === 'true'`;
+  const before = await waitForPage(cdp, defender, `(${clock} <= 11 && ${clock} > 0) && ${clock}`, 'response has used some of its time before disconnect', timeoutMs);
+  const [frozen] = await Promise.all([
+    waitForPage(cdp, attacker, `(${paused} && ${clock} > 0) && ${clock}`, 'waiting player sees the response clock pause', timeoutMs),
+    click(cdp, defender, '#responseActivate')
+  ]);
+  assert.ok(frozen <= before && frozen >= before - 1, 'Disconnect reset or drained the response clock');
+  const resumed = await waitForPage(cdp, defender, `(() => {
+    const button = document.querySelector('#responseActivate');
+    return document.body.dataset.onlineConnection === 'connected' && document.querySelector('#onlineResponse').open
+      && document.body.dataset.onlineResponse === 'acting' && !(${paused}) && !button.disabled
+      && button.textContent.includes('弱化力场') && ${clock};
+  })()`, 'reconnected defender can respond with the same trap', timeoutMs);
+  assert.ok(resumed <= frozen && resumed >= frozen - 1, 'Reconnect did not restore the frozen time');
+  assert.equal(await evaluate(cdp, defender, `document.querySelector('#playerPanel .life-value').textContent`), '4000 / 4000');
+  assert.equal(await evaluate(cdp, attacker, `document.querySelector('#aiPanel .life-value').textContent`), '4000 / 4000');
+  assert.equal(await evaluate(cdp, defender, `document.querySelectorAll('#playerTraps .trap-slot:not(.empty)').length`), 1);
+  await waitForPage(cdp, defender, `document.querySelector('#onlineResponse').open && ${clock} > 0 && ${clock} < ${resumed}`, 'restored countdown continues while waiting for the manual retry', timeoutMs);
+  return { before, frozen, resumed };
+}
+
+async function exerciseResponseLoss(attacker, defender, spectator, options, roomCode) {
+  const { timeoutMs, artifactDir, responseLoss } = options;
+  const artifactBase = path.join(artifactDir, `online-response-${responseLoss}-loss-${roomCode}`);
   await doubleClickText(cdp, attacker, '#hand .card.action-ready', '日冕骑士');
   await waitForPage(cdp, attacker, textMatchExpression('#playerField', '日冕骑士'), 'attacker summoned for response recovery', timeoutMs);
   await endTurn(cdp, attacker, timeoutMs);
@@ -801,10 +826,10 @@ async function exerciseResponseAckLoss(attacker, defender, spectator, options, r
   await waitForPage(cdp, attacker, visibleExpression('#playerField .slot[data-attack-state="ready"]'), 'attack available', timeoutMs);
   await defender.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await doubleClick(cdp, attacker, '#playerField .slot[data-attack-state="ready"]');
-  await waitForPage(cdp, defender, visibleExpression('#onlineResponse[open] #responseActivate'), 'trap response before dropping the acknowledgement', timeoutMs);
+  await waitForPage(cdp, defender, visibleExpression('#onlineResponse[open] #responseActivate'), 'trap response before disconnect', timeoutMs);
 
   const activations = [];
-  let acknowledgementReceived = false;
+  const acknowledgements = new Set();
   const observeResponseFrames = raw => {
     const event = JSON.parse(raw.toString());
     const sent = event.method === 'Network.webSocketFrameSent';
@@ -812,22 +837,34 @@ async function exerciseResponseAckLoss(attacker, defender, spectator, options, r
     if (event.params.response.opcode !== 1) return;
     const message = JSON.parse(event.params.response.payloadData);
     if (sent && message.type === DuelClientMessage.command && message.payload?.action?.type === OnlineCommandType.respondTrap) activations.push(message.requestId);
-    if (!sent && message.type === DuelServerMessage.ack && activations.includes(message.requestId)) acknowledgementReceived = true;
+    if (!sent && message.type === DuelServerMessage.ack && activations.includes(message.requestId)) acknowledgements.add(message.requestId);
   };
   await defender.cdp.send('Network.enable');
   defender.cdp.socket.on('message', observeResponseFrames);
   try {
-    await click(cdp, defender, '#responseActivate');
-    await waitForPage(cdp, defender, visibleExpression('#recoveryContinue'), 'recovered board after the committed response lost its acknowledgement', timeoutMs);
-    assert.match(await evaluate(cdp, defender, `document.querySelector('#recoverySelfLp').textContent`), /2800 LP/);
-    const recentEvents = await evaluate(cdp, defender, `document.querySelector('#recoveryEvents').textContent`);
-    assert.match(recentEvents, /发动《弱化力场》/);
-    assert.match(recentEvents, /1200 伤害/);
-    assert.equal(await evaluate(cdp, defender, `!document.querySelector('#onlineResponse').open && document.querySelector('#actionStage').hidden && document.querySelector('#chainResolutionStage').hidden`), true, 'Recovery reopened an old decision or replayed its outcome');
-    await waitForPage(cdp, defender, `document.querySelector('#recoveryBrief').getAnimations().every(animation => animation.playState === 'finished')`, 'recovery brief finished appearing', timeoutMs);
-    const screenshotPath = path.join(artifactDir, `online-response-ack-loss-${roomCode}.png`);
+    let responseClock = null;
+    if (responseLoss === 'request') {
+      responseClock = await recoverLostResponseRequest(attacker, defender, timeoutMs);
+      assert.equal(activations.length, 1, 'The reconnect automatically retried the response');
+      assert.equal(acknowledgements.size, 0, 'The dropped request was acknowledged');
+    } else {
+      await click(cdp, defender, '#responseActivate');
+      await waitForPage(cdp, defender, visibleExpression('#recoveryContinue'), 'recovered board after the committed response lost its acknowledgement', timeoutMs);
+      assert.match(await evaluate(cdp, defender, `document.querySelector('#recoverySelfLp').textContent`), /2800 LP/);
+      const recentEvents = await evaluate(cdp, defender, `document.querySelector('#recoveryEvents').textContent`);
+      assert.match(recentEvents, /发动《弱化力场》/);
+      assert.match(recentEvents, /1200 伤害/);
+      assert.equal(await evaluate(cdp, defender, `!document.querySelector('#onlineResponse').open && document.querySelector('#actionStage').hidden && document.querySelector('#chainResolutionStage').hidden`), true, 'Recovery reopened an old decision or replayed its outcome');
+      await waitForPage(cdp, defender, `document.querySelector('#recoveryBrief').getAnimations().every(animation => animation.playState === 'finished')`, 'recovery brief finished appearing', timeoutMs);
+    }
+    const screenshotPath = `${artifactBase}.png`;
     await writeFile(screenshotPath, Buffer.from((await defender.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
-    await click(cdp, defender, '#recoveryContinue');
+    if (responseLoss === 'request') {
+      await click(cdp, defender, '#responseActivate');
+      await waitForPage(cdp, defender, `!document.querySelector('#onlineResponse').open && ${textMatchExpression('#playerPanel', '2800 / 4000')}`, 'manual retry settled and closed the response', timeoutMs);
+    } else {
+      await click(cdp, defender, '#recoveryContinue');
+    }
     const resolution = await evaluate(cdp, defender, `(() => {
       const log = [...document.querySelectorAll('#eventLogList strong')].map(entry => entry.textContent);
       return { trapActivations: log.filter(text => text.includes('发动《弱化力场》')).length,
@@ -840,10 +877,15 @@ async function exerciseResponseAckLoss(attacker, defender, spectator, options, r
     await waitForPage(cdp, attacker, `!document.querySelector('#endTurnButton').disabled`, 'attack has settled and the turn can end', timeoutMs);
     await endTurn(cdp, attacker, timeoutMs);
     await waitForPage(cdp, defender, textMatchExpression('#turnLabel', '你的回合'), 'reconnected defender can take the next turn', timeoutMs);
-    assert.equal(activations.length, 1, 'Trap response was not sent exactly once');
-    assert.equal(acknowledgementReceived, false, 'Trap response acknowledgement reached the browser');
-    await writeFile(path.join(artifactDir, `online-response-ack-loss-${roomCode}.json`), `${JSON.stringify({ roomCode, responseRequests: activations.length, acknowledgementReceived, resolution, continued: true, screenshotPath }, null, 2)}\n`);
-    console.log(`online-response-ack-loss-smoke passed (${roomCode}, committed response, lost acknowledgement, one activation, continued turn)`);
+    const expectedRequests = responseLoss === 'request' ? 2 : 1;
+    assert.equal(activations.length, expectedRequests, 'Unexpected number of response requests');
+    assert.equal(new Set(activations).size, expectedRequests, 'The new response reused the lost request ID');
+    const acknowledgementReceived = acknowledgements.has(activations[0]);
+    assert.equal(acknowledgementReceived, false, 'Acknowledgement of the first response reached the browser');
+    if (responseLoss === 'request') assert.ok(acknowledgements.has(activations[1]), 'Manual retry never received its acknowledgement');
+    const report = { roomCode, responseClock, responseRequests: activations.length, acknowledgementReceived, resolution, continued: true, screenshotPath };
+    await writeFile(`${artifactBase}.json`, `${JSON.stringify(report, null, 2)}\n`);
+    console.log(`online-response-${responseLoss}-loss-smoke passed (${roomCode}, one activation, continued turn)`);
   } finally {
     defender.cdp.socket.off('message', observeResponseFrames);
   }
@@ -1551,8 +1593,8 @@ try {
 
   if (options.selectionExpiry) {
     await exerciseSelectionExpiry(firstPage, secondPage, spectatorPage, options, roomCode);
-  } else if (options.responseAckLoss) {
-    await exerciseResponseAckLoss(firstPage, secondPage, spectatorPage, options, roomCode);
+  } else if (options.responseLoss) {
+    await exerciseResponseLoss(firstPage, secondPage, spectatorPage, options, roomCode);
   } else if (options.chainRhythm) {
     await exerciseChainRhythm(firstPage, secondPage, spectatorPage, options, roomCode);
   } else if (options.tributeChoices) {
