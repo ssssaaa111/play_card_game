@@ -6,10 +6,12 @@ import { tmpdir } from "node:os";
 import { DuelRoom } from "../server/duel-room.js";
 import { DuelRoomStore } from "../server/duel-room-store.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
+import { cardHandSummary } from "../src/cards.js";
 import { createDuelist, cardById } from "../src/deck.js";
 import { buildEngineStateFromUiState } from "../src/engine-adapter.js";
 import { ControllerKind, DuelMode, createDuelSessionConfig } from "../src/duel-session.js";
 import { deckPresets } from "../src/data.js";
+import { onlineCardDetailView, onlineHandActionView } from "../src/online-duel-ui.js";
 
 function fixture(t, options = {}) {
   const directory = mkdtempSync(join(tmpdir(), "star-duel-rooms-"));
@@ -64,6 +66,7 @@ test("restart preserves card order events and receipts while excluding downtime 
   f.setNow(3_613_000);
   const restored = f.reload();
   assert.deepEqual(restored.engine.getState(), expected);
+  assert.equal(restored.viewFor("p1").turn.openingBattleLocked, true);
   assert.equal(restored.viewFor("p1").turnTimer.remainingMs, 87_000);
   assert.equal(restored.expireTurnTimeout(), false);
   assert.equal(restored.expireDisconnectTimeout(), false);
@@ -78,6 +81,106 @@ test("restart preserves card order events and receipts while excluding downtime 
   assert.deepEqual(restored.submit("one-new", { revision: receipt.revision - 1, commandId: receipt.commandId, action }), { ...receipt, duplicate: true });
   assert.deepEqual(restored.engine.getState(), before);
   assert.throws(() => restored.submit("one-new", { revision: receipt.revision, commandId: "old-choice", action: { type: "END_TURN" } }), { code: "STALE_REVISION" });
+  assert.throws(() => submit(restored, "one-new", { type: "CHANGE_PHASE", phase: "battle" }, "opener-battle"), { code: "ILLEGAL_COMMAND" });
+  submit(restored, "one-new", { type: "END_TURN" }, "pass-opener");
+  assert.equal(restored.viewFor("p2").turn.openingBattleLocked, false);
+});
+
+for (const damage of [400, 500]) {
+  test(`Burst Rune keeps its saved ${damage} damage and allows replays until the rematch`, (t) => {
+    const openingHands = {
+      p1: ["burst-rune", "material-reclaim", "ember-drake", "gale-mage", "element-echo"],
+      p2: ["burst-rune", "material-reclaim", "iron-guardian", "gale-mage", "solar-knight"]
+    };
+    const createState = options => createOnlineDuelState({
+      ...options, openingHands, legacyBurstRuneDamage: damage === 500, allowBurstRuneReplay: true
+    });
+    const f = fixture(t, { createState });
+    start(f.room);
+    const view = f.room.viewFor("p1");
+    const rune = view.players.p1.hand.find(card => card.templateId === "burst-rune");
+    const recovery = view.players.p1.hand.find(card => card.templateId === "material-reclaim");
+    assert.equal(cardHandSummary(rune), `对方 LP -${damage}`);
+    assert.equal(onlineCardDetailView(rune).effectText, `对对手造成 ${damage} 点伤害。`);
+    const castRune = view.legalActions.actions.activateCard.find(action => action.cardId === rune.id);
+    const receipt = submit(f.room, "one", castRune, "first-rune");
+    assert.equal(f.room.viewFor("p2").players.p2.lp, 4000 - damage);
+    f.store.save();
+
+    const restored = new DuelRoomStore({
+      ...f.settings,
+      createRoom: config => new DuelRoom({ ...config, now: f.settings.now,
+        createState: options => createOnlineDuelState({ ...options, openingHands }) })
+    }).require(f.room.code);
+    assert.deepEqual(restored.engine.getState(), f.room.engine.getState());
+    f.resume(restored);
+    assert.deepEqual(restored.submit("one-new", { revision: receipt.revision - 1, commandId: receipt.commandId, action: castRune }),
+      { ...receipt, duplicate: true });
+    assert.equal(restored.viewFor("p2").players.p2.lp, 4000 - damage);
+    assert.equal(restored.viewFor("p1").legalActions.delayedGraveReturnTargets, undefined);
+    const recoverRune = restored.viewFor("p1").legalActions.actions.activateCard.find(action =>
+      action.cardId === recovery.id && action.targetCardId === rune.id);
+    submit(restored, "one-new", recoverRune, "recover-rune");
+    const recovered = restored.viewFor("p1").players.p1.hand.find(card => card.id === rune.id);
+    assert.equal(recovered.effect, `burn${damage}`);
+    submit(restored, "one-new", castRune, "second-rune");
+    assert.equal(restored.viewFor("p2").players.p2.lp, 4000 - 2 * damage);
+    const damageEvents = restored.engine.getState().events.filter(event => event.type === "DAMAGE_DEALT");
+    assert.deepEqual(damageEvents.map(event => [event.sourceCardId, event.amount]), [[rune.id, damage], [rune.id, damage]]);
+
+    restored.forfeit("one-new");
+    restored.requestRematch("one-new");
+    restored.requestRematch("two-new");
+    const rematch = restored.viewFor("p2");
+    assert.equal(rematch.turn.playerId, "p2");
+    const rematchRune = rematch.players.p2.hand.find(card => card.templateId === "burst-rune");
+    assert.equal(rematchRune.effect, "burn400OncePerTurn");
+    assert.equal(cardHandSummary(rematchRune), "对方 LP -400 · 每张每回合 1 次");
+    const castRematchRune = rematch.legalActions.actions.activateCard.find(action => action.cardId === rematchRune.id);
+    submit(restored, "two-new", castRematchRune, "rematch-rune");
+    const rematchRecovery = rematch.players.p2.hand.find(card => card.templateId === "material-reclaim");
+    submit(restored, "two-new", { type: "ACTIVATE_CARD", cardId: rematchRecovery.id, targetCardId: rematchRune.id }, "rematch-recover");
+    assert.equal(onlineHandActionView(restored.viewFor("p2"), rematchRune.id).label, "本回合已发动");
+    assert.throws(() => submit(restored, "two-new", castRematchRune, "rematch-replay"), { code: "ILLEGAL_COMMAND" });
+    assert.equal(restored.viewFor("p1").players.p1.lp, 3600);
+    assert.equal(cardById("burst-rune").effect, "burn500");
+  });
+}
+
+test("new online duels limit the recovered copy across restart and reset next turn", (t) => {
+  const f = fixture(t, { createState: options => createOnlineDuelState({ ...options,
+    openingHands: { p1: ["burst-rune", "burst-rune", "material-reclaim", "solar-knight", "iron-guardian"] }
+  }) });
+  start(f.room);
+  const view = f.room.viewFor("p1");
+  const [first, second] = view.players.p1.hand.filter(card => card.templateId === "burst-rune");
+  const recovery = view.players.p1.hand.find(card => card.templateId === "material-reclaim");
+  const activate = cardId => ({ type: "ACTIVATE_CARD", cardId });
+  submit(f.room, "one", activate(first.id), "first-rune");
+  submit(f.room, "one", { ...activate(recovery.id), targetCardId: first.id }, "recover-first");
+  f.store.save();
+
+  const restored = f.reload();
+  f.resume(restored);
+  const recoveredView = restored.viewFor("p1");
+  assert.equal(onlineHandActionView(recoveredView, first.id).label, "本回合已发动");
+  assert.equal(onlineHandActionView(recoveredView, second.id).ok, true);
+  assert.match(onlineCardDetailView(recoveredView.players.p1.hand.find(card => card.id === first.id)).effectText, /同一张卡每回合只能发动 1 次/);
+  assert.deepEqual(recoveredView.legalActions.actions.activateCard.map(action => action.cardId), [second.id]);
+  assert.throws(() => submit(restored, "one-new", activate(first.id), "blocked-rune"),
+    { code: "ILLEGAL_COMMAND", message: /already been activated this turn/ });
+  assert.deepEqual(restored.viewFor("p1"), recoveredView);
+  assert.equal(restored.viewFor("p2").players.p2.lp, 3600);
+  submit(restored, "one-new", activate(second.id), "second-rune");
+  assert.equal(restored.viewFor("p2").players.p2.lp, 3200);
+
+  submit(restored, "one-new", { type: "END_TURN" }, "pass-first");
+  submit(restored, "two-new", { type: "END_TURN" }, "pass-second");
+  assert.equal(onlineHandActionView(restored.viewFor("p1"), first.id).ok, true);
+  submit(restored, "one-new", activate(first.id), "next-turn-rune");
+  assert.equal(restored.viewFor("p2").players.p2.lp, 2800);
+  const damageEvents = restored.engine.getState().events.filter(event => event.type === "DAMAGE_DEALT");
+  assert.deepEqual(damageEvents.map(event => [event.sourceCardId, event.amount]), [[first.id, 400], [second.id, 400], [first.id, 400]]);
 });
 
 test("equipment receipts restore their engine effect IDs without applying the bonus twice", (t) => {
@@ -157,9 +260,98 @@ test("finished results and one accepted rematch survive a second service instanc
   restored.requestRematch("two-new");
   assert.equal(restored.duelNumber, 2);
   assert.equal(restored.viewFor("p1").turn.playerId, "p2");
+  assert.equal(restored.viewFor("p2").turn.openingBattleLocked, true);
   assert.equal(restored.viewFor("p1").players.p1.deckCount, 51);
   restored.forfeit("two-new");
   assert.equal(restored.series.completed, 2);
+});
+
+function lethalTimeoutFixture(t) {
+  const f = fixture(t, { turnTimeoutMs: 5_000, createState: options => {
+    const state = createOnlineDuelState(options);
+    state.players.p2.grave.push(...state.players.p2.deck.splice(0));
+    state.players.p2.lp = 200;
+    return state;
+  } });
+  start(f.room);
+  f.setNow(15_000);
+  assert.equal(f.room.expireTurnTimeout(), true);
+  return f;
+}
+
+function legacyTimeoutSnapshot(f) {
+  const snapshot = f.room.toSnapshot();
+  snapshot.status = "playing";
+  snapshot.recordedDuelNumber = 0;
+  snapshot.series = { completed: 0, draws: 0, wins: { p1: 0, p2: 0 } };
+  return snapshot;
+}
+
+test("lethal timeout draw finalizes once and survives restart before a rematch", (t) => {
+  const f = lethalTimeoutFixture(t);
+  const expected = f.room.engine.getState();
+  assert.equal(expected.gameOver.winnerId, "p1");
+  assert.equal(f.room.status, "finished");
+  assert.deepEqual(f.room.series, { completed: 1, draws: 0, wins: { p1: 1, p2: 0 } });
+  assert.equal(f.room.recordedDuelNumber, 1);
+  assert.equal(f.room.turnTimeoutView(), null);
+  assert.equal(f.room.responseTimeoutView(), null);
+  assert.equal(f.room.expireTurnTimeout(), false);
+  f.store.save();
+  const restored = f.reload();
+  assert.deepEqual(restored.engine.getState(), expected);
+  assert.deepEqual(restored.series, f.room.series);
+  f.resume(restored);
+  restored.requestRematch("one-new");
+  restored.requestRematch("two-new");
+  assert.equal(restored.duelNumber, 2);
+  assert.equal(restored.status, "playing");
+  assert.equal(restored.viewFor("p1").turn.playerId, "p2");
+  assert.equal(restored.series.completed, 1);
+});
+
+test("legacy unrecorded timeout results restore without replaying damage or counting twice", (t) => {
+  const f = lethalTimeoutFixture(t);
+  const snapshot = legacyTimeoutSnapshot(f);
+  const content = JSON.stringify({ version: 1, rooms: [snapshot] });
+  writeFileSync(f.filePath, content);
+  const store = new DuelRoomStore(f.settings), restored = store.require(f.room.code);
+  assert.equal(readFileSync(f.filePath, "utf8"), content, "Loading must not overwrite the original snapshot");
+  assert.deepEqual(restored.engine.getState(), snapshot.state);
+  assert.equal(restored.status, "finished");
+  assert.deepEqual(restored.series, { completed: 1, draws: 0, wins: { p1: 1, p2: 0 } });
+  assert.equal(restored.recordedDuelNumber, 1);
+  assert.equal(restored.turnTimeoutView(), null);
+  assert.equal(restored.disconnectTimeoutDelay(), null);
+  store.save();
+  const reloaded = f.reload();
+  assert.deepEqual(reloaded.series, restored.series);
+  assert.deepEqual(reloaded.engine.getState(), snapshot.state);
+  f.resume(reloaded);
+  assert.equal(reloaded.publicHistoryFor("one-new").entries.filter(event => event.type === "GAME_OVER_DECLARED").length, 1);
+  reloaded.requestRematch("one-new");
+  reloaded.requestRematch("two-new");
+  assert.equal(reloaded.duelNumber, 2);
+  assert.equal(reloaded.series.completed, 1);
+});
+
+test("legacy timeout repair rejects unrelated or contradictory result metadata", (t) => {
+  const f = lethalTimeoutFixture(t);
+  const original = legacyTimeoutSnapshot(f);
+  for (const mutate of [
+    snapshot => { snapshot.state.events.findLast(event => event.type === "TURN_ENDED").reason = "manual"; },
+    snapshot => { snapshot.state.events.at(-1).phaseAdvanced = true; },
+    snapshot => { snapshot.state.gameOver.winnerId = "p2"; },
+    snapshot => { snapshot.series.completed = 1; snapshot.series.draws = 1; },
+    snapshot => { snapshot.turnTimer = { playerId: "p2", remainingMs: 1_000 }; }
+  ]) {
+    const snapshot = structuredClone(original);
+    mutate(snapshot);
+    const content = JSON.stringify({ version: 1, rooms: [snapshot] });
+    writeFileSync(f.filePath, content);
+    assert.throws(() => new DuelRoomStore(f.settings), { code: "ROOM_STORAGE_FAILED" });
+    assert.equal(readFileSync(f.filePath, "utf8"), content);
+  }
 });
 
 test("store expiry uses saved activity time and ignores incomplete temporary writes", (t) => {

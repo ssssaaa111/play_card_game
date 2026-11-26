@@ -2,6 +2,7 @@ import { makeBattlePreview, makeAttackIntentPreview, totalAtk, totalDef } from "
 import { createTrapResponse, selectTrapResponse } from "./response-state.js";
 import { describeBattleOutcome } from "./battle.js";
 import { cardHandSummary } from "./cards.js";
+import { isGraveReturn } from "./online-grave-return.js";
 
 function spectatorView(view) {
   return view?.viewerRole === "spectator";
@@ -51,7 +52,7 @@ export function onlineResponseTimerView(view, now = Date.now()) {
     seconds,
     ownResponse,
     label: paused
-      ? "对局已暂停，响应倒计时冻结"
+      ? `响应计时已冻结 · 剩余 ${seconds} 秒`
       : spectatorView(view)
         ? `等待${responderName}响应 · ${seconds} 秒后自动结算`
         : ownResponse
@@ -244,6 +245,22 @@ export function onlinePendingCommandView(view, pending) {
     CHANGE_PHASE: "正在切换阶段", END_TURN: "正在结束回合", SKIP_REMAINING_ATTACKS: "正在结束攻击"
   }[type] || (/^(RESPOND_|PASS_)/.test(type) ? "正在提交响应" : "正在提交操作");
   return { title, signal: "提交中", hint: "等待服务器确认，请稍候。" };
+}
+
+export function onlineInterruptedTrapResponseHint(view, interrupted) {
+  const action = interrupted?.action;
+  if (!action || !view || view.gameOver || spectatorView(view)
+    || view.roomCode !== interrupted.roomCode || view.duelNumber !== interrupted.duelNumber
+    || view.machine?.responseWindow?.playerId !== view.viewerSeatId) return "";
+  const response = {
+    RESPOND_TRAP: view.attackResponse,
+    RESPOND_SUMMON_TRAP: view.summonResponse,
+    RESPOND_CHAIN_TRAP: view.chainResponse
+  }[action.type];
+  const eventId = action.declarationEventId ?? action.triggerEventId;
+  if (!response || eventId == null || (response.declarationEventId ?? response.triggerEventId) !== eventId
+    || !response.candidates.some(candidate => candidate.cardId === action.cardId)) return "";
+  return "上次发动尚未结算，可重新确认。";
 }
 
 export function onlineChainResponseDecisionView(view) {
@@ -993,6 +1010,7 @@ export function onlineTurnControlView(view, { endTurnArmed = false } = {}) {
   const ownTurn = view?.turn?.playerId === view?.viewerSeatId;
   const blocked = !ownTurn || Boolean(view?.gameOver) || Boolean(view?.machine?.responseWindow) || !view?.legalActions?.can?.endTurn;
   const inBattle = view?.turn?.phase === "battle";
+  const openingLocked = ownTurn && Boolean(view?.turn?.openingBattleLocked);
   const attackCount = summary.attackCardIds.length;
   const confirming = Boolean(endTurnArmed && summary.total > 0 && !blocked);
   return {
@@ -1000,8 +1018,8 @@ export function onlineTurnControlView(view, { endTurnArmed = false } = {}) {
     attackCount,
     requiresEndTurnConfirmation: summary.total > 0,
     battle: {
-      label: inBattle ? "战斗阶段" : attackCount > 0 ? `进入战斗 · ${attackCount} 可攻击` : "进入战斗",
-      title: inBattle ? "当前处于战斗阶段" : attackCount > 0 ? `进入战斗阶段，${attackCount} 只怪兽可以攻击` : "进入战斗阶段"
+      label: openingLocked ? "首回合禁攻" : inBattle ? "战斗阶段" : attackCount > 0 ? `进入战斗 · ${attackCount} 可攻击` : "进入战斗",
+      title: openingLocked ? "先手首回合不能进入战斗阶段。" : inBattle ? "当前处于战斗阶段" : attackCount > 0 ? `进入战斗阶段，${attackCount} 只怪兽可以攻击` : "进入战斗阶段"
     },
     endTurn: {
       confirming,
@@ -1026,7 +1044,7 @@ export function onlineAttackIntent(view, model) {
   const ownTurn = view?.turn?.playerId === view?.viewerSeatId;
   const self = view?.players?.[view?.viewerSeatId];
   const blocked = Boolean(view?.gameOver || view?.machine?.responseWindow || view?.machine?.pendingAttack
-    || view?.machine?.chainLength || view?.seats?.some((seat) => seat.connected === false));
+    || view?.machine?.chainLength || view?.turn?.openingBattleLocked || view?.seats?.some((seat) => seat.connected === false));
   const eligible = Boolean(model?.card?.type === "monster"
     && self?.monsterZone?.some((card) => card?.id === model.card.id)
     && ownTurn && !blocked && model.card.mode !== "defense" && !model.card.used
@@ -1071,6 +1089,7 @@ export function onlineMonsterStatus(view, cardId) {
     return { ...status, detail: `${status.detail}${canChange ? "可先切换为攻击表示。" : card.changedMode ? "本回合已切换过表示。" : "可在主要阶段切换表示。"}` };
   }
   if (["locked", "spent"].includes(status.key)) return status;
+  if (view.turn?.openingBattleLocked) return { key: "locked", label: "首回合禁攻", tone: "locked", detail: "先手首回合不能攻击。" };
   const intent = onlineAttackIntent(view, onlineSelectionModel(view, selectOnlineCard(view, cardId)));
   if (intent.available) return { key: "ready", label: "可攻击", tone: "ready", detail: intent.requiresBattlePhase ? "可自动进入战斗阶段；单击选择目标，双击快捷攻击。" : "单击选择目标，双击快捷攻击。" };
   return view.turn?.phase === "battle"
@@ -1216,6 +1235,11 @@ export function onlineAttackDecisionView(view, model) {
   };
 }
 
+function graveReturnTimingHint(view, source, targetId) {
+  return targetId && isGraveReturn(source) && view.legalActions?.delayedGraveReturnTargets?.includes(targetId)
+    ? "回收后下个己方回合可再发动" : "";
+}
+
 export function onlineEffectDecisionView(view, model) {
   if (spectatorView(view) || model?.card.type !== "spell" || model.stage !== "target" || !model.targetIds.length
     || !view.players[view.viewerSeatId].hand.some(card => card.id === model.card.id)) return null;
@@ -1240,7 +1264,8 @@ export function onlineEffectDecisionView(view, model) {
     effect: cardHandSummary(model.card),
     target,
     candidates,
-    hint: target ? `${target.location} · ${target.detail}` : "单击选择，确认或双击目标发动。"
+    hint: target ? [target.location, target.detail, graveReturnTimingHint(view, model.card, target.id)].filter(Boolean).join(" · ")
+      : "单击选择，确认或双击目标发动。"
   };
 }
 
@@ -1280,7 +1305,9 @@ export function onlineGraveChoiceView(view, model, seatId = view?.viewerSeatId) 
     sourceId: model.card.id, seatId, count, selectedId,
     title: `${model.card.name} · 选择墓地目标`, effect: cardHandSummary(model.card),
     canConfirm: Boolean(selectedId && model.action?.targetCardId === selectedId),
+    selectedTimingHint: graveReturnTimingHint(view, model.card, selectedId),
     cards: grave.map(card => ({ card, eligible: legalIds.has(card.id), selected: card.id === selectedId,
+      timingHint: legalIds.has(card.id) ? graveReturnTimingHint(view, model.card, card.id) : "",
       reason: legalIds.has(card.id) ? card.id === selectedId ? "已选目标" : "可选目标"
         : model.card.effect === "graveRevive" && card.type !== "monster" ? "只能选择墓地怪兽" : "当前效果不能选择这张牌" }))
   };

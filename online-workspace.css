@@ -164,6 +164,7 @@ body[data-online-status]:is([data-duel-focus="target"], [data-duel-focus="attack
 .hand-navigation > span { min-width: 46px; color: #adc2d0; font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
 body[data-online-status] #handToolbar:has(.hand-navigation:not([hidden])) { display: flex; }
 body[data-online-status] #hand:focus-visible { outline: 1px solid rgba(115,226,213,.7); outline-offset: -1px; }
+body[data-online-status] #hand > .card:focus-visible { outline: 2px solid #73e2d5; outline-offset: -2px; }
 body[data-online-status] #hand[data-scroll-edges="right"] { mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent); }
 body[data-online-status] #hand[data-scroll-edges="left"] { mask-image: linear-gradient(90deg, transparent, #000 14px); }
 body[data-online-status] #hand[data-scroll-edges="both"] { mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent); }
@@ -245,6 +246,88 @@ body[data-online-status] #hand > .card:is(:hover, .selected) { transform: none; 
   body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .badge { height: 12px; padding-block: 0; font-size: 8px; }
   body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) .card-text.hand-summary { padding: 0 3px; font-size: 9px; line-height: 10px; -webkit-line-clamp: 1; }
   body[data-online-status]:is([data-duel-selection="hand"], [data-duel-selection="target"]) :is(#hand > .card, .hand-drag-ghost) :is(.stats, .stat) { height: 14px; font-size: 9px; }
+}
+
+.hand-reorder-grip { display: none; }
+
+@media (orientation: landscape) and (max-height: 400px) and (max-width: 1040px) {
+  body[data-online-status] #app #handPanel {
+    grid-template-columns: minmax(0,1fr) auto;
+    grid-template-rows: 30px minmax(0,1fr);
+    gap: 4px;
+    padding: 4px;
+  }
+  body[data-online-status] #app #handPanel:has(#fieldActionBar:not([hidden])) { padding-top: 94px; }
+  body[data-online-status] #app #handCommand > #choiceActions:not(.online-effect-choice, .online-attack-choice) {
+    right: calc(max(8px, var(--safe-area-right)) + clamp(226px, 31vw, 300px));
+  }
+  body[data-online-status] #app #handPanel .hand-stack { display: contents; }
+  body[data-online-status] #app #handPanel .hand-title {
+    grid-area: 1 / 1;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  body[data-online-status] #handPanel :is(.hand-title-copy, #handOrderStatus) { display: none; }
+  body[data-online-status] #handReadyJump {
+    grid-template-columns: auto auto;
+    grid-template-areas: "count label";
+    gap: 4px;
+    min-height: 27px;
+    padding-inline: 5px;
+    white-space: nowrap;
+  }
+  body[data-online-status] #app #handToolbar { grid-area: 1 / 2; gap: 4px; padding: 0; align-items: center; }
+  body[data-online-status] #app #handPanel #hand {
+    grid-area: 2 / 1 / 3 / -1;
+    gap: 2px;
+    padding: 0;
+    scroll-snap-type: none;
+    scrollbar-width: thin;
+  }
+  body[data-online-status][data-duel-selection] :is(#hand > .card, .hand-drag-ghost) {
+    flex-basis: 40px;
+    grid-template-columns: 22px minmax(0,1fr) auto 40px;
+    grid-template-areas: "grip head head detail" "grip stats action detail";
+    grid-template-rows: 16px 14px;
+    align-content: center;
+    gap: 0 4px;
+    padding: 3px 4px;
+  }
+  body[data-online-status][data-duel-selection] :is(#hand > .card, .hand-drag-ghost):not(.monster) {
+    grid-template-areas: "grip head head detail" "grip summary action detail";
+    grid-template-rows: 16px 14px;
+  }
+  body[data-online-status] #hand > .card.hand-direct-reorder { touch-action: pan-y; }
+  .hand-reorder-grip {
+    grid-area: grip;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(159,183,203,.2);
+    border-radius: 4px;
+    background: rgba(17,29,41,.8);
+    color: #b1c4d3;
+    font-size: 16px;
+    cursor: grab;
+    touch-action: none;
+  }
+  body[data-online-status][data-duel-selection] :is(#hand > .card, .hand-drag-ghost) .card-head { height: 16px; min-height: 0; }
+  body[data-online-status][data-duel-selection] :is(#hand > .card, .hand-drag-ghost) .card-name { font-size: 12px; }
+  body[data-online-status][data-duel-selection] :is(#hand > .card, .hand-drag-ghost) :is(.art, .monster .hand-summary) { display: none; }
+  body[data-online-status][data-duel-selection] :is(#hand > .card, .hand-drag-ghost) .hand-summary {
+    display: block;
+    height: 14px;
+    min-height: 0;
+    padding: 0;
+    font-size: 9px;
+    line-height: 14px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  body[data-online-status][data-duel-selection] :is(#hand > .card, .hand-drag-ghost) :is(.stats, .stat) { height: 14px; min-height: 0; font-size: 8px; }
+  body[data-online-status][data-duel-selection] :is(#hand > .card, .hand-drag-ghost) .action-tag { min-height: 0; height: 14px; padding-block: 0; }
 }
 
 /* Battle cards use the available track width; only their art turns in defense. */
@@ -520,7 +603,20 @@ body[data-online-status] #fieldTargets .online-target { min-height: 40px; margin
 body[data-online-status] #fieldTargets .online-target strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 body[data-online-status] #fieldTargets .online-target small { font-size: 9px; }
 @media (orientation: landscape) and (max-height: 540px) and (max-width: 1040px) {
-  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice { max-height: calc(100dvh - 100px); width: min(480px, calc(100vw - 20px)); gap: 8px; padding: 8px; }
+  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    max-height: none;
+    padding: 8px;
+    transform: none;
+  }
+  body[data-online-status] #app #handPanel:has(#choiceActions.online-attack-choice:not([hidden])) > :is(.hand-title, .hand-stack) {
+    visibility: hidden;
+  }
+  body[data-online-status] #app #handCommand > #choiceActions.online-attack-choice #fieldTargets {
+    max-height: min(98px, 28dvh);
+  }
   .online-attack-preview { gap: 5px; }
 }
 
@@ -626,6 +722,45 @@ body[data-online-status] #onlineResult .online-result-secondary .btn { border-co
   body[data-online-status] #cardInspector .online-inspector-hint { display: none; }
 }
 
+@media (orientation: landscape) and (max-height: 400px) and (max-width: 1040px) {
+  body[data-online-status] #cardInspector[data-grave-choice="true"] #inspectorContent { gap: 6px; }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] .online-zone-summary {
+    flex-direction: row;
+    align-items: center;
+    padding: 5px 8px;
+  }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] .online-zone-browser {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 6px;
+  }
+  .online-grave-entry {
+    grid-template-columns: minmax(0,1fr) auto;
+    grid-template-rows: auto;
+  }
+  .online-grave-entry .online-zone-card {
+    grid-template-columns: 40px minmax(0,1fr);
+    align-content: center;
+    align-items: center;
+    min-height: 52px;
+    padding: 5px;
+    transform: none;
+  }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] #inspectorContent .card {
+    grid-template-rows: minmax(0,1fr);
+    height: 40px;
+    min-height: 0;
+    max-height: none;
+    padding: 0;
+    overflow: hidden;
+  }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] #inspectorContent .card > :not(.art) { display: none; }
+  body[data-online-status] #cardInspector[data-grave-choice="true"] #inspectorContent .card .art { height: 100%; min-height: 0; }
+  .online-grave-entry .online-zone-card-caption strong { font-size: 12px; }
+  .online-grave-entry .online-zone-card-caption small { font-size: 10px; }
+  .online-grave-entry .online-grave-reason { margin-top: 0; }
+  .online-grave-entry .online-grave-detail { align-self: center; padding: 0 6px; }
+}
+
 /* Guidance owns a flexible row so readable text cannot cover either support zone. */
 body[data-online-status] #app .duel-table .field {
   grid-template-rows: minmax(0,1fr) var(--support-track-size) auto var(--support-track-size) minmax(0,1fr);
@@ -660,4 +795,34 @@ body[data-online-status] #app .duel-table #duelHint {
 :where(body[data-online-status]) #app .duel-table .center-line span { color: #e6eff7; background: #0b141e; }
 @media (orientation: landscape) and (max-height: 400px) and (max-width: 1040px) {
   body[data-online-status] #app .duel-table #duelHint { min-height: 28px; padding: 4px 8px; font-size: 12px; line-height: 1.35; }
+}
+
+@media (orientation: landscape) and (max-height: 360px) and (max-width: 640px) {
+  body[data-online-status] #app .duel-table .field {
+    --support-track-size: 23px;
+    top: 52px;
+    gap: 3px;
+  }
+  body[data-online-status] #app .duel-table .zone-row { column-gap: 3px; }
+  body[data-online-status] #app .duel-table .slot:has(.field-monster-card) { padding: 1px; }
+  body[data-online-status] #app .duel-table .field-monster-card {
+    grid-template-columns: minmax(0, 1fr) minmax(36px, 62%);
+    grid-template-rows: 12px minmax(0, 1fr);
+    padding: 1px;
+  }
+  body[data-online-status] #app .duel-table .field-monster-card .card-head { grid-area: 1 / 1 / 2 / -1; }
+  body[data-online-status] #app .duel-table .field-monster-card .art { grid-area: 2 / 1; }
+  body[data-online-status] #app .duel-table .field-monster-card .stats {
+    grid-area: 2 / 2;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    align-self: stretch;
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+  body[data-online-status] #app .duel-table .field-monster-card .stat { padding: 0; font-size: 7.5px; }
+  body[data-online-status] #app .duel-table .field-monster-card .card-state-rail,
+  body[data-online-status] #app .duel-table .slot .field-selection-chip { display: none; }
+  body[data-online-status="playing"][data-duel-turn="player"] #app .duel-table #playerField .slot[data-attack-state="ready"]::before { content: none; }
 }

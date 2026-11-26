@@ -1,8 +1,9 @@
-import { getLegalActions } from "./game-engine.js";
+import { cardActivatedThisTurn, getLegalActions } from "./game-engine.js";
 import { otherSeatId, seatIdsForState } from "./duel-session.js";
 import { onlineAttackResponse, onlineChainResponse, onlineSummonResponse } from "./online-response.js";
 import { onlineHandBlocker } from "./online-hand-feedback.js";
 import { effectMarkersForCard } from "./effect-markers.js";
+import { graveReturnLimit, graveReturnRuleText, graveReturnUsed, isGraveReturn } from "./online-grave-return.js";
 
 const PUBLIC_EVENT_FIELDS = new Set([
   "id", "type", "playerId", "rivalId", "winnerId", "loserId", "loserIds",
@@ -24,8 +25,10 @@ const PUBLIC_BATTLE_OUTCOME_FIELDS = new Set([
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
-function publicCard(card) {
+function publicCard(card, graveReturnTurnLimit = true) {
   if (!card) return null;
+  const limitedRecovery = graveReturnTurnLimit && isGraveReturn(card);
+  const text = card.text || "";
   return {
     id: card.id,
     templateId: card.templateId || card.id,
@@ -50,7 +53,8 @@ function publicCard(card) {
     battleWear: Math.max(0, Number(card.battleWear) || 0),
     effect: card.effect || "",
     trigger: card.trigger || "",
-    text: card.type === "trap" ? (card.text || "").replace("盖放后自动触发：", "盖放后可发动：") : card.text || ""
+    text: limitedRecovery ? `${text}${graveReturnRuleText}` : card.type === "trap" ? text.replace("盖放后自动触发：", "盖放后可发动：") : text,
+    ...(limitedRecovery ? { handSummary: "回收并抽 1 张 · 每回合共用 1 次" } : {})
   };
 }
 
@@ -69,8 +73,8 @@ export function resolveDuelTargetId(state, viewerSeatId, targetId) {
   return [...concealedTargetIds(state, viewerSeatId)].find(([, alias]) => alias === targetId)?.[0] || targetId;
 }
 
-function zoneCards(state, cardIds = []) {
-  return cardIds.map((cardId) => publicCard(state.cards?.[cardId])).filter(Boolean);
+function zoneCards(state, cardIds = [], graveReturnTurnLimit) {
+  return cardIds.map((cardId) => publicCard(state.cards?.[cardId], graveReturnTurnLimit)).filter(Boolean);
 }
 
 function fixedZoneCards(state, player, zoneName, { hidden = false, hiddenPrefix = "hidden" } = {}) {
@@ -154,7 +158,7 @@ function latestCompletedChainEvents(events = []) {
   return [...chain, ...aftermath];
 }
 
-function projectedPlayer(state, seatId, viewerSeatId, revealedTraps = new Set()) {
+function projectedPlayer(state, seatId, viewerSeatId, { revealedTraps = new Set(), graveReturnTurnLimit = true } = {}) {
   const player = state.players[seatId];
   const own = seatId === viewerSeatId;
   return {
@@ -163,15 +167,15 @@ function projectedPlayer(state, seatId, viewerSeatId, revealedTraps = new Set())
     deckCount: player.deck.length,
     handCount: player.hand.length,
     hand: own
-      ? zoneCards(state, player.hand)
+      ? zoneCards(state, player.hand, graveReturnTurnLimit)
       : player.hand.map((_cardId, index) => hiddenCard(`hidden:hand:${index}`)),
     monsterZone: fixedZoneCards(state, player, "monsterZone"),
     spellTrapZone: fixedZoneCards(state, player, "spellTrapZone", {
       hidden: own ? false : (card) => card?.type === "trap" && !revealedTraps.has(card.id),
       hiddenPrefix: "hidden:spell-trap"
     }),
-    grave: zoneCards(state, player.grave),
-    banished: zoneCards(state, player.banished),
+    grave: zoneCards(state, player.grave, graveReturnTurnLimit),
+    banished: zoneCards(state, player.banished, graveReturnTurnLimit),
     attacksSkipped: Boolean(player.attacksSkipped),
     normalSummonsUsed: Math.max(0, Number(player.normalSummonsUsed) || 0)
   };
@@ -251,7 +255,8 @@ export function buildDuelView(state, viewerSeatId, {
   duelNumber = 1,
   nextFirstPlayerId = null,
   series = null,
-  seats = []
+  seats = [],
+  graveReturnTurnLimit = true
 } = {}) {
   const seatIds = seatIdsForState(state);
   if (!seatIds.includes(viewerSeatId)) throw new Error(`Unknown viewer seat ${viewerSeatId}`);
@@ -270,6 +275,21 @@ export function buildDuelView(state, viewerSeatId, {
   legalActions.unavailableHandActions = Object.fromEntries([...rejectedHandActions]
     .filter(([cardId]) => !playableCards.has(cardId))
     .map(([cardId, reason]) => [cardId, onlineHandBlocker(state, viewerSeatId, state.cards[cardId], reason)]));
+  if (graveReturnTurnLimit && legalActions.can.activateCard && graveReturnUsed(state, viewerSeatId)) {
+    legalActions.actions.activateCard = legalActions.actions.activateCard.filter(({ cardId }) => {
+      if (!isGraveReturn(state.cards[cardId])) return true;
+      legalActions.unavailableHandActions[cardId] = graveReturnLimit;
+      return false;
+    });
+    const { can } = legalActions;
+    can.activateCard = legalActions.actions.activateCard.length > 0;
+    legalActions.hasAny = can.summon || can.setTrap || can.activateCard || can.declareAttack || can.changeMode;
+  }
+  const delayedGraveReturnTargets = new Set(legalActions.actions.activateCard
+    .filter(({ cardId, targetCardId }) => isGraveReturn(state.cards[cardId])
+      && state.cards[targetCardId]?.effect === "burn400OncePerTurn" && cardActivatedThisTurn(state, targetCardId))
+    .map(({ targetCardId }) => targetCardId));
+  if (delayedGraveReturnTargets.size) legalActions.delayedGraveReturnTargets = [...delayedGraveReturnTargets];
   const concealedTargets = concealedTargetIds(state, viewerSeatId);
   for (const actions of Object.values(legalActions.actions)) {
     for (const action of actions) {
@@ -306,7 +326,7 @@ export function buildDuelView(state, viewerSeatId, {
     chainResponse: canRequestLegalActions ? onlineChainResponse(state, viewerSeatId) : null,
     players: Object.fromEntries(seatIds.map((seatId) => [
       seatId,
-      projectedPlayer(state, seatId, viewerSeatId)
+      projectedPlayer(state, seatId, viewerSeatId, { graveReturnTurnLimit })
     ])),
     gameOver: clone(state.gameOver || null),
     legalActions,
@@ -349,7 +369,7 @@ export function buildSpectatorView(state, {
     })),
     turn: { playerId: state.turn.playerId, phase: state.turn.phase, timing: state.machine?.timing || state.turn.phase },
     machine,
-    players: Object.fromEntries(seatIds.map((seatId) => [seatId, projectedPlayer(state, seatId, null, revealedTraps)])),
+    players: Object.fromEntries(seatIds.map((seatId) => [seatId, projectedPlayer(state, seatId, null, { revealedTraps })])),
     gameOver: state.gameOver ? { winnerId: state.gameOver.winnerId || null, loserIds: [...(state.gameOver.loserIds || [])], reason: state.gameOver.reason || "" } : null,
     recentEvents: (state.events || []).slice(-40).map((event) => publicEvent(event, visibleIds)).filter(Boolean),
     lastChainEvents: latestCompletedChainEvents(state.events || []).map((event) => publicEvent(event, visibleIds)).filter(Boolean)

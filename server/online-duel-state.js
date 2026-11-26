@@ -47,7 +47,9 @@ export function createOnlineDuelState({
   deckPreset = "basicExpansion",
   deckChoices = {},
   openingHands = {},
-  openingGraves = {}
+  openingGraves = {},
+  legacyBurstRuneDamage = false,
+  allowBurstRuneReplay = false
 } = {}) {
   const [firstSeatId, secondSeatId] = seatIds;
   const session = createDuelSessionConfig({
@@ -74,5 +76,18 @@ export function createOnlineDuelState({
     gameOverLosers: [],
     gameOverReason: ""
   };
-  return buildEngineStateFromUiState(uiState);
+  const state = buildEngineStateFromUiState(uiState);
+  if (legacyBurstRuneDamage) return state;
+  // Save the rule with each duel so restores can use the original card definitions.
+  const burstRune = allowBurstRuneReplay
+    ? { effect: "burn400", text: "对对手造成 400 点伤害。" }
+    : { effect: "burn400OncePerTurn", text: "对对手造成 400 点伤害。同一张卡每回合只能发动 1 次。" };
+  state.cardDefinitions = {
+    ...state.cardDefinitions,
+    "burst-rune": { ...state.cardDefinitions["burst-rune"], ...burstRune }
+  };
+  for (const card of Object.values(state.cards)) {
+    if (card.templateId === "burst-rune") Object.assign(card, burstRune);
+  }
+  return state;
 }

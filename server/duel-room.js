@@ -5,6 +5,7 @@ import { DuelProtocolError, normalizeCommandEnvelope, normalizeDisplayName, sani
 import { buildDuelView, buildSpectatorView, resolveDuelTargetId } from "../src/duel-view.js";
 import { createOnlineDuelState } from "./online-duel-state.js";
 import { normalizeOnlineDeckChoice } from "../src/online-decks.js";
+import { graveReturnLimit, graveReturnUsed, isGraveReturn } from "../src/online-grave-return.js";
 import { newPublicHistory, appendPublicHistory, historyPage, restorePublicHistories } from "./public-history.js";
 import {
   onlineAttackResponse,
@@ -57,6 +58,35 @@ function snapshotAssert(condition) {
 const nonnegativeInteger = (value) => Number.isSafeInteger(value) && value >= 0;
 const remainingTime = (deadline, remaining, now) => deadline == null ? remaining : Math.max(0, deadline - now);
 
+function openingBattleLocked(state) {
+  // Restored duels that already entered battle can finish their turn.
+  return !state.gameOver && state.turn.phase === "main"
+    && !state.events.some(event => event.type === "TURN_ENDED");
+}
+
+// Older servers omitted room finalization when an automatic turn draw was lethal.
+// Accept only that recorded event sequence; unrelated snapshot mismatches still fail closed.
+function unrecordedTimeoutResult(snapshot, state) {
+  if (snapshot.status !== "playing" || !state?.gameOver || state.turn.phase !== "draw"
+    || snapshot.recordedDuelNumber !== snapshot.duelNumber - 1 || snapshot.series.completed !== snapshot.recordedDuelNumber
+    || snapshot.turnTimer != null || snapshot.responseTimer != null) return false;
+  const events = state.events.slice(-10);
+  const types = ["TURN_ENDED", "COMMAND_DISPATCHED", "TURN_STARTED", "ACTION_WINDOW_OPENED", "COMMAND_DISPATCHED",
+    "CARDS_DRAWN", "DRAW_FAILED", "DAMAGE_DEALT", "GAME_OVER_DECLARED", "TURN_DRAW_RESOLVED"];
+  if (events.length !== types.length || events.some((event, index) => event.type !== types[index])) return false;
+  const [ended, , started, , , , failed, damage, declared, draw] = events;
+  const { gameOver } = state;
+  return ended.reason === "online-turn-timeout" && ended.endedBy === "timeout"
+    && ended.nextPlayerId === draw.playerId && started.playerId === draw.playerId && state.turn.playerId === draw.playerId
+    && failed.reason === "turn" && failed.playerId === draw.playerId && damage.playerId === draw.playerId
+    && state.players[draw.playerId]?.lp === 0 && draw.phaseAdvanced === false
+    && gameOver.reason === "lp-zero" && declared.reason === gameOver.reason
+    && gameOver.triggerEventId === damage.id && declared.triggerEventId === damage.id
+    && gameOver.winnerId === declared.winnerId && ROOM_SEAT_IDS.includes(gameOver.winnerId)
+    && gameOver.loserIds.length === 1 && gameOver.loserIds[0] === draw.playerId
+    && declared.loserIds?.length === 1 && declared.loserIds[0] === draw.playerId;
+}
+
 export class DuelRoom {
   constructor({
     code,
@@ -64,11 +94,14 @@ export class DuelRoom {
     now = () => Date.now(),
     responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS,
     disconnectGraceMs = DEFAULT_DISCONNECT_GRACE_MS,
-    turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS
+    turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
+    graveReturnTurnLimit = true
   } = {}) {
     if (!code) throw new DuelRoomError("Room code is required");
     this.code = code;
     this.createState = createState;
+    // The opening playtest opts out to replay the historical control group.
+    this.graveReturnTurnLimit = graveReturnTurnLimit;
     this.now = now;
     this.revision = 0;
     this.status = "waiting";
@@ -153,10 +186,11 @@ export class DuelRoom {
       });
     }
     const engine = snapshot.state ? new GameEngine(snapshot.state) : null;
+    const pendingTimeoutResult = unrecordedTimeoutResult(snapshot, engine?.getState());
     snapshotAssert(snapshot.status === "waiting" ? !engine && snapshot.duelNumber === 0 : Boolean(engine) && snapshot.duelNumber > 0);
     if (engine) {
       snapshotAssert(Object.keys(engine.getState().players).sort().join(",") === "p1,p2");
-      snapshotAssert(Boolean(engine.getState().gameOver) === (snapshot.status === "finished"));
+      snapshotAssert(Boolean(engine.getState().gameOver) === (snapshot.status === "finished") || pendingTimeoutResult);
       snapshotAssert(snapshot.status !== "playing" || seats.size === 2);
       snapshotAssert(snapshot.recordedDuelNumber === (snapshot.status === "finished" ? snapshot.duelNumber : snapshot.duelNumber - 1));
     }
@@ -203,6 +237,11 @@ export class DuelRoom {
       snapshotAssert(this.turnTimerPlayerId === snapshot.turnTimer.playerId && snapshot.turnTimer.remainingMs <= this.turnTimeoutMs);
       this.turnDeadlineAt = null;
       this.turnRemainingMs = snapshot.turnTimer.remainingMs;
+    }
+    if (pendingTimeoutResult) {
+      this.status = "finished";
+      this.#recordDuelResult();
+      this.#clearDisconnectDeadlines();
     }
     // Reconnection changes the projection; old pending choices must not reuse the saved revision.
     this.#touch();
@@ -422,10 +461,19 @@ export class DuelRoom {
 
     const rivalSeatId = ROOM_SEAT_IDS.find((seatId) => seatId !== seat.seatId);
     const action = sanitizeOnlineAction(envelope.action, { seatId: seat.seatId, rivalId: rivalSeatId });
-    if (action.targetCardId) action.targetCardId = resolveDuelTargetId(this.engine.getState(), seat.seatId, action.targetCardId);
+    const state = this.engine.getState();
+    const isBattleAction = action.type === "CHANGE_PHASE" || action.type === "DECLARE_ATTACK";
+    if (isBattleAction && openingBattleLocked(state)) {
+      throw new DuelRoomError("先手首回合不能进入战斗阶段。", "ILLEGAL_COMMAND");
+    }
+    if (this.graveReturnTurnLimit && action.type === "ACTIVATE_CARD" && isGraveReturn(state.cards[action.cardId])
+        && state.players[seat.seatId].hand.includes(action.cardId) && graveReturnUsed(state, seat.seatId)) {
+      throw new DuelRoomError(graveReturnLimit.reason, "ILLEGAL_COMMAND");
+    }
+    if (action.targetCardId) action.targetCardId = resolveDuelTargetId(state, seat.seatId, action.targetCardId);
     let events;
     try {
-      events = this.#dispatchAction(action);
+      events = this.#dispatchAction(action, state);
     } catch (error) {
       if (error instanceof GameRuleError || error instanceof DuelProtocolError) {
         throw new DuelRoomError(error.message, "ILLEGAL_COMMAND");
@@ -477,15 +525,18 @@ export class DuelRoom {
         spectators: { enabled: this.spectatingAllowed(), count: this.spectators.size }
       };
     }
-    const view = buildDuelView(this.engine.getState(), seatId, {
+    const state = this.engine.getState();
+    const view = buildDuelView(state, seatId, {
       roomCode: this.code,
       revision: this.revision,
       status: this.status,
       duelNumber: this.duelNumber,
       nextFirstPlayerId: this.#nextFirstPlayerId(),
       series: clone(this.series),
+      graveReturnTurnLimit: this.graveReturnTurnLimit,
       seats
     });
+    view.turn.openingBattleLocked = openingBattleLocked(state);
     view.responseTimer = this.responseTimeoutView();
     view.turnTimer = this.turnTimeoutView();
     view.deckSelection = deckSelection;
@@ -493,9 +544,9 @@ export class DuelRoom {
     return view;
   }
 
-  #dispatchAction(action) {
+  #dispatchAction(action, initialState = this.engine.getState()) {
     // A network command may dispatch several engine actions. Commit all or none.
-    const engine = new GameEngine(this.engine.getState());
+    const engine = new GameEngine(initialState);
     const events = [];
     if (["RESPOND_TRAP", "PASS_ATTACK_RESPONSE"].includes(action.type)) {
       const state = engine.getState();
@@ -721,6 +772,10 @@ export class DuelRoom {
       endedBy: "timeout",
       endedAt: this.now()
     });
+    if (this.engine.getState().gameOver) {
+      this.status = "finished";
+      this.#recordDuelResult();
+    }
     this.#touch();
     return true;
   }

@@ -186,7 +186,7 @@ test("online response timer explains automatic passing and frozen disconnect tim
     paused: true,
     seconds: 6,
     ownResponse: true,
-    label: "对局已暂停，响应倒计时冻结"
+    label: "响应计时已冻结 · 剩余 6 秒"
   });
   assert.equal(onlineResponseTimerView({ ...base, responseTimer: { ...base.responseTimer, declarationEventId: 41 } }, 18_400), null);
 

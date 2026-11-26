@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { DuelRoom, DuelRoomError } from "../server/duel-room.js";
 import { createOnlineDuelState } from "../server/online-duel-state.js";
+import { onlineMonsterStatus, onlineTurnActionSummary } from "../src/online-duel-ui.js";
 
 function startedRoom(roomOptions = {}) {
   const createState = roomOptions.createState || ((options) => createOnlineDuelState({ ...options, openingHands: {
@@ -143,6 +144,10 @@ test("declaring an attack auto-resolves when no legal trap is set", () => {
     action: summon
   });
 
+  for (const connectionId of ["connection-1", "connection-2"]) {
+    room.submit(connectionId, { revision: room.revision, commandId: `pass-${connectionId}`, action: { type: "END_TURN" } });
+  }
+
   room.submit("connection-1", {
     revision: room.revision,
     commandId: "command-enter-battle",
@@ -163,6 +168,45 @@ test("declaring an attack auto-resolves when no legal trap is set", () => {
   assert.equal(resolved.machine.pendingAttack, null);
   assert.equal(resolved.machine.responseWindow, null);
   assert.ok(resolved.players.p2.lp < opponentLp);
+});
+
+test("the online opener can deploy the former 4000-damage line but cannot start battle", () => {
+  const { room } = startedRoom({ createState: options => createOnlineDuelState({ ...options, openingHands: {
+    p1: ["star-lancer", "solar-knight", "twin-summon", "war-chant", "weakening-web"],
+    p2: ["iron-guardian", "mirror-snare", "gale-mage", "blade-sigil", "void-hound"]
+  } }) });
+  const submit = (connection, commandId, action) => room.submit(connection, { revision: room.revision, commandId, action });
+  const p1 = () => room.viewFor("p1");
+  const play = (group, templateId) => {
+    const view = p1();
+    const card = view.players.p1.hand.find(entry => entry.templateId === templateId);
+    submit("connection-1", templateId, view.legalActions.actions[group].find(action => action.cardId === card.id));
+    return card.id;
+  };
+  const attackerId = play("summon", "star-lancer");
+  play("activateCard", "twin-summon");
+  play("summon", "solar-knight");
+  play("activateCard", "war-chant");
+  play("setTrap", "weakening-web");
+
+  const before = p1();
+  assert.equal(before.turn.openingBattleLocked, true);
+  assert.equal(before.legalActions.can.declareAttack, false);
+  assert.deepEqual(onlineTurnActionSummary(before).attackCardIds, []);
+  assert.equal(onlineMonsterStatus(before, attackerId).label, "首回合禁攻");
+  for (const [id, action] of [["battle", { type: "CHANGE_PHASE", phase: "battle" }], ["attack", { type: "DECLARE_ATTACK", attackerCardId: attackerId }]]) {
+    assert.throws(() => submit("connection-1", id, action), { code: "ILLEGAL_COMMAND", message: "先手首回合不能进入战斗阶段。" });
+  }
+  assert.deepEqual(p1(), before);
+  assert.equal(before.players.p2.lp, 4000);
+
+  submit("connection-1", "pass-to-p2", { type: "END_TURN" });
+  const reply = room.viewFor("p2");
+  assert.equal(reply.turn.openingBattleLocked, false);
+  const defender = reply.players.p2.hand.find(entry => entry.templateId === "iron-guardian");
+  submit("connection-2", "deploy-p2", reply.legalActions.actions.summon.find(action => action.cardId === defender.id));
+  submit("connection-2", "battle-p2", { type: "CHANGE_PHASE", phase: "battle" });
+  assert.ok(room.viewFor("p2").legalActions.actions.declareAttack.length > 0);
 });
 
 test("a reconnect token restores the same reserved seat", () => {

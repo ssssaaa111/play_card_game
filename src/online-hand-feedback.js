@@ -21,6 +21,9 @@ export function onlineHandBlocker(state, playerId, card, engineReason = "") {
   if (/has no normal or extra summon/.test(engineReason)) {
     return blocked("SUMMON_LIMIT", "次数用完", "本回合召唤次数已用完，需等下回合或获得额外召唤次数。");
   }
+  if (engineReason === "This card has already been activated this turn") {
+    return blocked("CARD_ACTIVATION_LIMIT", "本回合已发动", "这张牌本回合已发动过，下个己方回合可再次发动。");
+  }
   if (card.type === "monster" && player.monsterZone.length >= 5) {
     return blocked("MONSTER_ZONE_FULL", "怪兽区已满", "怪兽区已满，需要先腾出一个位置。");
   }

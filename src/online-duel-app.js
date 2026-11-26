@@ -1,5 +1,5 @@
 import { createCardElement } from "./card-renderer.js";
-import { renderHandCards } from "./hand-renderer.js?v=20261114-network-recovery-1";
+import { renderHandCards } from "./hand-renderer.js?v=20261125-landscape-hand-1";
 import { renderMonsterZones, renderSupportZones } from "./field-renderer.js?v=20261111-monster-status-1";
 import { buildDuelControlsView } from "./control-renderer.js";
 import { renderOnlineAttackPreview } from "./online-attack-preview-renderer.js?v=20261111-attack-choice-1";
@@ -19,13 +19,13 @@ import { installPublicReport } from "./public-report.js?v=20261114-network-recov
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineSelectionResetView, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261117-selection-reset-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineSelectionResetView, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineInterruptedTrapResponseHint, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261127-response-retry-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
   "app", "onlineTools", "onlineToolsToggle", "connectionStatus", "lobbyPanel", "playerName", "roomCodeInput", "createRoom", "joinRoom", "lobbyError",
   "roomPanel", "copyRoomCode", "readyButton", "seatGrid", "roomHint", "roomDeckSelect", "roomDeckRefresh", "roomDeckStatus", "roomDeckError", "spectatorConsent", "spectatorStatus", "watchRoomLink", "watchEntry", "onlineSpectatorCount", "duelPanel", "aiPanel", "playerPanel",
-  "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
+  "duelField", "aiTraps", "aiField", "playerField", "playerTraps", "turnLabel", "phaseLabel", "turnClock", "eventLog", "eventLogList", "eventLogClose", "logToggle", "logUnread", "logSelfGrave", "logSelfGraveCount", "logRivalGrave", "logRivalGraveCount",
   "handPanel", "hand", "handCount", "handReadyCount", "handReadyJump", "handGuide", "handSortType", "handNavigation", "handPrevious", "handNext", "handVisibleRange", "duelHint", "duelError", "versusStage", "versusPhase",
   "battleButton", "endTurnButton", "rivalDeckCount", "playerDeckCount", "rivalGraveLabel", "rivalGraveCount", "playerGraveLabel", "playerGraveCount", "rivalGrave", "playerGrave",
   "handCommand", "commandSignal", "commandIdle", "commandTitle", "commandHint", "fieldActionBar", "fieldActionName", "fieldActionStatus",
@@ -48,6 +48,7 @@ let authMode = "login";
 let authPending = false;
 let actionPending = false;
 let pendingCommand = null;
+let interruptedCommand = null;
 let selection = null;
 let selectionView = null;
 let trapChoice = null;
@@ -59,6 +60,7 @@ let observedReceiptRoomCode = null;
 let lastObservedEventId = 0;
 let actionReceipt = null;
 let pendingBattleReceipt = null;
+let pendingAttackFocus = null;
 let actionReceiptTimer = null;
 let lastResponseSoundId = null;
 let responseCountdownInterval = null;
@@ -216,6 +218,10 @@ function renderConnectionState(view = client.view) {
   elements.endTurnButton.disabled = true;
   elements.responseActivate.disabled = true;
   elements.responsePass.disabled = true;
+  if (elements.onlineResponse.open) {
+    elements.responseChoices.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+    elements.responseStatus.textContent = panel.title;
+  }
 }
 
 function clearReconnectTimer() {
@@ -291,6 +297,7 @@ function storedSession() {
   try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
 }
 function clearStoredSession() {
+  interruptedCommand = null;
   const key = roomStorageKey();
   if (!key) return;
   try { localStorage.removeItem(key); } catch {}
@@ -492,6 +499,7 @@ function syncActionReceipt(view) {
     observedReceiptRoomCode = view.roomCode;
     lastObservedEventId = newestId;
     clearActionReceipt();
+    pendingAttackFocus = null;
     pendingActionCue = null;
     lastFieldPositions = new Map();
     clearActionStage();
@@ -503,6 +511,7 @@ function syncActionReceipt(view) {
   if (freshEvents.length) hideRecoveryBrief();
   const cue = onlineActionCue(view, freshEvents);
   const turnEvent = [...freshEvents].reverse().find((event) => event.type === "TURN_STARTED");
+  if (turnEvent) pendingAttackFocus = null;
   const phaseEvent = !cue ? [...freshEvents].reverse().find((event) => event.type === "PHASE_CHANGED") : null;
   const stageEvent = turnEvent || phaseEvent;
   if (stageEvent) {
@@ -636,6 +645,7 @@ function pumpActionStageQueue() {
   const next = actionStageQueue.shift();
   if (next) showActionStage(next.view, next.cue, next.model);
   else if (releaseBattleReceipt() && client.view) render(client.view);
+  else if (client.view) restoreAttackFocus(client.view);
 }
 
 function showActionStage(view, cue, model) {
@@ -708,7 +718,7 @@ function playChainResolutionStage(view, cue, { replay = false } = {}) {
   clearActionStage();
   clearChainResolutionStage();
   phaseStageController.reset();
-  if (elements.onlineResponse.open) elements.onlineResponse.close();
+  closeOnlineResponse();
   clearResponseCountdown();
   document.body.dataset.onlineResponse = "none";
   const stage = elements.chainResolutionStage;
@@ -809,6 +819,7 @@ function rebaseRecoveredView(view) {
   observedReceiptRoomCode = view?.roomCode || null;
   lastObservedEventId = newestId;
   pendingActionCue = null;
+  pendingAttackFocus = null;
   selection = null;
   clearActionReceipt();
   clearActionStage();
@@ -1012,8 +1023,32 @@ function cancelSelection() {
   return true;
 }
 
+function cancelChoice() {
+  if (actionPending || !selection) return false;
+  const view = client.view;
+  if (selection.actionType !== "DECLARE_ATTACK"
+    || !view.players[view.viewerSeatId].monsterZone.some(card => card?.id === selection.cardId)) return cancelSelection();
+  clearEndTurnConfirmation();
+  selection = selectOnlineCard(view, selection.cardId);
+  directActivationTracker.reset();
+  playSound("click");
+  render(view);
+  [elements.fieldAttackBtn, elements.fieldModeBtn, elements.fieldDetailBtn]
+    .find(button => !button.disabled && button.getClientRects().length && !button.closest("[hidden],[inert]"))?.focus({ preventScroll: true });
+  return true;
+}
+
 function closeInspector() {
   if (elements.cardInspector.open) elements.cardInspector.close();
+}
+
+function closeOnlineResponse() {
+  if (!elements.onlineResponse.open) return;
+  if (inspectorReturnFocus?.fromResponse) {
+    inspectorReturnFocus = null;
+    closeInspector();
+  }
+  elements.onlineResponse.close();
 }
 
 function appendCardDetail(card) {
@@ -1073,6 +1108,7 @@ function appendCardCollection(cards, title, choice = null) {
       button.dataset.graveSelect = "true";
       button.disabled = !candidate.eligible || actionPending;
       button.setAttribute("aria-pressed", String(candidate.selected));
+      if (candidate.timingHint) button.setAttribute("aria-description", candidate.timingHint);
     }
     button.appendChild(createCardElement(document, display, { asset: assetForCard(display), showStateRail: false }));
     const caption = document.createElement("span");
@@ -1082,7 +1118,7 @@ function appendCardCollection(cards, title, choice = null) {
     if (choice) {
       const reason = document.createElement("small");
       reason.className = "online-grave-reason";
-      reason.textContent = candidate.reason;
+      reason.textContent = [candidate.reason, candidate.timingHint].filter(Boolean).join(" · ");
       caption.appendChild(reason);
       const entry = document.createElement("article");
       entry.className = "online-grave-entry";
@@ -1101,7 +1137,7 @@ function appendCardCollection(cards, title, choice = null) {
   elements.inspectorContent.append(summary, grid);
 }
 
-function showCards(cards, title = "卡牌详情", { collection = false, preserveCollection = false, seatId = null } = {}) {
+function showCards(cards, title = "卡牌详情", { collection = false, preserveCollection = false, seatId = null, fromResponse = false } = {}) {
   directActivationTracker.reset();
   const choice = collection && seatId ? onlineGraveChoiceView(client.view, onlineSelectionModel(client.view, selection), seatId) : null;
   if (collection) inspectorCollection = { cards: cards.filter(Boolean), title, seatId, choiceSourceId: choice?.sourceId, scrollTop: inspectorCollection?.seatId === seatId ? inspectorCollection.scrollTop || 0 : 0 };
@@ -1121,7 +1157,9 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
   elements.graveChoiceActions.hidden = !choice;
   elements.graveChoiceConfirm.disabled = actionPending || !choice?.canConfirm;
   elements.graveChoiceCancel.disabled = actionPending;
-  elements.graveChoiceStatus.textContent = choice?.selectedId ? `已选：${onlineCard(client.view, choice.selectedId)?.name}` : "选择一张高亮卡牌";
+  elements.graveChoiceStatus.textContent = choice?.selectedId
+    ? [`已选：${cardName(client.view, choice.selectedId)}`, choice.selectedTimingHint].filter(Boolean).join(" · ")
+    : "选择一张高亮卡牌";
   elements.inspectorContent.replaceChildren();
   const visibleCards = cards.filter((entry) => entry && !entry.hidden);
   if (collection && visibleCards.length) appendCardCollection(visibleCards, title, choice);
@@ -1133,7 +1171,9 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
     elements.inspectorContent.appendChild(empty);
   }
   if (!elements.cardInspector.open) {
-    inspectorReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const handCard = origin?.closest("#hand .card[data-card-uid]");
+    inspectorReturnFocus = { element: origin, handCardId: handCard?.dataset.cardUid, detail: Boolean(origin?.closest(".card-detail-entry")), viewport: inspectorViewportKey(), fromResponse };
     document.body.dataset.onlineOverlay = "detail";
     elements.cardInspector.showModal();
     elements.inspectorClose.focus({ preventScroll: true });
@@ -1145,6 +1185,24 @@ function showCards(cards, title = "卡牌详情", { collection = false, preserve
 
 function showGrave(seatId) {
   showCards(client.view.players[seatId].grave, seatId === client.view.viewerSeatId ? "我方墓地" : "对手墓地", { collection: true, seatId });
+}
+
+function inspectorViewportKey() {
+  return `${window.innerWidth}x${window.innerHeight}`;
+}
+
+function revealInspectorEntry(scroller, entry, returnPoint) {
+  if (returnPoint.viewportChanged || returnPoint.viewport !== inspectorViewportKey()) revealScrolledEntry(scroller, entry);
+}
+
+function revealScrolledEntry(scroller, entry) {
+  const frame = scroller.getBoundingClientRect();
+  const box = entry.getBoundingClientRect();
+  const leftEdge = frame.left + scroller.clientLeft;
+  const topEdge = frame.top + scroller.clientTop;
+  const left = box.left < leftEdge - 1 ? box.left - leftEdge : Math.max(0, box.right - leftEdge - scroller.clientWidth);
+  const top = box.top < topEdge - 1 ? box.top - topEdge : Math.max(0, box.bottom - topEdge - scroller.clientHeight);
+  if (Math.abs(left) > 1 || Math.abs(top) > 1) scroller.scrollBy({ left, top, behavior: "instant" });
 }
 
 function activeGraveChoice(view, model) {
@@ -1177,6 +1235,7 @@ function chooseCard(id) {
   if (view.machine?.responseWindow) return;
   const next = chooseOnlineCard(view, selection, id);
   if (next === selection) return;
+  pendingAttackFocus = null;
   clearEndTurnConfirmation();
   clearActionReceipt();
   selection = next;
@@ -1241,8 +1300,15 @@ function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
   }
 }
 
-async function sendAction(action) {
+async function sendAction(action, { returnAttackFocus = false } = {}) {
   if (actionPending || chainResolutionActive || !action || connectionPaused()) return;
+  const { roomCode, duelNumber, revision } = client.view;
+  interruptedCommand = null;
+  if (!client.view.machine.responseWindow) {
+    pendingAttackFocus = returnAttackFocus && action.type === "DECLARE_ATTACK"
+      ? { attackerId: action.attackerCardId, afterEventId: lastObservedEventId }
+      : null;
+  }
   directActivationTracker.reset();
   hideRecoveryBrief();
   clearEndTurnConfirmation();
@@ -1252,10 +1318,14 @@ async function sendAction(action) {
   return runCommand(async () => {
     try { await client.sendAction(action); }
     catch (error) {
+      if (action.type === "DECLARE_ATTACK") pendingAttackFocus = null;
+      if (["CONNECTION_LOST", "RESPONSE_TIMEOUT", "SEND_FAILED"].includes(error.code)) {
+        interruptedCommand = { action, roomCode, duelNumber };
+      }
       if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
       setError(error.message);
     }
-  }, { action, revision: client.view.revision });
+  }, { action, revision });
 }
 
 async function prepareSelectedAttack() {
@@ -1337,6 +1407,9 @@ function renderDuelist(root, view, seatId, rival) {
 function renderBoard(view, model) {
   const state = onlineBoardState(view, selection);
   state.pendingTrapChoice = trapChoice;
+  const focusedSlot = document.activeElement?.closest(".slot,.trap-slot");
+  const focusedZone = [elements.aiField, elements.aiTraps, elements.playerField, elements.playerTraps]
+    .find(root => focusedSlot && root.contains(focusedSlot));
   for (const owner of ["ai", "player"]) {
     const duelist = state[owner];
     const seatId = owner === "player" ? view.viewerSeatId : view.opponentSeatId;
@@ -1412,12 +1485,19 @@ function renderBoard(view, model) {
     slot?.setAttribute("aria-pressed", "true");
   }
   for (const slot of elements.playerField.querySelectorAll(".tribute-selected")) slot.setAttribute("aria-pressed", "true");
+  if (focusedZone && !focusedZone.closest("[hidden],[inert]")) {
+    const slot = [...focusedZone.children].find(element => element.dataset.index === focusedSlot.dataset.index);
+    if (slot && !slot.disabled) slot.focus({ preventScroll: true });
+  }
   const canAct = !actionPending && !view.gameOver && !view.machine.responseWindow && state.turn === "player";
   const hand = reconcileHandOrder(state.player.hand, handOrder);
   handOrder = hand.map((card) => card.uid);
+  const focusedHandCard = document.activeElement?.closest("#hand .card[data-card-uid]");
+  const focusedHandDetail = document.activeElement?.matches(".card-detail-entry");
+  const focusedHandIndex = [...elements.hand.children].indexOf(focusedHandCard);
   renderHandCards({
     document, root: elements.hand, cards: hand, assetForCard, started: true, canAct,
-    directReorder: true,
+    directReorder: true, reorderGrip: true,
     onMoveCard: (card, direction) => { handOrder = shiftHandCard(handOrder, card.uid, direction); render(client.view); },
     onInsertCard: (uid, beforeUid) => { handOrder = insertHandCard(handOrder, uid, beforeUid); render(client.view); },
     selectedZone: "hand", selectedUid: selection?.cardId,
@@ -1426,6 +1506,13 @@ function renderBoard(view, model) {
     onCardDoubleClick: (card) => chooseHandCard(card.uid, { directActivate: true }),
     onCardDetail: (card) => showCards([onlineCard(view, card.uid)], card.name)
   });
+  if (focusedHandCard && !elements.handPanel.inert) {
+    const cards = [...elements.hand.querySelectorAll(".card[data-card-uid]")];
+    const next = cards.find(card => card.dataset.cardUid === focusedHandCard.dataset.cardUid)
+      || cards[Math.min(focusedHandIndex, cards.length - 1)];
+    const target = focusedHandDetail ? next?.querySelector(".card-detail-entry") : next;
+    (target || elements.hand).focus({ preventScroll: true });
+  }
   const actionSummary = onlineTurnActionSummary(view);
   if (![...actionSummary.handCardIds.map((id) => `hand:${id}`), ...actionSummary.attackCardIds.map((id) => `field:${id}`)].includes(locatedReadyCardId)) locatedReadyCardId = null;
   elements.handPanel.dataset.readyCount = String(actionSummary.total);
@@ -1477,21 +1564,24 @@ function scheduleHandNavigation() {
   if (handNavigationFrame == null) handNavigationFrame = requestAnimationFrame(updateHandNavigation);
 }
 
-function scrollHandTo(left) {
-  elements.hand.scrollTo({ left, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+function scrollHandTo(position, vertical = false) {
+  elements.hand.scrollTo({ [vertical ? "top" : "left"]: position, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
 }
 
-function browseHand(direction) {
+function browseHand(direction, vertical = false) {
   const root = elements.hand;
   if (root.classList.contains("is-reordering")) return;
   const bounds = root.getBoundingClientRect();
   const cards = [...root.children].filter((card) => card.matches('.card'));
+  const near = vertical ? "top" : "left";
+  const far = vertical ? "bottom" : "right";
   const card = direction > 0
-    ? cards.find((card) => card.getBoundingClientRect().right > bounds.right + 1)
-    : cards.reverse().find((card) => card.getBoundingClientRect().left < bounds.left - 1);
+    ? cards.find((card) => card.getBoundingClientRect()[far] > bounds[far] + 1)
+    : cards.reverse().find((card) => card.getBoundingClientRect()[near] < bounds[near] - 1);
   if (!card) return;
   const box = card.getBoundingClientRect();
-  scrollHandTo(root.scrollLeft + (direction > 0 ? box.left - bounds.left - 2 : box.right - bounds.right + 2));
+  const current = vertical ? root.scrollTop : root.scrollLeft;
+  scrollHandTo(current + (direction > 0 ? box[near] - bounds[near] - 2 : box[far] - bounds[far] + 2), vertical);
 }
 
 function locateNextReadyAction() {
@@ -1507,6 +1597,22 @@ function locateNextReadyAction() {
   next.element.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   next.element.classList.remove("online-ready-located");
   requestAnimationFrame(() => next.element.classList.add("online-ready-located"));
+}
+
+function restoreAttackFocus(view) {
+  if (!pendingAttackFocus) return;
+  if (view.gameOver || view.turn.playerId !== view.viewerSeatId) {
+    pendingAttackFocus = null;
+    return;
+  }
+  if (actionPending || view.machine.responseWindow || presentationPending() || connectionPaused(view)) return;
+  const finishedAttack = view.recentEvents.some(event =>
+    event.id > pendingAttackFocus.afterEventId && event.attackerCardId === pendingAttackFocus.attackerId
+    && (event.type === "BATTLE_RESOLVED" || event.type === "ATTACK_CANCELED"));
+  if (!finishedAttack) return;
+  pendingAttackFocus = null;
+  if (document.activeElement !== document.body || selection || document.querySelector("dialog[open]")) return;
+  elements.playerField.querySelector('.slot[data-attack-state="ready"]:not(:disabled)')?.focus({ preventScroll: true });
 }
 
 function renderCommands(view, model) {
@@ -1579,7 +1685,7 @@ function renderCommands(view, model) {
   const attackDecision = isAttack ? onlineAttackDecisionView(view, model) : null;
   renderOnlineAttackPreview(document, elements.onlineBattlePreview, attackDecision);
   elements.choiceCancelBtn.disabled = actionPending;
-  elements.choiceCancelBtn.textContent = tributeDecision ? "取消召唤" : "取消";
+  elements.choiceCancelBtn.textContent = isAttack ? "返回操作" : tributeDecision ? "取消召唤" : "取消";
   elements.choiceActions.classList.toggle("target-choice", interaction.choice.target);
   elements.choiceActions.classList.toggle("online-attack-choice", isAttack);
   elements.choiceActions.classList.toggle("online-effect-choice", Boolean(effectDecision || tributeDecision));
@@ -1605,7 +1711,9 @@ function renderCommands(view, model) {
         : effectDecision ? effectDecision.target ? `${effectDecision.title} · ${effectDecision.target.location}` : effectDecision.title
         : targeting ? model.targetCardId ? `已选目标 · ${cardName(view, model.targetCardId)}` : `选择效果目标 · ${model.targetIds.length} 个可选`
         : prompt;
-  elements.duelHint.textContent = model ? fieldPrompt : endTurnWarning || actionReceipt?.text || elements.commandTitle.textContent;
+  const openingBattleLocked = ownTurn && view.turn.openingBattleLocked;
+  const idleHint = openingBattleLocked ? "先手首回合可部署卡牌，不能进入战斗。" : elements.commandTitle.textContent;
+  elements.duelHint.textContent = model ? fieldPrompt : endTurnWarning || actionReceipt?.text || idleHint;
   elements.duelHint.dataset.kind = selectedField && !attackIntent.available ? "unavailable" : model ? "action" : endTurnWarning ? "turn-warning" : actionReceipt ? actionReceipt.kind || "receipt" : "status";
   elements.duelHint.dataset.actor = !model && actionReceipt ? actionReceipt.actor || "none" : "none";
   elements.duelHint.dataset.eventType = !model && actionReceipt ? actionReceipt.type || "none" : "none";
@@ -1616,7 +1724,7 @@ function renderCommands(view, model) {
   elements.battleButton.textContent = turnControl.battle.label;
   elements.battleButton.title = chainResolutionActive ? "连锁演出结束后可继续操作。" : turnControl.battle.title;
   elements.battleButton.dataset.currentPhase = String(inBattle);
-  elements.battleButton.disabled = !canAct || Boolean(selection) || view.turn.phase !== "main" || !view.legalActions.can.endTurn;
+  elements.battleButton.disabled = !canAct || Boolean(selection) || openingBattleLocked || view.turn.phase !== "main" || !view.legalActions.can.endTurn;
   elements.endTurnButton.textContent = chainResolutionActive ? "连锁演出中" : turnControl.endTurn.label;
   elements.endTurnButton.title = chainResolutionActive ? "连锁演出结束后可继续操作。" : turnControl.endTurn.title;
   elements.endTurnButton.dataset.pendingActions = String(turnControl.requiresEndTurnConfirmation);
@@ -1744,7 +1852,7 @@ function renderResponsePreview({ choice, traps }) {
 }
 
 function selectResponse(index) {
-  if (actionPending) return;
+  if (actionPending || connectionPaused()) return;
   trapChoice = selectTrapResponse(trapChoice, index) || trapChoice;
   // Keep the clicked button mounted so a second click can become a double-click.
   const options = responseRendererOptions(client.view);
@@ -1812,6 +1920,9 @@ function renderResponseCountdown(view) {
 }
 
 function renderResponse(view) {
+  const retryHint = onlineInterruptedTrapResponseHint(view, interruptedCommand);
+  if (!retryHint) interruptedCommand = null;
+  elements.responseStatus.textContent = !actionPending && !connectionPaused(view) ? retryHint : "";
   if (view.machine.responseWindow) {
     clearActionStage();
     clearChainResolutionStage();
@@ -1838,7 +1949,7 @@ function renderResponse(view) {
       chainChoices: elements.responseChoices, chainStack: elements.responseChain
     }, onSelect: selectResponse, onActivate: (index) => respondToTrap(true, index), onCardClick: (_templateId, cardId) => {
       const card = (view.machine?.chain || []).find((link) => link.cardId === cardId)?.card || onlineCard(view, cardId);
-      if (card) showCards([card], card.name);
+      if (card) showCards([card], card.name, { fromResponse: true });
     } });
     renderResponsePreview(options);
     elements.onlineResponse.dataset.responseMode = panel.singleChoice ? "single" : "multiple";
@@ -1853,7 +1964,6 @@ function renderResponse(view) {
       : panel.singleChoice
       ? "唯一陷阱已选中，可发动或放弃。"
       : "选择 1 张陷阱，双击可直接发动。");
-    elements.responseStatus.textContent = "";
     elements.responseActivate.disabled ||= actionPending;
     elements.responsePass.disabled = actionPending;
     elements.responsePass.textContent = chainResponse ? "不再连锁" : "放弃响应";
@@ -1870,7 +1980,7 @@ function renderResponse(view) {
       elements.onlineResponse.showModal();
       elements[panel.singleChoice ? "responseActivate" : "responsePass"].focus({ preventScroll: true });
     }
-  } else if (elements.onlineResponse.open) elements.onlineResponse.close();
+  } else closeOnlineResponse();
   if (!view.machine.responseWindow) {
     clearResponseCountdown();
     document.body.dataset.onlineResponse = "none";
@@ -2277,6 +2387,7 @@ function render(view) {
   renderConnectionState(view);
   playPendingActionCue(view);
   if (restoring) showRecoveryBrief(view);
+  restoreAttackFocus(view);
 }
 
 client.on("view", render);
@@ -2373,7 +2484,9 @@ elements.copyRoomCode.addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(url.toString()); elements.copyRoomCode.title = "邀请链接已复制"; }
   catch { elements.copyRoomCode.title = `房间码 ${client.view.roomCode}，可手动复制`; }
 });
-elements.choiceConfirmBtn.addEventListener("click", () => sendAction(onlineSelectionModel(client.view, selection)?.action));
+elements.choiceConfirmBtn.addEventListener("click", (event) => {
+  void sendAction(onlineSelectionModel(client.view, selection)?.action, { returnAttackFocus: event.detail === 0 });
+});
 elements.responseActivate.addEventListener("click", () => respondToTrap(true));
 elements.responsePass.addEventListener("click", () => respondToTrap(false));
 elements.onlineResponse.addEventListener("cancel", (event) => event.preventDefault());
@@ -2389,7 +2502,8 @@ elements.onlineForfeit.addEventListener("cancel", (event) => {
 });
 elements.connectionRetry.addEventListener("click", () => { recoveryFailed = false; reconnectAttempt = 0; void attemptReconnect({ immediate: true }); });
 elements.connectionLobby.addEventListener("click", () => { void returnToOnlineLobby(); });
-for (const id of ["fieldCancelBtn", "choiceCancelBtn"]) elements[id].addEventListener("click", cancelSelection);
+elements.fieldCancelBtn.addEventListener("click", cancelSelection);
+elements.choiceCancelBtn.addEventListener("click", cancelChoice);
 elements.fieldAttackBtn.addEventListener("click", prepareSelectedAttack);
 elements.fieldModeBtn.addEventListener("click", () => sendAction(onlineCardActions(client.view, selection?.cardId).find((action) => action.type === "CHANGE_MONSTER_MODE")));
 elements.fieldDetailBtn.addEventListener("click", () => { const card = onlineCard(client.view, selection?.cardId); if (card) showCards([card], card.name); });
@@ -2414,6 +2528,7 @@ elements.inspectorBack.addEventListener("click", () => {
     returnPoint.detail ? ".online-grave-detail" : ".online-zone-card"
   )].find(button => button.dataset.cardId === returnPoint.cardId && !button.disabled);
   (origin || elements.inspectorClose).focus({ preventScroll: true });
+  if (origin) revealInspectorEntry(elements.inspectorContent, origin, returnPoint);
 });
 elements.graveChoiceConfirm.addEventListener("click", () => {
   const model = onlineSelectionModel(client.view, selection);
@@ -2430,10 +2545,38 @@ elements.inspectorBackdrop.addEventListener("click", (event) => {
 });
 elements.cardInspector.addEventListener("click", (event) => { if (event.target === elements.cardInspector) closeInspector(); });
 elements.cardInspector.addEventListener("close", () => {
+  if (elements.cardInspector.open) return;
   document.body.dataset.onlineOverlay = "none";
-  const returnFocus = inspectorReturnFocus;
+  const returnPoint = inspectorReturnFocus;
   inspectorReturnFocus = null;
-  if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+  const available = target => Boolean(target?.isConnected
+    && target.matches("button,[href],input,select,textarea,[tabindex]")
+    && !target.matches(":disabled") && !target.closest("[hidden],[inert]") && target.getClientRects().length);
+  const active = document.activeElement;
+  let target = available(active) && !elements.cardInspector.contains(active) ? active : returnPoint?.element;
+  if (!available(target) && returnPoint?.handCardId) {
+    const card = [...elements.hand.querySelectorAll(".card[data-card-uid]")].find(card => card.dataset.cardUid === returnPoint.handCardId);
+    target = returnPoint.detail ? card?.querySelector(".card-detail-entry") : card;
+    if (!available(target)) target = elements.hand;
+  }
+  const dialog = document.querySelector("dialog[open]");
+  if (!available(target) || (dialog && !dialog.contains(target))) return;
+  if (target !== active) target.focus({ preventScroll: true });
+  const handCard = target.closest("#hand .card[data-card-uid]");
+  if (handCard && handCard.dataset.cardUid === returnPoint?.handCardId) revealInspectorEntry(elements.hand, handCard, returnPoint);
+  if (target === returnPoint?.element && target.matches("#onlineResponse[open] #responseChain .chain-stack-card")) {
+    revealInspectorEntry(target.closest(".online-response-scroll"), target, returnPoint);
+  }
+});
+window.addEventListener("resize", () => {
+  const viewport = inspectorViewportKey();
+  for (const point of [inspectorReturnFocus, inspectorCollection?.returnPoint]) {
+    if (point && point.viewport !== viewport) point.viewportChanged = true;
+  }
+  if (elements.onlineResponse.open && !elements.cardInspector.open) {
+    const selected = elements.responseChoices.querySelector('[aria-pressed="true"]');
+    if (selected) revealScrolledEntry(selected.closest(".online-response-scroll"), selected);
+  }
 });
 elements.handSortType.addEventListener("click", () => { handOrder = sortHandCardsByType(onlineBoardState(client.view, selection).player.hand, handOrder).map((card) => card.uid); render(client.view); });
 elements.handReadyJump.addEventListener("click", locateNextReadyAction);
@@ -2443,16 +2586,28 @@ elements.hand.addEventListener("scroll", scheduleHandNavigation, { passive: true
 new ResizeObserver(scheduleHandNavigation).observe(elements.hand);
 new MutationObserver(scheduleHandNavigation).observe(elements.hand, { childList: true, attributes: true, attributeFilter: ["class"] });
 elements.hand.addEventListener("keydown", (event) => {
-  if (event.target !== elements.hand || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const hand = elements.hand;
+  if (event.target !== hand || hand.classList.contains("is-reordering")) return;
+  const vertical = getComputedStyle(hand).flexDirection === "column";
+  const previous = vertical ? "ArrowUp" : "ArrowLeft";
+  const next = vertical ? "ArrowDown" : "ArrowRight";
+  if (![previous, next, "Home", "End"].includes(event.key)) return;
   event.preventDefault();
-  if (event.key === "Home" || event.key === "End") scrollHandTo(event.key === "Home" ? 0 : elements.hand.scrollWidth);
-  else browseHand(event.key === "ArrowRight" ? 1 : -1);
+  if (event.key === "End") scrollHandTo(vertical ? hand.scrollHeight : hand.scrollWidth, vertical);
+  else if (event.key === "Home") scrollHandTo(0, vertical);
+  else browseHand(event.key === next ? 1 : -1, vertical);
+});
+elements.duelField.addEventListener("keydown", (event) => {
+  if (!["Enter", " "].includes(event.key) || !event.target.matches(".slot,.trap-slot")) return;
+  if (event.repeat) event.preventDefault();
+  else directActivationTracker.reset();
 });
 elements.hand.addEventListener("keydown", (event) => {
   if (!["Enter", " "].includes(event.key) || event.target.closest("button")) return;
   const card = event.target.closest(".card[data-card-uid]");
   if (!card) return;
   event.preventDefault();
+  if (event.repeat) return;
   const cardId = card.dataset.cardUid;
   const model = onlineSelectionModel(client.view, selection);
   if (selection?.cardId === cardId && model?.action) void sendAction(model.action);
@@ -2519,7 +2674,7 @@ elements.inspectorContent.addEventListener("click", (event) => {
   }
   if (inspectorCollection) {
     inspectorCollection.scrollTop = elements.inspectorContent.scrollTop;
-    inspectorCollection.returnPoint = { cardId: button.dataset.cardId, detail: button.classList.contains("online-grave-detail") };
+    inspectorCollection.returnPoint = { cardId: button.dataset.cardId, detail: button.classList.contains("online-grave-detail"), viewport: inspectorViewportKey() };
   }
   const card = onlineCard(client.view, button.dataset.cardId);
   if (card) showCards([card], card.name, { preserveCollection: true });
@@ -2532,7 +2687,7 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   if (!elements.recoveryBrief.hidden) hideRecoveryBrief({ focus: true });
-  else cancelSelection();
+  else cancelChoice();
 });
 elements.roomCodeInput.value = new URLSearchParams(window.location.search).get("room") || "";
 renderSoundButton();

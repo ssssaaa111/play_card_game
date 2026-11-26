@@ -90,6 +90,11 @@ export const defaultCardEffects = Object.freeze({
     { requirements: [{ type: "minDeckCount", player: "self", count: 2 }] }
   ),
   burn200: oneShot([{ op: "dealDamage", player: "rival", amount: 200 }]),
+  burn400: oneShot([{ op: "dealDamage", player: "rival", amount: 400 }]),
+  burn400OncePerTurn: oneShot(
+    [{ op: "dealDamage", player: "rival", amount: 400 }],
+    { requirements: [{ type: "oncePerTurnPerCard" }] }
+  ),
   burn500: oneShot([{ op: "dealDamage", player: "rival", amount: 500 }]),
   heal300: oneShot([{ op: "heal", player: "self", amount: 300 }]),
   heal700: oneShot([{ op: "heal", player: "self", amount: 700 }]),
@@ -240,7 +245,7 @@ export const defaultCardEffects = Object.freeze({
   lightShadowCombo: oneShot([
     { op: "heal", player: "self", amount: 600 },
     { op: "drawCards", player: "self", count: 1 }
-  ]),
+  ], { requirements: [{ type: "requiredElements", player: "self", elements: ["light", "shadow"] }] }),
   splitToken: oneShot(
     [{ op: "createToken", player: "self", templateId: "spark-fragment-token", count: 2 }],
     {
@@ -3563,6 +3568,11 @@ function runEffect(effects, effectId, ctx, action, card) {
   runEffectDefinition(definition, ctx, action, card);
 }
 
+export function cardActivatedThisTurn(state, cardId) {
+  return state.events.findLast(event => event.type === "TURN_ENDED"
+    || (event.type === "CARD_ACTIVATED" && event.cardId === cardId))?.type === "CARD_ACTIVATED";
+}
+
 function validateEffectRequirements(definition, state, action, card) {
   const requirements = Array.isArray(definition?.requirements) ? definition.requirements : [];
   for (const requirement of requirements) {
@@ -3661,6 +3671,10 @@ function validateEffectRequirements(definition, state, action, card) {
         const targetText = targetPlayerId ? ` on ${targetPlayerId} monsters` : "";
         throw new GameRuleError(`Effect ${card.effect || card.id} requires no active continuous effect${sourceText}${targetText}`);
       }
+      continue;
+    }
+    if (requirement.type === "oncePerTurnPerCard") {
+      if (cardActivatedThisTurn(state, card.id)) throw new GameRuleError("This card has already been activated this turn");
       continue;
     }
     if (requirement.type === "responseWindow") {

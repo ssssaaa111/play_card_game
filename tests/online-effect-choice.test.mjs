@@ -128,6 +128,43 @@ test("unique grave choice is preselected while stale or spectator choices stay u
   assert.equal(onlineGraveChoiceView(view, model(view, "revive")), null);
 });
 
+test("a spent Rune stays recoverable and only the selected Rune carries the timing hint", () => {
+  const room = new DuelRoom({ code: "EFX234", createState: options => createOnlineDuelState({
+    ...options, openingHands: { p1: ["burst-rune", "material-reclaim", "seer-call", "solar-knight", "iron-guardian"] }
+  }) });
+  for (const seat of ["p1", "p2"]) room.join({ name: seat, connectionId: seat });
+  for (const seat of ["p1", "p2"]) room.setReady(seat, true);
+  const initial = room.viewFor("p1");
+  const idFor = templateId => initial.players.p1.hand.find(card => card.templateId === templateId).id;
+  const runeId = idFor("burst-rune"), recoveryId = idFor("material-reclaim"), drawId = idFor("seer-call");
+  const submit = (action, commandId) => room.submit("p1", { action, commandId, revision: room.revision });
+  const hint = "回收后下个己方回合可再发动";
+
+  submit({ type: "ACTIVATE_CARD", cardId: runeId }, "burn");
+  const unique = room.viewFor("p1");
+  assert.deepEqual(unique.legalActions.delayedGraveReturnTargets, [runeId]);
+  assert.equal(room.viewFor("p2").legalActions.delayedGraveReturnTargets, undefined);
+  const uniqueModel = onlineSelectionModel(unique, selectOnlineCard(unique, recoveryId));
+  assert.equal(uniqueModel.action.targetCardId, runeId);
+  assert.ok(onlineEffectDecisionView(unique, uniqueModel).hint.endsWith(hint));
+
+  submit({ type: "ACTIVATE_CARD", cardId: drawId }, "draw");
+  const multi = room.viewFor("p1");
+  const selection = selectOnlineCard(multi, recoveryId);
+  const choice = targetId => onlineGraveChoiceView(multi, onlineSelectionModel(multi, chooseOnlineCard(multi, selection, targetId)));
+  const marked = choice(runeId);
+  assert.equal(marked.count, 2);
+  assert.equal(marked.canConfirm, true);
+  assert.equal(marked.selectedTimingHint, hint);
+  assert.equal(marked.cards.find(entry => entry.card.id === runeId).timingHint, hint);
+  assert.equal(choice(drawId).selectedTimingHint, "");
+  const recover = onlineSelectionModel(multi, chooseOnlineCard(multi, selection, runeId)).action;
+  submit(recover, "recover");
+  assert.ok(room.viewFor("p1").players.p1.hand.some(card => card.id === runeId));
+  assert.equal(room.viewFor("p1").legalActions.delayedGraveReturnTargets, undefined);
+  assert.equal(room.viewFor("p2").players.p2.lp, 3600);
+});
+
 test("server-only grave opening draws distinct cards without changing deck size", () => {
   const state = createOnlineDuelState({ openingHands: { p1: ["solar-knight", "trio-ember-recall", "trio-ember-recall", "blade-sigil", "dispelling-ray"] }, openingGraves: { p1: ["gale-mage", "iron-guardian", "war-chant"] } });
   const self = state.players.p1;

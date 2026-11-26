@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createOnlineActionRunner } from '../src/online-action-runner.js';
-import { onlinePendingCommandView, onlineSelectionResetView, selectOnlineCard, onlineSelectionModel } from '../src/online-duel-ui.js';
+import { onlinePendingCommandView, onlineInterruptedTrapResponseHint, onlineSelectionResetView, selectOnlineCard, onlineSelectionModel } from '../src/online-duel-ui.js';
 import { DuelRoom } from '../server/duel-room.js';
 import { createOnlineDuelState } from '../server/online-duel-state.js';
 
@@ -14,6 +14,28 @@ test('pending feedback describes the submitted action and yields to authoritativ
   assert.equal(onlinePendingCommandView(view, null), null);
   assert.equal(onlinePendingCommandView(view, { ...pending, action: { type: 'PASS_CHAIN_RESPONSE' } }).title, '正在提交响应');
   assert.equal(onlinePendingCommandView(view, { ...pending, action: { type: 'CHANGE_PHASE' } }).title, '正在切换阶段');
+});
+
+test('an interrupted activation can be retried only in its original unresolved response', () => {
+  const room = { roomCode: 'ABCD12', duelNumber: 1 };
+  const player = { ...room, viewerSeatId: 'p2', machine: { responseWindow: { playerId: 'p2' } } };
+  for (const [type, responseKey, eventKey] of [
+    ['RESPOND_TRAP', 'attackResponse', 'declarationEventId'],
+    ['RESPOND_SUMMON_TRAP', 'summonResponse', 'triggerEventId'],
+    ['RESPOND_CHAIN_TRAP', 'chainResponse', 'triggerEventId']
+  ]) {
+    const response = { [eventKey]: 7, candidates: [{ cardId: 'other-trap' }, { cardId: 'chosen-trap' }] };
+    const view = { ...player, [responseKey]: response };
+    const interrupted = { ...room, action: { type, [eventKey]: 7, cardId: 'chosen-trap' } };
+    const hint = view => onlineInterruptedTrapResponseHint(view, interrupted);
+    assert.equal(hint(view), '上次发动尚未结算，可重新确认。');
+    assert.equal(hint(player), '', 'Settled or expired response');
+    assert.equal(hint({ ...view, [responseKey]: { ...response, [eventKey]: 8 } }), '', 'New attack or chain link');
+    assert.equal(hint({ ...view, [responseKey]: { ...response, candidates: [response.candidates[0]] } }), '', 'Original trap is no longer legal');
+    assert.equal(hint({ ...view, duelNumber: 2 }), '', 'Rematch');
+    assert.equal(hint({ ...view, roomCode: 'OTHER2' }), '', 'Different room');
+    assert.equal(hint({ ...view, viewerSeatId: 'p1' }), '', 'Opponent has priority');
+  }
 });
 
 test('one pending command retains its feedback context and clears it on success or failure', async () => {
@@ -66,10 +88,11 @@ test('an expired turn explains discarded placement without consuming the selecte
 
 test('selection reset reasons follow actual phase, response, and battle changes while recovery and results retain priority', () => {
   const room = startedRoom();
-  const before = room.viewFor('p1');
+  room.submit('one', { revision: room.revision, commandId: 'pass-opener', action: { type: 'END_TURN' } });
+  const before = room.viewFor('p2');
   const selection = selectOnlineCard(before, before.legalActions.actions.summon[0].cardId);
-  room.submit('one', { revision: before.revision, commandId: 'phase-change', action: { type: 'CHANGE_PHASE', phase: 'battle' } });
-  const battle = room.viewFor('p1');
+  room.submit('two', { revision: before.revision, commandId: 'phase-change', action: { type: 'CHANGE_PHASE', phase: 'battle' } });
+  const battle = room.viewFor('p2');
   assert.match(onlineSelectionResetView(battle, before, selection).text, /已进入战斗阶段，原选择已取消，请重新选择/);
   assert.match(onlineSelectionResetView({ ...battle, turn: before.turn }, before, selection).text, /战况已更新/);
   assert.match(onlineSelectionResetView({ ...battle, machine: { ...battle.machine, responseWindow: { playerId: 'p2' } } }, before, selection).text, /已进入响应/);

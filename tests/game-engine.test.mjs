@@ -1587,15 +1587,18 @@ test("battle-trance immediately readies its target when that monster already att
   assertValidGameState(next);
 });
 
-test("light-shadow combo heals and draws through events", () => {
+test("light-shadow combo heals and draws when both elements are on the field", () => {
   const state = makeState({
     cards: [
       card("eclipse-1", { templateId: "eclipse-barrier", effect: "lightShadowCombo" }),
+      card("light-1", { templateId: "solar-knight", type: "monster", element: "light" }),
+      card("shadow-1", { templateId: "void-hound", type: "monster", element: "shadow" }),
       card("deck-1", { templateId: "solar-knight", type: "monster" })
     ],
     player: {
       hand: ["eclipse-1"],
-      deck: ["deck-1"]
+      deck: ["deck-1"],
+      monsterZone: ["light-1", "shadow-1"]
     }
   });
 
