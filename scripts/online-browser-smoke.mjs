@@ -37,6 +37,7 @@ function parseArgs(argv) {
     else if (argv[index] === "--chain-rhythm") result.chainRhythm = true;
     else if (argv[index] === "--response-ack-loss") result.responseLoss = "ack";
     else if (argv[index] === "--response-request-loss") result.responseLoss = "request";
+    else if (argv[index] === "--response-request-timeout") result.responseLoss = "timeout";
     else if (argv[index] === "--pending-feedback") result.pendingFeedback = true;
     else if (argv[index] === "--selection-expiry") result.selectionExpiry = true;
   }
@@ -821,18 +822,23 @@ async function recoverLostResponseRequest(attacker, defender, selectedTrapIndex,
 
 async function exerciseResponseLoss(attacker, defender, spectator, options, roomCode) {
   const { timeoutMs, artifactDir, responseLoss } = options;
-  const artifactBase = path.join(artifactDir, `online-response-${responseLoss}-loss-${roomCode}`);
+  const lostRequest = responseLoss !== 'ack';
+  const waitForExpiry = responseLoss === 'timeout';
+  const expectedDamage = waitForExpiry ? 1700 : 1200;
+  const defenderLp = 4000 - expectedDamage;
+  const artifactName = waitForExpiry ? 'request-timeout' : `${responseLoss}-loss`;
+  const artifactBase = path.join(artifactDir, `online-response-${artifactName}-${roomCode}`);
   const retryHint = '上次发动尚未结算，可重新确认。';
   await doubleClickText(cdp, attacker, '#hand .card.action-ready', '日冕骑士');
   await waitForPage(cdp, attacker, textMatchExpression('#playerField', '日冕骑士'), 'attacker summoned for response recovery', timeoutMs);
   await endTurn(cdp, attacker, timeoutMs);
   await waitForPage(cdp, defender, textMatchExpression('#turnLabel', '你的回合'), 'defender can set the trap', timeoutMs);
-  if (responseLoss === 'request') {
+  if (lostRequest) {
     await doubleClickText(cdp, defender, '#hand .card.action-ready', '镜光反制');
     await waitForPage(cdp, defender, visibleExpression('#playerTraps .trap-slot:not(.empty)'), 'mirror trap set first', timeoutMs);
   }
   await doubleClickText(cdp, defender, '#hand .card.action-ready', '弱化力场');
-  const setTrapCount = responseLoss === 'request' ? 2 : 1;
+  const setTrapCount = lostRequest ? 2 : 1;
   await waitForPage(cdp, defender, `document.querySelectorAll('#playerTraps .trap-slot:not(.empty)').length === ${setTrapCount}`, 'weakening trap set', timeoutMs);
   await endTurn(cdp, defender, timeoutMs);
   await waitForPage(cdp, attacker, visibleExpression('#playerField .slot[data-attack-state="ready"]'), 'attack available', timeoutMs);
@@ -841,7 +847,7 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
   await waitForPage(cdp, defender, visibleExpression('#onlineResponse[open] #responseActivate'), 'trap response before disconnect', timeoutMs);
   assert.equal(await evaluate(cdp, defender, `document.querySelector('#responseStatus').textContent`), '', 'Normal response showed a retry hint');
   const selectedTrapIndex = setTrapCount - 1;
-  if (responseLoss === 'request') {
+  if (lostRequest) {
     assert.equal(await evaluate(cdp, defender, `document.querySelector('#responseActivate').disabled`), true, 'Multiple traps should require a choice');
     await click(cdp, defender, '#responseChoices [data-trap-choice-index="1"]');
     assert.match(await evaluate(cdp, defender, `document.querySelector('#responseActivate').textContent`), /弱化力场/);
@@ -849,20 +855,31 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
 
   const activations = [];
   const acknowledgements = new Set();
+  const timeoutEvents = new Set();
+  let passRequests = 0;
   const observeResponseFrames = raw => {
     const event = JSON.parse(raw.toString());
     const sent = event.method === 'Network.webSocketFrameSent';
     if (!sent && event.method !== 'Network.webSocketFrameReceived') return;
     if (event.params.response.opcode !== 1) return;
     const message = JSON.parse(event.params.response.payloadData);
-    if (sent && message.type === DuelClientMessage.command && message.payload?.action?.type === OnlineCommandType.respondTrap) activations.push({ requestId: message.requestId, cardId: message.payload.action.cardId });
+    if (sent && message.type === DuelClientMessage.command) {
+      const action = message.payload.action;
+      if (action.type === OnlineCommandType.respondTrap) activations.push({ requestId: message.requestId, cardId: action.cardId });
+      if (action.type === OnlineCommandType.passAttackResponse) passRequests += 1;
+    }
     if (!sent && message.type === DuelServerMessage.ack && activations.some(activation => activation.requestId === message.requestId)) acknowledgements.add(message.requestId);
+    if (!sent && message.type === DuelServerMessage.roomState) {
+      for (const event of message.data.recentEvents || []) {
+        if (event.type === 'RESPONSE_WINDOW_CLOSED' && event.reason === 'online-response-timeout') timeoutEvents.add(event.id);
+      }
+    }
   };
   await defender.cdp.send('Network.enable');
   defender.cdp.socket.on('message', observeResponseFrames);
   try {
     let recoveredResponse = null;
-    if (responseLoss === 'request') {
+    if (lostRequest) {
       recoveredResponse = await recoverLostResponseRequest(attacker, defender, selectedTrapIndex, timeoutMs);
       assert.equal(await evaluate(cdp, defender, textMatchExpression('#onlineResponse[open] footer #responseStatus', retryHint)), true, 'The recovered response did not explain the retry');
       assert.equal(await evaluate(cdp, attacker, `document.querySelector('#responseStatus').textContent`), '', 'Waiting player saw the retry message');
@@ -892,26 +909,36 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
           && bounds.left >= 0 && bounds.right <= innerWidth && confirm.bottom <= innerHeight && !button.disabled;
       })()`, 'retry hint and confirmation fit in the short landscape footer', timeoutMs);
       await click(cdp, defender, '#responseActivate');
-      await waitForPage(cdp, defender, `!document.querySelector('#onlineResponse').open && ${textMatchExpression('#playerPanel', '2800 / 4000')}`, 'manual retry settled and closed the response', timeoutMs);
-      assert.equal(await evaluate(cdp, defender, `document.querySelector('#responseStatus').textContent`), '', 'Retry hint survived the new submission');
-    } else {
+    } else if (!lostRequest) {
       await click(cdp, defender, '#recoveryContinue');
     }
+    await waitForPage(cdp, defender, `!document.querySelector('#onlineResponse').open && ${textMatchExpression('#playerPanel', `${defenderLp} / 4000`)}`, 'attack settled and closed the response', timeoutMs);
+    assert.equal(await evaluate(cdp, defender, `document.querySelector('#responseStatus').textContent + document.querySelector('#responseCountdown').textContent`), '', 'Closed response retained its retry hint or countdown');
+
     const resolution = await evaluate(cdp, defender, `(() => {
       const log = [...document.querySelectorAll('#eventLogList strong')].map(entry => entry.textContent);
       const remaining = [...document.querySelectorAll('#playerTraps .trap-slot:not(.empty)')].map(slot => Number(slot.dataset.index));
       return { trapActivations: log.filter(text => text.includes('发动《弱化力场》')).length,
-        damageEvents: log.filter(text => text.includes('1200 伤害')).length,
+        damageEvents: log.filter(text => text.includes('${expectedDamage} 伤害')).length,
         remaining };
     })()`);
-    assert.deepEqual(resolution, { trapActivations: 1, damageEvents: 1, remaining: responseLoss === 'request' ? [0] : [] });
-    await waitForPage(cdp, attacker, textMatchExpression('#aiPanel', '2800 / 4000'), 'attacker sees the same damage', timeoutMs);
-    await waitForPage(cdp, spectator, textMatchExpression('#watchPlayers', '2800 LP'), 'spectator sees the same damage', timeoutMs);
+    const remainingTraps = waitForExpiry ? [0, 1] : lostRequest ? [0] : [];
+    assert.deepEqual(resolution, { trapActivations: waitForExpiry ? 0 : 1, damageEvents: 1, remaining: remainingTraps });
+    await waitForPage(cdp, attacker, textMatchExpression('#aiPanel', `${defenderLp} / 4000`), 'attacker sees the same damage', timeoutMs);
+    await waitForPage(cdp, spectator, textMatchExpression('#watchPlayers', `${defenderLp} LP`), 'spectator sees the same damage', timeoutMs);
+    let expiryScreenshotPath;
+    if (waitForExpiry) {
+      await waitForPage(cdp, defender, `document.querySelector('#duelHint').dataset.kind === 'battle-result' && ${textMatchExpression('#duelHint', String(expectedDamage))}`, 'original attack damage is shown after the timeout', timeoutMs);
+      expiryScreenshotPath = `${artifactBase}-settled.png`;
+      await writeFile(expiryScreenshotPath, Buffer.from((await defender.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+    }
     await waitForPage(cdp, attacker, `!document.querySelector('#endTurnButton').disabled`, 'attack has settled and the turn can end', timeoutMs);
     await endTurn(cdp, attacker, timeoutMs);
     await waitForPage(cdp, defender, textMatchExpression('#turnLabel', '你的回合'), 'reconnected defender can take the next turn', timeoutMs);
     const expectedRequests = responseLoss === 'request' ? 2 : 1;
     assert.equal(activations.length, expectedRequests, 'Unexpected number of response requests');
+    assert.equal(passRequests, 0, 'The client submitted a pass on its own');
+    assert.equal(timeoutEvents.size, waitForExpiry ? 1 : 0, 'Unexpected number of server timeout events');
     const [initial, retry] = activations;
     const acknowledgementReceived = acknowledgements.has(initial.requestId);
     assert.equal(acknowledgementReceived, false, 'Acknowledgement of the first response reached the browser');
@@ -920,9 +947,9 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
       assert.equal(retry.cardId, initial.cardId, 'The retry submitted a different trap');
       assert.ok(acknowledgements.has(retry.requestId), 'Manual retry never received its acknowledgement');
     }
-    const report = { roomCode, recoveredResponse, responseRequests: activations.length, acknowledgementReceived, resolution, continued: true, screenshotPath };
+    const report = { roomCode, recoveredResponse, responseRequests: activations.length, acknowledgementReceived, timeoutEvents: timeoutEvents.size, defenderLp, resolution, continued: true, screenshotPath, expiryScreenshotPath };
     await writeFile(`${artifactBase}.json`, `${JSON.stringify(report, null, 2)}\n`);
-    console.log(`online-response-${responseLoss}-loss-smoke passed (${roomCode}, one activation, continued turn)`);
+    console.log(`online-response-${artifactName}-smoke passed (${roomCode}, ${defenderLp} LP, continued turn)`);
   } finally {
     defender.cdp.socket.off('message', observeResponseFrames);
   }

@@ -128,6 +128,8 @@ jobs:
           ack_loss_pid=$!
           node scripts/duel-latency-proxy.mjs --port=5185 --target=ws://127.0.0.1:5178/duel --delay-ms=0 --drop-response-request > online-browser-request-loss.out.log 2> online-browser-request-loss.err.log &
           request_loss_pid=$!
+          node scripts/duel-latency-proxy.mjs --port=5186 --target=ws://127.0.0.1:5178/duel --delay-ms=0 --drop-response-request > online-browser-request-timeout.out.log 2> online-browser-request-timeout.err.log &
+          request_timeout_pid=$!
           DUEL_AUTH_STORE="$RUNNER_TEMP/card-duel-effect-auth.json" \
             DUEL_ROOM_STORE="$RUNNER_TEMP/card-duel-effect-rooms.json" \
             node scripts/duel-server.mjs --port=5179 --scenario=effect-choice > online-browser-effects.out.log 2> online-browser-effects.err.log &
@@ -146,7 +148,7 @@ jobs:
             node scripts/duel-server.mjs --port=5183 --scenario=trap-response > online-browser-expiry.out.log 2> online-browser-expiry.err.log &
           expiry_pid=$!
           cleanup() {
-            kill "$frontend_pid" "$duel_pid" "$effect_pid" "$tribute_pid" "$chain_pid" "$latency_pid" "$expiry_pid" "$ack_loss_pid" "$request_loss_pid" 2>/dev/null || true
+            kill "$frontend_pid" "$duel_pid" "$effect_pid" "$tribute_pid" "$chain_pid" "$latency_pid" "$expiry_pid" "$ack_loss_pid" "$request_loss_pid" "$request_timeout_pid" 2>/dev/null || true
           }
           trap cleanup EXIT
 
@@ -157,6 +159,7 @@ jobs:
               && curl --fail --silent http://127.0.0.1:5182/health > /dev/null \
               && curl --fail --silent http://127.0.0.1:5184/health > /dev/null \
               && curl --fail --silent http://127.0.0.1:5185/health > /dev/null \
+              && curl --fail --silent http://127.0.0.1:5186/health > /dev/null \
               && curl --fail --silent http://127.0.0.1:5179/health > /dev/null \
               && curl --fail --silent http://127.0.0.1:5180/health > /dev/null \
               && curl --fail --silent http://127.0.0.1:5181/health > /dev/null \
@@ -188,6 +191,12 @@ jobs:
             --frontend-url http://127.0.0.1:5177 \
             --duel-server-url http://127.0.0.1:5185 \
             --artifact-dir .tmp/online-browser-smoke/request-loss \
+            --timeout-ms 45000
+          npm run smoke:online-browser -- \
+            --response-request-timeout \
+            --frontend-url http://127.0.0.1:5177 \
+            --duel-server-url http://127.0.0.1:5186 \
+            --artifact-dir .tmp/online-browser-smoke/request-timeout \
             --timeout-ms 45000
           npm run smoke:online-browser -- \
             --effect-choices \
@@ -230,6 +239,8 @@ jobs:
             online-browser-ack-loss.err.log
             online-browser-request-loss.out.log
             online-browser-request-loss.err.log
+            online-browser-request-timeout.out.log
+            online-browser-request-timeout.err.log
             online-browser-effects.out.log
             online-browser-effects.err.log
             online-browser-tributes.out.log
