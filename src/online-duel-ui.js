@@ -247,6 +247,22 @@ export function onlinePendingCommandView(view, pending) {
   return { title, signal: "提交中", hint: "等待服务器确认，请稍候。" };
 }
 
+export function onlineInterruptedTrapResponseHint(view, interrupted) {
+  const action = interrupted?.action;
+  if (!action || !view || view.gameOver || spectatorView(view)
+    || view.roomCode !== interrupted.roomCode || view.duelNumber !== interrupted.duelNumber
+    || view.machine?.responseWindow?.playerId !== view.viewerSeatId) return "";
+  const response = {
+    RESPOND_TRAP: view.attackResponse,
+    RESPOND_SUMMON_TRAP: view.summonResponse,
+    RESPOND_CHAIN_TRAP: view.chainResponse
+  }[action.type];
+  const eventId = action.declarationEventId ?? action.triggerEventId;
+  if (!response || eventId == null || (response.declarationEventId ?? response.triggerEventId) !== eventId
+    || !response.candidates.some(candidate => candidate.cardId === action.cardId)) return "";
+  return "上次发动尚未结算，可重新确认。";
+}
+
 export function onlineChainResponseDecisionView(view) {
   const response = view?.chainResponse;
   const chain = (view?.machine?.chain || []).filter(link => link.committed);

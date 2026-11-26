@@ -822,6 +822,7 @@ async function recoverLostResponseRequest(attacker, defender, selectedTrapIndex,
 async function exerciseResponseLoss(attacker, defender, spectator, options, roomCode) {
   const { timeoutMs, artifactDir, responseLoss } = options;
   const artifactBase = path.join(artifactDir, `online-response-${responseLoss}-loss-${roomCode}`);
+  const retryHint = '上次发动尚未结算，可重新确认。';
   await doubleClickText(cdp, attacker, '#hand .card.action-ready', '日冕骑士');
   await waitForPage(cdp, attacker, textMatchExpression('#playerField', '日冕骑士'), 'attacker summoned for response recovery', timeoutMs);
   await endTurn(cdp, attacker, timeoutMs);
@@ -838,6 +839,7 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
   await defender.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await doubleClick(cdp, attacker, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, defender, visibleExpression('#onlineResponse[open] #responseActivate'), 'trap response before disconnect', timeoutMs);
+  assert.equal(await evaluate(cdp, defender, `document.querySelector('#responseStatus').textContent`), '', 'Normal response showed a retry hint');
   const selectedTrapIndex = setTrapCount - 1;
   if (responseLoss === 'request') {
     assert.equal(await evaluate(cdp, defender, `document.querySelector('#responseActivate').disabled`), true, 'Multiple traps should require a choice');
@@ -862,6 +864,8 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
     let recoveredResponse = null;
     if (responseLoss === 'request') {
       recoveredResponse = await recoverLostResponseRequest(attacker, defender, selectedTrapIndex, timeoutMs);
+      assert.equal(await evaluate(cdp, defender, textMatchExpression('#onlineResponse[open] footer #responseStatus', retryHint)), true, 'The recovered response did not explain the retry');
+      assert.equal(await evaluate(cdp, attacker, `document.querySelector('#responseStatus').textContent`), '', 'Waiting player saw the retry message');
       assert.equal(activations.length, 1, 'The reconnect automatically retried the response');
       assert.equal(acknowledgements.size, 0, 'The dropped request was acknowledged');
     } else {
@@ -872,13 +876,24 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
       assert.match(recentEvents, /发动《弱化力场》/);
       assert.match(recentEvents, /1200 伤害/);
       assert.equal(await evaluate(cdp, defender, `!document.querySelector('#onlineResponse').open && document.querySelector('#actionStage').hidden && document.querySelector('#chainResolutionStage').hidden`), true, 'Recovery reopened an old decision or replayed its outcome');
+      assert.equal(await evaluate(cdp, defender, `document.querySelector('#responseStatus').textContent`), '', 'A committed response showed a retry hint');
       await waitForPage(cdp, defender, `document.querySelector('#recoveryBrief').getAnimations().every(animation => animation.playState === 'finished')`, 'recovery brief finished appearing', timeoutMs);
     }
     const screenshotPath = `${artifactBase}.png`;
     await writeFile(screenshotPath, Buffer.from((await defender.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
     if (responseLoss === 'request') {
+      await defender.cdp.send('Emulation.setDeviceMetricsOverride', { width: 568, height: 320, deviceScaleFactor: 1, mobile: false });
+      await waitForPage(cdp, defender, `(() => {
+        const hint = document.querySelector('#responseStatus'), button = document.querySelector('#responseActivate');
+        const timer = document.querySelector('#responseCountdown');
+        const bounds = hint.getBoundingClientRect(), confirm = button.getBoundingClientRect();
+        return innerWidth === 568 && innerHeight === 320 && hint.textContent === ${JSON.stringify(retryHint)}
+          && bounds.top >= timer.getBoundingClientRect().bottom - 1 && bounds.bottom <= confirm.top + 1
+          && bounds.left >= 0 && bounds.right <= innerWidth && confirm.bottom <= innerHeight && !button.disabled;
+      })()`, 'retry hint and confirmation fit in the short landscape footer', timeoutMs);
       await click(cdp, defender, '#responseActivate');
       await waitForPage(cdp, defender, `!document.querySelector('#onlineResponse').open && ${textMatchExpression('#playerPanel', '2800 / 4000')}`, 'manual retry settled and closed the response', timeoutMs);
+      assert.equal(await evaluate(cdp, defender, `document.querySelector('#responseStatus').textContent`), '', 'Retry hint survived the new submission');
     } else {
       await click(cdp, defender, '#recoveryContinue');
     }

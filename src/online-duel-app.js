@@ -19,7 +19,7 @@ import { installPublicReport } from "./public-report.js?v=20261114-network-recov
 import { readCustomDecks } from "./custom-decks.js";
 import { normalizeOnlineDeckChoice, onlineDeckOptions } from "./online-decks.js?v=20261107-online-decks-1";
 import { OnlineAuthClient } from "./online-auth-client.js?v=20261114-network-recovery-1";
-import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineSelectionResetView, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261126-response-reconnect-1";
+import { onlineDisplayCard, onlineCard, onlineCardActions, onlineHandActionView, onlineTurnActionSummary, onlineTurnControlView, selectOnlineCard, onlineSelectionModel, onlineSelectionResetView, onlineBoardState, onlineInteractionView, onlineIdentityView, onlineSeriesView, onlineCardDetailView, onlineAttackIntent, onlineMonsterStatus, onlineResponseBattleView, onlinePendingCommandView, onlineInterruptedTrapResponseHint, onlineChainResponseDecisionView, onlineGameResultView, onlineRematchView, latestOnlineActionReceipt, chooseOnlineCard, onlineAttackDecisionView, onlineEffectDecisionView, onlineGraveChoiceView, onlineTributeDecisionView, onlineEventSound, onlineActionCue, onlineActionPresentation, onlineChainResolutionCue, onlineReconnectBrief, onlineEventTimeline, onlineConnectionView, onlineResponseTimerView, onlineTurnTimerView, onlineTrapResponseChoice } from "./online-duel-ui.js?v=20261127-response-retry-1";
 
 const elements = Object.fromEntries([
   "authPanel", "authTitle", "authLead", "authLoginTab", "authRegisterTab", "authForm", "authHandle", "authDisplayField", "authDisplayName", "authPassword", "authSubmit", "authError", "accountBadge", "accountName", "accountHandle", "logoutButton",
@@ -48,6 +48,7 @@ let authMode = "login";
 let authPending = false;
 let actionPending = false;
 let pendingCommand = null;
+let interruptedCommand = null;
 let selection = null;
 let selectionView = null;
 let trapChoice = null;
@@ -296,6 +297,7 @@ function storedSession() {
   try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
 }
 function clearStoredSession() {
+  interruptedCommand = null;
   const key = roomStorageKey();
   if (!key) return;
   try { localStorage.removeItem(key); } catch {}
@@ -1300,6 +1302,8 @@ function chooseSlot(owner, zone, index, { directActivate = false } = {}) {
 
 async function sendAction(action, { returnAttackFocus = false } = {}) {
   if (actionPending || chainResolutionActive || !action || connectionPaused()) return;
+  const { roomCode, duelNumber, revision } = client.view;
+  interruptedCommand = null;
   if (!client.view.machine.responseWindow) {
     pendingAttackFocus = returnAttackFocus && action.type === "DECLARE_ATTACK"
       ? { attackerId: action.attackerCardId, afterEventId: lastObservedEventId }
@@ -1315,10 +1319,13 @@ async function sendAction(action, { returnAttackFocus = false } = {}) {
     try { await client.sendAction(action); }
     catch (error) {
       if (action.type === "DECLARE_ATTACK") pendingAttackFocus = null;
+      if (["CONNECTION_LOST", "RESPONSE_TIMEOUT", "SEND_FAILED"].includes(error.code)) {
+        interruptedCommand = { action, roomCode, duelNumber };
+      }
       if (error.code === "STALE_REVISION") await client.sync().catch(() => {});
       setError(error.message);
     }
-  }, { action, revision: client.view.revision });
+  }, { action, revision });
 }
 
 async function prepareSelectedAttack() {
@@ -1913,6 +1920,9 @@ function renderResponseCountdown(view) {
 }
 
 function renderResponse(view) {
+  const retryHint = onlineInterruptedTrapResponseHint(view, interruptedCommand);
+  if (!retryHint) interruptedCommand = null;
+  elements.responseStatus.textContent = !actionPending && !connectionPaused(view) ? retryHint : "";
   if (view.machine.responseWindow) {
     clearActionStage();
     clearChainResolutionStage();
@@ -1954,7 +1964,6 @@ function renderResponse(view) {
       : panel.singleChoice
       ? "唯一陷阱已选中，可发动或放弃。"
       : "选择 1 张陷阱，双击可直接发动。");
-    elements.responseStatus.textContent = "";
     elements.responseActivate.disabled ||= actionPending;
     elements.responsePass.disabled = actionPending;
     elements.responsePass.textContent = chainResponse ? "不再连锁" : "放弃响应";
