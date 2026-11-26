@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { WebSocket } from "ws";
 
 import { removeBrowserProfileDir } from "./browser-smoke-cleanup.mjs";
+import { DuelClientMessage, DuelServerMessage, OnlineCommandType } from "../src/duel-command.js";
 
 const DEFAULT_FRONTEND_URL = "http://127.0.0.1:5221";
 const DEFAULT_DUEL_SERVER_URL = "http://127.0.0.1:5223";
@@ -20,6 +21,7 @@ function parseArgs(argv) {
     effectChoices: false,
     tributeChoices: false,
     chainRhythm: false,
+    responseAckLoss: false,
     pendingFeedback: false,
     selectionExpiry: false,
     artifactDir: process.env.ONLINE_BROWSER_ARTIFACT_DIR || path.resolve(".tmp", "online-browser-smoke")
@@ -33,6 +35,7 @@ function parseArgs(argv) {
     else if (argv[index] === "--effect-choices") result.effectChoices = true;
     else if (argv[index] === "--tribute-choices") result.tributeChoices = true;
     else if (argv[index] === "--chain-rhythm") result.chainRhythm = true;
+    else if (argv[index] === "--response-ack-loss") result.responseAckLoss = true;
     else if (argv[index] === "--pending-feedback") result.pendingFeedback = true;
     else if (argv[index] === "--selection-expiry") result.selectionExpiry = true;
   }
@@ -786,6 +789,66 @@ async function reconnectDuringResponse(responder, rival, options, roomCode) {
   return { frozen, resumed };
 }
 
+async function exerciseResponseAckLoss(attacker, defender, spectator, options, roomCode) {
+  const { timeoutMs, artifactDir } = options;
+  await doubleClickText(cdp, attacker, '#hand .card.action-ready', '日冕骑士');
+  await waitForPage(cdp, attacker, textMatchExpression('#playerField', '日冕骑士'), 'attacker summoned for response recovery', timeoutMs);
+  await endTurn(cdp, attacker, timeoutMs);
+  await waitForPage(cdp, defender, textMatchExpression('#turnLabel', '你的回合'), 'defender can set the trap', timeoutMs);
+  await doubleClickText(cdp, defender, '#hand .card.action-ready', '弱化力场');
+  await waitForPage(cdp, defender, visibleExpression('#playerTraps .trap-slot:not(.empty)'), 'weakening trap set', timeoutMs);
+  await endTurn(cdp, defender, timeoutMs);
+  await waitForPage(cdp, attacker, visibleExpression('#playerField .slot[data-attack-state="ready"]'), 'attack available', timeoutMs);
+  await defender.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
+  await doubleClick(cdp, attacker, '#playerField .slot[data-attack-state="ready"]');
+  await waitForPage(cdp, defender, visibleExpression('#onlineResponse[open] #responseActivate'), 'trap response before dropping the acknowledgement', timeoutMs);
+
+  const activations = [];
+  let acknowledgementReceived = false;
+  const observeResponseFrames = raw => {
+    const event = JSON.parse(raw.toString());
+    const sent = event.method === 'Network.webSocketFrameSent';
+    if (!sent && event.method !== 'Network.webSocketFrameReceived') return;
+    if (event.params.response.opcode !== 1) return;
+    const message = JSON.parse(event.params.response.payloadData);
+    if (sent && message.type === DuelClientMessage.command && message.payload?.action?.type === OnlineCommandType.respondTrap) activations.push(message.requestId);
+    if (!sent && message.type === DuelServerMessage.ack && activations.includes(message.requestId)) acknowledgementReceived = true;
+  };
+  await defender.cdp.send('Network.enable');
+  defender.cdp.socket.on('message', observeResponseFrames);
+  try {
+    await click(cdp, defender, '#responseActivate');
+    await waitForPage(cdp, defender, visibleExpression('#recoveryContinue'), 'recovered board after the committed response lost its acknowledgement', timeoutMs);
+    assert.match(await evaluate(cdp, defender, `document.querySelector('#recoverySelfLp').textContent`), /2800 LP/);
+    const recentEvents = await evaluate(cdp, defender, `document.querySelector('#recoveryEvents').textContent`);
+    assert.match(recentEvents, /发动《弱化力场》/);
+    assert.match(recentEvents, /1200 伤害/);
+    assert.equal(await evaluate(cdp, defender, `!document.querySelector('#onlineResponse').open && document.querySelector('#actionStage').hidden && document.querySelector('#chainResolutionStage').hidden`), true, 'Recovery reopened an old decision or replayed its outcome');
+    await waitForPage(cdp, defender, `document.querySelector('#recoveryBrief').getAnimations().every(animation => animation.playState === 'finished')`, 'recovery brief finished appearing', timeoutMs);
+    const screenshotPath = path.join(artifactDir, `online-response-ack-loss-${roomCode}.png`);
+    await writeFile(screenshotPath, Buffer.from((await defender.cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64'));
+    await click(cdp, defender, '#recoveryContinue');
+    const resolution = await evaluate(cdp, defender, `(() => {
+      const log = [...document.querySelectorAll('#eventLogList strong')].map(entry => entry.textContent);
+      return { trapActivations: log.filter(text => text.includes('发动《弱化力场》')).length,
+        damageEvents: log.filter(text => text.includes('1200 伤害')).length,
+        trapConsumed: !document.querySelector('#playerTraps .trap-slot:not(.empty)') };
+    })()`);
+    assert.deepEqual(resolution, { trapActivations: 1, damageEvents: 1, trapConsumed: true });
+    await waitForPage(cdp, attacker, textMatchExpression('#aiPanel', '2800 / 4000'), 'attacker sees the same damage', timeoutMs);
+    await waitForPage(cdp, spectator, textMatchExpression('#watchPlayers', '2800 LP'), 'spectator sees the same damage', timeoutMs);
+    await waitForPage(cdp, attacker, `!document.querySelector('#endTurnButton').disabled`, 'attack has settled and the turn can end', timeoutMs);
+    await endTurn(cdp, attacker, timeoutMs);
+    await waitForPage(cdp, defender, textMatchExpression('#turnLabel', '你的回合'), 'reconnected defender can take the next turn', timeoutMs);
+    assert.equal(activations.length, 1, 'Trap response was not sent exactly once');
+    assert.equal(acknowledgementReceived, false, 'Trap response acknowledgement reached the browser');
+    await writeFile(path.join(artifactDir, `online-response-ack-loss-${roomCode}.json`), `${JSON.stringify({ roomCode, responseRequests: activations.length, acknowledgementReceived, resolution, continued: true, screenshotPath }, null, 2)}\n`);
+    console.log(`online-response-ack-loss-smoke passed (${roomCode}, committed response, lost acknowledgement, one activation, continued turn)`);
+  } finally {
+    defender.cdp.socket.off('message', observeResponseFrames);
+  }
+}
+
 async function failurePageState(cdp, page) {
   if (!page?.cdp) return null;
   try {
@@ -1488,6 +1551,8 @@ try {
 
   if (options.selectionExpiry) {
     await exerciseSelectionExpiry(firstPage, secondPage, spectatorPage, options, roomCode);
+  } else if (options.responseAckLoss) {
+    await exerciseResponseAckLoss(firstPage, secondPage, spectatorPage, options, roomCode);
   } else if (options.chainRhythm) {
     await exerciseChainRhythm(firstPage, secondPage, spectatorPage, options, roomCode);
   } else if (options.tributeChoices) {
