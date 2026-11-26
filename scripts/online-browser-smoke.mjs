@@ -790,7 +790,7 @@ async function reconnectDuringResponse(responder, rival, options, roomCode) {
   return { frozen, resumed };
 }
 
-async function recoverLostResponseRequest(attacker, defender, timeoutMs) {
+async function recoverLostResponseRequest(attacker, defender, selectedTrapIndex, timeoutMs) {
   const clock = `Number(document.querySelector('#responseCountdown').textContent.match(/剩余 (\\d+) 秒/)?.[1])`;
   const paused = `document.querySelector('#responseCountdown').dataset.paused === 'true'`;
   const before = await waitForPage(cdp, defender, `(${clock} <= 11 && ${clock} > 0) && ${clock}`, 'response has used some of its time before disconnect', timeoutMs);
@@ -799,18 +799,24 @@ async function recoverLostResponseRequest(attacker, defender, timeoutMs) {
     click(cdp, defender, '#responseActivate')
   ]);
   assert.ok(frozen <= before && frozen >= before - 1, 'Disconnect reset or drained the response clock');
-  const resumed = await waitForPage(cdp, defender, `(() => {
-    const button = document.querySelector('#responseActivate');
-    return document.body.dataset.onlineConnection === 'connected' && document.querySelector('#onlineResponse').open
-      && document.body.dataset.onlineResponse === 'acting' && !(${paused}) && !button.disabled
-      && button.textContent.includes('弱化力场') && ${clock};
-  })()`, 'reconnected defender can respond with the same trap', timeoutMs);
+  const resumed = await waitForPage(cdp, defender, `document.body.dataset.onlineConnection === 'connected'
+    && document.querySelector('#onlineResponse').open && document.body.dataset.onlineResponse === 'acting'
+    && !(${paused}) && ${clock}`, 'reconnected defender has the attack response again', timeoutMs);
   assert.ok(resumed <= frozen && resumed >= frozen - 1, 'Reconnect did not restore the frozen time');
+  const selection = await evaluate(cdp, defender, `(() => {
+    const choices = [...document.querySelectorAll('#responseChoices button')];
+    const activate = document.querySelector('#responseActivate');
+    return { candidates: choices.length, selected: choices.filter(button => button.getAttribute('aria-pressed') === 'true').map(button => Number(button.dataset.trapChoiceIndex)), confirmText: activate.textContent.trim(), confirmDisabled: activate.disabled };
+  })()`);
+  assert.equal(selection.candidates, 2, 'Reconnect changed the number of available traps');
+  assert.deepEqual(selection.selected, [selectedTrapIndex], 'Reconnect changed the selected trap');
+  assert.match(selection.confirmText, /弱化力场/);
+  assert.equal(selection.confirmDisabled, false, 'Reconnect did not re-enable the selected response');
   assert.equal(await evaluate(cdp, defender, `document.querySelector('#playerPanel .life-value').textContent`), '4000 / 4000');
   assert.equal(await evaluate(cdp, attacker, `document.querySelector('#aiPanel .life-value').textContent`), '4000 / 4000');
-  assert.equal(await evaluate(cdp, defender, `document.querySelectorAll('#playerTraps .trap-slot:not(.empty)').length`), 1);
+  assert.equal(await evaluate(cdp, defender, `document.querySelectorAll('#playerTraps .trap-slot:not(.empty)').length`), 2);
   await waitForPage(cdp, defender, `document.querySelector('#onlineResponse').open && ${clock} > 0 && ${clock} < ${resumed}`, 'restored countdown continues while waiting for the manual retry', timeoutMs);
-  return { before, frozen, resumed };
+  return { before, frozen, resumed, selection };
 }
 
 async function exerciseResponseLoss(attacker, defender, spectator, options, roomCode) {
@@ -820,13 +826,24 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
   await waitForPage(cdp, attacker, textMatchExpression('#playerField', '日冕骑士'), 'attacker summoned for response recovery', timeoutMs);
   await endTurn(cdp, attacker, timeoutMs);
   await waitForPage(cdp, defender, textMatchExpression('#turnLabel', '你的回合'), 'defender can set the trap', timeoutMs);
+  if (responseLoss === 'request') {
+    await doubleClickText(cdp, defender, '#hand .card.action-ready', '镜光反制');
+    await waitForPage(cdp, defender, visibleExpression('#playerTraps .trap-slot:not(.empty)'), 'mirror trap set first', timeoutMs);
+  }
   await doubleClickText(cdp, defender, '#hand .card.action-ready', '弱化力场');
-  await waitForPage(cdp, defender, visibleExpression('#playerTraps .trap-slot:not(.empty)'), 'weakening trap set', timeoutMs);
+  const setTrapCount = responseLoss === 'request' ? 2 : 1;
+  await waitForPage(cdp, defender, `document.querySelectorAll('#playerTraps .trap-slot:not(.empty)').length === ${setTrapCount}`, 'weakening trap set', timeoutMs);
   await endTurn(cdp, defender, timeoutMs);
   await waitForPage(cdp, attacker, visibleExpression('#playerField .slot[data-attack-state="ready"]'), 'attack available', timeoutMs);
   await defender.cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
   await doubleClick(cdp, attacker, '#playerField .slot[data-attack-state="ready"]');
   await waitForPage(cdp, defender, visibleExpression('#onlineResponse[open] #responseActivate'), 'trap response before disconnect', timeoutMs);
+  const selectedTrapIndex = setTrapCount - 1;
+  if (responseLoss === 'request') {
+    assert.equal(await evaluate(cdp, defender, `document.querySelector('#responseActivate').disabled`), true, 'Multiple traps should require a choice');
+    await click(cdp, defender, '#responseChoices [data-trap-choice-index="1"]');
+    assert.match(await evaluate(cdp, defender, `document.querySelector('#responseActivate').textContent`), /弱化力场/);
+  }
 
   const activations = [];
   const acknowledgements = new Set();
@@ -836,15 +853,15 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
     if (!sent && event.method !== 'Network.webSocketFrameReceived') return;
     if (event.params.response.opcode !== 1) return;
     const message = JSON.parse(event.params.response.payloadData);
-    if (sent && message.type === DuelClientMessage.command && message.payload?.action?.type === OnlineCommandType.respondTrap) activations.push(message.requestId);
-    if (!sent && message.type === DuelServerMessage.ack && activations.includes(message.requestId)) acknowledgements.add(message.requestId);
+    if (sent && message.type === DuelClientMessage.command && message.payload?.action?.type === OnlineCommandType.respondTrap) activations.push({ requestId: message.requestId, cardId: message.payload.action.cardId });
+    if (!sent && message.type === DuelServerMessage.ack && activations.some(activation => activation.requestId === message.requestId)) acknowledgements.add(message.requestId);
   };
   await defender.cdp.send('Network.enable');
   defender.cdp.socket.on('message', observeResponseFrames);
   try {
-    let responseClock = null;
+    let recoveredResponse = null;
     if (responseLoss === 'request') {
-      responseClock = await recoverLostResponseRequest(attacker, defender, timeoutMs);
+      recoveredResponse = await recoverLostResponseRequest(attacker, defender, selectedTrapIndex, timeoutMs);
       assert.equal(activations.length, 1, 'The reconnect automatically retried the response');
       assert.equal(acknowledgements.size, 0, 'The dropped request was acknowledged');
     } else {
@@ -867,11 +884,12 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
     }
     const resolution = await evaluate(cdp, defender, `(() => {
       const log = [...document.querySelectorAll('#eventLogList strong')].map(entry => entry.textContent);
+      const remaining = [...document.querySelectorAll('#playerTraps .trap-slot:not(.empty)')].map(slot => Number(slot.dataset.index));
       return { trapActivations: log.filter(text => text.includes('发动《弱化力场》')).length,
         damageEvents: log.filter(text => text.includes('1200 伤害')).length,
-        trapConsumed: !document.querySelector('#playerTraps .trap-slot:not(.empty)') };
+        remaining };
     })()`);
-    assert.deepEqual(resolution, { trapActivations: 1, damageEvents: 1, trapConsumed: true });
+    assert.deepEqual(resolution, { trapActivations: 1, damageEvents: 1, remaining: responseLoss === 'request' ? [0] : [] });
     await waitForPage(cdp, attacker, textMatchExpression('#aiPanel', '2800 / 4000'), 'attacker sees the same damage', timeoutMs);
     await waitForPage(cdp, spectator, textMatchExpression('#watchPlayers', '2800 LP'), 'spectator sees the same damage', timeoutMs);
     await waitForPage(cdp, attacker, `!document.querySelector('#endTurnButton').disabled`, 'attack has settled and the turn can end', timeoutMs);
@@ -879,11 +897,15 @@ async function exerciseResponseLoss(attacker, defender, spectator, options, room
     await waitForPage(cdp, defender, textMatchExpression('#turnLabel', '你的回合'), 'reconnected defender can take the next turn', timeoutMs);
     const expectedRequests = responseLoss === 'request' ? 2 : 1;
     assert.equal(activations.length, expectedRequests, 'Unexpected number of response requests');
-    assert.equal(new Set(activations).size, expectedRequests, 'The new response reused the lost request ID');
-    const acknowledgementReceived = acknowledgements.has(activations[0]);
+    const [initial, retry] = activations;
+    const acknowledgementReceived = acknowledgements.has(initial.requestId);
     assert.equal(acknowledgementReceived, false, 'Acknowledgement of the first response reached the browser');
-    if (responseLoss === 'request') assert.ok(acknowledgements.has(activations[1]), 'Manual retry never received its acknowledgement');
-    const report = { roomCode, responseClock, responseRequests: activations.length, acknowledgementReceived, resolution, continued: true, screenshotPath };
+    if (responseLoss === 'request') {
+      assert.notEqual(retry.requestId, initial.requestId, 'The new response reused the lost request ID');
+      assert.equal(retry.cardId, initial.cardId, 'The retry submitted a different trap');
+      assert.ok(acknowledgements.has(retry.requestId), 'Manual retry never received its acknowledgement');
+    }
+    const report = { roomCode, recoveredResponse, responseRequests: activations.length, acknowledgementReceived, resolution, continued: true, screenshotPath };
     await writeFile(`${artifactBase}.json`, `${JSON.stringify(report, null, 2)}\n`);
     console.log(`online-response-${responseLoss}-loss-smoke passed (${roomCode}, one activation, continued turn)`);
   } finally {
